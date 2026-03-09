@@ -7,6 +7,7 @@ export interface StreamTurnArgs {
   workspaceId?: string;
   cwd?: string;
   runtimeOptions?: {
+    model?: string;
     chatStreamingEnabled?: boolean;
     debug?: boolean;
     providerTimeoutMs?: number;
@@ -14,11 +15,19 @@ export interface StreamTurnArgs {
     claudeAllowDangerouslySkipPermissions?: boolean;
     claudeSandboxEnabled?: boolean;
     claudeAllowUnsandboxedCommands?: boolean;
+    claudeSystemPrompt?: string;
+    claudeMaxTurns?: number;
+    claudeMaxBudgetUsd?: number;
+    claudeEffort?: "low" | "medium" | "high" | "max";
+    claudeThinkingMode?: "adaptive" | "enabled" | "disabled";
+    claudeAllowedTools?: string[];
+    claudeDisallowedTools?: string[];
     codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
     codexNetworkAccessEnabled?: boolean;
     codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
     codexPathOverride?: string;
     codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
+    codexWebSearchMode?: "disabled" | "cached" | "live";
     codexPlanMode?: boolean;
   };
 }
@@ -26,8 +35,17 @@ export interface StreamTurnArgs {
 export type BridgeEvent =
   | { type: "thinking"; text: string; isStreaming?: boolean }
   | { type: "text"; text: string }
+  | {
+    type: "usage";
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+    totalCostUsd?: number;
+  }
+  | { type: "prompt_suggestions"; suggestions: string[] }
   | { type: "tool"; toolUseId?: string; toolName: string; input: string; output?: string; state: "input-streaming" | "input-available" | "output-available" | "output-error" }
-  | { type: "tool_result"; tool_use_id: string; output: string }
+  | { type: "tool_result"; tool_use_id: string; output: string; isError?: boolean }
   | { type: "diff"; filePath: string; oldContent: string; newContent: string; status?: "pending" | "accepted" | "rejected" }
   | { type: "approval"; toolName: string; requestId: string; description: string }
   | {
@@ -60,6 +78,7 @@ export interface ProviderRuntime {
     message?: string;
   };
   abortTurn: (args: { providerId: ProviderId }) => { ok: boolean; message: string };
+  cleanupTask: (args: { taskId: string }) => { ok: boolean; message: string };
   respondApproval: (args: { providerId: ProviderId; requestId: string; approved: boolean }) => { ok: boolean; message: string };
   respondUserInput: (args: {
     providerId: ProviderId;

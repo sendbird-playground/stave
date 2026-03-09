@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
@@ -384,7 +384,7 @@ export function EditorPanel() {
     setSelectedDiffContent(result.content);
     const parsed = parseUnifiedDiff({ patch: result.content });
     openDiffInEditor({
-      messageId: `scm-diff:${args.path}`,
+      editorTabId: `scm-diff:${args.path}`,
       filePath: args.path,
       oldContent: parsed.oldContent,
       newContent: parsed.newContent,
@@ -482,55 +482,78 @@ export function EditorPanel() {
     >
       <div className="flex h-full min-h-0 flex-col rounded-lg shadow-sm border border-border/80 bg-card">
         <div className="flex h-10 items-center justify-between border-b border-border/80 px-3">
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "explorer" && "bg-secondary/80 text-foreground")}
-              onClick={() => setRightTab("explorer")}
-              title="Explorer"
-            >
-              <FolderTree className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "changes" && "bg-secondary/80 text-foreground")}
-              onClick={() => setRightTab("changes")}
-              title="Changes"
-            >
-              <GitBranch className="size-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 rounded-sm p-0 text-muted-foreground" title="Search">
-              <Search className="size-4" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-              onClick={() => {
-                if (rightTab === "changes") {
-                  void loadScmStatus();
-                } else {
-                  void refreshProjectFiles();
-                }
-              }}
-              title="Refresh"
-            >
-              <RefreshCcw className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-              onClick={() => setLayout({ patch: { sidebarOverlayVisible: false } })}
-              title="Close Panel"
-            >
-              <X className="size-4" />
-            </Button>
-          </div>
+          <TooltipProvider>
+            <div className="flex items-center gap-1.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "explorer" && "bg-secondary/80 text-foreground")}
+                    onClick={() => setRightTab("explorer")}
+                  >
+                    <FolderTree className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Explorer</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "changes" && "bg-secondary/80 text-foreground")}
+                    onClick={() => setRightTab("changes")}
+                  >
+                    <GitBranch className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Changes</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 rounded-sm p-0 text-muted-foreground">
+                    <Search className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Search</TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                    onClick={() => {
+                      if (rightTab === "changes") {
+                        void loadScmStatus();
+                      } else {
+                        void refreshProjectFiles();
+                      }
+                    }}
+                  >
+                    <RefreshCcw className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Refresh</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                    onClick={() => setLayout({ patch: { sidebarOverlayVisible: false } })}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Close panel</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </div>
 
         {rightTab === "changes" ? (
@@ -553,46 +576,64 @@ export function EditorPanel() {
               <div className="mb-1 flex items-center justify-between gap-2">
                 <p className="truncate text-sm text-muted-foreground">{explorerProjectName}</p>
                 <div className="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    onClick={() => void handleAddFile()}
-                    title="Add File"
-                  >
-                    <FilePlus className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    onClick={() => void handleAddFolder()}
-                    title="Add Folder"
-                  >
-                    <FolderPlus className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    onClick={() => setExpandedFolders(new Set())}
-                    title="Collapse All"
-                  >
-                    <ChevronsUp className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    onClick={() => setExpandedFolders(new Set(collectFolderPaths({ nodes: explorerTree })))}
-                    title="Expand All"
-                  >
-                    <ChevronsDown className="size-4" />
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                          onClick={() => void handleAddFile()}
+                        >
+                          <FilePlus className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Add file</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                          onClick={() => void handleAddFolder()}
+                        >
+                          <FolderPlus className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Add folder</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                          onClick={() => setExpandedFolders(new Set())}
+                        >
+                          <ChevronsUp className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Collapse all</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                          onClick={() => setExpandedFolders(new Set(collectFolderPaths({ nodes: explorerTree })))}
+                        >
+                          <ChevronsDown className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Expand all</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
               {explorerError ? <p className="mb-1 text-sm text-destructive">{explorerError}</p> : null}

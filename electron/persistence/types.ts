@@ -14,6 +14,14 @@ export interface PersistenceChatMessageRow {
   providerId: string;
   content: string;
   isStreaming?: boolean;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+    totalCostUsd?: number;
+  };
+  promptSuggestions?: string[];
   parts: unknown[];
 }
 

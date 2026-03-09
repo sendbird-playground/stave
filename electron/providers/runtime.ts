@@ -1,5 +1,5 @@
-import { streamClaudeWithSdk } from "./claude-sdk-runtime";
-import { streamCodexWithSdk } from "./codex-sdk-runtime";
+import { cleanupClaudeTask, streamClaudeWithSdk } from "./claude-sdk-runtime";
+import { cleanupCodexTask, streamCodexWithSdk } from "./codex-sdk-runtime";
 import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -213,6 +213,11 @@ export const providerRuntime: ProviderRuntime = {
       return { ok: false, message: "No active provider turn." };
     }
     return { ok: true, message: "Provider turn aborted." };
+  },
+  cleanupTask: ({ taskId }) => {
+    cleanupClaudeTask(taskId);
+    cleanupCodexTask(taskId);
+    return { ok: true, message: `Cleaned provider runtime state for task ${taskId}.` };
   },
   respondApproval: ({ providerId, requestId, approved }) => ({
     ...(() => {

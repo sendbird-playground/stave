@@ -1,12 +1,13 @@
 import { cva } from "class-variance-authority";
-import { ChevronDown, Folder, FolderPlus, GitBranch, Home, LayoutGrid, LoaderCircle, Minus, Moon, RefreshCw, Search, Settings, Square, Sun, X } from "lucide-react";
+import { ChevronDown, Folder, FolderPlus, GitBranch, Home, LoaderCircle, Minus, Moon, RefreshCw, Search, Settings, Square, Sun, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Badge, Button, Card, Input } from "@/components/ui";
+import { Badge, Button, Card, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { SettingsDialog } from "@/components/layout/SettingsDialog";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
+import { WorkspaceIdentityMark, getWorkspaceAccentTone } from "@/components/layout/workspace-accent";
 
 const workspaceChipVariants = cva("inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors", {
   variants: {
@@ -69,15 +70,6 @@ export function TopBar() {
       return "Default";
     }
     return args.name;
-  }
-
-  function workspaceIconColor(args: { workspaceId: string }) {
-    let hash = 0;
-    for (let i = 0; i < args.workspaceId.length; i += 1) {
-      hash = (hash * 31 + args.workspaceId.charCodeAt(i)) | 0;
-    }
-    const hue = Math.abs(hash) % 360;
-    return `oklch(0.7 0.16 ${hue})`;
   }
 
   useEffect(() => {
@@ -162,90 +154,127 @@ export function TopBar() {
               draggable={false}
             />
           </Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 w-9 rounded-md p-0 text-muted-foreground"
-            onClick={clearTaskSelection}
-            style={noDragStyle}
-          >
-            <Home className="size-3.5" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 rounded-md p-0 text-muted-foreground"
+                  onClick={clearTaskSelection}
+                  style={noDragStyle}
+                >
+                  <Home className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Home</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <span className="h-4 w-px bg-border/80" />
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="project-menu"
-            className={cn(
-              "h-9 max-w-44 rounded-md border border-border/70 bg-card px-2.5 text-sm transition-colors md:max-w-60",
-              projectMenuOpen && "border-primary/70 bg-secondary/80",
-            )}
-            onClick={() => setProjectMenuOpen((prev) => !prev)}
-            style={noDragStyle}
-          >
-            <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate">{workspaceRootName ?? "No Project"}</span>
-            <ChevronDown className="size-3.5" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="project-menu"
+                  className={cn(
+                    "h-9 max-w-44 rounded-md border border-border/70 bg-card px-2.5 text-sm transition-colors md:max-w-60",
+                    projectMenuOpen && "border-primary/70 bg-secondary/80",
+                  )}
+                  onClick={() => setProjectMenuOpen((prev) => !prev)}
+                  style={noDragStyle}
+                >
+                  <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{workspaceRootName ?? "No Project"}</span>
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{workspaceRootName ?? "No Project"}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <span className="h-4 w-px bg-border/80" />
-          <div className="hidden items-center gap-1 md:flex">
+          <TooltipProvider>
+            <div className="hidden items-center gap-1 md:flex">
             {orderedWorkspaces.map((workspace) => {
               const isActive = workspace.id === activeWorkspaceId;
               const isDefault = Boolean(workspaceDefaultById[workspace.id]);
+              const accentTone = getWorkspaceAccentTone({ workspaceName: workspace.name });
               return (
-                <button
-                  key={workspace.id}
-                  className={workspaceChipVariants({
-                    active: isActive,
-                    tone: isActive ? "active" : isDefault ? "muted" : "normal",
-                  })}
-                  onClick={() => {
-                    if (workspace.id === activeWorkspaceId || switchingWorkspaceId) {
-                      return;
-                    }
-                    setSwitchingWorkspaceId(workspace.id);
-                    void switchWorkspace({ workspaceId: workspace.id }).finally(() => {
-                      setSwitchingWorkspaceId(null);
-                    });
-                  }}
-                  disabled={Boolean(switchingWorkspaceId && switchingWorkspaceId !== workspace.id)}
-                  style={noDragStyle}
-                >
-                  {switchingWorkspaceId === workspace.id ? (
-                    <LoaderCircle className="size-3.5 animate-spin text-primary" />
-                  ) : (
-                    <LayoutGrid className="size-3.5" style={{ color: workspaceIconColor({ workspaceId: workspace.id }) }} />
-                  )}
-                  <span className="truncate max-w-24">{formatWorkspaceLabel({ name: workspace.name, isDefault })}</span>
-                  {!isDefault && workspace.id !== "base" ? (
-                    <span
-                      className="rounded px-1 text-sm text-muted-foreground hover:bg-secondary"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setWorkspaceToDelete({ id: workspace.id, name: workspace.name });
+                <Tooltip key={workspace.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      className={workspaceChipVariants({
+                        active: isActive,
+                        tone: isActive ? "active" : isDefault ? "muted" : "normal",
+                      })}
+                      onClick={() => {
+                        if (workspace.id === activeWorkspaceId || switchingWorkspaceId) {
+                          return;
+                        }
+                        setSwitchingWorkspaceId(workspace.id);
+                        void switchWorkspace({ workspaceId: workspace.id }).finally(() => {
+                          setSwitchingWorkspaceId(null);
+                        });
                       }}
+                      disabled={Boolean(switchingWorkspaceId && switchingWorkspaceId !== workspace.id)}
+                      style={noDragStyle}
                     >
-                      ×
-                    </span>
-                  ) : null}
-                </button>
+                      {switchingWorkspaceId === workspace.id ? (
+                        <span
+                          className="inline-flex size-5 shrink-0 items-center justify-center rounded-[0.45rem] border"
+                          style={{
+                            backgroundColor: accentTone.background,
+                            color: accentTone.foreground,
+                            borderColor: accentTone.border,
+                          }}
+                        >
+                          <LoaderCircle className="size-3 animate-spin" />
+                        </span>
+                      ) : (
+                        <WorkspaceIdentityMark workspaceName={workspace.name} />
+                      )}
+                      <span className="truncate max-w-24">{formatWorkspaceLabel({ name: workspace.name, isDefault })}</span>
+                      {!isDefault && workspace.id !== "base" ? (
+                        <span
+                          className="rounded px-1 text-sm text-muted-foreground hover:bg-secondary"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setWorkspaceToDelete({ id: workspace.id, name: workspace.name });
+                          }}
+                        >
+                          ×
+                        </span>
+                      ) : null}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {formatWorkspaceLabel({ name: workspace.name, isDefault })}
+                  </TooltipContent>
+                </Tooltip>
               );
             })}
             <span className="mx-1 h-4 w-px bg-border/80" />
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="new-workspace"
-              className="h-9 rounded-md px-3 text-sm"
-              onClick={() => {
-                setCreateWorkspaceError(null);
-                setCreateWorkspaceOpen(true);
-              }}
-              style={noDragStyle}
-            >
-              + New Workspace
-            </Button>
-          </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="new-workspace"
+                  className="h-9 rounded-md px-3 text-sm"
+                  onClick={() => {
+                    setCreateWorkspaceError(null);
+                    setCreateWorkspaceOpen(true);
+                  }}
+                  style={noDragStyle}
+                >
+                  + New Workspace
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Create a new workspace</TooltipContent>
+            </Tooltip>
+            </div>
+          </TooltipProvider>
         </div>
         <div
           className="absolute right-0 top-0 z-20 flex h-12 shrink-0 items-center"
@@ -253,66 +282,100 @@ export function TopBar() {
             right: "8px",
           }}
         >
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" onClick={() => void refreshProjectFiles()} style={noDragStyle}>
-              <RefreshCw className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 rounded-md p-0"
-              onClick={() => setDarkMode({ enabled: !isDarkMode })}
-              aria-label="toggle theme"
-              style={noDragStyle}
-            >
-              {isDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
-            </Button>
-            <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" aria-label="search" style={noDragStyle}>
-              <Search className="size-4" />
-            </Button>
-            <Button variant="ghost" size="sm" aria-label="open-settings" className="h-9 w-9 rounded-md p-0" onClick={() => setSettingsOpen(true)} style={noDragStyle}>
-              <Settings className="size-4" />
-            </Button>
+          <TooltipProvider>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" onClick={() => void refreshProjectFiles()} style={noDragStyle}>
+                    <RefreshCw className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Refresh project files</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 rounded-md p-0"
+                    onClick={() => setDarkMode({ enabled: !isDarkMode })}
+                    aria-label="toggle theme"
+                    style={noDragStyle}
+                  >
+                    {isDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{isDarkMode ? "Switch to light mode" : "Switch to dark mode"}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" aria-label="search" style={noDragStyle}>
+                    <Search className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Search</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" aria-label="open-settings" className="h-9 w-9 rounded-md p-0" onClick={() => setSettingsOpen(true)} style={noDragStyle}>
+                    <Settings className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Settings</TooltipContent>
+              </Tooltip>
             <span className="mx-1 h-4 w-px bg-border/80" aria-hidden="true" />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 rounded-md p-0"
-              onClick={() => void window.api?.window?.minimize?.()}
-              aria-label="window-minimize"
-              title="Minimize"
-              style={noDragStyle}
-            >
-              <Minus className="size-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 rounded-md p-0"
-              onClick={async () => {
-                const next = await window.api?.window?.toggleMaximize?.();
-                if (next) {
-                  setIsMaximized(next.isMaximized);
-                }
-              }}
-              aria-label="window-maximize"
-              title="Maximize"
-              style={noDragStyle}
-            >
-              <Square className={cn("size-3.5", isMaximized && "opacity-80")} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 rounded-md p-0 hover:bg-destructive hover:text-destructive-foreground"
-              onClick={() => void window.api?.window?.close?.()}
-              aria-label="window-close"
-              title="Close"
-              style={noDragStyle}
-            >
-              <X className="size-3.5" />
-            </Button>
-          </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 rounded-md p-0"
+                    onClick={() => void window.api?.window?.minimize?.()}
+                    aria-label="window-minimize"
+                    style={noDragStyle}
+                  >
+                    <Minus className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Minimize</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 rounded-md p-0"
+                    onClick={async () => {
+                      const next = await window.api?.window?.toggleMaximize?.();
+                      if (next) {
+                        setIsMaximized(next.isMaximized);
+                      }
+                    }}
+                    aria-label="window-maximize"
+                    style={noDragStyle}
+                  >
+                    <Square className={cn("size-3.5", isMaximized && "opacity-80")} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{isMaximized ? "Restore window" : "Maximize"}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 rounded-md p-0 hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => void window.api?.window?.close?.()}
+                    aria-label="window-close"
+                    style={noDragStyle}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Close window</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </div>
         {projectMenuOpen ? (
           <div ref={projectMenuRef} className="absolute left-22 top-10 z-40" style={noDragStyle}>

@@ -2,7 +2,7 @@ import MonacoEditor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import { Columns2, FileCode2, PenLine, Save, Send, X } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useAppStore } from "@/store/app.store";
-import { Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
+import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 
@@ -17,6 +17,7 @@ export function EditorMainPanel() {
   const layout = useAppStore((state) => state.layout);
   const settings = useAppStore((state) => state.settings);
   const setLayout = useAppStore((state) => state.setLayout);
+  const updateSettings = useAppStore((state) => state.updateSettings);
   const setActiveEditorTab = useAppStore((state) => state.setActiveEditorTab);
   const reorderEditorTabs = useAppStore((state) => state.reorderEditorTabs);
   const closeEditorTab = useAppStore((state) => state.closeEditorTab);
@@ -34,10 +35,13 @@ export function EditorMainPanel() {
   const activeTab = editorTabs.find((tab) => tab.id === activeEditorTabId) ?? null;
   const isImageTab = (tab: { kind?: "text" | "image"; language: string } | null) =>
     Boolean(tab && (tab.kind === "image" || tab.language === "image"));
+  const isChatDiffTab = (tab: { id: string; kind?: "text" | "image"; originalContent?: string } | null) =>
+    Boolean(tab && tab.kind !== "image" && !tab.id.startsWith("file:") && tab.originalContent != null);
   const activeTabIsImage = isImageTab(activeTab);
   const monacoTheme = isDarkMode ? "vs-dark" : "vs";
   const workspaceRootPath = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
   const activeModelPath = activeTab ? toMonacoModelPath(activeTab.filePath) : undefined;
+  const showDiffDisplayControls = Boolean(layout.editorDiffMode && activeTab?.originalContent != null && !activeTabIsImage);
 
   function configureMonaco(monaco: Monaco) {
     if (monacoConfiguredRef.current) {
@@ -216,6 +220,28 @@ export function EditorMainPanel() {
           >
             {layout.editorDiffMode ? <PenLine className="size-4" /> : <Columns2 className="size-4" />}
           </Button>
+          {showDiffDisplayControls ? (
+            <div className="flex items-center gap-1">
+              <Button
+                size="xs"
+                variant={settings.diffViewMode === "unified" ? "secondary" : "ghost"}
+                className="rounded-sm"
+                onClick={() => updateSettings({ patch: { diffViewMode: "unified" } })}
+                title="Unified Diff"
+              >
+                Unified
+              </Button>
+              <Button
+                size="xs"
+                variant={settings.diffViewMode === "split" ? "secondary" : "ghost"}
+                className="rounded-sm"
+                onClick={() => updateSettings({ patch: { diffViewMode: "split" } })}
+                title="Split Diff"
+              >
+                Split
+              </Button>
+            </div>
+          ) : null}
           <Button
             size="sm"
             variant="ghost"
@@ -281,6 +307,11 @@ export function EditorMainPanel() {
                   >
                     {tab.filePath.split("/").filter(Boolean).at(-1) ?? tab.filePath}
                   </button>
+                  {isChatDiffTab(tab) ? (
+                    <Badge variant="outline" className="h-4 rounded-sm px-1 text-[10px] uppercase tracking-[0.08em]">
+                      Diff
+                    </Badge>
+                  ) : null}
                   {tab.isDirty ? <span className="text-sm leading-none text-success">●</span> : null}
                   {tab.hasConflict ? <span className="rounded px-1 text-sm font-medium text-warning">!</span> : null}
                   <Button
@@ -392,7 +423,7 @@ export function EditorMainPanel() {
                 theme={monacoTheme}
                 options={{
                   readOnly: false,
-                  renderSideBySide: true,
+                  renderSideBySide: settings.diffViewMode === "split",
                   minimap: { enabled: settings.editorMinimap },
                   fontSize: settings.editorFontSize,
                   fontFamily: settings.editorFontFamily,

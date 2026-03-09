@@ -300,6 +300,36 @@ function waitForClaudeToolDecision<T>(args: {
   });
 }
 
+function toClaudeThinkingConfig(thinkingMode?: "adaptive" | "enabled" | "disabled") {
+  if (thinkingMode === "adaptive") {
+    return { type: "adaptive" as const };
+  }
+  if (thinkingMode === "enabled") {
+    return { type: "enabled" as const };
+  }
+  if (thinkingMode === "disabled") {
+    return { type: "disabled" as const };
+  }
+  return undefined;
+}
+
+function buildClaudeUsageEvent(resultMsg: SDKResultMessage): BridgeEvent {
+  return {
+    type: "usage",
+    inputTokens: resultMsg.usage.input_tokens,
+    outputTokens: resultMsg.usage.output_tokens,
+    ...(resultMsg.usage.cache_read_input_tokens != null
+      ? { cacheReadTokens: resultMsg.usage.cache_read_input_tokens }
+      : {}),
+    ...(resultMsg.usage.cache_creation_input_tokens != null
+      ? { cacheCreationTokens: resultMsg.usage.cache_creation_input_tokens }
+      : {}),
+    ...(typeof resultMsg.total_cost_usd === "number"
+      ? { totalCostUsd: resultMsg.total_cost_usd }
+      : {}),
+  };
+}
+
 function mapClaudeMessageToEvents(args: {
   message: SDKMessage;
   claudeDebugStream: boolean;
@@ -450,30 +480,72 @@ function mapClaudeMessageToEvents(args: {
     if (claudeDebugStream) {
       console.debug("[claude-sdk-runtime] prompt_suggestion", message);
     }
-    return [];
+    const suggestion = (message as { suggestion?: string }).suggestion?.trim();
+    if (!suggestion) {
+      return [];
+    }
+    return [{ type: "prompt_suggestions", suggestions: [suggestion] }];
   }
 
   if (message.type === "result") {
     const resultMsg = message as SDKResultMessage;
-    const stopReason = resultMsg.stop_reason ?? undefined;
-    const doneEvent: BridgeEvent = stopReason ? { type: "done", stop_reason: stopReason } : { type: "done" };
+    const events: BridgeEvent[] = [buildClaudeUsageEvent(resultMsg)];
     if (resultMsg.is_error) {
       const errorText = (resultMsg as { result?: string }).result;
       if (typeof errorText === "string" && errorText.length > 0) {
-        return [{ type: "text", text: errorText }, doneEvent];
+        events.unshift({ type: "text", text: errorText });
       }
     }
-    return [doneEvent];
+    return events;
+  }
+
+  if (message.type === "rate_limit_event") {
+    const rlMsg = message as {
+      type: "rate_limit_event";
+      rate_limit_info?: {
+        status?: string;
+        resetsAt?: number;
+        utilization?: number;
+      };
+    };
+    const info = rlMsg.rate_limit_info;
+    if (info?.status === "rejected") {
+      const resetTime = info.resetsAt
+        ? new Date(info.resetsAt * 1000).toLocaleTimeString()
+        : "unknown";
+      return [{
+        type: "error",
+        message: `Rate limit reached. Resets at ${resetTime}.`,
+        recoverable: true,
+      }];
+    }
+    if (info?.status === "allowed_warning") {
+      const pct = info.utilization != null
+        ? ` (${Math.round(info.utilization * 100)}% used)`
+        : "";
+      return [{
+        type: "system",
+        content: `Approaching rate limit${pct}. Consider pacing requests.`,
+      }];
+    }
+    return [];
+  }
+
+  if (message.type === "tool_use_summary") {
+    const sumMsg = message as { type: "tool_use_summary"; summary?: string };
+    const summary = sumMsg.summary?.trim();
+    if (summary) {
+      return [{ type: "system", content: summary }];
+    }
+    return [];
   }
 
   if (
-    message.type === "rate_limit_event"
-    || message.type === "auth_status"
+    message.type === "auth_status"
     || message.type === "task_notification"
     || message.type === "task_started"
     || message.type === "task_progress"
     || message.type === "files_persisted"
-    || message.type === "tool_use_summary"
     || message.type === "hook_started"
     || message.type === "hook_progress"
     || message.type === "hook_response"
@@ -493,6 +565,11 @@ function mapClaudeMessageToEvents(args: {
 
 const sessionIdByTask = new Map<string, string>();
 const activeRunByTask = new Map<string, Promise<void>>();
+
+export function cleanupClaudeTask(taskId: string) {
+  sessionIdByTask.delete(taskId);
+  activeRunByTask.delete(taskId);
+}
 
 function resolveSessionId(args: { taskId?: string }) {
   const taskKey = args.taskId ?? "default";
@@ -597,6 +674,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         value: process.env.STAVE_CLAUDE_ALLOW_UNSANDBOXED_COMMANDS,
         fallback: true,
       });
+    const thinking = toClaudeThinkingConfig(args.runtimeOptions?.claudeThinkingMode);
     const stream = queryFn({
       prompt: args.prompt,
       options: {
@@ -606,6 +684,14 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         includePartialMessages: true,
         promptSuggestions: true,
         cwd: runtimeCwd,
+        ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
+        ...(args.runtimeOptions?.claudeSystemPrompt ? { systemPrompt: args.runtimeOptions.claudeSystemPrompt } : {}),
+        ...(typeof args.runtimeOptions?.claudeMaxTurns === "number" ? { maxTurns: args.runtimeOptions.claudeMaxTurns } : {}),
+        ...(typeof args.runtimeOptions?.claudeMaxBudgetUsd === "number" ? { maxBudgetUsd: args.runtimeOptions.claudeMaxBudgetUsd } : {}),
+        ...(args.runtimeOptions?.claudeEffort ? { effort: args.runtimeOptions.claudeEffort } : {}),
+        ...(thinking ? { thinking } : {}),
+        ...(args.runtimeOptions?.claudeAllowedTools ? { allowedTools: args.runtimeOptions.claudeAllowedTools } : {}),
+        ...(args.runtimeOptions?.claudeDisallowedTools ? { disallowedTools: args.runtimeOptions.claudeDisallowedTools } : {}),
         canUseTool: async (toolName, input, options) => {
           const normalizedInput = input ?? {};
           const requestId = options.toolUseID;
@@ -705,6 +791,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
 
     let hasStreamedText = false;
     let hasStreamedThinking = false;
+    let finalStopReason: string | undefined;
     const claudeDebugStream = args.runtimeOptions?.debug ?? process.env.STAVE_CLAUDE_DEBUG === "1";
 
     for await (const message of stream) {
@@ -742,6 +829,9 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
           hasStreamedThinking = true;
         }
       }
+      if (message.type === "result") {
+        finalStopReason = (message as SDKResultMessage).stop_reason ?? undefined;
+      }
       let normalizedEvents = mapClaudeMessageToEvents({ message, claudeDebugStream });
       // Deduplicate: if text/thinking already came through stream_event deltas, skip the
       // full assistant message duplicates (they contain the same content assembled).
@@ -755,7 +845,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     }
 
     if (events[events.length - 1]?.type !== "done") {
-      const done: BridgeEvent = { type: "done" };
+      const done: BridgeEvent = finalStopReason ? { type: "done", stop_reason: finalStopReason } : { type: "done" };
       events.push(done);
       args.onEvent?.(done);
     }

@@ -1,15 +1,18 @@
-import { PromptInput } from "@/components/ai-elements";
+import { PromptInput, PromptSuggestion, PromptSuggestions } from "@/components/ai-elements";
+import { useState } from "react";
 import type { ModelSelectorOption } from "@/components/ai-elements/model-selector";
 import type { PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
 import { CLAUDE_SDK_MODEL_OPTIONS, CODEX_SDK_MODEL_OPTIONS, normalizeModelSelection, toHumanModelName } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { getLatestPromptSuggestions, mergePromptSuggestionWithDraft } from "./chat-input.utils";
 
 interface ChatInputProps {
   compact?: boolean;
 }
 
 export function ChatInput(args: ChatInputProps = {}) {
+  const [focusNonce, setFocusNonce] = useState(0);
   const activeTaskId = useAppStore((state) => state.activeTaskId);
   const tasks = useAppStore((state) => state.tasks);
   const messagesByTask = useAppStore((state) => state.messagesByTask);
@@ -37,6 +40,7 @@ export function ChatInput(args: ChatInputProps = {}) {
   const isEmpty = activeMessages.length === 0;
   const isTurnActive = Boolean(activeTurnIdsByTask[activeTaskId]);
   const activeModel = activeProvider === "claude-code" ? settings.modelClaude : settings.modelCodex;
+  const promptSuggestions = getLatestPromptSuggestions(activeMessages);
   const selectedModelOption: ModelSelectorOption = {
     key: `${activeProvider}:${activeModel}`,
     providerId: activeProvider,
@@ -69,8 +73,33 @@ export function ChatInput(args: ChatInputProps = {}) {
       )}
     >
       <div className={cn("mx-auto", args.compact || isEmpty ? "max-w-xl" : "max-w-4xl")}>
+        {!isTurnActive && promptSuggestions.length > 0 ? (
+          <PromptSuggestions>
+            {promptSuggestions.map((suggestion) => (
+              <PromptSuggestion
+                key={suggestion}
+                disabled={isTurnActive}
+                onClick={() => {
+                  updatePromptDraft({
+                    taskId: providerSelectionTarget,
+                    patch: {
+                      text: mergePromptSuggestionWithDraft({
+                        currentDraft: promptDraft.text,
+                        suggestion,
+                      }),
+                    },
+                  });
+                  setFocusNonce((current) => current + 1);
+                }}
+                title={suggestion}
+              >
+                {suggestion}
+              </PromptSuggestion>
+            ))}
+          </PromptSuggestions>
+        ) : null}
         <PromptInput
-          focusToken={activeTaskId || "draft:session"}
+          focusToken={`${providerSelectionTarget}:${focusNonce}`}
           value={promptDraft.text}
           disabled={isTurnActive}
           isTurnActive={isTurnActive}

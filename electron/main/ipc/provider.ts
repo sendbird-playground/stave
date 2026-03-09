@@ -109,6 +109,10 @@ export function registerProviderHandlers() {
     return providerRuntime.abortTurn({ providerId: args.providerId });
   });
 
+  ipcMain.handle("provider:cleanup-task", (_event, args: { taskId: string }) => {
+    return providerRuntime.cleanupTask({ taskId: args.taskId });
+  });
+
   ipcMain.handle("provider:respond-approval", (_event, args: {
     providerId: "claude-code" | "codex";
     requestId: string;

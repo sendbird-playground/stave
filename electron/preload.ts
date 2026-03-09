@@ -9,17 +9,27 @@ interface StreamTurnArgs {
   workspaceId?: string;
   cwd?: string;
   runtimeOptions?: {
+    model?: string;
+    chatStreamingEnabled?: boolean;
     debug?: boolean;
     providerTimeoutMs?: number;
     claudePermissionMode?: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
     claudeAllowDangerouslySkipPermissions?: boolean;
     claudeSandboxEnabled?: boolean;
     claudeAllowUnsandboxedCommands?: boolean;
+    claudeSystemPrompt?: string;
+    claudeMaxTurns?: number;
+    claudeMaxBudgetUsd?: number;
+    claudeEffort?: "low" | "medium" | "high" | "max";
+    claudeThinkingMode?: "adaptive" | "enabled" | "disabled";
+    claudeAllowedTools?: string[];
+    claudeDisallowedTools?: string[];
     codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
     codexNetworkAccessEnabled?: boolean;
     codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
     codexPathOverride?: string;
     codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
+    codexWebSearchMode?: "disabled" | "cached" | "live";
   };
 }
 
@@ -64,6 +74,7 @@ contextBridge.exposeInMainWorld("api", {
       };
     },
     abortTurn: (args: { providerId: ProviderId }) => ipcRenderer.invoke("provider:abort-turn", args),
+    cleanupTask: (args: { taskId: string }) => ipcRenderer.invoke("provider:cleanup-task", args),
     respondApproval: (args: { providerId: ProviderId; requestId: string; approved: boolean }) =>
       ipcRenderer.invoke("provider:respond-approval", args),
     respondUserInput: (args: {

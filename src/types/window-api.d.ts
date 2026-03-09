@@ -7,6 +7,7 @@ interface ProviderStreamTurnArgs {
   workspaceId?: string;
   cwd?: string;
   runtimeOptions?: {
+    model?: string;
     chatStreamingEnabled?: boolean;
     debug?: boolean;
     providerTimeoutMs?: number;
@@ -14,11 +15,19 @@ interface ProviderStreamTurnArgs {
     claudeAllowDangerouslySkipPermissions?: boolean;
     claudeSandboxEnabled?: boolean;
     claudeAllowUnsandboxedCommands?: boolean;
+    claudeSystemPrompt?: string;
+    claudeMaxTurns?: number;
+    claudeMaxBudgetUsd?: number;
+    claudeEffort?: "low" | "medium" | "high" | "max";
+    claudeThinkingMode?: "adaptive" | "enabled" | "disabled";
+    claudeAllowedTools?: string[];
+    claudeDisallowedTools?: string[];
     codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
     codexNetworkAccessEnabled?: boolean;
     codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
     codexPathOverride?: string;
     codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
+    codexWebSearchMode?: "disabled" | "cached" | "live";
   };
 }
 
@@ -50,6 +59,7 @@ interface WindowProviderApi {
     turnId: string | null;
   }) => void) => () => void;
   abortTurn?: (args: { providerId: ProviderId }) => Promise<{ ok: boolean; message?: string }>;
+  cleanupTask?: (args: { taskId: string }) => Promise<{ ok: boolean; message?: string }>;
   respondApproval?: (args: { providerId: ProviderId; requestId: string; approved: boolean }) => Promise<{
     ok: boolean;
     message?: string;
@@ -194,6 +204,14 @@ interface WindowPersistenceApi {
         providerId: string;
         content: string;
         isStreaming?: boolean;
+        usage?: {
+          inputTokens: number;
+          outputTokens: number;
+          cacheReadTokens?: number;
+          cacheCreationTokens?: number;
+          totalCostUsd?: number;
+        };
+        promptSuggestions?: string[];
         parts: unknown[];
       }>>;
     } | null;
@@ -217,6 +235,14 @@ interface WindowPersistenceApi {
         providerId: string;
         content: string;
         isStreaming?: boolean;
+        usage?: {
+          inputTokens: number;
+          outputTokens: number;
+          cacheReadTokens?: number;
+          cacheCreationTokens?: number;
+          totalCostUsd?: number;
+        };
+        promptSuggestions?: string[];
         parts: unknown[];
       }>>;
     };
@@ -241,6 +267,14 @@ interface WindowPersistenceApi {
         providerId: string;
         content: string;
         isStreaming?: boolean;
+        usage?: {
+          inputTokens: number;
+          outputTokens: number;
+          cacheReadTokens?: number;
+          cacheCreationTokens?: number;
+          totalCostUsd?: number;
+        };
+        promptSuggestions?: string[];
         parts: unknown[];
       }>>;
     };

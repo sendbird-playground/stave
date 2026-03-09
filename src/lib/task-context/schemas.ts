@@ -99,6 +99,14 @@ const ChatMessageSchema = z.object({
   isStreaming: z.boolean().optional(),
   isPlanResponse: z.boolean().optional(),
   planText: z.string().optional(),
+  usage: z.object({
+    inputTokens: z.number(),
+    outputTokens: z.number(),
+    cacheReadTokens: z.number().optional(),
+    cacheCreationTokens: z.number().optional(),
+    totalCostUsd: z.number().optional(),
+  }).optional(),
+  promptSuggestions: z.array(z.string()).optional(),
   parts: z.array(MessagePartSchema),
 });
 

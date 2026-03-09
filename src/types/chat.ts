@@ -103,6 +103,14 @@ export interface ChatMessage {
   isStreaming?: boolean;
   isPlanResponse?: boolean;
   planText?: string;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+    totalCostUsd?: number;
+  };
+  promptSuggestions?: string[];
   parts: MessagePart[];
 }
 
@@ -122,6 +130,7 @@ export interface EditorTab {
   language: string;
   content: string;
   originalContent?: string;
+  savedContent?: string;
   baseRevision?: string | null;
   hasConflict: boolean;
   isDirty: boolean;

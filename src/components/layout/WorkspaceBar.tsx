@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, FileCode2, FolderTree, GitBranch, GitPullRequest, LayoutGrid, TerminalSquare } from "lucide-react";
-import { Button, Input } from "@/components/ui";
+import { ChevronDown, FileCode2, FolderTree, GitBranch, GitPullRequest, TerminalSquare } from "lucide-react";
+import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 
 export function WorkspaceBar() {
   const [branchOpen, setBranchOpen] = useState(false);
@@ -163,91 +164,122 @@ export function WorkspaceBar() {
   return (
     <div data-testid="workspace-bar" className="relative z-20 flex h-14 items-center justify-between px-3 py-2.5 text-sm sm:px-4">
       <div className="flex items-center gap-2 overflow-hidden">
-        <span className="inline-flex h-9 items-center gap-1.5 truncate rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground shadow-sm">
-          <LayoutGrid className="size-3.5 text-muted-foreground" />
-          {workspaceName}
-        </span>
-        <button
-          type="button"
-          className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-md border border-border/80 bg-card/90 px-3 text-sm text-foreground transition-colors hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-50",
-            branchOpen && "border-primary/70 bg-secondary/80",
-          )}
-          onClick={() => setBranchOpen((prev) => !prev)}
-          disabled={!isDefaultWorkspace}
-          title={isDefaultWorkspace ? "Switch branch" : "Branch switch disabled for worktree workspace"}
-        >
-          <GitBranch className="size-3.5" />
-          {currentBranch}
-          <ChevronDown className="size-3.5" />
-        </button>
-        {!isDefaultWorkspace ? (
-          <button
-            type="button"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border/80 bg-card/90 px-3 text-sm text-foreground transition-colors hover:bg-secondary/60"
-            onClick={() => void handleOpenPR()}
-            title="Open Pull Request on GitHub"
-          >
-            <GitPullRequest className="size-3.5" />
-            Open PR
-          </button>
-        ) : null}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex h-9 items-center gap-1.5 truncate rounded-md border border-border bg-card px-3 text-sm font-semibold text-foreground shadow-sm">
+                <WorkspaceIdentityMark workspaceName={rawWorkspaceName} />
+                {workspaceName}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{workspaceName}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-9 items-center gap-1.5 rounded-md border border-border/80 bg-card/90 px-3 text-sm text-foreground transition-colors hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-50",
+                  branchOpen && "border-primary/70 bg-secondary/80",
+                )}
+                onClick={() => setBranchOpen((prev) => !prev)}
+                disabled={!isDefaultWorkspace}
+              >
+                <GitBranch className="size-3.5" />
+                {currentBranch}
+                <ChevronDown className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {isDefaultWorkspace ? "Switch branch" : "Branch switch disabled for worktree workspace"}
+            </TooltipContent>
+          </Tooltip>
+          {!isDefaultWorkspace ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border/80 bg-card/90 px-3 text-sm text-foreground transition-colors hover:bg-secondary/60"
+                  onClick={() => void handleOpenPR()}
+                >
+                  <GitPullRequest className="size-3.5" />
+                  Open PR
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Open pull request on GitHub</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </TooltipProvider>
       </div>
-      <div className="flex items-center gap-1 overflow-x-auto">
-        <Button
-          size="sm"
-          variant={layout.sidebarOverlayVisible ? "default" : "ghost"}
-          className={cn(
-            "h-9 w-9 rounded-md border border-transparent p-0 transition-colors",
-            layout.sidebarOverlayVisible
-              ? "ring-1 ring-primary/40"
-              : "hover:border-border/80 hover:bg-card/90"
-          )}
-          onClick={() => {
-            const nextVisible = !layout.sidebarOverlayVisible;
-            setLayout({ patch: { sidebarOverlayVisible: nextVisible } });
-            if (nextVisible) {
-              window.dispatchEvent(new CustomEvent("stave:right-panel-tab", { detail: "explorer" }));
-            }
-          }}
-          aria-label="Explorer"
-          title="Explorer"
-        >
-          <FolderTree className="size-4" />
-        </Button>
-        <Button
-          size="sm"
-          variant={isTerminalOpen ? "default" : "ghost"}
-          className={cn(
-            "h-9 w-9 rounded-md border border-transparent p-0 transition-colors",
-            isTerminalOpen
-              ? "ring-1 ring-primary/40"
-              : "hover:border-border/80 hover:bg-card/90"
-          )}
-          onClick={() => setLayout({ patch: { terminalDocked: !layout.terminalDocked } })}
-          aria-label="Terminal"
-          title="Terminal"
-        >
-          <TerminalSquare className="size-4" />
-        </Button>
-        <Button
-          size="sm"
-          variant={isEditorOpen ? "default" : "ghost"}
-          className={cn(
-            "h-9 w-9 rounded-md border border-transparent p-0 transition-colors",
-            isEditorOpen
-              ? "ring-1 ring-primary/40"
-              : "hover:border-border/80 hover:bg-card/90"
-          )}
-          onClick={() => {
-            setLayout({ patch: { editorVisible: !layout.editorVisible } });
-          }}
-          aria-label="Editor"
-          title="Editor"
-        >
-          <FileCode2 className="size-4" />
-        </Button>
-      </div>
+      <TooltipProvider>
+        <div className="flex items-center gap-1 overflow-x-auto">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant={isEditorOpen ? "default" : "ghost"}
+                className={cn(
+                  "h-9 w-9 rounded-md border border-transparent p-0 transition-colors",
+                  isEditorOpen
+                    ? "ring-1 ring-primary/40"
+                    : "hover:border-border/80 hover:bg-card/90"
+                )}
+                onClick={() => {
+                  setLayout({ patch: { editorVisible: !layout.editorVisible } });
+                }}
+                aria-label="Editor"
+              >
+                <FileCode2 className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Editor</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant={layout.sidebarOverlayVisible ? "default" : "ghost"}
+                className={cn(
+                  "h-9 w-9 rounded-md border border-transparent p-0 transition-colors",
+                  layout.sidebarOverlayVisible
+                    ? "ring-1 ring-primary/40"
+                    : "hover:border-border/80 hover:bg-card/90"
+                )}
+                onClick={() => {
+                  const nextVisible = !layout.sidebarOverlayVisible;
+                  setLayout({ patch: { sidebarOverlayVisible: nextVisible } });
+                  if (nextVisible) {
+                    window.dispatchEvent(new CustomEvent("stave:right-panel-tab", { detail: "explorer" }));
+                  }
+                }}
+                aria-label="Explorer"
+              >
+                <FolderTree className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Explorer</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant={isTerminalOpen ? "default" : "ghost"}
+                className={cn(
+                  "h-9 w-9 rounded-md border border-transparent p-0 transition-colors",
+                  isTerminalOpen
+                    ? "ring-1 ring-primary/40"
+                    : "hover:border-border/80 hover:bg-card/90"
+                )}
+                onClick={() => setLayout({ patch: { terminalDocked: !layout.terminalDocked } })}
+                aria-label="Terminal"
+              >
+                <TerminalSquare className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Terminal</TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
       {branchOpen && isDefaultWorkspace ? (
         <div ref={branchMenuRef} className="overflow-y-auto animate-dropdown-in absolute left-28 top-12 z-40 w-[min(26rem,calc(100vw-2rem))] h-[50vh] rounded-md border border-border/80 bg-card p-2 shadow-xl">
           <Input

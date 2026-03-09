@@ -11,6 +11,20 @@ const TextEventSchema = z.object({
   text: z.string(),
 });
 
+const UsageEventSchema = z.object({
+  type: z.literal("usage"),
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  cacheReadTokens: z.number().optional(),
+  cacheCreationTokens: z.number().optional(),
+  totalCostUsd: z.number().optional(),
+});
+
+const PromptSuggestionsEventSchema = z.object({
+  type: z.literal("prompt_suggestions"),
+  suggestions: z.array(z.string()),
+});
+
 const ToolStateSchema = z.union([
   z.literal("input-streaming"),
   z.literal("input-available"),
@@ -31,6 +45,7 @@ const ToolResultEventSchema = z.object({
   type: z.literal("tool_result"),
   tool_use_id: z.string(),
   output: z.string(),
+  isError: z.boolean().optional(),
 });
 
 const DiffStatusSchema = z.union([
@@ -95,6 +110,8 @@ const DoneEventSchema = z.object({
 export const NormalizedProviderEventSchema = z.discriminatedUnion("type", [
   ThinkingEventSchema,
   TextEventSchema,
+  UsageEventSchema,
+  PromptSuggestionsEventSchema,
   ToolEventSchema,
   ToolResultEventSchema,
   DiffEventSchema,

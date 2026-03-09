@@ -172,11 +172,14 @@ export interface AppSettings {
   claudeAllowDangerouslySkipPermissions: boolean;
   claudeSandboxEnabled: boolean;
   claudeAllowUnsandboxedCommands: boolean;
+  claudeEffort: "low" | "medium" | "high" | "max";
+  claudeThinkingMode: "adaptive" | "enabled" | "disabled";
   codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
   codexNetworkAccessEnabled: boolean;
   codexApprovalPolicy: "never" | "on-request" | "on-failure" | "untrusted";
   codexPathOverride: string;
   codexModelReasoningEffort: "minimal" | "low" | "medium" | "high" | "xhigh";
+  codexWebSearchMode: "disabled" | "cached" | "live";
   codexPlanMode: boolean;
 }
 
@@ -247,8 +250,8 @@ interface AppState {
     answers?: Record<string, string>;
     denied?: boolean;
   }) => void;
-  resolveDiff: (args: { taskId: string; messageId: string; accepted: boolean }) => void;
-  openDiffInEditor: (args: { messageId: string; filePath: string; oldContent: string; newContent: string }) => void;
+  resolveDiff: (args: { taskId: string; messageId: string; accepted: boolean; partIndex?: number }) => void;
+  openDiffInEditor: (args: { editorTabId: string; filePath: string; oldContent: string; newContent: string }) => void;
   openFileFromTree: (args: { filePath: string }) => Promise<void>;
   setActiveEditorTab: (args: { tabId: string }) => void;
   reorderEditorTabs: (args: { fromTabId: string; toTabId: string }) => void;
@@ -305,11 +308,14 @@ const defaultSettings: AppSettings = {
   claudeAllowDangerouslySkipPermissions: true,
   claudeSandboxEnabled: false,
   claudeAllowUnsandboxedCommands: true,
+  claudeEffort: "medium",
+  claudeThinkingMode: "adaptive",
   codexSandboxMode: "workspace-write",
   codexNetworkAccessEnabled: true,
   codexApprovalPolicy: "on-request",
   codexPathOverride: "",
   codexModelReasoningEffort: "medium",
+  codexWebSearchMode: "disabled",
   codexPlanMode: false,
 };
 
@@ -560,6 +566,8 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
         content: `[error] ${event.message}`,
       };
     case "tool_result":
+    case "usage":
+    case "prompt_suggestions":
     case "plan_ready":
     case "done":
       return null;
@@ -644,11 +652,33 @@ function appendProviderEventToAssistant(args: {
   message: ChatMessage;
   event: NormalizedProviderEvent;
 }): ChatMessage {
+  if (args.event.type === "usage") {
+    return {
+      ...args.message,
+      usage: {
+        ...args.message.usage,
+        inputTokens: args.event.inputTokens,
+        outputTokens: args.event.outputTokens,
+        ...(args.event.cacheReadTokens != null ? { cacheReadTokens: args.event.cacheReadTokens } : {}),
+        ...(args.event.cacheCreationTokens != null ? { cacheCreationTokens: args.event.cacheCreationTokens } : {}),
+        ...(args.event.totalCostUsd != null ? { totalCostUsd: args.event.totalCostUsd } : {}),
+      },
+    };
+  }
+
+  if (args.event.type === "prompt_suggestions") {
+    return {
+      ...args.message,
+      promptSuggestions: args.event.suggestions,
+    };
+  }
+
   if (args.event.type === "tool_result") {
-    const { tool_use_id, output } = args.event;
+    const { tool_use_id, output, isError } = args.event;
     const updatedParts = args.message.parts.map((p) => {
       if (p.type === "tool_use" && p.toolUseId === tool_use_id) {
-        return { ...p, output, state: "output-available" as const };
+        const nextState: "output-error" | "output-available" = isError ? "output-error" : "output-available";
+        return { ...p, output, state: nextState };
       }
       return p;
     });
@@ -687,8 +717,13 @@ function appendProviderEventToAssistant(args: {
     }
 
     const finalizedParts = args.message.parts.map((p) => {
-      if (p.type === "tool_use" && (p.state === "input-available" || p.state === "input-streaming")) {
-        return { ...p, state: "output-available" as const };
+      if (p.type === "tool_use") {
+        if (p.state === "input-available" || p.state === "input-streaming") {
+          return { ...p, state: "output-available" as const };
+        }
+        if (p.state === "output-available" || p.state === "output-error") {
+          return p;
+        }
       }
       return p;
     });
@@ -767,13 +802,14 @@ function createPlanAssistantMessage(args: {
   taskId: string;
   count: number;
   provider: ProviderId;
+  model: string;
   planText: string;
   isStreaming?: boolean;
 }): ChatMessage {
   return {
     id: buildMessageId({ taskId: args.taskId, count: args.count }),
     role: "assistant",
-    model: args.provider,
+    model: args.model,
     providerId: args.provider,
     content: args.planText,
     isStreaming: args.isStreaming ?? true,
@@ -1684,6 +1720,7 @@ export const useAppStore = create<AppState>()(
             activeTaskId: shouldSwitch ? fallbackTaskId : state.activeTaskId,
           };
         });
+        void window.api?.provider?.cleanupTask?.({ taskId });
       },
       setTaskProvider: ({ taskId, provider }) =>
         set((state) => {
@@ -1838,7 +1875,7 @@ export const useAppStore = create<AppState>()(
             const assistantMessage: ChatMessage = {
               id: assistantMessageId,
               role: "assistant",
-              model: provider,
+              model: activeModel,
               providerId: provider,
               content: responseText,
               isStreaming: false,
@@ -1905,7 +1942,7 @@ export const useAppStore = create<AppState>()(
           const assistantMessage: ChatMessage = {
             id: assistantMessageId,
             role: "assistant",
-            model: provider,
+            model: activeModel,
             providerId: provider,
             content: "",
             isStreaming: true,
@@ -1998,6 +2035,7 @@ export const useAppStore = create<AppState>()(
                     taskId: resolvedTaskId,
                     count: current.length,
                     provider,
+                    model: activeModel,
                     planText: event.planText,
                   });
 
@@ -2044,6 +2082,7 @@ export const useAppStore = create<AppState>()(
           workspaceId: get().activeWorkspaceId,
           cwd: get().workspacePathById[get().activeWorkspaceId] ?? get().projectPath ?? undefined,
           runtimeOptions: {
+            model: activeModel,
             chatStreamingEnabled: get().settings.chatStreamingEnabled,
             debug: get().settings.providerDebugStream,
             providerTimeoutMs: get().settings.providerTimeoutMs,
@@ -2051,11 +2090,14 @@ export const useAppStore = create<AppState>()(
             claudeAllowDangerouslySkipPermissions: get().settings.claudeAllowDangerouslySkipPermissions,
             claudeSandboxEnabled: get().settings.claudeSandboxEnabled,
             claudeAllowUnsandboxedCommands: get().settings.claudeAllowUnsandboxedCommands,
+            claudeEffort: get().settings.claudeEffort,
+            claudeThinkingMode: get().settings.claudeThinkingMode,
             codexSandboxMode: get().settings.codexSandboxMode,
             codexNetworkAccessEnabled: get().settings.codexNetworkAccessEnabled,
             codexApprovalPolicy: get().settings.codexApprovalPolicy,
             codexPathOverride: get().settings.codexPathOverride || undefined,
             codexModelReasoningEffort: get().settings.codexModelReasoningEffort,
+            codexWebSearchMode: get().settings.codexWebSearchMode,
             codexPlanMode: get().settings.codexPlanMode,
           },
           onEvent: ({ event }) => {
@@ -2247,7 +2289,7 @@ export const useAppStore = create<AppState>()(
         }
         applyUserInputState({ taskId, messageId, answers, denied });
       },
-      resolveDiff: ({ taskId, messageId, accepted }) => {
+      resolveDiff: ({ taskId, messageId, accepted, partIndex }) => {
         set((state) => {
           const current = state.messagesByTask[taskId] ?? [];
           return {
@@ -2258,8 +2300,11 @@ export const useAppStore = create<AppState>()(
                 messageId,
                 update: (message) => ({
                   ...message,
-                  parts: message.parts.map((part) => {
+                  parts: message.parts.map((part, index) => {
                     if (part.type !== "code_diff") {
+                      return part;
+                    }
+                    if (partIndex != null && index !== partIndex) {
                       return part;
                     }
                     return {
@@ -2273,9 +2318,9 @@ export const useAppStore = create<AppState>()(
           };
         });
       },
-      openDiffInEditor: ({ messageId, filePath, oldContent, newContent }) => {
+      openDiffInEditor: ({ editorTabId, filePath, oldContent, newContent }) => {
         set((state) => {
-          const existing = state.editorTabs.find((tab) => tab.id === messageId);
+          const existing = state.editorTabs.find((tab) => tab.id === editorTabId);
           if (existing) {
             return {
               activeEditorTabId: existing.id,
@@ -2284,12 +2329,13 @@ export const useAppStore = create<AppState>()(
           }
 
           const nextTab: EditorTab = {
-            id: messageId,
+            id: editorTabId,
             filePath,
             kind: "text",
             language: resolveLanguage({ filePath }),
             content: newContent,
             originalContent: oldContent,
+            savedContent: newContent,
             baseRevision: null,
             hasConflict: false,
             isDirty: false,
@@ -2338,6 +2384,7 @@ export const useAppStore = create<AppState>()(
             language: resolveLanguage({ filePath }),
             content: fileContent,
             originalContent: isImageFile ? undefined : fileContent,
+            savedContent: isImageFile ? undefined : fileContent,
             baseRevision,
             hasConflict: false,
             isDirty: false,
@@ -2430,7 +2477,7 @@ export const useAppStore = create<AppState>()(
             return {
               ...tab,
               content,
-              isDirty: tab.originalContent !== content,
+              isDirty: (tab.savedContent ?? tab.originalContent ?? tab.content) !== content,
               hasConflict: false,
             };
           }),
@@ -2489,7 +2536,8 @@ export const useAppStore = create<AppState>()(
             tab.id === activeTab.id
               ? {
                   ...tab,
-                  originalContent: tab.content,
+                  originalContent: tab.id.startsWith("file:") ? tab.content : tab.originalContent,
+                  savedContent: tab.content,
                   baseRevision: result.revision ?? tab.baseRevision,
                   hasConflict: false,
                   isDirty: false,
@@ -2563,7 +2611,12 @@ export const useAppStore = create<AppState>()(
             return {
               ...tab,
               content: update.fromDisk,
-              originalContent: update.kind === "image" ? tab.originalContent : update.fromDisk,
+              originalContent: update.kind === "image"
+                ? tab.originalContent
+                : tab.id.startsWith("file:")
+                ? update.fromDisk
+                : tab.originalContent,
+              savedContent: update.kind === "image" ? tab.savedContent : update.fromDisk,
               baseRevision: update.revision,
               hasConflict: false,
               isDirty: false,

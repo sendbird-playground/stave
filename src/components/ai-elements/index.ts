@@ -32,6 +32,7 @@ export { Tool, ToolContent, ToolGroup, ToolHeader, ToolInput, ToolOutput } from 
 export { ConfirmationCompact } from "./confirmation";
 export { UserInputCard } from "./user-input-card";
 export { PromptInput } from "./prompt-input";
+export { PromptSuggestion, PromptSuggestions } from "./suggestion";
 export { ModelSelector } from "./model-selector";
 export { PermissionModeSelector, cyclePermissionMode, type PermissionModeValue, type ClaudePermissionMode, type CodexApprovalPolicy } from "./permission-mode-selector";
 export { ModelIcon } from "./model-icon";

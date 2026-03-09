@@ -185,4 +185,62 @@ describe("workspace snapshot schema compatibility", () => {
       attachedFilePath: "",
     });
   });
+
+  test("loads snapshots that include usage and prompt suggestions", async () => {
+    setWindowApi({
+      persistence: {
+        listWorkspaces: async () => ({
+          ok: true,
+          rows: [{ id: "base", name: "Base", updatedAt: "2026-03-08T00:00:00.000Z" }],
+        }),
+        loadWorkspace: async () => ({
+          ok: true,
+          snapshot: {
+            activeTaskId: "task-2",
+            tasks: [
+              {
+                id: "task-2",
+                title: "Task 2",
+                provider: "claude-code",
+                updatedAt: "2026-03-08T00:00:00.000Z",
+                unread: false,
+              },
+            ],
+            messagesByTask: {
+              "task-2": [
+                {
+                  id: "m-2",
+                  role: "assistant",
+                  model: "claude-sonnet-4-6",
+                  providerId: "claude-code",
+                  content: "Done",
+                  usage: {
+                    inputTokens: 10,
+                    outputTokens: 20,
+                    cacheReadTokens: 5,
+                    totalCostUsd: 0.02,
+                  },
+                  promptSuggestions: ["Open a PR with these changes"],
+                  parts: [{ type: "text", text: "Done" }],
+                },
+              ],
+            },
+          },
+        }),
+        upsertWorkspace: async () => ({ ok: true }),
+      },
+    });
+
+    const loaded = await loadWorkspaceSnapshot({ workspaceId: "base" });
+
+    expect(loaded?.messagesByTask["task-2"]?.[0]?.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 20,
+      cacheReadTokens: 5,
+      totalCostUsd: 0.02,
+    });
+    expect(loaded?.messagesByTask["task-2"]?.[0]?.promptSuggestions).toEqual([
+      "Open a PR with these changes",
+    ]);
+  });
 });

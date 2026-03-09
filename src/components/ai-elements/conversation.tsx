@@ -163,6 +163,7 @@ interface ConversationVirtualListProps<T> {
   itemKey?: (index: number, item: T) => string | number;
   listKey?: string | number;
   restoreItemIndex?: number;
+  restoreItemId?: string;
   restoreItemOffset?: number;
   listRef?: MutableRefObject<VirtuosoHandle | null>;
 }
@@ -193,6 +194,8 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       return;
     }
 
+    const rafIds: number[] = [];
+
     const restoreToBottom = () => {
       if (lastIndex < 0) {
         return;
@@ -218,6 +221,28 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       }
     };
 
+    const refineSavedAnchorPosition = (messageId: string, offset: number) => {
+      if (!containerEl) {
+        return false;
+      }
+      const anchorNode = Array.from(containerEl.querySelectorAll<HTMLElement>("[data-message-id]"))
+        .find((node) => node.dataset.messageId === messageId);
+      if (!anchorNode) {
+        return false;
+      }
+      const containerTop = containerEl.getBoundingClientRect().top;
+      const currentOffset = anchorNode.getBoundingClientRect().top - containerTop;
+      const delta = Math.round(currentOffset + offset);
+      if (Math.abs(delta) <= 1) {
+        return true;
+      }
+      virtuosoRef.current?.scrollBy({
+        top: delta,
+        behavior: "auto",
+      });
+      return false;
+    };
+
     const savedIndex = props.restoreItemIndex;
     if (savedIndex == null || savedIndex < 0 || savedIndex >= props.data.length) {
       restoreToBottom();
@@ -225,14 +250,25 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     }
 
     const savedOffset = props.restoreItemOffset ?? 0;
+    const savedMessageId = props.restoreItemId;
     restoreToSavedAnchor(savedIndex, savedOffset);
-    const rafId = requestAnimationFrame(() => {
-      restoreToSavedAnchor(savedIndex, savedOffset);
-    });
-    return () => {
-      cancelAnimationFrame(rafId);
+    if (!savedMessageId) {
+      return;
+    }
+    let attempts = 0;
+    const maxAttempts = 4;
+    const runPreciseRestore = () => {
+      attempts += 1;
+      const settled = refineSavedAnchorPosition(savedMessageId, savedOffset);
+      if (!settled && attempts < maxAttempts) {
+        rafIds.push(requestAnimationFrame(runPreciseRestore));
+      }
     };
-  }, [lastIndex, props.data.length, props.listKey, props.restoreItemIndex, props.restoreItemOffset]);
+    rafIds.push(requestAnimationFrame(runPreciseRestore));
+    return () => {
+      rafIds.forEach((id) => cancelAnimationFrame(id));
+    };
+  }, [containerEl, lastIndex, props.data.length, props.listKey, props.restoreItemId, props.restoreItemIndex, props.restoreItemOffset]);
 
   return (
     <Virtuoso

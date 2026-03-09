@@ -2,8 +2,6 @@
 
 Stave is an Electron-based AI coding workspace built with Bun, React, Vite, and TypeScript.
 
-Current package version: `0.0.1`
-
 ## What exists today
 
 - Desktop-first runtime with Electron main/preload separation

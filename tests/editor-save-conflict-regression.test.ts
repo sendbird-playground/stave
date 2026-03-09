@@ -108,6 +108,32 @@ afterEach(() => {
 });
 
 describe("editor save/conflict behavior", () => {
+  test("keeps chat-opened diff tabs clean until the modified side actually changes", async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), "stave-editor-"));
+    const filePath = "note.txt";
+    const fullPath = path.join(rootPath, filePath);
+    await writeFile(fullPath, "after\n", "utf8");
+
+    const { useAppStore } = await setupStore({ rootPath, filePath });
+    useAppStore.getState().openDiffInEditor({
+      editorTabId: "chat-diff:msg-1:0:note.txt",
+      filePath,
+      oldContent: "before\n",
+      newContent: "after\n",
+    });
+
+    let tab = useAppStore.getState().editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
+    expect(tab?.isDirty).toBe(false);
+
+    useAppStore.getState().updateEditorContent({ tabId: "chat-diff:msg-1:0:note.txt", content: "after\n" });
+    tab = useAppStore.getState().editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
+    expect(tab?.isDirty).toBe(false);
+
+    useAppStore.getState().updateEditorContent({ tabId: "chat-diff:msg-1:0:note.txt", content: "after plus edit\n" });
+    tab = useAppStore.getState().editorTabs.find((item) => item.id === "chat-diff:msg-1:0:note.txt");
+    expect(tab?.isDirty).toBe(true);
+  });
+
   test("marks conflict on stale revision save and keeps dirty content", async () => {
     const rootPath = await mkdtemp(path.join(tmpdir(), "stave-editor-"));
     const filePath = "note.txt";

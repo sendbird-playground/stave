@@ -1,5 +1,5 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
-import type { Thread, ThreadEvent, ThreadItem, TurnOptions } from "@openai/codex-sdk";
+import type { Thread, ThreadEvent, ThreadItem, TurnCompletedEvent, TurnOptions } from "@openai/codex-sdk";
 import { resolveExecutablePath } from "./executable-path";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
@@ -180,11 +180,17 @@ function resolveCodexExecutablePath() {
   return selectedPath;
 }
 
+// Tracks accumulated text length per item to emit only deltas for streaming.
+const codexItemTextLength = new Map<string, number>();
+const codexItemLastEmitTime = new Map<string, number>();
+const CODEX_OUTPUT_THROTTLE_MS = 200;
+
 function mapCodexItemEvent(args: {
   lifecycle: "item.started" | "item.updated" | "item.completed";
   item: ThreadItem;
 }): BridgeEvent[] {
   const { item, lifecycle } = args;
+  const itemId = (item as { id?: string }).id ?? "";
   const messageText = (item.type === "agent_message" || item.type === "reasoning") ? (item.text ?? "") : "";
   const trimmedMessageText = messageText.trim();
   const isPlanResponse = trimmedMessageText.startsWith("<proposed_plan>") && trimmedMessageText.endsWith("</proposed_plan>");
@@ -193,28 +199,92 @@ function mapCodexItemEvent(args: {
     : "";
 
   switch (item.type) {
-    case "agent_message":
-      if (lifecycle !== "item.completed") return [];
-      if (isPlanResponse) {
-        return [{ type: "plan_ready", planText: extractedPlanText }];
+    case "agent_message": {
+      if (lifecycle === "item.completed") {
+        const prev = codexItemTextLength.get(itemId) ?? 0;
+        codexItemTextLength.delete(itemId);
+        // Plan detection only at completion (closing tag not available during streaming).
+        if (isPlanResponse) {
+          return [{ type: "plan_ready", planText: extractedPlanText }];
+        }
+        const full = item.text ?? "";
+        const delta = full.slice(prev);
+        return delta ? [{ type: "text", text: delta }] : [];
       }
-      return item.text ? [{ type: "text", text: item.text }] : [];
-    case "reasoning":
-      if (lifecycle !== "item.completed") return [];
-      return item.text ? [{ type: "thinking", text: item.text, isStreaming: false }] : [];
+      // item.started / item.updated — emit delta for streaming.
+      // Skip streaming if the text looks like it's starting a plan response
+      // to avoid showing raw XML that will later become a plan card.
+      const full = item.text ?? "";
+      if (!full || full.trimStart().startsWith("<proposed_plan>")) return [];
+      const prev = codexItemTextLength.get(itemId) ?? 0;
+      const delta = full.slice(prev);
+      if (!delta) return [];
+      codexItemTextLength.set(itemId, full.length);
+      return [{ type: "text", text: delta }];
+    }
+    case "reasoning": {
+      if (lifecycle === "item.completed") {
+        const prev = codexItemTextLength.get(itemId) ?? 0;
+        codexItemTextLength.delete(itemId);
+        const full = item.text ?? "";
+        const delta = full.slice(prev);
+        return delta ? [{ type: "thinking", text: delta, isStreaming: false }] : [];
+      }
+      // item.started / item.updated — emit delta for streaming
+      const full = item.text ?? "";
+      if (!full) return [];
+      const prev = codexItemTextLength.get(itemId) ?? 0;
+      const delta = full.slice(prev);
+      if (!delta) return [];
+      codexItemTextLength.set(itemId, full.length);
+      return [{ type: "thinking", text: delta, isStreaming: true }];
+    }
     case "command_execution": {
       const events: BridgeEvent[] = [];
       if (lifecycle === "item.started" && item.command) {
-        events.push({ type: "tool", toolName: "bash", input: item.command, state: "input-available" });
-      }
-      if (lifecycle === "item.completed" && (item.status === "completed" || item.status === "failed")) {
         events.push({
           type: "tool",
+          ...(itemId ? { toolUseId: itemId } : {}),
           toolName: "bash",
-          input: item.command ?? "",
-          output: item.aggregated_output ?? "",
-          state: item.status === "failed" ? "output-error" : "output-available",
+          input: item.command,
+          state: "input-available",
         });
+      }
+      if (
+        lifecycle === "item.updated"
+        && itemId
+        && typeof item.aggregated_output === "string"
+        && item.aggregated_output.length > 0
+      ) {
+        const now = Date.now();
+        const lastEmitAt = codexItemLastEmitTime.get(itemId) ?? 0;
+        if (now - lastEmitAt >= CODEX_OUTPUT_THROTTLE_MS) {
+          codexItemLastEmitTime.set(itemId, now);
+          events.push({
+            type: "tool_result",
+            tool_use_id: itemId,
+            output: item.aggregated_output,
+          });
+        }
+      }
+      if (lifecycle === "item.completed" && (item.status === "completed" || item.status === "failed")) {
+        codexItemLastEmitTime.delete(itemId);
+        if (itemId) {
+          events.push({
+            type: "tool_result",
+            tool_use_id: itemId,
+            output: item.aggregated_output ?? "",
+            ...(item.status === "failed" ? { isError: true } : {}),
+          });
+        } else {
+          events.push({
+            type: "tool",
+            toolName: "bash",
+            input: item.command ?? "",
+            output: item.aggregated_output ?? "",
+            state: item.status === "failed" ? "output-error" : "output-available",
+          });
+        }
       }
       return events;
     }
@@ -224,21 +294,33 @@ function mapCodexItemEvent(args: {
       if (lifecycle === "item.started") {
         events.push({
           type: "tool",
+          ...(itemId ? { toolUseId: itemId } : {}),
           toolName: toolLabel,
           input: toText(item.arguments ?? {}),
           state: "input-available",
         });
       }
       if (lifecycle === "item.completed" && (item.status === "completed" || item.status === "failed")) {
-        events.push({
-          type: "tool",
-          toolName: toolLabel,
-          input: toText(item.arguments ?? {}),
-          output: item.error?.message
-            ? `[error] ${item.error.message}`
-            : toText(item.result ?? ""),
-          state: item.status === "failed" ? "output-error" : "output-available",
-        });
+        const isFailed = item.status === "failed";
+        const output = item.error?.message
+          ? `[error] ${item.error.message}`
+          : toText(item.result ?? "");
+        if (itemId) {
+          events.push({
+            type: "tool_result",
+            tool_use_id: itemId,
+            output,
+            ...(isFailed ? { isError: true } : {}),
+          });
+        } else {
+          events.push({
+            type: "tool",
+            toolName: toolLabel,
+            input: toText(item.arguments ?? {}),
+            output,
+            state: isFailed ? "output-error" : "output-available",
+          });
+        }
       }
       return events;
     }
@@ -246,12 +328,16 @@ function mapCodexItemEvent(args: {
       if (lifecycle === "item.started") {
         return [{
           type: "tool",
+          ...(itemId ? { toolUseId: itemId } : {}),
           toolName: "web_search",
           input: item.query ?? "",
           state: "input-available",
         }];
       }
       if (lifecycle === "item.completed") {
+        if (itemId) {
+          return [{ type: "tool_result", tool_use_id: itemId, output: "" }];
+        }
         return [{
           type: "tool",
           toolName: "web_search",
@@ -263,6 +349,12 @@ function mapCodexItemEvent(args: {
       return [];
     }
     case "file_change": {
+      if (lifecycle === "item.started") {
+        const paths = (item.changes ?? []).map((change) => change.path ?? "").filter(Boolean);
+        if (paths.length > 0) {
+          return [{ type: "system", content: `Modifying: ${paths.join(", ")}` }];
+        }
+      }
       if (lifecycle !== "item.completed") return [];
       if (item.status === "failed") {
         return [{
@@ -309,19 +401,34 @@ function ensureThread(args: {
     runtimeValue: args.runtimeOptions?.codexApprovalPolicy,
     envValue: process.env.STAVE_CODEX_APPROVAL_POLICY?.trim(),
   });
-  const threadKey = `${args.taskId ?? "default"}:${args.cwd}:${sandboxMode}:${networkAccessEnabled ? "net1" : "net0"}:${approvalPolicy ?? "approval-default"}:${args.runtimeOptions?.codexPlanMode ? "plan1" : "plan0"}`;
+  const model = args.runtimeOptions?.model?.trim() || "model-default";
+  const modelReasoningEffort = args.runtimeOptions?.codexModelReasoningEffort ?? "effort-default";
+  const webSearchMode = args.runtimeOptions?.codexWebSearchMode ?? "websearch-default";
+  const threadKey = `${args.taskId ?? "default"}:${args.cwd}:${sandboxMode}:${networkAccessEnabled ? "net1" : "net0"}:${approvalPolicy ?? "approval-default"}:${model}:${modelReasoningEffort}:${webSearchMode}:${args.runtimeOptions?.codexPlanMode ? "plan1" : "plan0"}`;
   const existing = threadByTask.get(threadKey);
   if (existing) {
     return existing;
   }
   const thread = args.codex.startThread({
+    ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
     workingDirectory: args.cwd,
     sandboxMode,
     networkAccessEnabled,
+    ...(args.runtimeOptions?.codexModelReasoningEffort ? { modelReasoningEffort: args.runtimeOptions.codexModelReasoningEffort } : {}),
+    ...(args.runtimeOptions?.codexWebSearchMode ? { webSearchMode: args.runtimeOptions.codexWebSearchMode } : {}),
     ...(approvalPolicy ? { approvalPolicy } : {}),
   });
   threadByTask.set(threadKey, thread);
   return thread;
+}
+
+export function cleanupCodexTask(taskId: string) {
+  const keyPrefix = `${taskId}:`;
+  for (const threadKey of threadByTask.keys()) {
+    if (threadKey.startsWith(keyPrefix)) {
+      threadByTask.delete(threadKey);
+    }
+  }
 }
 
 export async function streamCodexWithSdk(args: StreamTurnArgs & {
@@ -368,6 +475,9 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
 
     const codexDebug = args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";
     const events: BridgeEvent[] = [];
+    // Clear any stale delta-tracking state from a previous aborted turn.
+    codexItemTextLength.clear();
+    codexItemLastEmitTime.clear();
     const diffTracker = await createTurnDiffTracker({ cwd: runtimeCwd });
     for await (const event of streamed.events) {
       const threadEvent = event as ThreadEvent;
@@ -376,6 +486,8 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
       }
       switch (threadEvent.type) {
         case "turn.started":
+          codexItemTextLength.clear();
+          codexItemLastEmitTime.clear();
           break;
         case "item.started":
         case "item.updated":
@@ -420,6 +532,18 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
           args.onEvent?.(events[events.length - 1]!);
           break;
         case "turn.completed":
+          {
+            const completedEvent = threadEvent as TurnCompletedEvent;
+            events.push({
+              type: "usage",
+              inputTokens: completedEvent.usage.input_tokens,
+              outputTokens: completedEvent.usage.output_tokens,
+              ...(completedEvent.usage.cached_input_tokens > 0
+                ? { cacheReadTokens: completedEvent.usage.cached_input_tokens }
+                : {}),
+            });
+            args.onEvent?.(events[events.length - 1]!);
+          }
           events.push({ type: "done" });
           args.onEvent?.(events[events.length - 1]!);
           break;
