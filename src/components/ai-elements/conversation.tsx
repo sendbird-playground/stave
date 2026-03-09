@@ -3,7 +3,7 @@ import { createContext, forwardRef, useContext, useEffect, useMemo, useRef, useS
 import { ArrowDown, Download } from "lucide-react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui";
+import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 
 interface ConversationContextValue {
   containerRef: React.RefObject<HTMLDivElement | null>;
@@ -178,16 +178,25 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       if (lastIndex < 0) {
         return;
       }
+      const behavior = args?.behavior ?? "auto";
       virtuosoRef.current?.scrollToIndex({
         index: lastIndex,
         align: "end",
         behavior: toVirtualScrollBehavior(args),
       });
+      if (containerEl) {
+        requestAnimationFrame(() => {
+          containerEl.scrollTo({ top: containerEl.scrollHeight, behavior });
+          requestAnimationFrame(() => {
+            containerEl.scrollTo({ top: containerEl.scrollHeight, behavior });
+          });
+        });
+      }
     });
     return () => {
       setScrollToBottomOverride(null);
     };
-  }, [lastIndex, setScrollToBottomOverride]);
+  }, [containerEl, lastIndex, setScrollToBottomOverride]);
 
   useEffect(() => {
     if (!virtuosoRef.current) {
@@ -309,23 +318,57 @@ export function ConversationEmptyState(args: {
   );
 }
 
-export function ConversationScrollButton(props: HTMLAttributes<HTMLButtonElement>) {
-  const { atBottom, scrollToBottom } = useConversationContext();
+interface ConversationScrollButtonProps extends HTMLAttributes<HTMLButtonElement> {
+  tooltip?: string;
+}
+
+export function ConversationScrollButton(props: ConversationScrollButtonProps) {
+  const { atBottom, containerRef, scrollToBottom } = useConversationContext();
   if (atBottom) {
     return null;
   }
 
-  return (
+  const { tooltip, ...buttonProps } = props;
+  const button = (
     <Button
       size="sm"
       variant="outline"
-      className={cn("absolute bottom-3 right-3 h-8 rounded-full px-2", props.className)}
-      onClick={() => scrollToBottom({ behavior: "smooth" })}
+      className={cn("absolute bottom-3 right-3 h-8 rounded-full px-2", buttonProps.className)}
+      onClick={() => {
+        scrollToBottom({ behavior: "smooth" });
+        const container = containerRef.current;
+        if (!container) {
+          return;
+        }
+        const forceBottom = () => {
+          const lastMessage = Array.from(container.querySelectorAll<HTMLElement>("[data-message-id]")).at(-1);
+          lastMessage?.scrollIntoView({ block: "end", behavior: "smooth" });
+          container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+        };
+        requestAnimationFrame(() => {
+          forceBottom();
+          requestAnimationFrame(forceBottom);
+        });
+      }}
       aria-label="scroll-to-bottom"
       type="button"
+      {...buttonProps}
     >
       <ArrowDown className="size-4" />
     </Button>
+  );
+
+  if (!tooltip) {
+    return button;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="top">{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -352,13 +395,13 @@ interface ConversationDownloadProps extends Omit<React.ComponentProps<typeof But
   messages: ConversationMarkdownMessage[];
   filename?: string;
   formatMessage?: (message: ConversationMarkdownMessage, index: number) => string;
+  tooltip?: string;
 }
 
 export function ConversationDownload(args: ConversationDownloadProps) {
-  const { messages, filename = `conversation-${new Date().toISOString().slice(0, 10)}.md`, formatMessage, className, ...props } = args;
+  const { messages, filename = `conversation-${new Date().toISOString().slice(0, 10)}.md`, formatMessage, className, tooltip, ...props } = args;
   const disabled = messages.length === 0;
-
-  return (
+  const button = (
     <Button
       type="button"
       size="sm"
@@ -380,5 +423,18 @@ export function ConversationDownload(args: ConversationDownloadProps) {
     >
       <Download className="size-4" />
     </Button>
+  );
+
+  if (!tooltip) {
+    return button;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="top">{tooltip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

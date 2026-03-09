@@ -208,7 +208,7 @@ Claude also rewrites the child-process environment before execution so Electron-
 - `STAVE_CODEX_APPROVAL_POLICY`
 - `STAVE_CODEX_DEBUG`
 
-Most per-turn runtime settings can also be changed from the Stave Settings dialog, and those UI values override the environment defaults for active turns.
+Most per-turn runtime settings can also be changed from the Settings dialog, and those UI values override the environment defaults for active turns.
 
 ## Project structure
 

@@ -1,6 +1,6 @@
-import { Archive, CirclePlus, Download, Ellipsis, LoaderCircle, PanelLeft, Pencil, Plus, RectangleEllipsis } from "lucide-react";
+import { Archive, Check, CirclePlus, Copy, Download, Ellipsis, Hash, LoaderCircle, PanelLeft, Pencil, Plus, RectangleEllipsis } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { getTaskCounts, getVisibleTasks, isTaskArchived, type TaskFilter } from "@/lib/tasks";
+import { formatTaskUpdatedAt, getTaskCounts, getVisibleTasks, isTaskArchived, type TaskFilter } from "@/lib/tasks";
 import { useAppStore } from "@/store/app.store";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, KbdSeparator, WaveIndicator } from "@/components/ui";
@@ -13,7 +13,10 @@ export function TaskList() {
   const [taskFilter, setTaskFilter] = useState<TaskFilter>("active");
   const [taskToArchive, setTaskToArchive] = useState<{ id: string; title: string } | null>(null);
   const [taskToRename, setTaskToRename] = useState<{ id: string; title: string } | null>(null);
+  const [taskToViewSession, setTaskToViewSession] = useState<{ id: string; title: string; provider: "claude-code" | "codex" } | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [copiedSessionId, setCopiedSessionId] = useState(false);
+  const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const tasks = useAppStore((state) => state.tasks);
   const layout = useAppStore((state) => state.layout);
@@ -45,6 +48,21 @@ export function TaskList() {
       renameInputRef.current?.select();
     }, 0);
   }, [taskToRename]);
+
+  useEffect(() => {
+    const handle = window.setInterval(() => {
+      setTimeAnchor(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(handle);
+  }, []);
+
+  useEffect(() => {
+    if (!taskToViewSession || !copiedSessionId) {
+      return;
+    }
+    const handle = window.setTimeout(() => setCopiedSessionId(false), 1500);
+    return () => window.clearTimeout(handle);
+  }, [copiedSessionId, taskToViewSession]);
 
   function handleRenameConfirm() {
     if (!taskToRename) {
@@ -136,7 +154,7 @@ export function TaskList() {
                         ) : null}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {isTaskArchived(task) ? "Archived" : task.updatedAt}
+                        {isTaskArchived(task) ? "Archived" : formatTaskUpdatedAt({ value: task.updatedAt, now: timeAnchor })}
                       </p>
                     </button>
                   ))}
@@ -169,7 +187,7 @@ export function TaskList() {
     <>
     <aside
       data-testid="task-list"
-      className="hidden h-full shrink-0 px-2 transition-[width] duration-200 lg:flex lg:flex-col"
+      className="hidden h-full shrink-0 px-2 lg:flex lg:flex-col"
       style={{ width: `${layout.taskListWidth}px`, minWidth: "160px" }}
     >
       <div className="mb-2">
@@ -249,7 +267,7 @@ export function TaskList() {
                   {task.unread ? <span className="inline-block size-1.5 shrink-0 rounded-full bg-warning" /> : null}
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                  <p>{task.updatedAt}</p>
+                  <p>{formatTaskUpdatedAt({ value: task.updatedAt, now: timeAnchor })}</p>
                   {isTaskArchived(task) ? (
                     <Badge variant="outline" className="rounded-md border-border/70 px-1.5 py-0 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
                       Archived
@@ -278,6 +296,13 @@ export function TaskList() {
                       <DropdownMenuItem onClick={() => exportTask({ taskId: task.id })}>
                         <Download />
                         Export
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        setCopiedSessionId(false);
+                        setTaskToViewSession({ id: task.id, title: task.title, provider: task.provider });
+                      }}>
+                        <Hash />
+                        View Session ID
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                     <DropdownMenuSeparator />
@@ -352,6 +377,42 @@ export function TaskList() {
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="outline" onClick={() => setTaskToRename(null)}>Cancel</Button>
             <Button onClick={handleRenameConfirm}>Rename</Button>
+          </div>
+        </Card>
+      </div>
+    ) : null}
+    {taskToViewSession ? (
+      <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]" onMouseDown={() => setTaskToViewSession(null)}>
+        <Card className="w-full max-w-lg rounded-lg border-border/80 bg-card p-4 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Session ID</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This is Stave&apos;s task session identifier for <span className="font-medium text-foreground">{taskToViewSession.title}</span>.
+                Claude SDK session state and Codex thread state are scoped from this task id inside the provider runtime.
+              </p>
+            </div>
+            <Badge variant="secondary" className="shrink-0">
+              {taskToViewSession.provider === "claude-code" ? "Claude" : "Codex"}
+            </Badge>
+          </div>
+          <div className="mt-4 rounded-md border border-border/80 bg-background px-3 py-2 font-mono text-sm text-foreground">
+            {taskToViewSession.id}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            This is not the raw provider-issued id shown by Claude or Codex directly. It is the stable Stave task id those provider sessions attach to.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setTaskToViewSession(null)}>Close</Button>
+            <Button
+              onClick={() => {
+                void navigator.clipboard.writeText(taskToViewSession.id);
+                setCopiedSessionId(true);
+              }}
+            >
+              {copiedSessionId ? <Check className="size-4" /> : <Copy className="size-4" />}
+              {copiedSessionId ? "Copied" : "Copy ID"}
+            </Button>
           </div>
         </Card>
       </div>

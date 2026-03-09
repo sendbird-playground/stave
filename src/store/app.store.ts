@@ -39,6 +39,8 @@ interface LayoutState {
   editorDiffMode: boolean;
 }
 
+const APP_STORE_KEY = "stave-store";
+
 export const THEME_TOKEN_NAMES = [
   "background",
   "foreground",
@@ -337,7 +339,7 @@ function buildMessageId(args: { taskId: string; count: number }) {
 }
 
 function buildRecentTimestamp() {
-  return "just now";
+  return new Date().toISOString();
 }
 
 function sanitizeBranchName(args: { value: string }) {
@@ -1527,7 +1529,7 @@ export const useAppStore = create<AppState>()(
             id: crypto.randomUUID(),
             title: trimmed.length > 0 ? trimmed : "New Task",
             provider: state.draftProvider,
-            updatedAt: "just now",
+            updatedAt: buildRecentTimestamp(),
             unread: false,
             archivedAt: null,
           };
@@ -2645,7 +2647,7 @@ export const useAppStore = create<AppState>()(
       },
     }),
     {
-      name: "stave-vnext-store",
+      name: APP_STORE_KEY,
       partialize: (state) => ({
         workspaces: state.workspaces,
         activeWorkspaceId: state.activeWorkspaceId,

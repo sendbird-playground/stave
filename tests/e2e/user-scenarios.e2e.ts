@@ -10,7 +10,7 @@ test("shows no-project splash when project is not selected", async ({ page }) =>
 
 test.fixme("shows no-workspace splash when project exists without selected workspace", async ({ page }) => {
   await page.addInitScript(() => {
-    window.localStorage.setItem("stave-vnext-store", JSON.stringify({
+    window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
         workspaceRootName: "stave-project",
@@ -63,7 +63,7 @@ test("new task button creates a visible task item", async ({ page }) => {
         messagesByTask: {},
       },
     }]));
-    window.localStorage.setItem("stave-vnext-store", JSON.stringify({
+    window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
         workspaceRootName: "stave-project",
@@ -101,7 +101,7 @@ test("prompt input is focused after creating a task", async ({ page }) => {
         messagesByTask: {},
       },
     }]));
-    window.localStorage.setItem("stave-vnext-store", JSON.stringify({
+    window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
         workspaceRootName: "stave-project",
@@ -150,7 +150,7 @@ test("stale streaming message does not show responding wave without an active tu
         },
       },
     }]));
-    window.localStorage.setItem("stave-vnext-store", JSON.stringify({
+    window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
         workspaceRootName: "stave-project",
@@ -210,7 +210,7 @@ test("streaming-off mode still shows responding wave during active turns", async
         },
       },
     }]));
-    window.localStorage.setItem("stave-vnext-store", JSON.stringify({
+    window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
         workspaceRootName: "stave-project",
@@ -292,7 +292,7 @@ test("workspace switch restores per-workspace task snapshot", async ({ page }) =
       },
     ];
     window.localStorage.setItem("stave:workspace-fallback:v1", JSON.stringify(rows));
-    window.localStorage.setItem("stave-vnext-store", JSON.stringify({
+    window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
         workspaceRootName: "stave-project",
@@ -332,7 +332,7 @@ test("source control actions update status and history surfaces", async ({ page 
       history: [] as Array<{ hash: string; relativeDate: string; subject: string }>,
     };
 
-    window.localStorage.setItem("stave-vnext-store", JSON.stringify({
+    window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
         workspaceRootName: "stave-project",
@@ -424,7 +424,7 @@ test("terminal sessions create and poll output lifecycle", async ({ page }) => {
       closeCalls: 0,
     };
 
-    window.localStorage.setItem("stave-vnext-store", JSON.stringify({
+    window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
         workspaceRootName: "stave-project",

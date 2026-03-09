@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, FileCode2, FolderTree, GitBranch, GitPullRequest, TerminalSquare } from "lucide-react";
-import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
@@ -13,7 +13,6 @@ export function WorkspaceBar() {
   const [currentBranch, setCurrentBranch] = useState("main");
   const [branchError, setBranchError] = useState("");
   const [isBusy, setIsBusy] = useState(false);
-  const branchMenuRef = useRef<HTMLDivElement | null>(null);
   const layout = useAppStore((state) => state.layout);
   const setLayout = useAppStore((state) => state.setLayout);
   const workspaces = useAppStore((state) => state.workspaces);
@@ -65,20 +64,6 @@ export function WorkspaceBar() {
       setCurrentBranch(next);
     }
   }, [workspaceBranchById, activeWorkspaceId]);
-
-  useEffect(() => {
-    if (!branchOpen) {
-      return;
-    }
-    const onPointerDown = (event: MouseEvent) => {
-      if (branchMenuRef.current?.contains(event.target as Node)) {
-        return;
-      }
-      setBranchOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [branchOpen]);
 
   const filteredBranches = useMemo(() => {
     const normalized = branchFilter.trim().toLowerCase();
@@ -174,26 +159,78 @@ export function WorkspaceBar() {
             </TooltipTrigger>
             <TooltipContent side="bottom">{workspaceName}</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  "inline-flex h-9 items-center gap-1.5 rounded-md border border-border/80 bg-card/90 px-3 text-sm text-foreground transition-colors hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-50",
-                  branchOpen && "border-primary/70 bg-secondary/80",
-                )}
-                onClick={() => setBranchOpen((prev) => !prev)}
-                disabled={!isDefaultWorkspace}
-              >
-                <GitBranch className="size-3.5" />
-                {currentBranch}
-                <ChevronDown className="size-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {isDefaultWorkspace ? "Switch branch" : "Branch switch disabled for worktree workspace"}
-            </TooltipContent>
-          </Tooltip>
+          <DropdownMenu open={branchOpen} onOpenChange={setBranchOpen}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex h-9 items-center gap-1.5 rounded-md border border-border/80 bg-card/90 px-3 text-sm text-foreground transition-colors hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-50",
+                      branchOpen && "border-primary/70 bg-secondary/80",
+                    )}
+                    disabled={!isDefaultWorkspace}
+                  >
+                    <GitBranch className="size-3.5" />
+                    {currentBranch}
+                    <ChevronDown className="size-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {isDefaultWorkspace ? "Switch branch" : "Branch switch disabled for worktree workspace"}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start" sideOffset={8} className="h-[50vh] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto p-2">
+              <Input
+                className="h-9 rounded-md border-background/12 bg-background/8 text-sm text-background placeholder:text-background/45"
+                placeholder="Search branches"
+                value={branchFilter}
+                onChange={(event) => setBranchFilter(event.target.value)}
+              />
+              <div className="mt-2 flex gap-2">
+                <Input
+                  className="h-9 rounded-md border-background/12 bg-background/8 text-sm text-background placeholder:text-background/45"
+                  placeholder="new-branch-name"
+                  value={newBranchName}
+                  onChange={(event) => setNewBranchName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleCreateBranch();
+                    }
+                  }}
+                />
+                <Button className="h-9 rounded-md px-3.5 text-sm" disabled={isBusy} onClick={() => void handleCreateBranch()}>
+                  Create
+                </Button>
+              </div>
+              <div className="mt-2 space-y-1 text-sm">
+                {branchError ? <p className="px-2 py-1 text-destructive">{branchError}</p> : null}
+                {filteredBranches.map((branch) => (
+                  <button
+                    key={branch}
+                    type="button"
+                    className={cn(
+                      "w-full rounded-sm px-2 py-2 text-left transition-colors hover:bg-background/10",
+                      branch === currentBranch && "border border-background/12 bg-background/10",
+                    )}
+                    onClick={() => {
+                      void handleCheckoutBranch({ name: branch }).then(() => {
+                        setBranchOpen(false);
+                        setBranchFilter("");
+                      });
+                    }}
+                    disabled={isBusy}
+                  >
+                    <p className="font-medium text-background">{branch}</p>
+                    <p className="text-sm text-background/60">{branch === currentBranch ? "Current branch" : "Checkout"}</p>
+                  </button>
+                ))}
+                {!branchError && filteredBranches.length === 0 ? <p className="px-2 py-2 text-background/60">No branches.</p> : null}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {!isDefaultWorkspace ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -280,45 +317,6 @@ export function WorkspaceBar() {
           </Tooltip>
         </div>
       </TooltipProvider>
-      {branchOpen && isDefaultWorkspace ? (
-        <div ref={branchMenuRef} className="overflow-y-auto animate-dropdown-in absolute left-28 top-12 z-40 w-[min(26rem,calc(100vw-2rem))] h-[50vh] rounded-md border border-border/80 bg-card p-2 shadow-xl">
-          <Input
-            className="h-9 rounded-md border-border/80 bg-background text-sm"
-            placeholder="Search branches"
-            value={branchFilter}
-            onChange={(event) => setBranchFilter(event.target.value)}
-          />
-          <div className="mt-2 flex gap-2">
-            <Input
-              className="h-9 rounded-md border-border/80 bg-background text-sm"
-              placeholder="new-branch-name"
-              value={newBranchName}
-              onChange={(event) => setNewBranchName(event.target.value)}
-            />
-            <Button className="h-9 rounded-md px-3.5 text-sm" disabled={isBusy} onClick={() => void handleCreateBranch()}>
-              Create
-            </Button>
-          </div>
-          <div className="mt-2 space-y-1 text-sm">
-            {branchError ? <p className="px-2 py-1 text-destructive">{branchError}</p> : null}
-            {filteredBranches.map((branch) => (
-              <button
-                key={branch}
-                className={[
-                  "w-full rounded-sm px-2 py-2 text-left hover:bg-secondary/60",
-                  branch === currentBranch ? "border border-border/70 bg-secondary/60" : "",
-                ].join(" ")}
-                onClick={() => void handleCheckoutBranch({ name: branch })}
-                disabled={isBusy}
-              >
-                <p className="font-medium">{branch}</p>
-                <p className="text-sm text-muted-foreground">{branch === currentBranch ? "Current branch" : "Checkout"}</p>
-              </button>
-            ))}
-            {!branchError && filteredBranches.length === 0 ? <p className="px-2 py-2 text-muted-foreground">No branches.</p> : null}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

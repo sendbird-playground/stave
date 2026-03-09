@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Bot, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Wrench } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Card, Input, Textarea } from "@/components/ui";
@@ -140,9 +140,7 @@ function GeneralSection() {
 
 function ThemeSection() {
   const [themeEditorMode, setThemeEditorMode] = useState<ThemeModeName>("light");
-  const [themeMode, themeOverrides] = useAppStore(
-    useShallow((state) => [state.settings.themeMode, state.settings.themeOverrides] as const),
-  );
+  const themeMode = useAppStore((state) => state.settings.themeMode);
   const updateSettings = useAppStore((state) => state.updateSettings);
 
   return (
@@ -182,7 +180,8 @@ function ThemeSection() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() =>
+              onClick={() => {
+                const themeOverrides = useAppStore.getState().settings.themeOverrides;
                 updateSettings({
                   patch: {
                     themeOverrides: {
@@ -190,71 +189,78 @@ function ThemeSection() {
                       [themeEditorMode]: {},
                     },
                   },
-                })
-              }
+                });
+              }}
             >
               Reset {themeEditorMode}
             </Button>
           </div>
 
           <div className="grid gap-3">
-            {THEME_TOKEN_NAMES.map((token) => {
-              const overrideValue = themeOverrides[themeEditorMode][token] ?? "";
-              const effectiveValue = overrideValue || PRESET_THEME_TOKENS[themeEditorMode][token];
-
-              return (
-                <div key={`${themeEditorMode}-${token}`} className="grid gap-3 rounded-xl border border-border/70 bg-background/60 p-4 lg:grid-cols-[190px_52px_1fr_auto] lg:items-center">
-                  <div>
-                    <p className="text-sm font-medium">{formatThemeTokenLabel(token)}</p>
-                    <p className="text-xs text-muted-foreground">Preset: {PRESET_THEME_TOKENS[themeEditorMode][token]}</p>
-                  </div>
-                  <span className="size-11 rounded-lg border border-border" style={{ backgroundColor: effectiveValue }} aria-hidden="true" />
-                  <Input
-                    className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
-                    value={overrideValue}
-                    placeholder={PRESET_THEME_TOKENS[themeEditorMode][token]}
-                    onChange={(event) =>
-                      updateSettings({
-                        patch: {
-                          themeOverrides: {
-                            ...themeOverrides,
-                            [themeEditorMode]: {
-                              ...themeOverrides[themeEditorMode],
-                              [token]: event.target.value,
-                            },
-                          },
-                        },
-                      })
-                    }
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      updateSettings({
-                        patch: {
-                          themeOverrides: {
-                            ...themeOverrides,
-                            [themeEditorMode]: {
-                              ...themeOverrides[themeEditorMode],
-                              [token]: "",
-                            },
-                          },
-                        },
-                      })
-                    }
-                  >
-                    Reset
-                  </Button>
-                </div>
-              );
-            })}
+            {THEME_TOKEN_NAMES.map((token) => (
+              <ThemeTokenRow key={`${themeEditorMode}-${token}`} token={token} themeEditorMode={themeEditorMode} />
+            ))}
           </div>
         </SettingsCard>
       </SectionStack>
     </>
   );
 }
+
+const ThemeTokenRow = memo(function ThemeTokenRow(args: { token: ThemeTokenName; themeEditorMode: ThemeModeName }) {
+  const updateSettings = useAppStore((state) => state.updateSettings);
+  const overrideValue = useAppStore((state) => state.settings.themeOverrides[args.themeEditorMode][args.token] ?? "");
+  const effectiveValue = overrideValue || PRESET_THEME_TOKENS[args.themeEditorMode][args.token];
+
+  return (
+    <div className="grid gap-3 rounded-xl border border-border/70 bg-background/60 p-4 lg:grid-cols-[190px_52px_1fr_auto] lg:items-center">
+      <div>
+        <p className="text-sm font-medium">{formatThemeTokenLabel(args.token)}</p>
+        <p className="text-xs text-muted-foreground">Preset: {PRESET_THEME_TOKENS[args.themeEditorMode][args.token]}</p>
+      </div>
+      <span className="size-11 rounded-lg border border-border" style={{ backgroundColor: effectiveValue }} aria-hidden="true" />
+      <Input
+        className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
+        value={overrideValue}
+        placeholder={PRESET_THEME_TOKENS[args.themeEditorMode][args.token]}
+        onChange={(event) => {
+          const themeOverrides = useAppStore.getState().settings.themeOverrides;
+          updateSettings({
+            patch: {
+              themeOverrides: {
+                ...themeOverrides,
+                [args.themeEditorMode]: {
+                  ...themeOverrides[args.themeEditorMode],
+                  [args.token]: event.target.value,
+                },
+              },
+            },
+          });
+        }}
+      />
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          const themeOverrides = useAppStore.getState().settings.themeOverrides;
+          updateSettings({
+            patch: {
+              themeOverrides: {
+                ...themeOverrides,
+                [args.themeEditorMode]: {
+                  ...themeOverrides[args.themeEditorMode],
+                  [args.token]: "",
+                },
+              },
+            },
+          });
+        }}
+      >
+        Reset
+      </Button>
+    </div>
+  );
+});
 
 function TerminalSection() {
   const [terminalFontSize, terminalFontFamily, terminalCursorStyle, terminalLineHeight] = useAppStore(

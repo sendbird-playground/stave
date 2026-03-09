@@ -1,4 +1,4 @@
-import { memo, Suspense, lazy, useMemo, useRef, useState } from "react";
+import { memo, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
 import { Check, ChevronDown, ChevronRight, Copy, MessageSquareIcon } from "lucide-react";
 import { Badge, Button, Card, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, WaveIndicator } from "@/components/ui";
@@ -37,6 +37,7 @@ import {
   parseSubagentToolInput,
 } from "@/components/ai-elements";
 import { getRenderableMessageParts, groupMessageParts, isPendingDiffStatus, summarizeDiffLineChanges } from "@/components/session/chat-panel.utils";
+import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { CodeDiffPart, FileContextPart, MessagePart } from "@/types/chat";
@@ -664,12 +665,15 @@ export function ChatPanel() {
   const messagesByTask = useAppStore((state) => state.messagesByTask);
   const activeTurnIdsByTask = useAppStore((state) => state.activeTurnIdsByTask);
   const chatStreamingEnabled = useAppStore((state) => state.settings.chatStreamingEnabled);
+  const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
   const scrollAnchorByTaskRef = useRef(new Map<string, TaskScrollAnchor>());
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
 
   const messages = useMemo(() => messagesByTask[activeTaskId] ?? [], [activeTaskId, messagesByTask]);
   const visibleMessages = useMemo(() => messages.filter((message) => !message.isPlanResponse), [messages]);
-  const activeTaskTitle = tasks.find((task) => task.id === activeTaskId)?.title ?? "Untitled Task";
+  const activeTask = useMemo(() => tasks.find((task) => task.id === activeTaskId), [activeTaskId, tasks]);
+  const activeTaskTitle = activeTask?.title ?? "Untitled Task";
+  const activeTaskUpdatedAt = activeTask?.updatedAt;
   const activeTurnId = activeTurnIdsByTask[activeTaskId];
   const liveStreamingMessageId = activeTurnId ? visibleMessages.at(-1)?.id : undefined;
   const conversationDownloadRows = useMemo(() => messages.map((message) => ({
@@ -686,14 +690,26 @@ export function ChatPanel() {
   const restoreAnchor = activeTaskId ? scrollAnchorByTaskRef.current.get(activeTaskId) : undefined;
   const restoreItemIndex = restoreAnchor ? messageIndexById.get(restoreAnchor.anchorMessageId) : undefined;
 
+  useEffect(() => {
+    const handle = window.setInterval(() => {
+      setTimeAnchor(Date.now());
+    }, 60_000);
+    return () => window.clearInterval(handle);
+  }, []);
+
   return (
     <Conversation>
       <div className="flex h-full w-full flex-col">
         <header className="flex h-10 items-center justify-between border-b border-border/80 px-3 text-sm">
-          <p className="inline-flex min-w-0 items-center gap-2 font-medium text-foreground">
+          <div className="flex min-w-0 items-center gap-2">
             <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
-            <span className="truncate">{activeTaskTitle}</span>
-          </p>
+            <span className="truncate font-medium text-foreground">{activeTaskTitle}</span>
+            {activeTaskUpdatedAt ? (
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {formatTaskUpdatedAt({ value: activeTaskUpdatedAt, now: timeAnchor })}
+              </span>
+            ) : null}
+          </div>
           <Badge variant="secondary">{visibleMessages.length} messages</Badge>
         </header>
         <ConversationContent
@@ -753,8 +769,8 @@ export function ChatPanel() {
           )}
         </ConversationContent>
       </div>
-      <ConversationDownload messages={conversationDownloadRows} />
-      <ConversationScrollButton />
+      <ConversationDownload messages={conversationDownloadRows} tooltip="Export conversation" />
+      <ConversationScrollButton tooltip="Scroll to bottom" />
     </Conversation>
   );
 }

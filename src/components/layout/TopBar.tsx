@@ -1,7 +1,7 @@
 import { cva } from "class-variance-authority";
 import { ChevronDown, Folder, FolderPlus, GitBranch, Home, LoaderCircle, Minus, Moon, RefreshCw, Search, Settings, Square, Sun, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Badge, Button, Card, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Badge, Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -38,7 +38,6 @@ export function TopBar() {
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
   const [isMaximized, setIsMaximized] = useState(false);
   const [workspaceToDelete, setWorkspaceToDelete] = useState<{ id: string; name: string } | null>(null);
-  const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const isDarkMode = useAppStore((state) => state.isDarkMode);
   const workspaceRootName = useAppStore((state) => state.workspaceRootName);
   const workspaces = useAppStore((state) => state.workspaces);
@@ -121,20 +120,6 @@ export function TopBar() {
     });
   }, [createWorkspaceOpen]);
 
-  useEffect(() => {
-    if (!projectMenuOpen) {
-      return;
-    }
-    const onPointerDown = (event: MouseEvent) => {
-      if (projectMenuRef.current?.contains(event.target as Node)) {
-        return;
-      }
-      setProjectMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [projectMenuOpen]);
-
   return (
     <>
       <header
@@ -171,28 +156,49 @@ export function TopBar() {
             </Tooltip>
           </TooltipProvider>
           <span className="h-4 w-px bg-border/80" />
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label="project-menu"
-                  className={cn(
-                    "h-9 max-w-44 rounded-md border border-border/70 bg-card px-2.5 text-sm transition-colors md:max-w-60",
-                    projectMenuOpen && "border-primary/70 bg-secondary/80",
-                  )}
-                  onClick={() => setProjectMenuOpen((prev) => !prev)}
-                  style={noDragStyle}
-                >
-                  <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{workspaceRootName ?? "No Project"}</span>
-                  <ChevronDown className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{workspaceRootName ?? "No Project"}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <DropdownMenu open={projectMenuOpen} onOpenChange={setProjectMenuOpen}>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="project-menu"
+                      className={cn(
+                        "h-9 max-w-44 rounded-md border border-border/70 bg-card px-2.5 text-sm transition-colors md:max-w-60",
+                        projectMenuOpen && "border-primary/70 bg-secondary/80",
+                      )}
+                      style={noDragStyle}
+                    >
+                      <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{workspaceRootName ?? "No Project"}</span>
+                      <ChevronDown className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{workspaceRootName ?? "No Project"}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <DropdownMenuContent align="start" sideOffset={8} className="w-[22rem]" style={noDragStyle}>
+              <DropdownMenuItem
+                className="h-10 justify-start gap-2 rounded-md px-3 text-sm"
+                onClick={() => {
+                  void createProject({});
+                  setProjectMenuOpen(false);
+                }}
+              >
+                <FolderPlus className="size-4 text-background/60" />
+                Create project (select folder)
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Current Project</DropdownMenuLabel>
+              <div className="rounded-sm border border-background/12 bg-background/8 px-2 py-2">
+                <p className="truncate text-sm font-medium text-background">{workspaceRootName ?? "No Project"}</p>
+                <p className="truncate text-sm text-background/60">{workspaceBranchById[activeWorkspaceId] ?? "main"}</p>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <span className="h-4 w-px bg-border/80" />
           <TooltipProvider>
             <div className="hidden items-center gap-1 md:flex">
@@ -377,30 +383,6 @@ export function TopBar() {
             </div>
           </TooltipProvider>
         </div>
-        {projectMenuOpen ? (
-          <div ref={projectMenuRef} className="absolute left-22 top-10 z-40" style={noDragStyle}>
-            <Card className="animate-dropdown-in w-[22rem] rounded-xl border-border/80 bg-card p-3">
-              <Button
-                variant="ghost"
-                className="h-10 w-full justify-start gap-2 rounded-md px-3 text-sm"
-                onClick={() => {
-                  void createProject({});
-                  setProjectMenuOpen(false);
-                }}
-              >
-                <FolderPlus className="size-4 text-muted-foreground" />
-                Create project (select folder)
-              </Button>
-              <div className="mt-2 border-t border-border/80 pt-2">
-                <p className="mb-1 px-2 text-sm text-muted-foreground">Current Project</p>
-                <div className="rounded-sm border border-border/80 bg-secondary/40 px-2 py-2">
-                  <p className="truncate text-sm font-medium">{workspaceRootName ?? "No Project"}</p>
-                  <p className="truncate text-sm text-muted-foreground">{workspaceBranchById[activeWorkspaceId] ?? "main"}</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-        ) : null}
       </header>
       <SettingsDialog open={settingsOpen} onOpenChange={({ open }) => setSettingsOpen(open)} />
       <ConfirmDialog

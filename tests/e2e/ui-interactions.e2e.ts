@@ -5,7 +5,7 @@ test("settings modal and workspace modal open", async ({ page }) => {
   await page.goto("/");
 
   await page.getByRole("button", { name: "open-settings" }).click();
-  await expect(page.getByText("Stave Settings")).toBeVisible();
+  await expect(page.getByText("Settings")).toBeVisible();
   await expect(page.getByRole("heading", { name: "General" })).toBeVisible();
   await page.getByRole("button", { name: "close-settings" }).click();
 

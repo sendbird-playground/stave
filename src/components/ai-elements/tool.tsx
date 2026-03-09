@@ -2,7 +2,6 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { createContext, useContext, useMemo, useState } from "react";
 import { ChevronDown, CircleAlert, CircleCheck, LoaderCircle, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 interface ToolProps extends HTMLAttributes<HTMLDivElement> {
   defaultOpen?: boolean;
@@ -54,38 +53,33 @@ export function getStatusBadge(state?: ToolHeaderProps["state"]): ReactNode {
   switch (state) {
     case "input-streaming":
       return (
-        <Badge variant="secondary" className="gap-1">
-          <LoaderCircle className="size-3 animate-spin" />
-          Running
-        </Badge>
+        <span aria-label="Running" className="inline-flex items-center text-muted-foreground">
+          <LoaderCircle className="size-3.5 animate-spin" />
+        </span>
       );
     case "input-available":
       return (
-        <Badge variant="secondary" className="gap-1">
-          <Wrench className="size-3" />
-          Input
-        </Badge>
+        <span aria-label="Input available" className="inline-flex items-center text-muted-foreground">
+          <Wrench className="size-3.5" />
+        </span>
       );
     case "output-available":
       return (
-        <Badge variant="success" className="gap-1">
-          <CircleCheck className="size-3" />
-          Done
-        </Badge>
+        <span aria-label="Done" className="inline-flex items-center text-success">
+          <CircleCheck className="size-3.5" />
+        </span>
       );
     case "output-error":
       return (
-        <Badge variant="destructive" className="gap-1">
-          <CircleAlert className="size-3" />
-          Error
-        </Badge>
+        <span aria-label="Error" className="inline-flex items-center text-destructive">
+          <CircleAlert className="size-3.5" />
+        </span>
       );
     default:
       return (
-        <Badge variant="secondary" className="gap-1">
-          <Wrench className="size-3" />
-          Idle
-        </Badge>
+        <span aria-label="Idle" className="inline-flex items-center text-muted-foreground">
+          <Wrench className="size-3.5" />
+        </span>
       );
   }
 }
@@ -152,31 +146,19 @@ export function ToolGroup({ states, children }: { states: (ToolGroupState | unde
 
   const groupStatus = overallState === "output-available" || overallState === "input-available"
     ? (
-      <span
-        aria-label="Done"
-        title="Done"
-        className="inline-flex items-center rounded-sm border border-success/30 bg-success/12 px-1.5 py-0.5 text-sm text-success-foreground"
-      >
-        <CircleCheck className="size-3" />
+      <span aria-label="Done" className="inline-flex items-center text-success">
+        <CircleCheck className="size-3.5" />
       </span>
     )
     : overallState === "output-error"
     ? (
-      <span
-        aria-label="Error"
-        title="Error"
-        className="inline-flex items-center rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-sm text-destructive"
-      >
-        <CircleAlert className="size-3" />
+      <span aria-label="Error" className="inline-flex items-center text-destructive">
+        <CircleAlert className="size-3.5" />
       </span>
     )
     : (
-      <span
-        aria-label="Running"
-        title="Running"
-        className="inline-flex items-center rounded-sm border border-border/70 bg-muted px-1.5 py-0.5 text-sm text-muted-foreground"
-      >
-        <LoaderCircle className="size-3 animate-spin" />
+      <span aria-label="Running" className="inline-flex items-center text-muted-foreground">
+        <LoaderCircle className="size-3.5 animate-spin" />
       </span>
     );
 

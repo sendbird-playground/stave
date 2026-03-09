@@ -7,6 +7,7 @@ export function createMainWindow() {
     height: 900,
     frame: false,
     titleBarStyle: "hidden",
+    title: "Stave",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,

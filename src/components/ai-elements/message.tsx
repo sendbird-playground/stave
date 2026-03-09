@@ -3,7 +3,7 @@ import { createContext, useContext, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Paperclip, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui";
+import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { useAppStore } from "@/store/app.store";
 import {
   CodeBlock,
@@ -35,7 +35,7 @@ export function MessageContent(props: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "w-full rounded-md border border-border/80 bg-card px-3 py-2 text-base leading-7 shadow-sm",
+        "w-full rounded-md border border-border/80 bg-card px-3 py-2 text-lg leading-7 shadow-sm",
         "group-[.is-user]:border-primary/40 group-[.is-user]:bg-primary/15"
       )}
       {...props}
@@ -110,7 +110,7 @@ export function MessageResponse({ isStreaming, ...props }: MessageResponseProps)
   }
 
   return (
-    <div className="text-base leading-7" data-streaming={isStreaming ? "true" : undefined} {...props}>
+    <div className="text-lg leading-7" data-streaming={isStreaming ? "true" : undefined} {...props}>
       {isStreaming ? (
         <div className="whitespace-pre-wrap break-words">{content}</div>
       ) : (
@@ -184,16 +184,28 @@ interface MessageActionProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export function MessageAction({ label, tooltip, className, ...props }: MessageActionProps) {
-  return (
+  const button = (
     <Button
       variant="ghost"
       size="sm"
       type="button"
       className={cn("h-7 rounded-sm px-2 text-sm text-muted-foreground hover:text-foreground", className)}
       aria-label={label}
-      title={tooltip ?? label}
       {...props}
     />
+  );
+
+  if (!tooltip && !label) {
+    return button;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="top">{tooltip ?? label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
