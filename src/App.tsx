@@ -1,16 +1,24 @@
 import { useEffect } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAppStore } from "@/store/app.store";
 
 export default function App() {
-  const hasHydratedWorkspaces = useAppStore((state) => state.hasHydratedWorkspaces);
-  const hydrateWorkspaces = useAppStore((state) => state.hydrateWorkspaces);
-  const flushActiveWorkspaceSnapshot = useAppStore((state) => state.flushActiveWorkspaceSnapshot);
-  const refreshProviderAvailability = useAppStore((state) => state.refreshProviderAvailability);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const tasks = useAppStore((state) => state.tasks);
-  const messagesByTask = useAppStore((state) => state.messagesByTask);
+  const [
+    hasHydratedWorkspaces,
+    workspaceSnapshotVersion,
+    hydrateWorkspaces,
+    flushActiveWorkspaceSnapshot,
+    refreshProviderAvailability,
+    activeWorkspaceId,
+  ] = useAppStore(useShallow((state) => [
+    state.hasHydratedWorkspaces,
+    state.workspaceSnapshotVersion,
+    state.hydrateWorkspaces,
+    state.flushActiveWorkspaceSnapshot,
+    state.refreshProviderAvailability,
+    state.activeWorkspaceId,
+  ] as const));
 
   useEffect(() => {
     void hydrateWorkspaces();
@@ -29,7 +37,7 @@ export default function App() {
       void flushActiveWorkspaceSnapshot();
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [activeWorkspaceId, activeTaskId, hasHydratedWorkspaces, tasks, messagesByTask, flushActiveWorkspaceSnapshot]);
+  }, [activeWorkspaceId, hasHydratedWorkspaces, workspaceSnapshotVersion, flushActiveWorkspaceSnapshot]);
 
   useEffect(() => {
     const onBeforeUnload = () => {

@@ -1,5 +1,5 @@
 import { PromptInput, PromptSuggestion, PromptSuggestions } from "@/components/ai-elements";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { ModelSelectorOption } from "@/components/ai-elements/model-selector";
 import type { PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
 import { buildCommandPaletteItems } from "@/lib/commands";
@@ -21,6 +21,8 @@ import {
 } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import type { ChatMessage } from "@/types/chat";
+import { useShallow } from "zustand/react/shallow";
 import { getLatestPromptSuggestions, mergePromptSuggestionWithDraft } from "./chat-input.utils";
 
 interface ChatInputProps {
@@ -28,36 +30,103 @@ interface ChatInputProps {
 }
 
 const EMPTY_PROMPT_DRAFT = { text: "", attachedFilePath: "" };
+const EMPTY_MESSAGES: ChatMessage[] = [];
 const PROMPT_DRAFT_SAVE_DELAY_MS = 250;
+
+interface ChatInputSuggestionsProps {
+  activeTaskId: string;
+  isTurnActive: boolean;
+  onSelectSuggestion: (suggestion: string) => void;
+}
+
+const ChatInputSuggestions = memo(function ChatInputSuggestions(args: ChatInputSuggestionsProps) {
+  const activeMessages = useAppStore((state) => {
+    if (args.isTurnActive || !args.activeTaskId) {
+      return EMPTY_MESSAGES;
+    }
+    return state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES;
+  });
+  const promptSuggestions = useMemo(() => getLatestPromptSuggestions(activeMessages), [activeMessages]);
+
+  if (args.isTurnActive || promptSuggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <PromptSuggestions>
+      {promptSuggestions.map((suggestion) => (
+        <PromptSuggestion
+          key={suggestion}
+          onClick={() => args.onSelectSuggestion(suggestion)}
+          title={suggestion}
+        >
+          {suggestion}
+        </PromptSuggestion>
+      ))}
+    </PromptSuggestions>
+  );
+});
 
 export function ChatInput(args: ChatInputProps = {}) {
   const [focusNonce, setFocusNonce] = useState(0);
   const [providerCommandCatalog, setProviderCommandCatalog] = useState(() => getCachedProviderCommandCatalog({
     providerId: "claude-code",
   }));
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
+  const [
+    activeTaskId,
+    draftProvider,
+    projectFiles,
+    providerAvailability,
+    setTaskProvider,
+    updatePromptDraft,
+    clearPromptDraft,
+    updateSettings,
+    sendUserMessage,
+    openFileFromTree,
+    abortTaskTurn,
+  ] = useAppStore(useShallow((state) => [
+    state.activeTaskId,
+    state.draftProvider,
+    state.projectFiles,
+    state.providerAvailability,
+    state.setTaskProvider,
+    state.updatePromptDraft,
+    state.clearPromptDraft,
+    state.updateSettings,
+    state.sendUserMessage,
+    state.openFileFromTree,
+    state.abortTaskTurn,
+  ] as const));
+  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
+  const promptDraft = useAppStore((state) => state.promptDraftByTask[activeTaskId || "draft:session"] ?? EMPTY_PROMPT_DRAFT);
+  const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
+  const activeMessageCount = useAppStore((state) => (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length);
+  const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
+  const [
+    modelClaude,
+    modelCodex,
+    customCommands,
+    claudePermissionMode,
+    claudeAllowDangerouslySkipPermissions,
+    claudeSandboxEnabled,
+    claudeAllowUnsandboxedCommands,
+    claudeEffort,
+    claudeThinkingMode,
+    codexApprovalPolicy,
+  ] = useAppStore(useShallow((state) => [
+    state.settings.modelClaude,
+    state.settings.modelCodex,
+    state.settings.customCommands,
+    state.settings.claudePermissionMode,
+    state.settings.claudeAllowDangerouslySkipPermissions,
+    state.settings.claudeSandboxEnabled,
+    state.settings.claudeAllowUnsandboxedCommands,
+    state.settings.claudeEffort,
+    state.settings.claudeThinkingMode,
+    state.settings.codexApprovalPolicy,
+  ] as const));
   const providerSelectionTarget = activeTaskId || "draft:session";
-  const tasks = useAppStore((state) => state.tasks);
-  const messagesByTask = useAppStore((state) => state.messagesByTask);
-  const promptDraft = useAppStore((state) => state.promptDraftByTask[providerSelectionTarget] ?? EMPTY_PROMPT_DRAFT);
-  const setTaskProvider = useAppStore((state) => state.setTaskProvider);
-  const updatePromptDraft = useAppStore((state) => state.updatePromptDraft);
-  const clearPromptDraft = useAppStore((state) => state.clearPromptDraft);
-  const updateSettings = useAppStore((state) => state.updateSettings);
-  const sendUserMessage = useAppStore((state) => state.sendUserMessage);
-  const openFileFromTree = useAppStore((state) => state.openFileFromTree);
-  const settings = useAppStore((state) => state.settings);
-  const projectFiles = useAppStore((state) => state.projectFiles);
-  const workspacePathById = useAppStore((state) => state.workspacePathById);
-  const projectPath = useAppStore((state) => state.projectPath);
-  const activeTurnIdsByTask = useAppStore((state) => state.activeTurnIdsByTask);
-  const providerAvailability = useAppStore((state) => state.providerAvailability);
-  const draftProvider = useAppStore((state) => state.draftProvider);
-  const abortTaskTurn = useAppStore((state) => state.abortTaskTurn);
-  const activeTask = tasks.find((task) => task.id === activeTaskId);
   const activeProvider = activeTask?.provider ?? draftProvider;
-  const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
   const [draftText, setDraftText] = useState(promptDraft.text);
   const draftTextRef = useRef(promptDraft.text);
   const syncedDraftRef = useRef({
@@ -66,13 +135,9 @@ export function ChatInput(args: ChatInputProps = {}) {
   });
   const draftSaveTimerRef = useRef<number | null>(null);
   const permissionMode: PermissionModeValue =
-    activeProvider === "claude-code" ? settings.claudePermissionMode : settings.codexApprovalPolicy;
-  const activeMessages = messagesByTask[activeTaskId] ?? [];
-  const lastMessage = activeMessages.at(-1);
-  const isEmpty = activeMessages.length === 0;
-  const isTurnActive = Boolean(activeTurnIdsByTask[activeTaskId]);
-  const activeModel = activeProvider === "claude-code" ? settings.modelClaude : settings.modelCodex;
-  const promptSuggestions = getLatestPromptSuggestions(activeMessages);
+    activeProvider === "claude-code" ? claudePermissionMode : codexApprovalPolicy;
+  const isEmpty = activeMessageCount === 0;
+  const activeModel = activeProvider === "claude-code" ? modelClaude : modelCodex;
   const selectedModelOption: ModelSelectorOption = {
     key: `${activeProvider}:${activeModel}`,
     providerId: activeProvider,
@@ -215,13 +280,13 @@ export function ChatInput(args: ChatInputProps = {}) {
       providerId: activeProvider,
       cwd: workspaceCwd,
       runtimeOptions: {
-        model: settings.modelClaude,
-        claudePermissionMode: settings.claudePermissionMode,
-        claudeAllowDangerouslySkipPermissions: settings.claudeAllowDangerouslySkipPermissions,
-        claudeSandboxEnabled: settings.claudeSandboxEnabled,
-        claudeAllowUnsandboxedCommands: settings.claudeAllowUnsandboxedCommands,
-        claudeEffort: settings.claudeEffort,
-        claudeThinkingMode: settings.claudeThinkingMode,
+        model: modelClaude,
+        claudePermissionMode,
+        claudeAllowDangerouslySkipPermissions,
+        claudeSandboxEnabled,
+        claudeAllowUnsandboxedCommands,
+        claudeEffort,
+        claudeThinkingMode,
       },
     }).then((response) => {
       if (cancelled) {
@@ -258,23 +323,23 @@ export function ChatInput(args: ChatInputProps = {}) {
     };
   }, [
     activeProvider,
-    settings.claudeAllowDangerouslySkipPermissions,
-    settings.claudeAllowUnsandboxedCommands,
-    settings.claudeEffort,
-    settings.claudePermissionMode,
-    settings.claudeSandboxEnabled,
-    settings.claudeThinkingMode,
-    settings.modelClaude,
+    claudeAllowDangerouslySkipPermissions,
+    claudeAllowUnsandboxedCommands,
+    claudeEffort,
+    claudePermissionMode,
+    claudeSandboxEnabled,
+    claudeThinkingMode,
+    modelClaude,
     workspaceCwd,
   ]);
 
   const commandPalette = useMemo(() => buildCommandPaletteItems({
     provider: activeProvider,
     settings: {
-      customCommands: settings.customCommands,
+      customCommands,
     },
     providerCommandCatalog,
-  }), [activeProvider, providerCommandCatalog, settings.customCommands]);
+  }), [activeProvider, customCommands, providerCommandCatalog]);
 
   return (
     <div
@@ -284,32 +349,23 @@ export function ChatInput(args: ChatInputProps = {}) {
       )}
     >
       <div className={cn("mx-auto", args.compact || isEmpty ? "max-w-xl" : "max-w-4xl")}>
-        {!isTurnActive && promptSuggestions.length > 0 ? (
-          <PromptSuggestions>
-            {promptSuggestions.map((suggestion) => (
-              <PromptSuggestion
-                key={suggestion}
-                disabled={isTurnActive}
-                onClick={() => {
-                  const nextText = mergePromptSuggestionWithDraft({
-                    currentDraft: draftTextRef.current,
-                    suggestion,
-                  });
-                  draftTextRef.current = nextText;
-                  setDraftText(nextText);
-                  commitPromptDraftText({
-                    taskId: providerSelectionTarget,
-                    text: nextText,
-                  });
-                  setFocusNonce((current) => current + 1);
-                }}
-                title={suggestion}
-              >
-                {suggestion}
-              </PromptSuggestion>
-            ))}
-          </PromptSuggestions>
-        ) : null}
+        <ChatInputSuggestions
+          activeTaskId={activeTaskId}
+          isTurnActive={isTurnActive}
+          onSelectSuggestion={(suggestion) => {
+            const nextText = mergePromptSuggestionWithDraft({
+              currentDraft: draftTextRef.current,
+              suggestion,
+            });
+            draftTextRef.current = nextText;
+            setDraftText(nextText);
+            commitPromptDraftText({
+              taskId: providerSelectionTarget,
+              text: nextText,
+            });
+            setFocusNonce((current) => current + 1);
+          }}
+        />
         <PromptInput
           focusToken={`${providerSelectionTarget}:${focusNonce}`}
           value={draftText}
@@ -354,9 +410,9 @@ export function ChatInput(args: ChatInputProps = {}) {
           permissionMode={permissionMode}
           onPermissionModeChange={(value) => {
             if (activeProvider === "claude-code") {
-              updateSettings({ patch: { claudePermissionMode: value as typeof settings.claudePermissionMode } });
+              updateSettings({ patch: { claudePermissionMode: value as typeof claudePermissionMode } });
             } else {
-              updateSettings({ patch: { codexApprovalPolicy: value as typeof settings.codexApprovalPolicy } });
+              updateSettings({ patch: { codexApprovalPolicy: value as typeof codexApprovalPolicy } });
             }
           }}
           onAttachFileChange={({ filePath }) =>

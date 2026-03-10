@@ -1,37 +1,296 @@
 import MonacoEditor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import { Columns2, FileCode2, PenLine, Save, Send, X } from "lucide-react";
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
 import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { releaseDiffEditorModels, type DiffEditorModelOwner } from "./editor-main-panel.utils";
+
+type MonacoDisposable = { dispose(): void };
+
+interface WorkspaceMonacoSupportState {
+  rootPath: string;
+  typeDefDisposables: MonacoDisposable[];
+  sourceFileDisposables: MonacoDisposable[];
+  typeDefsLoaded: boolean;
+  sourceFilesLoaded: boolean;
+  typeDefsPromise?: Promise<void>;
+  sourceFilesPromise?: Promise<void>;
+  cancelDeferredSourceLoad?: (() => void) | null;
+}
+
+let monacoDefaultsConfigured = false;
+let activeWorkspaceMonacoSupport: WorkspaceMonacoSupportState | null = null;
+
+function disposeMonacoDisposables(disposables: MonacoDisposable[]) {
+  for (const disposable of disposables) {
+    disposable.dispose();
+  }
+  disposables.length = 0;
+}
+
+function disposeWorkspaceMonacoSupport(state: WorkspaceMonacoSupportState) {
+  state.cancelDeferredSourceLoad?.();
+  state.cancelDeferredSourceLoad = null;
+  disposeMonacoDisposables(state.typeDefDisposables);
+  disposeMonacoDisposables(state.sourceFileDisposables);
+  if (activeWorkspaceMonacoSupport === state) {
+    activeWorkspaceMonacoSupport = null;
+  }
+}
+
+function getWorkspaceMonacoSupportState(rootPath: string) {
+  if (activeWorkspaceMonacoSupport?.rootPath === rootPath) {
+    return activeWorkspaceMonacoSupport;
+  }
+  if (activeWorkspaceMonacoSupport) {
+    disposeWorkspaceMonacoSupport(activeWorkspaceMonacoSupport);
+  }
+  activeWorkspaceMonacoSupport = {
+    rootPath,
+    typeDefDisposables: [],
+    sourceFileDisposables: [],
+    typeDefsLoaded: false,
+    sourceFilesLoaded: false,
+    cancelDeferredSourceLoad: null,
+  };
+  return activeWorkspaceMonacoSupport;
+}
+
+function scheduleDeferredWorkspaceLoad(callback: () => void) {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window && "cancelIdleCallback" in window) {
+    const idleId = window.requestIdleCallback(() => {
+      callback();
+    }, { timeout: 500 });
+    return () => window.cancelIdleCallback(idleId);
+  }
+  const timeoutId = globalThis.setTimeout(callback, 180);
+  return () => globalThis.clearTimeout(timeoutId);
+}
+
+function addMonacoExtraLibs(args: {
+  monaco: Monaco;
+  files: Array<{ content: string; filePath: string }>;
+}) {
+  const disposables: MonacoDisposable[] = [];
+  for (const file of args.files) {
+    disposables.push(args.monaco.languages.typescript.typescriptDefaults.addExtraLib(file.content, file.filePath));
+    disposables.push(args.monaco.languages.typescript.javascriptDefaults.addExtraLib(file.content, file.filePath));
+  }
+  return disposables;
+}
+
+function configureMonacoDefaults(monaco: Monaco) {
+  if (monacoDefaultsConfigured) {
+    return;
+  }
+
+  const compilerOptions = {
+    target: monaco.languages.typescript.ScriptTarget.ES2022,
+    module: monaco.languages.typescript.ModuleKind.ESNext,
+    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+    allowJs: true,
+    allowNonTsExtensions: true,
+    allowSyntheticDefaultImports: true,
+    esModuleInterop: true,
+    resolveJsonModule: true,
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    baseUrl: ".",
+    paths: {
+      "@/*": ["src/*"],
+    },
+  };
+
+  const diagnosticsOptions = {
+    noSemanticValidation: false,
+    noSyntaxValidation: false,
+    onlyVisible: true,
+  };
+
+  monaco.languages.typescript.typescriptDefaults.setEagerModelSync(false);
+  monaco.languages.typescript.javascriptDefaults.setEagerModelSync(false);
+  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions);
+  monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions);
+  monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
+  monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
+  monacoDefaultsConfigured = true;
+}
+
+async function ensureWorkspaceTypeDefsLoaded(args: {
+  monaco: Monaco;
+  state: WorkspaceMonacoSupportState;
+}) {
+  if (args.state.typeDefsLoaded || args.state.typeDefsPromise) {
+    return args.state.typeDefsPromise;
+  }
+
+  const readTypeDefs = window.api?.fs?.readTypeDefs;
+  if (!readTypeDefs) {
+    args.state.typeDefsLoaded = true;
+    return undefined;
+  }
+
+  args.state.typeDefsPromise = readTypeDefs({ rootPath: args.state.rootPath })
+    .then((result) => {
+      if (activeWorkspaceMonacoSupport !== args.state) {
+        return;
+      }
+      args.state.typeDefsLoaded = true;
+      if (!result.ok) {
+        return;
+      }
+      disposeMonacoDisposables(args.state.typeDefDisposables);
+      args.state.typeDefDisposables = addMonacoExtraLibs({
+        monaco: args.monaco,
+        files: result.libs,
+      });
+    })
+    .finally(() => {
+      args.state.typeDefsPromise = undefined;
+    });
+
+  return args.state.typeDefsPromise;
+}
+
+async function ensureWorkspaceSourceFilesLoaded(args: {
+  monaco: Monaco;
+  state: WorkspaceMonacoSupportState;
+}) {
+  if (args.state.sourceFilesLoaded || args.state.sourceFilesPromise) {
+    return args.state.sourceFilesPromise;
+  }
+
+  const readSourceFiles = window.api?.fs?.readSourceFiles;
+  if (!readSourceFiles) {
+    args.state.sourceFilesLoaded = true;
+    return undefined;
+  }
+
+  args.state.sourceFilesPromise = readSourceFiles({ rootPath: args.state.rootPath })
+    .then((result) => {
+      if (activeWorkspaceMonacoSupport !== args.state) {
+        return;
+      }
+      args.state.sourceFilesLoaded = true;
+      if (!result.ok) {
+        return;
+      }
+      disposeMonacoDisposables(args.state.sourceFileDisposables);
+      args.state.sourceFileDisposables = addMonacoExtraLibs({
+        monaco: args.monaco,
+        files: result.files,
+      });
+    })
+    .finally(() => {
+      args.state.sourceFilesPromise = undefined;
+    });
+
+  return args.state.sourceFilesPromise;
+}
+
+function supportsWorkspaceTypeLibraries(language: string) {
+  return language === "typescript" || language === "javascript";
+}
+
+function syncWorkspaceMonacoSupport(args: {
+  monaco: Monaco | null;
+  workspaceRootPath: string;
+  shouldLoadWorkspaceSupport: boolean;
+}) {
+  if (!args.monaco || !args.workspaceRootPath) {
+    if (activeWorkspaceMonacoSupport) {
+      disposeWorkspaceMonacoSupport(activeWorkspaceMonacoSupport);
+    }
+    return;
+  }
+
+  const supportState = getWorkspaceMonacoSupportState(args.workspaceRootPath);
+  void ensureWorkspaceTypeDefsLoaded({
+    monaco: args.monaco,
+    state: supportState,
+  });
+
+  if (args.shouldLoadWorkspaceSupport && !supportState.sourceFilesLoaded && !supportState.sourceFilesPromise) {
+    if (!supportState.cancelDeferredSourceLoad) {
+      supportState.cancelDeferredSourceLoad = scheduleDeferredWorkspaceLoad(() => {
+        supportState.cancelDeferredSourceLoad = null;
+        void ensureWorkspaceSourceFilesLoaded({
+          monaco: args.monaco!,
+          state: supportState,
+        });
+      });
+    }
+    return;
+  }
+
+  if (!args.shouldLoadWorkspaceSupport) {
+    supportState.cancelDeferredSourceLoad?.();
+    supportState.cancelDeferredSourceLoad = null;
+  }
+}
 
 export function EditorMainPanel() {
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const workspacePathById = useAppStore((state) => state.workspacePathById);
-  const projectPath = useAppStore((state) => state.projectPath);
-  const isDarkMode = useAppStore((state) => state.isDarkMode);
-  const editorTabs = useAppStore((state) => state.editorTabs);
-  const activeEditorTabId = useAppStore((state) => state.activeEditorTabId);
-  const layout = useAppStore((state) => state.layout);
-  const settings = useAppStore((state) => state.settings);
-  const setLayout = useAppStore((state) => state.setLayout);
-  const updateSettings = useAppStore((state) => state.updateSettings);
-  const setActiveEditorTab = useAppStore((state) => state.setActiveEditorTab);
-  const reorderEditorTabs = useAppStore((state) => state.reorderEditorTabs);
-  const closeEditorTab = useAppStore((state) => state.closeEditorTab);
-  const updateEditorContent = useAppStore((state) => state.updateEditorContent);
-  const sendEditorContextToChat = useAppStore((state) => state.sendEditorContextToChat);
-  const toggleEditorDiffMode = useAppStore((state) => state.toggleEditorDiffMode);
-  const saveActiveEditorTab = useAppStore((state) => state.saveActiveEditorTab);
+  const [
+    activeTaskId,
+    activeWorkspaceId,
+    isDarkMode,
+    editorTabs,
+    activeEditorTabId,
+    editorDiffMode,
+    diffViewMode,
+    editorMinimap,
+    editorFontSize,
+    editorFontFamily,
+    editorLineNumbers,
+    editorTabSize,
+    editorWordWrap,
+    setLayout,
+    updateSettings,
+    setActiveEditorTab,
+    reorderEditorTabs,
+    closeEditorTab,
+    updateEditorContent,
+    sendEditorContextToChat,
+    toggleEditorDiffMode,
+    saveActiveEditorTab,
+  ] = useAppStore(useShallow((state) => [
+    state.activeTaskId,
+    state.activeWorkspaceId,
+    state.isDarkMode,
+    state.editorTabs,
+    state.activeEditorTabId,
+    state.layout.editorDiffMode,
+    state.settings.diffViewMode,
+    state.settings.editorMinimap,
+    state.settings.editorFontSize,
+    state.settings.editorFontFamily,
+    state.settings.editorLineNumbers,
+    state.settings.editorTabSize,
+    state.settings.editorWordWrap,
+    state.setLayout,
+    state.updateSettings,
+    state.setActiveEditorTab,
+    state.reorderEditorTabs,
+    state.closeEditorTab,
+    state.updateEditorContent,
+    state.sendEditorContextToChat,
+    state.toggleEditorDiffMode,
+    state.saveActiveEditorTab,
+  ] as const));
+  const workspaceRootPath = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? "");
   const [tabToClose, setTabToClose] = useState<{ id: string; fileName: string } | null>(null);
   const [bulkCloseRequest, setBulkCloseRequest] = useState<{ tabIds: string[]; title: string; description: string } | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dropTargetTabId, setDropTargetTabId] = useState<string | null>(null);
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
-  const monacoConfiguredRef = useRef(false);
+  const monacoRef = useRef<Monaco | null>(null);
+  const diffEditorRef = useRef<DiffEditorModelOwner | null>(null);
 
   const activeTab = editorTabs.find((tab) => tab.id === activeEditorTabId) ?? null;
   const isImageTab = (tab: { kind?: "text" | "image"; language: string } | null) =>
@@ -40,72 +299,24 @@ export function EditorMainPanel() {
     Boolean(tab && tab.kind !== "image" && !tab.id.startsWith("file:") && tab.originalContent != null);
   const activeTabIsImage = isImageTab(activeTab);
   const monacoTheme = isDarkMode ? "vs-dark" : "vs";
-  const workspaceRootPath = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
   const activeModelPath = activeTab ? toMonacoModelPath(activeTab.filePath) : undefined;
-  const showDiffDisplayControls = Boolean(layout.editorDiffMode && activeTab?.originalContent != null && !activeTabIsImage);
+  const showDiffDisplayControls = Boolean(editorDiffMode && activeTab?.originalContent != null && !activeTabIsImage);
+  const activeDiffSessionKey = showDiffDisplayControls && activeTab ? `${activeTab.id}:${activeModelPath ?? "file:///unknown"}` : null;
+  const shouldLoadWorkspaceSupport = Boolean(
+    workspaceRootPath
+    && activeTab
+    && !activeTabIsImage
+    && supportsWorkspaceTypeLibraries(activeTab.language),
+  );
 
   function configureMonaco(monaco: Monaco) {
-    if (monacoConfiguredRef.current) {
-      return;
-    }
-    const compilerOptions = {
-      target: monaco.languages.typescript.ScriptTarget.ES2022,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-      allowJs: true,
-      allowNonTsExtensions: true,
-      allowSyntheticDefaultImports: true,
-      esModuleInterop: true,
-      resolveJsonModule: true,
-      strict: true,
-      noEmit: true,
-      skipLibCheck: true,
-      baseUrl: ".",
-      paths: {
-        "@/*": ["src/*"],
-      },
-    };
-
-    monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true);
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
-      noSyntaxValidation: false,
-      onlyVisible: false,
+    monacoRef.current = monaco;
+    configureMonacoDefaults(monaco);
+    syncWorkspaceMonacoSupport({
+      monaco,
+      workspaceRootPath,
+      shouldLoadWorkspaceSupport,
     });
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
-    monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
-    monacoConfiguredRef.current = true;
-
-    // Load type definitions from the workspace's node_modules so Monaco can
-    // resolve imports without showing false "cannot find module" errors.
-    const readTypeDefs = window.api?.fs?.readTypeDefs;
-    if (readTypeDefs && workspaceRootPath) {
-      void readTypeDefs({ rootPath: workspaceRootPath }).then((result) => {
-        if (!result.ok) {
-          return;
-        }
-        for (const lib of result.libs) {
-          monaco.languages.typescript.typescriptDefaults.addExtraLib(lib.content, lib.filePath);
-          monaco.languages.typescript.javascriptDefaults.addExtraLib(lib.content, lib.filePath);
-        }
-      });
-    }
-
-    // Register all workspace source files as extra libs so Monaco can resolve
-    // path-alias imports (e.g. @/components/...) even when those files aren't open.
-    const readSourceFiles = window.api?.fs?.readSourceFiles;
-    if (readSourceFiles && workspaceRootPath) {
-      void readSourceFiles({ rootPath: workspaceRootPath }).then((result) => {
-        if (!result.ok) {
-          return;
-        }
-        for (const file of result.files) {
-          monaco.languages.typescript.typescriptDefaults.addExtraLib(file.content, file.filePath);
-          monaco.languages.typescript.javascriptDefaults.addExtraLib(file.content, file.filePath);
-        }
-      });
-    }
   }
 
   useEffect(() => {
@@ -122,6 +333,27 @@ export function EditorMainPanel() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [imagePreviewOpen]);
+
+  useEffect(() => {
+    syncWorkspaceMonacoSupport({
+      monaco: monacoRef.current,
+      workspaceRootPath,
+      shouldLoadWorkspaceSupport,
+    });
+  }, [shouldLoadWorkspaceSupport, workspaceRootPath]);
+
+  useLayoutEffect(() => {
+    if (!activeDiffSessionKey) {
+      return;
+    }
+
+    return () => {
+      // @monaco-editor/react disposes diff models before disposing the widget.
+      // Reset the widget first so Monaco does not observe disposed models mid-unmount.
+      releaseDiffEditorModels(diffEditorRef.current);
+      diffEditorRef.current = null;
+    };
+  }, [activeDiffSessionKey]);
 
   function handleTabDragStart(event: DragEvent<HTMLDivElement>, tabId: string) {
     event.dataTransfer.effectAllowed = "move";
@@ -217,15 +449,15 @@ export function EditorMainPanel() {
             className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
             disabled={!activeTab?.originalContent || activeTabIsImage}
             onClick={toggleEditorDiffMode}
-            title={layout.editorDiffMode ? "Back to Edit" : "View Diff"}
+            title={editorDiffMode ? "Back to Edit" : "View Diff"}
           >
-            {layout.editorDiffMode ? <PenLine className="size-4" /> : <Columns2 className="size-4" />}
+            {editorDiffMode ? <PenLine className="size-4" /> : <Columns2 className="size-4" />}
           </Button>
           {showDiffDisplayControls ? (
             <div className="flex items-center gap-1">
               <Button
                 size="xs"
-                variant={settings.diffViewMode === "unified" ? "secondary" : "ghost"}
+                variant={diffViewMode === "unified" ? "secondary" : "ghost"}
                 className="rounded-sm"
                 onClick={() => updateSettings({ patch: { diffViewMode: "unified" } })}
                 title="Unified Diff"
@@ -234,7 +466,7 @@ export function EditorMainPanel() {
               </Button>
               <Button
                 size="xs"
-                variant={settings.diffViewMode === "split" ? "secondary" : "ghost"}
+                variant={diffViewMode === "split" ? "secondary" : "ghost"}
                 className="rounded-sm"
                 onClick={() => updateSettings({ patch: { diffViewMode: "split" } })}
                 title="Split Diff"
@@ -412,7 +644,7 @@ export function EditorMainPanel() {
                   <div className="text-sm text-muted-foreground">Unable to load image preview.</div>
                 )}
               </div>
-            ) : layout.editorDiffMode && activeTab.originalContent ? (
+            ) : editorDiffMode && activeTab.originalContent ? (
               <DiffEditor
                 height="100%"
                 language={activeTab.language}
@@ -424,16 +656,17 @@ export function EditorMainPanel() {
                 theme={monacoTheme}
                 options={{
                   readOnly: false,
-                  renderSideBySide: settings.diffViewMode === "split",
-                  minimap: { enabled: settings.editorMinimap },
-                  fontSize: settings.editorFontSize,
-                  fontFamily: settings.editorFontFamily,
-                  lineNumbers: settings.editorLineNumbers,
-                  wordWrap: settings.editorWordWrap ? "on" : "off",
+                  renderSideBySide: diffViewMode === "split",
+                  minimap: { enabled: editorMinimap },
+                  fontSize: editorFontSize,
+                  fontFamily: editorFontFamily,
+                  lineNumbers: editorLineNumbers,
+                  wordWrap: editorWordWrap ? "on" : "off",
                 }}
                 onMount={(editor) => {
-                  editor.getOriginalEditor().updateOptions({ tabSize: settings.editorTabSize });
-                  editor.getModifiedEditor().updateOptions({ tabSize: settings.editorTabSize });
+                  diffEditorRef.current = editor;
+                  editor.getOriginalEditor().updateOptions({ tabSize: editorTabSize });
+                  editor.getModifiedEditor().updateOptions({ tabSize: editorTabSize });
                   editor.getModifiedEditor().onDidChangeModelContent(() => {
                     const value = editor.getModifiedEditor().getValue();
                     updateEditorContent({ tabId: activeTab.id, content: value });
@@ -455,12 +688,12 @@ export function EditorMainPanel() {
                 }
                 theme={monacoTheme}
                 options={{
-                  minimap: { enabled: settings.editorMinimap },
-                  fontSize: settings.editorFontSize,
-                  fontFamily: settings.editorFontFamily,
-                  lineNumbers: settings.editorLineNumbers,
-                  tabSize: settings.editorTabSize,
-                  wordWrap: settings.editorWordWrap ? "on" : "off",
+                  minimap: { enabled: editorMinimap },
+                  fontSize: editorFontSize,
+                  fontFamily: editorFontFamily,
+                  lineNumbers: editorLineNumbers,
+                  tabSize: editorTabSize,
+                  wordWrap: editorWordWrap ? "on" : "off",
                 }}
               />
             )

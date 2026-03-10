@@ -499,6 +499,58 @@ describe("workspace store hydration ordering", () => {
     }]);
   });
 
+  test("hydrateWorkspaces restores projectFiles for the explorer on boot", async () => {
+    const localStorage = createMemoryStorage();
+    const listedFiles = ["package.json", "src/App.tsx"];
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          pickRoot: async () => ({ ok: false }),
+          listFiles: async () => ({ ok: true, files: listedFiles }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [{ id: "ws-main", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+          }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
+        },
+      },
+    });
+
+    const [{ workspaceFsAdapter }, { useAppStore }] = await Promise.all([
+      import("../src/lib/fs"),
+      import("../src/store/app.store"),
+    ]);
+    await (workspaceFsAdapter as { setRoot?: (args: { rootPath: string; rootName: string; files?: string[] }) => Promise<void> }).setRoot?.({
+      rootPath: "/tmp/stave-project",
+      rootName: "fixture",
+      files: [],
+    });
+
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      workspaces: [{ id: "ws-main", name: "default", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      projectPath: "/tmp/stave-project",
+      workspaceRootName: "fixture",
+      workspacePathById: { "ws-main": "/tmp/stave-project" },
+      workspaceBranchById: { "ws-main": "main" },
+      workspaceDefaultById: { "ws-main": true },
+      projectFiles: [],
+      hasHydratedWorkspaces: false,
+    });
+
+    await useAppStore.getState().hydrateWorkspaces();
+
+    expect(useAppStore.getState().projectFiles).toEqual(listedFiles);
+  });
+
   test("flushActiveWorkspaceSnapshot is blocked until workspace hydration completes", async () => {
     const localStorage = createMemoryStorage();
     const upsertCalls: Array<unknown> = [];

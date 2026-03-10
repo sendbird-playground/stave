@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.0.6",
   "description": "Stave: Agentic Coding IDE.",
-  "author": "astyfx",
+  "author": {
+    "name": "astyfx",
+    "email": "astyfx@gmail.com"
+  },
   "type": "module",
   "main": "out/main/index.js",
   "scripts": {
@@ -15,6 +18,10 @@
     "build": "tsc --noEmit && vite build",
     "build:desktop": "tsc --noEmit && electron-vite build",
     "package:desktop": "bun run build:desktop && electron-builder --config electron-builder.yml --dir",
+    "run:desktop:built": "bun run build:desktop && STAVE_RUNTIME_PROFILE=production electron .",
+    "package:linux:dir": "bun run build:desktop && electron-builder --config electron-builder.yml --linux dir",
+    "package:linux:appimage": "bun run build:desktop && electron-builder --config electron-builder.yml --linux AppImage",
+    "package:linux:deb": "bun run build:desktop && electron-builder --config electron-builder.yml --linux deb",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

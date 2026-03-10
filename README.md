@@ -71,6 +71,66 @@ bun run dev:desktop:poll
 - `bun run build`
 - `bun run build:desktop`
 - `bun run package:desktop`
+- `bun run run:desktop:built`
+- `bun run package:linux:dir`
+- `bun run package:linux:appimage`
+- `bun run package:linux:deb`
+
+## Render profiling
+
+Stave now includes an opt-in React render profiler around the main hot UI surfaces (`TaskList`, `ChatPanel`, `ChatInput`, `EditorPanel`, and `EditorMainPanel`).
+
+Enable it in a renderer session with either:
+
+```bash
+# query param
+http://127.0.0.1:5173/?staveProfileRenders=1
+```
+
+or from DevTools:
+
+```js
+localStorage.setItem("stave:render-profiler", "1");
+location.reload();
+```
+
+When enabled, slow commits are logged to the console and recorded as `performance.measure(...)` entries prefixed with `stave:render:`.
+
+## Desktop packaging
+
+If you want to test a real desktop build without hot reload, rebuild the native Electron modules first:
+
+```bash
+bun run rebuild:electron-deps
+```
+
+Then use one of these flows:
+
+### Run a built desktop app locally without hot reload
+
+```bash
+bun run run:desktop:built
+```
+
+This builds `out/` with `electron-vite` and launches Electron against the built files instead of the dev server. It uses the same production SQLite profile as the packaged app, while `bun run dev:desktop` uses a separate development database.
+
+### Build an unpacked Linux app bundle
+
+```bash
+bun run package:linux:dir
+```
+
+This writes an unpacked app into `release/` that you can launch directly on Ubuntu without installing a `.deb`.
+
+### Build an Ubuntu `.deb`
+
+```bash
+bun run package:linux:deb
+```
+
+The generated installer will be written under `release/`.
+
+On the first run after the dev/prod split, Stave moves the old shared `stave.sqlite` database into the development profile and lets the packaged app create a fresh production database. If the selected profile has no database yet, Stave creates it automatically on startup.
 
 ## Runtime shape
 

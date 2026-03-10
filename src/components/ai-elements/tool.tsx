@@ -157,7 +157,7 @@ export function ToolInput(args: { input: unknown; className?: string }) {
   return (
     <div className={cn("rounded-sm border border-border/70 bg-muted/20 p-2", args.className)}>
       <p className="mb-1 text-sm uppercase text-muted-foreground">Input</p>
-      <pre className="whitespace-pre-wrap text-sm text-muted-foreground">{content}</pre>
+      <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-muted-foreground">{content}</pre>
     </div>
   );
 }
@@ -167,7 +167,7 @@ export function ToolOutput(args: { output?: ReactNode; errorText?: string; class
     <div className={cn("rounded-sm border border-border/70 bg-background/40 p-2", args.className)}>
       <p className="mb-1 text-sm uppercase text-muted-foreground">{args.label ?? "Output"}</p>
       {args.errorText ? (
-        <p className="whitespace-pre-wrap text-sm text-destructive">{args.errorText}</p>
+        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-destructive">{args.errorText}</p>
       ) : (
         <div className="text-sm">{args.output ?? <span className="text-muted-foreground">No output.</span>}</div>
       )}

@@ -40,6 +40,10 @@ function ShortcutKeys({ sequences }: Pick<ShortcutItem, "sequences">) {
 }
 
 export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcutsDrawerProps) {
+  if (!open) {
+    return null;
+  }
+
   const modifierLabel = useMemo(
     () => (
       typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)

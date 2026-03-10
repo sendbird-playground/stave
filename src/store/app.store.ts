@@ -58,6 +58,8 @@ interface LayoutState {
 }
 
 const APP_STORE_KEY = "stave-store";
+export const PROVIDER_TIMEOUT_OPTIONS = [600000, 1200000, 1800000] as const;
+export const DEFAULT_PROVIDER_TIMEOUT_MS = 1800000;
 
 export const THEME_TOKEN_NAMES = [
   "background",
@@ -210,6 +212,7 @@ export interface AppSettings {
 
 interface AppState {
   hasHydratedWorkspaces: boolean;
+  workspaceSnapshotVersion: number;
   workspaces: WorkspaceSummary[];
   activeWorkspaceId: string;
   projectPath: string | null;
@@ -331,7 +334,7 @@ const defaultSettings: AppSettings = {
   diffViewMode: "unified",
   providerDebugStream: false,
   turnDiagnosticsVisible: true,
-  providerTimeoutMs: 300000,
+  providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
   claudePermissionMode: "bypassPermissions",
   claudeAllowDangerouslySkipPermissions: true,
   claudeSandboxEnabled: false,
@@ -361,6 +364,42 @@ function buildMessageId(args: { taskId: string; count: number }) {
 
 function buildRecentTimestamp() {
   return new Date().toISOString();
+}
+
+function incrementWorkspaceSnapshotVersion(state: Pick<AppState, "workspaceSnapshotVersion">) {
+  return state.workspaceSnapshotVersion + 1;
+}
+
+function mergeLayoutPatch(args: { layout: LayoutState; patch: Partial<LayoutState> }) {
+  let changed = false;
+  const nextLayout: LayoutState = { ...args.layout };
+
+  for (const [rawKey, rawValue] of Object.entries(args.patch)) {
+    const key = rawKey as keyof LayoutState;
+    const value = rawValue as LayoutState[keyof LayoutState];
+    if (value === undefined || Object.is(nextLayout[key], value)) {
+      continue;
+    }
+    nextLayout[key] = value as never;
+    changed = true;
+  }
+
+  return changed ? nextLayout : null;
+}
+
+function areStringArraysEqual(left: string[], right: string[]) {
+  if (left === right) {
+    return true;
+  }
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function sanitizeBranchName(args: { value: string }) {
@@ -450,6 +489,12 @@ function resolveLanguage(args: { filePath: string }) {
   return "plaintext";
 }
 
+function normalizeProviderTimeoutMs(args: { value: number | null | undefined }) {
+  return PROVIDER_TIMEOUT_OPTIONS.includes(args.value as (typeof PROVIDER_TIMEOUT_OPTIONS)[number])
+    ? args.value!
+    : DEFAULT_PROVIDER_TIMEOUT_MS;
+}
+
 function isImageFilePath(args: { filePath: string }) {
   const value = args.filePath.toLowerCase();
   return value.endsWith(".png")
@@ -519,6 +564,7 @@ function applyApprovalState(args: {
           }),
         }),
       },
+      workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
     };
   });
 }
@@ -549,6 +595,7 @@ function applyUserInputState(args: {
           }),
         }),
       },
+      workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
     };
   });
 }
@@ -669,6 +716,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       hasHydratedWorkspaces: false,
+      workspaceSnapshotVersion: 0,
       workspaces: [],
       activeWorkspaceId: "",
       projectPath: null,
@@ -757,6 +805,21 @@ export const useAppStore = create<AppState>()(
           }
         }
 
+        const branchById: Record<string, string> = { ...stateBeforeHydrate.workspaceBranchById };
+        const pathById: Record<string, string> = { ...stateBeforeHydrate.workspacePathById };
+
+        for (const row of rows) {
+          const isDefault = row.id === defaultWorkspaceId;
+          if (!branchById[row.id]) {
+            branchById[row.id] = isDefault ? stateBeforeHydrate.defaultBranch : row.name;
+          }
+          if (!pathById[row.id] && projectPath) {
+            pathById[row.id] = isDefault
+              ? projectPath
+              : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`;
+          }
+        }
+
         const preferredWorkspaceId = rows[0]?.id ?? "";
         const [snapshot, latestWorkspaceTurns] = preferredWorkspaceId
           ? await Promise.all([
@@ -765,32 +828,17 @@ export const useAppStore = create<AppState>()(
             ])
           : [null, []];
 
-        const preferredWorkspacePath = stateBeforeHydrate.workspacePathById[preferredWorkspaceId]
-          || (preferredWorkspaceId && projectPath ? projectPath : null);
+        const preferredWorkspacePath = pathById[preferredWorkspaceId] ?? null;
+        let projectFiles = stateBeforeHydrate.projectFiles;
         if (preferredWorkspacePath) {
           await workspaceFsAdapter.setRoot?.({
             rootPath: preferredWorkspacePath,
             rootName: stateBeforeHydrate.workspaceRootName ?? "project",
           });
+          projectFiles = await workspaceFsAdapter.listFiles();
         }
 
         set((state) => {
-          const projectPath = state.projectPath;
-          const branchById: Record<string, string> = { ...state.workspaceBranchById };
-          const pathById: Record<string, string> = { ...state.workspacePathById };
-
-          for (const row of rows) {
-            const isDefault = row.id === defaultWorkspaceId;
-            if (!branchById[row.id]) {
-              branchById[row.id] = isDefault ? state.defaultBranch : row.name;
-            }
-            if (!pathById[row.id] && projectPath) {
-              pathById[row.id] = isDefault
-                ? projectPath
-                : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`;
-            }
-          }
-
           const workspaceState = buildWorkspaceSessionState({
             snapshot,
             latestTurns: latestWorkspaceTurns,
@@ -799,11 +847,13 @@ export const useAppStore = create<AppState>()(
 
           return {
             hasHydratedWorkspaces: true,
+            workspaceSnapshotVersion: 0,
             workspaces: rows,
             activeWorkspaceId: preferredWorkspaceId,
             workspaceDefaultById: defaultWorkspaceId ? { [defaultWorkspaceId]: true } : {},
             workspaceBranchById: branchById,
             workspacePathById: pathById,
+            projectFiles,
             ...workspaceState,
           };
         });
@@ -901,6 +951,7 @@ export const useAppStore = create<AppState>()(
 
         set(() => ({
           hasHydratedWorkspaces: true,
+          workspaceSnapshotVersion: 0,
           workspaces: [{ id: starterWorkspaceId, name: defaultWorkspaceName, updatedAt: new Date().toISOString() }],
           activeWorkspaceId: starterWorkspaceId,
           projectPath: projectRootPath,
@@ -1008,6 +1059,7 @@ export const useAppStore = create<AppState>()(
         }
 
         set((state) => ({
+          workspaceSnapshotVersion: 0,
           workspaces: state.workspaces.some((workspace) => workspace.id === workspaceId)
             ? state.workspaces
             : [...state.workspaces, { id: workspaceId, name: branchName, updatedAt: new Date().toISOString() }],
@@ -1064,6 +1116,7 @@ export const useAppStore = create<AppState>()(
               workspacePathById: nextPathById,
               workspaceDefaultById: nextDefaultById,
               activeWorkspaceId: "",
+              workspaceSnapshotVersion: 0,
               ...workspaceState,
             };
           });
@@ -1126,6 +1179,7 @@ export const useAppStore = create<AppState>()(
           return {
             workspaces: nextWorkspaces.length > 0 ? nextWorkspaces : state.workspaces,
             activeWorkspaceId: workspaceId,
+            workspaceSnapshotVersion: 0,
             ...workspaceState,
             projectFiles: files,
           };
@@ -1142,19 +1196,42 @@ export const useAppStore = create<AppState>()(
         applyThemeClass({ enabled });
       },
       updateSettings: ({ patch }) => {
-        set((state) => ({ settings: { ...state.settings, ...patch } }));
+        const normalizedPatch = patch.providerTimeoutMs === undefined
+          ? patch
+          : {
+              ...patch,
+              providerTimeoutMs: normalizeProviderTimeoutMs({ value: patch.providerTimeoutMs }),
+            };
 
-        if (patch.themeOverrides) {
-          applyThemeOverrides({ themeOverrides: patch.themeOverrides });
+        set((state) => ({ settings: { ...state.settings, ...normalizedPatch } }));
+
+        if (normalizedPatch.themeOverrides) {
+          applyThemeOverrides({ themeOverrides: normalizedPatch.themeOverrides });
         }
-        if (patch.themeMode) {
-          const isDark = resolveDarkModeForTheme({ themeMode: patch.themeMode });
+        if (normalizedPatch.themeMode) {
+          const isDark = resolveDarkModeForTheme({ themeMode: normalizedPatch.themeMode });
           set(() => ({ isDarkMode: isDark }));
           applyThemeClass({ enabled: isDark });
         }
       },
-      selectTask: ({ taskId }) => set(() => ({ activeTaskId: taskId })),
-      clearTaskSelection: () => set(() => ({ activeTaskId: "" })),
+      selectTask: ({ taskId }) => set((state) => {
+        if (state.activeTaskId === taskId) {
+          return state;
+        }
+        return {
+          activeTaskId: taskId,
+          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+        };
+      }),
+      clearTaskSelection: () => set((state) => {
+        if (!state.activeTaskId) {
+          return state;
+        }
+        return {
+          activeTaskId: "",
+          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+        };
+      }),
       updatePromptDraft: ({ taskId, patch }) => {
         set((state) => {
           const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePath: "" };
@@ -1174,16 +1251,24 @@ export const useAppStore = create<AppState>()(
               ...state.promptDraftByTask,
               [taskId]: nextDraft,
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
       },
       clearPromptDraft: ({ taskId }) => {
-        set((state) => ({
-          promptDraftByTask: {
-            ...state.promptDraftByTask,
-            [taskId]: { text: "", attachedFilePath: "" },
-          },
-        }));
+        set((state) => {
+          const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePath: "" };
+          if (!currentDraft.text && !currentDraft.attachedFilePath) {
+            return state;
+          }
+          return {
+            promptDraftByTask: {
+              ...state.promptDraftByTask,
+              [taskId]: { text: "", attachedFilePath: "" },
+            },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
       },
       createTask: ({ title }) => {
         const trimmed = (title ?? "").trim();
@@ -1214,6 +1299,7 @@ export const useAppStore = create<AppState>()(
             providerConversationByTask: {
               ...state.providerConversationByTask,
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
       },
@@ -1232,6 +1318,7 @@ export const useAppStore = create<AppState>()(
                 }
               : task
           ),
+          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
         }));
       },
       duplicateTask: ({ taskId }) => {
@@ -1273,6 +1360,7 @@ export const useAppStore = create<AppState>()(
             providerConversationByTask: {
               ...state.providerConversationByTask,
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
       },
@@ -1336,6 +1424,7 @@ export const useAppStore = create<AppState>()(
               ...nextState.messagesByTask,
               [taskId]: [...current, message],
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
           };
         });
       },
@@ -1377,6 +1466,7 @@ export const useAppStore = create<AppState>()(
               ...nextState.messagesByTask,
               [taskId]: [...current, message],
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
           };
         });
       },
@@ -1401,6 +1491,7 @@ export const useAppStore = create<AppState>()(
           return {
             tasks: nextTasks,
             activeTaskId: shouldSwitch ? fallbackTaskId : state.activeTaskId,
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
         void window.api?.provider?.cleanupTask?.({ taskId });
@@ -1425,6 +1516,7 @@ export const useAppStore = create<AppState>()(
               ...state.nativeConversationReadyByTask,
               [taskId]: Boolean(state.providerConversationByTask[taskId]?.[provider]?.trim()),
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
         void window.api?.provider?.cleanupTask?.({ taskId });
@@ -1436,7 +1528,13 @@ export const useAppStore = create<AppState>()(
             [workspaceId]: branch,
           },
         })),
-      setLayout: ({ patch }) => set((state) => ({ layout: { ...state.layout, ...patch } })),
+      setLayout: ({ patch }) => set((state) => {
+        const nextLayout = mergeLayoutPatch({
+          layout: state.layout,
+          patch,
+        });
+        return nextLayout ? { layout: nextLayout } : state;
+      }),
       toggleEditorDiffMode: () =>
         set((state) => ({
           layout: {
@@ -1460,7 +1558,7 @@ export const useAppStore = create<AppState>()(
       },
       refreshProjectFiles: async () => {
         const files = await workspaceFsAdapter.listFiles();
-        set(() => ({ projectFiles: files }));
+        set((state) => (areStringArraysEqual(state.projectFiles, files) ? state : { projectFiles: files }));
       },
       refreshProviderAvailability: async () => {
         const checkAvailability = window.api?.provider?.checkAvailability;
@@ -1506,6 +1604,7 @@ export const useAppStore = create<AppState>()(
               ...nextState.messagesByTask,
               [seededTaskId]: nextState.messagesByTask[seededTaskId] ?? [],
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
           }));
           state = get();
           resolvedTaskId = seededTaskId;
@@ -1617,6 +1716,7 @@ export const useAppStore = create<AppState>()(
                     Object.entries(nextState.providerConversationByTask).filter(([key]) => key !== resolvedTaskId)
                   )
                 : nextState.providerConversationByTask,
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
             };
           });
           if (shouldClearProviderConversation) {
@@ -1695,6 +1795,7 @@ export const useAppStore = create<AppState>()(
               ...nextState.activeTurnIdsByTask,
               [resolvedTaskId]: turnId,
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
           };
         });
 
@@ -1795,6 +1896,9 @@ export const useAppStore = create<AppState>()(
                     ...nextState.providerConversationByTask,
                     [resolvedTaskId]: replayed.providerConversation!,
                   },
+              workspaceSnapshotVersion: replayed.changed || !providerConversationMatches
+                ? incrementWorkspaceSnapshotVersion(nextState)
+                : nextState.workspaceSnapshotVersion,
             };
           });
         };
@@ -1889,6 +1993,7 @@ export const useAppStore = create<AppState>()(
               ...state.activeTurnIdsByTask,
               [taskId]: undefined,
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
       },
@@ -1924,6 +2029,7 @@ export const useAppStore = create<AppState>()(
                       ...state.messagesByTask,
                       [taskId]: [...current, systemMessage],
                     },
+                    workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
                   };
                 });
                 return;
@@ -1954,6 +2060,7 @@ export const useAppStore = create<AppState>()(
                     ...state.messagesByTask,
                     [taskId]: [...current, systemMessage],
                   },
+                  workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
                 };
               });
             });
@@ -1980,6 +2087,7 @@ export const useAppStore = create<AppState>()(
                 ...state.messagesByTask,
                 [taskId]: [...current, systemMessage],
               },
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
             };
           });
           return;
@@ -2028,6 +2136,7 @@ export const useAppStore = create<AppState>()(
                       ...state.messagesByTask,
                       [taskId]: [...current, systemMessage],
                     },
+                    workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
                   };
                 });
                 return;
@@ -2059,6 +2168,7 @@ export const useAppStore = create<AppState>()(
                     ...state.messagesByTask,
                     [taskId]: [...current, systemMessage],
                   },
+                  workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
                 };
               });
             });
@@ -2085,6 +2195,7 @@ export const useAppStore = create<AppState>()(
                 ...state.messagesByTask,
                 [taskId]: [...current, systemMessage],
               },
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
             };
           });
           return;
@@ -2125,6 +2236,7 @@ export const useAppStore = create<AppState>()(
                 }),
               }),
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
       },
@@ -2482,6 +2594,9 @@ export const useAppStore = create<AppState>()(
         state.settings = { ...defaultSettings, ...state.settings };
         state.settings.codexApprovalPolicy = normalizeCodexApprovalPolicy({
           value: state.settings.codexApprovalPolicy,
+        });
+        state.settings.providerTimeoutMs = normalizeProviderTimeoutMs({
+          value: state.settings.providerTimeoutMs,
         });
         const isDark = resolveDarkModeForTheme({
           themeMode: state.settings?.themeMode ?? "dark",

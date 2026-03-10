@@ -24,7 +24,8 @@ export function TaskList() {
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const tasks = useAppStore((state) => state.tasks);
-  const layout = useAppStore((state) => state.layout);
+  const collapsed = useAppStore((state) => state.layout.taskListCollapsed);
+  const taskListWidth = useAppStore((state) => state.layout.taskListWidth);
   const activeTaskId = useAppStore((state) => state.activeTaskId);
   const activeTurnIdsByTask = useAppStore((state) => state.activeTurnIdsByTask);
   const providerConversationByTask = useAppStore((state) => state.providerConversationByTask);
@@ -34,8 +35,6 @@ export function TaskList() {
   const exportTask = useAppStore((state) => state.exportTask);
   const createTask = useAppStore((state) => state.createTask);
   const setLayout = useAppStore((state) => state.setLayout);
-
-  const collapsed = layout.taskListCollapsed;
   const taskCounts = getTaskCounts({ tasks });
   const visibleTasks = useMemo(() => getVisibleTasks({ tasks, filter: taskFilter }), [taskFilter, tasks]);
   const shortcutModifierLabel =
@@ -275,7 +274,7 @@ export function TaskList() {
     <aside
       data-testid="task-list"
       className="hidden h-full shrink-0 px-3.5 lg:flex lg:flex-col"
-      style={{ width: `${layout.taskListWidth}px`, minWidth: "160px" }}
+      style={{ width: `${taskListWidth}px`, minWidth: "160px" }}
     >
       <div className="mb-2">
         <Button

@@ -187,12 +187,26 @@ export function getMessageScrollFingerprint(message?: Pick<ChatMessage, "id" | "
   ].join(":");
 }
 
+export function shouldRenderInlineSystemEvent(args: { content: string }): boolean {
+  const normalized = args.content.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (normalized.startsWith("[error]")) {
+    return false;
+  }
+  return !normalized.includes("failed");
+}
+
 export function hasVisibleMessagePartContent(part: MessagePart): boolean {
   if (part.type === "thinking") {
     return false;
   }
   if (part.type === "text") {
     return part.text.trim().length > 0;
+  }
+  if (part.type === "system_event") {
+    return shouldRenderInlineSystemEvent({ content: part.content });
   }
   return true;
 }
@@ -213,12 +227,16 @@ export function getMessageBodyFallbackState(args: {
 }): MessageBodyFallbackState {
   const reasoningParts = args.renderableParts.filter((part) => part.type === "thinking");
   const visibleParts = args.renderableParts.filter(hasVisibleMessagePartContent);
+  const hasSystemEventParts = args.renderableParts.some((part) => part.type === "system_event");
 
   if (args.isActivelyStreaming && visibleParts.length === 0 && reasoningParts.length === 0) {
     return "streaming-placeholder";
   }
 
   if (!args.isActivelyStreaming && visibleParts.length === 0 && reasoningParts.length === 0) {
+    if (hasSystemEventParts) {
+      return "content";
+    }
     return "empty-completed";
   }
 

@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState, type ComponentPropsWithoutRef } from "react";
 import { Bot, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, TriangleAlert, Wrench } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Card, Input, Textarea } from "@/components/ui";
@@ -11,7 +11,15 @@ import {
   normalizeModelSelection,
 } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
-import { PRESET_THEME_TOKENS, THEME_TOKEN_NAMES, type ThemeModeName, type ThemeTokenName, useAppStore } from "@/store/app.store";
+import {
+  DEFAULT_PROVIDER_TIMEOUT_MS,
+  PRESET_THEME_TOKENS,
+  PROVIDER_TIMEOUT_OPTIONS,
+  THEME_TOKEN_NAMES,
+  type ThemeModeName,
+  type ThemeTokenName,
+  useAppStore,
+} from "@/store/app.store";
 
 export const settingsSections = [
   { id: "general", label: "General", icon: Cog },
@@ -59,6 +67,11 @@ function formatThemeTokenLabel(token: ThemeTokenName) {
     .split("-")
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");
+}
+
+function formatProviderTimeoutLabel(value: number) {
+  const minutes = Math.round(value / 60000);
+  return `${minutes} min`;
 }
 
 function SectionHeading(args: { title: string; description: string }) {
@@ -129,6 +142,73 @@ function LabeledField(args: {
   );
 }
 
+type DraftInputProps = Omit<ComponentPropsWithoutRef<typeof Input>, "value" | "defaultValue" | "onChange"> & {
+  value: string;
+  onCommit: (value: string) => void;
+};
+
+const DraftInput = memo(function DraftInput(args: DraftInputProps) {
+  const { value, onCommit, onBlur, onKeyDown, ...inputProps } = args;
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commit = (nextValue: string) => {
+    if (nextValue === value) {
+      return;
+    }
+    onCommit(nextValue);
+  };
+
+  return (
+    <Input
+      {...inputProps}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={(event) => {
+        commit(event.target.value);
+        onBlur?.(event);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          commit(event.currentTarget.value);
+        }
+        onKeyDown?.(event);
+      }}
+    />
+  );
+});
+
+type DraftTextareaProps = Omit<ComponentPropsWithoutRef<typeof Textarea>, "value" | "defaultValue" | "onChange"> & {
+  value: string;
+  onCommit: (value: string) => void;
+};
+
+const DraftTextarea = memo(function DraftTextarea(args: DraftTextareaProps) {
+  const { value, onCommit, onBlur, ...textareaProps } = args;
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  return (
+    <Textarea
+      {...textareaProps}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={(event) => {
+        if (event.target.value !== value) {
+          onCommit(event.target.value);
+        }
+        onBlur?.(event);
+      }}
+    />
+  );
+});
+
 function GeneralSection() {
   const language = useAppStore((state) => state.settings.language);
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -138,10 +218,10 @@ function GeneralSection() {
       <SectionHeading title="General" description="Global defaults for language and workspace-wide app behavior." />
       <SectionStack>
         <SettingsCard title="Language" description="Reserved for future localization support.">
-          <Input
+          <DraftInput
             className="h-10 rounded-md border-border/80 bg-background"
             value={language}
-            onChange={(event) => updateSettings({ patch: { language: event.target.value } })}
+            onCommit={(nextValue) => updateSettings({ patch: { language: nextValue } })}
           />
         </SettingsCard>
       </SectionStack>
@@ -230,11 +310,11 @@ const ThemeTokenRow = memo(function ThemeTokenRow(args: { token: ThemeTokenName;
         <p className="text-xs text-muted-foreground">Preset: {PRESET_THEME_TOKENS[args.themeEditorMode][args.token]}</p>
       </div>
       <span className="size-11 rounded-lg border border-border" style={{ backgroundColor: effectiveValue }} aria-hidden="true" />
-      <Input
+      <DraftInput
         className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
         value={overrideValue}
         placeholder={PRESET_THEME_TOKENS[args.themeEditorMode][args.token]}
-        onChange={(event) => {
+        onCommit={(nextValue) => {
           const themeOverrides = useAppStore.getState().settings.themeOverrides;
           updateSettings({
             patch: {
@@ -242,7 +322,7 @@ const ThemeTokenRow = memo(function ThemeTokenRow(args: { token: ThemeTokenName;
                 ...themeOverrides,
                 [args.themeEditorMode]: {
                   ...themeOverrides[args.themeEditorMode],
-                  [args.token]: event.target.value,
+                  [args.token]: nextValue,
                 },
               },
             },
@@ -290,30 +370,30 @@ function TerminalSection() {
       <SectionStack>
         <SettingsCard title="Typography" description="Tune readability for the integrated terminal.">
           <LabeledField title="Font Size">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               value={String(terminalFontSize)}
-              onChange={(event) =>
+              onCommit={(nextValue) =>
                 updateSettings({
-                  patch: { terminalFontSize: readInt(event.target.value, terminalFontSize) },
+                  patch: { terminalFontSize: readInt(nextValue, terminalFontSize) },
                 })
               }
             />
           </LabeledField>
           <LabeledField title="Font Family">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               value={terminalFontFamily}
-              onChange={(event) => updateSettings({ patch: { terminalFontFamily: event.target.value } })}
+              onCommit={(nextValue) => updateSettings({ patch: { terminalFontFamily: nextValue } })}
             />
           </LabeledField>
           <LabeledField title="Line Height">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               value={String(terminalLineHeight)}
-              onChange={(event) =>
+              onCommit={(nextValue) =>
                 updateSettings({
-                  patch: { terminalLineHeight: readFloat(event.target.value, terminalLineHeight) },
+                  patch: { terminalLineHeight: readFloat(nextValue, terminalLineHeight) },
                 })
               }
             />
@@ -349,16 +429,15 @@ function ModelsSection() {
       <SectionStack>
         <SettingsCard title="Model Routing" description="Verified model set only. Claude is limited to latest official models; Codex supports the latest Stave-supported IDs.">
           <LabeledField title="Claude">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               list="claude-model-options"
               value={modelClaude}
-              onChange={(event) => updateSettings({ patch: { modelClaude: event.target.value } })}
-              onBlur={(event) =>
+              onCommit={(nextValue) =>
                 updateSettings({
                   patch: {
                     modelClaude: normalizeModelSelection({
-                      value: event.target.value,
+                      value: nextValue,
                       fallback: getDefaultModelForProvider({ providerId: "claude-code" }),
                     }),
                   },
@@ -367,16 +446,15 @@ function ModelsSection() {
             />
           </LabeledField>
           <LabeledField title="Codex">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               list="codex-model-options"
               value={modelCodex}
-              onChange={(event) => updateSettings({ patch: { modelCodex: event.target.value } })}
-              onBlur={(event) =>
+              onCommit={(nextValue) =>
                 updateSettings({
                   patch: {
                     modelCodex: normalizeModelSelection({
-                      value: event.target.value,
+                      value: nextValue,
                       fallback: getDefaultModelForProvider({ providerId: "codex" }),
                     }),
                   },
@@ -411,15 +489,15 @@ function RulesSection() {
       <SectionHeading title="Rules" description="Default rule presets injected into provider runs." />
       <SectionStack>
         <SettingsCard title="Rule Presets" description="Primary and secondary presets are appended to new task turns.">
-          <Input
+          <DraftInput
             className="h-10 rounded-md border-border/80 bg-background"
             value={rulesPresetPrimary}
-            onChange={(event) => updateSettings({ patch: { rulesPresetPrimary: event.target.value } })}
+            onCommit={(nextValue) => updateSettings({ patch: { rulesPresetPrimary: nextValue } })}
           />
-          <Input
+          <DraftInput
             className="h-10 rounded-md border-border/80 bg-background"
             value={rulesPresetSecondary}
-            onChange={(event) => updateSettings({ patch: { rulesPresetSecondary: event.target.value } })}
+            onCommit={(nextValue) => updateSettings({ patch: { rulesPresetSecondary: nextValue } })}
           />
         </SettingsCard>
       </SectionStack>
@@ -555,10 +633,10 @@ function SubagentsSection() {
             />
           </LabeledField>
           <LabeledField title="Profile">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               value={subagentsProfile}
-              onChange={(event) => updateSettings({ patch: { subagentsProfile: event.target.value } })}
+              onCommit={(nextValue) => updateSettings({ patch: { subagentsProfile: nextValue } })}
             />
           </LabeledField>
         </SettingsCard>
@@ -630,20 +708,20 @@ function CommandsSection() {
             />
           </LabeledField>
           <LabeledField title="Allowlist">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               value={commandAllowlist}
-              onChange={(event) => updateSettings({ patch: { commandAllowlist: event.target.value } })}
+              onCommit={(nextValue) => updateSettings({ patch: { commandAllowlist: nextValue } })}
             />
           </LabeledField>
           <LabeledField
             title="Custom Commands"
             description="One per line. Format: `/stave:name = response` or `/stave:name => response`. Legacy `/name` entries are normalized into the Stave namespace."
           >
-            <Textarea
+            <DraftTextarea
               className="min-h-[140px] rounded-md border-border/80 bg-background font-mono text-sm"
               value={customCommands}
-              onChange={(event) => updateSettings({ patch: { customCommands: event.target.value } })}
+              onCommit={(nextValue) => updateSettings({ patch: { customCommands: nextValue } })}
               placeholder="/stave:clear = @clear&#10;/stave:hello = Hello from {provider} ({model})&#10;/stave:stats = Users: {user_count}, Assistant: {assistant_count}"
             />
           </LabeledField>
@@ -675,10 +753,10 @@ function ReviewSection() {
             />
           </LabeledField>
           <LabeledField title="Checklist Preset">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               value={reviewChecklistPreset}
-              onChange={(event) => updateSettings({ patch: { reviewChecklistPreset: event.target.value } })}
+              onCommit={(nextValue) => updateSettings({ patch: { reviewChecklistPreset: nextValue } })}
             />
           </LabeledField>
         </SettingsCard>
@@ -706,36 +784,36 @@ function EditorSection() {
       <SectionStack>
         <SettingsCard title="Typography" description="Base editor type and spacing defaults.">
           <LabeledField title="Font Size">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               type="number"
               min={10}
               max={32}
               value={String(editorFontSize)}
-              onChange={(event) =>
+              onCommit={(nextValue) =>
                 updateSettings({
-                  patch: { editorFontSize: readInt(event.target.value, editorFontSize) },
+                  patch: { editorFontSize: readInt(nextValue, editorFontSize) },
                 })
               }
             />
           </LabeledField>
           <LabeledField title="Font Family">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background font-mono"
               value={editorFontFamily}
-              onChange={(event) => updateSettings({ patch: { editorFontFamily: event.target.value } })}
+              onCommit={(nextValue) => updateSettings({ patch: { editorFontFamily: nextValue } })}
             />
           </LabeledField>
           <LabeledField title="Tab Size">
-            <Input
+            <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               type="number"
               min={1}
               max={8}
               value={String(editorTabSize)}
-              onChange={(event) =>
+              onCommit={(nextValue) =>
                 updateSettings({
-                  patch: { editorTabSize: readInt(event.target.value, editorTabSize) },
+                  patch: { editorTabSize: readInt(nextValue, editorTabSize) },
                 })
               }
             />
@@ -836,14 +914,14 @@ function ProvidersSection() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="60000">1 min (60s)</SelectItem>
-                <SelectItem value="120000">2 min (120s)</SelectItem>
-                <SelectItem value="300000">5 min (300s)</SelectItem>
-                <SelectItem value="600000">10 min (600s)</SelectItem>
-                <SelectItem value="1200000">20 min (1200s)</SelectItem>
+                {PROVIDER_TIMEOUT_OPTIONS.map((value) => (
+                  <SelectItem key={value} value={String(value)}>
+                    {formatProviderTimeoutLabel(value)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <span className="text-sm text-muted-foreground">{providerTimeoutMs / 1000}s</span>
+            <span className="text-sm text-muted-foreground">{formatProviderTimeoutLabel(providerTimeoutMs || DEFAULT_PROVIDER_TIMEOUT_MS)}</span>
           </div>
         </SettingsCard>
 
@@ -1122,11 +1200,11 @@ function DeveloperSection() {
       <SectionHeading title="Developer" description="Advanced diagnostics and local provider tooling overrides." />
       <SectionStack>
         <SettingsCard title="Codex Binary Path" description="Override the path to the local `codex` binary. Leave empty to use the system install discovered from your PATH/home bin locations.">
-          <Input
+          <DraftInput
             className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
             placeholder="/usr/local/bin/codex"
             value={codexPathOverride}
-            onChange={(event) => updateSettings({ patch: { codexPathOverride: event.target.value } })}
+            onCommit={(nextValue) => updateSettings({ patch: { codexPathOverride: nextValue } })}
           />
           <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground">
             <p className="flex items-center gap-2 font-medium text-foreground">

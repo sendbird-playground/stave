@@ -44,6 +44,7 @@ import {
   groupMessageParts,
   hasVisibleMessagePartContent,
   isPendingDiffStatus,
+  shouldRenderInlineSystemEvent,
   shouldAutoOpenToolGroup,
   shouldAutoOpenToolPart,
   summarizeDiffLineChanges,
@@ -52,7 +53,7 @@ import { copyTextToClipboard } from "@/lib/clipboard";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import type { CodeDiffPart, FileContextPart, MessagePart } from "@/types/chat";
+import type { ChatMessage, CodeDiffPart, FileContextPart, MessagePart } from "@/types/chat";
 import { TurnDiagnosticsPanel } from "@/components/session/TurnDiagnosticsPanel";
 
 const ReactDiffViewer = lazy(() => import("react-diff-viewer-continued"));
@@ -108,6 +109,8 @@ const CHAT_DIFF_VIEWER_STYLES = {
     },
   },
 } as const;
+
+const EMPTY_MESSAGES: ChatMessage[] = [];
 
 function toProviderStartCase(args: { providerId: "claude-code" | "codex" }) {
   return args.providerId
@@ -431,8 +434,10 @@ function MessagePartRenderer(args: { part: MessagePart; taskId: string; messageI
         />
       );
     case "system_event":
-      if (!part.content?.trim()) return null;
-      return <p className="text-sm italic text-muted-foreground">{part.content}</p>;
+      if (!shouldRenderInlineSystemEvent({ content: part.content })) {
+        return null;
+      }
+      return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm italic text-muted-foreground">{part.content}</p>;
     case "text":
       if (!part.text?.trim()) return null;
       return <MessageResponse isStreaming={isStreaming && isLastTextPart}>{part.text}</MessageResponse>;
@@ -597,6 +602,7 @@ interface MessageRowProps {
   activeTaskId: string;
   activeTurnId?: string;
   chatStreamingEnabled: boolean;
+  isFirst?: boolean;
   liveStreamingMessageId?: string;
   message: {
     id: string;
@@ -615,7 +621,7 @@ interface TaskScrollAnchor {
 }
 
 const MessageRow = memo(function MessageRow(args: MessageRowProps) {
-  const { activeTaskId, activeTurnId, chatStreamingEnabled, liveStreamingMessageId, message } = args;
+  const { activeTaskId, activeTurnId, chatStreamingEnabled, isFirst, liveStreamingMessageId, message } = args;
   const showRespondingWave =
     Boolean(activeTurnId)
     && message.id === liveStreamingMessageId
@@ -623,7 +629,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
     && message.isStreaming;
 
   return (
-    <div data-message-id={message.id}>
+    <div data-message-id={message.id} className={cn(isFirst && "pt-3 sm:pt-4")}>
       <Message from={message.role}>
         <div
           className={cn(
@@ -678,46 +684,15 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
   );
 });
 
-export function ChatPanel() {
+function ChatPanelHeader() {
   const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const tasks = useAppStore((state) => state.tasks);
-  const messagesByTask = useAppStore((state) => state.messagesByTask);
-  const activeTurnIdsByTask = useAppStore((state) => state.activeTurnIdsByTask);
-  const updateSettings = useAppStore((state) => state.updateSettings);
-  const chatStreamingEnabled = useAppStore((state) => state.settings.chatStreamingEnabled);
-  const turnDiagnosticsVisible = useAppStore((state) => state.settings.turnDiagnosticsVisible);
   const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const providerConversationByTask = useAppStore((state) => state.providerConversationByTask);
+  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
+  const turnDiagnosticsVisible = useAppStore((state) => state.settings.turnDiagnosticsVisible);
+  const updateSettings = useAppStore((state) => state.updateSettings);
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
-  const scrollAnchorByTaskRef = useRef(new Map<string, TaskScrollAnchor>());
-  const virtuosoRef = useRef<VirtuosoHandle | null>(null);
-
-  const messages = useMemo(() => messagesByTask[activeTaskId] ?? [], [activeTaskId, messagesByTask]);
-  const visibleMessages = useMemo(() => messages.filter((message) => !message.isPlanResponse), [messages]);
-  const activeTask = useMemo(() => tasks.find((task) => task.id === activeTaskId), [activeTaskId, tasks]);
   const activeTaskTitle = activeTask?.title ?? "Untitled Task";
   const activeTaskUpdatedAt = activeTask?.updatedAt;
-  const activeTurnId = activeTurnIdsByTask[activeTaskId];
-  const liveStreamingMessageId = activeTurnId ? visibleMessages.at(-1)?.id : undefined;
-  const latestUserMessageId = useMemo(() => getLatestUserMessageId(visibleMessages), [visibleMessages]);
-  const lastVisibleMessageScrollFingerprint = useMemo(
-    () => getMessageScrollFingerprint(visibleMessages.at(-1)),
-    [visibleMessages]
-  );
-  const conversationDownloadRows = useMemo(() => messages.map((message) => ({
-    role: message.role,
-    content: message.isPlanResponse
-      ? `[Plan]\n${message.planText?.trim() || message.content}`
-      : message.content,
-  })), [messages]);
-  const autoScrollKey = `${visibleMessages.length}:${lastVisibleMessageScrollFingerprint}`;
-  const forceScrollKey = latestUserMessageId;
-  const messageIndexById = useMemo(
-    () => new Map(visibleMessages.map((message, index) => [message.id, index])),
-    [visibleMessages]
-  );
-  const restoreAnchor = activeTaskId ? scrollAnchorByTaskRef.current.get(activeTaskId) : undefined;
-  const restoreItemIndex = restoreAnchor ? messageIndexById.get(restoreAnchor.anchorMessageId) : undefined;
   const canToggleTurnDiagnostics = Boolean(activeWorkspaceId && activeTaskId);
 
   useEffect(() => {
@@ -728,120 +703,182 @@ export function ChatPanel() {
   }, []);
 
   return (
-    <Conversation>
-      <div className="flex h-full w-full flex-col">
-        <header className="flex h-10 items-center justify-between border-b border-border/80 px-3 text-sm">
-          <div className="flex min-w-0 items-center gap-2">
-            <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
-            <span className="truncate font-medium text-foreground">{activeTaskTitle}</span>
-            {activeTaskUpdatedAt ? (
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {formatTaskUpdatedAt({ value: activeTaskUpdatedAt, now: timeAnchor })}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Toggle
-                    size="sm"
-                    variant="outline"
-                    pressed={turnDiagnosticsVisible}
-                    disabled={!canToggleTurnDiagnostics}
-                    aria-label={turnDiagnosticsVisible ? "Hide turn diagnostics" : "Show turn diagnostics"}
-                    className={cn(
-                      "h-7 rounded-sm px-2 text-xs shadow-none",
-                      turnDiagnosticsVisible
-                        ? "border-border/80 bg-secondary/80 text-foreground hover:bg-secondary/80"
-                        : "border-transparent text-muted-foreground hover:border-border/80 hover:bg-muted hover:text-foreground"
-                    )}
-                    onPressedChange={(pressed) => updateSettings({ patch: { turnDiagnosticsVisible: pressed } })}
-                  >
-                    <Activity className="size-3.5 shrink-0" />
-                    <span>Diagnostics</span>
-                  </Toggle>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {turnDiagnosticsVisible ? "Hide turn diagnostics" : "Show turn diagnostics"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Badge variant="secondary">{visibleMessages.length} messages</Badge>
-          </div>
-        </header>
-        {turnDiagnosticsVisible && activeWorkspaceId && activeTaskId ? (
-          <TurnDiagnosticsPanel
-            workspaceId={activeWorkspaceId}
-            taskId={activeTaskId}
-            activeTurnId={activeTurnId}
-            taskProvider={activeTask?.provider ?? "claude-code"}
-            providerConversations={providerConversationByTask[activeTaskId]}
-          />
+    <header className="flex h-10 items-center justify-between border-b border-border/80 px-3 text-sm">
+      <div className="flex min-w-0 items-center gap-2">
+        <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="truncate font-medium text-foreground">{activeTaskTitle}</span>
+        {activeTaskUpdatedAt ? (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {formatTaskUpdatedAt({ value: activeTaskUpdatedAt, now: timeAnchor })}
+          </span>
         ) : null}
-        <ConversationContent
-          autoScrollKey={autoScrollKey}
-          autoScrollBehavior="auto"
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Toggle
+                size="sm"
+                variant="outline"
+                pressed={turnDiagnosticsVisible}
+                disabled={!canToggleTurnDiagnostics}
+                aria-label={turnDiagnosticsVisible ? "Hide turn diagnostics" : "Show turn diagnostics"}
+                className={cn(
+                  "h-7 rounded-sm px-2 text-xs shadow-none",
+                  turnDiagnosticsVisible
+                    ? "border-border/80 bg-secondary/80 text-foreground hover:bg-secondary/80"
+                    : "border-transparent text-muted-foreground hover:border-border/80 hover:bg-muted hover:text-foreground"
+                )}
+                onPressedChange={(pressed) => updateSettings({ patch: { turnDiagnosticsVisible: pressed } })}
+              >
+                <Activity className="size-3.5 shrink-0" />
+                <span>Diagnostics</span>
+              </Toggle>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {turnDiagnosticsVisible ? "Hide turn diagnostics" : "Show turn diagnostics"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+    </header>
+  );
+}
+
+function ChatPanelDiagnosticsSection() {
+  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
+  const activeTaskId = useAppStore((state) => state.activeTaskId);
+  const activeTurnId = useAppStore((state) => state.activeTurnIdsByTask[state.activeTaskId]);
+  const activeTaskProvider = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? "claude-code");
+  const providerConversations = useAppStore((state) => state.providerConversationByTask[state.activeTaskId]);
+  const turnDiagnosticsVisible = useAppStore((state) => state.settings.turnDiagnosticsVisible);
+
+  if (!turnDiagnosticsVisible || !activeWorkspaceId || !activeTaskId) {
+    return null;
+  }
+
+  return (
+    <TurnDiagnosticsPanel
+      workspaceId={activeWorkspaceId}
+      taskId={activeTaskId}
+      activeTurnId={activeTurnId}
+      taskProvider={activeTaskProvider}
+      providerConversations={providerConversations}
+    />
+  );
+}
+
+function ChatPanelMessageList() {
+  const activeTaskId = useAppStore((state) => state.activeTaskId);
+  const messages = useAppStore((state) => state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES);
+  const activeTurnId = useAppStore((state) => state.activeTurnIdsByTask[state.activeTaskId]);
+  const chatStreamingEnabled = useAppStore((state) => state.settings.chatStreamingEnabled);
+  const scrollAnchorByTaskRef = useRef(new Map<string, TaskScrollAnchor>());
+  const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+
+  const visibleMessages = useMemo(() => messages.filter((message) => !message.isPlanResponse), [messages]);
+  const liveStreamingMessageId = activeTurnId ? visibleMessages.at(-1)?.id : undefined;
+  const latestUserMessageId = useMemo(() => getLatestUserMessageId(visibleMessages), [visibleMessages]);
+  const lastVisibleMessageScrollFingerprint = useMemo(
+    () => getMessageScrollFingerprint(visibleMessages.at(-1)),
+    [visibleMessages]
+  );
+  const autoScrollKey = `${visibleMessages.length}:${lastVisibleMessageScrollFingerprint}`;
+  const forceScrollKey = latestUserMessageId;
+  const messageIndexById = useMemo(
+    () => new Map(visibleMessages.map((message, index) => [message.id, index])),
+    [visibleMessages]
+  );
+  const restoreAnchor = activeTaskId ? scrollAnchorByTaskRef.current.get(activeTaskId) : undefined;
+  const restoreItemIndex = restoreAnchor ? messageIndexById.get(restoreAnchor.anchorMessageId) : undefined;
+
+  return (
+    <ConversationContent
+      autoScrollKey={autoScrollKey}
+      autoScrollBehavior="auto"
+      forceScrollKey={forceScrollKey}
+      scrollScopeKey={activeTaskId}
+      forceScrollScopeKey={activeTaskId}
+      withInnerLayout={visibleMessages.length === 0}
+      onScrollPositionChange={({ container }) => {
+        if (!activeTaskId) {
+          return;
+        }
+        const containerTop = container.getBoundingClientRect().top;
+        const nodes = Array.from(container.querySelectorAll<HTMLElement>("[data-message-id]"));
+        const anchorNode = nodes.find((node) => node.getBoundingClientRect().bottom > containerTop);
+        if (!anchorNode) {
+          return;
+        }
+        const anchorMessageId = anchorNode.dataset.messageId;
+        if (!anchorMessageId) {
+          return;
+        }
+        const offset = Math.max(0, Math.round(containerTop - anchorNode.getBoundingClientRect().top));
+        scrollAnchorByTaskRef.current.set(activeTaskId, {
+          anchorMessageId,
+          offset,
+        });
+      }}
+    >
+      {visibleMessages.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MessageSquareIcon />
+            </EmptyMedia>
+            <EmptyTitle>Start a conversation</EmptyTitle>
+            <EmptyDescription>Send a prompt to begin this task.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ConversationVirtualList
+          listKey={activeTaskId}
+          listRef={virtuosoRef}
+          data={visibleMessages}
           forceScrollKey={forceScrollKey}
-          scrollScopeKey={activeTaskId}
           forceScrollScopeKey={activeTaskId}
-          withInnerLayout={visibleMessages.length === 0}
-          onScrollPositionChange={({ container }) => {
-            if (!activeTaskId) {
-              return;
-            }
-            const containerTop = container.getBoundingClientRect().top;
-            const nodes = Array.from(container.querySelectorAll<HTMLElement>("[data-message-id]"));
-            const anchorNode = nodes.find((node) => node.getBoundingClientRect().bottom > containerTop);
-            if (!anchorNode) {
-              return;
-            }
-            const anchorMessageId = anchorNode.dataset.messageId;
-            if (!anchorMessageId) {
-              return;
-            }
-            const offset = Math.max(0, Math.round(containerTop - anchorNode.getBoundingClientRect().top));
-            scrollAnchorByTaskRef.current.set(activeTaskId, {
-              anchorMessageId,
-              offset,
-            });
-          }}
-        >
-          {visibleMessages.length === 0 ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <MessageSquareIcon />
-                </EmptyMedia>
-                <EmptyTitle>Start a conversation</EmptyTitle>
-                <EmptyDescription>Send a prompt to begin this task.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <ConversationVirtualList
-              listKey={activeTaskId}
-              listRef={virtuosoRef}
-              data={visibleMessages}
-              forceScrollKey={forceScrollKey}
-              forceScrollScopeKey={activeTaskId}
-              restoreItemIndex={restoreItemIndex}
-              restoreItemId={restoreAnchor?.anchorMessageId}
-              restoreItemOffset={restoreAnchor?.offset}
-              itemKey={(_, message) => message.id}
-              itemContent={(_, message) => (
-                <MessageRow
-                  activeTaskId={activeTaskId}
-                  activeTurnId={activeTurnId}
-                  chatStreamingEnabled={chatStreamingEnabled}
-                  liveStreamingMessageId={liveStreamingMessageId}
-                  message={message}
-                />
-              )}
+          restoreItemIndex={restoreItemIndex}
+          restoreItemId={restoreAnchor?.anchorMessageId}
+          restoreItemOffset={restoreAnchor?.offset}
+          itemKey={(_, message) => message.id}
+          itemContent={(index, message) => (
+            <MessageRow
+              activeTaskId={activeTaskId}
+              activeTurnId={activeTurnId}
+              chatStreamingEnabled={chatStreamingEnabled}
+              isFirst={index === 0}
+              liveStreamingMessageId={liveStreamingMessageId}
+              message={message}
             />
           )}
-        </ConversationContent>
+        />
+      )}
+    </ConversationContent>
+  );
+}
+
+function ChatPanelDownloadButton() {
+  const messages = useAppStore((state) => state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES);
+  const conversationDownloadRows = useMemo(() => messages.map((message) => ({
+    role: message.role,
+    content: message.isPlanResponse
+      ? `[Plan]\n${message.planText?.trim() || message.content}`
+      : message.content,
+  })), [messages]);
+
+  return <ConversationDownload messages={conversationDownloadRows} tooltip="Export conversation" />;
+}
+
+export function ChatPanel() {
+  return (
+    <Conversation>
+      <div className="flex h-full w-full flex-col">
+        <ChatPanelHeader />
+        <ChatPanelDiagnosticsSection />
+        <ChatPanelMessageList />
       </div>
-      <ConversationDownload messages={conversationDownloadRows} tooltip="Export conversation" />
+      <ChatPanelDownloadButton />
       <ConversationScrollButton tooltip="Scroll to bottom" />
     </Conversation>
   );

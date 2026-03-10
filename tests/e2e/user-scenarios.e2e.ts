@@ -5,7 +5,9 @@ test("shows no-project splash when project is not selected", async ({ page }) =>
   await page.goto("/");
 
   await expect(page.getByTestId("splash-no-project")).toBeVisible();
-  await expect(page.getByText("No Project Selected")).toBeVisible();
+  await expect(page.getByText("Open a Project")).toBeVisible();
+  await expect(page.getByTestId("workspace-bar")).toHaveCount(0);
+  await expect(page.getByTestId("task-list")).toHaveCount(0);
 });
 
 test.fixme("shows no-workspace splash when project exists without selected workspace", async ({ page }) => {

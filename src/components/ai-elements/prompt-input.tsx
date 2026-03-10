@@ -1,4 +1,4 @@
-import { FilePlus2, LoaderCircle, Square } from "lucide-react";
+import { FilePlus2, LoaderCircle, OctagonX, Send } from "lucide-react";
 import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Popover, PopoverAnchor, PopoverContent, Input, Textarea } from "@/components/ui";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
@@ -405,7 +405,7 @@ export function PromptInput(args: PromptInputProps) {
               className="h-9 rounded-md px-3.5 text-sm"
               onClick={() => onAbort?.()}
             >
-              <Square className="size-3.5" />
+              <OctagonX className="size-3.5" />
               Abort
             </Button>
           ) : null}
@@ -415,7 +415,12 @@ export function PromptInput(args: PromptInputProps) {
                 <LoaderCircle className="size-3.5 animate-spin" />
                 Responding...
               </>
-            ) : "Send"}
+            ) : (
+              <>
+                <Send className="size-3.5" />
+                Send
+              </>
+            )}
           </Button>
         </div>
       </div>

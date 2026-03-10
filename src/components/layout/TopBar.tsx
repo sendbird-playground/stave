@@ -1,14 +1,23 @@
 import { cva } from "class-variance-authority";
 import { ChevronDown, Folder, FolderPlus, GitBranch, Home, Keyboard, LoaderCircle, Minus, Moon, RefreshCw, Search, Settings, Square, Sun, X } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Badge, Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import { SettingsDialog } from "@/components/layout/SettingsDialog";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
-import { KeyboardShortcutsDrawer } from "@/components/layout/KeyboardShortcutsDrawer";
 import { WorkspaceIdentityMark, getWorkspaceAccentTone } from "@/components/layout/workspace-accent";
+
+const loadSettingsDialog = () =>
+  import("@/components/layout/SettingsDialog").then((module) => ({
+    default: module.SettingsDialog,
+  }));
+const SettingsDialog = lazy(() => loadSettingsDialog());
+const loadKeyboardShortcutsDrawer = () =>
+  import("@/components/layout/KeyboardShortcutsDrawer").then((module) => ({
+    default: module.KeyboardShortcutsDrawer,
+  }));
+const KeyboardShortcutsDrawer = lazy(() => loadKeyboardShortcutsDrawer());
 
 const workspaceChipVariants = cva("inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors", {
   variants: {
@@ -65,6 +74,19 @@ export function TopBar() {
       return 0;
     });
   }, [workspaces, workspaceDefaultById]);
+
+  function OverlayLoadingFallback(args: { title: string }) {
+    return (
+      <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]">
+        <Card className="w-full max-w-md border-border/80 bg-background/95 p-6 shadow-2xl">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" />
+            Loading {args.title.toLowerCase()}...
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   function formatWorkspaceLabel(args: { name: string; isDefault: boolean }) {
     if (args.isDefault && args.name.toLowerCase() === "default workspace") {
@@ -161,7 +183,7 @@ export function TopBar() {
         >
           <Badge className="h-8 rounded-md border border-border/80 bg-card px-2.5" style={noDragStyle}>
             <img
-              src={isDarkMode ? "/stave-logo-light.svg" : "/stave-logo-dark.svg"}
+              src={isDarkMode ? "stave-logo-light.svg" : "stave-logo-dark.svg"}
               alt="Stave"
               className="h-4 w-auto"
               draggable={false}
@@ -356,7 +378,16 @@ export function TopBar() {
                     size="sm"
                     className="h-9 w-9 rounded-md p-0"
                     aria-label="open-shortcuts"
-                    onClick={() => setShortcutsOpen(true)}
+                    onMouseEnter={() => {
+                      void loadKeyboardShortcutsDrawer();
+                    }}
+                    onFocus={() => {
+                      void loadKeyboardShortcutsDrawer();
+                    }}
+                    onClick={() => {
+                      void loadKeyboardShortcutsDrawer();
+                      setShortcutsOpen(true);
+                    }}
                     style={noDragStyle}
                   >
                     <Keyboard className="size-4" />
@@ -366,7 +397,23 @@ export function TopBar() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" aria-label="open-settings" className="h-9 w-9 rounded-md p-0" onClick={() => setSettingsOpen(true)} style={noDragStyle}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="open-settings"
+                    className="h-9 w-9 rounded-md p-0"
+                    onMouseEnter={() => {
+                      void loadSettingsDialog();
+                    }}
+                    onFocus={() => {
+                      void loadSettingsDialog();
+                    }}
+                    onClick={() => {
+                      void loadSettingsDialog();
+                      setSettingsOpen(true);
+                    }}
+                    style={noDragStyle}
+                  >
                     <Settings className="size-4" />
                   </Button>
                 </TooltipTrigger>
@@ -427,8 +474,16 @@ export function TopBar() {
           </TooltipProvider>
         </div>
       </header>
-      <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-      <SettingsDialog open={settingsOpen} onOpenChange={({ open }) => setSettingsOpen(open)} />
+      {shortcutsOpen ? (
+        <Suspense fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}>
+          <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        </Suspense>
+      ) : null}
+      {settingsOpen ? (
+        <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
+          <SettingsDialog open={settingsOpen} onOpenChange={({ open }) => setSettingsOpen(open)} />
+        </Suspense>
+      ) : null}
       <ConfirmDialog
         open={Boolean(workspaceToDelete)}
         title="Close Workspace"

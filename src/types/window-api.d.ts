@@ -190,6 +190,7 @@ interface WindowSourceControlApi {
     ok: boolean;
     current: string;
     branches: string[];
+    worktreePathByBranch: Record<string, string>;
     stderr: string;
   }>;
   createBranch?: (args: { name: string; cwd?: string; from?: string }) => Promise<SourceControlCommandResult>;

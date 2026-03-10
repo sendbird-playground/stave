@@ -14,16 +14,11 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-
-interface ExplorerNode {
-  name: string;
-  path: string;
-  type: "file" | "folder";
-  children: ExplorerNode[];
-}
+import { buildExplorerIndex, collectAncestorFolders, normalizeRelativeInputPath, type ExplorerNode } from "./editor-panel.utils";
 
 interface SourceControlItem {
   code: string;
@@ -34,119 +29,6 @@ interface SourceControlHistoryItem {
   hash: string;
   relativeDate: string;
   subject: string;
-}
-
-function normalizeRelativeInputPath(args: { value: string }) {
-  const normalized = args.value.trim().replace(/\\/g, "/").replace(/^\.\/+/, "").replace(/\/+$/, "");
-  if (!normalized || normalized.startsWith("/")) {
-    return null;
-  }
-  const parts = normalized.split("/").filter(Boolean);
-  if (parts.length === 0) {
-    return null;
-  }
-  if (parts.some((segment) => segment === "." || segment === "..")) {
-    return null;
-  }
-  return parts.join("/");
-}
-
-function collectFolderPaths(args: { nodes: ExplorerNode[] }) {
-  const paths: string[] = [];
-  const walk = (node: ExplorerNode) => {
-    if (node.type !== "folder") {
-      return;
-    }
-    paths.push(node.path);
-    for (const child of node.children) {
-      walk(child);
-    }
-  };
-  for (const node of args.nodes) {
-    walk(node);
-  }
-  return paths;
-}
-
-function collectAncestorFolders(args: { path: string }) {
-  const folders: string[] = [];
-  let current = "";
-  for (const segment of args.path.split("/").filter(Boolean)) {
-    current = current ? `${current}/${segment}` : segment;
-    folders.push(current);
-  }
-  return folders;
-}
-
-function createExplorerTree(args: { files: string[]; filter: string }) {
-  const root: ExplorerNode = { name: "root", path: "", type: "folder", children: [] };
-  const normalized = args.filter.trim().toLowerCase();
-  const folders = new Map<string, ExplorerNode>([["", root]]);
-
-  for (const filePath of args.files) {
-    const parts = filePath.split("/").filter(Boolean);
-    let parentPath = "";
-    for (let index = 0; index < parts.length; index += 1) {
-      const name = parts[index];
-      if (!name) {
-        continue;
-      }
-      const path = parentPath ? `${parentPath}/${name}` : name;
-      const isFile = index === parts.length - 1;
-      if (folders.has(path)) {
-        parentPath = path;
-        continue;
-      }
-      const parent = folders.get(parentPath);
-      if (!parent) {
-        break;
-      }
-
-      const node: ExplorerNode = {
-        name,
-        path,
-        type: isFile ? "file" : "folder",
-        children: [],
-      };
-      parent.children.push(node);
-      if (!isFile) {
-        folders.set(path, node);
-      }
-      parentPath = path;
-    }
-  }
-
-  const sortTree = (node: ExplorerNode) => {
-    node.children.sort((a, b) => {
-      if (a.type !== b.type) {
-        return a.type === "folder" ? -1 : 1;
-      }
-      return a.name.localeCompare(b.name);
-    });
-    for (const child of node.children) {
-      if (child.type === "folder") {
-        sortTree(child);
-      }
-    }
-  };
-  sortTree(root);
-
-  if (!normalized) {
-    return root.children;
-  }
-
-  const filterNode = (node: ExplorerNode): ExplorerNode | null => {
-    if (node.type === "file") {
-      return node.path.toLowerCase().includes(normalized) ? node : null;
-    }
-    const children = node.children.map(filterNode).filter(Boolean) as ExplorerNode[];
-    if (children.length > 0 || node.path.toLowerCase().includes(normalized)) {
-      return { ...node, children };
-    }
-    return null;
-  };
-
-  return root.children.map(filterNode).filter(Boolean) as ExplorerNode[];
 }
 
 function parseUnifiedDiff(args: { patch: string }) {
@@ -225,18 +107,27 @@ function ExplorerTreeRow(args: {
 }
 
 export function EditorPanel() {
-  const projectFiles = useAppStore((state) => state.projectFiles);
-  const layout = useAppStore((state) => state.layout);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const workspacePathById = useAppStore((state) => state.workspacePathById);
-  const workspaceRootName = useAppStore((state) => state.workspaceRootName);
-  const projectPath = useAppStore((state) => state.projectPath);
-  const openFileFromTree = useAppStore((state) => state.openFileFromTree);
-  const openDiffInEditor = useAppStore((state) => state.openDiffInEditor);
-  const setLayout = useAppStore((state) => state.setLayout);
-  const refreshProjectFiles = useAppStore((state) => state.refreshProjectFiles);
-
-  const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
+  const [
+    projectFiles,
+    activeWorkspaceId,
+    workspaceRootName,
+    sidebarOverlayVisible,
+    workspaceCwd,
+    openFileFromTree,
+    openDiffInEditor,
+    setLayout,
+    refreshProjectFiles,
+  ] = useAppStore(useShallow((state) => [
+    state.projectFiles,
+    state.activeWorkspaceId,
+    state.workspaceRootName,
+    state.layout.sidebarOverlayVisible,
+    state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined,
+    state.openFileFromTree,
+    state.openDiffInEditor,
+    state.setLayout,
+    state.refreshProjectFiles,
+  ] as const));
 
   const [rightTab, setRightTab] = useState<"explorer" | "changes">("explorer");
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -253,7 +144,8 @@ export function EditorPanel() {
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const [selectedDiffContent, setSelectedDiffContent] = useState("");
 
-  const explorerTree = useMemo(() => createExplorerTree({ files: projectFiles, filter: "" }), [projectFiles]);
+  const explorerIndex = useMemo(() => buildExplorerIndex({ files: projectFiles }), [projectFiles]);
+  const explorerTree = explorerIndex.tree;
   const filteredScmItems = sourceItems;
   const explorerProjectName = workspaceRootName?.trim() || "Project";
 
@@ -261,10 +153,9 @@ export function EditorPanel() {
     if (didInitExpandedFolders) {
       return;
     }
-    const topFolders = new Set(projectFiles.map((path) => path.split("/")[0]).filter((value): value is string => Boolean(value)));
-    setExpandedFolders(topFolders);
+    setExpandedFolders(new Set(explorerIndex.topFolders));
     setDidInitExpandedFolders(true);
-  }, [didInitExpandedFolders, projectFiles]);
+  }, [didInitExpandedFolders, explorerIndex.topFolders]);
 
   useEffect(() => {
     setExpandedFolders(new Set());
@@ -311,10 +202,10 @@ export function EditorPanel() {
   }
 
   useEffect(() => {
-    if (rightTab === "changes" && layout.sidebarOverlayVisible) {
+    if (rightTab === "changes" && sidebarOverlayVisible) {
       void loadScmStatus();
     }
-  }, [rightTab, layout.sidebarOverlayVisible]);
+  }, [rightTab, sidebarOverlayVisible]);
 
   async function handleStageAll() {
     const stageAll = window.api?.sourceControl?.stageAll;
@@ -626,7 +517,7 @@ export function EditorPanel() {
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                          onClick={() => setExpandedFolders(new Set(collectFolderPaths({ nodes: explorerTree })))}
+                          onClick={() => setExpandedFolders(new Set(explorerIndex.folderPaths))}
                         >
                           <ChevronsDown className="size-4" />
                         </Button>

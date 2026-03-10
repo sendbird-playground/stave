@@ -4,21 +4,29 @@ import { ChatPanel } from "@/components/session/ChatPanel";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { PlanViewer } from "@/components/session/PlanViewer";
 import { Button, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
+import { RenderProfiler } from "@/lib/render-profiler";
 import { useAppStore } from "@/store/app.store";
+import { useShallow } from "zustand/react/shallow";
 
 export function ChatArea() {
-  const projectPath = useAppStore((state) => state.projectPath);
-  const tasks = useAppStore((state) => state.tasks);
-  const workspaces = useAppStore((state) => state.workspaces);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const messagesByTask = useAppStore((state) => state.messagesByTask);
-  const createProject = useAppStore((state) => state.createProject);
-  const createTask = useAppStore((state) => state.createTask);
-  const hasSelectedWorkspace = workspaces.some((workspace) => workspace.id === activeWorkspaceId);
-  const hasAnyWorkspace = workspaces.length > 0;
-  const hasSelectedTask = tasks.some((task) => task.id === activeTaskId);
-  const isEmpty = (messagesByTask[activeTaskId] ?? []).length === 0;
+  const [
+    projectPath,
+    hasAnyWorkspace,
+    hasSelectedWorkspace,
+    hasSelectedTask,
+    activeTaskMessageCount,
+    createProject,
+    createTask,
+  ] = useAppStore(useShallow((state) => [
+    state.projectPath,
+    state.workspaces.length > 0,
+    state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId),
+    state.tasks.some((task) => task.id === state.activeTaskId),
+    (state.messagesByTask[state.activeTaskId] ?? []).length,
+    state.createProject,
+    state.createTask,
+  ] as const));
+  const isEmpty = activeTaskMessageCount === 0;
 
   if (!projectPath) {
     return (
@@ -70,16 +78,24 @@ export function ChatArea() {
     ? (
         <section className="flex min-h-0 flex-1 items-center justify-center px-6">
           <div className="w-full max-w-xl">
-            <ChatInput compact />
+            <RenderProfiler id="ChatInputCompact">
+              <ChatInput compact />
+            </RenderProfiler>
           </div>
         </section>
       )
     : (
         <>
-          <ChatPanel />
+          <RenderProfiler id="ChatPanel" thresholdMs={8}>
+            <ChatPanel />
+          </RenderProfiler>
           <div className="relative shrink-0">
-            <PlanViewer />
-            <ChatInput />
+            <RenderProfiler id="PlanViewer">
+              <PlanViewer />
+            </RenderProfiler>
+            <RenderProfiler id="ChatInput" thresholdMs={8}>
+              <ChatInput />
+            </RenderProfiler>
           </div>
         </>
       );

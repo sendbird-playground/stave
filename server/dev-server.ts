@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SandboxMode, ApprovalMode, ModelReasoningEffort } from "@openai/codex-sdk";
+import { parseWorktreePathByBranch } from "../src/lib/source-control-worktrees";
 import type { BridgeEvent } from "../electron/providers/types";
 import { streamClaudeWithSdk } from "../electron/providers/claude-sdk-runtime";
 import { streamCodexWithSdk } from "../electron/providers/codex-sdk-runtime";
@@ -320,6 +321,10 @@ const server = Bun.serve({
         cmd: "git rev-parse --abbrev-ref HEAD",
         cwd: body.cwd,
       });
+      const worktreeResult = await runCommand({
+        cmd: "git worktree list --porcelain",
+        cwd: body.cwd,
+      });
       return json({
         ok: result.ok && currentResult.ok,
         current: currentResult.ok ? currentResult.stdout.trim() : "unknown",
@@ -329,6 +334,7 @@ const server = Bun.serve({
               .map((name) => name.trim())
               .filter(Boolean)
           : [],
+        worktreePathByBranch: worktreeResult.ok ? parseWorktreePathByBranch({ stdout: worktreeResult.stdout }) : {},
         stderr: [result.stderr, currentResult.stderr].filter(Boolean).join("\n").trim(),
       });
     }

@@ -5,7 +5,9 @@ import {
   getMessageScrollFingerprint,
   getRenderableMessageParts,
   groupMessageParts,
+  hasVisibleMessagePartContent,
   isPendingDiffStatus,
+  shouldRenderInlineSystemEvent,
   shouldAutoOpenToolGroup,
   shouldAutoOpenToolPart,
   summarizeDiffLineChanges,
@@ -202,5 +204,29 @@ describe("getMessageBodyFallbackState", () => {
       isActivelyStreaming: false,
       renderableParts: [],
     })).toBe("empty-completed");
+  });
+
+  test("treats hidden system events as content so chain of thought can surface them", () => {
+    expect(getMessageBodyFallbackState({
+      isActivelyStreaming: false,
+      renderableParts: [{ type: "system_event", content: "[error] provider failed" }],
+    })).toBe("content");
+  });
+});
+
+describe("system event visibility", () => {
+  test("hides inline error-like system events", () => {
+    expect(shouldRenderInlineSystemEvent({ content: "[error] provider unavailable" })).toBe(false);
+    expect(shouldRenderInlineSystemEvent({ content: "Approval delivery failed: timeout" })).toBe(false);
+    expect(hasVisibleMessagePartContent({ type: "system_event", content: "Rollback failed." })).toBe(false);
+  });
+
+  test("keeps useful non-error notices visible inline", () => {
+    expect(shouldRenderInlineSystemEvent({ content: "Generation aborted by user." })).toBe(true);
+    expect(shouldRenderInlineSystemEvent({ content: "No response returned." })).toBe(true);
+    expect(hasVisibleMessagePartContent({
+      type: "system_event",
+      content: "Response was cut off because the output limit was reached.",
+    })).toBe(true);
   });
 });

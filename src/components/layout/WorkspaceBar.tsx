@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, FileCode2, Folder, FolderTree, GitBranch, GitPullRequest, TerminalSquare } from "lucide-react";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
+import { isBranchAttachedElsewhere } from "@/lib/source-control-worktrees";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
@@ -37,6 +38,7 @@ export function WorkspaceBar() {
   const [branchFilter, setBranchFilter] = useState("");
   const [newBranchName, setNewBranchName] = useState("");
   const [branches, setBranches] = useState<string[]>([]);
+  const [worktreePathByBranch, setWorktreePathByBranch] = useState<Record<string, string>>({});
   const [currentBranch, setCurrentBranch] = useState("main");
   const [branchError, setBranchError] = useState("");
   const [isBusy, setIsBusy] = useState(false);
@@ -80,6 +82,7 @@ export function WorkspaceBar() {
     }
     setCurrentBranch(result.current || workspaceBranchById[activeWorkspaceId] || "main");
     setBranches(result.branches);
+    setWorktreePathByBranch(result.worktreePathByBranch ?? {});
     setBranchError("");
     setIsBusy(false);
   }
@@ -109,11 +112,20 @@ export function WorkspaceBar() {
 
   const filteredBranches = useMemo(() => {
     const normalized = branchFilter.trim().toLowerCase();
-    if (!normalized) {
-      return branches;
-    }
-    return branches.filter((branch) => branch.toLowerCase().includes(normalized));
-  }, [branchFilter, branches]);
+    return branches.filter((branch) => {
+      if (isBranchAttachedElsewhere({
+        branch,
+        workspacePath: workspaceCwd,
+        worktreePathByBranch,
+      })) {
+        return false;
+      }
+      if (!normalized) {
+        return true;
+      }
+      return branch.toLowerCase().includes(normalized);
+    });
+  }, [branchFilter, branches, workspaceCwd, worktreePathByBranch]);
 
   async function handleCreateBranch() {
     const createBranch = window.api?.sourceControl?.createBranch;
@@ -207,21 +219,45 @@ export function WorkspaceBar() {
   async function handleCheckoutBranch(args: { name: string }) {
     const checkoutBranch = window.api?.sourceControl?.checkoutBranch;
     if (!checkoutBranch) {
-      setBranchError("Checkout bridge unavailable.");
-      return;
+      const message = "Checkout bridge unavailable.";
+      setBranchError(message);
+      toast.error("Branch checkout failed", { description: message });
+      return false;
+    }
+
+    if (args.name === currentBranch) {
+      return false;
+    }
+
+    const blockedByWorktree = isBranchAttachedElsewhere({
+      branch: args.name,
+      workspacePath: workspaceCwd,
+      worktreePathByBranch,
+    });
+    if (blockedByWorktree) {
+      const attachedPath = worktreePathByBranch[args.name];
+      const message = attachedPath
+        ? `Branch "${args.name}" is already checked out in ${formatWorkspacePathLabel({ workspacePath: attachedPath, projectPath })}.`
+        : `Branch "${args.name}" is already checked out in another worktree.`;
+      setBranchError(message);
+      toast.error("Branch unavailable", { description: message });
+      return false;
     }
 
     setIsBusy(true);
     const result = await checkoutBranch({ name: args.name, cwd: workspaceCwd });
     if (!result.ok) {
-      setBranchError(result.stderr || "Branch checkout failed.");
+      const message = result.stderr || "Branch checkout failed.";
+      setBranchError(message);
+      toast.error("Branch checkout failed", { description: message });
       setIsBusy(false);
-      return;
+      return false;
     }
     setWorkspaceBranch({ workspaceId: activeWorkspaceId, branch: args.name });
     setCurrentBranch(args.name);
     await loadBranches();
     setIsBusy(false);
+    return true;
   }
 
   return (
@@ -282,28 +318,41 @@ export function WorkspaceBar() {
                   </Button>
                 </div>
                 <div className="mt-2 space-y-1 text-sm">
-                  {branchError ? <p className="px-2 py-1 text-destructive">{branchError}</p> : null}
-                  {filteredBranches.map((branch) => (
-                    <button
-                      key={branch}
-                      type="button"
-                      className={cn(
-                        "w-full rounded-sm px-2 py-2 text-left transition-colors hover:bg-background/10",
-                        branch === currentBranch && "border border-background/12 bg-background/10",
-                      )}
-                      onClick={() => {
-                        void handleCheckoutBranch({ name: branch }).then(() => {
-                          setBranchOpen(false);
-                          setBranchFilter("");
-                        });
-                      }}
-                      disabled={isBusy}
-                    >
-                      <p className="font-medium text-background">{branch}</p>
-                      <p className="text-sm text-background/60">{branch === currentBranch ? "Current branch" : "Checkout"}</p>
-                    </button>
-                  ))}
-                  {!branchError && filteredBranches.length === 0 ? <p className="px-2 py-2 text-background/60">No branches.</p> : null}
+                  {branchError ? <p className="break-words px-2 py-1 whitespace-pre-wrap text-destructive">{branchError}</p> : null}
+                  {filteredBranches.map((branch) => {
+                    const isCurrent = branch === currentBranch;
+                    const statusLabel = isCurrent
+                      ? "Current branch"
+                      : "Checkout";
+
+                    return (
+                      <button
+                        key={branch}
+                        type="button"
+                        className={cn(
+                          "w-full rounded-sm px-2 py-2 text-left transition-colors",
+                          isCurrent && "border border-background/12 bg-background/10",
+                          !isCurrent && "hover:bg-background/10",
+                          (isBusy || isCurrent) && "cursor-not-allowed opacity-60",
+                        )}
+                        onClick={() => {
+                          void handleCheckoutBranch({ name: branch }).then((ok) => {
+                            if (!ok) {
+                              return;
+                            }
+                            setBranchOpen(false);
+                            setBranchFilter("");
+                          });
+                        }}
+                        disabled={isBusy || isCurrent}
+                        title={statusLabel}
+                      >
+                        <p className="font-medium text-background">{branch}</p>
+                        <p className="text-sm text-background/60">{statusLabel}</p>
+                      </button>
+                    );
+                  })}
+                  {!branchError && filteredBranches.length === 0 ? <p className="px-2 py-2 text-background/60">No available branches.</p> : null}
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>

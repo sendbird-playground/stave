@@ -1,4 +1,5 @@
 import { ipcMain } from "electron";
+import { parseWorktreePathByBranch } from "../../../src/lib/source-control-worktrees";
 import { hasConflictItems, parseStatusLines, quotePath, runCommand } from "../utils/command";
 
 export function registerScmHandlers() {
@@ -82,6 +83,7 @@ export function registerScmHandlers() {
   ipcMain.handle("scm:list-branches", async (_event, args: { cwd?: string }) => {
     const listResult = await runCommand({ command: "git branch --format='%(refname:short)'", cwd: args.cwd });
     const currentResult = await runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd: args.cwd });
+    const worktreeResult = await runCommand({ command: "git worktree list --porcelain", cwd: args.cwd });
 
     return {
       ok: listResult.ok && currentResult.ok,
@@ -92,6 +94,7 @@ export function registerScmHandlers() {
             .map((name) => name.trim())
             .filter(Boolean)
         : [],
+      worktreePathByBranch: worktreeResult.ok ? parseWorktreePathByBranch({ stdout: worktreeResult.stdout }) : {},
       stderr: [listResult.stderr, currentResult.stderr].filter(Boolean).join("\n").trim(),
     };
   });

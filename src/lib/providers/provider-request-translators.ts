@@ -1,5 +1,5 @@
-import { buildLegacyPromptFromCanonicalRequest } from "@/lib/providers/canonical-request";
-import type { CanonicalConversationRequest, ProviderId } from "@/lib/providers/provider.types";
+import { buildLegacyPromptFromCanonicalRequest } from "./canonical-request";
+import type { CanonicalConversationRequest, ProviderId } from "./provider.types";
 
 function getResumeConversationId(conversation?: CanonicalConversationRequest) {
   const value = conversation?.resume?.nativeConversationId?.trim();

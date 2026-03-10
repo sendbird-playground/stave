@@ -4,6 +4,7 @@ import { Button, Textarea, WaveIndicator } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
 import { APPROVE_PLAN_MESSAGE } from "@/lib/providers/plan-response";
 import { useAppStore } from "@/store/app.store";
+import { useShallow } from "zustand/react/shallow";
 
 type ViewState = "normal" | "minimized" | "expanded";
 
@@ -12,22 +13,24 @@ export function PlanViewer() {
   const [revisionText, setRevisionText] = useState("");
   const [viewState, setViewState] = useState<ViewState>("normal");
 
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const tasks = useAppStore((state) => state.tasks);
-  const messagesByTask = useAppStore((state) => state.messagesByTask);
-  const activeTurnIdsByTask = useAppStore((state) => state.activeTurnIdsByTask);
-  const settings = useAppStore((state) => state.settings);
-  const draftProvider = useAppStore((state) => state.draftProvider);
-  const sendUserMessage = useAppStore((state) => state.sendUserMessage);
-
-  const activeTask = tasks.find((t) => t.id === activeTaskId);
+  const [activeTaskId, draftProvider, claudePermissionMode, sendUserMessage] = useAppStore(
+    useShallow((state) => [
+      state.activeTaskId,
+      state.draftProvider,
+      state.settings.claudePermissionMode,
+      state.sendUserMessage,
+    ] as const),
+  );
+  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
+  const lastMessage = useAppStore((state) => {
+    const messages = state.messagesByTask[state.activeTaskId];
+    return messages?.at(-1);
+  });
+  const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
   const activeProvider = activeTask?.provider ?? draftProvider;
-  const isTurnActive = Boolean(activeTurnIdsByTask[activeTaskId]);
-  const messages = messagesByTask[activeTaskId] ?? [];
-  const lastMessage = messages.at(-1);
   const planText = lastMessage?.planText?.trim() ?? "";
 
-  const isClaudePlanMode = activeProvider === "claude-code" && settings.claudePermissionMode === "plan";
+  const isClaudePlanMode = activeProvider === "claude-code" && claudePermissionMode === "plan";
   const isPlanPreparing = isClaudePlanMode && isTurnActive;
   const isPlanPending =
     activeProvider === "claude-code" &&

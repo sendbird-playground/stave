@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { TopBar } from "@/components/layout/TopBar";
 import { WorkspaceBar } from "@/components/layout/WorkspaceBar";
 import { TaskList } from "@/components/layout/TaskList";
@@ -6,6 +7,7 @@ import { ChatArea } from "@/components/session/ChatArea";
 import { TerminalDock } from "@/components/layout/TerminalDock";
 import { Toaster } from "@/components/ui";
 import { getNextProviderId } from "@/lib/providers/model-catalog";
+import { RenderProfiler } from "@/lib/render-profiler";
 import { useAppStore } from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 
@@ -15,21 +17,89 @@ const EditorPanel = lazy(() =>
   }))
 );
 
+type ResizableLayoutKey =
+  | "taskListWidth"
+  | "editorPanelWidth"
+  | "explorerPanelWidth"
+  | "terminalDockHeight";
+
 export function AppShell() {
-  const layout = useAppStore((state) => state.layout);
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
+  const [
+    projectPath,
+    activeTaskId,
+    taskListCollapsed,
+    taskListWidth,
+    editorVisible,
+    editorPanelWidth,
+    sidebarOverlayVisible,
+    explorerPanelWidth,
+    terminalDocked,
+    terminalDockHeight,
+    checkOpenTabConflicts,
+    setLayout,
+    createTask,
+    setTaskProvider,
+    abortTaskTurn,
+    saveActiveEditorTab,
+    selectTask,
+  ] = useAppStore(useShallow((state) => [
+    state.projectPath,
+    state.activeTaskId,
+    state.layout.taskListCollapsed,
+    state.layout.taskListWidth,
+    state.layout.editorVisible,
+    state.layout.editorPanelWidth,
+    state.layout.sidebarOverlayVisible,
+    state.layout.explorerPanelWidth,
+    state.layout.terminalDocked,
+    state.layout.terminalDockHeight ?? 210,
+    state.checkOpenTabConflicts,
+    state.setLayout,
+    state.createTask,
+    state.setTaskProvider,
+    state.abortTaskTurn,
+    state.saveActiveEditorTab,
+    state.selectTask,
+  ] as const));
+  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
   const tasks = useAppStore((state) => state.tasks);
-  const checkOpenTabConflicts = useAppStore((state) => state.checkOpenTabConflicts);
-  const setLayout = useAppStore((state) => state.setLayout);
-  const createTask = useAppStore((state) => state.createTask);
-  const setTaskProvider = useAppStore((state) => state.setTaskProvider);
-  const abortTaskTurn = useAppStore((state) => state.abortTaskTurn);
-  const saveActiveEditorTab = useAppStore((state) => state.saveActiveEditorTab);
-  const selectTask = useAppStore((state) => state.selectTask);
-  const terminalDockHeight = layout.terminalDockHeight ?? 210;
+  const hasProject = Boolean(projectPath);
   const panelRowRef = useRef<HTMLDivElement>(null);
+  const pendingLayoutPatchRef = useRef<Partial<Record<ResizableLayoutKey, number>> | null>(null);
+  const resizeFrameRef = useRef<number | null>(null);
   const [zoomHudPercent, setZoomHudPercent] = useState<number | null>(null);
   const zoomHudTimerRef = useRef<number | null>(null);
+
+  function flushPendingLayoutPatch() {
+    if (!pendingLayoutPatchRef.current) {
+      return;
+    }
+    setLayout({ patch: pendingLayoutPatchRef.current });
+    pendingLayoutPatchRef.current = null;
+    if (resizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(resizeFrameRef.current);
+      resizeFrameRef.current = null;
+    }
+  }
+
+  function scheduleLayoutResizePatch(key: ResizableLayoutKey, value: number) {
+    pendingLayoutPatchRef.current = {
+      ...(pendingLayoutPatchRef.current ?? {}),
+      [key]: value,
+    };
+    if (resizeFrameRef.current !== null) {
+      return;
+    }
+    resizeFrameRef.current = window.requestAnimationFrame(() => {
+      resizeFrameRef.current = null;
+      if (!pendingLayoutPatchRef.current) {
+        return;
+      }
+      const patch = pendingLayoutPatchRef.current;
+      pendingLayoutPatchRef.current = null;
+      setLayout({ patch });
+    });
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -76,7 +146,7 @@ export function AppShell() {
 
       if (event.key.toLowerCase() === "b") {
         event.preventDefault();
-        const nextVisible = !layout.sidebarOverlayVisible;
+        const nextVisible = !sidebarOverlayVisible;
         setLayout({ patch: { sidebarOverlayVisible: nextVisible } });
         if (nextVisible) {
           window.dispatchEvent(new CustomEvent("stave:right-panel-tab", { detail: "changes" }));
@@ -86,13 +156,13 @@ export function AppShell() {
 
       if (event.key.toLowerCase() === "e") {
         event.preventDefault();
-        setLayout({ patch: { editorVisible: !layout.editorVisible } });
+        setLayout({ patch: { editorVisible: !editorVisible } });
         return;
       }
 
       if (event.key === "`") {
         event.preventDefault();
-        setLayout({ patch: { terminalDocked: !layout.terminalDocked } });
+        setLayout({ patch: { terminalDocked: !terminalDocked } });
         return;
       }
 
@@ -104,7 +174,6 @@ export function AppShell() {
 
       if (event.shiftKey && event.key.toLowerCase() === "p") {
         event.preventDefault();
-        const activeTask = tasks.find((task) => task.id === activeTaskId);
         if (!activeTask) {
           return;
         }
@@ -137,7 +206,13 @@ export function AppShell() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [abortTaskTurn, activeTaskId, createTask, layout.editorVisible, layout.sidebarOverlayVisible, layout.terminalDocked, saveActiveEditorTab, selectTask, setLayout, setTaskProvider, tasks]);
+  }, [abortTaskTurn, activeTask, activeTaskId, createTask, editorVisible, saveActiveEditorTab, selectTask, setLayout, setTaskProvider, sidebarOverlayVisible, tasks, terminalDocked]);
+
+  useEffect(() => () => {
+    if (resizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(resizeFrameRef.current);
+    }
+  }, []);
 
   return (
     <div className="flex h-full w-full flex-col bg-background text-foreground">
@@ -151,23 +226,28 @@ export function AppShell() {
       <Toaster />
       <TopBar />
       <div className="m-0 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border/70 bg-muted/50">
-        <WorkspaceBar />
+        {hasProject ? <WorkspaceBar /> : null}
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          <div className="flex min-h-0 flex-col pb-2">
-            <TaskList />
-          </div>
-          {!layout.taskListCollapsed ? (
+          {hasProject ? (
+            <div className="flex min-h-0 flex-col pb-2">
+              <RenderProfiler id="TaskList">
+                <TaskList />
+              </RenderProfiler>
+            </div>
+          ) : null}
+          {hasProject && !taskListCollapsed ? (
             <div
               className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
               onMouseDown={(event) => {
                 event.preventDefault();
                 const startX = event.clientX;
-                const startWidth = layout.taskListWidth;
+                const startWidth = taskListWidth;
                 const onMove = (moveEvent: MouseEvent) => {
                   const next = Math.max(160, Math.min(340, startWidth + (moveEvent.clientX - startX)));
-                  setLayout({ patch: { taskListWidth: next } });
+                  scheduleLayoutResizePatch("taskListWidth", next);
                 };
                 const onUp = () => {
+                  flushPendingLayoutPatch();
                   window.removeEventListener("mousemove", onMove);
                   window.removeEventListener("mouseup", onUp);
                 };
@@ -181,25 +261,26 @@ export function AppShell() {
               <div className="min-h-0 min-w-[420px] flex-1">
                 <ChatArea />
               </div>
-              {layout.editorVisible ? (
+              {editorVisible ? (
                 <>
                   <div
                     className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
                     onMouseDown={(event) => {
                       event.preventDefault();
                       const startX = event.clientX;
-                      const startWidth = layout.editorPanelWidth;
+                      const startWidth = editorPanelWidth;
                       const onMove = (moveEvent: MouseEvent) => {
                         const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
-                        const explorerWidth = layout.sidebarOverlayVisible ? layout.explorerPanelWidth : 0;
-                        const separators = layout.sidebarOverlayVisible ? 10 : 5;
+                        const explorerWidth = sidebarOverlayVisible ? explorerPanelWidth : 0;
+                        const separators = sidebarOverlayVisible ? 10 : 5;
                         const chatMinWidth = 420;
                         const maxEditor = Math.max(320, containerWidth - chatMinWidth - explorerWidth - separators);
                         const delta = startX - moveEvent.clientX;
                         const next = Math.max(320, Math.min(maxEditor, startWidth + delta));
-                        setLayout({ patch: { editorPanelWidth: next } });
+                        scheduleLayoutResizePatch("editorPanelWidth", next);
                       };
                       const onUp = () => {
+                        flushPendingLayoutPatch();
                         window.removeEventListener("mousemove", onMove);
                         window.removeEventListener("mouseup", onUp);
                       };
@@ -207,30 +288,33 @@ export function AppShell() {
                       window.addEventListener("mouseup", onUp);
                     }}
                   />
-                  <div className="hidden h-full lg:block" style={{ width: `${layout.editorPanelWidth}px` }}>
-                    <EditorMainPanel />
+                  <div className="hidden h-full lg:block" style={{ width: `${editorPanelWidth}px` }}>
+                    <RenderProfiler id="EditorMainPanel" thresholdMs={10}>
+                      <EditorMainPanel />
+                    </RenderProfiler>
                   </div>
                 </>
               ) : null}
-              {layout.sidebarOverlayVisible ? (
+              {sidebarOverlayVisible ? (
                 <>
                   <div
                     className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
                     onMouseDown={(event) => {
                       event.preventDefault();
                       const startX = event.clientX;
-                      const startWidth = layout.explorerPanelWidth;
+                      const startWidth = explorerPanelWidth;
                       const onMove = (moveEvent: MouseEvent) => {
                         const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
-                        const editorWidth = layout.editorVisible ? layout.editorPanelWidth : 0;
-                        const separators = layout.editorVisible ? 10 : 5;
+                        const editorWidth = editorVisible ? editorPanelWidth : 0;
+                        const separators = editorVisible ? 10 : 5;
                         const chatMinWidth = 420;
                         const maxExplorer = Math.max(200, containerWidth - chatMinWidth - editorWidth - separators);
                         const delta = startX - moveEvent.clientX;
                         const next = Math.max(200, Math.min(maxExplorer, startWidth + delta));
-                        setLayout({ patch: { explorerPanelWidth: next } });
+                        scheduleLayoutResizePatch("explorerPanelWidth", next);
                       };
                       const onUp = () => {
+                        flushPendingLayoutPatch();
                         window.removeEventListener("mousemove", onMove);
                         window.removeEventListener("mouseup", onUp);
                       };
@@ -238,15 +322,17 @@ export function AppShell() {
                       window.addEventListener("mouseup", onUp);
                     }}
                   />
-                  <Suspense fallback={<aside className="rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm" style={{ width: `${layout.explorerPanelWidth}px` }}>Loading panel...</aside>}>
-                    <div className="hidden h-full lg:block" style={{ width: `${layout.explorerPanelWidth}px` }}>
-                      <EditorPanel />
+                  <Suspense fallback={<aside className="rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm" style={{ width: `${explorerPanelWidth}px` }}>Loading panel...</aside>}>
+                    <div className="hidden h-full lg:block" style={{ width: `${explorerPanelWidth}px` }}>
+                      <RenderProfiler id="EditorPanel" thresholdMs={8}>
+                        <EditorPanel />
+                      </RenderProfiler>
                     </div>
                   </Suspense>
                 </>
               ) : null}
             </div>
-            {layout.terminalDocked ? (
+            {terminalDocked ? (
               <>
                 <div
                   className="h-[5px] shrink-0 cursor-row-resize transition-colors hover:bg-border/50"
@@ -257,9 +343,10 @@ export function AppShell() {
                     const onMove = (moveEvent: MouseEvent) => {
                       const delta = startY - moveEvent.clientY;
                       const next = Math.max(120, Math.min(420, startHeight + delta));
-                      setLayout({ patch: { terminalDockHeight: next } });
+                      scheduleLayoutResizePatch("terminalDockHeight", next);
                     };
                     const onUp = () => {
+                      flushPendingLayoutPatch();
                       window.removeEventListener("mousemove", onMove);
                       window.removeEventListener("mouseup", onUp);
                     };
