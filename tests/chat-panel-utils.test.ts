@@ -6,6 +6,8 @@ import {
   getRenderableMessageParts,
   groupMessageParts,
   isPendingDiffStatus,
+  shouldAutoOpenToolGroup,
+  shouldAutoOpenToolPart,
   summarizeDiffLineChanges,
 } from "@/components/session/chat-panel.utils";
 
@@ -155,6 +157,21 @@ describe("groupMessageParts", () => {
       "other",
       "other",
     ]);
+  });
+});
+
+describe("tool auto-open behavior", () => {
+  test("auto-opens individual tool cards only while streaming", () => {
+    expect(shouldAutoOpenToolPart("input-streaming")).toBe(true);
+    expect(shouldAutoOpenToolPart("input-available")).toBe(false);
+    expect(shouldAutoOpenToolPart("output-available")).toBe(false);
+    expect(shouldAutoOpenToolPart("output-error")).toBe(false);
+  });
+
+  test("auto-opens grouped tools only when at least one tool is streaming", () => {
+    expect(shouldAutoOpenToolGroup(["output-error"])).toBe(false);
+    expect(shouldAutoOpenToolGroup(["output-available", "output-error"])).toBe(false);
+    expect(shouldAutoOpenToolGroup(["output-error", "input-streaming"])).toBe(true);
   });
 });
 

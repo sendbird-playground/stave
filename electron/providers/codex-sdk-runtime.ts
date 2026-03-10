@@ -3,7 +3,10 @@ import type { Thread, ThreadEvent, ThreadItem, TurnCompletedEvent, TurnOptions }
 import { resolveExecutablePath } from "./executable-path";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
-import { extractProposedPlanText, startsWithProposedPlan } from "../../src/lib/providers/plan-response";
+import {
+  buildProviderTurnPrompt,
+  resolveProviderResumeConversationId,
+} from "../../src/lib/providers/provider-request-translators";
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
@@ -11,6 +14,9 @@ import path from "node:path";
 
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
+
+const SUPPORTED_CODEX_SDK_VERSION = "0.113.0";
+const SUPPORTED_CODEX_CLI_VERSION = "0.113.0";
 
 function parseBooleanEnv(args: { value: string | undefined; fallback: boolean }) {
   const normalized = args.value?.trim().toLowerCase();
@@ -39,12 +45,15 @@ function resolveSandboxMode(args: {
 }
 
 function resolveApprovalPolicy(args: {
-  runtimeValue?: "never" | "on-request" | "on-failure" | "untrusted";
+  runtimeValue?: "never" | "on-request" | "untrusted";
   envValue?: string;
-}): "never" | "on-request" | "on-failure" | "untrusted" | undefined {
+}): "never" | "on-request" | "untrusted" | undefined {
   const candidate = args.runtimeValue ?? args.envValue;
-  if (candidate === "never" || candidate === "on-request" || candidate === "on-failure" || candidate === "untrusted") {
+  if (candidate === "never" || candidate === "on-request" || candidate === "untrusted") {
     return candidate;
+  }
+  if (candidate === "on-failure") {
+    return "on-request";
   }
   return undefined;
 }
@@ -94,6 +103,8 @@ function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }
   return {
     taskId: args.taskId ?? "default",
     executablePath: args.executablePath || "<sdk-default>",
+    supportedSdkVersion: SUPPORTED_CODEX_SDK_VERSION,
+    supportedCliVersion: SUPPORTED_CODEX_CLI_VERSION,
     versionProbe: versionProbe
       ? {
         status: versionProbe.status,
@@ -104,6 +115,28 @@ function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }
       }
       : null,
   };
+}
+
+export function buildCodexConfigOverrides(args: {
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  const config: Record<string, string | boolean> = {};
+  const summaryMode = args.runtimeOptions?.codexReasoningSummary;
+  const supportsSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries;
+
+  if (args.runtimeOptions?.codexShowRawAgentReasoning) {
+    config.show_raw_agent_reasoning = true;
+  }
+  if (summaryMode && summaryMode !== "auto") {
+    config.model_reasoning_summary = summaryMode;
+  }
+  if (supportsSummaries === "enabled") {
+    config.model_supports_reasoning_summaries = true;
+  } else if (supportsSummaries === "disabled") {
+    config.model_supports_reasoning_summaries = false;
+  }
+
+  return Object.keys(config).length > 0 ? config : undefined;
 }
 
 function buildThreadKey(args: {
@@ -128,8 +161,11 @@ function buildThreadKey(args: {
   const model = args.runtimeOptions?.model?.trim() || "model-default";
   const modelReasoningEffort = args.runtimeOptions?.codexModelReasoningEffort ?? "effort-default";
   const webSearchMode = args.runtimeOptions?.codexWebSearchMode ?? "websearch-default";
+  const reasoningSummary = args.runtimeOptions?.codexReasoningSummary ?? "summary-auto";
+  const supportsReasoningSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries ?? "supports-auto";
+  const showRawAgentReasoning = args.runtimeOptions?.codexShowRawAgentReasoning ? "raw1" : "raw0";
 
-  return `${args.taskId ?? "default"}:${args.cwd}:${sandboxMode}:${networkAccessEnabled ? "net1" : "net0"}:${approvalPolicy ?? "approval-default"}:${model}:${modelReasoningEffort}:${webSearchMode}:${args.runtimeOptions?.codexPlanMode ? "plan1" : "plan0"}`;
+  return `${args.taskId ?? "default"}:${args.cwd}:${sandboxMode}:${networkAccessEnabled ? "net1" : "net0"}:${approvalPolicy ?? "approval-default"}:${model}:${modelReasoningEffort}:${webSearchMode}:${reasoningSummary}:${supportsReasoningSummaries}:${showRawAgentReasoning}`;
 }
 
 function resolveThreadId(args: { threadKey: string; fallbackThreadId?: string }) {
@@ -242,29 +278,21 @@ export function mapCodexItemEvent(args: {
 }): BridgeEvent[] {
   const { item, lifecycle } = args;
   const itemId = (item as { id?: string }).id ?? "";
-  const messageText = (item.type === "agent_message" || item.type === "reasoning") ? (item.text ?? "") : "";
-  const trimmedMessageText = messageText.trim();
-  const extractedPlanText = extractProposedPlanText({ text: trimmedMessageText });
-  const isPlanResponse = extractedPlanText !== null;
 
   switch (item.type) {
     case "agent_message": {
       if (lifecycle === "item.completed") {
         const prev = codexItemTextLength.get(itemId) ?? 0;
         codexItemTextLength.delete(itemId);
-        // Plan detection only at completion (closing tag not available during streaming).
-        if (isPlanResponse) {
-          return [{ type: "plan_ready", planText: extractedPlanText }];
-        }
         const full = item.text ?? "";
         const delta = full.slice(prev);
         return delta ? [{ type: "text", text: delta }] : [];
       }
       // item.started / item.updated — emit delta for streaming.
-      // Skip streaming if the text looks like it's starting a plan response
-      // to avoid showing raw XML that will later become a plan card.
       const full = item.text ?? "";
-      if (!full || startsWithProposedPlan({ text: full })) return [];
+      if (!full) {
+        return [];
+      }
       const prev = codexItemTextLength.get(itemId) ?? 0;
       const delta = full.slice(prev);
       if (!delta) return [];
@@ -438,6 +466,7 @@ function ensureThread(args: {
   codex: InstanceType<typeof import("@openai/codex-sdk").Codex>;
   taskId?: string;
   cwd: string;
+  conversation?: StreamTurnArgs["conversation"];
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }): Thread {
   const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccessEnabled
@@ -465,7 +494,10 @@ function ensureThread(args: {
   }
   const resumeThreadId = resolveThreadId({
     threadKey,
-    fallbackThreadId: args.runtimeOptions?.codexResumeThreadId,
+    fallbackThreadId: resolveProviderResumeConversationId({
+      conversation: args.conversation,
+      fallbackResumeId: args.runtimeOptions?.codexResumeThreadId,
+    }),
   });
   const threadOptions = {
     ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
@@ -523,11 +555,11 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     const codexExecutablePath = args.runtimeOptions?.codexPathOverride?.trim() || resolveCodexExecutablePath();
     diagnostics = buildCodexDiagnostics({ executablePath: codexExecutablePath ?? "", taskId: args.taskId });
 
-    const codexPlanMode = args.runtimeOptions?.codexPlanMode ?? false;
+    const codexConfig = buildCodexConfigOverrides({ runtimeOptions: args.runtimeOptions });
     const codex = new CodexCtor({
       ...(codexExecutablePath ? { codexPathOverride: codexExecutablePath } : {}),
       env: buildCodexEnv(),
-      ...(codexPlanMode ? { config: { collaboration_mode: true } } : {}),
+      ...(codexConfig ? { config: codexConfig } : {}),
     });
     const threadKey = buildThreadKey({
       taskId: args.taskId,
@@ -538,12 +570,18 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
       codex,
       taskId: args.taskId,
       cwd: runtimeCwd,
+      conversation: args.conversation,
       runtimeOptions: args.runtimeOptions,
     });
     const abortController = new AbortController();
     args.registerAbort?.(() => abortController.abort());
     const turnOptions: TurnOptions = { signal: abortController.signal };
-    const streamed = await thread.runStreamed(args.prompt, turnOptions);
+    const providerPrompt = buildProviderTurnPrompt({
+      providerId: args.providerId,
+      prompt: args.prompt,
+      conversation: args.conversation,
+    });
+    const streamed = await thread.runStreamed(providerPrompt, turnOptions);
 
     const codexDebug = args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";
     const events: BridgeEvent[] = [];
@@ -564,7 +602,10 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
         case "item.started":
         case "item.updated":
         case "item.completed": {
-          const mapped = mapCodexItemEvent({ lifecycle: threadEvent.type, item: threadEvent.item });
+          const mapped = mapCodexItemEvent({
+            lifecycle: threadEvent.type,
+            item: threadEvent.item,
+          });
           if (
             threadEvent.type === "item.completed"
             && threadEvent.item.type === "file_change"

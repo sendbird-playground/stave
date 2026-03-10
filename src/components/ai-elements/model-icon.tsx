@@ -1,22 +1,11 @@
 import { useState } from "react";
+import { getProviderFallbackLabel, getProviderIconUrl } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 import { cn } from "@/lib/utils";
-
-const PROVIDER_ICON_URL: Record<ProviderId, string> = {
-  codex: "/codex-color.svg",
-  "claude-code": "/claude-color.svg",
-};
 
 interface ModelIconProps {
   providerId: ProviderId;
   className?: string;
-}
-
-function fallbackLabel(args: { providerId: ProviderId }) {
-  if (args.providerId === "claude-code") {
-    return "C";
-  }
-  return "O";
 }
 
 export function ModelIcon(args: ModelIconProps) {
@@ -32,14 +21,14 @@ export function ModelIcon(args: ModelIconProps) {
         )}
         aria-hidden
       >
-        {fallbackLabel({ providerId })}
+        {getProviderFallbackLabel({ providerId })}
       </span>
     );
   }
 
   return (
     <img
-      src={PROVIDER_ICON_URL[providerId]}
+      src={getProviderIconUrl({ providerId })}
       alt=""
       aria-hidden
       className={cn("size-4 shrink-0 object-contain", className)}

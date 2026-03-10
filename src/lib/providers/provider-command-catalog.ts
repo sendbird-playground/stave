@@ -1,3 +1,4 @@
+import { getProviderLabel, providerSupportsNativeCommandCatalog } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 
 export interface ProviderSlashCommand {
@@ -28,12 +29,12 @@ function toCatalogCacheKey(args: { providerId: ProviderId; cwd?: string }) {
 }
 
 export function getInitialProviderCommandCatalog(args: { providerId: ProviderId }): ProviderCommandCatalogState {
-  if (args.providerId === "codex") {
+  if (!providerSupportsNativeCommandCatalog(args)) {
     return {
       providerId: args.providerId,
       status: "unsupported",
       commands: [],
-      detail: "Codex does not expose a native slash-command catalog through the current SDK path.",
+      detail: `${getProviderLabel({ providerId: args.providerId, variant: "full" })} does not expose a native slash-command catalog through the current SDK path.`,
     };
   }
 

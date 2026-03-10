@@ -1,6 +1,12 @@
 import { ipcMain } from "electron";
 import type { PersistenceWorkspaceSnapshot } from "../../persistence/types";
-import { ListTaskTurnsArgsSchema, ListTurnEventsArgsSchema, PersistenceUpsertArgsSchema, WorkspaceIdArgsSchema } from "./schemas";
+import {
+  ListLatestWorkspaceTurnsArgsSchema,
+  ListTaskTurnsArgsSchema,
+  ListTurnEventsArgsSchema,
+  PersistenceUpsertArgsSchema,
+  WorkspaceIdArgsSchema,
+} from "./schemas";
 import { ensurePersistenceReady, ensurePersistenceReadySync } from "../state";
 
 export function registerPersistenceHandlers() {
@@ -86,6 +92,19 @@ export function registerPersistenceHandlers() {
     const turns = store.listTurns({
       workspaceId: parsedArgs.data.workspaceId,
       taskId: parsedArgs.data.taskId,
+      limit: parsedArgs.data.limit,
+    });
+    return { ok: true, turns };
+  });
+
+  ipcMain.handle("persistence:list-latest-workspace-turns", async (_event, args: unknown) => {
+    const parsedArgs = ListLatestWorkspaceTurnsArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, turns: [] };
+    }
+    const store = await ensurePersistenceReady();
+    const turns = store.listLatestTurnsForWorkspace({
+      workspaceId: parsedArgs.data.workspaceId,
       limit: parsedArgs.data.limit,
     });
     return { ok: true, turns };

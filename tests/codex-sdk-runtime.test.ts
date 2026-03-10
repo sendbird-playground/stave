@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mapCodexItemEvent } from "../electron/providers/codex-sdk-runtime";
+import { buildCodexConfigOverrides, mapCodexItemEvent } from "../electron/providers/codex-sdk-runtime";
 
 describe("mapCodexItemEvent", () => {
   test("emits a non-streaming reasoning completion event even when there is no final delta", () => {
@@ -73,7 +73,7 @@ describe("mapCodexItemEvent", () => {
     ]);
   });
 
-  test("emits plan_ready only for a clean proposed_plan wrapper", () => {
+  test("treats plan-shaped agent messages as plain text", () => {
     expect(mapCodexItemEvent({
       lifecycle: "item.completed",
       item: {
@@ -82,18 +82,33 @@ describe("mapCodexItemEvent", () => {
         text: "<proposed_plan>\nShip the fix.\n</proposed_plan>",
       },
     } as const)).toEqual([
-      { type: "plan_ready", planText: "Ship the fix." },
+      { type: "text", text: "<proposed_plan>\nShip the fix.\n</proposed_plan>" },
     ]);
+  });
+});
 
-    expect(mapCodexItemEvent({
-      lifecycle: "item.completed",
-      item: {
-        id: "plan-test-2",
-        type: "agent_message",
-        text: "<proposed_plan>Ship the fix.</proposed_plan>\nExtra note",
+describe("buildCodexConfigOverrides", () => {
+  test("returns only explicit Codex config overrides", () => {
+    expect(buildCodexConfigOverrides({
+      runtimeOptions: {
+        codexShowRawAgentReasoning: true,
+        codexReasoningSummary: "detailed",
+        codexSupportsReasoningSummaries: "enabled",
       },
-    } as const)).toEqual([
-      { type: "text", text: "<proposed_plan>Ship the fix.</proposed_plan>\nExtra note" },
-    ]);
+    })).toEqual({
+      show_raw_agent_reasoning: true,
+      model_reasoning_summary: "detailed",
+      model_supports_reasoning_summaries: true,
+    });
+  });
+
+  test("omits auto/default Codex config values", () => {
+    expect(buildCodexConfigOverrides({
+      runtimeOptions: {
+        codexShowRawAgentReasoning: false,
+        codexReasoningSummary: "auto",
+        codexSupportsReasoningSummaries: "auto",
+      },
+    })).toBeUndefined();
   });
 });

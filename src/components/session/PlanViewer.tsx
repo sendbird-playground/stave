@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ClipboardCheck, Minus, Maximize2 } from "lucide-react";
 import { Button, Textarea, WaveIndicator } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
+import { APPROVE_PLAN_MESSAGE } from "@/lib/providers/plan-response";
 import { useAppStore } from "@/store/app.store";
 
 type ViewState = "normal" | "minimized" | "expanded";
@@ -26,11 +27,13 @@ export function PlanViewer() {
   const lastMessage = messages.at(-1);
   const planText = lastMessage?.planText?.trim() ?? "";
 
-  const isPlanMode = activeProvider === "claude-code" && settings.claudePermissionMode === "plan";
-  const isPlanPreparing = isPlanMode && isTurnActive;
+  const isClaudePlanMode = activeProvider === "claude-code" && settings.claudePermissionMode === "plan";
+  const isPlanPreparing = isClaudePlanMode && isTurnActive;
   const isPlanPending =
+    activeProvider === "claude-code" &&
     !isTurnActive &&
     lastMessage?.role === "assistant" &&
+    lastMessage.providerId === "claude-code" &&
     lastMessage.isPlanResponse === true &&
     !lastMessage.isStreaming;
 
@@ -48,7 +51,7 @@ export function PlanViewer() {
   }
 
   function handleApprove() {
-    sendUserMessage({ taskId: activeTaskId, content: "Approved, please proceed with the plan." });
+    sendUserMessage({ taskId: activeTaskId, content: APPROVE_PLAN_MESSAGE });
     setRevising(false);
     setRevisionText("");
   }

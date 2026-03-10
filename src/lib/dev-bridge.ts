@@ -1,4 +1,4 @@
-import type { ProviderId } from "@/lib/providers/provider.types";
+import type { CanonicalConversationRequest, ProviderId } from "@/lib/providers/provider.types";
 
 const DEV_API_BASE = "http://127.0.0.1:3001";
 
@@ -42,8 +42,10 @@ export function installDevApiBridge() {
     provider: {
       ...existingApi.provider,
       streamTurn: async (args: {
+        turnId?: string;
         providerId: ProviderId;
         prompt: string;
+        conversation?: CanonicalConversationRequest;
         taskId?: string;
         workspaceId?: string;
         cwd?: string;
@@ -55,16 +57,16 @@ export function installDevApiBridge() {
         });
         return result.events;
       },
-      abortTurn: (args: { providerId: ProviderId }) => postJson({
+      abortTurn: (args: { turnId: string }) => postJson({
         path: "/api/provider/abort",
         body: args,
       }),
-      respondApproval: (args: { providerId: ProviderId; requestId: string; approved: boolean }) => postJson({
+      respondApproval: (args: { turnId: string; requestId: string; approved: boolean }) => postJson({
         path: "/api/provider/approval",
         body: args,
       }),
       respondUserInput: (args: {
-        providerId: ProviderId;
+        turnId: string;
         requestId: string;
         answers?: Record<string, string>;
         denied?: boolean;

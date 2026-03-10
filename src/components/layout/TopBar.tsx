@@ -1,5 +1,5 @@
 import { cva } from "class-variance-authority";
-import { ChevronDown, Folder, FolderPlus, GitBranch, Home, LoaderCircle, Minus, Moon, RefreshCw, Search, Settings, Square, Sun, X } from "lucide-react";
+import { ChevronDown, Folder, FolderPlus, GitBranch, Home, Keyboard, LoaderCircle, Minus, Moon, RefreshCw, Search, Settings, Square, Sun, X } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Badge, Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { SettingsDialog } from "@/components/layout/SettingsDialog";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
+import { KeyboardShortcutsDrawer } from "@/components/layout/KeyboardShortcutsDrawer";
 import { WorkspaceIdentityMark, getWorkspaceAccentTone } from "@/components/layout/workspace-accent";
 
 const workspaceChipVariants = cva("inline-flex h-9 items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors", {
@@ -27,6 +28,7 @@ export function TopBar() {
   const dragStyle = { WebkitAppRegion: "drag" } as CSSProperties;
   const noDragStyle = { WebkitAppRegion: "no-drag" } as CSSProperties;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState<string | null>(null);
@@ -120,6 +122,32 @@ export function TopBar() {
     });
   }, [createWorkspaceOpen]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const hasMod = event.ctrlKey || event.metaKey;
+      if (!hasMod || event.altKey || event.shiftKey || event.code !== "Slash") {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement
+        && (
+          target.isContentEditable
+          || Boolean(target.closest("input, textarea, select, [role='textbox'], [contenteditable='true']"))
+        )
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      setShortcutsOpen(true);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   return (
     <>
       <header
@@ -129,7 +157,7 @@ export function TopBar() {
       >
         <div
           className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
-          style={{ paddingRight: "156px" }}
+          style={{ paddingRight: "198px" }}
         >
           <Badge className="h-8 rounded-md border border-border/80 bg-card px-2.5" style={noDragStyle}>
             <img
@@ -323,6 +351,21 @@ export function TopBar() {
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 rounded-md p-0"
+                    aria-label="open-shortcuts"
+                    onClick={() => setShortcutsOpen(true)}
+                    style={noDragStyle}
+                  >
+                    <Keyboard className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Keyboard shortcuts</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <Button variant="ghost" size="sm" aria-label="open-settings" className="h-9 w-9 rounded-md p-0" onClick={() => setSettingsOpen(true)} style={noDragStyle}>
                     <Settings className="size-4" />
                   </Button>
@@ -384,6 +427,7 @@ export function TopBar() {
           </TooltipProvider>
         </div>
       </header>
+      <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
       <SettingsDialog open={settingsOpen} onOpenChange={({ open }) => setSettingsOpen(open)} />
       <ConfirmDialog
         open={Boolean(workspaceToDelete)}

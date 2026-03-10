@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { listTaskTurns, loadTurnReplay, replayPersistedTurn } from "@/lib/db/turns.db";
+import {
+  listLatestWorkspaceTurns,
+  listTaskTurns,
+  loadTurnRequestSnapshot,
+  loadTurnReplay,
+  replayPersistedTurn,
+} from "@/lib/db/turns.db";
 
 const originalWindow = globalThis.window;
 
@@ -65,5 +71,110 @@ describe("turn replay data access", () => {
     expect(turns[0]?.id).toBe("turn-1");
     expect(replay.map((item) => item.event.type)).toEqual(["text", "done"]);
     expect(replayedTypes).toEqual(["text", "done"]);
+  });
+
+  test("lists the latest turn for each task in a workspace", async () => {
+    setWindowApi({
+      persistence: {
+        listLatestWorkspaceTurns: async () => ({
+          ok: true,
+          turns: [
+            {
+              id: "turn-task-2",
+              workspaceId: "ws-1",
+              taskId: "task-2",
+              providerId: "claude-code",
+              createdAt: "2026-03-10T00:00:03.000Z",
+              completedAt: null,
+              eventCount: 1,
+            },
+            {
+              id: "turn-task-1",
+              workspaceId: "ws-1",
+              taskId: "task-1",
+              providerId: "codex",
+              createdAt: "2026-03-10T00:00:01.000Z",
+              completedAt: "2026-03-10T00:00:02.000Z",
+              eventCount: 2,
+            },
+          ],
+        }),
+      },
+    });
+
+    const turns = await listLatestWorkspaceTurns({ workspaceId: "ws-1" });
+
+    expect(turns.map((turn) => turn.taskId)).toEqual(["task-2", "task-1"]);
+    expect(turns[0]?.completedAt).toBeNull();
+  });
+
+  test("loads a persisted request snapshot when present", async () => {
+    setWindowApi({
+      persistence: {
+        listTurnEvents: async () => ({
+          ok: true,
+          events: [
+            {
+              id: "event-0",
+              turnId: "turn-req-1",
+              sequence: 0,
+              eventType: "request_snapshot",
+              payload: {
+                type: "request_snapshot",
+                prompt: "fallback prompt",
+                conversation: {
+                  target: {
+                    providerId: "claude-code",
+                    model: "claude-sonnet-4-6",
+                  },
+                  mode: "chat",
+                  history: [],
+                  input: {
+                    role: "user",
+                    providerId: "user",
+                    model: "user",
+                    content: "hello",
+                    parts: [{ type: "text", text: "hello" }],
+                  },
+                  contextParts: [],
+                },
+              },
+              createdAt: "2026-03-10T00:00:00.000Z",
+            },
+            {
+              id: "event-1",
+              turnId: "turn-req-1",
+              sequence: 1,
+              eventType: "text",
+              payload: { type: "text", text: "hello" },
+              createdAt: "2026-03-10T00:00:01.000Z",
+            },
+          ],
+        }),
+      },
+    });
+
+    const snapshot = await loadTurnRequestSnapshot({ turnId: "turn-req-1" });
+
+    expect(snapshot).toEqual({
+      type: "request_snapshot",
+      prompt: "fallback prompt",
+      conversation: {
+        target: {
+          providerId: "claude-code",
+          model: "claude-sonnet-4-6",
+        },
+        mode: "chat",
+        history: [],
+        input: {
+          role: "user",
+          providerId: "user",
+          model: "user",
+          content: "hello",
+          parts: [{ type: "text", text: "hello" }],
+        },
+        contextParts: [],
+      },
+    });
   });
 });

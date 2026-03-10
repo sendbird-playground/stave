@@ -1,7 +1,11 @@
 import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
+import {
+  getProviderConversationLabel as getProviderConversationLabelFromCatalog,
+  listProviderIds,
+} from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 
-export const providerConversationOrder: ProviderId[] = ["claude-code", "codex"];
+export const providerConversationOrder: ProviderId[] = listProviderIds();
 
 export function getProviderConversationId(args: {
   conversations?: TaskProviderConversationState;
@@ -27,5 +31,5 @@ export function listProviderConversations(args: {
 }
 
 export function getProviderConversationLabel(args: { providerId: ProviderId }) {
-  return args.providerId === "claude-code" ? "Claude session ID" : "Codex thread ID";
+  return getProviderConversationLabelFromCatalog(args);
 }

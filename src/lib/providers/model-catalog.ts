@@ -17,11 +17,104 @@ export const CODEX_SDK_MODEL_OPTIONS = [
   "gpt-5.3-codex",
 ] as const;
 
-export function getSdkModelOptions(args: { providerId: ProviderId }) {
-  if (args.providerId === "claude-code") {
-    return CLAUDE_SDK_MODEL_OPTIONS;
+export interface ProviderDescriptor {
+  id: ProviderId;
+  label: string;
+  shortLabel: string;
+  iconUrl: string;
+  fallbackLabel: string;
+  models: readonly string[];
+  defaultModel: string;
+  conversationLabel: string;
+  capabilities: {
+    nativeCommandCatalog: boolean;
+  };
+}
+
+export const PROVIDER_DESCRIPTORS = [
+  {
+    id: "claude-code",
+    label: "Claude Code",
+    shortLabel: "Claude",
+    iconUrl: "/claude-color.svg",
+    fallbackLabel: "C",
+    models: CLAUDE_SDK_MODEL_OPTIONS,
+    defaultModel: "claude-sonnet-4-6",
+    conversationLabel: "Claude session ID",
+    capabilities: {
+      nativeCommandCatalog: true,
+    },
+  },
+  {
+    id: "codex",
+    label: "Codex",
+    shortLabel: "Codex",
+    iconUrl: "/codex-color.svg",
+    fallbackLabel: "O",
+    models: CODEX_SDK_MODEL_OPTIONS,
+    defaultModel: "gpt-5.4",
+    conversationLabel: "Codex thread ID",
+    capabilities: {
+      nativeCommandCatalog: false,
+    },
+  },
+] as const satisfies readonly ProviderDescriptor[];
+
+export function listProviderDescriptors() {
+  return [...PROVIDER_DESCRIPTORS];
+}
+
+export function listProviderIds(): ProviderId[] {
+  return PROVIDER_DESCRIPTORS.map((descriptor) => descriptor.id);
+}
+
+export function getProviderDescriptor(args: { providerId: ProviderId }) {
+  const descriptor = PROVIDER_DESCRIPTORS.find((candidate) => candidate.id === args.providerId);
+  if (!descriptor) {
+    throw new Error(`Unknown provider descriptor: ${args.providerId}`);
   }
-  return CODEX_SDK_MODEL_OPTIONS;
+  return descriptor;
+}
+
+export function getProviderLabel(args: {
+  providerId: ProviderId;
+  variant?: "short" | "full";
+}) {
+  const descriptor = getProviderDescriptor(args);
+  return args.variant === "full" ? descriptor.label : descriptor.shortLabel;
+}
+
+export function getProviderIconUrl(args: { providerId: ProviderId }) {
+  return getProviderDescriptor(args).iconUrl;
+}
+
+export function getProviderFallbackLabel(args: { providerId: ProviderId }) {
+  return getProviderDescriptor(args).fallbackLabel;
+}
+
+export function getProviderConversationLabel(args: { providerId: ProviderId }) {
+  return getProviderDescriptor(args).conversationLabel;
+}
+
+export function providerSupportsNativeCommandCatalog(args: { providerId: ProviderId }) {
+  return getProviderDescriptor(args).capabilities.nativeCommandCatalog;
+}
+
+export function getDefaultModelForProvider(args: { providerId: ProviderId }) {
+  return getProviderDescriptor(args).defaultModel;
+}
+
+export function getNextProviderId(args: { providerId: ProviderId }) {
+  const providerIds = listProviderIds();
+  const currentIndex = providerIds.indexOf(args.providerId);
+  if (currentIndex < 0) {
+    return providerIds[0] ?? args.providerId;
+  }
+  return providerIds[(currentIndex + 1) % providerIds.length] ?? args.providerId;
+}
+
+export function getSdkModelOptions(args: { providerId: ProviderId }) {
+  return getProviderDescriptor(args).models;
 }
 
 export function normalizeModelSelection(args: { value: string; fallback: string }) {

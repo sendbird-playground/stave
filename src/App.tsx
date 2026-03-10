@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useAppStore } from "@/store/app.store";
 
 export default function App() {
+  const hasHydratedWorkspaces = useAppStore((state) => state.hasHydratedWorkspaces);
   const hydrateWorkspaces = useAppStore((state) => state.hydrateWorkspaces);
   const flushActiveWorkspaceSnapshot = useAppStore((state) => state.flushActiveWorkspaceSnapshot);
   const refreshProviderAvailability = useAppStore((state) => state.refreshProviderAvailability);
@@ -21,14 +22,14 @@ export default function App() {
   }, [hydrateWorkspaces, refreshProviderAvailability]);
 
   useEffect(() => {
-    if (!activeWorkspaceId) {
+    if (!hasHydratedWorkspaces || !activeWorkspaceId) {
       return;
     }
     const timer = window.setTimeout(() => {
       void flushActiveWorkspaceSnapshot();
     }, 1200);
     return () => window.clearTimeout(timer);
-  }, [activeWorkspaceId, activeTaskId, tasks, messagesByTask, flushActiveWorkspaceSnapshot]);
+  }, [activeWorkspaceId, activeTaskId, hasHydratedWorkspaces, tasks, messagesByTask, flushActiveWorkspaceSnapshot]);
 
   useEffect(() => {
     const onBeforeUnload = () => {
@@ -38,5 +39,9 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [flushActiveWorkspaceSnapshot]);
 
-  return <AppShell />;
+  return (
+    <>
+      <AppShell />
+    </>
+  );
 }

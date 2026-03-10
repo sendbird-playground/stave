@@ -1,5 +1,6 @@
 import { Check, ChevronDown, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getProviderLabel, listProviderIds } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 import { Input } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -18,13 +19,6 @@ interface ModelSelectorProps {
   options: readonly ModelSelectorOption[];
   disabled?: boolean;
   onSelect: (args: { selection: ModelSelectorOption }) => void;
-}
-
-function toProviderLabel(args: { providerId: ProviderId }) {
-  if (args.providerId === "claude-code") {
-    return "Claude Code";
-  }
-  return "Codex";
 }
 
 export function ModelSelector(args: ModelSelectorProps) {
@@ -47,7 +41,9 @@ export function ModelSelector(args: ModelSelectorProps) {
       bucket.push(option);
       groups[option.providerId] = bucket;
     }
-    return groups;
+    return listProviderIds()
+      .map((providerId) => [providerId, groups[providerId] ?? []] as const)
+      .filter(([, providerOptions]) => providerOptions.length > 0);
   }, [visibleOptions]);
 
   useEffect(() => {
@@ -91,10 +87,10 @@ export function ModelSelector(args: ModelSelectorProps) {
             />
           </label>
           <div className="max-h-56 space-y-1 overflow-auto">
-            {Object.entries(groupedOptions).map(([providerId, providerOptions]) => (
+            {groupedOptions.map(([providerId, providerOptions]) => (
               <div key={providerId} className="space-y-1">
                 <p className="cmdk-group-heading px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {toProviderLabel({ providerId: providerId as ProviderId })}
+                  {getProviderLabel({ providerId, variant: "full" })}
                 </p>
                 {providerOptions.map((option) => (
                   <button

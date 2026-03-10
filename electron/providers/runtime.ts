@@ -5,14 +5,43 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
 const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000);
-const activeAborters = new Map<StreamTurnArgs["providerId"], () => void>();
-const activeApprovalResponders = new Map<StreamTurnArgs["providerId"], (args: { requestId: string; approved: boolean }) => boolean>();
-const activeUserInputResponders = new Map<StreamTurnArgs["providerId"], (args: {
-  requestId: string;
-  answers?: Record<string, string>;
-  denied?: boolean;
-}) => boolean>();
+type ActiveRuntimeSession = {
+  turnId: string;
+  providerId: StreamTurnArgs["providerId"];
+  taskId?: string;
+  streamId?: string;
+  abort?: () => void;
+  respondApproval?: (args: { requestId: string; approved: boolean }) => boolean;
+  respondUserInput?: (args: {
+    requestId: string;
+    answers?: Record<string, string>;
+    denied?: boolean;
+  }) => boolean;
+};
+
+const activeSessions = new Map<string, ActiveRuntimeSession>();
 const activeStreams = new Map<string, { events: BridgeEvent[]; done: boolean }>();
+
+function upsertActiveSession(args: {
+  turnId: string;
+  providerId: StreamTurnArgs["providerId"];
+  taskId?: string;
+  streamId?: string;
+  abort?: () => void;
+  respondApproval?: ActiveRuntimeSession["respondApproval"];
+  respondUserInput?: ActiveRuntimeSession["respondUserInput"];
+}) {
+  const current = activeSessions.get(args.turnId);
+  activeSessions.set(args.turnId, {
+    turnId: args.turnId,
+    providerId: args.providerId,
+    taskId: args.taskId ?? current?.taskId,
+    streamId: args.streamId ?? current?.streamId,
+    abort: args.abort ?? current?.abort,
+    respondApproval: args.respondApproval ?? current?.respondApproval,
+    respondUserInput: args.respondUserInput ?? current?.respondUserInput,
+  });
+}
 
 function toClaudeErrorEvents(args: { message: string }): BridgeEvent[] {
   return [
@@ -30,20 +59,29 @@ function toCodexErrorEvents(args: { message: string }): BridgeEvent[] {
   ];
 }
 
-function abortActive(args: { providerId: StreamTurnArgs["providerId"] }) {
-  const aborter = activeAborters.get(args.providerId);
+function abortActive(args: { turnId: string }) {
+  const session = activeSessions.get(args.turnId);
+  const aborter = session?.abort;
   if (!aborter) {
     return false;
   }
   aborter();
-  activeAborters.delete(args.providerId);
+  activeSessions.delete(args.turnId);
   return true;
 }
 
-function clearActiveProviderState(args: { providerId: StreamTurnArgs["providerId"] }) {
-  activeAborters.delete(args.providerId);
-  activeApprovalResponders.delete(args.providerId);
-  activeUserInputResponders.delete(args.providerId);
+function clearActiveTurnState(args: { turnId: string }) {
+  activeSessions.delete(args.turnId);
+}
+
+function clearActiveTaskSessions(args: { taskId: string }) {
+  for (const [turnId, session] of activeSessions.entries()) {
+    if (session.taskId !== args.taskId) {
+      continue;
+    }
+    session.abort?.();
+    activeSessions.delete(turnId);
+  }
 }
 
 async function withTimeout<T>(args: {
@@ -68,6 +106,12 @@ async function withTimeout<T>(args: {
 }
 
 async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: BridgeEvent) => void }) {
+  const turnId = args.turnId ?? randomUUID();
+  upsertActiveSession({
+    turnId,
+    providerId: args.providerId,
+    taskId: args.taskId,
+  });
   const turnTimeoutMs = args.runtimeOptions?.providerTimeoutMs ?? sdkTurnTimeoutMs;
   if (args.providerId === "claude-code") {
     let timedOut = false;
@@ -82,19 +126,34 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
             args.onEvent?.(event);
           },
           registerAbort: (aborter) => {
-            activeAborters.set(args.providerId, aborter);
+            upsertActiveSession({
+              turnId,
+              providerId: args.providerId,
+              taskId: args.taskId,
+              abort: aborter,
+            });
           },
           registerApprovalResponder: (responder) => {
-            activeApprovalResponders.set(args.providerId, responder);
+            upsertActiveSession({
+              turnId,
+              providerId: args.providerId,
+              taskId: args.taskId,
+              respondApproval: responder,
+            });
           },
           registerUserInputResponder: (responder) => {
-            activeUserInputResponders.set(args.providerId, responder);
+            upsertActiveSession({
+              turnId,
+              providerId: args.providerId,
+              taskId: args.taskId,
+              respondUserInput: responder,
+            });
           },
         }),
         timeoutMs: turnTimeoutMs,
         onTimeout: () => {
           timedOut = true;
-          abortActive({ providerId: args.providerId });
+          abortActive({ turnId });
         },
       });
       if (events && events.length > 0) {
@@ -106,7 +165,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       fallback.forEach((event) => args.onEvent?.(event));
       return fallback;
     } finally {
-      clearActiveProviderState({ providerId: args.providerId });
+      clearActiveTurnState({ turnId });
     }
   }
 
@@ -122,13 +181,18 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
           args.onEvent?.(event);
         },
         registerAbort: (aborter) => {
-          activeAborters.set(args.providerId, aborter);
+          upsertActiveSession({
+            turnId,
+            providerId: args.providerId,
+            taskId: args.taskId,
+            abort: aborter,
+          });
         },
       }),
       timeoutMs: turnTimeoutMs,
       onTimeout: () => {
         timedOut = true;
-        abortActive({ providerId: args.providerId });
+        abortActive({ turnId });
       },
     });
     if (events && events.length > 0) {
@@ -140,7 +204,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     fallback.forEach((event) => args.onEvent?.(event));
     return fallback;
   } finally {
-    clearActiveProviderState({ providerId: args.providerId });
+    clearActiveTurnState({ turnId });
   }
 }
 
@@ -148,11 +212,19 @@ export const providerRuntime: ProviderRuntime = {
   streamTurn: (args) => runProviderTurn(args),
   startTurnStream: (args, options) => {
     const streamId = randomUUID();
+    const turnId = args.turnId ?? randomUUID();
     const shouldBufferForPolling = !options?.onEvent;
     const session = { events: [] as BridgeEvent[], done: false };
     activeStreams.set(streamId, session);
+    upsertActiveSession({
+      turnId,
+      providerId: args.providerId,
+      taskId: args.taskId,
+      streamId,
+    });
     void runProviderTurn({
       ...args,
+      turnId,
       onEvent: (event) => {
         if (shouldBufferForPolling) {
           session.events.push(event);
@@ -174,6 +246,7 @@ export const providerRuntime: ProviderRuntime = {
       })
       .finally(() => {
         session.done = true;
+        clearActiveTurnState({ turnId });
         if (!shouldBufferForPolling) {
           activeStreams.delete(streamId);
         }
@@ -207,59 +280,60 @@ export const providerRuntime: ProviderRuntime = {
       done,
     };
   },
-  abortTurn: ({ providerId }) => {
-    const ok = abortActive({ providerId });
+  abortTurn: ({ turnId }) => {
+    const ok = abortActive({ turnId });
     if (!ok) {
       return { ok: false, message: "No active provider turn." };
     }
     return { ok: true, message: "Provider turn aborted." };
   },
   cleanupTask: ({ taskId }) => {
+    clearActiveTaskSessions({ taskId });
     cleanupClaudeTask(taskId);
     cleanupCodexTask(taskId);
     return { ok: true, message: `Cleaned provider runtime state for task ${taskId}.` };
   },
-  respondApproval: ({ providerId, requestId, approved }) => ({
+  respondApproval: ({ turnId, requestId, approved }) => ({
     ...(() => {
-      const responder = activeApprovalResponders.get(providerId);
+      const responder = activeSessions.get(turnId)?.respondApproval;
       if (!responder) {
         return {
           ok: false,
-          message: `No active approval responder for ${providerId}. requestId=${requestId}`,
+          message: `No active approval responder for turn ${turnId}. requestId=${requestId}`,
         };
       }
       const delivered = responder({ requestId, approved });
       if (!delivered) {
         return {
           ok: false,
-          message: `Approval responder rejected request for ${providerId}. requestId=${requestId}`,
+          message: `Approval responder rejected request for turn ${turnId}. requestId=${requestId}`,
         };
       }
       return {
         ok: true,
-        message: `Approval response delivered to ${providerId}. requestId=${requestId}`,
+        message: `Approval response delivered to turn ${turnId}. requestId=${requestId}`,
       };
     })(),
   }),
-  respondUserInput: ({ providerId, requestId, answers, denied }) => ({
+  respondUserInput: ({ turnId, requestId, answers, denied }) => ({
     ...(() => {
-      const responder = activeUserInputResponders.get(providerId);
+      const responder = activeSessions.get(turnId)?.respondUserInput;
       if (!responder) {
         return {
           ok: false,
-          message: `No active user-input responder for ${providerId}. requestId=${requestId}`,
+          message: `No active user-input responder for turn ${turnId}. requestId=${requestId}`,
         };
       }
       const delivered = responder({ requestId, answers, denied });
       if (!delivered) {
         return {
           ok: false,
-          message: `User-input responder rejected request for ${providerId}. requestId=${requestId}`,
+          message: `User-input responder rejected request for turn ${turnId}. requestId=${requestId}`,
         };
       }
       return {
         ok: true,
-        message: `User-input response delivered to ${providerId}. requestId=${requestId}`,
+        message: `User-input response delivered to turn ${turnId}. requestId=${requestId}`,
       };
     })(),
   }),

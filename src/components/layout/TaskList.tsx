@@ -1,12 +1,16 @@
 import { Archive, Check, CirclePlus, Copy, Download, Ellipsis, Hash, LoaderCircle, PanelLeft, Pencil, Plus, RectangleEllipsis } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getProviderLabel } from "@/lib/providers/model-catalog";
 import { formatTaskUpdatedAt, getTaskCounts, getVisibleTasks, isTaskArchived, type TaskFilter } from "@/lib/tasks";
 import { getProviderConversationLabel, listProviderConversations } from "@/lib/providers/provider-conversations";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { useAppStore } from "@/store/app.store";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, KbdSeparator, WaveIndicator } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { ModelIcon } from "@/components/ai-elements";
+
+const TASK_SHORTCUT_COUNT = 10;
 
 export function TaskList() {
   const [taskHoverOpen, setTaskHoverOpen] = useState(false);
@@ -33,7 +37,12 @@ export function TaskList() {
 
   const collapsed = layout.taskListCollapsed;
   const taskCounts = getTaskCounts({ tasks });
-  const visibleTasks = getVisibleTasks({ tasks, filter: taskFilter });
+  const visibleTasks = useMemo(() => getVisibleTasks({ tasks, filter: taskFilter }), [taskFilter, tasks]);
+  const shortcutModifierLabel =
+    typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
+      ? "Cmd"
+      : "Ctrl";
+  const taskShortcutsEnabled = taskFilter === "active";
   const filterOptions: Array<{ id: TaskFilter; label: string; count: number }> = [
     { id: "active", label: "Active", count: taskCounts.active },
     { id: "archived", label: "Archived", count: taskCounts.archived },
@@ -75,6 +84,73 @@ export function TaskList() {
   const sessionConversationRows = listProviderConversations({
     conversations: sessionProviderConversations,
   });
+
+  function handleTaskSelection(taskId: string) {
+    if (switchingTaskId || taskId === activeTaskId) {
+      return;
+    }
+    setSwitchingTaskId(taskId);
+    selectTask({ taskId });
+    window.setTimeout(() => setSwitchingTaskId(null), 120);
+  }
+
+  function getTaskShortcutLabel(index: number) {
+    if (index < 0 || index >= TASK_SHORTCUT_COUNT) {
+      return null;
+    }
+    return index === TASK_SHORTCUT_COUNT - 1 ? "0" : String(index + 1);
+  }
+
+  async function copySessionIdentifier(args: { key: string; value: string }) {
+    try {
+      await copyTextToClipboard(args.value);
+      setCopiedSessionIdKey(args.key);
+    } catch {
+      setCopiedSessionIdKey(null);
+    }
+  }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const hasMod = event.ctrlKey || event.metaKey;
+      if (!taskShortcutsEnabled || !hasMod || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement
+        && (
+          target.isContentEditable
+          || (
+            Boolean(target.closest("input, textarea, select, [role='textbox'], [contenteditable='true']"))
+            && !target.closest("[data-prompt-input-root]")
+          )
+        )
+      ) {
+        return;
+      }
+
+      const shortcutIndex = event.key === "0"
+        ? TASK_SHORTCUT_COUNT - 1
+        : Number.parseInt(event.key, 10) - 1;
+      if (Number.isNaN(shortcutIndex) || shortcutIndex < 0 || shortcutIndex >= TASK_SHORTCUT_COUNT) {
+        return;
+      }
+
+      const nextTask = visibleTasks[shortcutIndex];
+      if (!nextTask) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      handleTaskSelection(nextTask.id);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [taskShortcutsEnabled, activeTaskId, switchingTaskId, visibleTasks]);
 
   function handleRenameConfirm() {
     if (!taskToRename) {
@@ -140,24 +216,22 @@ export function TaskList() {
                   ))}
                 </div>
                 <div className="max-h-72 space-y-1 overflow-auto">
-                  {visibleTasks.map((task) => (
+                  {visibleTasks.map((task, index) => {
+                    const shortcutLabel = taskShortcutsEnabled ? getTaskShortcutLabel(index) : null;
+                    return (
                     <button
                       key={task.id}
                       className={[
                         "w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-secondary/70",
                         task.id === activeTaskId ? "bg-secondary/70" : "",
                       ].join(" ")}
-                      onClick={() => {
-                        if (switchingTaskId || task.id === activeTaskId) {
-                          return;
-                        }
-                        setSwitchingTaskId(task.id);
-                        selectTask({ taskId: task.id });
-                        window.setTimeout(() => setSwitchingTaskId(null), 120);
-                      }}
+                      onClick={() => handleTaskSelection(task.id)}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate">{task.title}</p>
+                        <div className="flex min-w-0 items-center gap-2">
+                          {shortcutLabel ? <Kbd>{shortcutLabel}</Kbd> : null}
+                          <p className="truncate">{task.title}</p>
+                        </div>
                         {activeTurnIdsByTask[task.id] ? (
                           <WaveIndicator
                             className={cn("gap-px", task.provider === "claude-code" ? "text-provider-claude" : "text-provider-codex")}
@@ -169,7 +243,8 @@ export function TaskList() {
                         {isTaskArchived(task) ? "Archived" : formatTaskUpdatedAt({ value: task.updatedAt, now: timeAnchor })}
                       </p>
                     </button>
-                  ))}
+                    );
+                  })}
                   {visibleTasks.length === 0 ? (
                     <p className="rounded-md border border-dashed border-border/70 px-2 py-3 text-xs text-muted-foreground">
                       No {taskFilter} tasks yet.
@@ -214,8 +289,8 @@ export function TaskList() {
             <CirclePlus className="size-4 text-muted-foreground" />
             New Task
           </span>
-          <KbdGroup aria-label="Keyboard shortcut Ctrl N">
-            <Kbd>Ctrl</Kbd>
+          <KbdGroup aria-label={`Keyboard shortcut ${shortcutModifierLabel} N`}>
+            <Kbd>{shortcutModifierLabel}</Kbd>
             <KbdSeparator>+</KbdSeparator>
             <Kbd>N</Kbd>
           </KbdGroup>
@@ -237,8 +312,22 @@ export function TaskList() {
           </button>
         ))}
       </div>
+      {taskShortcutsEnabled ? (
+        <div className="mb-3 flex items-center justify-between rounded-md border border-border/60 bg-card/70 px-3 py-2 text-xs text-muted-foreground">
+          <span>Quick jump</span>
+          <KbdGroup aria-label={`Keyboard shortcut ${shortcutModifierLabel} 1 through 9 and 0`}>
+            <Kbd>{shortcutModifierLabel}</Kbd>
+            <KbdSeparator>+</KbdSeparator>
+            <Kbd>1</Kbd>
+            <KbdSeparator>...</KbdSeparator>
+            <Kbd>0</Kbd>
+          </KbdGroup>
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 space-y-1 overflow-auto">
-        {visibleTasks.map((task) => (
+        {visibleTasks.map((task, index) => {
+          const shortcutLabel = taskShortcutsEnabled ? getTaskShortcutLabel(index) : null;
+          return (
           <div
             key={task.id}
             className={cn(
@@ -250,14 +339,15 @@ export function TaskList() {
           >
             <div className="flex items-start gap-2 px-3 py-2">
               <button
-                onClick={() => selectTask({ taskId: task.id })}
+                onClick={() => handleTaskSelection(task.id)}
                 className="min-w-0 flex-1 text-left"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-1.5">
+                    {shortcutLabel ? <Kbd>{shortcutLabel}</Kbd> : null}
                     <Badge variant="secondary" className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-0.5 text-sm">
                       <ModelIcon providerId={task.provider} className="size-3.5" />
-                      {task.provider === "claude-code" ? "Claude" : "Codex"}
+                      {getProviderLabel({ providerId: task.provider })}
                     </Badge>
                     {switchingTaskId === task.id ? <LoaderCircle className="size-3 shrink-0 animate-spin text-primary" /> : null}
                     {switchingTaskId !== task.id && activeTurnIdsByTask[task.id] ? (
@@ -327,9 +417,10 @@ export function TaskList() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {visibleTasks.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/70 bg-card/50 px-3 py-4 text-sm text-muted-foreground">
             {taskFilter === "active" ? "No active tasks. Archived tasks are still available in the archived view." : null}
@@ -401,11 +492,11 @@ export function TaskList() {
               <h3 className="text-base font-semibold text-foreground">Conversation IDs</h3>
               <p className="mt-2 text-sm text-muted-foreground">
                 Stave keeps its own stable task id, and each provider keeps its own native conversation id.
-                For <span className="font-medium text-foreground">{taskToViewSession.title}</span>, these ids can coexist because one task can switch between Claude and Codex.
+                For <span className="font-medium text-foreground">{taskToViewSession.title}</span>, these ids can coexist because one task can switch between providers over time.
               </p>
             </div>
             <Badge variant="secondary" className="shrink-0">
-              {sessionTask?.provider === "claude-code" ? "Current: Claude" : sessionTask?.provider === "codex" ? "Current: Codex" : "Task"}
+              {sessionTask?.provider ? `Current: ${getProviderLabel({ providerId: sessionTask.provider })}` : "Task"}
             </Badge>
           </div>
           <div className="mt-4 space-y-3">
@@ -417,10 +508,7 @@ export function TaskList() {
                   size="sm"
                   variant="ghost"
                   className="h-8 shrink-0 px-2"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(taskToViewSession.id);
-                    setCopiedSessionIdKey("task");
-                  }}
+                  onClick={() => void copySessionIdentifier({ key: "task", value: taskToViewSession.id })}
                 >
                   {copiedSessionIdKey === "task" ? <Check className="size-4" /> : <Copy className="size-4" />}
                   {copiedSessionIdKey === "task" ? "Copied" : "Copy"}
@@ -439,7 +527,7 @@ export function TaskList() {
                       {getProviderConversationLabel({ providerId: row.providerId })}
                     </p>
                     <Badge variant={sessionTask?.provider === row.providerId ? "secondary" : "outline"}>
-                      {row.providerId === "claude-code" ? "Claude" : "Codex"}
+                      {getProviderLabel({ providerId: row.providerId })}
                     </Badge>
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-3">
@@ -448,10 +536,7 @@ export function TaskList() {
                       size="sm"
                       variant="ghost"
                       className="h-8 shrink-0 px-2"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(row.nativeConversationId);
-                        setCopiedSessionIdKey(row.providerId);
-                      }}
+                      onClick={() => void copySessionIdentifier({ key: row.providerId, value: row.nativeConversationId })}
                     >
                       {copiedSessionIdKey === row.providerId ? <Check className="size-4" /> : <Copy className="size-4" />}
                       {copiedSessionIdKey === row.providerId ? "Copied" : "Copy"}

@@ -44,8 +44,11 @@ import {
   groupMessageParts,
   hasVisibleMessagePartContent,
   isPendingDiffStatus,
+  shouldAutoOpenToolGroup,
+  shouldAutoOpenToolPart,
   summarizeDiffLineChanges,
 } from "@/components/session/chat-panel.utils";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -124,9 +127,12 @@ function CopyButton({ text }: { text: string }) {
       label="Copy"
       tooltip="Copy message"
       onClick={() => {
-        navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        void copyTextToClipboard(text)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
+          .catch(() => {});
       }}
     >
       {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
@@ -383,8 +389,8 @@ function MessagePartRenderer(args: { part: MessagePart; taskId: string; messageI
       }
       return (
         <Tool
-          defaultOpen={part.state === "input-streaming" || part.state === "output-error"}
-          openWhen={part.state === "input-streaming" || part.state === "output-error"}
+          defaultOpen={shouldAutoOpenToolPart(part.state)}
+          openWhen={shouldAutoOpenToolPart(part.state)}
         >
           <ToolHeader type={part.toolName} state={part.state} />
           <ToolContent>
@@ -533,13 +539,13 @@ function MessageBody(args: {
       {segments.map((segment) => {
         if (segment.kind === "tools") {
           const toolStates = segment.parts.map((p) => (p.type === "tool_use" ? p.state : undefined));
-          const hasActiveOrErroredTool = toolStates.some((state) => state === "input-streaming" || state === "output-error");
+          const shouldAutoOpenGroup = shouldAutoOpenToolGroup(toolStates);
           return (
             <div key={`${messageId}-tools-${segment.startIndex}`} className="mt-2 first:mt-0">
               <ToolGroup
                 states={toolStates}
-                defaultOpen={hasActiveOrErroredTool}
-                openWhen={hasActiveOrErroredTool}
+                defaultOpen={shouldAutoOpenGroup}
+                openWhen={shouldAutoOpenGroup}
               >
                 {segment.parts.map((part, idx) => (
                   <MessagePartRenderer

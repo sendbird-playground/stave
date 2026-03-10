@@ -6,10 +6,13 @@ Stave is an Electron-based AI coding workspace built with Bun, React, Vite, and 
 
 - Desktop-first runtime with Electron main/preload separation
 - Task-oriented chat UI with Claude and Codex provider switching
+- Turn-scoped provider runtime routing for abort, approval, and user-input flows
 - Workspace and branch-aware project navigation
 - Monaco editor, docked terminal, and source-control actions
-- SQLite-backed local persistence for workspaces, tasks, and messages
-- Unified provider event pipeline for text, thinking, tools, approvals, user input, plans, and diffs
+- SQLite-backed local persistence for workspaces, tasks, messages, turns, and request snapshots
+- Canonical conversation requests translated into provider-specific runtime prompts
+- Unified provider event pipeline for text, thinking, tools, approvals, user input, Claude plans, and diffs
+- Latest-turn diagnostics with provider session ids, event timeline, and request snapshot inspection
 - Unit and Playwright E2E coverage
 
 ## Stack
@@ -95,6 +98,31 @@ That path is:
 - `src/lib/dev-bridge.ts`
 - `server/dev-server.ts`
 
+## How one chat UI works across providers
+
+Stave keeps a single task chat UI by separating app-owned conversation state from provider-owned wire formats.
+
+High-level flow:
+
+1. The renderer builds a `CanonicalConversationRequest` from the task's normalized history, current user input, selected file context, and any persisted provider-native session id.
+2. The provider bridge sends that canonical request plus a small fallback prompt across preload / IPC into Electron.
+3. Provider-specific translators rebuild the exact Claude or Codex prompt from the canonical request inside the runtime.
+4. Claude and Codex both stream back normalized `BridgeEvent` records such as `text`, `thinking`, `tool`, `approval`, `user_input`, `diff`, and `done`.
+5. The renderer replays those normalized events into one shared message model and one shared chat surface.
+
+This keeps the task thread as Stave's source of truth while still letting each provider preserve its own native conversation id when available.
+
+## Turn diagnostics and persistence
+
+Every persisted turn stores:
+
+- provider id
+- turn event timeline
+- provider-native conversation ids
+- a `request_snapshot` payload containing the canonical request used to start that turn
+
+The diagnostics panel can therefore show not only what a provider emitted, but also what Stave actually sent into that turn.
+
 ## How Claude SDK works in Stave
 
 Claude turns are handled in `electron/providers/claude-sdk-runtime.ts`.
@@ -114,6 +142,8 @@ Claude event mapping currently does this:
 - tool use -> `tool`
 - `ExitPlanMode` tool payload -> `plan_ready`
 - stream/runtime failures -> `error`
+
+Claude plan responses are the only provider-specific plan surface currently rendered in the dedicated `PlanViewer`.
 
 Claude-specific runtime controls come from the UI and runtime options:
 
@@ -152,7 +182,6 @@ Codex event mapping currently includes:
 - MCP tool calls -> `tool`
 - web search -> `tool`
 - todo list -> `thinking`
-- collaboration-mode `<proposed_plan>` payload -> `plan_ready`
 - file changes -> diff events
 - failures -> `error`
 
@@ -161,13 +190,19 @@ Codex-specific runtime controls come from the UI and runtime options:
 - network access
 - sandbox mode
 - approval policy
-- collaboration/plan mode
 - reasoning effort
+- reasoning summary / raw reasoning toggles
 - binary path override
 - provider timeout
 - debug stream logging
 
-Codex threads are keyed by task/cwd plus the active sandbox, network, approval, and plan-mode settings so Stave can preserve thread context without mixing incompatible runtime modes.
+Codex threads are keyed by task/cwd plus the active sandbox, network, approval, model, reasoning, and web-search settings so Stave can preserve thread context without mixing incompatible runtime modes.
+
+## Supported Codex Baseline
+
+- Codex SDK: `@openai/codex-sdk@0.113.0`
+- Codex CLI baseline: `0.113.0`
+- Stave expects a local Codex CLI installation. A user-configured binary path takes precedence over PATH-based discovery.
 
 ## How Stave finds the executable CLI path
 

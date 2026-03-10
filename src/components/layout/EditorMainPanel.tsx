@@ -5,6 +5,7 @@ import { useAppStore } from "@/store/app.store";
 import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 export function EditorMainPanel() {
   const activeTaskId = useAppStore((state) => state.activeTaskId);
@@ -177,7 +178,7 @@ export function EditorMainPanel() {
       return;
     }
     try {
-      await navigator.clipboard.writeText(value);
+      await copyTextToClipboard(value);
     } catch {
       // Keep silent; clipboard API can be denied based on runtime permissions.
     }

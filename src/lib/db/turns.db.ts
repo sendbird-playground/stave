@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseNormalizedEvent } from "@/lib/providers/runtime";
+import type { CanonicalConversationRequest } from "@/lib/providers/provider.types";
 import type { ParsedNormalizedProviderEvent } from "@/lib/providers/schemas";
 
 const PersistedTurnSummarySchema = z.object({
@@ -24,6 +25,18 @@ const PersistedTurnEventSchema = z.object({
 export type PersistedTurnSummary = z.infer<typeof PersistedTurnSummarySchema>;
 export type PersistedTurnEvent = z.infer<typeof PersistedTurnEventSchema>;
 
+const PersistedTurnRequestSnapshotSchema = z.object({
+  type: z.literal("request_snapshot"),
+  prompt: z.string(),
+  conversation: z.unknown().nullable().optional(),
+});
+
+export interface PersistedTurnRequestSnapshot {
+  type: "request_snapshot";
+  prompt: string;
+  conversation?: CanonicalConversationRequest | null;
+}
+
 export interface ReplayedTurnEvent {
   persisted: PersistedTurnEvent;
   event: ParsedNormalizedProviderEvent;
@@ -31,6 +44,20 @@ export interface ReplayedTurnEvent {
 
 function getPersistenceApi() {
   return window.api?.persistence;
+}
+
+function parseReplayEvents(args: { events: PersistedTurnEvent[] }) {
+  const replay: ReplayedTurnEvent[] = [];
+
+  for (const persisted of args.events) {
+    const parsed = parseNormalizedEvent({ payload: persisted.payload });
+    if (!parsed) {
+      continue;
+    }
+    replay.push({ persisted, event: parsed });
+  }
+
+  return replay;
 }
 
 export async function listTaskTurns(args: {
@@ -55,6 +82,31 @@ export async function listTaskTurns(args: {
   const parsed = z.array(PersistedTurnSummarySchema).safeParse(response.turns);
   if (!parsed.success) {
     throw new Error("Invalid task turn payload returned from persistence bridge.");
+  }
+
+  return parsed.data;
+}
+
+export async function listLatestWorkspaceTurns(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<PersistedTurnSummary[]> {
+  const persistence = getPersistenceApi();
+  if (!persistence?.listLatestWorkspaceTurns) {
+    return [];
+  }
+
+  const response = await persistence.listLatestWorkspaceTurns({
+    workspaceId: args.workspaceId,
+    limit: args.limit,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to list latest workspace turns for ${args.workspaceId}`);
+  }
+
+  const parsed = z.array(PersistedTurnSummarySchema).safeParse(response.turns);
+  if (!parsed.success) {
+    throw new Error("Invalid latest workspace turn payload returned from persistence bridge.");
   }
 
   return parsed.data;
@@ -93,17 +145,32 @@ export async function loadTurnReplay(args: {
   limit?: number;
 }): Promise<ReplayedTurnEvent[]> {
   const events = await listPersistedTurnEvents(args);
-  const replay: ReplayedTurnEvent[] = [];
+  return parseReplayEvents({ events });
+}
 
-  for (const persisted of events) {
-    const parsed = parseNormalizedEvent({ payload: persisted.payload });
-    if (!parsed) {
-      continue;
-    }
-    replay.push({ persisted, event: parsed });
+export async function loadTurnRequestSnapshot(args: {
+  turnId: string;
+}): Promise<PersistedTurnRequestSnapshot | null> {
+  const events = await listPersistedTurnEvents({
+    turnId: args.turnId,
+    afterSequence: 0,
+    limit: 10,
+  });
+  const rawSnapshot = events.find((event) => event.eventType === "request_snapshot")?.payload;
+  if (!rawSnapshot) {
+    return null;
   }
 
-  return replay;
+  const parsed = PersistedTurnRequestSnapshotSchema.safeParse(rawSnapshot);
+  if (!parsed.success) {
+    return null;
+  }
+
+  return {
+    type: "request_snapshot",
+    prompt: parsed.data.prompt,
+    conversation: (parsed.data.conversation as CanonicalConversationRequest | null | undefined) ?? null,
+  };
 }
 
 export async function* replayPersistedTurn(args: {

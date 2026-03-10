@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { CanonicalConversationRequest } from "../src/lib/providers/provider.types";
 
 type ProviderId = "claude-code" | "codex";
 
@@ -10,8 +11,10 @@ interface ProviderSlashCommand {
 }
 
 interface StreamTurnArgs {
+  turnId?: string;
   providerId: ProviderId;
   prompt: string;
+  conversation?: CanonicalConversationRequest;
   taskId?: string;
   workspaceId?: string;
   cwd?: string;
@@ -34,11 +37,13 @@ interface StreamTurnArgs {
     claudeResumeSessionId?: string;
     codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
     codexNetworkAccessEnabled?: boolean;
-    codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
+    codexApprovalPolicy?: "never" | "on-request" | "untrusted";
     codexPathOverride?: string;
     codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
     codexWebSearchMode?: "disabled" | "cached" | "live";
-    codexPlanMode?: boolean;
+    codexShowRawAgentReasoning?: boolean;
+    codexReasoningSummary?: "auto" | "concise" | "detailed" | "none";
+    codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
     codexResumeThreadId?: string;
   };
 }
@@ -90,12 +95,12 @@ contextBridge.exposeInMainWorld("api", {
         streamEventSubscribers.delete(listener);
       };
     },
-    abortTurn: (args: { providerId: ProviderId }) => ipcRenderer.invoke("provider:abort-turn", args),
+    abortTurn: (args: { turnId: string }) => ipcRenderer.invoke("provider:abort-turn", args),
     cleanupTask: (args: { taskId: string }) => ipcRenderer.invoke("provider:cleanup-task", args),
-    respondApproval: (args: { providerId: ProviderId; requestId: string; approved: boolean }) =>
+    respondApproval: (args: { turnId: string; requestId: string; approved: boolean }) =>
       ipcRenderer.invoke("provider:respond-approval", args),
     respondUserInput: (args: {
-      providerId: ProviderId;
+      turnId: string;
       requestId: string;
       answers?: Record<string, string>;
       denied?: boolean;
@@ -120,6 +125,8 @@ contextBridge.exposeInMainWorld("api", {
     upsertWorkspaceSync: (args: { id: string; name: string; snapshot: unknown }) => ipcRenderer.sendSync("persistence:upsert-workspace-sync", args),
     deleteWorkspace: (args: { workspaceId: string }) => ipcRenderer.invoke("persistence:delete-workspace", args),
     listTaskTurns: (args: { workspaceId: string; taskId: string; limit?: number }) => ipcRenderer.invoke("persistence:list-task-turns", args),
+    listLatestWorkspaceTurns: (args: { workspaceId: string; limit?: number }) =>
+      ipcRenderer.invoke("persistence:list-latest-workspace-turns", args),
     listTurnEvents: (args: { turnId: string; afterSequence?: number; limit?: number }) =>
       ipcRenderer.invoke("persistence:list-turn-events", args),
   },

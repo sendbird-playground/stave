@@ -1,5 +1,6 @@
 import type { ProviderId } from "@/lib/providers/provider.types";
 import type { ProviderCommandCatalogState, ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
+import { getProviderLabel, providerSupportsNativeCommandCatalog } from "@/lib/providers/model-catalog";
 import type { AppSettings } from "@/store/app.store";
 import type { ChatMessage } from "@/types/chat";
 
@@ -163,10 +164,6 @@ function fillTemplate(args: {
     .replaceAll("{assistant_count}", String(assistantMessages));
 }
 
-function getProviderLabel(provider: ProviderId) {
-  return provider === "claude-code" ? "Claude" : "Codex";
-}
-
 function buildStatusResponse(ctx: CommandContext) {
   const userMessages = ctx.messages.filter((message) => message.role === "user").length;
   const assistantMessages = ctx.messages.filter((message) => message.role === "assistant").length;
@@ -174,7 +171,7 @@ function buildStatusResponse(ctx: CommandContext) {
 
   return [
     `Task: ${taskLabel}`,
-    `Provider: ${getProviderLabel(ctx.provider)} (${ctx.model})`,
+    `Provider: ${getProviderLabel({ providerId: ctx.provider })} (${ctx.model})`,
     `Workspace: ${ctx.workspaceCwd ?? "Unknown"}`,
     `Turn: ${ctx.isTurnActive ? "active" : "idle"}`,
     `Messages: ${formatInteger(userMessages)} user, ${formatInteger(assistantMessages)} assistant`,
@@ -188,7 +185,7 @@ function buildUsageResponse(ctx: CommandContext) {
   if (usageMessages.length === 0) {
     return [
       "No token usage recorded yet for this task.",
-      `Provider: ${getProviderLabel(ctx.provider)} (${ctx.model})`,
+      `Provider: ${getProviderLabel({ providerId: ctx.provider })} (${ctx.model})`,
     ].join("\n");
   }
 
@@ -214,7 +211,7 @@ function buildUsageResponse(ctx: CommandContext) {
 
   const lastUsage = [...usageMessages].reverse().find((message) => message.usage)?.usage;
   const lines = [
-    `Provider: ${getProviderLabel(ctx.provider)} (${ctx.model})`,
+    `Provider: ${getProviderLabel({ providerId: ctx.provider })} (${ctx.model})`,
     `Assistant turns with usage: ${formatInteger(usageMessages.length)}`,
     `Input tokens: ${formatInteger(totals.inputTokens)}`,
     `Output tokens: ${formatInteger(totals.outputTokens)}`,
@@ -237,12 +234,13 @@ function buildUsageResponse(ctx: CommandContext) {
 }
 
 function buildProviderPassthroughNote(provider: ProviderId) {
-  if (provider === "claude-code") {
-    return "Supported Claude slash commands are forwarded unchanged to Claude. Unsupported ones are blocked locally once the current workspace catalog is loaded.";
+  const providerLabel = getProviderLabel({ providerId: provider });
+  if (providerSupportsNativeCommandCatalog({ providerId: provider })) {
+    return `Supported ${providerLabel} slash commands are forwarded unchanged to ${providerLabel}. Unsupported ones are blocked locally once the current workspace catalog is loaded.`;
   }
   return [
-    "Unprefixed slash commands are forwarded unchanged to Codex.",
-    "Codex native slash-command behavior depends on the current SDK-backed runtime path.",
+    `Unprefixed slash commands are forwarded unchanged to ${providerLabel}.`,
+    `${providerLabel} native slash-command behavior depends on the current SDK-backed runtime path.`,
   ].join("\n");
 }
 
@@ -250,9 +248,10 @@ function buildProviderPaletteNote(args: {
   provider: ProviderId;
   providerCommandCatalog?: ProviderCommandCatalogState;
 }): CommandPaletteProviderNote {
-  if (args.provider !== "claude-code") {
+  const providerLabel = getProviderLabel({ providerId: args.provider });
+  if (!providerSupportsNativeCommandCatalog({ providerId: args.provider })) {
     return {
-      title: "Codex passthrough",
+      title: `${providerLabel} passthrough`,
       description: buildProviderPassthroughNote(args.provider),
     };
   }
@@ -260,31 +259,31 @@ function buildProviderPaletteNote(args: {
   const catalog = args.providerCommandCatalog;
   if (!catalog || catalog.status === "idle") {
     return {
-      title: "Claude command catalog",
-      description: "Claude native slash commands have not been loaded yet for this workspace.",
+      title: `${providerLabel} command catalog`,
+      description: `${providerLabel} native slash commands have not been loaded yet for this workspace.`,
     };
   }
   if (catalog.status === "loading") {
     return {
-      title: "Claude command catalog",
-      description: "Loading Claude native slash commands for the current workspace...",
+      title: `${providerLabel} command catalog`,
+      description: `Loading ${providerLabel} native slash commands for the current workspace...`,
     };
   }
   if (catalog.status === "error") {
     return {
-      title: "Claude command catalog",
+      title: `${providerLabel} command catalog`,
       description: `${catalog.detail}\nUnsupported commands may still pass through unchanged until the catalog is available.`,
     };
   }
   if (catalog.status === "unsupported") {
     return {
-      title: "Claude command catalog",
+      title: `${providerLabel} command catalog`,
       description: catalog.detail,
     };
   }
 
   return {
-    title: "Claude native commands",
+    title: `${providerLabel} native commands`,
     description: catalog.detail || buildProviderPassthroughNote(args.provider),
   };
 }
@@ -312,6 +311,7 @@ function listCustomCommandKeys(args: { settings: Pick<AppSettings, "customComman
 }
 
 function buildHelpResponse(ctx: CommandContext) {
+  const providerLabel = getProviderLabel({ providerId: ctx.provider });
   const builtins = staveBuiltinCommands.map((command) => `- ${command.command}: ${command.description}`);
   const customCommands = listCustomCommandKeys({ settings: ctx.settings });
   const sections = [
@@ -329,22 +329,26 @@ function buildHelpResponse(ctx: CommandContext) {
   sections.push("Provider passthrough:");
   sections.push(buildProviderPassthroughNote(ctx.provider));
 
-  if (ctx.provider === "claude-code" && ctx.providerCommandCatalog?.status === "ready") {
+  if (
+    providerSupportsNativeCommandCatalog({ providerId: ctx.provider })
+    && ctx.providerCommandCatalog?.status === "ready"
+  ) {
     sections.push("");
-    sections.push("Available Claude native commands:");
+    sections.push(`Available ${providerLabel} native commands:`);
     ctx.providerCommandCatalog.commands.forEach((command) => sections.push(formatProviderCommandLine(command)));
   }
 
   return sections.join("\n");
 }
 
-function buildUnknownClaudeCommandResponse(ctx: CommandContext, command: string) {
-  const sections = [`Unknown Claude command for this workspace: ${command}`];
+function buildUnknownProviderCommandResponse(ctx: CommandContext, command: string) {
+  const providerLabel = getProviderLabel({ providerId: ctx.provider });
+  const sections = [`Unknown ${providerLabel} command for this workspace: ${command}`];
 
   if (ctx.providerCommandCatalog?.status === "ready") {
     if (ctx.providerCommandCatalog.commands.length > 0) {
       sections.push("");
-      sections.push("Available Claude native commands:");
+      sections.push(`Available ${providerLabel} native commands:`);
       ctx.providerCommandCatalog.commands.forEach((item) => sections.push(formatProviderCommandLine(item)));
     } else if (ctx.providerCommandCatalog.detail) {
       sections.push("");
@@ -438,7 +442,10 @@ export function buildCommandPaletteItems(args: {
       });
     });
 
-  if (args.provider === "claude-code" && args.providerCommandCatalog?.status === "ready") {
+  if (
+    providerSupportsNativeCommandCatalog({ providerId: args.provider })
+    && args.providerCommandCatalog?.status === "ready"
+  ) {
     args.providerCommandCatalog.commands
       .slice()
       .sort((left, right) => left.command.localeCompare(right.command))
@@ -499,7 +506,10 @@ export function resolveCommandInput(input: string, ctx: CommandContext): Command
 
   const { cmd, rawArgs } = parsed;
   if (!cmd.startsWith(STAVE_NAMESPACE)) {
-    if (ctx.provider === "claude-code" && ctx.providerCommandCatalog?.status === "ready") {
+    if (
+      providerSupportsNativeCommandCatalog({ providerId: ctx.provider })
+      && ctx.providerCommandCatalog?.status === "ready"
+    ) {
       const matchedProviderCommand = findProviderCommand({
         command: cmd,
         providerCommandCatalog: ctx.providerCommandCatalog,
@@ -516,7 +526,7 @@ export function resolveCommandInput(input: string, ctx: CommandContext): Command
         kind: "local-response",
         source: "provider_meta",
         command: cmd,
-        response: buildUnknownClaudeCommandResponse(ctx, cmd),
+        response: buildUnknownProviderCommandResponse(ctx, cmd),
       };
     }
 

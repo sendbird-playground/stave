@@ -40,7 +40,7 @@ export function registerProviderHandlers() {
       return { ok: false, streamId: "", turnId: null };
     }
     const safeArgs = parsedArgs.data as StreamTurnArgs;
-    const turnId = randomUUID();
+    const turnId = safeArgs.turnId ?? randomUUID();
     const sender = event.sender;
     const store = await ensurePersistenceReady();
     let sequence = 0;
@@ -60,6 +60,26 @@ export function registerProviderHandlers() {
           providerId: safeArgs.providerId,
           taskId: safeArgs.taskId,
           workspaceId: safeArgs.workspaceId ?? null,
+        });
+      }
+
+      try {
+        store.appendTurnEvent({
+          id: randomUUID(),
+          turnId,
+          sequence: 0,
+          eventType: "request_snapshot",
+          payload: {
+            type: "request_snapshot",
+            prompt: safeArgs.prompt,
+            conversation: safeArgs.conversation ?? null,
+          },
+        });
+      } catch (error) {
+        console.warn("[provider:persistence] failed to append request snapshot", error, {
+          turnId,
+          providerId: safeArgs.providerId,
+          taskId: safeArgs.taskId,
         });
       }
     }
@@ -111,7 +131,8 @@ export function registerProviderHandlers() {
         if (!completed && safeArgs.taskId) {
           completed = true;
           try {
-            store.completeTurn({ id: turnId });
+            const completedAt = new Date().toISOString();
+            store.completeTurn({ id: turnId, completedAt });
           } catch (error) {
             console.warn("[provider:persistence] failed to complete turn", error, {
               turnId,
@@ -135,11 +156,11 @@ export function registerProviderHandlers() {
   });
 
   ipcMain.handle("provider:abort-turn", (_event, args: unknown) => {
-    const parsedProviderId = ProviderIdSchema.safeParse((args as { providerId?: unknown })?.providerId);
-    if (!parsedProviderId.success) {
+    const turnId = (args as { turnId?: unknown })?.turnId;
+    if (typeof turnId !== "string" || turnId.trim().length === 0) {
       return { ok: false, message: "Invalid provider abort request." };
     }
-    return providerRuntime.abortTurn({ providerId: parsedProviderId.data });
+    return providerRuntime.abortTurn({ turnId });
   });
 
   ipcMain.handle("provider:cleanup-task", (_event, args: unknown) => {
@@ -156,7 +177,7 @@ export function registerProviderHandlers() {
       return { ok: false, message: "Invalid approval response request." };
     }
     return providerRuntime.respondApproval({
-      providerId: parsedArgs.data.providerId,
+      turnId: parsedArgs.data.turnId,
       requestId: parsedArgs.data.requestId,
       approved: parsedArgs.data.approved,
     });
@@ -168,7 +189,7 @@ export function registerProviderHandlers() {
       return { ok: false, message: "Invalid user-input response request." };
     }
     return providerRuntime.respondUserInput({
-      providerId: parsedArgs.data.providerId,
+      turnId: parsedArgs.data.turnId,
       requestId: parsedArgs.data.requestId,
       answers: parsedArgs.data.answers,
       denied: parsedArgs.data.denied,

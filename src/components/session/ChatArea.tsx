@@ -66,26 +66,27 @@ export function ChatArea() {
     );
   }
 
-  if (isEmpty) {
-    return (
-      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
+  const content = isEmpty
+    ? (
         <section className="flex min-h-0 flex-1 items-center justify-center px-6">
           <div className="w-full max-w-xl">
-            <p className="mb-6 text-center text-2xl font-semibold tracking-tight text-foreground/70">Stave</p>
             <ChatInput compact />
           </div>
         </section>
-      </div>
-    );
-  }
+      )
+    : (
+        <>
+          <ChatPanel />
+          <div className="relative shrink-0">
+            <PlanViewer />
+            <ChatInput />
+          </div>
+        </>
+      );
 
   return (
     <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
-      <ChatPanel />
-      <div className="relative shrink-0">
-        <PlanViewer />
-        <ChatInput />
-      </div>
+      {content}
     </div>
   );
 }

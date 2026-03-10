@@ -5,6 +5,7 @@ import { TaskList } from "@/components/layout/TaskList";
 import { ChatArea } from "@/components/session/ChatArea";
 import { TerminalDock } from "@/components/layout/TerminalDock";
 import { Toaster } from "@/components/ui";
+import { getNextProviderId } from "@/lib/providers/model-catalog";
 import { useAppStore } from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 
@@ -107,7 +108,7 @@ export function AppShell() {
         if (!activeTask) {
           return;
         }
-        const nextProvider = activeTask.provider === "claude-code" ? "codex" : "claude-code";
+        const nextProvider = getNextProviderId({ providerId: activeTask.provider });
         setTaskProvider({ taskId: activeTaskId, provider: nextProvider });
         return;
       }

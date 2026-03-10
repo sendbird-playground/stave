@@ -2,8 +2,17 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { Activity, ChevronDown, ChevronRight, Clock3, TriangleAlert } from "lucide-react";
 import { Badge, Card } from "@/components/ui";
 import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
-import { listTaskTurns, loadTurnReplay, type PersistedTurnSummary, type ReplayedTurnEvent } from "@/lib/db/turns.db";
+import {
+  listTaskTurns,
+  loadTurnReplay,
+  loadTurnRequestSnapshot,
+  type PersistedTurnRequestSnapshot,
+  type PersistedTurnSummary,
+  type ReplayedTurnEvent,
+} from "@/lib/db/turns.db";
+import { getProviderLabel } from "@/lib/providers/model-catalog";
 import { getProviderConversationId, getProviderConversationLabel, listProviderConversations } from "@/lib/providers/provider-conversations";
+import type { ProviderId } from "@/lib/providers/provider.types";
 import { formatTurnDuration, formatTurnEventLabel, summarizeTurnDiagnostics } from "@/lib/providers/turn-diagnostics";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
@@ -12,7 +21,7 @@ interface TurnDiagnosticsPanelProps {
   taskId: string;
   workspaceId: string;
   activeTurnId?: string;
-  taskProvider: "claude-code" | "codex";
+  taskProvider: ProviderId;
   providerConversations?: TaskProviderConversationState;
 }
 
@@ -21,20 +30,22 @@ interface TurnDiagnosticsState {
   error: string | null;
   latestTurn: PersistedTurnSummary | null;
   replay: ReplayedTurnEvent[];
+  requestSnapshot: PersistedTurnRequestSnapshot | null;
 }
 
-function getStatusBadgeVariant(status: "running" | "completed" | "error" | "truncated") {
+function getStatusBadgeVariant(status: "running" | "completed" | "error" | "truncated" | "interrupted") {
   switch (status) {
     case "error":
       return "destructive";
     case "truncated":
+    case "interrupted":
       return "warning";
     default:
       return "secondary";
   }
 }
 
-function getStatusLabel(status: "running" | "completed" | "error" | "truncated") {
+function getStatusLabel(status: "running" | "completed" | "error" | "truncated" | "interrupted") {
   switch (status) {
     case "running":
       return "Running";
@@ -44,6 +55,8 @@ function getStatusLabel(status: "running" | "completed" | "error" | "truncated")
       return "Error";
     case "truncated":
       return "Truncated";
+    case "interrupted":
+      return "Interrupted";
   }
 }
 
@@ -54,6 +67,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
     error: null,
     latestTurn: null,
     replay: [],
+    requestSnapshot: null,
   });
   const [open, setOpen] = useState(false);
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
@@ -79,6 +93,9 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
         const replay = latestTurn
           ? await loadTurnReplay({ turnId: latestTurn.id, limit: 400 })
           : [];
+        const requestSnapshot = latestTurn
+          ? await loadTurnRequestSnapshot({ turnId: latestTurn.id })
+          : null;
 
         if (cancelled) {
           return;
@@ -90,6 +107,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
             error: null,
             latestTurn,
             replay,
+            requestSnapshot,
           });
         });
       } catch (error) {
@@ -102,6 +120,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
             error: String(error),
             latestTurn: null,
             replay: [],
+            requestSnapshot: null,
           });
         });
       }
@@ -123,8 +142,14 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
   }, [activeTurnId, taskId, workspaceId]);
 
   const summary = useMemo(
-    () => (state.latestTurn ? summarizeTurnDiagnostics({ turn: state.latestTurn, replay: state.replay }) : null),
-    [state.latestTurn, state.replay]
+    () => (state.latestTurn
+      ? summarizeTurnDiagnostics({
+          turn: state.latestTurn,
+          replay: state.replay,
+          isActiveTurn: state.latestTurn.id === activeTurnId,
+        })
+      : null),
+    [activeTurnId, state.latestTurn, state.replay]
   );
   const timeline = useMemo(() => state.replay.slice(-12), [state.replay]);
   const currentNativeConversationId = useMemo(
@@ -135,6 +160,13 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
     () => listProviderConversations({ conversations: providerConversations }),
     [providerConversations]
   );
+  const snapshotConversation = state.requestSnapshot?.conversation ?? null;
+  const snapshotTargetProviderLabel = snapshotConversation
+    ? getProviderLabel({ providerId: snapshotConversation.target.providerId })
+    : null;
+  const snapshotPromptPreview = state.requestSnapshot
+    ? state.requestSnapshot.prompt.trim() || "(empty fallback prompt; provider runtime used canonical request)"
+    : null;
 
   useEffect(() => {
     if (!summary) {
@@ -163,7 +195,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
                 {summary?.status === "error" ? <TriangleAlert className="size-4 text-destructive" /> : <Activity className="size-4 text-muted-foreground" />}
                 Latest turn
               </span>
-              {state.latestTurn ? <Badge variant="outline">{state.latestTurn.providerId}</Badge> : null}
+              {state.latestTurn ? <Badge variant="outline">{getProviderLabel({ providerId: state.latestTurn.providerId })}</Badge> : null}
               {summary ? <Badge variant={getStatusBadgeVariant(summary.status)}>{getStatusLabel(summary.status)}</Badge> : null}
               {summary ? <Badge variant="secondary">{summary.totalEvents} events</Badge> : null}
             </div>
@@ -173,7 +205,10 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
               {state.latestTurn ? (
                 <span className="inline-flex items-center gap-1">
                   <Clock3 className="size-3.5" />
-                  {formatTurnDuration(summary?.durationMs ?? null)}
+                  {formatTurnDuration({
+                    durationMs: summary?.durationMs ?? null,
+                    status: summary?.status,
+                  })}
                 </span>
               ) : null}
               {state.latestTurn ? <span>{formatTaskUpdatedAt({ value: state.latestTurn.createdAt, now: timeAnchor })}</span> : null}
@@ -213,10 +248,15 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
                 </div>
               </div>
             ) : null}
+            {summary?.status === "interrupted" ? (
+              <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
+                This turn was interrupted because Stave was closed before the provider finished.
+              </div>
+            ) : null}
             <div className="mt-3 rounded-md border border-border/70 bg-background/50 px-3 py-2">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Provider sessions</p>
-                <Badge variant="secondary">{taskProvider === "claude-code" ? "Current: Claude" : "Current: Codex"}</Badge>
+                <Badge variant="secondary">{`Current: ${getProviderLabel({ providerId: taskProvider })}`}</Badge>
               </div>
               {providerConversationRows.length === 0 ? (
                 <p className="mt-1 text-sm text-muted-foreground">No provider-native ids recorded for this task yet.</p>
@@ -241,6 +281,43 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+            <div className="mt-3 rounded-md border border-border/70 bg-background/50 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Request snapshot</p>
+                {snapshotTargetProviderLabel ? <Badge variant="outline">{snapshotTargetProviderLabel}</Badge> : null}
+                {snapshotConversation?.target.model ? <Badge variant="secondary">{snapshotConversation.target.model}</Badge> : null}
+              </div>
+              {!state.requestSnapshot ? (
+                <p className="mt-1 text-sm text-muted-foreground">No persisted request snapshot for this turn.</p>
+              ) : (
+                <>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                    <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Mode</p>
+                      <p className="mt-1 text-sm text-foreground">{snapshotConversation?.mode ?? "unknown"}</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">History</p>
+                      <p className="mt-1 text-sm text-foreground">{snapshotConversation?.history.length ?? 0} messages</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Context parts</p>
+                      <p className="mt-1 text-sm text-foreground">{snapshotConversation?.contextParts.length ?? 0} parts</p>
+                    </div>
+                    <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Resume id</p>
+                      <p className="mt-1 truncate font-mono text-sm text-foreground">
+                        {snapshotConversation?.resume?.nativeConversationId ?? "None"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Fallback prompt</p>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{snapshotPromptPreview}</p>
+                  </div>
+                </>
               )}
             </div>
             <div className="mt-3">

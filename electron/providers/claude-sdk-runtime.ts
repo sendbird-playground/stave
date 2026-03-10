@@ -1,4 +1,5 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
+import { buildProviderTurnPrompt, resolveProviderResumeConversationId } from "../../src/lib/providers/provider-request-translators";
 import type {
   Query,
   SDKMessage,
@@ -888,7 +889,10 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
 
     const existingSessionId = resolveSessionId({
       taskId: args.taskId,
-      fallbackSessionId: args.runtimeOptions?.claudeResumeSessionId,
+      fallbackSessionId: resolveProviderResumeConversationId({
+        conversation: args.conversation,
+        fallbackResumeId: args.runtimeOptions?.claudeResumeSessionId,
+      }),
     });
     const permissionMode = resolveClaudePermissionMode({
       runtimeValue: args.runtimeOptions?.claudePermissionMode,
@@ -915,8 +919,13 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       cwd: runtimeCwd,
       baseSystemPrompt: args.runtimeOptions?.claudeSystemPrompt,
     });
-    const stream = queryFn({
+    const providerPrompt = buildProviderTurnPrompt({
+      providerId: args.providerId,
       prompt: args.prompt,
+      conversation: args.conversation,
+    });
+    const stream = queryFn({
+      prompt: providerPrompt,
       options: {
         permissionMode,
         ...(permissionMode === "bypassPermissions" ? { allowDangerouslySkipPermissions } : {}),

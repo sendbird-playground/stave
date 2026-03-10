@@ -1,6 +1,7 @@
 import type { HTMLAttributes } from "react";
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -44,9 +45,12 @@ function SnippetCopyButton({ code }: { code: string }) {
       type="button"
       className="border-l border-border/70 px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
       onClick={() => {
-        navigator.clipboard.writeText(code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        void copyTextToClipboard(code)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          })
+          .catch(() => {});
       }}
       aria-label="Copy"
       title="Copy"

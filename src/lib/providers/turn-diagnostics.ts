@@ -1,7 +1,7 @@
 import type { PersistedTurnSummary, ReplayedTurnEvent } from "@/lib/db/turns.db";
 
 export interface TurnDiagnosticsSummary {
-  status: "running" | "completed" | "error" | "truncated";
+  status: "running" | "completed" | "error" | "truncated" | "interrupted";
   stopReason: string | null;
   durationMs: number | null;
   totalEvents: number;
@@ -18,6 +18,7 @@ export interface TurnDiagnosticsSummary {
 export function summarizeTurnDiagnostics(args: {
   turn: PersistedTurnSummary;
   replay: ReplayedTurnEvent[];
+  isActiveTurn?: boolean;
 }): TurnDiagnosticsSummary {
   let stopReason: string | null = null;
   let textEvents = 0;
@@ -69,6 +70,8 @@ export function summarizeTurnDiagnostics(args: {
   const lastEventType = args.replay.at(-1)?.event.type ?? null;
   const status = errorEvents > 0
     ? "error"
+    : !args.turn.completedAt && !args.isActiveTurn
+    ? "interrupted"
     : stopReason === "max_tokens"
     ? "truncated"
     : args.turn.completedAt
@@ -124,7 +127,15 @@ export function formatTurnEventLabel(args: { event: ReplayedTurnEvent["event"] }
   }
 }
 
-export function formatTurnDuration(durationMs: number | null): string {
+export function formatTurnDuration(args: {
+  durationMs: number | null;
+  status?: TurnDiagnosticsSummary["status"];
+}): string {
+  if (args.status === "interrupted") {
+    return "Interrupted";
+  }
+
+  const durationMs = args.durationMs;
   if (durationMs == null) {
     return "Running";
   }

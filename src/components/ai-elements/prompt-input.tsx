@@ -163,7 +163,7 @@ export function PromptInput(args: PromptInputProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-border/80 bg-card p-4">
+    <form data-prompt-input-root onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-border/80 bg-card p-4">
       <div className="flex flex-wrap items-center gap-2">
         <ModelSelector
           value={selectedModel}

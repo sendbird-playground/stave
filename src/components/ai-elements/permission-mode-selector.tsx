@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
-export type CodexApprovalPolicy = "never" | "on-request" | "on-failure" | "untrusted";
+export type CodexApprovalPolicy = "never" | "on-request" | "untrusted";
 export type PermissionModeValue = ClaudePermissionMode | CodexApprovalPolicy;
 
 interface PermissionModeOption {
@@ -22,7 +22,6 @@ const CLAUDE_OPTIONS: PermissionModeOption[] = [
 const CODEX_OPTIONS: PermissionModeOption[] = [
   { value: "never", label: "Never" },
   { value: "on-request", label: "On Request" },
-  { value: "on-failure", label: "On Failure" },
   { value: "untrusted", label: "Untrusted" },
 ];
 

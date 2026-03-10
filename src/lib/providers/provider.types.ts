@@ -1,4 +1,11 @@
-import type { CodeDiffPart, ToolUsePart, UserInputQuestion } from "@/types/chat";
+import type {
+  CodeDiffPart,
+  FileContextPart,
+  MessagePart,
+  MessageRole,
+  ToolUsePart,
+  UserInputQuestion,
+} from "@/types/chat";
 
 export type ProviderId = "claude-code" | "codex";
 
@@ -6,6 +13,41 @@ export interface ProviderCommandCatalogRequest {
   providerId: ProviderId;
   cwd?: string;
   runtimeOptions?: ProviderTurnRequest["runtimeOptions"];
+}
+
+export interface CanonicalRetrievedContextPart {
+  type: "retrieved_context";
+  sourceId: string;
+  title?: string;
+  content: string;
+}
+
+export interface CanonicalConversationMessage {
+  messageId?: string;
+  role: MessageRole;
+  providerId?: ProviderId | "user";
+  model?: string;
+  content: string;
+  parts: MessagePart[];
+  isPlanResponse?: boolean;
+  planText?: string;
+}
+
+export interface CanonicalConversationRequest {
+  turnId?: string;
+  taskId?: string;
+  workspaceId?: string;
+  target: {
+    providerId: ProviderId;
+    model?: string;
+  };
+  mode: "chat" | "review";
+  history: CanonicalConversationMessage[];
+  input: CanonicalConversationMessage & { role: "user" };
+  contextParts: Array<FileContextPart | CanonicalRetrievedContextPart>;
+  resume?: {
+    nativeConversationId?: string;
+  };
 }
 
 export type NormalizedProviderEvent =
@@ -32,7 +74,9 @@ export type NormalizedProviderEvent =
   | { type: "done"; stop_reason?: "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | string };
 
 export interface ProviderTurnRequest {
+  turnId?: string;
   prompt: string;
+  conversation?: CanonicalConversationRequest;
   taskId?: string;
   workspaceId?: string;
   cwd?: string;
@@ -55,11 +99,13 @@ export interface ProviderTurnRequest {
     claudeResumeSessionId?: string;
     codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
     codexNetworkAccessEnabled?: boolean;
-    codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
+    codexApprovalPolicy?: "never" | "on-request" | "untrusted";
     codexPathOverride?: string;
     codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
     codexWebSearchMode?: "disabled" | "cached" | "live";
-    codexPlanMode?: boolean;
+    codexShowRawAgentReasoning?: boolean;
+    codexReasoningSummary?: "auto" | "concise" | "detailed" | "none";
+    codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
     codexResumeThreadId?: string;
   };
 }

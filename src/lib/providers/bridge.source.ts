@@ -15,8 +15,10 @@ async function* fromArray(args: { items: unknown[] }) {
 }
 
 async function* fromPolledStream(args: {
+  turnId?: string;
   providerId: ProviderId;
   prompt: string;
+  conversation?: ProviderTurnRequest["conversation"];
   taskId?: string;
   workspaceId?: string;
   cwd?: string;
@@ -29,8 +31,10 @@ async function* fromPolledStream(args: {
   }
 
   const started = await startStreamTurn({
+    turnId: args.turnId,
     providerId: args.providerId,
     prompt: args.prompt,
+    conversation: args.conversation,
     taskId: args.taskId,
     workspaceId: args.workspaceId,
     cwd: args.cwd,
@@ -58,8 +62,10 @@ async function* fromPolledStream(args: {
 }
 
 async function* fromPushStream(args: {
+  turnId?: string;
   providerId: ProviderId;
   prompt: string;
+  conversation?: ProviderTurnRequest["conversation"];
   taskId?: string;
   workspaceId?: string;
   cwd?: string;
@@ -102,8 +108,10 @@ async function* fromPushStream(args: {
 
   try {
     const started = await startPushTurn({
+      turnId: args.turnId,
       providerId: args.providerId,
       prompt: args.prompt,
+      conversation: args.conversation,
       taskId: args.taskId,
       workspaceId: args.workspaceId,
       cwd: args.cwd,
@@ -144,8 +152,10 @@ async function* fromPushStream(args: {
 }
 
 async function resolveBridgeStream(args: {
+  turnId?: string;
   providerId: ProviderId;
   prompt: string;
+  conversation?: ProviderTurnRequest["conversation"];
   taskId?: string;
   workspaceId?: string;
   cwd?: string;
@@ -157,8 +167,10 @@ async function resolveBridgeStream(args: {
       return null;
     }
     const result = await streamTurn({
+      turnId: args.turnId,
       providerId: args.providerId,
       prompt: args.prompt,
+      conversation: args.conversation,
       taskId: args.taskId,
       workspaceId: args.workspaceId,
       cwd: args.cwd,
@@ -176,8 +188,10 @@ async function resolveBridgeStream(args: {
   const subscribeStreamEvents = window.api?.provider?.subscribeStreamEvents;
   if (startPushTurn && subscribeStreamEvents) {
     return fromPushStream({
+      turnId: args.turnId,
       providerId: args.providerId,
       prompt: args.prompt,
+      conversation: args.conversation,
       taskId: args.taskId,
       workspaceId: args.workspaceId,
       cwd: args.cwd,
@@ -189,8 +203,10 @@ async function resolveBridgeStream(args: {
   const readStreamTurn = window.api?.provider?.readStreamTurn;
   if (startStreamTurn && readStreamTurn) {
     return fromPolledStream({
+      turnId: args.turnId,
       providerId: args.providerId,
       prompt: args.prompt,
+      conversation: args.conversation,
       taskId: args.taskId,
       workspaceId: args.workspaceId,
       cwd: args.cwd,
@@ -204,8 +220,10 @@ async function resolveBridgeStream(args: {
   }
 
   const result = await streamTurn({
+    turnId: args.turnId,
     providerId: args.providerId,
     prompt: args.prompt,
+    conversation: args.conversation,
     taskId: args.taskId,
     workspaceId: args.workspaceId,
     cwd: args.cwd,
@@ -238,8 +256,10 @@ export function createBridgeProviderSource<TRawEvent>(args: { providerId: Provid
   return {
     async *streamTurn(turnArgs: ProviderTurnRequest) {
       const source = await resolveBridgeStream({
+        turnId: turnArgs.turnId,
         providerId,
         prompt: turnArgs.prompt,
+        conversation: turnArgs.conversation,
         taskId: turnArgs.taskId,
         workspaceId: turnArgs.workspaceId,
         cwd: turnArgs.cwd,

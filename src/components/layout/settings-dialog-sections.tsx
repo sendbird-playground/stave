@@ -1,10 +1,15 @@
 import { memo, useState } from "react";
-import { Bot, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Wrench } from "lucide-react";
+import { Bot, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, TriangleAlert, Wrench } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Card, Input, Textarea } from "@/components/ui";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CLAUDE_SDK_MODEL_OPTIONS, CODEX_SDK_MODEL_OPTIONS, normalizeModelSelection } from "@/lib/providers/model-catalog";
+import {
+  CLAUDE_SDK_MODEL_OPTIONS,
+  CODEX_SDK_MODEL_OPTIONS,
+  getDefaultModelForProvider,
+  normalizeModelSelection,
+} from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { PRESET_THEME_TOKENS, THEME_TOKEN_NAMES, type ThemeModeName, type ThemeTokenName, useAppStore } from "@/store/app.store";
 
@@ -354,7 +359,7 @@ function ModelsSection() {
                   patch: {
                     modelClaude: normalizeModelSelection({
                       value: event.target.value,
-                      fallback: CLAUDE_SDK_MODEL_OPTIONS[0],
+                      fallback: getDefaultModelForProvider({ providerId: "claude-code" }),
                     }),
                   },
                 })
@@ -372,7 +377,7 @@ function ModelsSection() {
                   patch: {
                     modelCodex: normalizeModelSelection({
                       value: event.target.value,
-                      fallback: CODEX_SDK_MODEL_OPTIONS[0],
+                      fallback: getDefaultModelForProvider({ providerId: "codex" }),
                     }),
                   },
                 })
@@ -790,7 +795,9 @@ function ProvidersSection() {
     codexApprovalPolicy,
     codexModelReasoningEffort,
     codexWebSearchMode,
-    codexPlanMode,
+    codexShowRawAgentReasoning,
+    codexReasoningSummary,
+    codexSupportsReasoningSummaries,
   ] = useAppStore(
     useShallow((state) => [
       state.settings.providerTimeoutMs,
@@ -805,7 +812,9 @@ function ProvidersSection() {
       state.settings.codexApprovalPolicy,
       state.settings.codexModelReasoningEffort,
       state.settings.codexWebSearchMode,
-      state.settings.codexPlanMode,
+      state.settings.codexShowRawAgentReasoning,
+      state.settings.codexReasoningSummary,
+      state.settings.codexSupportsReasoningSummaries,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -975,7 +984,7 @@ function ProvidersSection() {
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexApprovalPolicy: value as "never" | "on-request" | "on-failure" | "untrusted",
+                    codexApprovalPolicy: value as "never" | "on-request" | "untrusted",
                   },
                 })
               }
@@ -986,23 +995,9 @@ function ProvidersSection() {
               <SelectContent>
                 <SelectItem value="never">never</SelectItem>
                 <SelectItem value="on-request">on-request</SelectItem>
-                <SelectItem value="on-failure">on-failure</SelectItem>
                 <SelectItem value="untrusted">untrusted</SelectItem>
               </SelectContent>
             </Select>
-          </LabeledField>
-          <LabeledField
-            title="Plan Mode"
-            description="Enable collaboration mode so Codex proposes a plan before executing."
-          >
-            <ChoiceButtons
-              value={codexPlanMode ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { codexPlanMode: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
           </LabeledField>
           <LabeledField title="Reasoning Effort">
             <Select
@@ -1026,6 +1021,65 @@ function ProvidersSection() {
                 <SelectItem value="xhigh">xhigh</SelectItem>
               </SelectContent>
             </Select>
+          </LabeledField>
+          <LabeledField
+            title="Reasoning Summary"
+            description="Codex config for model-side reasoning summaries when supported."
+          >
+            <Select
+              value={codexReasoningSummary}
+              onValueChange={(value) =>
+                updateSettings({
+                  patch: {
+                    codexReasoningSummary: value as "auto" | "concise" | "detailed" | "none",
+                  },
+                })
+              }
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">auto</SelectItem>
+                <SelectItem value="concise">concise</SelectItem>
+                <SelectItem value="detailed">detailed</SelectItem>
+                <SelectItem value="none">none</SelectItem>
+              </SelectContent>
+            </Select>
+          </LabeledField>
+          <LabeledField
+            title="Supports Reasoning Summaries"
+            description="Override Codex capability detection when a model supports reasoning summaries but the CLI cannot infer it."
+          >
+            <Select
+              value={codexSupportsReasoningSummaries}
+              onValueChange={(value) =>
+                updateSettings({
+                  patch: {
+                    codexSupportsReasoningSummaries: value as "auto" | "enabled" | "disabled",
+                  },
+                })
+              }
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">auto</SelectItem>
+                <SelectItem value="enabled">enabled</SelectItem>
+                <SelectItem value="disabled">disabled</SelectItem>
+              </SelectContent>
+            </Select>
+          </LabeledField>
+          <LabeledField title="Raw Agent Reasoning">
+            <ChoiceButtons
+              value={codexShowRawAgentReasoning ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { codexShowRawAgentReasoning: value === "on" } })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
           </LabeledField>
           <LabeledField
             title="Web Search Mode"
@@ -1067,13 +1121,23 @@ function DeveloperSection() {
     <>
       <SectionHeading title="Developer" description="Advanced diagnostics and local provider tooling overrides." />
       <SectionStack>
-        <SettingsCard title="Codex Binary Path" description="Override the path to the `codex` binary. Leave empty to use the system default.">
+        <SettingsCard title="Codex Binary Path" description="Override the path to the local `codex` binary. Leave empty to use the system install discovered from your PATH/home bin locations.">
           <Input
             className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
             placeholder="/usr/local/bin/codex"
             value={codexPathOverride}
             onChange={(event) => updateSettings({ patch: { codexPathOverride: event.target.value } })}
           />
+          <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2 font-medium text-foreground">
+              <TriangleAlert className="size-4 text-warning" />
+              Supported Codex baseline
+            </p>
+            <p className="mt-1">
+              Stave targets Codex SDK `0.113.0` and expects a local `codex` CLI around `0.113.0`.
+              If your installed CLI is older, update it or point this field at the version you want Stave to use.
+            </p>
+          </div>
         </SettingsCard>
 
         <SettingsCard

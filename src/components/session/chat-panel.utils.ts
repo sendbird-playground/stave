@@ -1,4 +1,4 @@
-import type { ChatMessage, CodeDiffPart, FileContextPart, MessagePart } from "@/types/chat";
+import type { ChatMessage, CodeDiffPart, FileContextPart, MessagePart, ToolUsePart } from "@/types/chat";
 
 export function isPendingDiffStatus(status: CodeDiffPart["status"]) {
   return status === "pending";
@@ -195,6 +195,14 @@ export function hasVisibleMessagePartContent(part: MessagePart): boolean {
     return part.text.trim().length > 0;
   }
   return true;
+}
+
+export function shouldAutoOpenToolPart(state: ToolUsePart["state"]) {
+  return state === "input-streaming";
+}
+
+export function shouldAutoOpenToolGroup(states: Array<ToolUsePart["state"] | undefined>) {
+  return states.some((state) => state !== undefined && shouldAutoOpenToolPart(state));
 }
 
 export type MessageBodyFallbackState = "content" | "streaming-placeholder" | "empty-completed";

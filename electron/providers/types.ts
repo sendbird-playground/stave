@@ -1,3 +1,5 @@
+import type { CanonicalConversationRequest } from "../../src/lib/providers/provider.types";
+
 export type ProviderId = "claude-code" | "codex";
 
 export interface ProviderSlashCommand {
@@ -15,8 +17,10 @@ export interface ProviderCommandCatalogResult {
 }
 
 export interface StreamTurnArgs {
+  turnId?: string;
   providerId: ProviderId;
   prompt: string;
+  conversation?: CanonicalConversationRequest;
   taskId?: string;
   workspaceId?: string;
   cwd?: string;
@@ -39,11 +43,13 @@ export interface StreamTurnArgs {
     claudeResumeSessionId?: string;
     codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
     codexNetworkAccessEnabled?: boolean;
-    codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
+    codexApprovalPolicy?: "never" | "on-request" | "untrusted";
     codexPathOverride?: string;
     codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
     codexWebSearchMode?: "disabled" | "cached" | "live";
-    codexPlanMode?: boolean;
+    codexShowRawAgentReasoning?: boolean;
+    codexReasoningSummary?: "auto" | "concise" | "detailed" | "none";
+    codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
     codexResumeThreadId?: string;
   };
 }
@@ -94,11 +100,11 @@ export interface ProviderRuntime {
     done: boolean;
     message?: string;
   };
-  abortTurn: (args: { providerId: ProviderId }) => { ok: boolean; message: string };
+  abortTurn: (args: { turnId: string }) => { ok: boolean; message: string };
   cleanupTask: (args: { taskId: string }) => { ok: boolean; message: string };
-  respondApproval: (args: { providerId: ProviderId; requestId: string; approved: boolean }) => { ok: boolean; message: string };
+  respondApproval: (args: { turnId: string; requestId: string; approved: boolean }) => { ok: boolean; message: string };
   respondUserInput: (args: {
-    providerId: ProviderId;
+    turnId: string;
     requestId: string;
     answers?: Record<string, string>;
     denied?: boolean;

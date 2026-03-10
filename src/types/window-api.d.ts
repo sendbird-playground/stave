@@ -1,9 +1,11 @@
-import type { ProviderId } from "@/lib/providers/provider.types";
+import type { CanonicalConversationRequest, ProviderId } from "@/lib/providers/provider.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
 
 interface ProviderStreamTurnArgs {
+  turnId?: string;
   providerId: ProviderId;
   prompt: string;
+  conversation?: CanonicalConversationRequest;
   taskId?: string;
   workspaceId?: string;
   cwd?: string;
@@ -26,11 +28,13 @@ interface ProviderStreamTurnArgs {
     claudeResumeSessionId?: string;
     codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
     codexNetworkAccessEnabled?: boolean;
-    codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
+    codexApprovalPolicy?: "never" | "on-request" | "untrusted";
     codexPathOverride?: string;
     codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
     codexWebSearchMode?: "disabled" | "cached" | "live";
-    codexPlanMode?: boolean;
+    codexShowRawAgentReasoning?: boolean;
+    codexReasoningSummary?: "auto" | "concise" | "detailed" | "none";
+    codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
     codexResumeThreadId?: string;
   };
 }
@@ -62,14 +66,14 @@ interface WindowProviderApi {
     providerId: ProviderId;
     turnId: string | null;
   }) => void) => () => void;
-  abortTurn?: (args: { providerId: ProviderId }) => Promise<{ ok: boolean; message?: string }>;
+  abortTurn?: (args: { turnId: string }) => Promise<{ ok: boolean; message?: string }>;
   cleanupTask?: (args: { taskId: string }) => Promise<{ ok: boolean; message?: string }>;
-  respondApproval?: (args: { providerId: ProviderId; requestId: string; approved: boolean }) => Promise<{
+  respondApproval?: (args: { turnId: string; requestId: string; approved: boolean }) => Promise<{
     ok: boolean;
     message?: string;
   }>;
   respondUserInput?: (args: {
-    providerId: ProviderId;
+    turnId: string;
     requestId: string;
     answers?: Record<string, string>;
     denied?: boolean;
@@ -281,6 +285,18 @@ interface WindowPersistenceApi {
   }) => Promise<{ ok: boolean }>;
   deleteWorkspace?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
   listTaskTurns?: (args: { workspaceId: string; taskId: string; limit?: number }) => Promise<{
+    ok: boolean;
+    turns: Array<{
+      id: string;
+      workspaceId: string;
+      taskId: string;
+      providerId: "claude-code" | "codex";
+      createdAt: string;
+      completedAt: string | null;
+      eventCount: number;
+    }>;
+  }>;
+  listLatestWorkspaceTurns?: (args: { workspaceId: string; limit?: number }) => Promise<{
     ok: boolean;
     turns: Array<{
       id: string;

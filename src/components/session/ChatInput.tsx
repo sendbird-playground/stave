@@ -1,5 +1,5 @@
 import { PromptInput, PromptSuggestion, PromptSuggestions } from "@/components/ai-elements";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelSelectorOption } from "@/components/ai-elements/model-selector";
 import type { PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
 import { buildCommandPaletteItems } from "@/lib/commands";
@@ -10,7 +10,15 @@ import {
   toProviderCommandCatalogState,
   type ProviderCommandCatalogState,
 } from "@/lib/providers/provider-command-catalog";
-import { CLAUDE_SDK_MODEL_OPTIONS, CODEX_SDK_MODEL_OPTIONS, normalizeModelSelection, toHumanModelName } from "@/lib/providers/model-catalog";
+import {
+  getDefaultModelForProvider,
+  getProviderLabel,
+  getSdkModelOptions,
+  listProviderIds,
+  normalizeModelSelection,
+  providerSupportsNativeCommandCatalog,
+  toHumanModelName,
+} from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { getLatestPromptSuggestions, mergePromptSuggestionWithDraft } from "./chat-input.utils";
@@ -19,6 +27,9 @@ interface ChatInputProps {
   compact?: boolean;
 }
 
+const EMPTY_PROMPT_DRAFT = { text: "", attachedFilePath: "" };
+const PROMPT_DRAFT_SAVE_DELAY_MS = 250;
+
 export function ChatInput(args: ChatInputProps = {}) {
   const [focusNonce, setFocusNonce] = useState(0);
   const [providerCommandCatalog, setProviderCommandCatalog] = useState(() => getCachedProviderCommandCatalog({
@@ -26,9 +37,10 @@ export function ChatInput(args: ChatInputProps = {}) {
   }));
   const activeTaskId = useAppStore((state) => state.activeTaskId);
   const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
+  const providerSelectionTarget = activeTaskId || "draft:session";
   const tasks = useAppStore((state) => state.tasks);
   const messagesByTask = useAppStore((state) => state.messagesByTask);
-  const promptDraftByTask = useAppStore((state) => state.promptDraftByTask);
+  const promptDraft = useAppStore((state) => state.promptDraftByTask[providerSelectionTarget] ?? EMPTY_PROMPT_DRAFT);
   const setTaskProvider = useAppStore((state) => state.setTaskProvider);
   const updatePromptDraft = useAppStore((state) => state.updatePromptDraft);
   const clearPromptDraft = useAppStore((state) => state.clearPromptDraft);
@@ -46,10 +58,15 @@ export function ChatInput(args: ChatInputProps = {}) {
   const activeTask = tasks.find((task) => task.id === activeTaskId);
   const activeProvider = activeTask?.provider ?? draftProvider;
   const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
+  const [draftText, setDraftText] = useState(promptDraft.text);
+  const draftTextRef = useRef(promptDraft.text);
+  const syncedDraftRef = useRef({
+    taskId: providerSelectionTarget,
+    text: promptDraft.text,
+  });
+  const draftSaveTimerRef = useRef<number | null>(null);
   const permissionMode: PermissionModeValue =
     activeProvider === "claude-code" ? settings.claudePermissionMode : settings.codexApprovalPolicy;
-  const providerSelectionTarget = activeTaskId || "draft:session";
-  const promptDraft = promptDraftByTask[providerSelectionTarget] ?? { text: "", attachedFilePath: "" };
   const activeMessages = messagesByTask[activeTaskId] ?? [];
   const lastMessage = activeMessages.at(-1);
   const isEmpty = activeMessages.length === 0;
@@ -63,27 +80,93 @@ export function ChatInput(args: ChatInputProps = {}) {
     label: toHumanModelName({ model: activeModel }),
     available: providerAvailability[activeProvider],
   };
-  const modelOptions: ModelSelectorOption[] = [
-    ...CLAUDE_SDK_MODEL_OPTIONS.map((model) => ({
-      key: `claude-code:${model}`,
-      providerId: "claude-code" as const,
+  const modelOptions: ModelSelectorOption[] = listProviderIds().flatMap((providerId) =>
+    getSdkModelOptions({ providerId }).map((model) => ({
+      key: `${providerId}:${model}`,
+      providerId,
       model,
       label: toHumanModelName({ model }),
-      available: providerAvailability["claude-code"],
-    })),
-    ...CODEX_SDK_MODEL_OPTIONS.map((model) => ({
-      key: `codex:${model}`,
-      providerId: "codex" as const,
-      model,
-      label: toHumanModelName({ model }),
-      available: providerAvailability.codex,
-    })),
-  ];
+      available: providerAvailability[providerId],
+    }))
+  );
+
+  function cancelPendingDraftSave() {
+    if (draftSaveTimerRef.current === null) {
+      return;
+    }
+    window.clearTimeout(draftSaveTimerRef.current);
+    draftSaveTimerRef.current = null;
+  }
+
+  function adoptPromptDraftText(nextDraft: { taskId: string; text: string }) {
+    syncedDraftRef.current = nextDraft;
+    draftTextRef.current = nextDraft.text;
+    setDraftText(nextDraft.text);
+  }
+
+  function commitPromptDraftText(nextDraft: { taskId: string; text: string }) {
+    cancelPendingDraftSave();
+    const store = useAppStore.getState();
+    const currentText = store.promptDraftByTask[nextDraft.taskId]?.text ?? "";
+    if (currentText !== nextDraft.text) {
+      store.updatePromptDraft({
+        taskId: nextDraft.taskId,
+        patch: { text: nextDraft.text },
+      });
+    }
+    syncedDraftRef.current = nextDraft;
+  }
+
+  function schedulePromptDraftSave(nextDraft: { taskId: string; text: string }) {
+    cancelPendingDraftSave();
+    draftSaveTimerRef.current = window.setTimeout(() => {
+      commitPromptDraftText(nextDraft);
+    }, PROMPT_DRAFT_SAVE_DELAY_MS);
+  }
+
+  useEffect(() => {
+    const syncedDraft = syncedDraftRef.current;
+    if (providerSelectionTarget !== syncedDraft.taskId) {
+      commitPromptDraftText({
+        taskId: syncedDraft.taskId,
+        text: draftTextRef.current,
+      });
+      adoptPromptDraftText({
+        taskId: providerSelectionTarget,
+        text: promptDraft.text,
+      });
+      return;
+    }
+    if (promptDraft.text !== syncedDraft.text) {
+      adoptPromptDraftText({
+        taskId: providerSelectionTarget,
+        text: promptDraft.text,
+      });
+    }
+  }, [promptDraft.text, providerSelectionTarget]);
+
+  useEffect(() => () => {
+    commitPromptDraftText({
+      taskId: syncedDraftRef.current.taskId,
+      text: draftTextRef.current,
+    });
+  }, []);
+
+  useEffect(() => {
+    const flushDraftText = () => {
+      commitPromptDraftText({
+        taskId: syncedDraftRef.current.taskId,
+        text: draftTextRef.current,
+      });
+    };
+    window.addEventListener("beforeunload", flushDraftText);
+    return () => window.removeEventListener("beforeunload", flushDraftText);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (activeProvider !== "claude-code") {
+    if (!providerSupportsNativeCommandCatalog({ providerId: activeProvider })) {
       const nextCatalog = getInitialProviderCommandCatalog({ providerId: activeProvider });
       setProviderCommandCatalog(nextCatalog);
       setCachedProviderCommandCatalog({
@@ -119,7 +202,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       providerId: activeProvider,
       status: "loading",
       commands: [],
-      detail: "Loading Claude native slash commands...",
+      detail: `Loading ${getProviderLabel({ providerId: activeProvider })} native slash commands...`,
     };
     setProviderCommandCatalog(loadingCatalog);
     setCachedProviderCommandCatalog({
@@ -208,14 +291,15 @@ export function ChatInput(args: ChatInputProps = {}) {
                 key={suggestion}
                 disabled={isTurnActive}
                 onClick={() => {
-                  updatePromptDraft({
+                  const nextText = mergePromptSuggestionWithDraft({
+                    currentDraft: draftTextRef.current,
+                    suggestion,
+                  });
+                  draftTextRef.current = nextText;
+                  setDraftText(nextText);
+                  commitPromptDraftText({
                     taskId: providerSelectionTarget,
-                    patch: {
-                      text: mergePromptSuggestionWithDraft({
-                        currentDraft: promptDraft.text,
-                        suggestion,
-                      }),
-                    },
+                    text: nextText,
                   });
                   setFocusNonce((current) => current + 1);
                 }}
@@ -228,7 +312,7 @@ export function ChatInput(args: ChatInputProps = {}) {
         ) : null}
         <PromptInput
           focusToken={`${providerSelectionTarget}:${focusNonce}`}
-          value={promptDraft.text}
+          value={draftText}
           disabled={isTurnActive}
           isTurnActive={isTurnActive}
           selectedModel={selectedModelOption}
@@ -237,20 +321,33 @@ export function ChatInput(args: ChatInputProps = {}) {
           attachedFilePath={promptDraft.attachedFilePath}
           commandPaletteItems={commandPalette.items}
           commandPaletteProviderNote={commandPalette.providerNote}
-          onValueChange={(value) => updatePromptDraft({ taskId: providerSelectionTarget, patch: { text: value } })}
+          onValueChange={(value) => {
+            draftTextRef.current = value;
+            setDraftText(value);
+            schedulePromptDraftSave({
+              taskId: providerSelectionTarget,
+              text: value,
+            });
+          }}
           onModelSelect={({ selection }) => {
             setTaskProvider({ taskId: providerSelectionTarget, provider: selection.providerId });
             if (selection.providerId === "claude-code") {
               updateSettings({
                 patch: {
-                  modelClaude: normalizeModelSelection({ value: selection.model, fallback: CLAUDE_SDK_MODEL_OPTIONS[0] }),
+                  modelClaude: normalizeModelSelection({
+                    value: selection.model,
+                    fallback: getDefaultModelForProvider({ providerId: selection.providerId }),
+                  }),
                 },
               });
               return;
             }
             updateSettings({
               patch: {
-                modelCodex: normalizeModelSelection({ value: selection.model, fallback: CODEX_SDK_MODEL_OPTIONS[0] }),
+                modelCodex: normalizeModelSelection({
+                  value: selection.model,
+                  fallback: getDefaultModelForProvider({ providerId: selection.providerId }),
+                }),
               },
             });
           }}
@@ -265,6 +362,7 @@ export function ChatInput(args: ChatInputProps = {}) {
           onAttachFileChange={({ filePath }) =>
             updatePromptDraft({ taskId: providerSelectionTarget, patch: { attachedFilePath: filePath } })}
           onSubmit={async ({ text, filePath }) => {
+            cancelPendingDraftSave();
             if (filePath) {
               await openFileFromTree({ filePath });
             }
@@ -283,6 +381,10 @@ export function ChatInput(args: ChatInputProps = {}) {
                 : undefined,
             });
             clearPromptDraft({ taskId: providerSelectionTarget });
+            adoptPromptDraftText({
+              taskId: providerSelectionTarget,
+              text: "",
+            });
           }}
           onAbort={() => abortTaskTurn({ taskId: activeTaskId })}
         />

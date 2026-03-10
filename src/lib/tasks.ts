@@ -11,12 +11,26 @@ export function isTaskArchived(task: Pick<Task, "archivedAt">) {
 }
 
 export function getVisibleTasks(args: { tasks: Task[]; filter: TaskFilter }) {
-  if (args.filter === "all") {
-    return args.tasks;
-  }
-  return args.tasks.filter((task) =>
-    args.filter === "archived" ? isTaskArchived(task) : !isTaskArchived(task)
-  );
+  const filteredTasks = args.filter === "all"
+    ? args.tasks
+    : args.tasks.filter((task) =>
+      args.filter === "archived" ? isTaskArchived(task) : !isTaskArchived(task)
+    );
+
+  return [...filteredTasks].sort((left, right) => {
+    const leftTime = Date.parse(left.updatedAt);
+    const rightTime = Date.parse(right.updatedAt);
+
+    if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+      return left.updatedAt.localeCompare(right.updatedAt)
+        || left.title.localeCompare(right.title)
+        || left.id.localeCompare(right.id);
+    }
+
+    return leftTime - rightTime
+      || left.title.localeCompare(right.title)
+      || left.id.localeCompare(right.id);
+  });
 }
 
 export function getTaskCounts(args: { tasks: Array<Pick<Task, "archivedAt">> }) {

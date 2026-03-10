@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { createHighlighter } from "shiki";
 import type { BundledLanguage } from "shiki";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
@@ -187,14 +188,13 @@ export function CodeBlockCopyButton({
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard
-      .writeText(code)
+    void copyTextToClipboard(code)
       .then(() => {
         setCopied(true);
         onCopy?.();
         setTimeout(() => setCopied(false), timeout);
       })
-      .catch((err: Error) => onError?.(err));
+      .catch((error) => onError?.(error instanceof Error ? error : new Error("Clipboard write failed.")));
   };
 
   return (

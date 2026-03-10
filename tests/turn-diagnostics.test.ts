@@ -69,9 +69,41 @@ describe("turn diagnostics", () => {
     expect(summary.totalEvents).toBe(4);
   });
 
+  test("marks inactive incomplete turns as interrupted", () => {
+    const summary = summarizeTurnDiagnostics({
+      turn: {
+        id: "turn-2",
+        workspaceId: "ws-1",
+        taskId: "task-1",
+        providerId: "codex",
+        createdAt: "2026-03-09T00:00:00.000Z",
+        completedAt: null,
+        eventCount: 1,
+      },
+      replay: [
+        {
+          persisted: {
+            id: "event-1",
+            turnId: "turn-2",
+            sequence: 1,
+            eventType: "text",
+            payload: { type: "text", text: "partial" },
+            createdAt: "2026-03-09T00:00:01.000Z",
+          },
+          event: { type: "text", text: "partial" },
+        },
+      ],
+      isActiveTurn: false,
+    });
+
+    expect(summary.status).toBe("interrupted");
+    expect(summary.lastEventType).toBe("text");
+  });
+
   test("formats durations for running and completed turns", () => {
-    expect(formatTurnDuration(null)).toBe("Running");
-    expect(formatTurnDuration(850)).toBe("850ms");
-    expect(formatTurnDuration(4200)).toBe("4.2s");
+    expect(formatTurnDuration({ durationMs: null })).toBe("Running");
+    expect(formatTurnDuration({ durationMs: 850 })).toBe("850ms");
+    expect(formatTurnDuration({ durationMs: 4200 })).toBe("4.2s");
+    expect(formatTurnDuration({ durationMs: null, status: "interrupted" })).toBe("Interrupted");
   });
 });
