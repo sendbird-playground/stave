@@ -54,7 +54,7 @@ import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, CodeDiffPart, FileContextPart, MessagePart } from "@/types/chat";
-import { TurnDiagnosticsPanel } from "@/components/session/TurnDiagnosticsPanel";
+import { SessionReplayDrawer } from "@/components/session/SessionReplayDrawer";
 
 const ReactDiffViewer = lazy(() => import("react-diff-viewer-continued"));
 
@@ -689,11 +689,11 @@ function ChatPanelHeader() {
   const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
   const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
   const turnDiagnosticsVisible = useAppStore((state) => state.settings.turnDiagnosticsVisible);
-  const updateSettings = useAppStore((state) => state.updateSettings);
+  const [sessionReplayOpen, setSessionReplayOpen] = useState(false);
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
   const activeTaskTitle = activeTask?.title ?? "Untitled Task";
   const activeTaskUpdatedAt = activeTask?.updatedAt;
-  const canToggleTurnDiagnostics = Boolean(activeWorkspaceId && activeTaskId);
+  const canOpenSessionReplay = Boolean(activeWorkspaceId && activeTaskId);
 
   useEffect(() => {
     const handle = window.setInterval(() => {
@@ -703,68 +703,47 @@ function ChatPanelHeader() {
   }, []);
 
   return (
-    <header className="flex h-10 items-center justify-between border-b border-border/80 px-3 text-sm">
-      <div className="flex min-w-0 items-center gap-2">
-        <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="truncate font-medium text-foreground">{activeTaskTitle}</span>
-        {activeTaskUpdatedAt ? (
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {formatTaskUpdatedAt({ value: activeTaskUpdatedAt, now: timeAnchor })}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Toggle
-                size="sm"
-                variant="outline"
-                pressed={turnDiagnosticsVisible}
-                disabled={!canToggleTurnDiagnostics}
-                aria-label={turnDiagnosticsVisible ? "Hide turn diagnostics" : "Show turn diagnostics"}
-                className={cn(
-                  "h-7 rounded-sm px-2 text-xs shadow-none",
-                  turnDiagnosticsVisible
-                    ? "border-border/80 bg-secondary/80 text-foreground hover:bg-secondary/80"
-                    : "border-transparent text-muted-foreground hover:border-border/80 hover:bg-muted hover:text-foreground"
-                )}
-                onPressedChange={(pressed) => updateSettings({ patch: { turnDiagnosticsVisible: pressed } })}
-              >
-                <Activity className="size-3.5 shrink-0" />
-                <span>Diagnostics</span>
-              </Toggle>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {turnDiagnosticsVisible ? "Hide turn diagnostics" : "Show turn diagnostics"}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-    </header>
-  );
-}
-
-function ChatPanelDiagnosticsSection() {
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const activeTurnId = useAppStore((state) => state.activeTurnIdsByTask[state.activeTaskId]);
-  const activeTaskProvider = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? "claude-code");
-  const providerConversations = useAppStore((state) => state.providerConversationByTask[state.activeTaskId]);
-  const turnDiagnosticsVisible = useAppStore((state) => state.settings.turnDiagnosticsVisible);
-
-  if (!turnDiagnosticsVisible || !activeWorkspaceId || !activeTaskId) {
-    return null;
-  }
-
-  return (
-    <TurnDiagnosticsPanel
-      workspaceId={activeWorkspaceId}
-      taskId={activeTaskId}
-      activeTurnId={activeTurnId}
-      taskProvider={activeTaskProvider}
-      providerConversations={providerConversations}
-    />
+    <>
+      <header className="flex h-10 items-center justify-between border-b border-border/80 px-3 text-sm">
+        <div className="flex min-w-0 items-center gap-2">
+          <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate font-medium text-foreground">{activeTaskTitle}</span>
+          {activeTaskUpdatedAt ? (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {formatTaskUpdatedAt({ value: activeTaskUpdatedAt, now: timeAnchor })}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {turnDiagnosticsVisible ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!canOpenSessionReplay}
+                    className={cn(
+                      "h-7 rounded-sm px-2 text-xs shadow-none",
+                      sessionReplayOpen
+                        ? "border-border/80 bg-secondary/80 text-foreground hover:bg-secondary/80"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    onClick={() => setSessionReplayOpen(true)}
+                  >
+                    <Activity className="size-3.5 shrink-0" />
+                    <span>Replay</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Open session replay</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
+        </div>
+      </header>
+      <SessionReplayDrawer open={sessionReplayOpen} onOpenChange={setSessionReplayOpen} />
+    </>
   );
 }
 
@@ -875,7 +854,6 @@ export function ChatPanel() {
     <Conversation>
       <div className="flex h-full w-full flex-col">
         <ChatPanelHeader />
-        <ChatPanelDiagnosticsSection />
         <ChatPanelMessageList />
       </div>
       <ChatPanelDownloadButton />

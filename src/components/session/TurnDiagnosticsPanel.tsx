@@ -23,6 +23,8 @@ interface TurnDiagnosticsPanelProps {
   activeTurnId?: string;
   taskProvider: ProviderId;
   providerConversations?: TaskProviderConversationState;
+  surface?: "inline" | "drawer";
+  defaultOpen?: boolean;
 }
 
 interface TurnDiagnosticsState {
@@ -61,7 +63,15 @@ function getStatusLabel(status: "running" | "completed" | "error" | "truncated" 
 }
 
 export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
-  const { taskId, workspaceId, activeTurnId, taskProvider, providerConversations } = args;
+  const {
+    taskId,
+    workspaceId,
+    activeTurnId,
+    taskProvider,
+    providerConversations,
+    surface = "inline",
+    defaultOpen = false,
+  } = args;
   const [state, setState] = useState<TurnDiagnosticsState>({
     loading: true,
     error: null,
@@ -69,7 +79,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
     replay: [],
     requestSnapshot: null,
   });
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
 
   useEffect(() => {
@@ -182,8 +192,8 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
   }
 
   return (
-    <div className="border-b border-border/70 px-3 py-2">
-      <Card className="overflow-hidden border-border/80 bg-muted/25">
+    <div className={cn(surface === "drawer" ? "px-5 py-5 md:px-6" : "border-b border-border/70 px-3 py-2")}>
+      <Card className={cn("overflow-hidden border-border/80 bg-muted/25", surface === "drawer" && "bg-muted/15")}>
         <button
           type="button"
           className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-muted/30"
@@ -200,7 +210,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
               {summary ? <Badge variant="secondary">{summary.totalEvents} events</Badge> : null}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              {state.loading ? <span>Loading diagnostics...</span> : null}
+              {state.loading ? <span>Loading session replay...</span> : null}
               {state.error ? <span>{state.error}</span> : null}
               {state.latestTurn ? (
                 <span className="inline-flex items-center gap-1">

@@ -1233,8 +1233,8 @@ function DeveloperSection() {
         </SettingsCard>
 
         <SettingsCard
-          title="Turn Diagnostics UI"
-          description="Shows recent persisted provider-turn diagnostics above the active chat session."
+          title="Session Replay UI"
+          description="Shows the Session Replay entry point for the active chat session."
         >
           <ChoiceButtons
             value={turnDiagnosticsVisible ? "on" : "off"}
