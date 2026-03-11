@@ -1,4 +1,4 @@
-import { memo, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
 import { Activity, Check, ChevronDown, ChevronRight, Copy, MessageSquareIcon } from "lucide-react";
 import { Badge, Button, Card, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Toggle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
@@ -56,7 +56,7 @@ import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, CodeDiffPart, FileContextPart, MessagePart } from "@/types/chat";
-import { SessionReplayDrawer } from "@/components/session/SessionReplayDrawer";
+import { SessionReplayDrawer, type SessionReplayRequestContext } from "@/components/session/SessionReplayDrawer";
 
 const ReactDiffViewer = lazy(() => import("react-diff-viewer-continued"));
 
@@ -464,7 +464,7 @@ function toToolDisplayName(toolName: string) {
     || "Tool";
 }
 
-function BackgroundActionsSummary(args: { parts: MessagePart[] }) {
+function BackgroundActionsSummary(args: { parts: MessagePart[]; onOpenReplay?: () => void }) {
   const summary = useMemo(() => summarizeReplayOnlyToolParts(args.parts), [args.parts]);
 
   if (summary.totalActions === 0) {
@@ -488,9 +488,16 @@ function BackgroundActionsSummary(args: { parts: MessagePart[] }) {
             Generic tool activity was moved out of the chat stream. Open Session Replay for inputs, outputs, and the full event timeline.
           </p>
         </div>
-        <Badge variant={summary.activeActions > 0 ? "warning" : summary.failedActions > 0 ? "destructive" : "secondary"}>
-          {statusLabel}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={summary.activeActions > 0 ? "warning" : summary.failedActions > 0 ? "destructive" : "secondary"}>
+            {statusLabel}
+          </Badge>
+          {args.onOpenReplay ? (
+            <Button type="button" size="sm" variant="outline" onClick={args.onOpenReplay}>
+              Open Replay
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="flex flex-wrap gap-2">
         {summary.byTool.slice(0, 5).map((item) => (
@@ -546,8 +553,9 @@ function MessageBody(args: {
   taskId: string;
   messageId: string;
   streamingEnabled: boolean;
+  onOpenReplay?: () => void;
 }) {
-  const { message, taskId, messageId, streamingEnabled } = args;
+  const { message, taskId, messageId, streamingEnabled, onOpenReplay } = args;
   const isActivelyStreaming = Boolean(message.isStreaming);
   const isStreaming = streamingEnabled && isActivelyStreaming;
   const renderableParts = useMemo(() => getRenderableMessageParts({
@@ -599,7 +607,7 @@ function MessageBody(args: {
       {showChainOfThought ? <ChainOfThought isStreaming={isStreaming} steps={chainOfThoughtSteps} className={hasReasoning ? "mt-2" : undefined} /> : null}
       {replayOnlyToolParts.length > 0 ? (
         <div className={cn("mt-2", !hasReasoning && !showChainOfThought && "mt-0")}>
-          <BackgroundActionsSummary parts={replayOnlyToolParts} />
+          <BackgroundActionsSummary parts={replayOnlyToolParts} onOpenReplay={onOpenReplay} />
         </div>
       ) : null}
       {segments.map((segment) => {
@@ -665,6 +673,7 @@ interface MessageRowProps {
   chatStreamingEnabled: boolean;
   isFirst?: boolean;
   liveStreamingMessageId?: string;
+  onOpenReplay?: () => void;
   message: {
     id: string;
     role: "user" | "assistant";
@@ -682,7 +691,7 @@ interface TaskScrollAnchor {
 }
 
 const MessageRow = memo(function MessageRow(args: MessageRowProps) {
-  const { activeTaskId, activeTurnId, chatStreamingEnabled, isFirst, liveStreamingMessageId, message } = args;
+  const { activeTaskId, activeTurnId, chatStreamingEnabled, isFirst, liveStreamingMessageId, message, onOpenReplay } = args;
   const showRespondingWave =
     Boolean(activeTurnId)
     && message.id === liveStreamingMessageId
@@ -704,6 +713,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
               taskId={activeTaskId}
               messageId={message.id}
               streamingEnabled={chatStreamingEnabled}
+              onOpenReplay={onOpenReplay}
             />
           </MessageContent>
           <MessageActions
@@ -745,12 +755,14 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
   );
 });
 
-function ChatPanelHeader() {
+function ChatPanelHeader(args: {
+  sessionReplayOpen: boolean;
+  onOpenSessionReplay: (request?: Omit<SessionReplayRequestContext, "key">) => void;
+}) {
   const activeTaskId = useAppStore((state) => state.activeTaskId);
   const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
   const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
   const turnDiagnosticsVisible = useAppStore((state) => state.settings.turnDiagnosticsVisible);
-  const [sessionReplayOpen, setSessionReplayOpen] = useState(false);
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
   const activeTaskTitle = activeTask?.title ?? "Untitled Task";
   const activeTaskUpdatedAt = activeTask?.updatedAt;
@@ -787,11 +799,14 @@ function ChatPanelHeader() {
                     disabled={!canOpenSessionReplay}
                     className={cn(
                       "h-7 rounded-sm px-2 text-xs shadow-none",
-                      sessionReplayOpen
+                      args.sessionReplayOpen
                         ? "border-border/80 bg-secondary/80 text-foreground hover:bg-secondary/80"
                         : "text-muted-foreground hover:text-foreground"
                     )}
-                    onClick={() => setSessionReplayOpen(true)}
+                    onClick={() => args.onOpenSessionReplay({
+                      view: "overview",
+                      replayFilter: "all",
+                    })}
                   >
                     <Activity className="size-3.5 shrink-0" />
                     <span>Replay</span>
@@ -803,12 +818,15 @@ function ChatPanelHeader() {
           ) : null}
         </div>
       </header>
-      <SessionReplayDrawer open={sessionReplayOpen} onOpenChange={setSessionReplayOpen} />
     </>
   );
 }
 
-function ChatPanelMessageList() {
+const MemoizedChatPanelHeader = memo(ChatPanelHeader);
+
+function ChatPanelMessageList(args: {
+  onOpenSessionReplay: (request?: Omit<SessionReplayRequestContext, "key">) => void;
+}) {
   const activeTaskId = useAppStore((state) => state.activeTaskId);
   const messages = useAppStore((state) => state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES);
   const activeTurnId = useAppStore((state) => state.activeTurnIdsByTask[state.activeTaskId]);
@@ -889,6 +907,10 @@ function ChatPanelMessageList() {
               chatStreamingEnabled={chatStreamingEnabled}
               isFirst={index === 0}
               liveStreamingMessageId={liveStreamingMessageId}
+              onOpenReplay={() => args.onOpenSessionReplay({
+                view: "replay",
+                replayFilter: "tools",
+              })}
               message={message}
             />
           )}
@@ -897,6 +919,8 @@ function ChatPanelMessageList() {
     </ConversationContent>
   );
 }
+
+const MemoizedChatPanelMessageList = memo(ChatPanelMessageList);
 
 function ChatPanelDownloadButton() {
   const messages = useAppStore((state) => state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES);
@@ -911,12 +935,26 @@ function ChatPanelDownloadButton() {
 }
 
 export function ChatPanel() {
+  const [sessionReplayOpen, setSessionReplayOpen] = useState(false);
+  const replayRequestKeyRef = useRef(0);
+  const [sessionReplayRequest, setSessionReplayRequest] = useState<SessionReplayRequestContext | null>(null);
+
+  const openSessionReplay = useCallback((request?: Omit<SessionReplayRequestContext, "key">) => {
+    replayRequestKeyRef.current += 1;
+    setSessionReplayRequest({ key: replayRequestKeyRef.current, ...request });
+    setSessionReplayOpen(true);
+  }, []);
+
   return (
     <Conversation>
       <div className="flex h-full w-full flex-col">
-        <ChatPanelHeader />
-        <ChatPanelMessageList />
+        <MemoizedChatPanelHeader
+          sessionReplayOpen={sessionReplayOpen}
+          onOpenSessionReplay={openSessionReplay}
+        />
+        <MemoizedChatPanelMessageList onOpenSessionReplay={openSessionReplay} />
       </div>
+      <SessionReplayDrawer open={sessionReplayOpen} onOpenChange={setSessionReplayOpen} request={sessionReplayRequest} />
       <ChatPanelDownloadButton />
       <ConversationScrollButton tooltip="Scroll to bottom" />
     </Conversation>

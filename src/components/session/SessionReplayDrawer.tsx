@@ -4,13 +4,21 @@ import { Badge, Button, Drawer, DrawerClose, DrawerContent, DrawerDescription, D
 import { getProviderLabel } from "@/lib/providers/model-catalog";
 import { useAppStore } from "@/store/app.store";
 import { TurnDiagnosticsPanel } from "@/components/session/TurnDiagnosticsPanel";
+import type { ReplayEventFilter } from "@/components/session/turn-diagnostics-panel.utils";
 
 interface SessionReplayDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  request?: SessionReplayRequestContext | null;
 }
 
-export function SessionReplayDrawer({ open, onOpenChange }: SessionReplayDrawerProps) {
+export interface SessionReplayRequestContext {
+  key: number;
+  view?: "overview" | "replay";
+  replayFilter?: ReplayEventFilter;
+}
+
+export function SessionReplayDrawer({ open, onOpenChange, request }: SessionReplayDrawerProps) {
   const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
   const activeTaskId = useAppStore((state) => state.activeTaskId);
   const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
@@ -57,6 +65,9 @@ export function SessionReplayDrawer({ open, onOpenChange }: SessionReplayDrawerP
               providerConversations={providerConversations}
               surface="drawer"
               defaultOpen
+              requestKey={request?.key}
+              requestedView={request?.view}
+              requestedReplayFilter={request?.replayFilter}
             />
           ) : (
             <div className="px-5 py-6 text-sm text-muted-foreground md:px-6">

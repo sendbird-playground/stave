@@ -91,6 +91,92 @@ This phase is intentionally structural. It fixes the layout problem first withou
 - add event rail / scrubber style navigation
 - add selected-event detail and file/change summaries
 
+## Delivery Status
+
+### Done
+
+- Phase 1 is complete.
+- Phase 2 is complete.
+- Phase 3A is complete.
+- Phase 3B is complete.
+- Phase 3C is complete.
+- Phase 3D is complete.
+
+### In Progress
+
+- No active phase remains in this plan.
+
+## Phase 3 Breakdown
+
+### 3A: Multi-turn navigation
+
+Goal: move from "latest-turn inspector" to "session replay" by letting the user switch across recent turns without leaving the drawer.
+
+Tasks:
+
+- load a recent turn list for the active task
+- add a selected-turn control in the drawer
+- bind overview, request snapshot, timeline, and replay detail to the selected turn instead of the implicit latest turn
+- keep live polling only for the active selected turn
+
+TODO:
+
+- show recent-turn count and selected-turn metadata near the top of the drawer
+- preserve the selected turn when the list refreshes
+- fall back to the newest available turn if the selected turn disappears
+
+### 3B: Replay filtering and grouping
+
+Goal: make long event streams scannable instead of forcing the user to read a flat chronological wall.
+
+Tasks:
+
+- add filter chips or grouped sections for tools, edits, approvals, system notices, and errors
+- add compact counts for the currently selected turn
+- keep replay readable on small screens
+
+TODO:
+
+- decide whether filters should affect overview timeline, replay list, or both
+- decide whether grouped events should be collapsible by default
+
+### 3C: Session overview
+
+Goal: promote the drawer from turn diagnostics to session-level inspection.
+
+Tasks:
+
+- summarize recent turns for the active task
+- show conversation-level counts for tools, errors, approvals, and diffs
+- expose files touched and provider/model spread across recent turns
+
+TODO:
+
+- decide the recent-turn window size
+- decide whether session overview should include cost/token rollups or stay turn-scoped until later
+
+### 3D: Replay deep links
+
+Goal: connect the compact chat summary back to the replay surface so the user can jump directly into relevant activity.
+
+Tasks:
+
+- wire the chat background-actions summary to open session replay
+- optionally preselect the originating turn and replay view
+
+TODO:
+
+- decide whether deep links should focus a specific event cluster or only the turn
+- avoid coupling message-list rendering to replay drawer state
+
+## Immediate Next Slice
+
+The planned replay MVP phases are complete. Any follow-up work should be treated as polish or expansion, not a missing baseline phase.
+
+## Follow-up
+
+Next-version expansion work is tracked in `docs/session-replay-next-version-plan.md`.
+
 ## Technical Direction
 
 ### Reuse existing persisted turn data
