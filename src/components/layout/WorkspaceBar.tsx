@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { ChevronDown, FileCode2, Folder, FolderTree, GitBranch, GitPullRequest, TerminalSquare } from "lucide-react";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
 import { isBranchAttachedElsewhere } from "@/lib/source-control-worktrees";
@@ -42,29 +43,45 @@ export function WorkspaceBar() {
   const [currentBranch, setCurrentBranch] = useState("main");
   const [branchError, setBranchError] = useState("");
   const [isBusy, setIsBusy] = useState(false);
-  const layout = useAppStore((state) => state.layout);
-  const setLayout = useAppStore((state) => state.setLayout);
-  const workspaces = useAppStore((state) => state.workspaces);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const workspaceDefaultById = useAppStore((state) => state.workspaceDefaultById);
-  const workspaceBranchById = useAppStore((state) => state.workspaceBranchById);
-  const workspacePathById = useAppStore((state) => state.workspacePathById);
-  const projectPath = useAppStore((state) => state.projectPath);
-  const defaultBranch = useAppStore((state) => state.defaultBranch);
-  const setWorkspaceBranch = useAppStore((state) => state.setWorkspaceBranch);
+  const [
+    isEditorOpen,
+    sidebarOverlayVisible,
+    isTerminalOpen,
+    setLayout,
+    workspaces,
+    activeWorkspaceId,
+    workspaceDefaultById,
+    workspaceBranchById,
+    workspacePathById,
+    projectPath,
+    defaultBranch,
+    setWorkspaceBranch,
+  ] = useAppStore(useShallow((state) => [
+    state.layout.editorVisible,
+    state.layout.sidebarOverlayVisible,
+    state.layout.terminalDocked,
+    state.setLayout,
+    state.workspaces,
+    state.activeWorkspaceId,
+    state.workspaceDefaultById,
+    state.workspaceBranchById,
+    state.workspacePathById,
+    state.projectPath,
+    state.defaultBranch,
+    state.setWorkspaceBranch,
+  ] as const));
 
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
   const rawWorkspaceName = activeWorkspace?.name ?? "Default Workspace";
   const workspaceName = rawWorkspaceName.toLowerCase() === "default workspace" ? "Default" : rawWorkspaceName;
   const isDefaultWorkspace = Boolean(workspaceDefaultById[activeWorkspaceId]);
+  const activeWorkspaceBranch = workspaceBranchById[activeWorkspaceId];
 
   const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
   const workspacePathLabel = formatWorkspacePathLabel({
     workspacePath: workspacePathById[activeWorkspaceId],
     projectPath,
   });
-  const isTerminalOpen = layout.terminalDocked;
-  const isEditorOpen = layout.editorVisible;
 
   async function loadBranches() {
     const listBranches = window.api?.sourceControl?.listBranches;
@@ -95,11 +112,11 @@ export function WorkspaceBar() {
   }, [branchOpen, isDefaultWorkspace, activeWorkspaceId]);
 
   useEffect(() => {
-    const next = workspaceBranchById[activeWorkspaceId];
+    const next = activeWorkspaceBranch;
     if (next) {
       setCurrentBranch(next);
     }
-  }, [workspaceBranchById, activeWorkspaceId]);
+  }, [activeWorkspaceBranch]);
 
   useEffect(() => {
     if (isDefaultWorkspace) {
@@ -398,7 +415,7 @@ export function WorkspaceBar() {
                     : "hover:border-border/80 hover:bg-card/90"
                 )}
                 onClick={() => {
-                  setLayout({ patch: { editorVisible: !layout.editorVisible } });
+                  setLayout({ patch: { editorVisible: !isEditorOpen } });
                 }}
                 aria-label="Editor"
               >
@@ -411,15 +428,15 @@ export function WorkspaceBar() {
             <TooltipTrigger asChild>
               <Button
                 size="sm"
-                variant={layout.sidebarOverlayVisible ? "default" : "ghost"}
+                variant={sidebarOverlayVisible ? "default" : "ghost"}
                 className={cn(
                   "h-9 w-9 rounded-md border border-transparent p-0 transition-colors",
-                  layout.sidebarOverlayVisible
+                  sidebarOverlayVisible
                     ? "ring-1 ring-primary/40"
                     : "hover:border-border/80 hover:bg-card/90"
                 )}
                 onClick={() => {
-                  const nextVisible = !layout.sidebarOverlayVisible;
+                  const nextVisible = !sidebarOverlayVisible;
                   setLayout({ patch: { sidebarOverlayVisible: nextVisible } });
                   if (nextVisible) {
                     window.dispatchEvent(new CustomEvent("stave:right-panel-tab", { detail: "explorer" }));
@@ -443,7 +460,7 @@ export function WorkspaceBar() {
                     ? "ring-1 ring-primary/40"
                     : "hover:border-border/80 hover:bg-card/90"
                 )}
-                onClick={() => setLayout({ patch: { terminalDocked: !layout.terminalDocked } })}
+                onClick={() => setLayout({ patch: { terminalDocked: !isTerminalOpen } })}
                 aria-label="Terminal"
               >
                 <TerminalSquare className="size-4" />

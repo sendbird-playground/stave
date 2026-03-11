@@ -1196,13 +1196,19 @@ export const useAppStore = create<AppState>()(
         });
       },
       setDarkMode: ({ enabled }) => {
-        set((state) => ({
-          isDarkMode: enabled,
-          settings: {
-            ...state.settings,
-            themeMode: enabled ? "dark" : "light",
-          },
-        }));
+        const nextThemeMode: AppSettings["themeMode"] = enabled ? "dark" : "light";
+        set((state) => {
+          if (state.isDarkMode === enabled && state.settings.themeMode === nextThemeMode) {
+            return state;
+          }
+          return {
+            isDarkMode: enabled,
+            settings: {
+              ...state.settings,
+              themeMode: nextThemeMode,
+            },
+          };
+        });
         applyThemeClass({ enabled });
       },
       updateSettings: ({ patch }) => {
@@ -1213,15 +1219,35 @@ export const useAppStore = create<AppState>()(
               providerTimeoutMs: normalizeProviderTimeoutMs({ value: patch.providerTimeoutMs }),
             };
 
-        set((state) => ({ settings: { ...state.settings, ...normalizedPatch } }));
+        const nextThemeMode = normalizedPatch.themeMode;
+        const nextIsDark = nextThemeMode
+          ? resolveDarkModeForTheme({ themeMode: nextThemeMode })
+          : null;
+
+        set((state) => {
+          const nextSettings = { ...state.settings, ...normalizedPatch };
+          const settingsChanged = Object.keys(normalizedPatch).some((key) => (
+            nextSettings[key as keyof AppSettings] !== state.settings[key as keyof AppSettings]
+          ));
+          if (!settingsChanged && (nextIsDark === null || nextIsDark === state.isDarkMode)) {
+            return state;
+          }
+          const nextState: Partial<AppState> = {
+            settings: nextSettings,
+          };
+          if (nextIsDark !== null) {
+            nextState.isDarkMode = nextIsDark;
+          }
+          return {
+            ...nextState,
+          };
+        });
 
         if (normalizedPatch.themeOverrides) {
           applyThemeOverrides({ themeOverrides: normalizedPatch.themeOverrides });
         }
-        if (normalizedPatch.themeMode) {
-          const isDark = resolveDarkModeForTheme({ themeMode: normalizedPatch.themeMode });
-          set(() => ({ isDarkMode: isDark }));
-          applyThemeClass({ enabled: isDark });
+        if (nextIsDark !== null) {
+          applyThemeClass({ enabled: nextIsDark });
         }
       },
       selectTask: ({ taskId }) => set((state) => {

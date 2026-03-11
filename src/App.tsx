@@ -1,51 +1,61 @@
 import { useEffect } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAppStore } from "@/store/app.store";
 
 export default function App() {
-  const [
-    hasHydratedWorkspaces,
-    workspaceSnapshotVersion,
-    hydrateWorkspaces,
-    flushActiveWorkspaceSnapshot,
-    refreshProviderAvailability,
-    activeWorkspaceId,
-  ] = useAppStore(useShallow((state) => [
-    state.hasHydratedWorkspaces,
-    state.workspaceSnapshotVersion,
-    state.hydrateWorkspaces,
-    state.flushActiveWorkspaceSnapshot,
-    state.refreshProviderAvailability,
-    state.activeWorkspaceId,
-  ] as const));
-
   useEffect(() => {
-    void hydrateWorkspaces();
-    void refreshProviderAvailability();
+    void useAppStore.getState().hydrateWorkspaces();
+    void useAppStore.getState().refreshProviderAvailability();
     const timer = window.setInterval(() => {
-      void refreshProviderAvailability();
+      void useAppStore.getState().refreshProviderAvailability();
     }, 10000);
     return () => window.clearInterval(timer);
-  }, [hydrateWorkspaces, refreshProviderAvailability]);
+  }, []);
 
   useEffect(() => {
-    if (!hasHydratedWorkspaces || !activeWorkspaceId) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      void flushActiveWorkspaceSnapshot();
-    }, 1200);
-    return () => window.clearTimeout(timer);
-  }, [activeWorkspaceId, hasHydratedWorkspaces, workspaceSnapshotVersion, flushActiveWorkspaceSnapshot]);
+    let timer: number | null = null;
+
+    const scheduleSnapshotFlush = (state: ReturnType<typeof useAppStore.getState>) => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      if (!state.hasHydratedWorkspaces || !state.activeWorkspaceId) {
+        return;
+      }
+      timer = window.setTimeout(() => {
+        timer = null;
+        void useAppStore.getState().flushActiveWorkspaceSnapshot();
+      }, 1200);
+    };
+
+    scheduleSnapshotFlush(useAppStore.getState());
+    const unsubscribe = useAppStore.subscribe((state, prevState) => {
+      if (
+        state.hasHydratedWorkspaces === prevState.hasHydratedWorkspaces
+        && state.activeWorkspaceId === prevState.activeWorkspaceId
+        && state.workspaceSnapshotVersion === prevState.workspaceSnapshotVersion
+      ) {
+        return;
+      }
+      scheduleSnapshotFlush(state);
+    });
+
+    return () => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const onBeforeUnload = () => {
-      void flushActiveWorkspaceSnapshot({ sync: true });
+      void useAppStore.getState().flushActiveWorkspaceSnapshot({ sync: true });
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [flushActiveWorkspaceSnapshot]);
+  }, []);
 
   return (
     <>

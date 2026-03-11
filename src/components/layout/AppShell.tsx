@@ -26,7 +26,6 @@ type ResizableLayoutKey =
 export function AppShell() {
   const [
     projectPath,
-    activeTaskId,
     taskListCollapsed,
     taskListWidth,
     editorVisible,
@@ -35,16 +34,9 @@ export function AppShell() {
     explorerPanelWidth,
     terminalDocked,
     terminalDockHeight,
-    checkOpenTabConflicts,
     setLayout,
-    createTask,
-    setTaskProvider,
-    abortTaskTurn,
-    saveActiveEditorTab,
-    selectTask,
   ] = useAppStore(useShallow((state) => [
     state.projectPath,
-    state.activeTaskId,
     state.layout.taskListCollapsed,
     state.layout.taskListWidth,
     state.layout.editorVisible,
@@ -53,16 +45,8 @@ export function AppShell() {
     state.layout.explorerPanelWidth,
     state.layout.terminalDocked,
     state.layout.terminalDockHeight ?? 210,
-    state.checkOpenTabConflicts,
     state.setLayout,
-    state.createTask,
-    state.setTaskProvider,
-    state.abortTaskTurn,
-    state.saveActiveEditorTab,
-    state.selectTask,
   ] as const));
-  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
-  const tasks = useAppStore((state) => state.tasks);
   const hasProject = Boolean(projectPath);
   const panelRowRef = useRef<HTMLDivElement>(null);
   const pendingLayoutPatchRef = useRef<Partial<Record<ResizableLayoutKey, number>> | null>(null);
@@ -103,11 +87,11 @@ export function AppShell() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void checkOpenTabConflicts();
+      void useAppStore.getState().checkOpenTabConflicts();
     }, 5000);
 
     return () => window.clearInterval(timer);
-  }, [checkOpenTabConflicts]);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = window.api?.window?.subscribeZoomChanges?.(({ percent }) => {
@@ -130,24 +114,25 @@ export function AppShell() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const store = useAppStore.getState();
       const hasMod = event.ctrlKey || event.metaKey;
       if (!hasMod) {
         if (event.key === "Escape") {
-          abortTaskTurn({ taskId: activeTaskId });
+          store.abortTaskTurn({ taskId: store.activeTaskId });
         }
         return;
       }
 
       if (event.key.toLowerCase() === "n") {
         event.preventDefault();
-        createTask({ title: "" });
+        store.createTask({ title: "" });
         return;
       }
 
       if (event.key.toLowerCase() === "b") {
         event.preventDefault();
-        const nextVisible = !sidebarOverlayVisible;
-        setLayout({ patch: { sidebarOverlayVisible: nextVisible } });
+        const nextVisible = !store.layout.sidebarOverlayVisible;
+        store.setLayout({ patch: { sidebarOverlayVisible: nextVisible } });
         if (nextVisible) {
           window.dispatchEvent(new CustomEvent("stave:right-panel-tab", { detail: "changes" }));
         }
@@ -156,57 +141,58 @@ export function AppShell() {
 
       if (event.key.toLowerCase() === "e") {
         event.preventDefault();
-        setLayout({ patch: { editorVisible: !editorVisible } });
+        store.setLayout({ patch: { editorVisible: !store.layout.editorVisible } });
         return;
       }
 
       if (event.key === "`") {
         event.preventDefault();
-        setLayout({ patch: { terminalDocked: !terminalDocked } });
+        store.setLayout({ patch: { terminalDocked: !store.layout.terminalDocked } });
         return;
       }
 
       if (event.key.toLowerCase() === "s") {
         event.preventDefault();
-        void saveActiveEditorTab();
+        void store.saveActiveEditorTab();
         return;
       }
 
       if (event.shiftKey && event.key.toLowerCase() === "p") {
         event.preventDefault();
+        const activeTask = store.tasks.find((task) => task.id === store.activeTaskId);
         if (!activeTask) {
           return;
         }
         const nextProvider = getNextProviderId({ providerId: activeTask.provider });
-        setTaskProvider({ taskId: activeTaskId, provider: nextProvider });
+        store.setTaskProvider({ taskId: activeTask.id, provider: nextProvider });
         return;
       }
 
       if (event.shiftKey && (event.key.toLowerCase() === "j" || event.key === "ArrowDown")) {
         event.preventDefault();
-        const currentIndex = tasks.findIndex((task) => task.id === activeTaskId);
-        const nextIndex = currentIndex >= 0 ? Math.min(tasks.length - 1, currentIndex + 1) : 0;
-        const nextTaskId = tasks[nextIndex]?.id;
+        const currentIndex = store.tasks.findIndex((task) => task.id === store.activeTaskId);
+        const nextIndex = currentIndex >= 0 ? Math.min(store.tasks.length - 1, currentIndex + 1) : 0;
+        const nextTaskId = store.tasks[nextIndex]?.id;
         if (nextTaskId) {
-          selectTask({ taskId: nextTaskId });
+          store.selectTask({ taskId: nextTaskId });
         }
         return;
       }
 
       if (event.shiftKey && (event.key.toLowerCase() === "k" || event.key === "ArrowUp")) {
         event.preventDefault();
-        const currentIndex = tasks.findIndex((task) => task.id === activeTaskId);
+        const currentIndex = store.tasks.findIndex((task) => task.id === store.activeTaskId);
         const prevIndex = currentIndex >= 0 ? Math.max(0, currentIndex - 1) : 0;
-        const prevTaskId = tasks[prevIndex]?.id;
+        const prevTaskId = store.tasks[prevIndex]?.id;
         if (prevTaskId) {
-          selectTask({ taskId: prevTaskId });
+          store.selectTask({ taskId: prevTaskId });
         }
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [abortTaskTurn, activeTask, activeTaskId, createTask, editorVisible, saveActiveEditorTab, selectTask, setLayout, setTaskProvider, sidebarOverlayVisible, tasks, terminalDocked]);
+  }, []);
 
   useEffect(() => () => {
     if (resizeFrameRef.current !== null) {

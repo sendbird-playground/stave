@@ -57,6 +57,7 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, CodeDiffPart, FileContextPart, MessagePart } from "@/types/chat";
 import { SessionReplayDrawer, type SessionReplayRequestContext } from "@/components/session/SessionReplayDrawer";
+import { useShallow } from "zustand/react/shallow";
 
 const ReactDiffViewer = lazy(() => import("react-diff-viewer-continued"));
 
@@ -759,13 +760,23 @@ function ChatPanelHeader(args: {
   sessionReplayOpen: boolean;
   onOpenSessionReplay: (request?: Omit<SessionReplayRequestContext, "key">) => void;
 }) {
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
-  const turnDiagnosticsVisible = useAppStore((state) => state.settings.turnDiagnosticsVisible);
+  const [
+    activeTaskId,
+    activeWorkspaceId,
+    activeTaskTitle,
+    activeTaskUpdatedAt,
+    turnDiagnosticsVisible,
+  ] = useAppStore(useShallow((state) => {
+    const activeTask = state.tasks.find((task) => task.id === state.activeTaskId);
+    return [
+      state.activeTaskId,
+      state.activeWorkspaceId,
+      activeTask?.title ?? "Untitled Task",
+      activeTask?.updatedAt,
+      state.settings.turnDiagnosticsVisible,
+    ] as const;
+  }));
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
-  const activeTaskTitle = activeTask?.title ?? "Untitled Task";
-  const activeTaskUpdatedAt = activeTask?.updatedAt;
   const canOpenSessionReplay = Boolean(activeWorkspaceId && activeTaskId);
 
   useEffect(() => {

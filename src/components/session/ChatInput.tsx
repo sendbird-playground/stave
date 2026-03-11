@@ -74,7 +74,6 @@ export function ChatInput(args: ChatInputProps = {}) {
   }));
   const [
     activeTaskId,
-    draftProvider,
     projectFiles,
     providerAvailability,
     setTaskProvider,
@@ -86,7 +85,6 @@ export function ChatInput(args: ChatInputProps = {}) {
     abortTaskTurn,
   ] = useAppStore(useShallow((state) => [
     state.activeTaskId,
-    state.draftProvider,
     state.projectFiles,
     state.providerAvailability,
     state.setTaskProvider,
@@ -97,7 +95,9 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.openFileFromTree,
     state.abortTaskTurn,
   ] as const));
-  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
+  const activeProvider = useAppStore((state) => (
+    state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? state.draftProvider
+  ));
   const promptDraft = useAppStore((state) => state.promptDraftByTask[activeTaskId || "draft:session"] ?? EMPTY_PROMPT_DRAFT);
   const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
   const activeMessageCount = useAppStore((state) => (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length);
@@ -126,7 +126,6 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.settings.codexApprovalPolicy,
   ] as const));
   const providerSelectionTarget = activeTaskId || "draft:session";
-  const activeProvider = activeTask?.provider ?? draftProvider;
   const [draftText, setDraftText] = useState(promptDraft.text);
   const draftTextRef = useRef(promptDraft.text);
   const syncedDraftRef = useRef({

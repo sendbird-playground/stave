@@ -13,21 +13,19 @@ export function PlanViewer() {
   const [revisionText, setRevisionText] = useState("");
   const [viewState, setViewState] = useState<ViewState>("normal");
 
-  const [activeTaskId, draftProvider, claudePermissionMode, sendUserMessage] = useAppStore(
+  const [activeTaskId, activeProvider, claudePermissionMode, sendUserMessage] = useAppStore(
     useShallow((state) => [
       state.activeTaskId,
-      state.draftProvider,
+      state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? state.draftProvider,
       state.settings.claudePermissionMode,
       state.sendUserMessage,
     ] as const),
   );
-  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId));
   const lastMessage = useAppStore((state) => {
     const messages = state.messagesByTask[state.activeTaskId];
     return messages?.at(-1);
   });
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
-  const activeProvider = activeTask?.provider ?? draftProvider;
   const planText = lastMessage?.planText?.trim() ?? "";
 
   const isClaudePlanMode = activeProvider === "claude-code" && claudePermissionMode === "plan";
