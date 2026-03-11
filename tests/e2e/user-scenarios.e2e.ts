@@ -540,7 +540,7 @@ test("terminal sessions create and poll output lifecycle", async ({ page }) => {
     .poll(() => page.evaluate(() => (window as unknown as { __terminalTest: { readCalls: number } }).__terminalTest.readCalls))
     .toBeGreaterThan(0);
 
-  await page.locator('[data-testid="terminal-dock"] aside .h-7 button').first().click();
+  await page.getByRole("button", { name: "new-terminal-session" }).click();
   await expect(page.getByText("Terminal 2")).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __terminalTest: { createCalls: number } }).__terminalTest.createCalls))

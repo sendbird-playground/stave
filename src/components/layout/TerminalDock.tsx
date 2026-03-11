@@ -1,15 +1,23 @@
 import "@xterm/xterm/css/xterm.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import { Plus, SquareTerminal, Trash2, X } from "lucide-react";
+import { Eraser, Plus, SquareTerminal, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui";
+import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
 
 interface TerminalTab {
   id: string;
   label: string;
 }
+
+const TERMINAL_TRANSCRIPT_STORAGE_KEY = "stave:terminal-task-transcript:v1";
+const TERMINAL_POLL_INTERVAL_MS = 120;
+const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
+const DEFAULT_TERMINAL_FONT_FAMILY = '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace';
+const DEFAULT_TERMINAL_FONT_SIZE = 13;
+const DEFAULT_TERMINAL_LINE_HEIGHT = 1.2;
 
 function waitForAnimationFrames(count: number) {
   return new Promise<void>((resolve) => {
@@ -54,36 +62,83 @@ function resolveTerminalTheme() {
 }
 
 export function TerminalDock() {
-  const layout = useAppStore((state) => state.layout);
-  const settings = useAppStore((state) => state.settings);
-  const isDarkMode = useAppStore((state) => state.isDarkMode);
-  const setLayout = useAppStore((state) => state.setLayout);
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const workspacePathById = useAppStore((state) => state.workspacePathById);
-  const workspaceCwd = workspacePathById[activeWorkspaceId];
-  const terminalDockHeight = layout.terminalDockHeight ?? 210;
+  const [
+    terminalDockHeight,
+    terminalFontFamily,
+    terminalFontSize,
+    terminalLineHeight,
+    isDarkMode,
+    setLayout,
+    activeTaskId,
+    activeWorkspaceId,
+    workspaceCwd,
+  ] = useAppStore(useShallow((state) => [
+    state.layout.terminalDockHeight ?? 210,
+    state.settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
+    state.settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE,
+    state.settings.terminalLineHeight || DEFAULT_TERMINAL_LINE_HEIGHT,
+    state.isDarkMode,
+    state.setLayout,
+    state.activeTaskId,
+    state.activeWorkspaceId,
+    state.workspacePathById[state.activeWorkspaceId],
+  ] as const));
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const sessionBufferRef = useRef<Record<string, string>>({});
   const writeLockRef = useRef(false);
   const transcriptRef = useRef<Record<string, string>>({});
   const creatingSessionRef = useRef(false);
+  const transcriptFlushTimerRef = useRef<number | null>(null);
+  const resizeFrameRef = useRef<number | null>(null);
+  const lastResizeRef = useRef<{ cols: number; rows: number }>({ cols: 0, rows: 0 });
+  const transcriptLoadedRef = useRef(false);
 
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [bridgeError, setBridgeError] = useState("");
   const [terminalReady, setTerminalReady] = useState(false);
 
-  const activeSessionId = useMemo(() => activeTabId, [activeTabId]);
-  const taskKey = useMemo(() => `${activeWorkspaceId}:${activeTaskId || "no-task"}`, [activeTaskId, activeWorkspaceId]);
+  const activeSessionId = activeTabId;
+  const taskKey = `${activeWorkspaceId}:${activeTaskId || "no-task"}`;
+
+  function scheduleTranscriptFlush() {
+    if (transcriptFlushTimerRef.current !== null) {
+      return;
+    }
+
+    transcriptFlushTimerRef.current = window.setTimeout(() => {
+      transcriptFlushTimerRef.current = null;
+      window.localStorage.setItem(TERMINAL_TRANSCRIPT_STORAGE_KEY, JSON.stringify(transcriptRef.current));
+    }, TERMINAL_TRANSCRIPT_FLUSH_MS);
+  }
 
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
+
+  useEffect(() => {
+    if (transcriptLoadedRef.current) {
+      return;
+    }
+    transcriptLoadedRef.current = true;
+    const raw = window.localStorage.getItem(TERMINAL_TRANSCRIPT_STORAGE_KEY);
+    try {
+      transcriptRef.current = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    } catch {
+      transcriptRef.current = {};
+    }
+
+    return () => {
+      if (transcriptFlushTimerRef.current !== null) {
+        window.clearTimeout(transcriptFlushTimerRef.current);
+        transcriptFlushTimerRef.current = null;
+      }
+      window.localStorage.setItem(TERMINAL_TRANSCRIPT_STORAGE_KEY, JSON.stringify(transcriptRef.current));
+    };
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current || xtermRef.current) {
@@ -93,9 +148,9 @@ export function TerminalDock() {
 
     const terminal = new Terminal({
       theme: resolveTerminalTheme(),
-      fontFamily: settings.terminalFontFamily || '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace',
-      fontSize: settings.terminalFontSize || 13,
-      lineHeight: settings.terminalLineHeight || 1.2,
+      fontFamily: terminalFontFamily,
+      fontSize: terminalFontSize,
+      lineHeight: terminalLineHeight,
       letterSpacing: 0,
       cursorBlink: true,
       convertEol: true,
@@ -106,22 +161,39 @@ export function TerminalDock() {
     terminal.open(containerRef.current);
 
     xtermRef.current = terminal;
-    fitAddonRef.current = fitAddon;
+    lastResizeRef.current = { cols: 0, rows: 0 };
 
     const sendResize = () => {
       fitAddon.fit();
-      const sessionId = activeSessionIdRef.current;
+      if (lastResizeRef.current.cols === terminal.cols && lastResizeRef.current.rows === terminal.rows) {
+        return;
+      }
+      lastResizeRef.current = {
+        cols: terminal.cols,
+        rows: terminal.rows,
+      };
       const resizeSession = window.api?.terminal?.resizeSession;
+      const sessionId = activeSessionIdRef.current;
       if (sessionId && resizeSession) {
         void resizeSession({ sessionId, cols: terminal.cols, rows: terminal.rows });
       }
     };
 
+    const scheduleResize = () => {
+      if (resizeFrameRef.current !== null) {
+        return;
+      }
+      resizeFrameRef.current = window.requestAnimationFrame(() => {
+        resizeFrameRef.current = null;
+        sendResize();
+      });
+    };
+
     const stabilizeTerminalMetrics = async () => {
       await waitForAnimationFrames(2);
       await waitForTerminalFont({
-        fontFamily: settings.terminalFontFamily || '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace',
-        fontSize: settings.terminalFontSize || 13,
+        fontFamily: terminalFontFamily,
+        fontSize: terminalFontSize,
       });
       await waitForAnimationFrames(1);
 
@@ -140,7 +212,7 @@ export function TerminalDock() {
 
     // ResizeObserver fires after layout is complete and fonts are applied,
     // so it handles both the initial fit and all subsequent size changes.
-    const ro = new ResizeObserver(() => sendResize());
+    const ro = new ResizeObserver(() => scheduleResize());
     ro.observe(containerRef.current);
 
     const disposable = terminal.onData((input) => {
@@ -167,11 +239,14 @@ export function TerminalDock() {
       setTerminalReady(false);
       disposable.dispose();
       ro.disconnect();
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current);
+        resizeFrameRef.current = null;
+      }
       terminal.dispose();
       xtermRef.current = null;
-      fitAddonRef.current = null;
     };
-  }, [settings.terminalFontFamily, settings.terminalFontSize, settings.terminalLineHeight]);
+  }, [terminalFontFamily, terminalFontSize, terminalLineHeight]);
 
   useEffect(() => {
     if (!xtermRef.current) {
@@ -221,29 +296,21 @@ export function TerminalDock() {
     delete sessionBufferRef.current[args.sessionId];
     setTabs((prev) => {
       const next = prev.filter((tab) => tab.id !== args.sessionId);
-      if (activeTabId === args.sessionId) {
-        setActiveTabId(next.at(-1)?.id ?? null);
-      }
+      setActiveTabId((current) => (current === args.sessionId ? next.at(-1)?.id ?? null : current));
       return next;
     });
   }
 
   useEffect(() => {
-    if (!activeTaskId) {
+    if (!xtermRef.current) {
       return;
     }
-    const raw = window.localStorage.getItem("stave:terminal-task-transcript:v1");
-    try {
-      transcriptRef.current = raw ? (JSON.parse(raw) as Record<string, string>) : {};
-    } catch {
-      transcriptRef.current = {};
-    }
+    xtermRef.current.clear();
     const transcript = transcriptRef.current[taskKey];
-    if (transcript && xtermRef.current) {
-      xtermRef.current.clear();
+    if (transcript) {
       xtermRef.current.write(transcript);
     }
-  }, [activeTaskId, taskKey]);
+  }, [taskKey]);
 
   // Reset sessions only when the workspace directory changes (not on every task switch).
   useEffect(() => {
@@ -277,33 +344,55 @@ export function TerminalDock() {
   }, [activeTaskId, tabs.length, terminalReady]);
 
   useEffect(() => {
-    const timer = window.setInterval(async () => {
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) {
+        return;
+      }
+
       const readSession = window.api?.terminal?.readSession;
-      if (!readSession) {
+      if (!readSession || tabs.length === 0) {
         return;
       }
 
       const ids = tabs.map((tab) => tab.id);
-      for (const sessionId of ids) {
-        const read = await readSession({ sessionId });
+      const reads = await Promise.all(ids.map(async (sessionId) => [sessionId, await readSession({ sessionId })] as const));
+      let activeOutput = "";
+      let transcriptChanged = false;
+
+      for (const [sessionId, read] of reads) {
         if (!read.ok || !read.output) {
           continue;
         }
 
-        const currentBuffer = sessionBufferRef.current[sessionId] ?? "";
-        const nextBuffer = `${currentBuffer}${read.output}`;
-        sessionBufferRef.current[sessionId] = nextBuffer;
-        const previousTranscript = transcriptRef.current[taskKey] ?? "";
-        transcriptRef.current[taskKey] = `${previousTranscript}${read.output}`;
-        window.localStorage.setItem("stave:terminal-task-transcript:v1", JSON.stringify(transcriptRef.current));
-
+        sessionBufferRef.current[sessionId] = `${sessionBufferRef.current[sessionId] ?? ""}${read.output}`;
+        transcriptRef.current[taskKey] = `${transcriptRef.current[taskKey] ?? ""}${read.output}`;
+        transcriptChanged = true;
         if (activeSessionIdRef.current === sessionId) {
-          xtermRef.current?.write(read.output);
+          activeOutput += read.output;
         }
       }
-    }, 120);
 
-    return () => window.clearInterval(timer);
+      if (activeOutput) {
+        xtermRef.current?.write(activeOutput);
+      }
+      if (transcriptChanged) {
+        scheduleTranscriptFlush();
+      }
+
+      if (!cancelled) {
+        window.setTimeout(() => {
+          void poll();
+        }, TERMINAL_POLL_INTERVAL_MS);
+      }
+    };
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+    };
   }, [tabs, taskKey]);
 
   useEffect(() => {
@@ -325,7 +414,7 @@ export function TerminalDock() {
     }
     sessionBufferRef.current[sessionId] = "";
     transcriptRef.current[taskKey] = "";
-    window.localStorage.setItem("stave:terminal-task-transcript:v1", JSON.stringify(transcriptRef.current));
+    scheduleTranscriptFlush();
     xtermRef.current?.clear();
   }
 
@@ -347,7 +436,7 @@ export function TerminalDock() {
                 title="Clear Terminal"
                 aria-label="clear-terminal"
               >
-                <Trash2 className="size-3.5" />
+                <Eraser className="size-3.5" />
               </Button>
               <Button
                 variant="ghost"
@@ -373,6 +462,8 @@ export function TerminalDock() {
               size="sm"
               className="h-8 rounded-md px-2"
               onClick={() => void createSessionTab()}
+              title="New Terminal Session"
+              aria-label="new-terminal-session"
             >
               <Plus className="size-3.5" />
             </Button>
