@@ -121,7 +121,7 @@ export function CodeBlockContent({ code, language }: CodeBlockContentProps) {
     return (
       <div
         className={cn(
-          "overflow-x-auto [&>pre]:m-0 [&>pre]:overflow-visible [&>pre]:px-4 [&>pre]:py-3",
+          "overflow-x-auto font-mono [&>pre]:m-0 [&>pre]:overflow-visible [&>pre]:px-4 [&>pre]:py-3",
           codeSizeClass,
         )}
         // Shiki output is sanitised — no user content reaches dangerouslySetInnerHTML
@@ -133,7 +133,7 @@ export function CodeBlockContent({ code, language }: CodeBlockContentProps) {
 
   // Fallback: plain text while highlighter loads
   return (
-    <pre className={cn("overflow-x-auto bg-editor px-4 py-3 text-editor-foreground", codeSizeClass)}>
+    <pre className={cn("overflow-x-auto bg-editor px-4 py-3 font-mono text-editor-foreground", codeSizeClass)}>
       <code>{code}</code>
     </pre>
   );

@@ -19,7 +19,7 @@ export interface WorkspaceSnapshot {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePath: string }>;
+  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[] }>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
 }
 

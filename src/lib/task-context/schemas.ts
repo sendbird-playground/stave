@@ -133,8 +133,14 @@ export const WorkspaceSnapshotSchema = z.object({
   messagesByTask: z.record(z.string(), z.array(ChatMessageSchema)),
   promptDraftByTask: z.record(z.string(), z.object({
     text: z.string(),
-    attachedFilePath: z.string().optional().default(""),
-  })).optional().default({}),
+    attachedFilePaths: z.array(z.string()).optional().default([]),
+    attachedFilePath: z.string().optional(),
+  }).transform((draft) => ({
+    text: draft.text,
+    attachedFilePaths: draft.attachedFilePaths.length > 0
+      ? draft.attachedFilePaths
+      : (draft.attachedFilePath ? [draft.attachedFilePath] : []),
+  }))).optional().default({}),
   providerConversationByTask: z.record(z.string(), TaskProviderConversationStateSchema).optional().default({}),
 });
 

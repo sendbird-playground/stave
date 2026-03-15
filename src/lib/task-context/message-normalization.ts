@@ -1,4 +1,8 @@
 import type { ChatMessage, MessagePart } from "@/types/chat";
+import {
+  sanitizeChatMessagePayload,
+  sanitizeMessagePartPayload,
+} from "@/lib/file-context-sanitization";
 
 function normalizeMessagePart(args: {
   part: MessagePart;
@@ -18,7 +22,7 @@ function normalizeMessagePart(args: {
     return { ...part, status: "accepted" };
   }
 
-  return part;
+  return sanitizeMessagePartPayload(part);
 }
 
 export function normalizeMessagesForSnapshot(args: {
@@ -27,7 +31,7 @@ export function normalizeMessagesForSnapshot(args: {
   const out: Record<string, ChatMessage[]> = {};
 
   for (const [taskId, messages] of Object.entries(args.messagesByTask)) {
-    out[taskId] = messages.map((message) => ({
+    out[taskId] = messages.map((message) => sanitizeChatMessagePayload({
       ...message,
       isStreaming: false,
       parts: message.parts.map((part) => normalizeMessagePart({ part, providerId: message.providerId })),

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { MAX_FILE_CONTEXT_CONTENT_CHARS } from "@/lib/file-context-sanitization";
 import {
   buildCanonicalConversationRequest,
   buildLegacyPromptFromCanonicalRequest,
@@ -37,12 +38,12 @@ describe("canonical request builder", () => {
       history,
       userInput: "Proceed with step 1.",
       mode: "chat",
-      fileContext: {
+      fileContexts: [{
         filePath: "src/store/app.store.ts",
         content: "const answer = 42;",
         language: "ts",
         instruction: "Focus on the provider request path.",
-      },
+      }],
       nativeConversationId: "thread_123",
     });
 
@@ -84,5 +85,86 @@ describe("canonical request builder", () => {
     expect(prompt).toContain("assistant: 1. Check git status");
     expect(prompt).toContain("[Current User Input]");
     expect(prompt).toContain("Add a migration plan.");
+  });
+
+  test("sanitizes oversized historical and current file context payloads", () => {
+    const oversizedImagePayload = `data:image/svg+xml;base64,${"a".repeat(MAX_FILE_CONTEXT_CONTENT_CHARS + 128)}`;
+    const oversizedTextPayload = "b".repeat(MAX_FILE_CONTEXT_CONTENT_CHARS + 256);
+    const request = buildCanonicalConversationRequest({
+      providerId: "codex",
+      model: "gpt-5.4",
+      history: [{
+        id: "user-oversized",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "",
+        parts: [{
+          type: "file_context",
+          filePath: "public/unnamed88.svg",
+          content: oversizedImagePayload,
+          language: "svg",
+        }],
+      }],
+      userInput: "Try again.",
+      mode: "chat",
+      fileContexts: [{
+        filePath: "notes/large.md",
+        content: oversizedTextPayload,
+        language: "md",
+      }],
+    });
+
+    const historyPart = request.history[0]?.parts[0];
+    expect(historyPart).toBeDefined();
+    expect(historyPart?.type).toBe("file_context");
+    if (historyPart?.type !== "file_context") {
+      throw new Error("expected file_context history part");
+    }
+    expect(historyPart.content).not.toContain("data:image/svg+xml;base64");
+    expect(historyPart.content).toContain("image payload omitted");
+    expect(historyPart.content.length).toBeLessThanOrEqual(MAX_FILE_CONTEXT_CONTENT_CHARS);
+
+    const contextPart = request.contextParts[0];
+    expect(contextPart).toBeDefined();
+    expect(contextPart?.type).toBe("file_context");
+    if (!contextPart || contextPart.type !== "file_context") {
+      throw new Error("expected file_context context part");
+    }
+    expect(contextPart.content).toContain("content truncated");
+    expect(contextPart.content.length).toBeLessThanOrEqual(MAX_FILE_CONTEXT_CONTENT_CHARS);
+  });
+
+  test("sanitizes oversized historical tool outputs before serializing history", () => {
+    const oversizedToolOutput = "o".repeat(MAX_FILE_CONTEXT_CONTENT_CHARS + 512);
+    const request = buildCanonicalConversationRequest({
+      providerId: "codex",
+      model: "gpt-5.4",
+      history: [{
+        id: "assistant-oversized-tool",
+        role: "assistant",
+        model: "gpt-5.4",
+        providerId: "codex",
+        content: "",
+        parts: [{
+          type: "tool_use",
+          toolUseId: "tool-1",
+          toolName: "bash",
+          input: "cat huge.log",
+          output: oversizedToolOutput,
+          state: "output-available",
+        }],
+      }],
+      userInput: "Summarize that result.",
+      mode: "chat",
+    });
+
+    const historyPart = request.history[0]?.parts[0];
+    expect(historyPart?.type).toBe("tool_use");
+    if (!historyPart || historyPart.type !== "tool_use") {
+      throw new Error("expected tool_use history part");
+    }
+    expect(historyPart.output).toContain("tool output truncated");
+    expect(historyPart.output?.length).toBeLessThanOrEqual(MAX_FILE_CONTEXT_CONTENT_CHARS);
   });
 });

@@ -177,4 +177,67 @@ describe("turn replay data access", () => {
       },
     });
   });
+
+  test("skips request snapshots during replay and maps legacy persisted events", async () => {
+    const originalConsoleError = console.error;
+    const consoleErrors: unknown[][] = [];
+    console.error = (...args) => {
+      consoleErrors.push(args);
+    };
+
+    try {
+      setWindowApi({
+        persistence: {
+          listTurnEvents: async () => ({
+            ok: true,
+            events: [
+              {
+                id: "event-0",
+                turnId: "turn-legacy-1",
+                sequence: 0,
+                eventType: "request_snapshot",
+                payload: {
+                  type: "request_snapshot",
+                  prompt: "legacy prompt",
+                },
+                createdAt: "2026-03-10T00:00:00.000Z",
+              },
+              {
+                id: "event-1",
+                turnId: "turn-legacy-1",
+                sequence: 1,
+                eventType: "AGENT_MESSAGE",
+                payload: {
+                  eventType: "AGENT_MESSAGE",
+                  text: "legacy hello",
+                },
+                createdAt: "2026-03-10T00:00:01.000Z",
+              },
+              {
+                id: "event-2",
+                turnId: "turn-legacy-1",
+                sequence: 2,
+                eventType: "TASK_COMPLETE",
+                payload: {
+                  eventType: "TASK_COMPLETE",
+                },
+                createdAt: "2026-03-10T00:00:02.000Z",
+              },
+            ],
+          }),
+        },
+      });
+
+      const replay = await loadTurnReplay({ turnId: "turn-legacy-1" });
+
+      expect(replay.map((item) => item.event.type)).toEqual(["text", "done"]);
+      expect(replay[0]?.event).toEqual({
+        type: "text",
+        text: "legacy hello",
+      });
+      expect(consoleErrors).toEqual([]);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
 });

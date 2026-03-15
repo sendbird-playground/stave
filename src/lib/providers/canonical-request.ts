@@ -1,4 +1,8 @@
 import type { ChatMessage, FileContextPart, MessagePart } from "@/types/chat";
+import {
+  sanitizeChatMessagePayload,
+  sanitizeFileContextPayload,
+} from "@/lib/file-context-sanitization";
 import type {
   CanonicalConversationMessage,
   CanonicalConversationRequest,
@@ -38,21 +42,22 @@ function cloneContextPart(part: FileContextPart | CanonicalRetrievedContextPart)
   if (part.type === "retrieved_context") {
     return { ...part };
   }
-  return { ...part };
+  return sanitizeFileContextPayload({ ...part });
 }
 
 export function toCanonicalConversationMessage(args: {
   message: ChatMessage;
 }): CanonicalConversationMessage {
+  const sanitizedMessage = sanitizeChatMessagePayload(args.message);
   return {
-    messageId: args.message.id,
-    role: args.message.role,
-    providerId: args.message.providerId,
-    model: args.message.model,
-    content: args.message.content,
-    parts: args.message.parts.map((part) => cloneMessagePart(part)),
-    isPlanResponse: args.message.isPlanResponse,
-    planText: args.message.planText,
+    messageId: sanitizedMessage.id,
+    role: sanitizedMessage.role,
+    providerId: sanitizedMessage.providerId,
+    model: sanitizedMessage.model,
+    content: sanitizedMessage.content,
+    parts: sanitizedMessage.parts.map((part) => cloneMessagePart(part)),
+    isPlanResponse: sanitizedMessage.isPlanResponse,
+    planText: sanitizedMessage.planText,
   };
 }
 
@@ -65,24 +70,26 @@ export function buildCanonicalConversationRequest(args: {
   history: ChatMessage[];
   userInput: string;
   mode?: CanonicalConversationRequest["mode"];
-  fileContext?: {
+  fileContexts?: Array<{
     filePath: string;
     content: string;
     language: string;
     instruction?: string;
-  };
+  }>;
   nativeConversationId?: string | null;
   retrievedContextParts?: CanonicalRetrievedContextPart[];
 }): CanonicalConversationRequest {
   const contextParts: CanonicalConversationRequest["contextParts"] = [];
-  if (args.fileContext) {
-    contextParts.push({
-      type: "file_context",
-      filePath: args.fileContext.filePath,
-      content: args.fileContext.content,
-      language: args.fileContext.language,
-      instruction: args.fileContext.instruction,
-    });
+  if (args.fileContexts) {
+    for (const fc of args.fileContexts) {
+      contextParts.push(sanitizeFileContextPayload({
+        type: "file_context",
+        filePath: fc.filePath,
+        content: fc.content,
+        language: fc.language,
+        instruction: fc.instruction,
+      }));
+    }
   }
   args.retrievedContextParts?.forEach((part) => {
     contextParts.push(cloneContextPart(part));

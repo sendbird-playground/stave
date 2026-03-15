@@ -1,4 +1,4 @@
-import { FilePlus2, LoaderCircle, OctagonX, Send } from "lucide-react";
+import { Check, FilePlus2, LoaderCircle, OctagonX, Send, X } from "lucide-react";
 import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Popover, PopoverAnchor, PopoverContent, Input, Textarea } from "@/components/ui";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
@@ -17,7 +17,7 @@ interface PromptInputProps {
   selectedModel: ModelSelectorOption;
   modelOptions: readonly ModelSelectorOption[];
   projectFiles: string[];
-  attachedFilePath?: string;
+  attachedFilePaths: string[];
   permissionMode?: PermissionModeValue;
   runtimeQuickControls?: readonly PromptInputRuntimeControl[];
   runtimeStatusItems?: readonly PromptInputRuntimeStatusItem[];
@@ -25,9 +25,9 @@ interface PromptInputProps {
   commandPaletteProviderNote?: CommandPaletteProviderNote;
   onValueChange: (value: string) => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
-  onAttachFileChange: (args: { filePath: string }) => void;
+  onAttachFilesChange: (args: { filePaths: string[] }) => void;
   onPermissionModeChange?: (value: PermissionModeValue) => void;
-  onSubmit: (args: { text: string; filePath?: string }) => void | Promise<void>;
+  onSubmit: (args: { text: string; filePaths: string[] }) => void | Promise<void>;
   onAbort?: () => void;
 }
 
@@ -40,7 +40,7 @@ export function PromptInput(args: PromptInputProps) {
     selectedModel,
     modelOptions,
     projectFiles,
-    attachedFilePath,
+    attachedFilePaths,
     permissionMode,
     runtimeQuickControls,
     runtimeStatusItems,
@@ -48,7 +48,7 @@ export function PromptInput(args: PromptInputProps) {
     commandPaletteProviderNote,
     onValueChange,
     onModelSelect,
-    onAttachFileChange,
+    onAttachFilesChange,
     onPermissionModeChange,
     onSubmit,
     onAbort,
@@ -148,10 +148,10 @@ export function PromptInput(args: PromptInputProps) {
 
   async function submitCurrentMessage() {
     const nextText = value.trim();
-    if (!nextText && !attachedFilePath) {
+    if (!nextText && attachedFilePaths.length === 0) {
       return;
     }
-    await onSubmit({ text: nextText, filePath: attachedFilePath });
+    await onSubmit({ text: nextText, filePaths: attachedFilePaths });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -350,9 +350,21 @@ export function PromptInput(args: PromptInputProps) {
           </Command>
         </PopoverContent>
       </Popover>
-      {attachedFilePath ? (
-        <div className="rounded-sm border border-border/80 bg-secondary/50 px-2 py-1.5 text-sm">
-          Attached file: <span className="font-medium">{attachedFilePath}</span>
+      {attachedFilePaths.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {attachedFilePaths.map((filePath) => (
+            <div key={filePath} className="flex items-center gap-1 rounded-sm border border-border/80 bg-secondary/50 px-2 py-1 text-sm">
+              <span className="font-medium">{filePath}</span>
+              <button
+                type="button"
+                disabled={interactionsDisabled}
+                onClick={() => onAttachFilesChange({ filePaths: attachedFilePaths.filter((p) => p !== filePath) })}
+                className="ml-0.5 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
         </div>
       ) : null}
       {attachOpen ? (
@@ -365,23 +377,30 @@ export function PromptInput(args: PromptInputProps) {
             className="h-9 rounded-md border-border/80 bg-background px-3 text-sm"
           />
           <div className="mt-2 max-h-40 space-y-1 overflow-auto">
-            {filteredFiles.map((filePath) => (
-              <button
-                type="button"
-                key={filePath}
-                disabled={interactionsDisabled}
-                onClick={() => {
-                  onAttachFileChange({ filePath });
-                  setAttachOpen(false);
-                }}
-                className={cn(
-                  "w-full rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/70",
-                  filePath === attachedFilePath && "bg-secondary/80",
-                )}
-              >
-                {filePath}
-              </button>
-            ))}
+            {filteredFiles.map((filePath) => {
+              const isSelected = attachedFilePaths.includes(filePath);
+              return (
+                <button
+                  type="button"
+                  key={filePath}
+                  disabled={interactionsDisabled}
+                  onClick={() => {
+                    onAttachFilesChange({
+                      filePaths: isSelected
+                        ? attachedFilePaths.filter((p) => p !== filePath)
+                        : [...attachedFilePaths, filePath],
+                    });
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/70",
+                    isSelected && "bg-secondary/80",
+                  )}
+                >
+                  {isSelected ? <Check className="size-3.5 shrink-0 text-foreground" /> : <span className="size-3.5 shrink-0" />}
+                  {filePath}
+                </button>
+              );
+            })}
             {filteredFiles.length === 0 ? <p className="px-2 py-1.5 text-sm text-muted-foreground">No matching files.</p> : null}
           </div>
         </div>

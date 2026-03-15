@@ -1,0 +1,17 @@
+<!-- Claude Code project instructions -->
+
+See [AGENTS.md](./AGENTS.md) for the authoritative project policy.
+
+## Claude-specific guidance
+
+- `app.store.ts` is ~2 100 lines. Read targeted sections with offset/limit instead of loading the whole file.
+- When modifying provider runtimes, always check **both** `claude-sdk-runtime.ts` and `codex-sdk-runtime.ts` for symmetry.
+- Run `bun test` after code changes to verify nothing is broken.
+- Prefer the `Agent` tool with `subagent_type: "Explore"` for open-ended codebase searches rather than manual glob/grep chains.
+
+## Release and Push Requests
+
+- Treat `$stave-patch-release` as the Stave release workflow trigger.
+- Use `$stave-patch-release` only when the user explicitly asks to release, ship, publish, version, tag, generate release notes, or repair an already-created release.
+- If the user only asks to commit, push, or commit and push current work, use a normal git commit/push flow instead.
+- For ordinary commit/push requests, do not bump `package.json`, do not touch `CHANGELOG.md`, and do not create or move semver release tags unless the user explicitly asks for release work.

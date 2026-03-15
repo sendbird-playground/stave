@@ -2,6 +2,78 @@ import { describe, expect, test } from "bun:test";
 import { parseNormalizedEvent } from "@/lib/providers/runtime";
 
 describe("parseNormalizedEvent", () => {
+  test("accepts legacy assistant text payloads", () => {
+    const parsed = parseNormalizedEvent({
+      payload: {
+        kind: "assistant_text",
+        text: "hello from legacy runtime",
+      },
+    });
+
+    expect(parsed).toEqual({
+      type: "text",
+      text: "hello from legacy runtime",
+    });
+  });
+
+  test("accepts legacy agent message payloads", () => {
+    const parsed = parseNormalizedEvent({
+      payload: {
+        eventType: "AGENT_MESSAGE",
+        text: "legacy agent message",
+      },
+    });
+
+    expect(parsed).toEqual({
+      type: "text",
+      text: "legacy agent message",
+    });
+  });
+
+  test("accepts legacy MCP tool lifecycle payloads", () => {
+    const started = parseNormalizedEvent({
+      payload: {
+        eventType: "MCP_TOOL_CALL_BEGIN",
+        requestId: "tool-123",
+        toolName: "web_search",
+        input: "latest docs",
+      },
+    });
+    const completed = parseNormalizedEvent({
+      payload: {
+        eventType: "MCP_TOOL_CALL_END",
+        requestId: "tool-123",
+        output: "done",
+        failed: false,
+      },
+    });
+
+    expect(started).toEqual({
+      type: "tool",
+      toolUseId: "tool-123",
+      toolName: "web_search",
+      input: "latest docs",
+      state: "input-available",
+    });
+    expect(completed).toEqual({
+      type: "tool_result",
+      tool_use_id: "tool-123",
+      output: "done",
+    });
+  });
+
+  test("accepts legacy task completion payloads", () => {
+    const parsed = parseNormalizedEvent({
+      payload: {
+        eventType: "TASK_COMPLETE",
+      },
+    });
+
+    expect(parsed).toEqual({
+      type: "done",
+    });
+  });
+
   test("accepts valid tool event", () => {
     const parsed = parseNormalizedEvent({
       payload: {

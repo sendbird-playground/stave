@@ -511,13 +511,17 @@ function RulesSection() {
 }
 
 function ChatSection() {
-  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize] = useAppStore(
+  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, reasoningDefaultExpanded] = useAppStore(
     useShallow((state) => [
       state.settings.smartSuggestions,
       state.settings.chatSendPreview,
       state.settings.chatStreamingEnabled,
       state.settings.messageFontSize,
       state.settings.messageCodeFontSize,
+      state.settings.messageFontFamily,
+      state.settings.messageMonoFontFamily,
+      state.settings.messageKoreanFontFamily,
+      state.settings.reasoningDefaultExpanded,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -557,6 +561,36 @@ function ChatSection() {
               ]}
             />
           </LabeledField>
+          <LabeledField
+            title="Message Font Family"
+            description="Base sans-serif font for chat messages. Falls back to the Korean font, then sans-serif."
+          >
+            <DraftInput
+              value={messageFontFamily}
+              className="h-9 font-mono text-sm"
+              onCommit={(nextValue) => updateSettings({ patch: { messageFontFamily: nextValue } })}
+            />
+          </LabeledField>
+          <LabeledField
+            title="Message Mono Font Family"
+            description="Monospace font for inline code and code blocks in messages."
+          >
+            <DraftInput
+              value={messageMonoFontFamily}
+              className="h-9 font-mono text-sm"
+              onCommit={(nextValue) => updateSettings({ patch: { messageMonoFontFamily: nextValue } })}
+            />
+          </LabeledField>
+          <LabeledField
+            title="Korean Font Family"
+            description="Fallback font for Korean (CJK) text in messages. Pretendard Variable is loaded by default."
+          >
+            <DraftInput
+              value={messageKoreanFontFamily}
+              className="h-9 font-mono text-sm"
+              onCommit={(nextValue) => updateSettings({ patch: { messageKoreanFontFamily: nextValue } })}
+            />
+          </LabeledField>
           <LabeledField title="Smart Suggestions">
             <ChoiceButtons
               value={smartSuggestions ? "on" : "off"}
@@ -584,6 +618,19 @@ function ChatSection() {
               options={[
                 { value: "on", label: "On" },
                 { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
+          <LabeledField
+            title="Reasoning Expanded by Default"
+            description="When enabled, thinking/reasoning blocks in messages are expanded by default. When disabled, they start collapsed."
+          >
+            <ChoiceButtons
+              value={reasoningDefaultExpanded ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { reasoningDefaultExpanded: value === "on" } })}
+              options={[
+                { value: "on", label: "Expanded" },
+                { value: "off", label: "Collapsed" },
               ]}
             />
           </LabeledField>

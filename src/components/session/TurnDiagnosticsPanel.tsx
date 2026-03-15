@@ -28,6 +28,22 @@ import {
   type SessionOverviewAggregate,
 } from "@/components/session/turn-diagnostics-panel.utils";
 
+export interface TurnReplayHeaderMeta {
+  loading: boolean;
+  detailLoading: boolean;
+  error: string | null;
+  statusLabel: string | null;
+  statusVariant: "destructive" | "warning" | "secondary" | null;
+  totalEvents: number | null;
+  previewEventCount: number | null;
+  isLatest: boolean;
+  isLive: boolean;
+  durationLabel: string | null;
+  timeAgo: string | null;
+  stopReason: string | null;
+  lastEventType: string | null;
+}
+
 interface TurnDiagnosticsPanelProps {
   taskId: string;
   workspaceId: string;
@@ -39,6 +55,7 @@ interface TurnDiagnosticsPanelProps {
   requestKey?: number;
   requestedView?: DrawerDiagnosticsView;
   requestedReplayFilter?: ReplayEventFilter;
+  onHeaderMetaChange?: (meta: TurnReplayHeaderMeta) => void;
 }
 
 interface TurnDiagnosticsState {
@@ -325,6 +342,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
     requestKey,
     requestedView,
     requestedReplayFilter,
+    onHeaderMetaChange,
   } = args;
   const [state, setState] = useState<TurnDiagnosticsState>({
     loading: true,
@@ -707,13 +725,410 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
     }
   }, [summary]);
 
+  useEffect(() => {
+    if (!onHeaderMetaChange) {
+      return;
+    }
+    const resolvedStatus = summary?.status ?? selectedTurnPreviewStatus ?? null;
+    onHeaderMetaChange({
+      loading: state.loading,
+      detailLoading: state.detailLoading,
+      error: state.error,
+      statusLabel: resolvedStatus ? getStatusLabel(resolvedStatus) : null,
+      statusVariant: resolvedStatus ? getStatusBadgeVariant(resolvedStatus) : null,
+      totalEvents: summary?.totalEvents ?? null,
+      previewEventCount: selectedTurn?.eventCount ?? null,
+      isLatest: selectedTurnIsLatest,
+      isLive: selectedTurnIsLive,
+      durationLabel: selectedTurn
+        ? formatTurnDuration({ durationMs: summary?.durationMs ?? null, status: summary?.status })
+        : null,
+      timeAgo: selectedTurn ? formatTaskUpdatedAt({ value: selectedTurn.createdAt, now: timeAnchor }) : null,
+      stopReason: summary?.stopReason ?? null,
+      lastEventType: summary?.lastEventType ?? null,
+    });
+  }, [onHeaderMetaChange, state.loading, state.detailLoading, state.error, summary, selectedTurn, selectedTurnIsLatest, selectedTurnIsLive, selectedTurnPreviewStatus, timeAnchor]);
+
   if (!state.loading && !state.error && !selectedTurn) {
     return null;
   }
 
+  const overviewContent = (
+    <>
+      <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Recent session</p>
+            {sessionOverview.aggregate ? <Badge variant="secondary">{sessionOverview.aggregate.totalTurns} turns</Badge> : null}
+            {sessionOverview.loading ? <Badge variant="outline">Refreshing</Badge> : null}
+          </div>
+          {sessionOverview.aggregate ? (
+            <p className="text-xs text-muted-foreground">
+              Window: latest {sessionOverview.aggregate.totalTurns} {sessionOverview.aggregate.totalTurns === 1 ? "turn" : "turns"}
+            </p>
+          ) : null}
+        </div>
+        {sessionOverview.error ? (
+          <p className="mt-2 text-sm text-destructive">{sessionOverview.error}</p>
+        ) : null}
+        {!sessionOverview.aggregate ? (
+          sessionOverview.loading ? (
+            <p className="mt-2 text-sm text-muted-foreground">Loading recent session overview...</p>
+          ) : null
+        ) : (
+          <>
+            <div className="mt-2 grid gap-2 sm:grid-cols-4">
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Window</p>
+                <p className="mt-1 text-sm text-foreground">
+                  running {sessionOverview.aggregate.runningTurns} · completed {sessionOverview.aggregate.completedTurns}
+                </p>
+              </div>
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Outcomes</p>
+                <p className="mt-1 text-sm text-foreground">
+                  errors {sessionOverview.aggregate.errorTurns} · truncated {sessionOverview.aggregate.truncatedTurns} · interrupted {sessionOverview.aggregate.interruptedTurns}
+                </p>
+              </div>
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Activity</p>
+                <p className="mt-1 text-sm text-foreground">
+                  events {sessionOverview.aggregate.totalEvents} · tools {sessionOverview.aggregate.toolEvents} · approvals {sessionOverview.aggregate.approvalEvents}
+                </p>
+              </div>
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Changes</p>
+                <p className="mt-1 text-sm text-foreground">
+                  diffs {sessionOverview.aggregate.diffEvents} · files {sessionOverview.aggregate.filesTouched.length} · input {sessionOverview.aggregate.inputEvents}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Providers</p>
+                {sessionOverview.aggregate.providers.length === 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">No providers recorded in this window.</p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {sessionOverview.aggregate.providers.map((providerId) => (
+                      <Badge key={providerId} variant="outline">{getProviderLabel({ providerId })}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Models</p>
+                {sessionOverview.aggregate.models.length === 0 ? (
+                  <p className="mt-1 text-sm text-muted-foreground">No request snapshots with model ids in this window.</p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {sessionOverview.aggregate.models.map((model) => (
+                      <Badge key={model} variant="secondary">{model}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 rounded-md border border-border/70 bg-card/50 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Recent files</p>
+              {sessionOverview.aggregate.filesTouched.length === 0 ? (
+                <p className="mt-1 text-sm text-muted-foreground">No diff events in this recent session window.</p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {sessionOverview.aggregate.filesTouched.slice(0, 8).map((item) => (
+                    <Badge key={item.filePath} variant="outline">
+                      {item.filePath} x{item.count}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+      {summary ? (
+        <div className="mt-3 flex items-center gap-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Selected turn</p>
+          {selectedTurn ? <Badge variant="outline">{selectedTurn.id}</Badge> : null}
+        </div>
+      ) : null}
+      {summary ? (
+        <div className="mt-2 grid gap-2 sm:grid-cols-4">
+          <div className="rounded-md border border-border/70 bg-background/50 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Content</p>
+            <p className="mt-1 text-sm text-foreground">
+              text {summary.textEvents} · reasoning {summary.thinkingEvents}
+            </p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-background/50 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Actions</p>
+            <p className="mt-1 text-sm text-foreground">
+              tools {summary.toolEvents} · approvals {summary.approvalEvents} · input {summary.inputEvents}
+            </p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-background/50 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Signals</p>
+            <p className="mt-1 text-sm text-foreground">
+              system {summary.systemEvents} · errors {summary.errorEvents}
+            </p>
+          </div>
+          <div className="rounded-md border border-border/70 bg-background/50 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Native conversation</p>
+            <p className="mt-1 truncate font-mono text-sm text-foreground">
+              {currentNativeConversationId ?? "Not started"}
+            </p>
+          </div>
+        </div>
+      ) : null}
+      {summary?.status === "interrupted" ? (
+        <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
+          This turn was interrupted because Stave was closed before the provider finished.
+        </div>
+      ) : null}
+      <div className="mt-3 rounded-md border border-border/70 bg-background/50 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Provider sessions</p>
+          <Badge variant="secondary">{`Current: ${getProviderLabel({ providerId: taskProvider })}`}</Badge>
+        </div>
+        {providerConversationRows.length === 0 ? (
+          <p className="mt-1 text-sm text-muted-foreground">No provider-native ids recorded for this task yet.</p>
+        ) : (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {providerConversationRows.map((row) => (
+              <div
+                key={row.providerId}
+                className={cn(
+                  "rounded-md border px-2.5 py-2",
+                  row.providerId === taskProvider
+                    ? "border-border bg-card"
+                    : "border-border/70 bg-muted/30"
+                )}
+              >
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  {getProviderConversationLabel({ providerId: row.providerId })}
+                </p>
+                <p className="mt-1 max-w-[24rem] truncate font-mono text-sm text-foreground">
+                  {row.nativeConversationId}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="mt-3 rounded-md border border-border/70 bg-background/50 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Request snapshot</p>
+          {snapshotTargetProviderLabel ? <Badge variant="outline">{snapshotTargetProviderLabel}</Badge> : null}
+          {snapshotConversation?.target.model ? <Badge variant="secondary">{snapshotConversation.target.model}</Badge> : null}
+        </div>
+        {state.detailLoading && !state.requestSnapshot ? (
+          <p className="mt-1 text-sm text-muted-foreground">Loading selected turn...</p>
+        ) : null}
+        {!state.requestSnapshot ? (
+          !state.detailLoading ? <p className="mt-1 text-sm text-muted-foreground">No persisted request snapshot for this turn.</p> : null
+        ) : (
+          <>
+            <div className="mt-2 grid gap-2 sm:grid-cols-4">
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Mode</p>
+                <p className="mt-1 text-sm text-foreground">{snapshotConversation?.mode ?? "unknown"}</p>
+              </div>
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">History</p>
+                <p className="mt-1 text-sm text-foreground">{snapshotConversation?.history.length ?? 0} messages</p>
+              </div>
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Context parts</p>
+                <p className="mt-1 text-sm text-foreground">{snapshotConversation?.contextParts.length ?? 0} parts</p>
+              </div>
+              <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Resume id</p>
+                <p className="mt-1 truncate font-mono text-sm text-foreground">
+                  {snapshotConversation?.resume?.nativeConversationId ?? "None"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-2 rounded-md border border-border/70 bg-card/50 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Fallback prompt</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{snapshotPromptPreview}</p>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="mt-3">
+        <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Timeline</p>
+        <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-border/70 bg-background/50 p-2">
+          {state.detailLoading && timeline.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Loading selected turn...</p>
+          ) : timeline.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No persisted events yet.</p>
+          ) : (
+            timeline.map((item) => (
+              <div
+                key={item.persisted.id}
+                className={cn(
+                  "flex items-start justify-between gap-3 rounded-sm px-2 py-1.5 text-sm",
+                  item.event.type === "error" && "bg-destructive/10 text-destructive"
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{formatTurnEventLabel({ event: item.event })}</p>
+                  <p className="text-xs text-muted-foreground">
+                    seq {item.persisted.sequence} · {formatTaskUpdatedAt({ value: item.persisted.createdAt, now: timeAnchor })}
+                  </p>
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  {item.event.type}
+                </Badge>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  const replayContent = (
+    <div className="space-y-2">
+      <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Replay filters</p>
+          <p className="text-xs text-muted-foreground">
+            Showing {filteredReplayEvents.length} of {replayEvents.length} events
+          </p>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {replayFilterSummary.map((item) => (
+            <Button
+              key={item.id}
+              type="button"
+              size="sm"
+              variant={replayFilter === item.id ? "secondary" : "outline"}
+              onClick={() => setReplayFilter(item.id)}
+            >
+              {REPLAY_FILTER_LABELS[item.id]}
+              <span className="text-xs tabular-nums text-muted-foreground">{item.count}</span>
+            </Button>
+          ))}
+        </div>
+      </div>
+      {state.detailLoading && replayEvents.length === 0 ? (
+        <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3 text-sm text-muted-foreground">
+          Loading selected turn...
+        </div>
+      ) : replayEvents.length === 0 ? (
+        <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3 text-sm text-muted-foreground">
+          No persisted replay events yet.
+        </div>
+      ) : filteredReplayEvents.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border/70 bg-background/50 px-3 py-3 text-sm text-muted-foreground">
+          No events matched the `{REPLAY_FILTER_LABELS[replayFilter]}` filter for this turn.
+        </div>
+      ) : replayFilter === "all" ? (
+        groupedReplayEvents.map((group) => {
+          const isCollapsed = collapsedReplayGroups.includes(group.id);
+          return (
+            <div key={group.id} className="rounded-md border border-border/70 bg-background/35">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/30"
+                onClick={() => {
+                  setCollapsedReplayGroups((current) => (
+                    current.includes(group.id)
+                      ? current.filter((value) => value !== group.id)
+                      : [...current, group.id]
+                  ));
+                }}
+              >
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">{REPLAY_FILTER_LABELS[group.id]}</span>
+                  <Badge variant="secondary">{group.events.length}</Badge>
+                </div>
+                {isCollapsed ? (
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                )}
+              </button>
+              {!isCollapsed ? (
+                <div className="space-y-2 border-t border-border/70 px-3 py-3">
+                  {group.events.map((item) => (
+                    <ReplayEventCard
+                      key={item.persisted.id}
+                      item={item}
+                      timeAnchor={timeAnchor}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })
+      ) : (
+        filteredReplayEvents.map((item) => (
+          <ReplayEventCard
+            key={item.persisted.id}
+            item={item}
+            timeAnchor={timeAnchor}
+          />
+        ))
+      )}
+    </div>
+  );
+
+  if (surface === "drawer") {
+    return (
+      <div className="px-5 py-5 md:px-6">
+        <div className="space-y-3">
+          <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Recent turns</p>
+              <Badge variant="secondary">{state.turns.length}</Badge>
+            </div>
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Select
+                value={state.selectedTurnId ?? undefined}
+                onValueChange={(value) => {
+                  setState((current) => (
+                    current.selectedTurnId === value
+                      ? current
+                      : {
+                          ...current,
+                          selectedTurnId: value,
+                          detailLoading: true,
+                          error: null,
+                          replay: [],
+                          requestSnapshot: null,
+                        }
+                  ));
+                }}
+              >
+                <SelectTrigger className="w-full sm:max-w-[28rem]">
+                  <SelectValue placeholder="Select a turn" />
+                </SelectTrigger>
+                <SelectContent>
+                  {recentTurnItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.previewLabel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Showing the most recent {state.turns.length} {state.turns.length === 1 ? "turn" : "turns"} for this task.
+              </p>
+            </div>
+          </div>
+          <DiagnosticsViewToggle value={drawerView} onChange={setDrawerView} />
+          {drawerView === "overview" ? overviewContent : replayContent}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn(surface === "drawer" ? "px-5 py-5 md:px-6" : "border-b border-border/70 px-3 py-2")}>
-      <Card className={cn("overflow-hidden border-border/80 bg-muted/25", surface === "drawer" && "bg-muted/15")}>
+    <div className="border-b border-border/70 px-3 py-2">
+      <Card className="overflow-hidden border-border/80 bg-muted/25">
         <button
           type="button"
           className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-muted/30"
@@ -754,370 +1169,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
         </button>
         {open ? (
           <div className="border-t border-border/70 bg-card/40 px-3 py-3">
-            {surface === "drawer" ? (
-              <div className="mb-3 space-y-3">
-                <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Recent turns</p>
-                    <Badge variant="secondary">{state.turns.length}</Badge>
-                  </div>
-                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Select
-                      value={state.selectedTurnId ?? undefined}
-                      onValueChange={(value) => {
-                        setState((current) => (
-                          current.selectedTurnId === value
-                            ? current
-                            : {
-                                ...current,
-                                selectedTurnId: value,
-                                detailLoading: true,
-                                error: null,
-                                replay: [],
-                                requestSnapshot: null,
-                              }
-                        ));
-                      }}
-                    >
-                      <SelectTrigger className="w-full sm:max-w-[28rem]">
-                        <SelectValue placeholder="Select a turn" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {recentTurnItems.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.previewLabel}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Showing the most recent {state.turns.length} {state.turns.length === 1 ? "turn" : "turns"} for this task.
-                    </p>
-                  </div>
-                </div>
-                <DiagnosticsViewToggle value={drawerView} onChange={setDrawerView} />
-              </div>
-            ) : null}
-            {surface !== "drawer" || drawerView === "overview" ? (
-              <>
-                <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Recent session</p>
-                      {sessionOverview.aggregate ? <Badge variant="secondary">{sessionOverview.aggregate.totalTurns} turns</Badge> : null}
-                      {sessionOverview.loading ? <Badge variant="outline">Refreshing</Badge> : null}
-                    </div>
-                    {sessionOverview.aggregate ? (
-                      <p className="text-xs text-muted-foreground">
-                        Window: latest {sessionOverview.aggregate.totalTurns} {sessionOverview.aggregate.totalTurns === 1 ? "turn" : "turns"}
-                      </p>
-                    ) : null}
-                  </div>
-                  {sessionOverview.error ? (
-                    <p className="mt-2 text-sm text-destructive">{sessionOverview.error}</p>
-                  ) : null}
-                  {!sessionOverview.aggregate ? (
-                    sessionOverview.loading ? (
-                      <p className="mt-2 text-sm text-muted-foreground">Loading recent session overview...</p>
-                    ) : null
-                  ) : (
-                    <>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Window</p>
-                          <p className="mt-1 text-sm text-foreground">
-                            running {sessionOverview.aggregate.runningTurns} · completed {sessionOverview.aggregate.completedTurns}
-                          </p>
-                        </div>
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Outcomes</p>
-                          <p className="mt-1 text-sm text-foreground">
-                            errors {sessionOverview.aggregate.errorTurns} · truncated {sessionOverview.aggregate.truncatedTurns} · interrupted {sessionOverview.aggregate.interruptedTurns}
-                          </p>
-                        </div>
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Activity</p>
-                          <p className="mt-1 text-sm text-foreground">
-                            events {sessionOverview.aggregate.totalEvents} · tools {sessionOverview.aggregate.toolEvents} · approvals {sessionOverview.aggregate.approvalEvents}
-                          </p>
-                        </div>
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Changes</p>
-                          <p className="mt-1 text-sm text-foreground">
-                            diffs {sessionOverview.aggregate.diffEvents} · files {sessionOverview.aggregate.filesTouched.length} · input {sessionOverview.aggregate.inputEvents}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Providers</p>
-                          {sessionOverview.aggregate.providers.length === 0 ? (
-                            <p className="mt-1 text-sm text-muted-foreground">No providers recorded in this window.</p>
-                          ) : (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {sessionOverview.aggregate.providers.map((providerId) => (
-                                <Badge key={providerId} variant="outline">{getProviderLabel({ providerId })}</Badge>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Models</p>
-                          {sessionOverview.aggregate.models.length === 0 ? (
-                            <p className="mt-1 text-sm text-muted-foreground">No request snapshots with model ids in this window.</p>
-                          ) : (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {sessionOverview.aggregate.models.map((model) => (
-                                <Badge key={model} variant="secondary">{model}</Badge>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-3 rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Recent files</p>
-                        {sessionOverview.aggregate.filesTouched.length === 0 ? (
-                          <p className="mt-1 text-sm text-muted-foreground">No diff events in this recent session window.</p>
-                        ) : (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {sessionOverview.aggregate.filesTouched.slice(0, 8).map((item) => (
-                              <Badge key={item.filePath} variant="outline">
-                                {item.filePath} x{item.count}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-                {summary ? (
-                  <div className="mt-3 flex items-center gap-2">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Selected turn</p>
-                    {selectedTurn ? <Badge variant="outline">{selectedTurn.id}</Badge> : null}
-                  </div>
-                ) : null}
-                {summary ? (
-                  <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                    <div className="rounded-md border border-border/70 bg-background/50 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Content</p>
-                      <p className="mt-1 text-sm text-foreground">
-                        text {summary.textEvents} · reasoning {summary.thinkingEvents}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border/70 bg-background/50 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Actions</p>
-                      <p className="mt-1 text-sm text-foreground">
-                        tools {summary.toolEvents} · approvals {summary.approvalEvents} · input {summary.inputEvents}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border/70 bg-background/50 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Signals</p>
-                      <p className="mt-1 text-sm text-foreground">
-                        system {summary.systemEvents} · errors {summary.errorEvents}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border/70 bg-background/50 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Native conversation</p>
-                      <p className="mt-1 truncate font-mono text-sm text-foreground">
-                        {currentNativeConversationId ?? "Not started"}
-                      </p>
-                    </div>
-                  </div>
-                ) : null}
-                {summary?.status === "interrupted" ? (
-                  <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
-                    This turn was interrupted because Stave was closed before the provider finished.
-                  </div>
-                ) : null}
-                <div className="mt-3 rounded-md border border-border/70 bg-background/50 px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Provider sessions</p>
-                    <Badge variant="secondary">{`Current: ${getProviderLabel({ providerId: taskProvider })}`}</Badge>
-                  </div>
-                  {providerConversationRows.length === 0 ? (
-                    <p className="mt-1 text-sm text-muted-foreground">No provider-native ids recorded for this task yet.</p>
-                  ) : (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {providerConversationRows.map((row) => (
-                        <div
-                          key={row.providerId}
-                          className={cn(
-                            "rounded-md border px-2.5 py-2",
-                            row.providerId === taskProvider
-                              ? "border-border bg-card"
-                              : "border-border/70 bg-muted/30"
-                          )}
-                        >
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            {getProviderConversationLabel({ providerId: row.providerId })}
-                          </p>
-                          <p className="mt-1 max-w-[24rem] truncate font-mono text-sm text-foreground">
-                            {row.nativeConversationId}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 rounded-md border border-border/70 bg-background/50 px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Request snapshot</p>
-                    {snapshotTargetProviderLabel ? <Badge variant="outline">{snapshotTargetProviderLabel}</Badge> : null}
-                    {snapshotConversation?.target.model ? <Badge variant="secondary">{snapshotConversation.target.model}</Badge> : null}
-                  </div>
-                  {state.detailLoading && !state.requestSnapshot ? (
-                    <p className="mt-1 text-sm text-muted-foreground">Loading selected turn...</p>
-                  ) : null}
-                  {!state.requestSnapshot ? (
-                    !state.detailLoading ? <p className="mt-1 text-sm text-muted-foreground">No persisted request snapshot for this turn.</p> : null
-                  ) : (
-                    <>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Mode</p>
-                          <p className="mt-1 text-sm text-foreground">{snapshotConversation?.mode ?? "unknown"}</p>
-                        </div>
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">History</p>
-                          <p className="mt-1 text-sm text-foreground">{snapshotConversation?.history.length ?? 0} messages</p>
-                        </div>
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Context parts</p>
-                          <p className="mt-1 text-sm text-foreground">{snapshotConversation?.contextParts.length ?? 0} parts</p>
-                        </div>
-                        <div className="rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Resume id</p>
-                          <p className="mt-1 truncate font-mono text-sm text-foreground">
-                            {snapshotConversation?.resume?.nativeConversationId ?? "None"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-2 rounded-md border border-border/70 bg-card/50 px-3 py-2">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Fallback prompt</p>
-                        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{snapshotPromptPreview}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Timeline</p>
-                  <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-border/70 bg-background/50 p-2">
-                    {state.detailLoading && timeline.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Loading selected turn...</p>
-                    ) : timeline.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No persisted events yet.</p>
-                    ) : (
-                      timeline.map((item) => (
-                        <div
-                          key={item.persisted.id}
-                          className={cn(
-                            "flex items-start justify-between gap-3 rounded-sm px-2 py-1.5 text-sm",
-                            item.event.type === "error" && "bg-destructive/10 text-destructive"
-                          )}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium">{formatTurnEventLabel({ event: item.event })}</p>
-                            <p className="text-xs text-muted-foreground">
-                              seq {item.persisted.sequence} · {formatTaskUpdatedAt({ value: item.persisted.createdAt, now: timeAnchor })}
-                            </p>
-                          </div>
-                          <Badge variant="outline" className="shrink-0">
-                            {item.event.type}
-                          </Badge>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-2">
-                <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Replay filters</p>
-                    <p className="text-xs text-muted-foreground">
-                      Showing {filteredReplayEvents.length} of {replayEvents.length} events
-                    </p>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {replayFilterSummary.map((item) => (
-                      <Button
-                        key={item.id}
-                        type="button"
-                        size="sm"
-                        variant={replayFilter === item.id ? "secondary" : "outline"}
-                        onClick={() => setReplayFilter(item.id)}
-                      >
-                        {REPLAY_FILTER_LABELS[item.id]}
-                        <span className="text-xs tabular-nums text-muted-foreground">{item.count}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-                {state.detailLoading && replayEvents.length === 0 ? (
-                  <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3 text-sm text-muted-foreground">
-                    Loading selected turn...
-                  </div>
-                ) : replayEvents.length === 0 ? (
-                  <div className="rounded-md border border-border/70 bg-background/50 px-3 py-3 text-sm text-muted-foreground">
-                    No persisted replay events yet.
-                  </div>
-                ) : filteredReplayEvents.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-border/70 bg-background/50 px-3 py-3 text-sm text-muted-foreground">
-                    No events matched the `{REPLAY_FILTER_LABELS[replayFilter]}` filter for this turn.
-                  </div>
-                ) : replayFilter === "all" ? (
-                  groupedReplayEvents.map((group) => {
-                    const isCollapsed = collapsedReplayGroups.includes(group.id);
-                    return (
-                      <div key={group.id} className="rounded-md border border-border/70 bg-background/35">
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/30"
-                          onClick={() => {
-                            setCollapsedReplayGroups((current) => (
-                              current.includes(group.id)
-                                ? current.filter((value) => value !== group.id)
-                                : [...current, group.id]
-                            ));
-                          }}
-                        >
-                          <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium text-foreground">{REPLAY_FILTER_LABELS[group.id]}</span>
-                            <Badge variant="secondary">{group.events.length}</Badge>
-                          </div>
-                          {isCollapsed ? (
-                            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-                          )}
-                        </button>
-                        {!isCollapsed ? (
-                          <div className="space-y-2 border-t border-border/70 px-3 py-3">
-                            {group.events.map((item) => (
-                              <ReplayEventCard
-                                key={item.persisted.id}
-                                item={item}
-                                timeAnchor={timeAnchor}
-                              />
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                ) : (
-                  filteredReplayEvents.map((item) => (
-                    <ReplayEventCard
-                      key={item.persisted.id}
-                      item={item}
-                      timeAnchor={timeAnchor}
-                    />
-                  ))
-                )}
-              </div>
-            )}
+            {overviewContent}
           </div>
         ) : null}
       </Card>

@@ -99,6 +99,7 @@ Stable project documentation now lives under `docs/`.
 - [Conversation flow](docs/architecture/conversation-flow.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
 - [Future SDK backlog](docs/future/claude-sdk-candidates.md)
+- [Shared skill management plan (2026-03-13)](docs/future/shared-skill-management-plan-2026-03-13.md)
 - [Session Replay](docs/features/session-replay.md)
 - [Language intelligence](docs/features/language-intelligence.md)
 - [Developer diagnostics](docs/developer/diagnostics.md)

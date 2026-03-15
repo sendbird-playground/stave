@@ -332,6 +332,7 @@ interface WindowPersistenceApi {
       }>>;
       promptDraftByTask?: Record<string, {
         text: string;
+        attachedFilePaths?: string[];
         attachedFilePath?: string;
       }>;
       providerConversationByTask?: Record<string, {
@@ -372,6 +373,7 @@ interface WindowPersistenceApi {
       }>>;
       promptDraftByTask?: Record<string, {
         text: string;
+        attachedFilePaths?: string[];
         attachedFilePath?: string;
       }>;
       providerConversationByTask?: Record<string, {
@@ -437,6 +439,7 @@ interface WindowPersistenceApi {
       }>>;
       promptDraftByTask?: Record<string, {
         text: string;
+        attachedFilePaths?: string[];
         attachedFilePath?: string;
       }>;
       providerConversationByTask?: Record<string, {

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
+import { sanitizeFileContextPayload } from "@/lib/file-context-sanitization";
 import { workspaceFsAdapter } from "@/lib/fs";
 import { getProviderAdapter } from "@/lib/providers";
 import {
@@ -167,6 +168,10 @@ export interface AppSettings {
   chatStreamingEnabled: boolean;
   messageFontSize: "base" | "lg" | "xl";
   messageCodeFontSize: "base" | "lg" | "xl";
+  messageFontFamily: string;
+  messageMonoFontFamily: string;
+  messageKoreanFontFamily: string;
+  reasoningDefaultExpanded: boolean;
   modelClaude: string;
   modelCodex: string;
   rulesPresetPrimary: string;
@@ -228,7 +233,7 @@ interface AppState {
   isDarkMode: boolean;
   activeTaskId: string;
   draftProvider: ProviderId;
-  promptDraftByTask: Record<string, { text: string; attachedFilePath: string }>;
+  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[] }>;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   layout: LayoutState;
@@ -252,7 +257,7 @@ interface AppState {
   updateSettings: (args: { patch: Partial<AppSettings> }) => void;
   selectTask: (args: { taskId: string }) => void;
   clearTaskSelection: () => void;
-  updatePromptDraft: (args: { taskId: string; patch: Partial<{ text: string; attachedFilePath: string }> }) => void;
+  updatePromptDraft: (args: { taskId: string; patch: Partial<{ text: string; attachedFilePaths: string[] }> }) => void;
   clearPromptDraft: (args: { taskId: string }) => void;
   createTask: (args: { title?: string }) => void;
   renameTask: (args: { taskId: string; title: string }) => void;
@@ -271,12 +276,12 @@ interface AppState {
   sendUserMessage: (args: {
     taskId: string;
     content: string;
-    fileContext?: {
+    fileContexts?: Array<{
       filePath: string;
       content: string;
       language: string;
       instruction?: string;
-    };
+    }>;
   }) => void;
   abortTaskTurn: (args: { taskId: string }) => void;
   resolveApproval: (args: { taskId: string; messageId: string; approved: boolean }) => void;
@@ -312,6 +317,10 @@ const defaultSettings: AppSettings = {
   chatStreamingEnabled: true,
   messageFontSize: "lg",
   messageCodeFontSize: "base",
+  messageFontFamily: "Geist Variable",
+  messageMonoFontFamily: "JetBrains Mono",
+  messageKoreanFontFamily: "Pretendard Variable",
+  reasoningDefaultExpanded: false,
   modelClaude: getDefaultModelForProvider({ providerId: "claude-code" }),
   modelCodex: getDefaultModelForProvider({ providerId: "codex" }),
   rulesPresetPrimary: "typescript-best-practices",
@@ -537,13 +546,13 @@ function createFileContextPart(args: {
   language: string;
   instruction?: string;
 }): FileContextPart {
-  return {
+  return sanitizeFileContextPayload({
     type: "file_context",
     filePath: args.filePath,
     content: args.content,
     language: args.language,
     instruction: args.instruction,
-  };
+  });
 }
 
 function updateMessageById(args: {
@@ -713,6 +722,25 @@ function applyThemeOverrides(args: { themeOverrides: AppSettings["themeOverrides
   }
 
   element.textContent = css;
+}
+
+function applyFontOverrides(args: {
+  messageFontFamily: string;
+  messageMonoFontFamily: string;
+  messageKoreanFontFamily: string;
+}) {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const root = document.documentElement;
+  const sans = [args.messageFontFamily, args.messageKoreanFontFamily, "sans-serif"]
+    .filter(Boolean)
+    .join(", ");
+  const mono = [args.messageMonoFontFamily, "monospace"]
+    .filter(Boolean)
+    .join(", ");
+  root.style.setProperty("--font-sans", sans);
+  root.style.setProperty("--font-mono", mono);
 }
 
 function resolveDarkModeForTheme(args: { themeMode: AppSettings["themeMode"]; fallback?: boolean }) {
@@ -1255,6 +1283,18 @@ export const useAppStore = create<AppState>()(
         if (nextIsDark !== null) {
           applyThemeClass({ enabled: nextIsDark });
         }
+        if (
+          normalizedPatch.messageFontFamily !== undefined
+          || normalizedPatch.messageMonoFontFamily !== undefined
+          || normalizedPatch.messageKoreanFontFamily !== undefined
+        ) {
+          const s = get().settings;
+          applyFontOverrides({
+            messageFontFamily: s.messageFontFamily,
+            messageMonoFontFamily: s.messageMonoFontFamily,
+            messageKoreanFontFamily: s.messageKoreanFontFamily,
+          });
+        }
       },
       selectTask: ({ taskId }) => set((state) => {
         if (state.activeTaskId === taskId) {
@@ -1276,15 +1316,16 @@ export const useAppStore = create<AppState>()(
       }),
       updatePromptDraft: ({ taskId, patch }) => {
         set((state) => {
-          const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePath: "" };
+          const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePaths: [] };
           const nextDraft = {
             text: currentDraft.text,
-            attachedFilePath: currentDraft.attachedFilePath,
+            attachedFilePaths: currentDraft.attachedFilePaths,
             ...patch,
           };
           if (
             nextDraft.text === currentDraft.text
-            && nextDraft.attachedFilePath === currentDraft.attachedFilePath
+            && nextDraft.attachedFilePaths.length === currentDraft.attachedFilePaths.length
+            && nextDraft.attachedFilePaths.every((p, i) => p === currentDraft.attachedFilePaths[i])
           ) {
             return state;
           }
@@ -1299,14 +1340,14 @@ export const useAppStore = create<AppState>()(
       },
       clearPromptDraft: ({ taskId }) => {
         set((state) => {
-          const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePath: "" };
-          if (!currentDraft.text && !currentDraft.attachedFilePath) {
+          const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePaths: [] };
+          if (!currentDraft.text && currentDraft.attachedFilePaths.length === 0) {
             return state;
           }
           return {
             promptDraftByTask: {
               ...state.promptDraftByTask,
-              [taskId]: { text: "", attachedFilePath: "" },
+              [taskId]: { text: "", attachedFilePaths: [] },
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
@@ -1623,7 +1664,7 @@ export const useAppStore = create<AppState>()(
           providerAvailability,
         }));
       },
-      sendUserMessage: ({ taskId, content, fileContext }) => {
+      sendUserMessage: ({ taskId, content, fileContexts }) => {
         const turnId = crypto.randomUUID();
         let state = get();
         let resolvedTaskId = taskId;
@@ -1778,7 +1819,7 @@ export const useAppStore = create<AppState>()(
           history: existingHistory,
           userInput: content,
           mode: "chat",
-          fileContext,
+          fileContexts,
           nativeConversationId: providerConversation?.[provider] ?? null,
         });
         const prompt = content;
@@ -1787,13 +1828,15 @@ export const useAppStore = create<AppState>()(
           const current = nextState.messagesByTask[resolvedTaskId] ?? [];
           const userMessageId = buildMessageId({ taskId: resolvedTaskId, count: current.length });
           const userParts: MessagePart[] = [];
-          if (fileContext) {
-            userParts.push(createFileContextPart({
-              filePath: fileContext.filePath,
-              content: fileContext.content,
-              language: fileContext.language,
-              instruction: fileContext.instruction,
-            }));
+          if (fileContexts) {
+            for (const fc of fileContexts) {
+              userParts.push(createFileContextPart({
+                filePath: fc.filePath,
+                content: fc.content,
+                language: fc.language,
+                instruction: fc.instruction,
+              }));
+            }
           }
           if (content.trim().length > 0) {
             userParts.push(createUserTextPart({ text: content }));
@@ -2627,12 +2670,12 @@ export const useAppStore = create<AppState>()(
         get().sendUserMessage({
           taskId,
           content: instruction ?? "",
-          fileContext: {
+          fileContexts: [{
             filePath: activeTab.filePath,
             content: activeTab.kind === "image" ? `[image file omitted] ${activeTab.filePath}` : activeTab.content,
             language: activeTab.kind === "image" ? "image" : activeTab.language || resolveLanguage({ filePath: activeTab.filePath }),
             instruction,
-          },
+          }],
         });
       },
     }),
@@ -2676,6 +2719,11 @@ export const useAppStore = create<AppState>()(
         state.isDarkMode = isDark;
         applyThemeClass({ enabled: isDark });
         applyThemeOverrides({ themeOverrides: state.settings.themeOverrides });
+        applyFontOverrides({
+          messageFontFamily: state.settings.messageFontFamily,
+          messageMonoFontFamily: state.settings.messageMonoFontFamily,
+          messageKoreanFontFamily: state.settings.messageKoreanFontFamily,
+        });
       },
     }
   )

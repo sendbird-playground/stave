@@ -229,7 +229,7 @@ export function ConversationContent(props: ConversationContentProps) {
       {...rest}
     >
       {withInnerLayout ? (
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-3 py-3 sm:px-5">{children}</div>
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-3 py-3 sm:px-5">{children}</div>
       ) : children}
     </div>
   );
@@ -243,7 +243,7 @@ const VirtualListContainer = forwardRef(function VirtualListContainer(
   return (
     <div
       ref={ref}
-      className={cn("mx-auto w-full max-w-4xl px-3 pt-4 sm:px-5 sm:pt-5", className)}
+      className={cn("mx-auto w-full max-w-5xl px-3 pt-4 sm:px-5 sm:pt-5", className)}
       style={withExtraPaddingBottom(style, VIRTUAL_LIST_BOTTOM_GAP)}
       {...rest}
     />

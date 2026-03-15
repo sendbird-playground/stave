@@ -50,6 +50,9 @@ function parseReplayEvents(args: { events: PersistedTurnEvent[] }) {
   const replay: ReplayedTurnEvent[] = [];
 
   for (const persisted of args.events) {
+    if (persisted.eventType === "request_snapshot") {
+      continue;
+    }
     const parsed = parseNormalizedEvent({ payload: persisted.payload });
     if (!parsed) {
       continue;

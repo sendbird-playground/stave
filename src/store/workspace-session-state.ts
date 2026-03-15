@@ -13,7 +13,7 @@ export interface WorkspaceSessionState {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePath: string }>;
+  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[] }>;
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
   nativeConversationReadyByTask: Record<string, boolean>;
@@ -24,7 +24,7 @@ export function createEmptyWorkspaceState() {
     activeTaskId: "",
     tasks: [] as Task[],
     messagesByTask: {} as Record<string, ChatMessage[]>,
-    promptDraftByTask: {} as Record<string, { text: string; attachedFilePath: string }>,
+    promptDraftByTask: {} as Record<string, { text: string; attachedFilePaths: string[] }>,
     providerConversationByTask: {} as Record<string, TaskProviderConversationState>,
   };
 }
@@ -205,7 +205,7 @@ export function createWorkspaceSnapshot(args: {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePath: string }>;
+  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[] }>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
 }) {
   return {
@@ -224,7 +224,7 @@ export async function persistWorkspaceSnapshot(args: {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePath: string }>;
+  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[] }>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
 }) {
   await upsertWorkspace({

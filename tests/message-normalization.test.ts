@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { MAX_FILE_CONTEXT_CONTENT_CHARS } from "@/lib/file-context-sanitization";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 
 describe("normalizeMessagesForSnapshot", () => {
@@ -60,5 +61,75 @@ describe("normalizeMessagesForSnapshot", () => {
       type: "code_diff",
       status: "pending",
     });
+  });
+
+  test("sanitizes oversized file context parts", () => {
+    const oversizedImagePayload = `data:image/png;base64,${"x".repeat(MAX_FILE_CONTEXT_CONTENT_CHARS + 32)}`;
+    const normalized = normalizeMessagesForSnapshot({
+      messagesByTask: {
+        "task-1": [
+          {
+            id: "m-1",
+            role: "user",
+            model: "user",
+            providerId: "user",
+            content: "",
+            parts: [
+              {
+                type: "file_context",
+                filePath: "public/diagram.png",
+                content: oversizedImagePayload,
+                language: "png",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const normalizedPart = normalized["task-1"]?.[0]?.parts[0];
+    expect(normalizedPart).toBeDefined();
+    expect(normalizedPart?.type).toBe("file_context");
+    if (normalizedPart?.type !== "file_context") {
+      throw new Error("expected file_context part");
+    }
+    expect(normalizedPart.content).toContain("image payload omitted");
+    expect(normalizedPart.content).not.toContain("data:image/png;base64");
+    expect(normalizedPart.content.length).toBeLessThanOrEqual(MAX_FILE_CONTEXT_CONTENT_CHARS);
+  });
+
+  test("sanitizes oversized tool outputs in persisted history", () => {
+    const oversizedToolOutput = "y".repeat(MAX_FILE_CONTEXT_CONTENT_CHARS + 256);
+    const normalized = normalizeMessagesForSnapshot({
+      messagesByTask: {
+        "task-1": [
+          {
+            id: "m-1",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "",
+            parts: [
+              {
+                type: "tool_use",
+                toolUseId: "tool-1",
+                toolName: "bash",
+                input: "cat huge.log",
+                output: oversizedToolOutput,
+                state: "output-available",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const normalizedPart = normalized["task-1"]?.[0]?.parts[0];
+    expect(normalizedPart?.type).toBe("tool_use");
+    if (normalizedPart?.type !== "tool_use") {
+      throw new Error("expected tool_use part");
+    }
+    expect(normalizedPart.output).toContain("tool output truncated");
+    expect(normalizedPart.output?.length).toBeLessThanOrEqual(MAX_FILE_CONTEXT_CONTENT_CHARS);
   });
 });

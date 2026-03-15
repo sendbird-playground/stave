@@ -32,7 +32,7 @@ interface ChatInputProps {
   compact?: boolean;
 }
 
-const EMPTY_PROMPT_DRAFT = { text: "", attachedFilePath: "" };
+const EMPTY_PROMPT_DRAFT = { text: "", attachedFilePaths: [] as string[] };
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const PROMPT_DRAFT_SAVE_DELAY_MS = 250;
 const CLAUDE_THINKING_OPTIONS = [
@@ -613,7 +613,7 @@ export function ChatInput(args: ChatInputProps = {}) {
         isEmpty && !args.compact && "pb-6",
       )}
     >
-      <div className={cn("mx-auto", args.compact || isEmpty ? "max-w-xl" : "max-w-4xl")}>
+      <div className={cn("mx-auto max-w-5xl")}>
         <ChatInputSuggestions
           activeTaskId={activeTaskId}
           isTurnActive={isTurnActive}
@@ -639,7 +639,7 @@ export function ChatInput(args: ChatInputProps = {}) {
           selectedModel={selectedModelOption}
           modelOptions={modelOptions}
           projectFiles={projectFiles}
-          attachedFilePath={promptDraft.attachedFilePath}
+          attachedFilePaths={promptDraft.attachedFilePaths}
           commandPaletteItems={commandPalette.items}
           commandPaletteProviderNote={commandPalette.providerNote}
           onValueChange={(value) => {
@@ -682,26 +682,27 @@ export function ChatInput(args: ChatInputProps = {}) {
               updateSettings({ patch: { codexApprovalPolicy: value as typeof codexApprovalPolicy } });
             }
           }}
-          onAttachFileChange={({ filePath }) =>
-            updatePromptDraft({ taskId: providerSelectionTarget, patch: { attachedFilePath: filePath } })}
-          onSubmit={async ({ text, filePath }) => {
+          onAttachFilesChange={({ filePaths }) =>
+            updatePromptDraft({ taskId: providerSelectionTarget, patch: { attachedFilePaths: filePaths } })}
+          onSubmit={async ({ text, filePaths }) => {
             cancelPendingDraftSave();
-            if (filePath) {
-              await openFileFromTree({ filePath });
+            for (const fp of filePaths) {
+              await openFileFromTree({ filePath: fp });
             }
 
             const latestTabs = useAppStore.getState().editorTabs;
-            const tab = filePath ? latestTabs.find((item) => item.filePath === filePath) : null;
+            const fileContexts = filePaths
+              .map((fp) => latestTabs.find((item) => item.filePath === fp))
+              .filter((tab): tab is NonNullable<typeof tab> => tab != null)
+              .map((tab) => ({
+                filePath: tab.filePath,
+                content: tab.content,
+                language: tab.language,
+              }));
             sendUserMessage({
               taskId: activeTaskId,
               content: text,
-              fileContext: tab
-                ? {
-                    filePath: tab.filePath,
-                    content: tab.content,
-                    language: tab.language,
-                  }
-                : undefined,
+              fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
             });
             clearPromptDraft({ taskId: providerSelectionTarget });
             adoptPromptDraftText({

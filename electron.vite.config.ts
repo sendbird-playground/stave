@@ -3,9 +3,16 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 
+const srcAlias = {
+  "@": path.resolve(__dirname, "./src"),
+};
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias: srcAlias,
+    },
     build: {
       rollupOptions: {
         external: ["@anthropic-ai/claude-agent-sdk", "@openai/codex-sdk"],
@@ -17,6 +24,9 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias: srcAlias,
+    },
     build: {
       rollupOptions: {
         input: {
@@ -41,9 +51,7 @@ export default defineConfig({
       },
     },
     resolve: {
-      alias: {
-        "@": path.resolve(__dirname, "./src"),
-      },
+      alias: srcAlias,
     },
     build: {
       rollupOptions: {

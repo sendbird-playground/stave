@@ -557,6 +557,7 @@ function MessageBody(args: {
   onOpenReplay?: () => void;
 }) {
   const { message, taskId, messageId, streamingEnabled, onOpenReplay } = args;
+  const reasoningDefaultExpanded = useAppStore((state) => state.settings.reasoningDefaultExpanded);
   const isActivelyStreaming = Boolean(message.isStreaming);
   const isStreaming = streamingEnabled && isActivelyStreaming;
   const renderableParts = useMemo(() => getRenderableMessageParts({
@@ -586,7 +587,7 @@ function MessageBody(args: {
 
   if (fallbackState === "streaming-placeholder") {
     return (
-      <Reasoning isStreaming>
+      <Reasoning isStreaming defaultOpen={reasoningDefaultExpanded}>
         <ReasoningTrigger />
         <ReasoningContent>Thinking...</ReasoningContent>
       </Reasoning>
@@ -600,7 +601,7 @@ function MessageBody(args: {
   return (
     <>
       {hasReasoning ? (
-        <Reasoning isStreaming={isStreaming}>
+        <Reasoning isStreaming={isStreaming} defaultOpen={reasoningDefaultExpanded}>
           <ReasoningTrigger />
           <ReasoningContent>{reasoningText || "Thinking..."}</ReasoningContent>
         </Reasoning>

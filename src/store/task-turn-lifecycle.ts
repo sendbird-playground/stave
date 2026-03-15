@@ -27,7 +27,7 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePath: string }>;
+  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[] }>;
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
   workspaceName: string;
