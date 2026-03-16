@@ -1,4 +1,4 @@
-import { Activity, Clock3, TriangleAlert } from "lucide-react";
+import { Clock3, TriangleAlert } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { Badge, Button, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from "@/components/ui";
 import { getProviderLabel } from "@/lib/providers/model-catalog";
@@ -81,7 +81,7 @@ function SessionReplayDrawerBody({
         <DrawerHeader className="gap-3 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
-              {hasError ? <TriangleAlert className="size-4 text-destructive" /> : <Activity className="size-4 text-muted-foreground" />}
+              {hasError ? <TriangleAlert className="size-4 text-destructive" /> : <Clock3 className="size-4 text-muted-foreground" />}
               Session Replay
             </span>
             {activeTaskProvider ? <Badge variant="outline">{taskProviderLabel}</Badge> : null}

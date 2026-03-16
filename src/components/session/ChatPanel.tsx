@@ -1,6 +1,6 @@
 import { memo, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
-import { Activity, Check, ChevronDown, ChevronRight, Clock3, Copy, MessageSquareIcon } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Clock3, Copy, MessageSquareIcon } from "lucide-react";
 import { Badge, Button, Card, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Toggle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import {
   ChainOfThought,
@@ -251,16 +251,18 @@ function ChangedFilesBlock(args: { parts: CodeDiffPart[]; taskId: string; messag
               </button>
               {isOpen ? (
                 <div className="border-t bg-card/40">
-                  <Suspense fallback={<div className="px-3 py-2 text-sm text-muted-foreground">Loading diff...</div>}>
-                    <ReactDiffViewer
-                      oldValue={row.part.oldContent}
-                      newValue={row.part.newContent}
-                      splitView={false}
-                      hideLineNumbers={false}
-                      useDarkTheme={isDarkMode}
-                      styles={CHAT_DIFF_VIEWER_STYLES}
-                    />
-                  </Suspense>
+                  <div className="overflow-x-auto">
+                    <Suspense fallback={<div className="px-3 py-2 text-sm text-muted-foreground">Loading diff...</div>}>
+                      <ReactDiffViewer
+                        oldValue={row.part.oldContent}
+                        newValue={row.part.newContent}
+                        splitView={false}
+                        hideLineNumbers={false}
+                        useDarkTheme={isDarkMode}
+                        styles={CHAT_DIFF_VIEWER_STYLES}
+                      />
+                    </Suspense>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 border-t px-3 py-2">
                     <Button size="sm" variant="outline" onClick={() => openDiff({ part: row.part, index })}>
                       Open in Editor
@@ -831,7 +833,7 @@ function ChatPanelHeader(args: {
                       replayFilter: "all",
                     })}
                   >
-                    <Activity className="size-3.5 shrink-0" />
+                    <Clock3 className="size-3.5 shrink-0" />
                     <span>Replay</span>
                   </Button>
                 </TooltipTrigger>
