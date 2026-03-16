@@ -78,6 +78,7 @@ export function getReplayEventFilterId(args: { item: ReplayedTurnEvent }): Exclu
     case "thinking":
       return "content";
     case "tool":
+    case "tool_progress":
     case "tool_result":
       return "tools";
     case "diff":

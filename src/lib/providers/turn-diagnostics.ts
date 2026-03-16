@@ -104,6 +104,8 @@ export function formatTurnEventLabel(args: { event: ReplayedTurnEvent["event"] }
       return `Conversation: ${args.event.providerId}`;
     case "tool":
       return `Tool: ${args.event.toolName}`;
+    case "tool_progress":
+      return `Tool progress: ${args.event.toolName}`;
     case "tool_result":
       return "Tool output";
     case "approval":
