@@ -4,7 +4,7 @@
 
 Project policy entrypoint for `/home/astyfx/stave`.
 
-## Local Override (IMPORTANT)
+## Local Override (MUST)
 
 `AGENTS.local.md` is a project-local overlay convention for this repository. It is not an official `agents.md` standard feature.
 
