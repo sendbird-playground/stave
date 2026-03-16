@@ -1,6 +1,6 @@
 import { memo, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
-import { Activity, Check, ChevronDown, ChevronRight, Copy, MessageSquareIcon } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronRight, Clock3, Copy, MessageSquareIcon } from "lucide-react";
 import { Badge, Button, Card, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Toggle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import {
   ChainOfThought,
@@ -476,27 +476,38 @@ function BackgroundActionsSummary(args: { parts: MessagePart[]; onOpenReplay?: (
     ? `${summary.activeActions} running`
     : summary.failedActions > 0
     ? `${summary.failedActions} with issues`
-    : "Recorded";
+    : null;
 
   return (
     <Card className="gap-3 border-dashed border-border/80 bg-muted/20 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-foreground">
             {summary.totalActions} {summary.totalActions === 1 ? "background action" : "background actions"}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Generic tool activity was moved out of the chat stream. Open Session Replay for inputs, outputs, and the full event timeline.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={summary.activeActions > 0 ? "warning" : summary.failedActions > 0 ? "destructive" : "secondary"}>
-            {statusLabel}
-          </Badge>
+          {statusLabel ? (
+            <Badge variant={summary.activeActions > 0 ? "warning" : "destructive"}>
+              {statusLabel}
+            </Badge>
+          ) : null}
           {args.onOpenReplay ? (
-            <Button type="button" size="sm" variant="outline" onClick={args.onOpenReplay}>
-              Open Replay
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="outline"
+                    className="ml-auto"
+                    aria-label="Open Session Replay"
+                    onClick={args.onOpenReplay}
+                  >
+                    <Clock3 className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Open Session Replay</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : null}
         </div>
       </div>

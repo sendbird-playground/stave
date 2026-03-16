@@ -33,6 +33,8 @@ interface PromptInputRuntimeBarProps {
   quickControls?: readonly PromptInputRuntimeControl[];
   statusItems?: readonly PromptInputRuntimeStatusItem[];
   disabled?: boolean;
+  className?: string;
+  withBorder?: boolean;
 }
 
 function statusPillToneClass(tone: PromptInputRuntimeStatusItem["tone"]) {
@@ -104,7 +106,7 @@ export function PromptInputRuntimeBar(args: PromptInputRuntimeBarProps) {
   }
 
   return (
-    <div className="border-t border-border/70 pt-3">
+    <div className={cn(args.withBorder !== false && "border-t border-border/70 pt-3", args.className)}>
       {quickControls.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">

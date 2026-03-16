@@ -59,6 +59,7 @@ interface LayoutState {
 }
 
 const APP_STORE_KEY = "stave-store";
+export const TASK_LIST_MIN_WIDTH = 290;
 export const MIN_EDITOR_PANEL_WIDTH = 600;
 export const DEFAULT_EDITOR_PANEL_WIDTH = 720;
 export const PROVIDER_TIMEOUT_OPTIONS = [600000, 1200000, 1800000] as const;
@@ -804,7 +805,7 @@ export const useAppStore = create<AppState>()(
       tasks: [],
       messagesByTask: {},
       layout: {
-        taskListWidth: 185,
+        taskListWidth: TASK_LIST_MIN_WIDTH,
         taskListCollapsed: false,
         editorPanelWidth: DEFAULT_EDITOR_PANEL_WIDTH,
         explorerPanelWidth: 300,

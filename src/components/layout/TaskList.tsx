@@ -8,7 +8,7 @@ import { getProviderLabel } from "@/lib/providers/model-catalog";
 import { getProviderConversationLabel, listProviderConversations } from "@/lib/providers/provider-conversations";
 import { formatTaskUpdatedAt, getTaskCounts, getVisibleTasks, isTaskArchived, type TaskFilter } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
-import { useAppStore } from "@/store/app.store";
+import { TASK_LIST_MIN_WIDTH, useAppStore } from "@/store/app.store";
 
 const TASK_SHORTCUT_COUNT = 10;
 
@@ -33,6 +33,7 @@ export function TaskList() {
   const exportTask = useAppStore((state) => state.exportTask);
   const createTask = useAppStore((state) => state.createTask);
   const setLayout = useAppStore((state) => state.setLayout);
+  const resolvedTaskListWidth = Math.max(taskListWidth, TASK_LIST_MIN_WIDTH);
 
   const taskCounts = useMemo(() => getTaskCounts({ tasks }), [tasks]);
   const visibleTasks = useMemo(() => getVisibleTasks({ tasks, filter: taskFilter }), [taskFilter, tasks]);
@@ -255,7 +256,7 @@ export function TaskList() {
       <aside
         data-testid="task-list"
         className="hidden h-full shrink-0 px-3.5 lg:flex lg:flex-col"
-        style={{ width: `${taskListWidth}px`, minWidth: "160px" }}
+        style={{ width: `${resolvedTaskListWidth}px`, minWidth: `${TASK_LIST_MIN_WIDTH}px` }}
       >
         <div className="mb-2">
           <Button

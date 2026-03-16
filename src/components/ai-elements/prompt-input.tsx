@@ -1,6 +1,6 @@
-import { Check, FilePlus2, LoaderCircle, OctagonX, Send, X } from "lucide-react";
+import { Check, FilePlus2, LoaderCircle, OctagonX, Send, SlidersHorizontal, X } from "lucide-react";
 import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Popover, PopoverAnchor, PopoverContent, Input, Textarea } from "@/components/ui";
+import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Input, Popover, PopoverAnchor, PopoverContent, Textarea } from "@/components/ui";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
 import { filterCommandPaletteItems, getSlashCommandSearchQuery } from "@/lib/commands";
 import { cn } from "@/lib/utils";
@@ -84,6 +84,14 @@ export function PromptInput(args: PromptInputProps) {
     && (filteredCommandItems.length > 0 || commandPaletteProviderNote)
   );
   const hasRuntimePermissionControl = Boolean(runtimeQuickControls?.some((control) => control.id === "permission-mode"));
+  const showStandalonePermissionSelector = Boolean(
+    permissionMode !== undefined && onPermissionModeChange && !hasRuntimePermissionControl
+  );
+  const hasControlsDrawerContent = Boolean(
+    showStandalonePermissionSelector
+    || (runtimeQuickControls?.length ?? 0) > 0
+    || (runtimeStatusItems?.length ?? 0) > 0
+  );
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -170,22 +178,6 @@ export function PromptInput(args: PromptInputProps) {
 
   return (
     <form data-prompt-input-root onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-border/80 bg-card p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <ModelSelector
-          value={selectedModel}
-          options={modelOptions}
-          disabled={interactionsDisabled}
-          onSelect={({ selection }) => onModelSelect({ selection })}
-        />
-        {permissionMode !== undefined && onPermissionModeChange && !hasRuntimePermissionControl ? (
-          <PermissionModeSelector
-            providerId={selectedModel.providerId}
-            value={permissionMode}
-            disabled={interactionsDisabled}
-            onSelect={onPermissionModeChange}
-          />
-        ) : null}
-      </div>
       <Popover open={commandPaletteOpen} modal={false}>
         <PopoverAnchor asChild>
           <div>
@@ -405,8 +397,60 @@ export function PromptInput(args: PromptInputProps) {
           </div>
         </div>
       ) : null}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <ModelSelector
+            value={selectedModel}
+            options={modelOptions}
+            disabled={interactionsDisabled}
+            onSelect={({ selection }) => onModelSelect({ selection })}
+          />
+          {hasControlsDrawerContent ? (
+            <Drawer direction="bottom">
+              <DrawerTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={interactionsDisabled}
+                  className="h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60"
+                  aria-label="Open controls drawer"
+                >
+                  <SlidersHorizontal className="size-3.5" />
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
+                <DrawerHeader className="gap-2 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
+                  <DrawerTitle className="text-lg font-semibold">Controls & Runtime</DrawerTitle>
+                  <DrawerDescription>
+                    Adjust provider controls and inspect the current runtime configuration for this composer.
+                  </DrawerDescription>
+                </DrawerHeader>
+                <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
+                  {showStandalonePermissionSelector ? (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Permission
+                      </p>
+                      <PermissionModeSelector
+                        providerId={selectedModel.providerId}
+                        value={permissionMode as PermissionModeValue}
+                        disabled={interactionsDisabled}
+                        onSelect={onPermissionModeChange!}
+                      />
+                    </div>
+                  ) : null}
+                  <PromptInputRuntimeBar
+                    quickControls={runtimeQuickControls}
+                    statusItems={runtimeStatusItems}
+                    disabled={interactionsDisabled}
+                    withBorder={false}
+                    className={cn(showStandalonePermissionSelector && "mt-5")}
+                  />
+                </div>
+              </DrawerContent>
+            </Drawer>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -449,11 +493,6 @@ export function PromptInput(args: PromptInputProps) {
           </Button>
         </div>
       </div>
-      <PromptInputRuntimeBar
-        quickControls={runtimeQuickControls}
-        statusItems={runtimeStatusItems}
-        disabled={interactionsDisabled}
-      />
     </form>
   );
 }

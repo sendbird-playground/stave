@@ -65,7 +65,7 @@ export function ModelSelector(args: ModelSelectorProps) {
       <button
         type="button"
         className={cn(
-          "inline-flex h-8 max-w-[240px] items-center gap-1.5 rounded-sm border border-border/80 bg-secondary px-2 text-sm text-foreground transition-colors hover:bg-secondary/80",
+          "inline-flex h-9 max-w-[240px] items-center gap-1.5 rounded-md border border-border/70 bg-secondary px-3 text-sm text-foreground transition-colors hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-60",
           open && "border-primary/60 bg-secondary/90",
         )}
         onClick={() => setOpen((prev) => !prev)}

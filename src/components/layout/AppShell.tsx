@@ -8,7 +8,7 @@ import { TerminalDock } from "@/components/layout/TerminalDock";
 import { Toaster } from "@/components/ui";
 import { getNextProviderId } from "@/lib/providers/model-catalog";
 import { RenderProfiler } from "@/lib/render-profiler";
-import { MIN_EDITOR_PANEL_WIDTH, useAppStore } from "@/store/app.store";
+import { MIN_EDITOR_PANEL_WIDTH, TASK_LIST_MIN_WIDTH, useAppStore } from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 
 const EditorPanel = lazy(() =>
@@ -22,6 +22,8 @@ type ResizableLayoutKey =
   | "editorPanelWidth"
   | "explorerPanelWidth"
   | "terminalDockHeight";
+
+const TASK_LIST_MAX_WIDTH = 340;
 
 export function AppShell() {
   const [
@@ -227,9 +229,12 @@ export function AppShell() {
               onMouseDown={(event) => {
                 event.preventDefault();
                 const startX = event.clientX;
-                const startWidth = taskListWidth;
+                const startWidth = Math.max(taskListWidth, TASK_LIST_MIN_WIDTH);
                 const onMove = (moveEvent: MouseEvent) => {
-                  const next = Math.max(160, Math.min(340, startWidth + (moveEvent.clientX - startX)));
+                  const next = Math.max(
+                    TASK_LIST_MIN_WIDTH,
+                    Math.min(TASK_LIST_MAX_WIDTH, startWidth + (moveEvent.clientX - startX)),
+                  );
                   scheduleLayoutResizePatch("taskListWidth", next);
                 };
                 const onUp = () => {

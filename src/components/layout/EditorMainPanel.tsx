@@ -4,7 +4,7 @@ import { AlignJustify, Columns2, FileCode2, PenLine, Save, Send, X } from "lucid
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
-import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
+import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { copyTextToClipboard } from "@/lib/clipboard";
@@ -852,77 +852,109 @@ export function EditorMainPanel() {
           <FileCode2 className="size-4 text-muted-foreground" />
           Editor
         </p>
-        <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-            disabled={!activeTab?.isDirty || activeTabIsImage}
-            onClick={() => void saveActiveEditorTab()}
-            title="Save (Ctrl S)"
-          >
-            <Save className="size-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-            disabled={!activeTab?.originalContent || activeTabIsImage}
-            onClick={toggleEditorDiffMode}
-            title={editorDiffMode ? "Back to Edit" : "View Diff"}
-          >
-            {editorDiffMode ? <PenLine className="size-4" /> : <Columns2 className="size-4" />}
-          </Button>
-          {showDiffDisplayControls ? (
-            <div className="flex items-center gap-0.5 rounded-md border border-border/80 bg-background/70 p-0.5">
-              <Button
-                size="sm"
-                variant="ghost"
-                className={cn(
-                  "h-6 w-6 rounded-sm p-0 text-muted-foreground",
-                  diffViewMode === "unified" && "bg-secondary text-foreground",
-                )}
-                onClick={() => updateSettings({ patch: { diffViewMode: "unified" } })}
-                title="Unified Diff"
-                aria-label="Unified Diff"
-              >
-                <AlignJustify className="size-3.5" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className={cn(
-                  "h-6 w-6 rounded-sm p-0 text-muted-foreground",
-                  diffViewMode === "split" && "bg-secondary text-foreground",
-                )}
-                onClick={() => updateSettings({ patch: { diffViewMode: "split" } })}
-                title="Split Diff"
-                aria-label="Split Diff"
-              >
-                <Columns2 className="size-3.5" />
-              </Button>
-            </div>
-          ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-            disabled={!activeTab}
-            onClick={() => sendEditorContextToChat({ taskId: activeTaskId })}
-            title="Send to Agent"
-          >
-            <Send className="size-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-            onClick={() => setLayout({ patch: { editorVisible: false } })}
-            title="Close Editor"
-          >
-            <X className="size-4" />
-          </Button>
-        </div>
+        <TooltipProvider>
+          <div className="flex items-center gap-1.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                    disabled={!activeTab?.isDirty || activeTabIsImage}
+                    onClick={() => void saveActiveEditorTab()}
+                  >
+                    <Save className="size-4" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Save (Ctrl S)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                    disabled={!activeTab?.originalContent || activeTabIsImage}
+                    onClick={toggleEditorDiffMode}
+                  >
+                    {editorDiffMode ? <PenLine className="size-4" /> : <Columns2 className="size-4" />}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{editorDiffMode ? "Back to Edit" : "View Diff"}</TooltipContent>
+            </Tooltip>
+            {showDiffDisplayControls ? (
+              <div className="flex items-center gap-0.5 rounded-md border border-border/80 bg-background/70 p-0.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={cn(
+                        "h-6 w-6 rounded-sm p-0 text-muted-foreground",
+                        diffViewMode === "unified" && "bg-secondary text-foreground",
+                      )}
+                      onClick={() => updateSettings({ patch: { diffViewMode: "unified" } })}
+                      aria-label="Unified Diff"
+                    >
+                      <AlignJustify className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Unified Diff</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className={cn(
+                        "h-6 w-6 rounded-sm p-0 text-muted-foreground",
+                        diffViewMode === "split" && "bg-secondary text-foreground",
+                      )}
+                      onClick={() => updateSettings({ patch: { diffViewMode: "split" } })}
+                      aria-label="Split Diff"
+                    >
+                      <Columns2 className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Split Diff</TooltipContent>
+                </Tooltip>
+              </div>
+            ) : null}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                    disabled={!activeTab}
+                    onClick={() => sendEditorContextToChat({ taskId: activeTaskId })}
+                  >
+                    <Send className="size-4" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Send to Agent</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
+                  onClick={() => setLayout({ patch: { editorVisible: false } })}
+                >
+                  <X className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Close Editor</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
 
       <div className="mx-2 mb-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border/80 bg-editor text-editor-foreground shadow-sm">
