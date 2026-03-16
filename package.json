@@ -33,7 +33,7 @@
     "test:ci": "bun run typecheck && bun test && bun run build && bun run build:desktop"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.74",
+    "@anthropic-ai/claude-agent-sdk": "0.2.76",
     "@fontsource-variable/geist": "^5.2.8",
     "@monaco-editor/react": "^4.7.0",
     "@openai/codex-sdk": "0.114.0",
