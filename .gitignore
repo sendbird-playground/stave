@@ -1,6 +1,7 @@
 .DS_Store
 .stave/
 node_modules/
+.cache/
 dist/
 out/
 release/

@@ -1,8 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const defaultRepoRoot = path.resolve(import.meta.dirname, "..");
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const defaultRepoRoot = path.resolve(scriptDir, "..");
 
 const PATCH_TARGETS = [
   {

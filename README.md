@@ -81,7 +81,7 @@ The desktop packaging scripts and `bun run run:desktop:built` now rebuild native
 bun run rebuild:electron-deps
 ```
 
-This rebuild now patches `better-sqlite3` in the Electron 41 getter contexts that need `HolderV2()`, then runs `node-gyp rebuild --runtime=electron --build-from-source` for `better-sqlite3` and `node-pty` using the current Electron version and host architecture.
+This rebuild now patches `better-sqlite3` in the Electron 41 getter contexts that need `HolderV2()`, then runs `node-gyp rebuild --runtime=electron --build-from-source` for `better-sqlite3` and `node-pty` using the current Electron version and host architecture. Electron headers are cached under `.cache/node-gyp/` in the repo so the rebuild does not depend on a writable home-directory cache.
 
 Useful packaging commands:
 

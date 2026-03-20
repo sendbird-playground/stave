@@ -1,10 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { applyBetterSqlite3ElectronPatch } from "./patch-better-sqlite3-electron.mjs";
 
-const defaultRepoRoot = path.resolve(import.meta.dirname, "..");
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const defaultRepoRoot = path.resolve(scriptDir, "..");
 const nativeModules = ["better-sqlite3", "node-pty"];
 
 export function resolveElectronVersion(args = {}) {
@@ -24,10 +25,16 @@ export function resolveNodeGypBin(args = {}) {
   return path.join(repoRoot, "node_modules", ".bin", process.platform === "win32" ? "node-gyp.cmd" : "node-gyp");
 }
 
+export function resolveNodeGypDevDir(args = {}) {
+  const repoRoot = args.repoRoot ?? defaultRepoRoot;
+  return path.join(repoRoot, ".cache", "node-gyp");
+}
+
 export function rebuildNativeModule(args) {
   const repoRoot = args.repoRoot ?? defaultRepoRoot;
   const modulePath = path.join(repoRoot, "node_modules", args.moduleName);
   const nodeGypBin = resolveNodeGypBin({ repoRoot });
+  const nodeGypDevDir = resolveNodeGypDevDir({ repoRoot });
 
   const commandArgs = [
     "rebuild",
@@ -38,10 +45,15 @@ export function rebuildNativeModule(args) {
     "--build-from-source",
   ];
 
+  mkdirSync(nodeGypDevDir, { recursive: true });
+
   const result = spawnSync(nodeGypBin, commandArgs, {
     cwd: modulePath,
     stdio: "inherit",
-    env: process.env,
+    env: {
+      ...process.env,
+      npm_config_devdir: nodeGypDevDir,
+    },
   });
 
   if (result.status !== 0) {
