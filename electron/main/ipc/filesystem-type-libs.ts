@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { resolveRootFilePath } from "../utils/filesystem";
 
 export interface MonacoVirtualFile {
   content: string;
@@ -76,11 +77,15 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
 }
 
 export async function readWorkspaceTypeDefinitionFiles(args: {
-  rootPath: string;
+  rootPath?: string | null;
   maxPackageCount?: number;
   maxFileCount?: number;
   maxDirectoryDepth?: number;
 }) {
+  const rootPath = resolveRootFilePath({ rootPath: args.rootPath, filePath: "." });
+  if (!rootPath) {
+    throw new Error("Workspace root path is required.");
+  }
   const libs: MonacoVirtualFile[] = [];
   const maxPackageCount = args.maxPackageCount ?? DEFAULT_MAX_PACKAGE_COUNT;
   const maxFileCount = args.maxFileCount ?? DEFAULT_MAX_FILE_COUNT;
@@ -115,7 +120,7 @@ export async function readWorkspaceTypeDefinitionFiles(args: {
   }
 
   async function collectPackageFiles(packageName: string) {
-    const packageDir = toPackageDirectory(args.rootPath, packageName);
+    const packageDir = toPackageDirectory(rootPath, packageName);
     if (!await pathExists(packageDir)) {
       return null;
     }
@@ -166,7 +171,7 @@ export async function readWorkspaceTypeDefinitionFiles(args: {
     return packageJson;
   }
 
-  const rootPackageJson = await readJsonFile<PackageJsonLike>(path.join(args.rootPath, "package.json"));
+  const rootPackageJson = await readJsonFile<PackageJsonLike>(path.join(rootPath, "package.json"));
   if (!rootPackageJson) {
     throw new Error("Unable to read package.json from workspace root.");
   }

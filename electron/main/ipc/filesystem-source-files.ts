@@ -1,7 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { resolveRootFilePath } from "../utils/filesystem";
 
-export async function readWorkspaceSourceFiles(args: { rootPath: string }) {
+export async function readWorkspaceSourceFiles(args: { rootPath?: string | null }) {
+  const rootPath = resolveRootFilePath({ rootPath: args.rootPath, filePath: "." });
+  if (!rootPath) {
+    throw new Error("Workspace root path is required.");
+  }
   const files: Array<{ content: string; filePath: string }> = [];
   const MAX_TOTAL = 800;
   const EXCLUDED_DIRS = new Set(["node_modules", ".git", "dist", "out", "build", ".next", ".nuxt"]);
@@ -40,6 +45,6 @@ export async function readWorkspaceSourceFiles(args: { rootPath: string }) {
     }
   }
 
-  await collectSrc(args.rootPath, "");
+  await collectSrc(rootPath, "");
   return files;
 }

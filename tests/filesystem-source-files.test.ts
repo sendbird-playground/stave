@@ -37,4 +37,8 @@ describe("readWorkspaceSourceFiles", () => {
       "file:///src/store/app.store.ts",
     ]);
   });
+
+  test("throws a descriptive error when rootPath is missing", async () => {
+    await expect(readWorkspaceSourceFiles({ rootPath: undefined })).rejects.toThrow("Workspace root path is required.");
+  });
 });

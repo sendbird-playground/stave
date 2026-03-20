@@ -2,6 +2,10 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { RootFileEntry } from "../types";
 
+function normalizePathInput(value: string | null | undefined) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 export function revisionFromStat(args: { size: number; mtimeMs: number }) {
   return `node:${args.size}:${Math.floor(args.mtimeMs)}`;
 }
@@ -10,7 +14,11 @@ export function isIgnoredDirectory(args: { name: string }) {
   return args.name.startsWith(".") || args.name === "node_modules" || args.name === "dist" || args.name === "out";
 }
 
-export async function listFilesRecursive(args: { rootPath: string; maxDepth?: number; maxFiles?: number }): Promise<string[]> {
+export async function listFilesRecursive(args: { rootPath?: string | null; maxDepth?: number; maxFiles?: number }): Promise<string[]> {
+  const rootPath = normalizePathInput(args.rootPath);
+  if (!rootPath) {
+    throw new Error("Workspace root path is required.");
+  }
   const maxDepth = args.maxDepth ?? 8;
   const maxFiles = args.maxFiles ?? 1000;
   const files: RootFileEntry[] = [];
@@ -40,13 +48,18 @@ export async function listFilesRecursive(args: { rootPath: string; maxDepth?: nu
     }
   }
 
-  await walk(args.rootPath, "", 0);
+  await walk(rootPath, "", 0);
   return files.map((item) => item.relativePath).sort();
 }
 
-export function resolveRootFilePath(args: { rootPath: string; filePath: string }) {
-  const normalizedRoot = path.resolve(args.rootPath);
-  const absolute = path.resolve(normalizedRoot, args.filePath);
+export function resolveRootFilePath(args: { rootPath?: string | null; filePath?: string | null }) {
+  const rootPath = normalizePathInput(args.rootPath);
+  const filePath = normalizePathInput(args.filePath);
+  if (!rootPath || !filePath) {
+    return null;
+  }
+  const normalizedRoot = path.resolve(rootPath);
+  const absolute = path.resolve(normalizedRoot, filePath);
   const relative = path.relative(normalizedRoot, absolute);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     return null;

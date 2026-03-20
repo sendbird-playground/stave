@@ -112,4 +112,8 @@ describe("readWorkspaceTypeDefinitionFiles", () => {
     expect(filePaths).toContain("file:///node_modules/@types/better-sqlite3/package.json");
     expect(filePaths).toContain("file:///node_modules/@types/better-sqlite3/index.d.ts");
   });
+
+  test("throws a descriptive error when rootPath is missing", async () => {
+    await expect(readWorkspaceTypeDefinitionFiles({ rootPath: undefined })).rejects.toThrow("Workspace root path is required.");
+  });
 });

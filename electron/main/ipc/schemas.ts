@@ -250,6 +250,23 @@ export const OpenExternalArgsSchema = z.object({
   url: z.string().min(1).max(2048),
 }).strict();
 
+const FilesystemRootPathSchema = z.string().min(1).max(4096);
+const FilesystemFilePathSchema = z.string().min(1).max(4096);
+
+export const FilesystemRootArgsSchema = z.object({
+  rootPath: FilesystemRootPathSchema,
+}).strict();
+
+export const FilesystemFileArgsSchema = z.object({
+  rootPath: FilesystemRootPathSchema,
+  filePath: FilesystemFilePathSchema,
+}).strict();
+
+export const FilesystemWriteFileArgsSchema = FilesystemFileArgsSchema.extend({
+  content: z.string(),
+  expectedRevision: z.string().max(4096).nullable().optional(),
+}).strict();
+
 const LspLanguageIdSchema = z.literal("python");
 
 const LspBaseRequestSchema = z.object({
