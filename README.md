@@ -75,13 +75,13 @@ bun run dev:desktop:poll
 
 ## Desktop packaging
 
-Rebuild the native Electron modules before testing a real desktop build without hot reload:
+The desktop packaging scripts and `bun run run:desktop:built` now rebuild native Electron modules automatically before bundling or launching the built app. If your local install gets out of sync after `bun install`, run the rebuild manually:
 
 ```bash
 bun run rebuild:electron-deps
 ```
 
-This rebuild now patches and recompiles `better-sqlite3` and `node-pty` against the current Electron runtime ABI used by Stave.
+This rebuild now patches `better-sqlite3` in the Electron 41 getter contexts that need `HolderV2()`, then runs `node-gyp rebuild --runtime=electron --build-from-source` for `better-sqlite3` and `node-pty` using the current Electron version and host architecture.
 
 Useful packaging commands:
 

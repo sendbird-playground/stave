@@ -6,6 +6,7 @@ files:
 directories:
   output: release
 asar: true
+npmRebuild: false
 linux:
   target:
     - AppImage

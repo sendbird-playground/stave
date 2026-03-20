@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.11](https://github.com/astyfx/stave/compare/v0.0.10...v0.0.11) (2026-03-20)
+
+### Highlights
+
+- fixed the Electron 41 `better-sqlite3` patch flow by scoping `HolderV2()` replacements to getter blocks that actually use `PropertyCallbackInfo`
+- added a single Electron native dependency rebuild entrypoint that resolves the current Electron version and host architecture before rebuilding `better-sqlite3` and `node-pty`
+- made packaged desktop runs and built local desktop runs rebuild Electron native modules automatically before bundling or launching
+- added regression coverage for the patch scope and packaging script wiring, and refreshed the desktop packaging README to document the safer rebuild workflow
+
 ## [0.0.10](https://github.com/astyfx/stave/compare/v0.0.9...v0.0.10) (2026-03-20)
 
 ### Features
