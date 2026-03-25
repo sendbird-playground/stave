@@ -2,27 +2,26 @@
 
 ## Stave Model Router
 
-The Stave Model Router is a meta-provider that sits above the real Claude and Codex runtimes. When a task uses the `stave` provider, the router analyses each prompt and automatically forwards the turn to the most suitable underlying provider and model.
+The Stave Model Router is a meta-provider that sits above the real Claude and Codex runtimes. When a task uses the `stave` provider, Stave Auto classifies each prompt by intent and either routes it directly to a single model or escalates it into orchestration.
 
 High-level flow:
 
 1. The renderer submits a turn with `providerId: "stave"`.
-2. `electron/providers/runtime.ts` detects the `stave` provider and calls `resolveStaveTarget(...)` from `electron/providers/stave-router.ts`.
-3. `resolveStaveTarget` is a pure function. It scores the prompt against several pattern sets and returns a `StaveRouteTarget` containing `{ providerId, model, reason }`.
-4. A `system` `BridgeEvent` is emitted immediately, e.g. `[Stave] Planning intent → Claude Opus Plan`, so the chat surface shows which model was selected and why.
-5. `buildStaveResolvedArgs` rewrites the `StreamTurnArgs` with the resolved provider and model.
-6. `runProviderTurn` is called recursively with the rewritten args, so all timeout, abort, and approval logic is handled identically to a direct turn.
+2. `electron/providers/runtime.ts` detects the `stave` provider and builds the active `staveAuto` profile from settings.
+3. `electron/providers/stave-preprocessor.ts` asks a lightweight classifier to return either `strategy: "direct"` with an intent (`plan`, `analyze`, `implement`, `quick_edit`, `general`) or `strategy: "orchestrate"`.
+4. For direct execution, Stave resolves the configured model for that intent from the profile, emits `stave:execution_processing`, rewrites the `StreamTurnArgs`, and re-enters the normal provider runtime.
+5. For orchestration, `electron/providers/stave-orchestrator.ts` asks the supervisor to produce role-based subtasks (`plan`, `analyze`, `implement`, `verify`, `general`), resolves each role to a configured model, executes subtasks, then synthesises the result.
 
-### Routing table
+### Direct intent table
 
-| Priority | Trigger condition | Provider | Model |
-|----------|-------------------|----------|-------|
-| 1 | Planning / strategy intent (no deep analysis) | `claude-code` | `opusplan` |
-| 2 | OpenAI / GPT ecosystem keywords | `codex` | `gpt-5.4` |
-| 3 | Deep analysis or complex planning with large context | `claude-code` | `claude-opus-4-6` |
-| 4 | Precise code generation, short prompt | `codex` | `gpt-5.3-codex` |
-| 5 | Quick targeted edit, short prompt | `claude-code` | `claude-haiku-4-5` |
-| 6 | Default (general task) | `claude-code` | `claude-sonnet-4-6` |
+| Intent | Default model | Typical work |
+|--------|---------------|--------------|
+| `plan` | `opusplan` | design, strategy, planning-only requests |
+| `analyze` | `claude-opus-4-6` | explanation, debugging, review, root cause |
+| `implement` | `gpt-5.3-codex` | feature work, patching, refactors, test writing |
+| `quick_edit` | `claude-haiku-4-5` | rename, typo, tiny targeted changes |
+| `general` | `claude-sonnet-4-6` | balanced default path |
+| `verify` | `claude-sonnet-4-6` | orchestration-only validation/review step |
 
 ### Complexity signals
 
@@ -33,7 +32,7 @@ High-level flow:
 
 ### Availability check
 
-The Stave router is considered available when the Claude CLI is available, since `claude-code` is the primary routing target. Codex availability is checked only if the router decides to delegate to Codex.
+The Stave router is considered available when at least one underlying provider is available. Direct execution uses profile-aware fallback pairs when the chosen provider is unavailable; orchestration can optionally fall back to same-provider workers when cross-provider workers are disabled.
 
 ### Native command catalog
 
@@ -41,7 +40,12 @@ The Stave provider does not expose a native command catalog. Switching to `claud
 
 ### Source file
 
-`electron/providers/stave-router.ts` — pure functions only, no I/O, no side effects.
+Core files:
+
+- `electron/providers/stave-router.ts` — deterministic fallback intent router
+- `electron/providers/stave-preprocessor.ts` — LLM classifier
+- `electron/providers/stave-orchestrator.ts` — role-based orchestration runner
+- `src/lib/providers/stave-auto-profile.ts` — settings-derived profile helpers
 
 ---
 

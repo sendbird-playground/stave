@@ -14,6 +14,17 @@ async function* fromArray(args: { items: unknown[] }) {
   }
 }
 
+async function* emitStartFailure(args: { message?: string }) {
+  const detail = args.message?.trim() || "Provider request could not start.";
+  yield {
+    type: "system",
+    content: detail,
+  };
+  yield {
+    type: "done",
+  };
+}
+
 async function* fromPolledStream(args: {
   turnId?: string;
   providerId: ProviderId;
@@ -41,6 +52,7 @@ async function* fromPolledStream(args: {
     runtimeOptions: args.runtimeOptions,
   });
   if (!started.ok || !started.streamId) {
+    yield* emitStartFailure({ message: started.message });
     return;
   }
 
@@ -48,6 +60,7 @@ async function* fromPolledStream(args: {
   for (;;) {
     const page = await readStreamTurn({ streamId: started.streamId, cursor });
     if (!page.ok) {
+      yield* emitStartFailure({ message: page.message });
       return;
     }
     for (const event of page.events) {
@@ -118,6 +131,7 @@ async function* fromPushStream(args: {
       runtimeOptions: args.runtimeOptions,
     });
     if (!started.ok || !started.streamId) {
+      yield* emitStartFailure({ message: started.message });
       return;
     }
     targetStreamId = started.streamId;

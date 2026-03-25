@@ -56,17 +56,20 @@ const RuntimeOptionsSchema = z.object({
   codexSupportsReasoningSummaries: z.union([z.literal("auto"), z.literal("enabled"), z.literal("disabled")]).optional(),
   codexFastMode: z.boolean().optional(),
   codexResumeThreadId: z.string().max(200).optional(),
-  staveRouteModels: z.object({
-    planning: z.string().max(200).optional(),
-    ecosystem: z.string().max(200).optional(),
-    complex: z.string().max(200).optional(),
-    codeGen: z.string().max(200).optional(),
-    quickEdit: z.string().max(200).optional(),
-    default: z.string().max(200).optional(),
+  staveAuto: z.object({
+    classifierModel: z.string().max(200),
+    supervisorModel: z.string().max(200),
+    planModel: z.string().max(200),
+    analyzeModel: z.string().max(200),
+    implementModel: z.string().max(200),
+    quickEditModel: z.string().max(200),
+    generalModel: z.string().max(200),
+    verifyModel: z.string().max(200).optional(),
+    orchestrationMode: z.union([z.literal("off"), z.literal("auto"), z.literal("aggressive")]),
+    maxSubtasks: z.number().int().min(1).max(8),
+    maxParallelSubtasks: z.number().int().min(1).max(8),
+    allowCrossProviderWorkers: z.boolean(),
   }).strict().optional(),
-  stavePreprocessorModel: z.string().max(200).optional(),
-  staveSupervisorModel: z.string().max(200).optional(),
-  staveOrchestrationEnabled: z.boolean().optional(),
 }).strict().optional();
 
 const UserInputOptionSchema = z.object({
@@ -150,6 +153,17 @@ const CanonicalMessagePartSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("system_event"),
     content: z.string().max(500_000),
+  }).strict(),
+  z.object({
+    type: z.literal("stave_processing"),
+    strategy: z.union([
+      z.literal("direct"),
+      z.literal("orchestrate"),
+    ]),
+    model: z.string().max(200).optional(),
+    supervisorModel: z.string().max(200).optional(),
+    reason: z.string().max(5000),
+    fastMode: z.boolean().optional(),
   }).strict(),
   z.object({
     type: z.literal("orchestration_progress"),

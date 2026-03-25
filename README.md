@@ -150,6 +150,7 @@ bun run package:linux:deb
 | `[persistence] upsert-workspace-sync failed` in Electron logs | Same as above, check the full error message | `bun run rebuild:electron-deps` |
 | `Patch signature not found` error during rebuild | `better-sqlite3` version changed or `node_modules` corrupted | `bun install && bun run rebuild:electron-deps` |
 | Build fails with `node-gyp` errors | Missing C++ toolchain | Install Xcode CLT / build-essential (see Prerequisites) |
+| macOS repeatedly asks "Allow Stave to access files in your … folder?" when opening files in the editor or attaching files/images to a prompt | macOS TCC requires explicit per-folder consent the first time Stave reads from Desktop, Documents, or Downloads. In production this prompt appears once and is then remembered permanently. In development builds the Electron binary changes on every rebuild, which invalidates the stored TCC grant and causes the dialog to reappear each session. | **Production:** approve the dialog once — it will not appear again. **Development:** grant permanent access via **System Settings → Privacy & Security → Files and Folders → Stave** (toggle each folder on). |
 
 ## Docs
 

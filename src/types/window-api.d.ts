@@ -21,8 +21,8 @@ type ProviderStreamTurnResult =
 
 interface WindowProviderApi {
   streamTurn?: (args: ProviderStreamTurnArgs) => ProviderStreamTurnResult;
-  startStreamTurn?: (args: ProviderStreamTurnArgs) => Promise<{ ok: boolean; streamId: string }>;
-  startPushTurn?: (args: ProviderStreamTurnArgs) => Promise<{ ok: boolean; streamId: string; turnId: string | null }>;
+  startStreamTurn?: (args: ProviderStreamTurnArgs) => Promise<{ ok: boolean; streamId: string; message?: string }>;
+  startPushTurn?: (args: ProviderStreamTurnArgs) => Promise<{ ok: boolean; streamId: string; turnId: string | null; message?: string }>;
   readStreamTurn?: (args: { streamId: string; cursor: number }) => Promise<{
     ok: boolean;
     events: unknown[];

@@ -24,13 +24,23 @@ export interface CanonicalRetrievedContextPart {
   content: string;
 }
 
-export interface StaveRouteModels {
-  planning?: string;
-  ecosystem?: string;
-  complex?: string;
-  codeGen?: string;
-  quickEdit?: string;
-  default?: string;
+export type StaveAutoIntent = "plan" | "analyze" | "implement" | "quick_edit" | "general";
+export type StaveWorkerRole = "plan" | "analyze" | "implement" | "verify" | "general";
+export type StaveOrchestrationMode = "off" | "auto" | "aggressive";
+
+export interface StaveAutoProfile {
+  classifierModel: string;
+  supervisorModel: string;
+  planModel: string;
+  analyzeModel: string;
+  implementModel: string;
+  quickEditModel: string;
+  generalModel: string;
+  verifyModel?: string;
+  orchestrationMode: StaveOrchestrationMode;
+  maxSubtasks: number;
+  maxParallelSubtasks: number;
+  allowCrossProviderWorkers: boolean;
 }
 
 export interface CanonicalSkillContextPart {
@@ -137,25 +147,8 @@ export interface ProviderRuntimeOptions {
     codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
     codexFastMode?: boolean;
     codexResumeThreadId?: string;
-    /** Per-rule model overrides for the Stave meta-provider router. */
-    staveRouteModels?: StaveRouteModels;
-    /**
-     * Model used for the Stave Pre-processor (intent analysis + routing decision).
-     * Defaults to "claude-haiku-4-5". Falls back to "gpt-5.3-codex" if unavailable,
-     * then to regex-based routing if both are unavailable.
-     */
-    stavePreprocessorModel?: string;
-    /**
-     * Model used as the Supervisor when Stave orchestrates multiple workers.
-     * Defaults to "claude-opus-4-6". Can be set to "gpt-5.4" for speed-prioritised
-     * orchestration.
-     */
-    staveSupervisorModel?: string;
-    /**
-     * Enable Stave orchestration (multi-model collaboration) for complex requests.
-     * Defaults to true when providerId is "stave". Set to false to force single-model routing.
-     */
-    staveOrchestrationEnabled?: boolean;
+    /** Stave Auto profile used by the meta-provider for direct routing and orchestration. */
+    staveAuto?: StaveAutoProfile;
 }
 
 export interface ProviderAdapter {

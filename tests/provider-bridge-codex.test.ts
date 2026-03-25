@@ -72,4 +72,32 @@ describe("codex provider bridge normalization", () => {
       { type: "done" },
     ]);
   });
+
+  test("surfaces push-stream start failures as visible system events", async () => {
+    setWindowApi({
+      provider: {
+        subscribeStreamEvents: () => () => {},
+        startPushTurn: async () => ({
+          ok: false,
+          streamId: "",
+          turnId: null,
+          message: "IPC schema rejected provider request. conversation.history.1.parts.0.type: Invalid input",
+        }),
+      },
+    });
+
+    const adapter = getProviderAdapter({ providerId: "codex" });
+    const events: Array<{ type: string; content?: string }> = [];
+    for await (const event of adapter.runTurn({ prompt: "hello" })) {
+      events.push(event as { type: string; content?: string });
+    }
+
+    expect(events).toEqual([
+      {
+        type: "system",
+        content: "IPC schema rejected provider request. conversation.history.1.parts.0.type: Invalid input",
+      },
+      { type: "done" },
+    ]);
+  });
 });

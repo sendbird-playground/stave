@@ -1137,133 +1137,156 @@ function EditorSection() {
   );
 }
 
-function StaveRoutingModelsCard() {
+function StaveAutoCard() {
   const [
-    staveModelPlanner,
-    staveModelEcosystem,
-    staveModelComplex,
-    staveModelCodeGen,
-    staveModelQuickEdit,
-    staveModelDefault,
+    staveAutoClassifierModel,
+    staveAutoSupervisorModel,
+    staveAutoPlanModel,
+    staveAutoAnalyzeModel,
+    staveAutoImplementModel,
+    staveAutoQuickEditModel,
+    staveAutoGeneralModel,
+    staveAutoVerifyModel,
+    staveAutoOrchestrationMode,
+    staveAutoMaxSubtasks,
+    staveAutoMaxParallelSubtasks,
+    staveAutoAllowCrossProviderWorkers,
   ] = useAppStore(
     useShallow((state) => [
-      state.settings.staveModelPlanner,
-      state.settings.staveModelEcosystem,
-      state.settings.staveModelComplex,
-      state.settings.staveModelCodeGen,
-      state.settings.staveModelQuickEdit,
-      state.settings.staveModelDefault,
+      state.settings.staveAutoClassifierModel,
+      state.settings.staveAutoSupervisorModel,
+      state.settings.staveAutoPlanModel,
+      state.settings.staveAutoAnalyzeModel,
+      state.settings.staveAutoImplementModel,
+      state.settings.staveAutoQuickEditModel,
+      state.settings.staveAutoGeneralModel,
+      state.settings.staveAutoVerifyModel,
+      state.settings.staveAutoOrchestrationMode,
+      state.settings.staveAutoMaxSubtasks,
+      state.settings.staveAutoMaxParallelSubtasks,
+      state.settings.staveAutoAllowCrossProviderWorkers,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
 
   return (
     <SettingsCard
-      title="Stave Routing Models"
-      description="The model used for each automatic routing rule. Any Claude or Codex model can be assigned — the provider is inferred from the model name."
+      title="Stave Auto"
+      description="Role-based defaults for Stave Auto. The classifier and supervisor decide intent and workflow, while these models remain the source of truth for actual execution."
     >
-      <LabeledField title="Planning / Strategy" description="Triggered by plan · 계획 · 설계 · approach keywords (no analysis intent).">
+      <LabeledField title="Orchestration Mode" description="Off = direct routing only. Auto = orchestrate only when needed. Aggressive = bias toward multi-step workflows.">
+        <Select
+          value={staveAutoOrchestrationMode}
+          onValueChange={(value) =>
+            updateSettings({
+              patch: { staveAutoOrchestrationMode: value as "off" | "auto" | "aggressive" },
+            })}
+        >
+          <SelectTrigger className="h-10 rounded-md border-border/80 bg-background">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="off">off</SelectItem>
+            <SelectItem value="auto">auto</SelectItem>
+            <SelectItem value="aggressive">aggressive</SelectItem>
+          </SelectContent>
+        </Select>
+      </LabeledField>
+      <LabeledField title="Supervisor Model" description="Used for orchestration planning and synthesis. Default: claude-opus-4-6.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-routing-model-options"
-          value={staveModelPlanner}
-          onCommit={(v) => updateSettings({ patch: { staveModelPlanner: normalizeModelSelection({ value: v, fallback: "opusplan" }) } })}
+          list="stave-auto-model-options"
+          value={staveAutoSupervisorModel}
+          onCommit={(value) => updateSettings({ patch: { staveAutoSupervisorModel: normalizeModelSelection({ value, fallback: "claude-opus-4-6" }) } })}
         />
       </LabeledField>
-      <LabeledField title="OpenAI Ecosystem" description="Triggered by OpenAI · gpt-5 · ChatGPT · o3 · o4 keywords.">
+      <LabeledField title="Plan Model" description="Used for strategy, design, and plan-only requests.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-routing-model-options"
-          value={staveModelEcosystem}
-          onCommit={(v) => updateSettings({ patch: { staveModelEcosystem: normalizeModelSelection({ value: v, fallback: "gpt-5.4" }) } })}
+          list="stave-auto-model-options"
+          value={staveAutoPlanModel}
+          onCommit={(value) => updateSettings({ patch: { staveAutoPlanModel: normalizeModelSelection({ value, fallback: "opusplan" }) } })}
         />
       </LabeledField>
-      <LabeledField title="Complex Analysis" description="Triggered by analyze · 분석 · explain · why keywords with large context (long prompt, 4+ files, or 8+ messages).">
+      <LabeledField title="Analyze Model" description="Used for debugging, review, explanation, architecture, and root-cause analysis.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-routing-model-options"
-          value={staveModelComplex}
-          onCommit={(v) => updateSettings({ patch: { staveModelComplex: normalizeModelSelection({ value: v, fallback: "claude-opus-4-6" }) } })}
+          list="stave-auto-model-options"
+          value={staveAutoAnalyzeModel}
+          onCommit={(value) => updateSettings({ patch: { staveAutoAnalyzeModel: normalizeModelSelection({ value, fallback: "claude-opus-4-6" }) } })}
         />
       </LabeledField>
-      <LabeledField title="Code Generation" description="Triggered by generate code · write a function · implement an algorithm on a short prompt.">
+      <LabeledField title="Implement Model" description="Used for feature work, code generation, patching, refactors, and test writing.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-routing-model-options"
-          value={staveModelCodeGen}
-          onCommit={(v) => updateSettings({ patch: { staveModelCodeGen: normalizeModelSelection({ value: v, fallback: "gpt-5.3-codex" }) } })}
+          list="stave-auto-model-options"
+          value={staveAutoImplementModel}
+          onCommit={(value) => updateSettings({ patch: { staveAutoImplementModel: normalizeModelSelection({ value, fallback: "gpt-5.3-codex" }) } })}
         />
       </LabeledField>
-      <LabeledField title="Quick Edit" description="Triggered by rename · typo · 오타 · just fix · 간단하게 on a short prompt.">
+      <LabeledField title="Quick Edit Model" description="Used for rename, typo, and tiny targeted edits.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-routing-model-options"
-          value={staveModelQuickEdit}
-          onCommit={(v) => updateSettings({ patch: { staveModelQuickEdit: normalizeModelSelection({ value: v, fallback: "claude-haiku-4-5" }) } })}
+          list="stave-auto-model-options"
+          value={staveAutoQuickEditModel}
+          onCommit={(value) => updateSettings({ patch: { staveAutoQuickEditModel: normalizeModelSelection({ value, fallback: "claude-haiku-4-5" }) } })}
         />
       </LabeledField>
-      <LabeledField title="Default" description="Used when none of the rules above match.">
+      <LabeledField title="General Model" description="Used when the request does not strongly match another role.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-routing-model-options"
-          value={staveModelDefault}
-          onCommit={(v) => updateSettings({ patch: { staveModelDefault: normalizeModelSelection({ value: v, fallback: "claude-sonnet-4-6" }) } })}
+          list="stave-auto-model-options"
+          value={staveAutoGeneralModel}
+          onCommit={(value) => updateSettings({ patch: { staveAutoGeneralModel: normalizeModelSelection({ value, fallback: "claude-sonnet-4-6" }) } })}
         />
       </LabeledField>
-      <datalist id="stave-routing-model-options">
+      <LabeledField title="Verify Model" description="Used for validation, sanity checks, and review after implementation.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-auto-model-options"
+          value={staveAutoVerifyModel}
+          onCommit={(value) => updateSettings({ patch: { staveAutoVerifyModel: normalizeModelSelection({ value, fallback: "claude-sonnet-4-6" }) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Classifier Model" description="Lightweight model that decides whether to route directly or orchestrate.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-auto-model-options"
+          value={staveAutoClassifierModel}
+          onCommit={(value) => updateSettings({ patch: { staveAutoClassifierModel: normalizeModelSelection({ value, fallback: "claude-haiku-4-5" }) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Max Subtasks" description="Upper bound for supervisor-generated subtasks per orchestration run.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          value={String(staveAutoMaxSubtasks)}
+          onCommit={(value) =>
+            updateSettings({ patch: { staveAutoMaxSubtasks: Math.min(8, Math.max(1, readInt(value, 3))) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Max Parallel Subtasks" description="How many independent subtasks Stave may execute at the same time.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          value={String(staveAutoMaxParallelSubtasks)}
+          onCommit={(value) =>
+            updateSettings({ patch: { staveAutoMaxParallelSubtasks: Math.min(8, Math.max(1, readInt(value, 2))) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Cross-Provider Workers" description="Allow orchestration to mix Claude and Codex workers in the same request.">
+        <ChoiceButtons
+          value={staveAutoAllowCrossProviderWorkers ? "on" : "off"}
+          onChange={(value) => updateSettings({ patch: { staveAutoAllowCrossProviderWorkers: value === "on" } })}
+          options={[
+            { value: "on", label: "On" },
+            { value: "off", label: "Off" },
+          ]}
+        />
+      </LabeledField>
+      <datalist id="stave-auto-model-options">
         {STAVE_ROUTING_MODEL_OPTIONS.map((model) => (
           <option key={model} value={model} />
         ))}
       </datalist>
-    </SettingsCard>
-  );
-}
-
-function StaveOrchestrationCard() {
-  const [
-    stavePreprocessorModel,
-    staveSupervisorModel,
-    staveOrchestrationEnabled,
-  ] = useAppStore(
-    useShallow((state) => [
-      state.settings.stavePreprocessorModel,
-      state.settings.staveSupervisorModel,
-      state.settings.staveOrchestrationEnabled,
-    ] as const),
-  );
-  const updateSettings = useAppStore((state) => state.updateSettings);
-
-  return (
-    <SettingsCard
-      title="Stave Orchestration"
-      description="Configure the Pre-processor and Supervisor models for multi-model collaboration."
-    >
-      <LabeledField title="Orchestration" description="Enable multi-model orchestration for complex requests.">
-        <ChoiceButtons
-          value={staveOrchestrationEnabled ? "on" : "off"}
-          onChange={(value) => updateSettings({ patch: { staveOrchestrationEnabled: value === "on" } })}
-          options={[
-            { value: "on", label: "Enabled" },
-            { value: "off", label: "Disabled" },
-          ]}
-        />
-      </LabeledField>
-      <LabeledField title="Pre-processor Model" description="Lightweight model that analyses each prompt and picks a routing strategy. Default: claude-haiku-4-5.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-routing-model-options"
-          value={stavePreprocessorModel}
-          onCommit={(v) => updateSettings({ patch: { stavePreprocessorModel: normalizeModelSelection({ value: v, fallback: "claude-haiku-4-5" }) } })}
-        />
-      </LabeledField>
-      <LabeledField title="Supervisor Model" description="Model used as Orchestrator supervisor for planning and synthesis. Default: claude-opus-4-6.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-routing-model-options"
-          value={staveSupervisorModel}
-          onCommit={(v) => updateSettings({ patch: { staveSupervisorModel: normalizeModelSelection({ value: v, fallback: "claude-opus-4-6" }) } })}
-        />
-      </LabeledField>
     </SettingsCard>
   );
 }
@@ -1655,8 +1678,7 @@ function ProvidersSection() {
           </LabeledField>
         </SettingsCard>
 
-        <StaveRoutingModelsCard />
-        <StaveOrchestrationCard />
+        <StaveAutoCard />
       </SectionStack>
     </>
   );
