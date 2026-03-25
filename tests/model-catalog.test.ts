@@ -6,6 +6,7 @@ import {
   getNextProviderId,
   getProviderIconUrl,
   getProviderLabel,
+  getProviderWaveToneClass,
   getSdkModelOptions,
   listProviderIds,
   toHumanModelName,
@@ -32,9 +33,10 @@ describe("model catalog", () => {
     expect(getDefaultModelForProvider({ providerId: "claude-code" })).toBe("claude-sonnet-4-6");
   });
 
-  test("returns stable asset-backed icon urls for provider badges", () => {
-    expect(getProviderIconUrl({ providerId: "claude-code" })).toContain("claude-color.svg");
-    expect(getProviderIconUrl({ providerId: "codex" })).toContain("codex-color.svg");
+  test("returns provider wave tone classes", () => {
+    expect(getProviderWaveToneClass({ providerId: "claude-code" })).toBe("text-provider-claude");
+    expect(getProviderWaveToneClass({ providerId: "codex" })).toBe("text-provider-codex");
+    expect(getProviderWaveToneClass({ providerId: "stave" })).toBe("text-primary");
   });
 
   test("cycles provider order from the descriptor registry", () => {
