@@ -1046,7 +1046,7 @@ function hashProjectPath(value: string) {
 
 function buildProjectDefaultWorkspaceId(args: { projectPath?: string | null }) {
   const projectPath = args.projectPath?.trim();
-  return projectPath ? `base:${hashProjectPath(projectPath)}` : starterWorkspaceId;
+  return projectPath ? `base:${hashProjectPath(normalizeComparablePath(projectPath))}` : starterWorkspaceId;
 }
 
 function buildImportedWorktreeWorkspaceId(args: { projectPath: string; worktreePath: string }) {
@@ -1283,20 +1283,21 @@ export const useAppStore = create<AppState>()(
 
         const defaultWorkspaceId = buildProjectDefaultWorkspaceId({ projectPath: args.projectRootPath });
         const now = new Date().toISOString();
-        const empty = createEmptyWorkspaceState();
-        await persistWorkspaceSnapshot({
-          workspaceId: defaultWorkspaceId,
-          workspaceName: defaultWorkspaceName,
-          activeTaskId: empty.activeTaskId,
-          tasks: empty.tasks,
-          messagesByTask: empty.messagesByTask,
-          promptDraftByTask: empty.promptDraftByTask,
-          editorTabs: empty.editorTabs,
-          activeEditorTabId: empty.activeEditorTabId,
-          providerConversationByTask: empty.providerConversationByTask,
-        });
-        const workspaceState = buildWorkspaceSessionState({
-          snapshot: createWorkspaceSnapshot({
+
+        // Check if this workspace already has persisted data before overwriting.
+        // When localStorage is cleared (e.g. dev-mode port change or origin switch),
+        // the project won't appear in recentProjects even though the DB still holds
+        // its tasks and messages.  Loading the existing snapshot prevents data loss.
+        const existingSnapshot = await loadWorkspaceSnapshot({ workspaceId: defaultWorkspaceId });
+
+        let workspaceState: ReturnType<typeof buildWorkspaceSessionState>;
+        if (existingSnapshot) {
+          workspaceState = buildWorkspaceSessionState({ snapshot: existingSnapshot });
+        } else {
+          const empty = createEmptyWorkspaceState();
+          await persistWorkspaceSnapshot({
+            workspaceId: defaultWorkspaceId,
+            workspaceName: defaultWorkspaceName,
             activeTaskId: empty.activeTaskId,
             tasks: empty.tasks,
             messagesByTask: empty.messagesByTask,
@@ -1304,8 +1305,19 @@ export const useAppStore = create<AppState>()(
             editorTabs: empty.editorTabs,
             activeEditorTabId: empty.activeEditorTabId,
             providerConversationByTask: empty.providerConversationByTask,
-          }),
-        });
+          });
+          workspaceState = buildWorkspaceSessionState({
+            snapshot: createWorkspaceSnapshot({
+              activeTaskId: empty.activeTaskId,
+              tasks: empty.tasks,
+              messagesByTask: empty.messagesByTask,
+              promptDraftByTask: empty.promptDraftByTask,
+              editorTabs: empty.editorTabs,
+              activeEditorTabId: empty.activeEditorTabId,
+              providerConversationByTask: empty.providerConversationByTask,
+            }),
+          });
+        }
         const nextProject = {
           projectPath: args.projectRootPath,
           projectName: args.projectName,
