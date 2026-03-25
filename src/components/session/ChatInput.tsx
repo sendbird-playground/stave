@@ -175,6 +175,11 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? state.draftProvider
   ));
   const promptDraft = useAppStore((state) => state.promptDraftByTask[activeTaskId || "draft:session"] ?? EMPTY_PROMPT_DRAFT);
+  const promptFocusNonce = useAppStore((state) => state.promptFocusNonce);
+  useEffect(() => {
+    if (promptFocusNonce === 0) return;
+    setFocusNonce((current) => current + 1);
+  }, [promptFocusNonce]);
   const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
   const activeMessageCount = useAppStore((state) => (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length);
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));

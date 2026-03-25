@@ -128,6 +128,22 @@ describe("parseNormalizedEvent", () => {
     expect(parsed?.type).toBe("provider_conversation");
   });
 
+  test("accepts stave provider conversation metadata", () => {
+    const parsed = parseNormalizedEvent({
+      payload: {
+        type: "provider_conversation",
+        providerId: "stave",
+        nativeConversationId: "session-stave-123",
+      },
+    });
+
+    expect(parsed).toEqual({
+      type: "provider_conversation",
+      providerId: "stave",
+      nativeConversationId: "session-stave-123",
+    });
+  });
+
   test("accepts valid prompt suggestions event", () => {
     const parsed = parseNormalizedEvent({
       payload: {

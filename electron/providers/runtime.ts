@@ -1,10 +1,15 @@
 import { cleanupClaudeTask, getClaudeCommandCatalog, streamClaudeWithSdk } from "./claude-sdk-runtime";
 import { cleanupCodexTask, streamCodexWithSdk } from "./codex-sdk-runtime";
-import { buildStaveResolvedArgs, resolveStaveTarget } from "./stave-router";
+import { buildStaveResolvedArgs } from "./stave-router";
 import { runPreprocessor } from "./stave-preprocessor";
 import { getCachedAvailability } from "./stave-availability";
 import { runOrchestrator } from "./stave-orchestrator";
 import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
+import {
+  DEFAULT_STAVE_AUTO_PROFILE,
+  resolveStaveIntentModel,
+  resolveStaveProviderForModel,
+} from "../../src/lib/providers/stave-auto-profile";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
@@ -125,6 +130,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       (p) => p.type === "file_context" || p.type === "image_context",
     ).length;
     const historyLength = args.conversation?.history?.length ?? 0;
+    const profile = args.runtimeOptions?.staveAuto ?? DEFAULT_STAVE_AUTO_PROFILE;
 
     // Helper: run a provider turn in batch mode (collect all events, no streaming).
     // Injected into the Pre-processor so it can call any provider without a
@@ -139,20 +145,21 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       userPrompt: args.prompt,
       historyLength,
       attachedFileCount,
-      preprocessorModel: args.runtimeOptions?.stavePreprocessorModel ?? "claude-haiku-4-5",
-      supervisorModel: args.runtimeOptions?.staveSupervisorModel ?? "claude-opus-4-6",
-      orchestrationEnabled: args.runtimeOptions?.staveOrchestrationEnabled ?? true,
-      routeModels: args.runtimeOptions?.staveRouteModels,
+      profile,
       baseArgs: { cwd: args.cwd, taskId: args.taskId, workspaceId: args.workspaceId },
       runTurnBatch,
     });
 
     // Emit the structured execution plan so the UI can reflect it.
     if (plan.strategy === "direct") {
+      const directModel = resolveStaveIntentModel({
+        profile,
+        intent: plan.intent,
+      });
       args.onEvent?.({
         type: "stave:execution_processing",
         strategy: "direct",
-        model: plan.model,
+        model: directModel,
         reason: plan.reason,
         fastMode: plan.executionHints?.fastMode ?? false,
       });
@@ -160,7 +167,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       args.onEvent?.({
         type: "stave:execution_processing",
         strategy: "orchestrate",
-        supervisorModel: plan.supervisorModel,
+        supervisorModel: profile.supervisorModel,
         reason: plan.reason,
       });
     }
@@ -178,12 +185,11 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
         "opusplan": "claude-opus-4-6",
       };
 
-      const CODEX_MODELS = new Set(["gpt-5.4", "gpt-5.3-codex"]);
-      const resolveProvider = (model: string): "claude-code" | "codex" =>
-        CODEX_MODELS.has(model) ? "codex" : "claude-code";
-
-      let chosenModel = plan.model;
-      const planProvider = resolveProvider(chosenModel);
+      let chosenModel = resolveStaveIntentModel({
+        profile,
+        intent: plan.intent,
+      });
+      const planProvider = resolveStaveProviderForModel({ model: chosenModel });
       const planProviderAvail = getCachedAvailability(planProvider);
       if (planProviderAvail === false) {
         const fallback = MODEL_FALLBACK[chosenModel];
@@ -194,7 +200,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
 
       // Resolve to the chosen provider and model.
       const resolvedTarget = {
-        providerId: resolveProvider(chosenModel),
+        providerId: resolveStaveProviderForModel({ model: chosenModel }),
         model: chosenModel,
         reason: plan.reason,
       };
@@ -220,7 +226,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     // strategy === "orchestrate" — Phase 3: invoke the Orchestrator.
     await runOrchestrator({
       userPrompt: args.prompt,
-      supervisorModel: plan.supervisorModel,
+      profile,
       baseArgs: { cwd: args.cwd, taskId: args.taskId, workspaceId: args.workspaceId },
       runtimeOptions: args.runtimeOptions,
       onEvent: (event) => args.onEvent?.(event),

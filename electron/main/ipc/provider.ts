@@ -16,12 +16,40 @@ import {
 import { ensurePersistenceReady } from "../state";
 import { isDoneEvent, toEventType } from "../utils/provider-events";
 
+function formatSchemaIssuePath(path: PropertyKey[]) {
+  if (path.length === 0) {
+    return "(root)";
+  }
+  return path.map((segment) => String(segment)).join(".");
+}
+
+function formatSchemaFailureMessage(args: {
+  issues: Array<{ path: PropertyKey[]; message: string }>;
+  fallback: string;
+}) {
+  const summary = args.issues
+    .slice(0, 3)
+    .map((issue) => `${formatSchemaIssuePath(issue.path)}: ${issue.message}`)
+    .join("; ");
+
+  return summary.length > 0
+    ? `IPC schema rejected provider request. ${summary}`
+    : args.fallback;
+}
+
 export function registerProviderHandlers() {
   ipcMain.handle("provider:stream-turn", async (_event, args: unknown) => {
     const parsedArgs = StreamTurnArgsSchema.safeParse(args);
     if (!parsedArgs.success) {
       return [
-        { type: "error", message: "Invalid provider request.", recoverable: false },
+        {
+          type: "error",
+          message: formatSchemaFailureMessage({
+            issues: parsedArgs.error.issues,
+            fallback: "IPC schema rejected provider request.",
+          }),
+          recoverable: false,
+        },
         { type: "done" },
       ];
     }
@@ -31,7 +59,14 @@ export function registerProviderHandlers() {
   ipcMain.handle("provider:start-stream-turn", (_event, args: unknown) => {
     const parsedArgs = StreamTurnArgsSchema.safeParse(args);
     if (!parsedArgs.success) {
-      return { ok: false, streamId: "" };
+      return {
+        ok: false,
+        streamId: "",
+        message: formatSchemaFailureMessage({
+          issues: parsedArgs.error.issues,
+          fallback: "IPC schema rejected provider request.",
+        }),
+      };
     }
     return providerRuntime.startTurnStream(parsedArgs.data as StreamTurnArgs);
   });
@@ -39,7 +74,15 @@ export function registerProviderHandlers() {
   ipcMain.handle("provider:start-push-turn", async (event, args: unknown) => {
     const parsedArgs = StreamTurnArgsSchema.safeParse(args);
     if (!parsedArgs.success) {
-      return { ok: false, streamId: "", turnId: null };
+      return {
+        ok: false,
+        streamId: "",
+        turnId: null,
+        message: formatSchemaFailureMessage({
+          issues: parsedArgs.error.issues,
+          fallback: "IPC schema rejected provider request.",
+        }),
+      };
     }
     const safeArgs = parsedArgs.data as StreamTurnArgs;
     const turnId = safeArgs.turnId ?? randomUUID();

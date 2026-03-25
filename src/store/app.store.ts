@@ -17,6 +17,7 @@ import {
   buildCanonicalConversationRequest,
 } from "@/lib/providers/canonical-request";
 import { getDefaultModelForProvider, listProviderIds } from "@/lib/providers/model-catalog";
+import { buildStaveAutoProfileFromSettings } from "@/lib/providers/stave-auto-profile";
 import { getCachedProviderCommandCatalog } from "@/lib/providers/provider-command-catalog";
 import { getArchiveFallbackTaskId, isTaskArchived, reorderTasksWithinFilter, type TaskFilter } from "@/lib/tasks";
 import {
@@ -207,16 +208,19 @@ export interface AppSettings {
   modelClaude: string;
   modelCodex: string;
   modelStave: string;
-  /** Per-rule model overrides for the Stave meta-provider router. */
-  staveModelPlanner: string;
-  staveModelEcosystem: string;
-  staveModelComplex: string;
-  staveModelCodeGen: string;
-  staveModelQuickEdit: string;
-  staveModelDefault: string;
-  stavePreprocessorModel: string;
-  staveSupervisorModel: string;
-  staveOrchestrationEnabled: boolean;
+  /** Role-based defaults used by Stave Auto. */
+  staveAutoClassifierModel: string;
+  staveAutoSupervisorModel: string;
+  staveAutoPlanModel: string;
+  staveAutoAnalyzeModel: string;
+  staveAutoImplementModel: string;
+  staveAutoQuickEditModel: string;
+  staveAutoGeneralModel: string;
+  staveAutoVerifyModel: string;
+  staveAutoOrchestrationMode: "off" | "auto" | "aggressive";
+  staveAutoMaxSubtasks: number;
+  staveAutoMaxParallelSubtasks: number;
+  staveAutoAllowCrossProviderWorkers: boolean;
   rulesPresetPrimary: string;
   rulesPresetSecondary: string;
   permissionMode: "require-approval" | "auto-safe";
@@ -283,6 +287,7 @@ interface AppState {
   activeTaskId: string;
   draftProvider: ProviderId;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  promptFocusNonce: number;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   layout: LayoutState;
@@ -404,15 +409,18 @@ const defaultSettings: AppSettings = {
   modelClaude: getDefaultModelForProvider({ providerId: "claude-code" }),
   modelCodex: getDefaultModelForProvider({ providerId: "codex" }),
   modelStave: getDefaultModelForProvider({ providerId: "stave" }),
-  staveModelPlanner: "opusplan",
-  staveModelEcosystem: "gpt-5.4",
-  staveModelComplex: "claude-opus-4-6",
-  staveModelCodeGen: "gpt-5.3-codex",
-  staveModelQuickEdit: "claude-haiku-4-5",
-  staveModelDefault: "claude-sonnet-4-6",
-  stavePreprocessorModel: "claude-haiku-4-5",
-  staveSupervisorModel: "claude-opus-4-6",
-  staveOrchestrationEnabled: true,
+  staveAutoClassifierModel: "claude-haiku-4-5",
+  staveAutoSupervisorModel: "claude-opus-4-6",
+  staveAutoPlanModel: "opusplan",
+  staveAutoAnalyzeModel: "claude-opus-4-6",
+  staveAutoImplementModel: "gpt-5.3-codex",
+  staveAutoQuickEditModel: "claude-haiku-4-5",
+  staveAutoGeneralModel: "claude-sonnet-4-6",
+  staveAutoVerifyModel: "claude-sonnet-4-6",
+  staveAutoOrchestrationMode: "auto",
+  staveAutoMaxSubtasks: 3,
+  staveAutoMaxParallelSubtasks: 2,
+  staveAutoAllowCrossProviderWorkers: true,
   rulesPresetPrimary: "typescript-best-practices",
   rulesPresetSecondary: "no-target-brand-keyword",
   permissionMode: "auto-safe",
@@ -1351,6 +1359,7 @@ export const useAppStore = create<AppState>()(
       activeTaskId: "",
       draftProvider: "claude-code",
       promptDraftByTask: {},
+      promptFocusNonce: 0,
       tasks: [],
       messagesByTask: {},
       layout: {
@@ -3019,6 +3028,13 @@ export const useAppStore = create<AppState>()(
             if (isActiveWorkspaceTarget) {
               const activeTurnId = nextState.activeTurnIdsByTask[resolvedTaskId];
               if (activeTurnId !== turnId) {
+                console.warn("[provider-turn] dropped late events for inactive turn", {
+                  taskId: resolvedTaskId,
+                  workspaceId: taskWorkspaceId,
+                  expectedTurnId: turnId,
+                  activeTurnId: activeTurnId ?? null,
+                  eventTypes: pendingEvents.map((event) => event.type),
+                });
                 return {};
               }
 
@@ -3087,6 +3103,13 @@ export const useAppStore = create<AppState>()(
 
             const activeTurnId = workspaceSession.activeTurnIdsByTask[resolvedTaskId];
             if (activeTurnId !== turnId) {
+              console.warn("[provider-turn] dropped late events for inactive cached workspace turn", {
+                taskId: resolvedTaskId,
+                workspaceId: taskWorkspaceId,
+                expectedTurnId: turnId,
+                activeTurnId: activeTurnId ?? null,
+                eventTypes: pendingEvents.map((event) => event.type),
+              });
               return {};
             }
 
@@ -3233,17 +3256,9 @@ export const useAppStore = create<AppState>()(
             ...(provider === "codex" && providerConversation?.codex?.trim()
               ? { codexResumeThreadId: providerConversation.codex }
               : {}),
-            staveRouteModels: {
-              planning: get().settings.staveModelPlanner,
-              ecosystem: get().settings.staveModelEcosystem,
-              complex: get().settings.staveModelComplex,
-              codeGen: get().settings.staveModelCodeGen,
-              quickEdit: get().settings.staveModelQuickEdit,
-              default: get().settings.staveModelDefault,
-            },
-            stavePreprocessorModel: get().settings.stavePreprocessorModel,
-            staveSupervisorModel: get().settings.staveSupervisorModel,
-            staveOrchestrationEnabled: get().settings.staveOrchestrationEnabled,
+            staveAuto: buildStaveAutoProfileFromSettings({
+              settings: get().settings,
+            }),
           },
           onEvent: ({ event }) => {
             queuedEvents.push(event);
@@ -3925,16 +3940,19 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        get().sendUserMessage({
-          taskId,
-          content: instruction ?? "",
-          fileContexts: [{
-            filePath: activeTab.filePath,
-            content: activeTab.kind === "image" ? `[image file omitted] ${activeTab.filePath}` : activeTab.content,
-            language: activeTab.kind === "image" ? "image" : activeTab.language || resolveLanguage({ filePath: activeTab.filePath }),
-            instruction,
-          }],
-        });
+        // Attach the file to the prompt draft so the user can type their instruction first.
+        const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePaths: [], attachments: [] };
+        if (!currentDraft.attachedFilePaths.includes(activeTab.filePath)) {
+          get().updatePromptDraft({
+            taskId,
+            patch: {
+              attachedFilePaths: [...currentDraft.attachedFilePaths, activeTab.filePath],
+            },
+          });
+        }
+
+        // Increment the focus nonce so ChatInput focuses the textarea.
+        set((s) => ({ promptFocusNonce: s.promptFocusNonce + 1 }));
       },
       });
     },
@@ -3978,6 +3996,45 @@ export const useAppStore = create<AppState>()(
         // Migrate legacy fastModeVisible → per-provider fields.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = state.settings as any;
+        if (typeof raw.staveModelPlanner === "string" && typeof raw.staveAutoPlanModel !== "string") {
+          raw.staveAutoPlanModel = raw.staveModelPlanner;
+        }
+        if (typeof raw.staveModelComplex === "string" && typeof raw.staveAutoAnalyzeModel !== "string") {
+          raw.staveAutoAnalyzeModel = raw.staveModelComplex;
+        }
+        if (typeof raw.staveModelCodeGen === "string" && typeof raw.staveAutoImplementModel !== "string") {
+          raw.staveAutoImplementModel = raw.staveModelCodeGen;
+        }
+        if (typeof raw.staveModelQuickEdit === "string" && typeof raw.staveAutoQuickEditModel !== "string") {
+          raw.staveAutoQuickEditModel = raw.staveModelQuickEdit;
+        }
+        if (typeof raw.staveModelDefault === "string" && typeof raw.staveAutoGeneralModel !== "string") {
+          raw.staveAutoGeneralModel = raw.staveModelDefault;
+        }
+        if (typeof raw.stavePreprocessorModel === "string" && typeof raw.staveAutoClassifierModel !== "string") {
+          raw.staveAutoClassifierModel = raw.stavePreprocessorModel;
+        }
+        if (typeof raw.staveSupervisorModel === "string" && typeof raw.staveAutoSupervisorModel !== "string") {
+          raw.staveAutoSupervisorModel = raw.staveSupervisorModel;
+        }
+        if (typeof raw.staveModelComplex === "string" && typeof raw.staveAutoVerifyModel !== "string") {
+          raw.staveAutoVerifyModel = raw.staveModelComplex;
+        }
+        if (
+          typeof raw.staveOrchestrationEnabled === "boolean"
+          && typeof raw.staveAutoOrchestrationMode !== "string"
+        ) {
+          raw.staveAutoOrchestrationMode = raw.staveOrchestrationEnabled ? "auto" : "off";
+        }
+        delete raw.staveModelPlanner;
+        delete raw.staveModelEcosystem;
+        delete raw.staveModelComplex;
+        delete raw.staveModelCodeGen;
+        delete raw.staveModelQuickEdit;
+        delete raw.staveModelDefault;
+        delete raw.stavePreprocessorModel;
+        delete raw.staveSupervisorModel;
+        delete raw.staveOrchestrationEnabled;
         if (typeof raw.fastModeVisible === "boolean") {
           state.settings.claudeFastModeVisible ??= raw.fastModeVisible;
           state.settings.codexFastModeVisible ??= raw.fastModeVisible;

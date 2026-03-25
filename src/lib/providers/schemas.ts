@@ -13,7 +13,7 @@ const TextEventSchema = z.object({
 
 const ProviderConversationEventSchema = z.object({
   type: z.literal("provider_conversation"),
-  providerId: z.union([z.literal("claude-code"), z.literal("codex")]),
+  providerId: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]),
   nativeConversationId: z.string(),
 });
 

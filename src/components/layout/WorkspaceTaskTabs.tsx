@@ -2,7 +2,7 @@ import { Check, Copy, Ellipsis, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
-import { Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
+import { Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, KbdSeparator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getProviderConversationLabel, listProviderConversations } from "@/lib/providers/provider-conversations";
@@ -12,6 +12,18 @@ import { useAppStore } from "@/store/app.store";
 import type { ChatMessage } from "@/types/chat";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
+const TASK_SHORTCUT_COUNT = 10;
+
+const isMacPlatform =
+  typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent);
+const shortcutModifierSymbol = isMacPlatform ? "\u2318" : "Ctrl";
+
+function getTaskShortcutLabel(index: number): string | null {
+  if (index < 0 || index >= TASK_SHORTCUT_COUNT) {
+    return null;
+  }
+  return index === TASK_SHORTCUT_COUNT - 1 ? "0" : String(index + 1);
+}
 
 function TaskHistoryDrawer(args: {
   open: boolean;
@@ -130,6 +142,54 @@ export function WorkspaceTaskTabs() {
     return () => window.clearTimeout(handle);
   }, [copiedSessionIdKey, taskToViewSession]);
 
+  // Keyboard shortcuts: Cmd/Ctrl + 1-9,0 to switch tabs
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const hasMod = event.ctrlKey || event.metaKey;
+      if (!hasMod || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          (Boolean(
+            target.closest(
+              "input, textarea, select, [role='textbox'], [contenteditable='true']"
+            )
+          ) &&
+            !target.closest("[data-prompt-input-root]")))
+      ) {
+        return;
+      }
+
+      const shortcutIndex =
+        event.key === "0"
+          ? TASK_SHORTCUT_COUNT - 1
+          : Number.parseInt(event.key, 10) - 1;
+      if (
+        Number.isNaN(shortcutIndex) ||
+        shortcutIndex < 0 ||
+        shortcutIndex >= TASK_SHORTCUT_COUNT
+      ) {
+        return;
+      }
+
+      const nextTask = visibleTasks[shortcutIndex];
+      if (!nextTask) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      selectTask({ taskId: nextTask.id });
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [visibleTasks, selectTask]);
+
   function handleRenameConfirm() {
     if (!taskToRename) {
       return;
@@ -179,7 +239,7 @@ export function WorkspaceTaskTabs() {
                   No active tasks
                 </div>
               ) : (
-                visibleTasks.map((task) => {
+                visibleTasks.map((task, index) => {
                   const isActive = task.id === activeTaskId;
                   const isResponding = Boolean(activeTurnIdsByTask[task.id]);
                   const respondingProviderId = getRespondingProviderId({
@@ -187,6 +247,10 @@ export function WorkspaceTaskTabs() {
                     messages: messagesByTask[task.id] ?? EMPTY_MESSAGES,
                   });
                   const respondingToneClass = getProviderWaveToneClass({ providerId: respondingProviderId });
+                  const shortcutLabel = getTaskShortcutLabel(index);
+                  const buttonVisibility = isActive
+                    ? "opacity-100"
+                    : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150";
 
                   return (
                     <div
@@ -205,7 +269,7 @@ export function WorkspaceTaskTabs() {
                       }}
                       onDrop={(event) => handleTaskDrop(event, task.id)}
                       className={cn(
-                        "flex h-11 cursor-grab items-center gap-1 rounded-md border px-2",
+                        "group flex h-11 cursor-grab items-center gap-1 rounded-md border px-2",
                         isActive
                           ? "border-primary/50 bg-background shadow-sm"
                           : "border-border/70 bg-background/70",
@@ -226,6 +290,12 @@ export function WorkspaceTaskTabs() {
                           )}
                         </span>
                         <span className="max-w-56 truncate text-sm font-medium">{task.title}</span>
+                        {shortcutLabel != null ? (
+                          <KbdGroup className="ml-1 shrink-0 opacity-60">
+                            <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutModifierSymbol}</Kbd>
+                            <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutLabel}</Kbd>
+                          </KbdGroup>
+                        ) : null}
                       </button>
                       <TooltipProvider>
                         <Tooltip>
@@ -234,7 +304,7 @@ export function WorkspaceTaskTabs() {
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-7 w-7 rounded-md p-0 text-muted-foreground"
+                              className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
                               onClick={() => setTaskToArchive({ id: task.id, title: task.title })}
                               aria-label={`archive-task-${task.id}`}
                             >
@@ -246,7 +316,7 @@ export function WorkspaceTaskTabs() {
                       </TooltipProvider>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 rounded-md p-0 text-muted-foreground" aria-label={`task-menu-${task.id}`}>
+                          <Button type="button" variant="ghost" size="sm" className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)} aria-label={`task-menu-${task.id}`}>
                             <Ellipsis className="size-4" />
                           </Button>
                         </DropdownMenuTrigger>

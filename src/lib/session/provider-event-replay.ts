@@ -97,6 +97,102 @@ function createUserInputPart(args: {
   };
 }
 
+function parseJsonString(raw: string): unknown | null {
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  if (cleaned.length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return null;
+  }
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isLikelyStaveExecutionProcessingPayload(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (candidate.strategy === "direct") {
+    return typeof candidate.model === "string" && typeof candidate.reason === "string";
+  }
+
+  if (candidate.strategy === "orchestrate") {
+    return typeof candidate.supervisorModel === "string" && typeof candidate.reason === "string";
+  }
+
+  return false;
+}
+
+function isLikelyStaveOrchestrationBreakdownPayload(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length === 0) {
+    return false;
+  }
+
+  return value.every((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return false;
+    }
+
+    const candidate = item as Record<string, unknown>;
+    return (
+      typeof candidate.id === "string"
+      && typeof candidate.title === "string"
+      && typeof candidate.model === "string"
+      && typeof candidate.prompt === "string"
+      && (candidate.dependsOn === undefined || isStringArray(candidate.dependsOn))
+    );
+  });
+}
+
+function isLikelyStaveInternalRoutingPayload(text: string): boolean {
+  const parsed = parseJsonString(text);
+  if (!parsed) {
+    return false;
+  }
+
+  return (
+    isLikelyStaveExecutionProcessingPayload(parsed)
+    || isLikelyStaveOrchestrationBreakdownPayload(parsed)
+  );
+}
+
+function shouldSuppressStaveInternalText(args: {
+  message: ChatMessage;
+  candidateText: string;
+  partsExcludingTrailingText: MessagePart[];
+}): boolean {
+  if (args.message.providerId !== "stave") {
+    return false;
+  }
+
+  if (args.partsExcludingTrailingText.some((part) => part.type === "orchestration_progress")) {
+    return false;
+  }
+
+  const hasNonRoutingParts = args.partsExcludingTrailingText.some((part) => (
+    part.type !== "stave_processing"
+    && part.type !== "system_event"
+    && part.type !== "thinking"
+  ));
+  if (hasNonRoutingParts) {
+    return false;
+  }
+
+  return isLikelyStaveInternalRoutingPayload(args.candidateText);
+}
+
 function normalizeEventToPart(args: { event: NormalizedProviderEvent }): MessagePart | null {
   const { event } = args;
 
@@ -233,6 +329,33 @@ export function appendProviderEventToAssistant(args: {
         incoming: args.event.suggestions,
       }),
     };
+  }
+
+  if (args.event.type === "text") {
+    const lastPart = args.message.parts.at(-1);
+    const partsExcludingTrailingText = lastPart?.type === "text"
+      ? args.message.parts.slice(0, -1)
+      : args.message.parts;
+    const candidateText = lastPart?.type === "text"
+      ? `${lastPart.text}${args.event.text}`
+      : args.event.text;
+
+    if (shouldSuppressStaveInternalText({
+      message: args.message,
+      candidateText,
+      partsExcludingTrailingText,
+    })) {
+      const nextContent = lastPart?.type === "text" && args.message.content.endsWith(lastPart.text)
+        ? args.message.content.slice(0, -lastPart.text.length)
+        : args.message.content;
+
+      return {
+        ...args.message,
+        content: nextContent,
+        parts: partsExcludingTrailingText,
+        isStreaming: true,
+      };
+    }
   }
 
   if (args.event.type === "tool_progress") {

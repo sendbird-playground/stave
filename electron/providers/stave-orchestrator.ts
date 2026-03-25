@@ -1,67 +1,67 @@
 /**
- * Stave Orchestrator
+ * Stave Auto orchestrator.
  *
- * Coordinates multi-model task execution when the Pre-processor determines
- * that a request benefits from specialised agents working in sequence.
- *
- * Flow:
- *   1. Call the Supervisor to decompose the user prompt into 2-4 subtasks (JSON plan).
- *   2. Execute subtasks respecting `dependsOn` order (topological sort → parallel groups).
- *   3. Inject prior results into subsequent prompts via {subtask-id} placeholders.
- *   4. Call the Supervisor again to synthesise all results into a coherent response.
+ * The supervisor produces role-based subtasks. Stave resolves each role to the
+ * configured model from the Stave Auto profile at execution time so settings
+ * remain the single source of truth.
  */
 
 import type { BridgeEvent, StreamTurnArgs } from "./types";
-import type { ProviderRuntimeOptions } from "../../src/lib/providers/provider.types";
-
-// ── Supervisor prompts ────────────────────────────────────────────────────────
-
-const SUPERVISOR_BREAKDOWN_PROMPT = `You are an orchestration supervisor for Stave AI coding assistant.
-Given a user request, decompose it into 2-4 subtasks for specialized agents.
-
-Available agents and their strengths:
-- "claude-haiku-4-5": Fast analysis, reading code, quick questions
-- "claude-sonnet-4-6": General coding, writing code, balanced tasks
-- "gpt-5.3-codex": Pure code generation, precise implementations
-- "claude-opus-4-6": Deep reasoning, complex analysis, architecture
-- "gpt-5.4": Complex tasks needing speed, OpenAI ecosystem
-
-Return ONLY a JSON array (no markdown):
-[
-  {"id":"st-1","title":"Analyse existing code","model":"claude-haiku-4-5","prompt":"...","dependsOn":[]},
-  {"id":"st-2","title":"Implement fix","model":"gpt-5.3-codex","prompt":"Based on analysis: {st-1}\\n\\n...","dependsOn":["st-1"]}
-]
-
-Keep subtasks focused. Use {id} placeholders to reference previous results.
-If the task needs only 1 subtask, return a single-element array.
-Maximum 4 subtasks.`;
-
-const SUPERVISOR_SYNTHESIS_PROMPT = `You are an orchestration supervisor. Multiple specialized agents have completed their work.
-Synthesize their outputs into a coherent, helpful final response for the user.
-Be concise - avoid repeating what the agents already produced verbatim.`;
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import type { ProviderRuntimeOptions, StaveAutoProfile, StaveWorkerRole } from "../../src/lib/providers/provider.types";
+import {
+  resolveStaveProviderForModel,
+  resolveStaveWorkerModel,
+} from "../../src/lib/providers/stave-auto-profile";
 
 interface SubtaskSpec {
   id: string;
   title: string;
-  model: string;
+  role: StaveWorkerRole;
   prompt: string;
   dependsOn: string[];
 }
 
-// ── Provider inference ────────────────────────────────────────────────────────
+function buildSupervisorBreakdownPrompt(args: {
+  profile: StaveAutoProfile;
+}) {
+  const providerNote = args.profile.allowCrossProviderWorkers
+    ? "Cross-provider workers are allowed."
+    : "Avoid plans that require mixing providers; prefer fewer, broader subtasks.";
 
-const CODEX_MODEL_IDS = new Set(["gpt-5.4", "gpt-5.3-codex"]);
+  return `You are the Stave Auto orchestration supervisor.
+Break the user's request into 1-${args.profile.maxSubtasks} focused subtasks.
 
-function resolveProviderForModel(model: string): "claude-code" | "codex" {
-  return CODEX_MODEL_IDS.has(model) ? "codex" : "claude-code";
+Available worker roles:
+- "plan": strategy or high-level design only
+- "analyze": explain, inspect, debug, review, root-cause analysis
+- "implement": write, patch, refactor, add tests
+- "verify": validate the implementation, inspect risks, sanity-check tests
+- "general": balanced fallback when another role is not a clean fit
+
+${providerNote}
+
+Return ONLY a JSON array:
+[
+  {"id":"st-1","title":"Analyse existing code","role":"analyze","prompt":"...","dependsOn":[]},
+  {"id":"st-2","title":"Implement fix","role":"implement","prompt":"Based on analysis: {st-1}\\n\\n...","dependsOn":["st-1"]}
+]
+
+Rules:
+- Keep subtasks focused and concrete
+- Prefer 2-3 subtasks unless one is enough
+- Use {id} placeholders to reference earlier results
+- Use "verify" only when an explicit validation/review step is helpful`;
 }
 
-// ── JSON parsing ──────────────────────────────────────────────────────────────
+const SUPERVISOR_SYNTHESIS_PROMPT = `You are the Stave Auto synthesis supervisor.
+Multiple workers completed focused subtasks. Produce one coherent final response.
+Be concise and avoid repeating every intermediate detail verbatim.`;
 
-function parseSubtaskSpec(raw: string): SubtaskSpec[] | null {
-  const cleaned = raw
+function parseSubtaskSpec(args: {
+  raw: string;
+  maxSubtasks: number;
+}): SubtaskSpec[] | null {
+  const cleaned = args.raw
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
@@ -79,48 +79,55 @@ function parseSubtaskSpec(raw: string): SubtaskSpec[] | null {
         || item === null
         || typeof item.id !== "string"
         || typeof item.title !== "string"
-        || typeof item.model !== "string"
+        || typeof item.role !== "string"
         || typeof item.prompt !== "string"
       ) {
         return null;
       }
+
+      const role = item.role;
+      if (
+        role !== "plan"
+        && role !== "analyze"
+        && role !== "implement"
+        && role !== "verify"
+        && role !== "general"
+      ) {
+        return null;
+      }
+
       const dependsOn = Array.isArray(item.dependsOn)
-        ? (item.dependsOn as unknown[]).filter((d): d is string => typeof d === "string")
+        ? (item.dependsOn as unknown[]).filter((dep): dep is string => typeof dep === "string")
         : [];
+
       subtasks.push({
-        id: item.id as string,
-        title: item.title as string,
-        model: item.model as string,
-        prompt: item.prompt as string,
+        id: item.id,
+        title: item.title,
+        role,
+        prompt: item.prompt,
         dependsOn,
       });
     }
 
-    return subtasks.length > 0 ? subtasks.slice(0, 4) : null;
+    return subtasks.slice(0, args.maxSubtasks);
   } catch {
     return null;
   }
 }
 
-// ── Topological sort ──────────────────────────────────────────────────────────
-
-/**
- * Groups subtasks by level: level 0 has no dependencies, level 1 depends only
- * on level 0, etc.  Subtasks within the same level can run in parallel.
- */
 function topologicalGroups(subtasks: SubtaskSpec[]): SubtaskSpec[][] {
   const idToLevel = new Map<string, number>();
-  const allIds = new Set(subtasks.map((s) => s.id));
+  const allIds = new Set(subtasks.map((subtask) => subtask.id));
 
   function getLevel(id: string): number {
     if (idToLevel.has(id)) {
       return idToLevel.get(id)!;
     }
-    const task = subtasks.find((s) => s.id === id);
+    const task = subtasks.find((subtask) => subtask.id === id);
     if (!task) {
       return 0;
     }
-    const validDeps = task.dependsOn.filter((d) => allIds.has(d));
+    const validDeps = task.dependsOn.filter((dep) => allIds.has(dep));
     if (validDeps.length === 0) {
       idToLevel.set(id, 0);
       return 0;
@@ -130,182 +137,242 @@ function topologicalGroups(subtasks: SubtaskSpec[]): SubtaskSpec[][] {
     return level;
   }
 
-  for (const st of subtasks) {
-    getLevel(st.id);
+  for (const subtask of subtasks) {
+    getLevel(subtask.id);
   }
 
   const maxLevel = Math.max(0, ...Array.from(idToLevel.values()));
   const groups: SubtaskSpec[][] = Array.from({ length: maxLevel + 1 }, () => []);
-  for (const st of subtasks) {
-    const level = idToLevel.get(st.id) ?? 0;
-    groups[level]!.push(st);
+  for (const subtask of subtasks) {
+    groups[idToLevel.get(subtask.id) ?? 0]!.push(subtask);
   }
 
-  return groups.filter((g) => g.length > 0);
+  return groups.filter((group) => group.length > 0);
 }
-
-// ── Text extraction ───────────────────────────────────────────────────────────
 
 function extractTextFromEvents(events: BridgeEvent[]): string {
   return events
-    .filter((e): e is Extract<BridgeEvent, { type: "text" }> => e.type === "text")
-    .map((e) => e.text)
+    .filter((event): event is Extract<BridgeEvent, { type: "text" }> => event.type === "text")
+    .map((event) => event.text)
     .join("");
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+function buildSingleTurnPrompt(args: {
+  providerId: "claude-code" | "codex";
+  systemPrompt: string;
+  prompt: string;
+}) {
+  if (args.providerId === "codex") {
+    return `<system>\n${args.systemPrompt}\n</system>\n\n${args.prompt}`;
+  }
+  return args.prompt;
+}
+
+function buildSingleTurnRuntimeOptions(args: {
+  providerId: "claude-code" | "codex";
+  model: string;
+  systemPrompt: string;
+  timeoutMs: number;
+}): ProviderRuntimeOptions {
+  return {
+    model: args.model,
+    ...(args.providerId === "claude-code"
+      ? {
+          claudeSystemPrompt: args.systemPrompt,
+          claudeMaxTurns: 1,
+          claudePermissionMode: "bypassPermissions" as const,
+          claudeAllowedTools: [],
+        }
+      : {}),
+    providerTimeoutMs: args.timeoutMs,
+  };
+}
+
+function resolveWorkerExecutionModel(args: {
+  profile: StaveAutoProfile;
+  role: StaveWorkerRole;
+  supervisorModel: string;
+}): string {
+  const model = resolveStaveWorkerModel({
+    profile: args.profile,
+    role: args.role,
+  });
+  if (args.profile.allowCrossProviderWorkers) {
+    return model;
+  }
+
+  const workerProvider = resolveStaveProviderForModel({ model });
+  const supervisorProvider = resolveStaveProviderForModel({ model: args.supervisorModel });
+  return workerProvider === supervisorProvider ? model : args.supervisorModel;
+}
 
 export async function runOrchestrator(args: {
   userPrompt: string;
-  supervisorModel: string;
+  profile: StaveAutoProfile;
   baseArgs: Pick<StreamTurnArgs, "cwd" | "taskId" | "workspaceId">;
   runtimeOptions?: ProviderRuntimeOptions;
   onEvent: (event: BridgeEvent) => void;
   runTurnBatch: (args: StreamTurnArgs) => Promise<BridgeEvent[]>;
 }): Promise<void> {
-  const { userPrompt, supervisorModel, baseArgs, runtimeOptions, onEvent, runTurnBatch } = args;
-  const supervisorProvider = resolveProviderForModel(supervisorModel);
+  const supervisorModel = args.profile.supervisorModel;
+  const supervisorProvider = resolveStaveProviderForModel({ model: supervisorModel });
 
-  // ── Step 1: Ask supervisor to decompose the request ────────────────────────
   let decompositionEvents: BridgeEvent[];
   try {
-    decompositionEvents = await runTurnBatch({
+    decompositionEvents = await args.runTurnBatch({
       providerId: supervisorProvider,
-      prompt: userPrompt,
-      cwd: baseArgs.cwd,
-      taskId: baseArgs.taskId,
-      workspaceId: baseArgs.workspaceId,
-      runtimeOptions: {
+      prompt: buildSingleTurnPrompt({
+        providerId: supervisorProvider,
+        systemPrompt: buildSupervisorBreakdownPrompt({ profile: args.profile }),
+        prompt: args.userPrompt,
+      }),
+      cwd: args.baseArgs.cwd,
+      taskId: args.baseArgs.taskId,
+      workspaceId: args.baseArgs.workspaceId,
+      runtimeOptions: buildSingleTurnRuntimeOptions({
+        providerId: supervisorProvider,
         model: supervisorModel,
-        claudeSystemPrompt: SUPERVISOR_BREAKDOWN_PROMPT,
-        claudeMaxTurns: 1,
-        claudePermissionMode: "bypassPermissions",
-        claudeAllowedTools: [],
-        providerTimeoutMs: 30_000,
-      },
+        systemPrompt: buildSupervisorBreakdownPrompt({ profile: args.profile }),
+        timeoutMs: 30_000,
+      }),
     });
   } catch {
-    // Supervisor unreachable — emit a single done event so the turn ends cleanly.
-    onEvent({ type: "error", message: "Orchestrator: supervisor failed to produce a breakdown.", recoverable: true });
-    onEvent({ type: "done" });
+    args.onEvent({ type: "error", message: "Orchestrator: supervisor failed to produce a breakdown.", recoverable: true });
+    args.onEvent({ type: "done" });
     return;
   }
 
-  const decompositionRaw = extractTextFromEvents(decompositionEvents);
-  const subtasks = parseSubtaskSpec(decompositionRaw);
-
+  const subtasks = parseSubtaskSpec({
+    raw: extractTextFromEvents(decompositionEvents),
+    maxSubtasks: args.profile.maxSubtasks,
+  });
   if (!subtasks) {
-    // Could not parse plan — fall back gracefully.
-    onEvent({ type: "error", message: "Orchestrator: could not parse subtask breakdown.", recoverable: true });
-    onEvent({ type: "done" });
+    args.onEvent({ type: "error", message: "Orchestrator: could not parse subtask breakdown.", recoverable: true });
+    args.onEvent({ type: "done" });
     return;
   }
 
-  // Emit the plan event so the UI can render the progress card.
-  onEvent({
+  args.onEvent({
     type: "stave:orchestration_processing",
     supervisorModel,
-    subtasks: subtasks.map((st) => ({
-      id: st.id,
-      title: st.title,
-      model: st.model,
-      dependsOn: st.dependsOn,
+    subtasks: subtasks.map((subtask) => ({
+      id: subtask.id,
+      title: subtask.title,
+      model: resolveWorkerExecutionModel({
+        profile: args.profile,
+        role: subtask.role,
+        supervisorModel,
+      }),
+      dependsOn: subtask.dependsOn,
     })),
   });
 
-  // ── Step 2: Execute subtasks in topological order ──────────────────────────
   const results = new Map<string, string>();
   const groups = topologicalGroups(subtasks);
-  let subtaskIndex = 0;
+  let subtaskCounter = 0;
 
   for (const group of groups) {
-    await Promise.all(
-      group.map(async (subtask) => {
-        const index = subtaskIndex++;
-        onEvent({
-          type: "stave:subtask_started",
-          subtaskId: subtask.id,
-          index,
-          total: subtasks.length,
-          title: subtask.title,
-          model: subtask.model,
+    for (let index = 0; index < group.length; index += args.profile.maxParallelSubtasks) {
+      const batch = group.slice(index, index + args.profile.maxParallelSubtasks);
+      await Promise.all(batch.map(async (subtask) => {
+        subtaskCounter += 1;
+        const workerModel = resolveWorkerExecutionModel({
+          profile: args.profile,
+          role: subtask.role,
+          supervisorModel,
         });
 
-        // Inject prior results via {id} placeholders.
+        args.onEvent({
+          type: "stave:subtask_started",
+          subtaskId: subtask.id,
+          index: subtaskCounter,
+          total: subtasks.length,
+          title: subtask.title,
+          model: workerModel,
+        });
+
         let resolvedPrompt = subtask.prompt;
         for (const [id, result] of results.entries()) {
           resolvedPrompt = resolvedPrompt.replaceAll(`{${id}}`, result);
         }
 
-        const provider = resolveProviderForModel(subtask.model);
+        const workerProvider = resolveStaveProviderForModel({ model: workerModel });
         let success = false;
         try {
-          const subtaskEvents = await runTurnBatch({
-            providerId: provider,
+          const subtaskEvents = await args.runTurnBatch({
+            providerId: workerProvider,
             prompt: resolvedPrompt,
-            cwd: baseArgs.cwd,
-            taskId: baseArgs.taskId,
-            workspaceId: baseArgs.workspaceId,
+            cwd: args.baseArgs.cwd,
+            taskId: args.baseArgs.taskId,
+            workspaceId: args.baseArgs.workspaceId,
             runtimeOptions: {
-              ...(runtimeOptions ?? {}),
-              model: subtask.model,
-              claudeMaxTurns: 5,
-              claudePermissionMode: runtimeOptions?.claudePermissionMode ?? "bypassPermissions",
-              providerTimeoutMs: runtimeOptions?.providerTimeoutMs ?? 120_000,
+              ...(args.runtimeOptions ?? {}),
+              model: workerModel,
+              ...(workerProvider === "claude-code"
+                ? {
+                    claudeMaxTurns: 5,
+                    claudePermissionMode: args.runtimeOptions?.claudePermissionMode ?? "bypassPermissions",
+                  }
+                : {}),
+              providerTimeoutMs: args.runtimeOptions?.providerTimeoutMs ?? 120_000,
             },
           });
-          const resultText = extractTextFromEvents(subtaskEvents);
-          results.set(subtask.id, resultText);
+          results.set(subtask.id, extractTextFromEvents(subtaskEvents));
           success = true;
         } catch {
           results.set(subtask.id, `(subtask ${subtask.id} failed)`);
         }
 
-        onEvent({ type: "stave:subtask_done", subtaskId: subtask.id, success });
-      }),
-    );
-  }
-
-  // ── Step 3: Synthesise results ─────────────────────────────────────────────
-  onEvent({ type: "stave:synthesis_started" });
-
-  const resultsContext = subtasks
-    .map((st) => `## ${st.title} (${st.model})\n${results.get(st.id) ?? "(no output)"}`)
-    .join("\n\n");
-
-  const synthesisPrompt = `Original request:\n${userPrompt}\n\n---\n\nAgent outputs:\n\n${resultsContext}`;
-
-  let synthesisEvents: BridgeEvent[];
-  try {
-    synthesisEvents = await runTurnBatch({
-      providerId: supervisorProvider,
-      prompt: synthesisPrompt,
-      cwd: baseArgs.cwd,
-      taskId: baseArgs.taskId,
-      workspaceId: baseArgs.workspaceId,
-      runtimeOptions: {
-        model: supervisorModel,
-        claudeSystemPrompt: SUPERVISOR_SYNTHESIS_PROMPT,
-        claudeMaxTurns: 1,
-        claudePermissionMode: "bypassPermissions",
-        claudeAllowedTools: [],
-        providerTimeoutMs: 60_000,
-      },
-    });
-  } catch {
-    onEvent({ type: "error", message: "Orchestrator: synthesis step failed.", recoverable: true });
-    onEvent({ type: "done" });
-    return;
-  }
-
-  // Stream the synthesis output as normal text events.
-  for (const event of synthesisEvents) {
-    if (event.type === "text" || event.type === "thinking") {
-      onEvent(event);
+        args.onEvent({ type: "stave:subtask_done", subtaskId: subtask.id, success });
+      }));
     }
   }
 
-  // Emit final done with stop reason if available.
-  const doneEvent = synthesisEvents.find((e): e is Extract<BridgeEvent, { type: "done" }> => e.type === "done");
-  onEvent({ type: "done", stop_reason: doneEvent?.stop_reason });
+  args.onEvent({ type: "stave:synthesis_started" });
+
+  const resultsContext = subtasks
+    .map((subtask) => {
+      const workerModel = resolveWorkerExecutionModel({
+        profile: args.profile,
+        role: subtask.role,
+        supervisorModel,
+      });
+      return `## ${subtask.title} (${subtask.role} / ${workerModel})\n${results.get(subtask.id) ?? "(no output)"}`;
+    })
+    .join("\n\n");
+
+  let synthesisEvents: BridgeEvent[];
+  try {
+    const synthesisPrompt = `Original request:\n${args.userPrompt}\n\n---\n\nWorker outputs:\n\n${resultsContext}`;
+    synthesisEvents = await args.runTurnBatch({
+      providerId: supervisorProvider,
+      prompt: buildSingleTurnPrompt({
+        providerId: supervisorProvider,
+        systemPrompt: SUPERVISOR_SYNTHESIS_PROMPT,
+        prompt: synthesisPrompt,
+      }),
+      cwd: args.baseArgs.cwd,
+      taskId: args.baseArgs.taskId,
+      workspaceId: args.baseArgs.workspaceId,
+      runtimeOptions: buildSingleTurnRuntimeOptions({
+        providerId: supervisorProvider,
+        model: supervisorModel,
+        systemPrompt: SUPERVISOR_SYNTHESIS_PROMPT,
+        timeoutMs: 60_000,
+      }),
+    });
+  } catch {
+    args.onEvent({ type: "error", message: "Orchestrator: synthesis step failed.", recoverable: true });
+    args.onEvent({ type: "done" });
+    return;
+  }
+
+  for (const event of synthesisEvents) {
+    if (event.type === "text" || event.type === "thinking") {
+      args.onEvent(event);
+    }
+  }
+
+  const doneEvent = synthesisEvents.find((event): event is Extract<BridgeEvent, { type: "done" }> => event.type === "done");
+  args.onEvent({ type: "done", stop_reason: doneEvent?.stop_reason });
 }
