@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { providerRuntime } from "../../providers/runtime";
+import { suggestClaudeTaskName } from "../../providers/claude-sdk-runtime";
 import type { StreamTurnArgs } from "../../providers/types";
 import {
   ApprovalResponseArgsSchema,
@@ -9,6 +10,7 @@ import {
   ProviderIdSchema,
   StreamReadArgsSchema,
   StreamTurnArgsSchema,
+  SuggestTaskNameArgsSchema,
   UserInputResponseArgsSchema,
 } from "./schemas";
 import { ensurePersistenceReady } from "../state";
@@ -219,5 +221,15 @@ export function registerProviderHandlers() {
       cwd: parsedArgs.data.cwd,
       runtimeOptions: parsedArgs.data.runtimeOptions,
     });
+  });
+
+  // Lightweight, single-turn query that returns a short title for a new task.
+  // Runs isolated from the task's main conversation history.
+  ipcMain.handle("provider:suggest-task-name", (_event, args: unknown) => {
+    const parsed = SuggestTaskNameArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false };
+    }
+    return suggestClaudeTaskName({ prompt: parsed.data.prompt });
   });
 }

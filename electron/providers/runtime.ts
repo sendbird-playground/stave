@@ -1,6 +1,9 @@
 import { cleanupClaudeTask, getClaudeCommandCatalog, streamClaudeWithSdk } from "./claude-sdk-runtime";
 import { cleanupCodexTask, streamCodexWithSdk } from "./codex-sdk-runtime";
 import { buildStaveResolvedArgs, resolveStaveTarget } from "./stave-router";
+import { runPreprocessor } from "./stave-preprocessor";
+import { getCachedAvailability } from "./stave-availability";
+import { runOrchestrator } from "./stave-orchestrator";
 import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -115,7 +118,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
   });
   const turnTimeoutMs = args.runtimeOptions?.providerTimeoutMs ?? sdkTurnTimeoutMs;
 
-  // ── Stave meta-provider: resolve the real target and re-enter ──────────────
+  // ── Stave meta-provider: Pre-processor → direct or orchestrate ────────────
   if (args.providerId === "stave") {
     const contextParts = args.conversation?.contextParts ?? [];
     const attachedFileCount = contextParts.filter(
@@ -123,21 +126,107 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     ).length;
     const historyLength = args.conversation?.history?.length ?? 0;
 
-    const target = resolveStaveTarget({
-      prompt: args.prompt,
-      attachedFileCount,
+    // Helper: run a provider turn in batch mode (collect all events, no streaming).
+    // Injected into the Pre-processor so it can call any provider without a
+    // circular module dependency.
+    const runTurnBatch = async (batchArgs: StreamTurnArgs): Promise<BridgeEvent[]> => {
+      const collected: BridgeEvent[] = [];
+      await runProviderTurn({ ...batchArgs, onEvent: (e) => collected.push(e) });
+      return collected;
+    };
+
+    const plan = await runPreprocessor({
+      userPrompt: args.prompt,
       historyLength,
+      attachedFileCount,
+      preprocessorModel: args.runtimeOptions?.stavePreprocessorModel ?? "claude-haiku-4-5",
+      supervisorModel: args.runtimeOptions?.staveSupervisorModel ?? "claude-opus-4-6",
+      orchestrationEnabled: args.runtimeOptions?.staveOrchestrationEnabled ?? true,
       routeModels: args.runtimeOptions?.staveRouteModels,
+      baseArgs: { cwd: args.cwd, taskId: args.taskId, workspaceId: args.workspaceId },
+      runTurnBatch,
     });
 
-    // Notify the client which provider + model was selected
-    args.onEvent?.({ type: "system", content: `[Stave] ${target.reason}` });
-    // Let the client know the resolved provider + model so the message badge can update
-    args.onEvent?.({ type: "model_resolved", resolvedProviderId: target.providerId, resolvedModel: target.model });
+    // Emit the structured execution plan so the UI can reflect it.
+    if (plan.strategy === "direct") {
+      args.onEvent?.({
+        type: "stave:execution_processing",
+        strategy: "direct",
+        model: plan.model,
+        reason: plan.reason,
+        fastMode: plan.executionHints?.fastMode ?? false,
+      });
+    } else {
+      args.onEvent?.({
+        type: "stave:execution_processing",
+        strategy: "orchestrate",
+        supervisorModel: plan.supervisorModel,
+        reason: plan.reason,
+      });
+    }
 
-    // Delegate to the real provider via a recursive call so that all
-    // timeout / abort / session logic is handled identically.
-    return runProviderTurn(buildStaveResolvedArgs(args, target));
+    if (plan.strategy === "direct") {
+      // ── Phase 2: Availability-aware fallback ────────────────────────────────
+      // Fallback pairs: if the plan's provider is cached as unavailable, pick
+      // an equivalent model from the other provider.
+      const MODEL_FALLBACK: Record<string, string> = {
+        "claude-opus-4-6": "gpt-5.4",
+        "claude-sonnet-4-6": "gpt-5.4",
+        "claude-haiku-4-5": "gpt-5.3-codex",
+        "gpt-5.4": "claude-opus-4-6",
+        "gpt-5.3-codex": "claude-haiku-4-5",
+        "opusplan": "claude-opus-4-6",
+      };
+
+      const CODEX_MODELS = new Set(["gpt-5.4", "gpt-5.3-codex"]);
+      const resolveProvider = (model: string): "claude-code" | "codex" =>
+        CODEX_MODELS.has(model) ? "codex" : "claude-code";
+
+      let chosenModel = plan.model;
+      const planProvider = resolveProvider(chosenModel);
+      const planProviderAvail = getCachedAvailability(planProvider);
+      if (planProviderAvail === false) {
+        const fallback = MODEL_FALLBACK[chosenModel];
+        if (fallback) {
+          chosenModel = fallback;
+        }
+      }
+
+      // Resolve to the chosen provider and model.
+      const resolvedTarget = {
+        providerId: resolveProvider(chosenModel),
+        model: chosenModel,
+        reason: plan.reason,
+      };
+
+      // Notify the client of the resolved model (updates the message badge).
+      // Note: the routing reason is already shown via the stave:execution_processing event → stave_processing MessagePart.
+      args.onEvent?.({ type: "model_resolved", resolvedProviderId: resolvedTarget.providerId, resolvedModel: resolvedTarget.model });
+
+      const resolvedArgs = buildStaveResolvedArgs(args, resolvedTarget);
+
+      // Apply fast-mode hint if the Pre-processor flagged it.
+      if (plan.executionHints?.fastMode) {
+        resolvedArgs.runtimeOptions = {
+          ...resolvedArgs.runtimeOptions,
+          codexFastMode: true,
+          claudeFastMode: true,
+        };
+      }
+
+      return runProviderTurn(resolvedArgs);
+    }
+
+    // strategy === "orchestrate" — Phase 3: invoke the Orchestrator.
+    await runOrchestrator({
+      userPrompt: args.prompt,
+      supervisorModel: plan.supervisorModel,
+      baseArgs: { cwd: args.cwd, taskId: args.taskId, workspaceId: args.workspaceId },
+      runtimeOptions: args.runtimeOptions,
+      onEvent: (event) => args.onEvent?.(event),
+      runTurnBatch,
+    });
+    return;
   }
 
   if (args.providerId === "claude-code") {

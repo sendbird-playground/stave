@@ -2,6 +2,14 @@ import { z } from "zod";
 
 export const ProviderIdSchema = z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]);
 
+export const SuggestTaskNameArgsSchema = z.object({
+  prompt: z.string().max(2000),
+  history: z.array(z.object({
+    role: z.string().max(50),
+    content: z.string().max(2000),
+  }).strict()).max(20).optional(),
+}).strict();
+
 export const SkillCatalogArgsSchema = z.object({
   workspacePath: z.string().max(4096).optional(),
 }).strict();
@@ -56,6 +64,9 @@ const RuntimeOptionsSchema = z.object({
     quickEdit: z.string().max(200).optional(),
     default: z.string().max(200).optional(),
   }).strict().optional(),
+  stavePreprocessorModel: z.string().max(200).optional(),
+  staveSupervisorModel: z.string().max(200).optional(),
+  staveOrchestrationEnabled: z.boolean().optional(),
 }).strict().optional();
 
 const UserInputOptionSchema = z.object({
@@ -139,6 +150,27 @@ const CanonicalMessagePartSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("system_event"),
     content: z.string().max(500_000),
+  }).strict(),
+  z.object({
+    type: z.literal("orchestration_progress"),
+    supervisorModel: z.string().max(200),
+    subtasks: z.array(z.object({
+      id: z.string().max(200),
+      title: z.string().max(5000),
+      model: z.string().max(200),
+      status: z.union([
+        z.literal("pending"),
+        z.literal("running"),
+        z.literal("done"),
+        z.literal("error"),
+      ]),
+    }).strict()).max(32),
+    status: z.union([
+      z.literal("planning"),
+      z.literal("executing"),
+      z.literal("synthesizing"),
+      z.literal("done"),
+    ]),
   }).strict(),
 ]);
 

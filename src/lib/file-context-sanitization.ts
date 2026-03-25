@@ -122,6 +122,31 @@ export function sanitizeMessagePartPayload<T extends MessagePart>(part: T): T {
       const content = sanitizeTextField({ value: part.content, label: "system event" });
       return content === part.content ? part : { ...part, content } as T;
     }
+    case "orchestration_progress": {
+      const supervisorModel = sanitizeTextField({
+        value: part.supervisorModel,
+        label: "orchestration supervisor model",
+      });
+      const subtasks = part.subtasks.map((subtask) => ({
+        ...subtask,
+        title: sanitizeTextField({ value: subtask.title, label: "orchestration subtask title" }),
+        model: sanitizeTextField({ value: subtask.model, label: "orchestration subtask model" }),
+      }));
+      const changed = supervisorModel !== part.supervisorModel
+        || subtasks.some((subtask, index) => (
+          subtask.title !== part.subtasks[index]?.title
+          || subtask.model !== part.subtasks[index]?.model
+        ));
+      return changed
+        ? {
+            ...part,
+            supervisorModel,
+            subtasks,
+          } as T
+        : part;
+    }
+    case "stave_processing":
+      return part;
     case "approval":
     case "user_input":
       return part;

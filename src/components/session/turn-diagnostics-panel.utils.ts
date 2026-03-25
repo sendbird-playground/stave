@@ -92,10 +92,19 @@ export function getReplayEventFilterId(args: { item: ReplayedTurnEvent }): Exclu
     case "usage":
     case "prompt_suggestions":
     case "plan_ready":
+    case "model_resolved":
+    case "stave:execution_processing":
+    case "stave:orchestration_processing":
+    case "stave:subtask_started":
+    case "stave:subtask_done":
+    case "stave:synthesis_started":
     case "system":
     case "done":
       return "system";
   }
+
+  const exhaustiveCheck: never = args.item.event;
+  return exhaustiveCheck;
 }
 
 export function summarizeReplayEventFilters(args: {

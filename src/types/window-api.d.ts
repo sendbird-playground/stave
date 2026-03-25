@@ -70,6 +70,13 @@ interface WindowProviderApi {
     commands: ProviderSlashCommand[];
     detail: string;
   }>;
+  /** Generates a short task title from the given prompt and optional
+   *  conversation history using a lightweight single-turn Claude query
+   *  isolated from the main task conversation. */
+  suggestTaskName?: (args: {
+    prompt: string;
+    history?: Array<{ role: string; content: string }>;
+  }) => Promise<{ ok: boolean; title?: string }>;
 }
 
 interface WindowFsApi {

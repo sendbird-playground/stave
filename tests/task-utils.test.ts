@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { getArchiveFallbackTaskId, getTaskCounts, getVisibleTasks, isTaskArchived, reorderTasksWithinFilter } from "../src/lib/tasks";
-import type { Task } from "../src/types/chat";
+import { getArchiveFallbackTaskId, getRespondingProviderId, getTaskCounts, getVisibleTasks, isTaskArchived, reorderTasksWithinFilter } from "../src/lib/tasks";
+import type { ChatMessage, Task } from "../src/types/chat";
 
 const tasks: Task[] = [
   {
@@ -30,6 +30,38 @@ const tasks: Task[] = [
 ];
 
 describe("task utils", () => {
+  test("uses the streaming assistant's resolved provider for responding tone", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        model: "gpt-5.4",
+        providerId: "stave",
+        content: "",
+        isStreaming: true,
+        parts: [],
+      },
+    ];
+
+    expect(getRespondingProviderId({ fallbackProviderId: "stave", messages })).toBe("codex");
+  });
+
+  test("falls back to the last assistant provider when a turn has no streaming marker", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "m1",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        providerId: "claude-code",
+        content: "Done",
+        isStreaming: false,
+        parts: [],
+      },
+    ];
+
+    expect(getRespondingProviderId({ fallbackProviderId: "stave", messages })).toBe("claude-code");
+  });
+
   test("filters archived and active task views", () => {
     expect(getVisibleTasks({ tasks, filter: "active" }).map((task) => task.id)).toEqual(["task-active-1", "task-active-2"]);
     expect(getVisibleTasks({ tasks, filter: "archived" }).map((task) => task.id)).toEqual(["task-archived-1"]);

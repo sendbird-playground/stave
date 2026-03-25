@@ -24,6 +24,8 @@ import {
   Reasoning,
   ReasoningContent,
   ReasoningTrigger,
+  OrchestrationCard,
+  StaveProcessingCard,
   SubagentCard,
   TodoCard,
   Tool,
@@ -121,11 +123,11 @@ function toProviderStartCase(args: { providerId: "claude-code" | "codex" | "stav
     .join(" ");
 }
 
-function toProviderWaveToneClass(args: { providerId: "claude-code" | "codex" | "stave" | "user" }) {
+function toProviderWaveToneClass(args: { providerId: "claude-code" | "codex" | "stave" | "user"; model?: string }) {
   if (args.providerId === "user") {
     return "text-primary";
   }
-  return getProviderWaveToneClass({ providerId: args.providerId });
+  return getProviderWaveToneClass({ providerId: args.providerId, model: args.model });
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -500,6 +502,10 @@ function MessagePartRenderer(args: { part: MessagePart; taskId: string; messageI
         return null;
       }
       return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm italic text-muted-foreground">{part.content}</p>;
+    case "orchestration_progress":
+      return <OrchestrationCard part={part} />;
+    case "stave_processing":
+      return <StaveProcessingCard part={part} />;
     case "text":
       if (!part.text?.trim()) return null;
       return <MessageResponse isStreaming={isStreaming && isLastTextPart}>{part.text}</MessageResponse>;
@@ -538,44 +544,37 @@ function BackgroundActionsSummary(args: { parts: MessagePart[]; onOpenReplay?: (
     : null;
 
   return (
-    <Card className="gap-3 border-dashed border-border/80 bg-muted/20 p-3">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium text-foreground">
-            {summary.totalActions} {summary.totalActions === 1 ? "background action" : "background actions"}
-          </p>
-          {statusLabel ? (
-            <Badge variant="destructive">
-              {statusLabel}
-            </Badge>
-          ) : null}
-          {args.onOpenReplay ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    className="ml-auto"
-                    aria-label="Open Session Replay"
-                    onClick={args.onOpenReplay}
-                  >
-                    <Clock3 className="size-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Open Session Replay</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : null}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
+    <Card className="border-dashed border-border/80 bg-muted/20 p-2">
+      <div className="flex flex-wrap items-center gap-2">
         {summary.byTool.slice(0, 5).map((item) => (
           <Badge key={item.toolName} variant="outline">
             {toToolDisplayName(item.toolName)} x{item.count}
           </Badge>
         ))}
+        {statusLabel ? (
+          <Badge variant="destructive">
+            {statusLabel}
+          </Badge>
+        ) : null}
+        {args.onOpenReplay ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  className="ml-auto"
+                  aria-label="Open Session Replay"
+                  onClick={args.onOpenReplay}
+                >
+                  <Clock3 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open Session Replay</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
       </div>
     </Card>
   );
@@ -817,7 +816,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                 label="Responding"
                 className="pointer-events-none absolute right-0 top-1/2 h-8 w-8 shrink-0 -translate-y-1/2 cursor-default p-0 opacity-100"
               >
-                <WaveIndicator className={toProviderWaveToneClass({ providerId: message.providerId })} />
+                <WaveIndicator className={toProviderWaveToneClass({ providerId: message.providerId, model: message.model })} />
               </MessageAction>
             ) : null}
           </MessageActions>

@@ -1,4 +1,6 @@
-import type { Task } from "@/types/chat";
+import type { ProviderId } from "@/lib/providers/provider.types";
+import { resolveProviderDisplayId } from "@/lib/providers/model-catalog";
+import type { ChatMessage, Task } from "@/types/chat";
 
 export type TaskFilter = "active" | "archived" | "all";
 
@@ -78,9 +80,47 @@ export function getTaskCounts(args: { tasks: Array<Pick<Task, "archivedAt">> }) 
   };
 }
 
+export function filterTasksByName(args: { tasks: Task[]; query: string }) {
+  const trimmed = args.query.trim();
+  if (!trimmed) {
+    return args.tasks;
+  }
+  const lower = trimmed.toLowerCase();
+  return args.tasks.filter((task) => task.title.toLowerCase().includes(lower));
+}
+
 export function getArchiveFallbackTaskId(args: { tasks: Task[]; archivedTaskId: string }) {
   const activeFallback = args.tasks.find((task) => task.id !== args.archivedTaskId && !isTaskArchived(task));
   return activeFallback?.id ?? "";
+}
+
+export function getRespondingProviderId(args: {
+  fallbackProviderId: ProviderId;
+  messages: ChatMessage[];
+}) {
+  let latestResolvedAssistantProviderId: ProviderId | null = null;
+
+  for (let index = args.messages.length - 1; index >= 0; index -= 1) {
+    const message = args.messages[index];
+    if (message?.role !== "assistant" || message.providerId === "user") {
+      continue;
+    }
+
+    const resolvedProviderId = resolveProviderDisplayId({
+      providerId: message.providerId,
+      model: message.model,
+    });
+
+    if (message.isStreaming) {
+      return resolvedProviderId;
+    }
+
+    if (!latestResolvedAssistantProviderId) {
+      latestResolvedAssistantProviderId = resolvedProviderId;
+    }
+  }
+
+  return latestResolvedAssistantProviderId ?? resolveProviderDisplayId({ providerId: args.fallbackProviderId });
 }
 
 export function formatTaskUpdatedAt(args: { value: string; now?: number | Date }) {

@@ -9,7 +9,9 @@ export type MessagePartType =
   | "image_context"
   | "approval"
   | "user_input"
-  | "system_event";
+  | "system_event"
+  | "orchestration_progress"
+  | "stave_processing";
 
 export type Attachment =
   | { kind: "file"; filePath: string }
@@ -97,6 +99,32 @@ export interface SystemEventPart extends MessagePartBase {
   content: string;
 }
 
+export interface StaveProcessingPart extends MessagePartBase {
+  type: "stave_processing";
+  strategy: "direct" | "orchestrate";
+  /** The model chosen for direct execution. */
+  model?: string;
+  /** The supervisor model chosen for orchestration. */
+  supervisorModel?: string;
+  /** Short human-readable reason from the Pre-processor. */
+  reason: string;
+  fastMode?: boolean;
+}
+
+export interface OrchestrationSubtaskState {
+  id: string;
+  title: string;
+  model: string;
+  status: "pending" | "running" | "done" | "error";
+}
+
+export interface OrchestrationProgressPart extends MessagePartBase {
+  type: "orchestration_progress";
+  supervisorModel: string;
+  subtasks: OrchestrationSubtaskState[];
+  status: "planning" | "executing" | "synthesizing" | "done";
+}
+
 export type MessagePart =
   | TextPart
   | ThinkingPart
@@ -106,7 +134,9 @@ export type MessagePart =
   | ImageContextPart
   | ApprovalPart
   | UserInputPart
-  | SystemEventPart;
+  | SystemEventPart
+  | OrchestrationProgressPart
+  | StaveProcessingPart;
 
 export interface ChatMessage {
   id: string;

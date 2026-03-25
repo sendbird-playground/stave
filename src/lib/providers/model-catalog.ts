@@ -45,6 +45,21 @@ export interface ProviderDescriptor {
 
 export const PROVIDER_DESCRIPTORS = [
   {
+    // Stave meta-provider: analyses each prompt and automatically routes to
+    // the best underlying provider+model (claude-code or codex).
+    id: "stave",
+    label: "Stave",
+    shortLabel: "Stave",
+    iconUrl: STAVE_LOGO_DARK_ICON_URL,
+    fallbackLabel: "S",
+    models: STAVE_META_MODEL_OPTIONS,
+    defaultModel: "stave-auto",
+    conversationLabel: "Stave router",
+    capabilities: {
+      nativeCommandCatalog: false,
+    },
+  },
+  {
     id: "claude-code",
     label: "Claude Code",
     shortLabel: "Claude",
@@ -66,21 +81,6 @@ export const PROVIDER_DESCRIPTORS = [
     models: CODEX_SDK_MODEL_OPTIONS,
     defaultModel: "gpt-5.4",
     conversationLabel: "Codex thread ID",
-    capabilities: {
-      nativeCommandCatalog: false,
-    },
-  },
-  {
-    // Stave meta-provider: analyses each prompt and automatically routes to
-    // the best underlying provider+model (claude-code or codex).
-    id: "stave",
-    label: "Stave",
-    shortLabel: "Stave",
-    iconUrl: STAVE_LOGO_DARK_ICON_URL,
-    fallbackLabel: "S",
-    models: STAVE_META_MODEL_OPTIONS,
-    defaultModel: "stave-auto",
-    conversationLabel: "Stave router",
     capabilities: {
       nativeCommandCatalog: false,
     },
@@ -118,11 +118,33 @@ export function getProviderIconUrl(args: { providerId: ProviderId; isDarkMode?: 
   return getProviderDescriptor({ providerId: args.providerId }).iconUrl;
 }
 
-export function getProviderWaveToneClass(args: { providerId: ProviderId }) {
-  if (args.providerId === "claude-code") {
+export function inferProviderIdFromModel(args: { model: string }): ProviderId {
+  const normalizedModel = args.model.trim().toLowerCase();
+  if (!normalizedModel || normalizedModel === "stave-auto" || normalizedModel.startsWith("stave-")) {
+    return "stave";
+  }
+  if (normalizedModel.includes("codex") || normalizedModel.startsWith("gpt-")) {
+    return "codex";
+  }
+  return "claude-code";
+}
+
+export function resolveProviderDisplayId(args: { providerId: ProviderId; model?: string }) {
+  if (args.providerId !== "stave" || !args.model) {
+    return args.providerId;
+  }
+
+  const inferredProviderId = inferProviderIdFromModel({ model: args.model });
+  return inferredProviderId === "stave" ? args.providerId : inferredProviderId;
+}
+
+export function getProviderWaveToneClass(args: { providerId: ProviderId; model?: string }) {
+  const displayProviderId = resolveProviderDisplayId(args);
+
+  if (displayProviderId === "claude-code") {
     return "text-provider-claude";
   }
-  if (args.providerId === "codex") {
+  if (displayProviderId === "codex") {
     return "text-provider-codex";
   }
   return "text-primary";

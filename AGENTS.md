@@ -102,6 +102,19 @@ React renderer         →  src/
 - When upgrading `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, or the Codex/Claude CLI expectations, verify new option names and object shapes against the installed package types/docs in `node_modules` before wiring them into Stave. Do not assume flag names from memory.
 - If a change is intentionally provider-specific, note that explicitly in code or the final handoff. Otherwise, review the sibling provider adapter for symmetry.
 
+### NormalizedProviderEvent ↔ Zod Schema Sync
+
+`NormalizedProviderEvent` (TypeScript union in `src/lib/providers/provider.types.ts`) and `NormalizedProviderEventSchema` (Zod discriminated union in `src/lib/providers/schemas.ts`) **must always be kept in sync**.
+
+**Why this matters:**
+All IPC events emitted from `electron/providers/` travel through `adapter.factory.ts → parseNormalizedEvent()`, which validates every event against `NormalizedProviderEventSchema`. Any event type missing from the Zod schema is silently dropped — TypeScript will not catch this because the TS type and Zod schema are separate definitions.
+
+**Rules:**
+- Every time you add a new event variant to `NormalizedProviderEvent`, immediately add the matching Zod schema object to `NormalizedProviderEventSchema` in the same commit/change.
+- Every time you rename an event type string (e.g. `"stave:execution_plan"` → `"stave:execution_processing"`), rename **both** the TypeScript union literal and the Zod `z.literal(...)` in the same change. Also update every `electron/providers/` emitter and `src/lib/session/provider-event-replay.ts` handler.
+- The Zod schema variable names (e.g. `StaveExecutionProcessingEventSchema`) must mirror the TypeScript type for easy auditing. If they diverge, treat it as a bug.
+- After any change to either file, verify with `bun run typecheck`. TypeScript type errors may not surface missing Zod entries — manually cross-check that every member of the `NormalizedProviderEvent` union has a corresponding Zod schema in `NormalizedProviderEventSchema`.
+
 ## Code Conventions
 
 - **Import paths:** always use `@/...` alias, never bare `../../` from `src/`.
