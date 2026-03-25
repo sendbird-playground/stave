@@ -109,7 +109,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
     activeTurnIdsByTask,
     activeWorkspaceBranch,
     activeWorkspaceCwd,
-    newWorkspaceInitCommand,
+    projectWorkspaceInitCommand,
     createProject,
     openProjectFromPath,
     openProject,
@@ -134,7 +134,10 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
     state.activeTurnIdsByTask,
     state.workspaceBranchById[state.activeWorkspaceId] ?? "main",
     state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined,
-    state.settings.newWorkspaceInitCommand,
+    (state.projectPath
+      ? state.recentProjects.find((project) => project.projectPath === state.projectPath)?.newWorkspaceInitCommand
+      : ""
+    ) ?? "",
     state.createProject,
     state.openProjectFromPath,
     state.openProject,
@@ -746,7 +749,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
         open={createWorkspaceOpen}
         activeBranch={activeWorkspaceBranch}
         cwd={activeWorkspaceCwd}
-        defaultInitCommand={newWorkspaceInitCommand}
+        defaultInitCommand={projectWorkspaceInitCommand}
         onOpenChange={setCreateWorkspaceOpen}
         onCreateWorkspace={createWorkspace}
       />

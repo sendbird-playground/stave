@@ -15,7 +15,7 @@ This is the primary app architecture:
 
 The renderer does not call provider SDKs directly. It sends provider turn requests across the preload bridge, and Electron executes the SDK work in the main process.
 
-The same terminal bridge is also used for local workspace automation such as running an optional post-create bootstrap command when a new git worktree workspace is created.
+The same terminal bridge is also used for local workspace automation such as running an optional repo-scoped post-create bootstrap command when a new git worktree workspace is created.
 
 ## Browser dev runtime
 

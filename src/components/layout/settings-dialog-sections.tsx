@@ -1,5 +1,5 @@
 import { memo, useEffect, useState, type ComponentPropsWithoutRef } from "react";
-import { Bot, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, TriangleAlert, Wrench } from "lucide-react";
+import { Bot, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, TriangleAlert, Wrench } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Button, Card, Input, Textarea } from "@/components/ui";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -86,6 +86,44 @@ function formatProviderTimeoutLabel(value: number) {
 interface GpuStatusSnapshot {
   hardwareAccelerationEnabled: boolean;
   featureStatus: Record<string, string>;
+}
+
+interface GitRemoteState {
+  name: string;
+  fetchUrl: string | null;
+  pushUrl: string | null;
+}
+
+function parseGitRemotes(args: { stdout: string }) {
+  const remoteStateByName = new Map<string, GitRemoteState>();
+  const lines = args.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const match = line.match(/^(\S+)\s+(.+?)\s+\((fetch|push)\)$/i);
+    if (!match) {
+      continue;
+    }
+    const [, name, url, kind] = match;
+    if (!name || !url || !kind) {
+      continue;
+    }
+    const current = remoteStateByName.get(name) ?? {
+      name,
+      fetchUrl: null,
+      pushUrl: null,
+    };
+    if (kind.toLowerCase() === "fetch") {
+      current.fetchUrl = url;
+    } else {
+      current.pushUrl = url;
+    }
+    remoteStateByName.set(name, current);
+  }
+
+  return Array.from(remoteStateByName.values());
 }
 
 function SectionHeading(args: { title: string; description: string }) {
@@ -224,18 +262,117 @@ const DraftTextarea = memo(function DraftTextarea(args: DraftTextareaProps) {
 });
 
 function GeneralSection() {
-  const [language, newWorkspaceInitCommand, confirmBeforeClose] = useAppStore(
+  const [language, confirmBeforeClose, projectPath, recentProjects, activeWorkspaceId, workspacePathById] = useAppStore(
     useShallow((state) => [
       state.settings.language,
-      state.settings.newWorkspaceInitCommand,
       state.settings.confirmBeforeClose,
+      state.projectPath,
+      state.recentProjects,
+      state.activeWorkspaceId,
+      state.workspacePathById,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const setProjectWorkspaceInitCommand = useAppStore((state) => state.setProjectWorkspaceInitCommand);
+  const projectWorkspaceInitCommand = (projectPath
+    ? recentProjects.find((project) => project.projectPath === projectPath)?.newWorkspaceInitCommand
+    : ""
+  ) ?? "";
+  const repositoryLookupCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
+  const [repositoryRefreshNonce, setRepositoryRefreshNonce] = useState(0);
+  const [repositoryState, setRepositoryState] = useState<{
+    status: "idle" | "loading" | "ready" | "error";
+    rootPath: string | null;
+    remotes: GitRemoteState[];
+    detail: string;
+  }>({
+    status: "idle",
+    rootPath: null,
+    remotes: [],
+    detail: "Open a project to inspect repository details.",
+  });
+
+  useEffect(() => {
+    if (!projectPath) {
+      setRepositoryState({
+        status: "idle",
+        rootPath: null,
+        remotes: [],
+        detail: "Open a project to inspect repository details.",
+      });
+      return;
+    }
+
+    const runCommand = window.api?.terminal?.runCommand;
+    if (!runCommand || !repositoryLookupCwd) {
+      setRepositoryState({
+        status: "error",
+        rootPath: null,
+        remotes: [],
+        detail: "Terminal bridge unavailable.",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setRepositoryState((current) => ({
+      ...current,
+      status: "loading",
+      detail: "Refreshing repository metadata...",
+    }));
+
+    void (async () => {
+      const [rootResult, remoteResult] = await Promise.all([
+        runCommand({
+          cwd: repositoryLookupCwd,
+          command: "git rev-parse --show-toplevel",
+        }),
+        runCommand({
+          cwd: repositoryLookupCwd,
+          command: "git remote -v",
+        }),
+      ]);
+      if (cancelled) {
+        return;
+      }
+
+      if (!rootResult.ok) {
+        setRepositoryState({
+          status: "error",
+          rootPath: null,
+          remotes: [],
+          detail: rootResult.stderr?.trim() || "Current project is not a git repository.",
+        });
+        return;
+      }
+
+      const rootPath = rootResult.stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .find(Boolean) ?? projectPath;
+      const remotes = remoteResult.ok ? parseGitRemotes({ stdout: remoteResult.stdout }) : [];
+      const detail = remoteResult.ok
+        ? (remotes.length > 0
+            ? `${remotes.length} remote${remotes.length === 1 ? "" : "s"} configured.`
+            : "No git remotes configured.")
+        : (remoteResult.stderr?.trim() || "Failed to inspect git remotes.");
+
+      setRepositoryState({
+        status: "ready",
+        rootPath,
+        remotes,
+        detail,
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath, repositoryLookupCwd, repositoryRefreshNonce]);
 
   return (
     <>
-      <SectionHeading title="General" description="Global defaults for language and workspace-wide app behavior." />
+      <SectionHeading title="General" description="Global preferences plus per-repository workspace defaults." />
       <SectionStack>
         <SettingsCard title="Language" description="Reserved for future localization support.">
           <DraftInput
@@ -245,8 +382,8 @@ function GeneralSection() {
           />
         </SettingsCard>
         <SettingsCard
-          title="New Workspace Defaults"
-          description="Optional shell command to run after Stave creates a new git worktree workspace."
+          title="Repository Workspace Defaults"
+          description="Each repository can keep its own post-create bootstrap command for new worktree workspaces."
         >
           <LabeledField
             title="Post-Create Command"
@@ -254,10 +391,64 @@ function GeneralSection() {
           >
             <DraftTextarea
               className="min-h-[120px] rounded-md border-border/80 bg-background font-mono text-sm"
-              value={newWorkspaceInitCommand}
-              onCommit={(nextValue) => updateSettings({ patch: { newWorkspaceInitCommand: nextValue } })}
+              value={projectWorkspaceInitCommand}
+              onCommit={(nextValue) => setProjectWorkspaceInitCommand({ command: nextValue })}
               placeholder="bun install"
+              disabled={!projectPath}
             />
+          </LabeledField>
+          {projectPath ? (
+            <p className="text-xs text-muted-foreground">
+              Current repository: <span className="font-mono">{projectPath}</span>
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Open a project to configure this value.</p>
+          )}
+        </SettingsCard>
+        <SettingsCard
+          title="Repository Metadata"
+          description="Quick inspection of the active repository root path and remote configuration."
+        >
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">{repositoryState.detail}</p>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!projectPath || repositoryState.status === "loading"}
+              onClick={() => setRepositoryRefreshNonce((value) => value + 1)}
+            >
+              <RefreshCcw className={cn("size-3.5", repositoryState.status === "loading" ? "animate-spin" : "")} />
+              Refresh
+            </Button>
+          </div>
+          <LabeledField title="Repository Root Path">
+            <div className="rounded-md border border-border/80 bg-background px-3 py-2.5 font-mono text-xs break-all">
+              {repositoryState.rootPath ?? "Not detected"}
+            </div>
+          </LabeledField>
+          <LabeledField title="Remote Status">
+            {repositoryState.status === "error" ? (
+              <p className="text-sm text-destructive">{repositoryState.detail}</p>
+            ) : repositoryState.remotes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No remotes configured.</p>
+            ) : (
+              <div className="space-y-2">
+                {repositoryState.remotes.map((remote) => (
+                  <div key={remote.name} className="rounded-md border border-border/80 bg-background px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{remote.name}</p>
+                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">configured</Badge>
+                    </div>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
+                      fetch: {remote.fetchUrl ?? "-"}
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
+                      push: {remote.pushUrl ?? remote.fetchUrl ?? "-"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </LabeledField>
         </SettingsCard>
         <SettingsCard

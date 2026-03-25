@@ -528,6 +528,9 @@ interface WindowApi {
   };
   shell?: {
     openExternal?: (args: { url: string }) => Promise<{ ok: boolean; stderr?: string }>;
+    showInFinder?: (args: { path: string }) => Promise<{ ok: boolean; stderr?: string }>;
+    openInVSCode?: (args: { path: string }) => Promise<{ ok: boolean; stderr?: string }>;
+    openInTerminal?: (args: { path: string }) => Promise<{ ok: boolean; stderr?: string }>;
   };
 }
 

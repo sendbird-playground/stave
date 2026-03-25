@@ -94,6 +94,7 @@ interface RecentProjectState {
   workspaceBranchById: Record<string, string>;
   workspacePathById: Record<string, string>;
   workspaceDefaultById: Record<string, boolean>;
+  newWorkspaceInitCommand?: string;
 }
 
 const APP_STORE_KEY = "stave-store";
@@ -201,7 +202,6 @@ export interface AppSettings {
   themeMode: "light" | "dark" | "system";
   themeOverrides: Record<ThemeModeName, ThemeOverrideValues>;
   language: string;
-  newWorkspaceInitCommand: string;
   updateMode: "auto" | "manual";
   httpProxy: string;
   smartSuggestions: boolean;
@@ -336,6 +336,7 @@ interface AppState {
     workspaceId: string;
     direction: "up" | "down";
   }) => void;
+  setProjectWorkspaceInitCommand: (args: { projectPath?: string; command: string }) => void;
   setDarkMode: (args: { enabled: boolean }) => void;
   updateSettings: (args: { patch: Partial<AppSettings> }) => void;
   selectTask: (args: { taskId: string }) => void;
@@ -403,7 +404,6 @@ const defaultSettings: AppSettings = {
     dark: {},
   },
   language: "English",
-  newWorkspaceInitCommand: "",
   updateMode: "auto",
   httpProxy: "",
   smartSuggestions: true,
@@ -493,6 +493,22 @@ function buildRecentTimestamp() {
 
 function normalizeWorkspaceInitCommand(args: { value?: string | null }) {
   return args.value?.trim() ?? "";
+}
+
+function normalizeProjectWorkspaceInitCommand(args: { value?: string | null }) {
+  return normalizeWorkspaceInitCommand({ value: args.value });
+}
+
+function resolveProjectWorkspaceInitCommand(args: {
+  projectPath?: string | null;
+  recentProjects: RecentProjectState[];
+}) {
+  const projectPath = args.projectPath?.trim();
+  if (!projectPath) {
+    return "";
+  }
+  const project = args.recentProjects.find((item) => item.projectPath === projectPath);
+  return normalizeProjectWorkspaceInitCommand({ value: project?.newWorkspaceInitCommand });
 }
 
 function summarizeTerminalCommandDetail(args: { stdout?: string; stderr?: string; fallback: string }) {
@@ -1084,6 +1100,9 @@ function cloneRecentProjectState(project: RecentProjectState): RecentProjectStat
     workspaceBranchById: { ...project.workspaceBranchById },
     workspacePathById: { ...project.workspacePathById },
     workspaceDefaultById: { ...project.workspaceDefaultById },
+    newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
+      value: project.newWorkspaceInitCommand,
+    }),
   };
 }
 
@@ -1146,6 +1165,9 @@ function normalizeRecentProjectStates(args: { projects?: RecentProjectState[] | 
           ...workspaceDefaultById,
           [defaultWorkspaceId]: true,
         },
+        newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
+          value: project.newWorkspaceInitCommand,
+        }),
       },
     });
   }
@@ -1189,6 +1211,10 @@ function captureCurrentProjectState(args: {
       workspaceBranchById: args.workspaceBranchById,
       workspacePathById: args.workspacePathById,
       workspaceDefaultById: args.workspaceDefaultById,
+      newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
+        projectPath: args.projectPath,
+        recentProjects: args.recentProjects,
+      }),
     },
   });
 }
@@ -1235,6 +1261,10 @@ export const useAppStore = create<AppState>()(
                   workspaceBranchById: state.workspaceBranchById,
                   workspacePathById: state.workspacePathById,
                   workspaceDefaultById: state.workspaceDefaultById,
+                  newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
+                    projectPath: args.projectRootPath,
+                    recentProjects: rememberedProjects,
+                  }),
                 }),
                 projectName: args.projectName,
                 defaultBranch: args.defaultBranch,
@@ -1333,6 +1363,7 @@ export const useAppStore = create<AppState>()(
           workspaceBranchById: { [defaultWorkspaceId]: args.defaultBranch },
           workspacePathById: { [defaultWorkspaceId]: args.projectRootPath },
           workspaceDefaultById: { [defaultWorkspaceId]: true },
+          newWorkspaceInitCommand: "",
         } satisfies RecentProjectState;
 
         set(() => ({
@@ -1857,8 +1888,12 @@ export const useAppStore = create<AppState>()(
         if (!branchName) {
           return { ok: false, message: "Workspace branch name is invalid." };
         }
+        const projectWorkspaceInitCommand = resolveProjectWorkspaceInitCommand({
+          projectPath: current.projectPath,
+          recentProjects: current.recentProjects,
+        });
         const workspaceInitCommand = normalizeWorkspaceInitCommand({
-          value: initCommand ?? current.settings.newWorkspaceInitCommand,
+          value: initCommand ?? projectWorkspaceInitCommand,
         });
         const baseBranch = (fromBranch?.trim() || current.defaultBranch || "main").replace(/^origin\//, "");
         const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
@@ -2139,6 +2174,10 @@ export const useAppStore = create<AppState>()(
                   workspaceBranchById: state.workspaceBranchById,
                   workspacePathById: state.workspacePathById,
                   workspaceDefaultById: state.workspaceDefaultById,
+                  newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
+                    projectPath: normalizedProjectPath,
+                    recentProjects: state.recentProjects,
+                  }),
                 },
               }),
             };
@@ -2165,6 +2204,48 @@ export const useAppStore = create<AppState>()(
             recentProjects: state.recentProjects.map((item, index) => (
               index === projectIndex ? nextProject : cloneRecentProjectState(item)
             )),
+          };
+        });
+      },
+      setProjectWorkspaceInitCommand: ({ projectPath, command }) => {
+        set((state) => {
+          const normalizedProjectPath = (projectPath?.trim() || state.projectPath?.trim() || "");
+          if (!normalizedProjectPath) {
+            return state;
+          }
+
+          const currentProjects = captureCurrentProjectState({
+            recentProjects: state.recentProjects,
+            projectPath: state.projectPath,
+            workspaceRootName: state.workspaceRootName,
+            defaultBranch: state.defaultBranch,
+            workspaces: state.workspaces,
+            activeWorkspaceId: state.activeWorkspaceId,
+            workspaceBranchById: state.workspaceBranchById,
+            workspacePathById: state.workspacePathById,
+            workspaceDefaultById: state.workspaceDefaultById,
+          });
+          const existingProject = currentProjects.find((project) => project.projectPath === normalizedProjectPath);
+          if (!existingProject) {
+            return state;
+          }
+
+          const nextCommand = normalizeProjectWorkspaceInitCommand({ value: command });
+          const currentCommand = normalizeProjectWorkspaceInitCommand({
+            value: existingProject.newWorkspaceInitCommand,
+          });
+          if (currentCommand === nextCommand) {
+            return state;
+          }
+
+          return {
+            recentProjects: upsertRecentProjectState({
+              projects: currentProjects,
+              project: {
+                ...cloneRecentProjectState(existingProject),
+                newWorkspaceInitCommand: nextCommand,
+              },
+            }),
           };
         });
       },
@@ -4060,6 +4141,10 @@ export const useAppStore = create<AppState>()(
           state.settings.codexFastModeVisible ??= raw.fastModeVisible;
           delete raw.fastModeVisible;
         }
+        const legacyProjectInitCommand = normalizeProjectWorkspaceInitCommand({
+          value: raw.newWorkspaceInitCommand,
+        });
+        delete raw.newWorkspaceInitCommand;
         state.settings.codexApprovalPolicy = normalizeCodexApprovalPolicy({
           value: state.settings.codexApprovalPolicy,
         });
@@ -4069,6 +4154,14 @@ export const useAppStore = create<AppState>()(
         state.recentProjects = normalizeRecentProjectStates({
           projects: state.recentProjects,
         });
+        if (legacyProjectInitCommand) {
+          state.recentProjects = state.recentProjects.map((project) => ({
+            ...cloneRecentProjectState(project),
+            newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
+              value: project.newWorkspaceInitCommand || legacyProjectInitCommand,
+            }),
+          }));
+        }
         state.layout = normalizeLayoutState(state.layout);
         const isDark = resolveDarkModeForTheme({
           themeMode: state.settings?.themeMode ?? "dark",
