@@ -8,6 +8,7 @@ import {
   getProviderLabel,
   getProviderWaveToneClass,
   getSdkModelOptions,
+  inferProviderIdFromModel,
   listProviderIds,
   toHumanModelName,
 } from "@/lib/providers/model-catalog";
@@ -37,6 +38,15 @@ describe("model catalog", () => {
     expect(getProviderWaveToneClass({ providerId: "claude-code" })).toBe("text-provider-claude");
     expect(getProviderWaveToneClass({ providerId: "codex" })).toBe("text-provider-codex");
     expect(getProviderWaveToneClass({ providerId: "stave" })).toBe("text-primary");
+    expect(getProviderWaveToneClass({ providerId: "stave", model: "gpt-5.4" })).toBe("text-provider-codex");
+    expect(getProviderWaveToneClass({ providerId: "stave", model: "claude-sonnet-4-6" })).toBe("text-provider-claude");
+  });
+
+  test("infers provider ids from routed model ids", () => {
+    expect(inferProviderIdFromModel({ model: "gpt-5.4" })).toBe("codex");
+    expect(inferProviderIdFromModel({ model: "gpt-5-codex" })).toBe("codex");
+    expect(inferProviderIdFromModel({ model: "claude-sonnet-4-6" })).toBe("claude-code");
+    expect(inferProviderIdFromModel({ model: "stave-auto" })).toBe("stave");
   });
 
   test("cycles provider order from the descriptor registry", () => {

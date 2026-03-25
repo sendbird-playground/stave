@@ -39,6 +39,13 @@ function cloneMessagePart(part: MessagePart): MessagePart {
       };
     case "system_event":
       return { ...part };
+    case "orchestration_progress":
+      return {
+        ...part,
+        subtasks: part.subtasks.map((subtask) => ({ ...subtask })),
+      };
+    case "stave_processing":
+      return { ...part };
   }
 }
 

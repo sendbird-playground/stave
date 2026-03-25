@@ -114,6 +114,7 @@ function ExplorerTreeRow(args: {
 export function EditorPanel() {
   const [
     activeWorkspaceId,
+    hasHydratedWorkspaces,
     workspaceRootName,
     sidebarOverlayVisible,
     sidebarOverlayTab,
@@ -124,6 +125,7 @@ export function EditorPanel() {
     refreshProjectFiles,
   ] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
+    state.hasHydratedWorkspaces,
     state.workspaceRootName,
     state.layout.sidebarOverlayVisible,
     state.layout.sidebarOverlayTab,
@@ -249,14 +251,14 @@ export function EditorPanel() {
   }, [activeWorkspaceId, workspaceCwd]);
 
   useEffect(() => {
-    if (!workspaceCwd || !sidebarOverlayVisible || rightTab !== "explorer") {
+    if (!hasHydratedWorkspaces || !workspaceCwd || !sidebarOverlayVisible || rightTab !== "explorer") {
       return;
     }
     if (explorerDirectoryStateRef.current[""]) {
       return;
     }
     void loadExplorerDirectory({ directoryPath: "" });
-  }, [activeWorkspaceId, rightTab, sidebarOverlayVisible, workspaceCwd]);
+  }, [activeWorkspaceId, hasHydratedWorkspaces, rightTab, sidebarOverlayVisible, workspaceCwd]);
 
   async function loadScmStatus() {
     const getStatus = window.api?.sourceControl?.getStatus;

@@ -88,6 +88,11 @@ export type NormalizedProviderEvent =
   | { type: "plan_ready"; planText: string }
   | { type: "system"; content: string }
   | { type: "model_resolved"; resolvedProviderId: ProviderId; resolvedModel: string }
+  | { type: "stave:execution_processing"; strategy: "direct" | "orchestrate"; model?: string; supervisorModel?: string; reason: string; fastMode?: boolean }
+  | { type: "stave:orchestration_processing"; supervisorModel: string; subtasks: Array<{ id: string; title: string; model: string; dependsOn: string[] }> }
+  | { type: "stave:subtask_started"; subtaskId: string; index: number; total: number; title: string; model: string }
+  | { type: "stave:subtask_done"; subtaskId: string; success: boolean }
+  | { type: "stave:synthesis_started" }
   | { type: "error"; message: string; recoverable: boolean }
   | { type: "done"; stop_reason?: "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | string };
 
@@ -134,6 +139,23 @@ export interface ProviderRuntimeOptions {
     codexResumeThreadId?: string;
     /** Per-rule model overrides for the Stave meta-provider router. */
     staveRouteModels?: StaveRouteModels;
+    /**
+     * Model used for the Stave Pre-processor (intent analysis + routing decision).
+     * Defaults to "claude-haiku-4-5". Falls back to "gpt-5.3-codex" if unavailable,
+     * then to regex-based routing if both are unavailable.
+     */
+    stavePreprocessorModel?: string;
+    /**
+     * Model used as the Supervisor when Stave orchestrates multiple workers.
+     * Defaults to "claude-opus-4-6". Can be set to "gpt-5.4" for speed-prioritised
+     * orchestration.
+     */
+    staveSupervisorModel?: string;
+    /**
+     * Enable Stave orchestration (multi-model collaboration) for complex requests.
+     * Defaults to true when providerId is "stave". Set to false to force single-model routing.
+     */
+    staveOrchestrationEnabled?: boolean;
 }
 
 export interface ProviderAdapter {

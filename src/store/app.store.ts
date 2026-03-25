@@ -208,12 +208,15 @@ export interface AppSettings {
   modelCodex: string;
   modelStave: string;
   /** Per-rule model overrides for the Stave meta-provider router. */
-  staveModelPlanning: string;
+  staveModelPlanner: string;
   staveModelEcosystem: string;
   staveModelComplex: string;
   staveModelCodeGen: string;
   staveModelQuickEdit: string;
   staveModelDefault: string;
+  stavePreprocessorModel: string;
+  staveSupervisorModel: string;
+  staveOrchestrationEnabled: boolean;
   rulesPresetPrimary: string;
   rulesPresetSecondary: string;
   permissionMode: "require-approval" | "auto-safe";
@@ -401,12 +404,15 @@ const defaultSettings: AppSettings = {
   modelClaude: getDefaultModelForProvider({ providerId: "claude-code" }),
   modelCodex: getDefaultModelForProvider({ providerId: "codex" }),
   modelStave: getDefaultModelForProvider({ providerId: "stave" }),
-  staveModelPlanning: "opusplan",
+  staveModelPlanner: "opusplan",
   staveModelEcosystem: "gpt-5.4",
   staveModelComplex: "claude-opus-4-6",
   staveModelCodeGen: "gpt-5.3-codex",
   staveModelQuickEdit: "claude-haiku-4-5",
   staveModelDefault: "claude-sonnet-4-6",
+  stavePreprocessorModel: "claude-haiku-4-5",
+  staveSupervisorModel: "claude-opus-4-6",
+  staveOrchestrationEnabled: true,
   rulesPresetPrimary: "typescript-best-practices",
   rulesPresetSecondary: "no-target-brand-keyword",
   permissionMode: "auto-safe",
@@ -2687,6 +2693,7 @@ export const useAppStore = create<AppState>()(
         let state = get();
         let resolvedTaskId = taskId;
         let task = state.tasks.find((item) => item.id === resolvedTaskId);
+        const isNewlyCreatedTask = !task;
         if (!task) {
           const seededTaskId = crypto.randomUUID();
           const seededTitleText = resolveSkillSelections({
@@ -2849,6 +2856,32 @@ export const useAppStore = create<AppState>()(
           providerId: provider,
         });
         const normalizedPrompt = skillSelection.normalizedText;
+
+        // ── Auto task naming ──────────────────────────────────────────────────
+        // On every prompt, fire a lightweight single-turn Claude query to keep
+        // the task title up-to-date with the evolving conversation context.
+        // Runs fully async — never blocks the main turn.
+        {
+          const capturedTaskId = resolvedTaskId;
+          const promptForTitle = normalizedPrompt || content;
+          const historyForTitle = existingHistory.slice(-6).map((m) => ({
+            role: m.role as string,
+            content: m.content,
+          }));
+          void window.api?.provider?.suggestTaskName?.({
+            prompt: promptForTitle,
+            history: historyForTitle,
+          })
+            .then((result) => {
+              if (result?.ok && result.title) {
+                get().renameTask({ taskId: capturedTaskId, title: result.title });
+              }
+            })
+            .catch(() => {
+              // Title generation failed — keep the current title.
+            });
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         const providerConversation = state.providerConversationByTask[resolvedTaskId];
         const conversation = buildCanonicalConversationRequest({
@@ -3201,13 +3234,16 @@ export const useAppStore = create<AppState>()(
               ? { codexResumeThreadId: providerConversation.codex }
               : {}),
             staveRouteModels: {
-              planning: get().settings.staveModelPlanning,
+              planning: get().settings.staveModelPlanner,
               ecosystem: get().settings.staveModelEcosystem,
               complex: get().settings.staveModelComplex,
               codeGen: get().settings.staveModelCodeGen,
               quickEdit: get().settings.staveModelQuickEdit,
               default: get().settings.staveModelDefault,
             },
+            stavePreprocessorModel: get().settings.stavePreprocessorModel,
+            staveSupervisorModel: get().settings.staveSupervisorModel,
+            staveOrchestrationEnabled: get().settings.staveOrchestrationEnabled,
           },
           onEvent: ({ event }) => {
             queuedEvents.push(event);

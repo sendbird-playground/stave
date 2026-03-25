@@ -10,6 +10,8 @@ import type {
   ChatMessage,
   CodeDiffPart,
   MessagePart,
+  OrchestrationProgressPart,
+  StaveProcessingPart,
   TextPart,
   ThinkingPart,
   ToolUsePart,
@@ -142,12 +144,26 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
         type: "system_event",
         content: `[error] ${event.message}`,
       };
+    case "stave:execution_processing": {
+      const plan: StaveProcessingPart = {
+        type: "stave_processing",
+        strategy: event.strategy,
+        reason: event.reason,
+        ...(event.strategy === "direct" && event.model ? { model: event.model, fastMode: event.fastMode } : {}),
+        ...(event.strategy === "orchestrate" && event.supervisorModel ? { supervisorModel: event.supervisorModel } : {}),
+      };
+      return plan;
+    }
     case "tool_progress":
     case "tool_result":
     case "usage":
     case "prompt_suggestions":
     case "plan_ready":
     case "model_resolved":
+    case "stave:orchestration_processing":
+    case "stave:subtask_started":
+    case "stave:subtask_done":
+    case "stave:synthesis_started":
     case "done":
       return null;
   }
@@ -260,6 +276,70 @@ export function appendProviderEventToAssistant(args: {
     return args.message;
   }
 
+  if (args.event.type === "stave:orchestration_processing") {
+    const planEvent = args.event;
+    const progressPart: OrchestrationProgressPart = {
+      type: "orchestration_progress",
+      supervisorModel: planEvent.supervisorModel,
+      subtasks: planEvent.subtasks.map((st) => ({
+        id: st.id,
+        title: st.title,
+        model: st.model,
+        status: "pending" as const,
+      })),
+      status: "executing",
+    };
+    return {
+      ...args.message,
+      parts: [...args.message.parts, progressPart],
+      isStreaming: true,
+    };
+  }
+
+  if (args.event.type === "stave:subtask_started") {
+    const { subtaskId } = args.event;
+    const updatedParts = args.message.parts.map((part) => {
+      if (part.type !== "orchestration_progress") {
+        return part;
+      }
+      return {
+        ...part,
+        subtasks: part.subtasks.map((st) =>
+          st.id === subtaskId ? { ...st, status: "running" as const } : st,
+        ),
+      };
+    });
+    return { ...args.message, parts: updatedParts };
+  }
+
+  if (args.event.type === "stave:subtask_done") {
+    const { subtaskId, success } = args.event;
+    const updatedParts = args.message.parts.map((part) => {
+      if (part.type !== "orchestration_progress") {
+        return part;
+      }
+      return {
+        ...part,
+        subtasks: part.subtasks.map((st) =>
+          st.id === subtaskId
+            ? { ...st, status: success ? ("done" as const) : ("error" as const) }
+            : st,
+        ),
+      };
+    });
+    return { ...args.message, parts: updatedParts };
+  }
+
+  if (args.event.type === "stave:synthesis_started") {
+    const updatedParts = args.message.parts.map((part) => {
+      if (part.type !== "orchestration_progress") {
+        return part;
+      }
+      return { ...part, status: "synthesizing" as const };
+    });
+    return { ...args.message, parts: updatedParts };
+  }
+
   if (args.event.type === "done") {
     if (!hasRenderableAssistantContent({ message: args.message })) {
       return {
@@ -274,11 +354,14 @@ export function appendProviderEventToAssistant(args: {
     }
 
     const finalizedParts = args.message.parts.map((part) => {
-      if (part.type !== "tool_use") {
+      if (part.type === "tool_use") {
+        if (part.state === "input-available" || part.state === "input-streaming") {
+          return { ...part, state: "output-available" as const };
+        }
         return part;
       }
-      if (part.state === "input-available" || part.state === "input-streaming") {
-        return { ...part, state: "output-available" as const };
+      if (part.type === "orchestration_progress" && part.status !== "done") {
+        return { ...part, status: "done" as const };
       }
       return part;
     });

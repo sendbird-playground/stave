@@ -121,6 +121,51 @@ const DoneEventSchema = z.object({
   stop_reason: z.string().optional(),
 });
 
+const ModelResolvedEventSchema = z.object({
+  type: z.literal("model_resolved"),
+  resolvedProviderId: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]),
+  resolvedModel: z.string(),
+});
+
+const StaveExecutionProcessingEventSchema = z.object({
+  type: z.literal("stave:execution_processing"),
+  strategy: z.union([z.literal("direct"), z.literal("orchestrate")]),
+  model: z.string().optional(),
+  supervisorModel: z.string().optional(),
+  reason: z.string(),
+  fastMode: z.boolean().optional(),
+});
+
+const StaveOrchestrationProcessingEventSchema = z.object({
+  type: z.literal("stave:orchestration_processing"),
+  supervisorModel: z.string(),
+  subtasks: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    model: z.string(),
+    dependsOn: z.array(z.string()),
+  })),
+});
+
+const StaveSubtaskStartedEventSchema = z.object({
+  type: z.literal("stave:subtask_started"),
+  subtaskId: z.string(),
+  index: z.number(),
+  total: z.number(),
+  title: z.string(),
+  model: z.string(),
+});
+
+const StaveSubtaskDoneEventSchema = z.object({
+  type: z.literal("stave:subtask_done"),
+  subtaskId: z.string(),
+  success: z.boolean(),
+});
+
+const StaveSynthesisStartedEventSchema = z.object({
+  type: z.literal("stave:synthesis_started"),
+});
+
 export const NormalizedProviderEventSchema = z.discriminatedUnion("type", [
   ThinkingEventSchema,
   TextEventSchema,
@@ -137,6 +182,12 @@ export const NormalizedProviderEventSchema = z.discriminatedUnion("type", [
   SystemEventSchema,
   ErrorEventSchema,
   DoneEventSchema,
+  ModelResolvedEventSchema,
+  StaveExecutionProcessingEventSchema,
+  StaveOrchestrationProcessingEventSchema,
+  StaveSubtaskStartedEventSchema,
+  StaveSubtaskDoneEventSchema,
+  StaveSynthesisStartedEventSchema,
 ]);
 
 export type ParsedNormalizedProviderEvent = z.infer<typeof NormalizedProviderEventSchema>;

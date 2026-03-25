@@ -3,10 +3,12 @@ import { memo, type ReactNode } from "react";
 import { ModelIcon } from "@/components/ai-elements";
 import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Kbd, WaveIndicator } from "@/components/ui";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
-import { formatTaskUpdatedAt, isTaskArchived } from "@/lib/tasks";
+import { formatTaskUpdatedAt, getRespondingProviderId, isTaskArchived } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import type { Task } from "@/types/chat";
+import type { ChatMessage, Task } from "@/types/chat";
+
+const EMPTY_MESSAGES: ChatMessage[] = [];
 
 interface BaseTaskItemProps {
   task: Task;
@@ -33,6 +35,8 @@ export const CompactTaskItem = memo(function CompactTaskItem({
   onSelect,
 }: BaseTaskItemProps) {
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[task.id]));
+  const messages = useAppStore((state) => state.messagesByTask[task.id] ?? EMPTY_MESSAGES);
+  const respondingProviderId = getRespondingProviderId({ fallbackProviderId: task.provider, messages });
 
   return (
     <button
@@ -49,7 +53,7 @@ export const CompactTaskItem = memo(function CompactTaskItem({
         </div>
         {isTurnActive ? (
           <WaveIndicator
-            className={cn("gap-px", getProviderWaveToneClass({ providerId: task.provider }))}
+            className={cn("gap-px", getProviderWaveToneClass({ providerId: respondingProviderId }))}
             barClassName="h-3 w-0.5 rounded-[2px]"
           />
         ) : null}
@@ -75,6 +79,8 @@ export const TaskItem = memo(function TaskItem({
   dragHandle,
 }: TaskItemProps) {
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[task.id]));
+  const messages = useAppStore((state) => state.messagesByTask[task.id] ?? EMPTY_MESSAGES);
+  const respondingProviderId = getRespondingProviderId({ fallbackProviderId: task.provider, messages });
 
   return (
     <div
@@ -102,7 +108,7 @@ export const TaskItem = memo(function TaskItem({
                   className="inline-flex shrink-0 items-center gap-1 rounded-md border-border/70 bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground"
                 >
                   <WaveIndicator
-                    className={cn("gap-px", getProviderWaveToneClass({ providerId: task.provider }))}
+                    className={cn("gap-px", getProviderWaveToneClass({ providerId: respondingProviderId }))}
                     barClassName="h-3 w-0.5 rounded-[2px]"
                   />
                   Responding

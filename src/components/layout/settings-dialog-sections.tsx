@@ -1139,7 +1139,7 @@ function EditorSection() {
 
 function StaveRoutingModelsCard() {
   const [
-    staveModelPlanning,
+    staveModelPlanner,
     staveModelEcosystem,
     staveModelComplex,
     staveModelCodeGen,
@@ -1147,7 +1147,7 @@ function StaveRoutingModelsCard() {
     staveModelDefault,
   ] = useAppStore(
     useShallow((state) => [
-      state.settings.staveModelPlanning,
+      state.settings.staveModelPlanner,
       state.settings.staveModelEcosystem,
       state.settings.staveModelComplex,
       state.settings.staveModelCodeGen,
@@ -1166,8 +1166,8 @@ function StaveRoutingModelsCard() {
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-routing-model-options"
-          value={staveModelPlanning}
-          onCommit={(v) => updateSettings({ patch: { staveModelPlanning: normalizeModelSelection({ value: v, fallback: "opusplan" }) } })}
+          value={staveModelPlanner}
+          onCommit={(v) => updateSettings({ patch: { staveModelPlanner: normalizeModelSelection({ value: v, fallback: "opusplan" }) } })}
         />
       </LabeledField>
       <LabeledField title="OpenAI Ecosystem" description="Triggered by OpenAI · gpt-5 · ChatGPT · o3 · o4 keywords.">
@@ -1215,6 +1215,55 @@ function StaveRoutingModelsCard() {
           <option key={model} value={model} />
         ))}
       </datalist>
+    </SettingsCard>
+  );
+}
+
+function StaveOrchestrationCard() {
+  const [
+    stavePreprocessorModel,
+    staveSupervisorModel,
+    staveOrchestrationEnabled,
+  ] = useAppStore(
+    useShallow((state) => [
+      state.settings.stavePreprocessorModel,
+      state.settings.staveSupervisorModel,
+      state.settings.staveOrchestrationEnabled,
+    ] as const),
+  );
+  const updateSettings = useAppStore((state) => state.updateSettings);
+
+  return (
+    <SettingsCard
+      title="Stave Orchestration"
+      description="Configure the Pre-processor and Supervisor models for multi-model collaboration."
+    >
+      <LabeledField title="Orchestration" description="Enable multi-model orchestration for complex requests.">
+        <ChoiceButtons
+          value={staveOrchestrationEnabled ? "on" : "off"}
+          onChange={(value) => updateSettings({ patch: { staveOrchestrationEnabled: value === "on" } })}
+          options={[
+            { value: "on", label: "Enabled" },
+            { value: "off", label: "Disabled" },
+          ]}
+        />
+      </LabeledField>
+      <LabeledField title="Pre-processor Model" description="Lightweight model that analyses each prompt and picks a routing strategy. Default: claude-haiku-4-5.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-routing-model-options"
+          value={stavePreprocessorModel}
+          onCommit={(v) => updateSettings({ patch: { stavePreprocessorModel: normalizeModelSelection({ value: v, fallback: "claude-haiku-4-5" }) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Supervisor Model" description="Model used as Orchestrator supervisor for planning and synthesis. Default: claude-opus-4-6.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-routing-model-options"
+          value={staveSupervisorModel}
+          onCommit={(v) => updateSettings({ patch: { staveSupervisorModel: normalizeModelSelection({ value: v, fallback: "claude-opus-4-6" }) } })}
+        />
+      </LabeledField>
     </SettingsCard>
   );
 }
@@ -1607,6 +1656,7 @@ function ProvidersSection() {
         </SettingsCard>
 
         <StaveRoutingModelsCard />
+        <StaveOrchestrationCard />
       </SectionStack>
     </>
   );

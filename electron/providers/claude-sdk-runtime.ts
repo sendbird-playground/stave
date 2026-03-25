@@ -1170,3 +1170,68 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
   }
 }
 
+// ── Auto task name suggestion ─────────────────────────────────────────────────
+// Runs a lightweight, single-turn Claude query to produce a short title for a
+// newly-created task.  Intentionally isolated from the main task session so the
+// title query never appears in the user's conversation history.
+
+export async function suggestClaudeTaskName(args: {
+  prompt: string;
+  history?: Array<{ role: string; content: string }>;
+}): Promise<{ ok: boolean; title?: string }> {
+  try {
+    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    if (!queryFn) {
+      return { ok: false };
+    }
+
+    const claudeExecutablePath = resolveClaudeExecutablePath();
+
+    // Build a conversation summary from the last few exchanges (if any).
+    const historyLines = (args.history ?? [])
+      .slice(-6)
+      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 300)}`)
+      .join("\n");
+
+    const titlePrompt = [
+      "Based on the conversation below, generate a short task title (3-6 words, Title Case) that best describes what this coding task is about overall.",
+      "Return ONLY the title — no quotes, no punctuation, no explanation.",
+      "",
+      ...(historyLines ? [`Conversation so far:\n${historyLines}`, ""] : []),
+      `Latest message: ${args.prompt.slice(0, 400)}`,
+    ].join("\n");
+
+    const stream = queryFn({
+      prompt: titlePrompt,
+      options: {
+        permissionMode: "default",
+        maxTurns: 1,
+        cwd: process.cwd(),
+        model: "claude-haiku-4-5",
+        ...(claudeExecutablePath ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
+        env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
+      },
+    }) as Query;
+
+    const textParts: string[] = [];
+    for await (const message of stream) {
+      if (message.type === "assistant") {
+        const assistantMsg = message as SDKAssistantMessage;
+        const contentBlocks = assistantMsg.message?.content;
+        if (!Array.isArray(contentBlocks)) continue;
+        for (const block of contentBlocks) {
+          const b = block as { type?: string; text?: string };
+          if (b.type === "text" && b.text) {
+            textParts.push(b.text);
+          }
+        }
+      }
+    }
+
+    const title = textParts.join("").trim().split("\n")[0]?.trim();
+    return title ? { ok: true, title } : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}

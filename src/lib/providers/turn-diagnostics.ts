@@ -38,11 +38,23 @@ export function summarizeTurnDiagnostics(args: {
         thinkingEvents += 1;
         break;
       case "provider_conversation":
+      case "usage":
+      case "prompt_suggestions":
+      case "plan_ready":
+      case "model_resolved":
+      case "stave:execution_processing":
+      case "stave:orchestration_processing":
+      case "stave:subtask_started":
+      case "stave:subtask_done":
+      case "stave:synthesis_started":
         systemEvents += 1;
         break;
       case "tool":
+      case "tool_progress":
       case "tool_result":
         toolEvents += 1;
+        break;
+      case "diff":
         break;
       case "approval":
         approvalEvents += 1;
@@ -118,6 +130,20 @@ export function formatTurnEventLabel(args: { event: ReplayedTurnEvent["event"] }
       return "Prompt suggestions";
     case "plan_ready":
       return "Plan ready";
+    case "model_resolved":
+      return `Resolved model: ${args.event.resolvedProviderId} / ${args.event.resolvedModel}`;
+    case "stave:execution_processing":
+      return args.event.strategy === "orchestrate"
+        ? `Stave orchestration selected (${args.event.supervisorModel ?? "supervisor"})`
+        : `Stave direct execution selected (${args.event.model ?? "auto"})`;
+    case "stave:orchestration_processing":
+      return `Stave orchestration plan (${args.event.subtasks.length} subtasks)`;
+    case "stave:subtask_started":
+      return `Subtask ${args.event.index}/${args.event.total} started: ${args.event.title}`;
+    case "stave:subtask_done":
+      return `Subtask ${args.event.subtaskId} ${args.event.success ? "completed" : "failed"}`;
+    case "stave:synthesis_started":
+      return "Stave synthesis started";
     case "system":
       return "System";
     case "error":
@@ -127,6 +153,9 @@ export function formatTurnEventLabel(args: { event: ReplayedTurnEvent["event"] }
     case "diff":
       return `Diff: ${args.event.filePath}`;
   }
+
+  const exhaustiveCheck: never = args.event;
+  return exhaustiveCheck;
 }
 
 export function formatTurnDuration(args: {

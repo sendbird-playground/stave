@@ -11,6 +11,7 @@ import { StaveAppMenuButton } from "@/components/layout/StaveAppMenuButton";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
+import { getRespondingProviderId } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
@@ -104,6 +105,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
     workspaceBranchById,
     workspaceRuntimeCacheById,
     tasks,
+    messagesByTask,
     activeTurnIdsByTask,
     activeWorkspaceBranch,
     activeWorkspaceCwd,
@@ -128,6 +130,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
     state.workspaceBranchById,
     state.workspaceRuntimeCacheById,
     state.tasks,
+    state.messagesByTask,
     state.activeTurnIdsByTask,
     state.workspaceBranchById[state.activeWorkspaceId] ?? "main",
     state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined,
@@ -236,7 +239,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
 
   function getWorkspaceRuntimeState(workspaceId: string) {
     return workspaceId === activeWorkspaceId
-      ? { tasks, activeTurnIdsByTask }
+      ? { tasks, messagesByTask, activeTurnIdsByTask }
       : workspaceRuntimeCacheById[workspaceId];
   }
 
@@ -254,7 +257,17 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
   }
 
   function getWorkspaceRespondingToneClass(workspaceId: string) {
-    const providers = Array.from(new Set(getWorkspaceRespondingTasks(workspaceId).map((task) => task.provider)));
+    const runtimeState = getWorkspaceRuntimeState(workspaceId);
+    if (!runtimeState) {
+      return "text-primary";
+    }
+
+    const providers = Array.from(new Set(getWorkspaceRespondingTasks(workspaceId).map((task) =>
+      getRespondingProviderId({
+        fallbackProviderId: task.provider,
+        messages: runtimeState.messagesByTask[task.id] ?? [],
+      })
+    )));
     if (providers.length !== 1) {
       return "text-primary";
     }

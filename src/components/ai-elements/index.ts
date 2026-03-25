@@ -27,6 +27,8 @@ export { Snippet } from "./snippet";
 export { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning";
 export { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtTrigger, type ChainOfThoughtStep } from "./chain-of-thought";
 export { SubagentCard, parseSubagentToolInput } from "./subagent";
+export { OrchestrationCard } from "./orchestration";
+export { StaveProcessingCard } from "./stave-processing-card";
 export { TodoCard, parseTodoInput } from "./todo";
 export { Tool, ToolContent, ToolGroup, ToolHeader, ToolInput, ToolOutput } from "./tool";
 export { ConfirmationCompact } from "./confirmation";

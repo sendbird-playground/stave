@@ -10,74 +10,111 @@ The model selector shows **Stave Auto** as the single model option. The chat sur
 
 ## How the router works
 
-The router is implemented as a pure function in `electron/providers/stave-router.ts`. It receives the current prompt, the number of attached files, and the conversation history length, then returns a `StaveRouteTarget`:
+Routing happens in two stages:
 
-```ts
-type StaveRouteTarget = {
-  providerId: "claude-code" | "codex";
-  model: string;
-  reason: string; // shown to the user as a system event
-};
-```
+### Stage 1 — Pre-processor (LLM)
 
-No LLM call is made during routing — the decision is entirely heuristic and adds zero latency. The routing decision can differ for every turn in the same task, so a task may use Opus Plan for its first message and Sonnet for the next.
+Every turn is first analysed by a lightweight LLM (`claude-haiku-4-5` by default). The Pre-processor receives the user's prompt, conversation history length, and attached file count, then returns a structured `ExecutionPlan` as JSON — either `"direct"` (single model) or `"orchestrate"` (multi-model).
 
-## Routing rules (priority order)
+**Pre-processor model selection priority:**
 
-### 1 — Planning intent → Claude Opus Plan (`opusplan`)
+1. `stavePreprocessorModel` setting (default: `claude-haiku-4-5`)
+2. `gpt-5.3-codex` — if the primary model's provider is unavailable
+3. Regex fallback — if both providers are unavailable (see Stage 1b below)
 
-Triggered by: words like *plan*, *설계*, *계획*, *전략*, *approach*, *what's the best way*, *how should I structure*, etc., when no deep analysis keywords are also present.
+The Pre-processor always runs with `codexFastMode: true`, a 10-second hard timeout, no file/tool access, and a single turn (`claudeMaxTurns: 1`).
 
-Use this when you want Stave to think through a design or implementation strategy before touching any files. `opusplan` never executes tool calls; it produces a plan and stops.
+### Stage 1b — Regex fallback
 
-### 2 — OpenAI / GPT ecosystem → GPT-5.4 (`gpt-5.4`)
+If the Pre-processor LLM is unreachable (network error, timeout, quota exhausted), the router falls back to the original heuristic logic in `stave-router.ts`. This guarantees zero-downtime degradation: users on environments without any LLM access still get sensible routing.
 
-Triggered by: keywords like *openai*, *gpt-5*, *chatgpt*, *openai api*, *o3*, *o4-mini*, etc.
+### Stage 2a — Direct (single model)
 
-Routes to Codex so the turn runs inside the GPT-5 family, which is most familiar with its own APIs and SDKs.
+The Pre-processor selected one model to handle the full request. The routing runtime:
 
-### 3 — Complex analysis or planning → Claude Opus 4.6 (`claude-opus-4-6`)
+1. Checks provider availability for the chosen model.
+2. If unavailable, substitutes an automatic fallback (see table below).
+3. Forwards the turn to the selected model with `fastMode` applied when the Pre-processor requested it.
 
-Triggered by: deep analysis keywords (*analyze*, *분석*, *explain*, *root cause*, *architecture*, *how does … work*, etc.) combined with a complex context (prompt > 1 200 chars, 4+ attached files, or 8+ history messages).
+**Direct model palette:**
 
-Use this when you need Stave to reason deeply across a large codebase or explain a non-obvious system behaviour.
+| Situation | Model | fastMode |
+|---|---|---|
+| Quick edits (rename, typo, one-liner) | `claude-haiku-4-5` | — |
+| General coding / explanations | `claude-sonnet-4-6` | — |
+| Pure code generation focus | `gpt-5.3-codex` | — |
+| Complex analysis, architecture (accuracy first) | `claude-opus-4-6` | false |
+| **Complex task + urgency signal** | **`gpt-5.4`** | **true** |
+| OpenAI ecosystem questions | `gpt-5.4` | — |
+| Planning / design only (no file edits) | `opusplan` | — |
 
-### 4 — Precise code generation → GPT-5.3-Codex (`gpt-5.3-codex`)
+Urgency signals that trigger `fastMode: true`: *빠르게, 빨리, quick, fast, ASAP, urgent, 즉시*.
 
-Triggered by: explicit code-generation phrasing (*generate code*, *write a function*, *implement an algorithm*, etc.) on a short prompt (< 350 chars).
+**Automatic availability fallbacks:**
 
-Routes to the code-specialised GPT-5.3-Codex variant for precise, focused code output.
+| Chosen model | Fallback when unavailable |
+|---|---|
+| `claude-opus-4-6` | `gpt-5.4` |
+| `claude-sonnet-4-6` | `gpt-5.4` |
+| `claude-haiku-4-5` | `gpt-5.3-codex` |
+| `gpt-5.4` | `claude-opus-4-6` |
+| `gpt-5.3-codex` | `claude-haiku-4-5` |
 
-### 5 — Quick targeted edit → Claude Haiku 4.5 (`claude-haiku-4-5`)
+### Stage 2b — Orchestrate (multi-model)
 
-Triggered by: quick-edit signals (*rename*, *just fix*, *typo*, *오타*, *quick change*, etc.) on a short prompt.
+When the Pre-processor judges that the request genuinely requires multiple specialised agents (e.g. "analyse the auth module, then rewrite it, then add tests"), it returns `strategy: "orchestrate"`. The Orchestrator takes over:
 
-Routes to the fastest, lowest-cost Claude model for simple single-concern tasks.
+1. **Supervisor decompose** — The Supervisor model (default `claude-opus-4-6`) breaks the request into 2–4 subtasks as a JSON plan with `dependsOn` edges.
+2. **Parallel execution** — Subtasks are grouped by topological level; subtasks at the same level run in parallel via `Promise.all`. Prior results are injected into subsequent prompts via `{subtask-id}` placeholders.
+3. **Supervisor synthesise** — The Supervisor merges all worker outputs into a single coherent response streamed back to the user.
 
-### 6 — Default → Claude Sonnet 4.6 (`claude-sonnet-4-6`)
+Orchestration is only active when **Stave Auto** is selected and `staveOrchestrationEnabled` is `true` (the default). If orchestration is disabled in settings, the Pre-processor's `"orchestrate"` decision is silently downgraded to the regex fallback direct path.
 
-All other prompts. Claude Sonnet 4.6 provides the best balance of quality, speed, and cost for general development work.
+## Provider availability cache
+
+Both stages consult a 30-second TTL in-process cache (`stave-availability.ts`) to avoid redundant availability checks. The cache is non-persistent: each new Stave session re-checks on the first request. The cache can be invalidated programmatically after quota-exhaustion errors.
 
 ## Per-turn routing
 
 The router re-evaluates every turn independently. Within a single task, different messages can be routed to different models. Provider-native conversation IDs (Claude session ID, Codex thread ID) are preserved separately per provider, so switching between providers within a task does not lose context.
 
-## Availability
+## Settings
 
-The Stave provider is shown as available in the Settings dialog when the Claude CLI is reachable. Codex availability is checked only when the router decides to delegate to Codex.
+Three settings control the orchestration behaviour (accessible via **Settings → Stave Orchestration**):
+
+| Setting | Default | Description |
+|---|---|---|
+| `stavePreprocessorModel` | `claude-haiku-4-5` | Model used to analyse prompts and produce `ExecutionPlan` |
+| `staveSupervisorModel` | `claude-opus-4-6` | Model used to decompose and synthesise in orchestration mode |
+| `staveOrchestrationEnabled` | `true` | When false, all turns use the direct path |
+
+The existing per-rule model overrides (`StaveRoutingModelsCard`) remain available for users who want to pin specific regex-matched routes to particular models.
+
+## BridgeEvents emitted by Stave
+
+Stave emits its own meta-events (prefixed `stave:`) alongside the provider's native events:
+
+| Event | When |
+|---|---|
+| `stave:execution_plan` | Pre-processor returns a plan (before the actual turn starts) |
+| `stave:orchestration_plan` | Supervisor returns the subtask breakdown |
+| `stave:subtask_started` | A worker agent begins its subtask |
+| `stave:subtask_done` | A worker agent finishes |
+| `stave:synthesis_started` | Supervisor begins merging worker outputs |
 
 ## Extending the router
 
-The routing logic lives entirely in `electron/providers/stave-router.ts` as pure functions. To adjust or add rules:
+**Routing rules (regex fallback):** edit `stave-router.ts` — add patterns to `PLAN_PATTERNS`, `DEEP_ANALYSIS_PATTERNS`, etc. No other files need to change.
 
-1. Add or modify the pattern arrays (`PLAN_PATTERNS`, `DEEP_ANALYSIS_PATTERNS`, etc.).
-2. Adjust the scoring / threshold logic in `resolveStaveTarget`.
-3. No other files need to change for routing-rule updates.
+**Pre-processor prompt:** edit the `PREPROCESSOR_SYSTEM_PROMPT` constant in `stave-preprocessor.ts` to adjust the model descriptions or decision criteria.
 
-To add a new routing tier (e.g. a future model), add it to `CLAUDE_SDK_MODEL_OPTIONS` or `CODEX_SDK_MODEL_OPTIONS` in `model-catalog.ts`, then add a new scored branch in `resolveStaveTarget`.
+**Supervisor prompts:** edit `SUPERVISOR_PLAN_PROMPT` / `SUPERVISOR_SYNTHESIS_PROMPT` in `stave-orchestrator.ts`.
+
+**New model tier:** add it to `CLAUDE_SDK_MODEL_OPTIONS` or `CODEX_SDK_MODEL_OPTIONS` in `model-catalog.ts`, then reference it in the Pre-processor system prompt and update the availability fallback table in `runtime.ts`.
 
 ## Limitations
 
 - The Stave provider does not expose a native command catalog. Use `claude-code` or `codex` directly if you need provider-specific slash commands.
-- The router does not make an LLM call to classify the prompt, so edge cases may be routed suboptimally. Switching to a specific provider remains possible at any time.
+- Orchestration adds latency proportional to the number of subtasks × model round-trips. For time-sensitive work, prefer direct mode or disable orchestration in settings.
 - Per-task routing history is not persisted; diagnostics panels show the resolved provider and model that was actually used for each turn.
+- The Pre-processor timeout is 10 seconds. On slow networks, frequent Pre-processor timeouts will cause all turns to fall back to regex routing.

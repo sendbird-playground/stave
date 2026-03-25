@@ -59,6 +59,11 @@ export type BridgeEvent =
   | { type: "plan_ready"; planText: string }
   | { type: "system"; content: string }
   | { type: "model_resolved"; resolvedProviderId: "claude-code" | "codex"; resolvedModel: string }
+  | { type: "stave:execution_processing"; strategy: "direct" | "orchestrate"; model?: string; supervisorModel?: string; reason: string; fastMode?: boolean }
+  | { type: "stave:orchestration_processing"; supervisorModel: string; subtasks: Array<{ id: string; title: string; model: string; dependsOn: string[] }> }
+  | { type: "stave:subtask_started"; subtaskId: string; index: number; total: number; title: string; model: string }
+  | { type: "stave:subtask_done"; subtaskId: string; success: boolean }
+  | { type: "stave:synthesis_started" }
   | { type: "error"; message: string; recoverable: boolean }
   | { type: "done"; stop_reason?: string };
 

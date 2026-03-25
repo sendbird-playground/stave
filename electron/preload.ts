@@ -128,6 +128,8 @@ contextBridge.exposeInMainWorld("api", {
       commands: ProviderSlashCommand[];
       detail: string;
     }>,
+    suggestTaskName: (args: { prompt: string }) =>
+      ipcRenderer.invoke("provider:suggest-task-name", args) as Promise<{ ok: boolean; title?: string }>,
   },
   persistence: {
     listWorkspaces: () => ipcRenderer.invoke("persistence:list-workspaces"),
