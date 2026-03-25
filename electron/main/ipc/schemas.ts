@@ -328,6 +328,10 @@ export const OpenExternalArgsSchema = z.object({
   url: z.string().min(1).max(2048),
 }).strict();
 
+export const OpenPathArgsSchema = z.object({
+  path: z.string().min(1).max(4096),
+}).strict();
+
 const FilesystemRootPathSchema = z.string().min(1).max(4096);
 const FilesystemFilePathSchema = z.string().min(1).max(4096);
 

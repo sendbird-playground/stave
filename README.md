@@ -14,7 +14,7 @@ Stave is an Electron-based AI coding workspace built with Bun, React, Vite, and 
 - redesigned project, workspace, and task shell with a collapsible project sidebar, workspace task tabs, and a right-side activity rail
 - recent-project switching that preserves each project's own workspace list and last active workspace
 - automatic import of existing branch-backed git worktrees when a project opens
-- optional post-create workspace bootstrap command for new git worktrees, such as `bun install` or `npm install`
+- optional repo-scoped post-create workspace bootstrap command for new git worktrees, such as `bun install` or `npm install`
 - SQLite-backed local persistence for workspaces, tasks, messages, and turns
 
 ## Stack

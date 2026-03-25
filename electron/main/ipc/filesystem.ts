@@ -1,4 +1,5 @@
-import { dialog, ipcMain } from "electron";
+import { dialog, ipcMain, shell } from "electron";
+import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,6 +10,7 @@ import {
   FilesystemRootArgsSchema,
   FilesystemWriteFileArgsSchema,
   OpenExternalArgsSchema,
+  OpenPathArgsSchema,
 } from "./schemas";
 import { openExternalWithFallback } from "../utils/external-url";
 import { listDirectoryEntries, listFilesRecursive, mimeTypeFromFilePath, resolveRootFilePath, revisionFromStat } from "../utils/filesystem";
@@ -61,6 +63,101 @@ export function registerFilesystemHandlers() {
       return { ok: false, stderr: "Invalid external URL request." };
     }
     return openExternalWithFallback({ url: parsed.data.url });
+  });
+
+  ipcMain.handle("shell:show-in-finder", async (_event, args: unknown) => {
+    const parsed = OpenPathArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid path request." };
+    }
+    try {
+      shell.showItemInFolder(parsed.data.path);
+      return { ok: true as const };
+    } catch (error) {
+      return { ok: false as const, stderr: String(error) };
+    }
+  });
+
+  ipcMain.handle("shell:open-in-vscode", async (_event, args: unknown) => {
+    const parsed = OpenPathArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid path request." };
+    }
+    return new Promise<{ ok: boolean; stderr?: string }>((resolve) => {
+      const child = spawn("code", [parsed.data.path], {
+        detached: true,
+        stdio: "ignore",
+        shell: process.platform === "win32",
+      });
+      child.once("error", (error) => resolve({ ok: false, stderr: String(error) }));
+      child.once("spawn", () => {
+        child.unref();
+        resolve({ ok: true });
+      });
+    });
+  });
+
+  ipcMain.handle("shell:open-in-terminal", async (_event, args: unknown) => {
+    const parsed = OpenPathArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid path request." };
+    }
+    const targetPath = parsed.data.path;
+    if (process.platform === "darwin") {
+      // Try Terminal.app, fall back to iTerm2
+      const launchers: Array<{ command: string; commandArgs: string[] }> = [
+        { command: "open", commandArgs: ["-a", "Terminal", targetPath] },
+        { command: "open", commandArgs: ["-a", "iTerm", targetPath] },
+      ];
+      let lastError = "Failed to open terminal.";
+      for (const launcher of launchers) {
+        const result = await new Promise<{ ok: boolean; stderr?: string }>((resolve) => {
+          const child = spawn(launcher.command, launcher.commandArgs, { detached: true, stdio: "ignore" });
+          child.once("error", (error) => resolve({ ok: false, stderr: String(error) }));
+          child.once("spawn", () => {
+            child.unref();
+            resolve({ ok: true });
+          });
+        });
+        if (result.ok) return { ok: true as const };
+        lastError = result.stderr ?? lastError;
+      }
+      return { ok: false as const, stderr: lastError };
+    }
+    if (process.platform === "win32") {
+      return new Promise<{ ok: boolean; stderr?: string }>((resolve) => {
+        const child = spawn("cmd.exe", ["/c", "start", "cmd.exe", "/k", `cd /d "${targetPath}"`], {
+          detached: true,
+          stdio: "ignore",
+          shell: false,
+        });
+        child.once("error", (error) => resolve({ ok: false, stderr: String(error) }));
+        child.once("spawn", () => {
+          child.unref();
+          resolve({ ok: true });
+        });
+      });
+    }
+    // Linux
+    const launchers: Array<{ command: string; commandArgs: string[] }> = [
+      { command: "xterm", commandArgs: [] },
+      { command: "gnome-terminal", commandArgs: [`--working-directory=${targetPath}`] },
+      { command: "xfce4-terminal", commandArgs: [`--working-directory=${targetPath}`] },
+    ];
+    let lastError = "Failed to open terminal.";
+    for (const launcher of launchers) {
+      const result = await new Promise<{ ok: boolean; stderr?: string }>((resolve) => {
+        const child = spawn(launcher.command, launcher.commandArgs, { detached: true, stdio: "ignore" });
+        child.once("error", (error) => resolve({ ok: false, stderr: String(error) }));
+        child.once("spawn", () => {
+          child.unref();
+          resolve({ ok: true });
+        });
+      });
+      if (result.ok) return { ok: true as const };
+      lastError = result.stderr ?? lastError;
+    }
+    return { ok: false as const, stderr: lastError };
   });
 
   ipcMain.handle("fs:list-files", async (_event, args: unknown) => {

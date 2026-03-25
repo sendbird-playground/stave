@@ -1,4 +1,4 @@
-import { FolderTree, LoaderCircle } from "lucide-react";
+import { FolderTree, LoaderCircle, Code2, SquareTerminal, FolderOpen } from "lucide-react";
 import { Suspense, lazy, useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Card, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
@@ -136,18 +136,53 @@ export function TopBar() {
           <TooltipProvider>
             <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
             {activeWorkspacePath ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div
-                    className="inline-flex max-w-full items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground"
-                    style={TOP_BAR_NO_DRAG_STYLE}
-                  >
-                    <FolderTree className="size-3.5 shrink-0" />
-                    <span className="truncate font-mono">{workspacePathLabel}</span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{activeWorkspacePath}</TooltipContent>
-              </Tooltip>
+              <div className="flex min-w-0 items-center gap-1" style={TOP_BAR_NO_DRAG_STYLE}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="inline-flex max-w-[220px] items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
+                      <FolderTree className="size-3.5 shrink-0" />
+                      <span className="truncate font-mono">{workspacePathLabel}</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{activeWorkspacePath}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
+                      onClick={() => void window.api?.shell?.showInFinder?.({ path: activeWorkspacePath })}
+                    >
+                      <FolderOpen className="size-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Open in Finder</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
+                      onClick={() => void window.api?.shell?.openInVSCode?.({ path: activeWorkspacePath })}
+                    >
+                      <Code2 className="size-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Open in VS Code</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
+                      onClick={() => void window.api?.shell?.openInTerminal?.({ path: activeWorkspacePath })}
+                    >
+                      <SquareTerminal className="size-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Open in Terminal</TooltipContent>
+                </Tooltip>
+              </div>
             ) : null}
             <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
           </TooltipProvider>

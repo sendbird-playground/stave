@@ -255,6 +255,9 @@ contextBridge.exposeInMainWorld("api", {
   },
   shell: {
     openExternal: (args: { url: string }) => ipcRenderer.invoke("shell:open-external", args),
+    showInFinder: (args: { path: string }) => ipcRenderer.invoke("shell:show-in-finder", args),
+    openInVSCode: (args: { path: string }) => ipcRenderer.invoke("shell:open-in-vscode", args),
+    openInTerminal: (args: { path: string }) => ipcRenderer.invoke("shell:open-in-terminal", args),
   },
   capture: {
     screenshot: () => ipcRenderer.invoke("screenshot:capture") as Promise<{ ok: boolean; dataUrl: string }>,
