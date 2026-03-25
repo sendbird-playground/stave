@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { TopBar } from "@/components/layout/TopBar";
 import { ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
@@ -18,7 +18,6 @@ const EditorPanel = lazy(() =>
     default: module.EditorPanel,
   }))
 );
-
 type ResizableLayoutKey =
   | "taskListWidth"
   | "editorPanelWidth"
@@ -69,6 +68,11 @@ export function AppShell() {
   const [zoomHudPercent, setZoomHudPercent] = useState<number | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const zoomHudTimerRef = useRef<number | null>(null);
+  const handleFocusFileSearch = useCallback(() => {
+    const input = document.querySelector<HTMLInputElement>("[data-file-search-input]");
+    input?.focus();
+    input?.select();
+  }, []);
 
   function flushPendingLayoutPatch() {
     if (!pendingLayoutPatchRef.current) {
@@ -158,6 +162,14 @@ export function AppShell() {
     const onKeyDown = (event: KeyboardEvent) => {
       const store = useAppStore.getState();
       const hasMod = event.ctrlKey || event.metaKey;
+
+      if (hasMod && !event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        event.stopPropagation();
+        handleFocusFileSearch();
+        return;
+      }
+
       if (isEditableShortcutTarget(event.target)) {
         return;
       }
@@ -236,7 +248,7 @@ export function AppShell() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [handleFocusFileSearch]);
 
   useEffect(() => () => {
     if (resizeFrameRef.current !== null) {
