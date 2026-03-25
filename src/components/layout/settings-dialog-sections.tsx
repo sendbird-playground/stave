@@ -10,6 +10,12 @@ import {
   getDefaultModelForProvider,
   normalizeModelSelection,
 } from "@/lib/providers/model-catalog";
+import {
+  buildStaveAutoModelSettingsPatch,
+  DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
+  detectStaveAutoModelPreset,
+  STAVE_AUTO_MODEL_PRESETS,
+} from "@/lib/providers/stave-auto-profile";
 
 // All real (non-meta) model IDs available for Stave routing rule overrides
 const STAVE_ROUTING_MODEL_OPTIONS = [...CLAUDE_SDK_MODEL_OPTIONS, ...CODEX_SDK_MODEL_OPTIONS] as const;
@@ -1151,6 +1157,7 @@ function StaveAutoCard() {
     staveAutoMaxSubtasks,
     staveAutoMaxParallelSubtasks,
     staveAutoAllowCrossProviderWorkers,
+    staveAutoFastMode,
   ] = useAppStore(
     useShallow((state) => [
       state.settings.staveAutoClassifierModel,
@@ -1165,15 +1172,64 @@ function StaveAutoCard() {
       state.settings.staveAutoMaxSubtasks,
       state.settings.staveAutoMaxParallelSubtasks,
       state.settings.staveAutoAllowCrossProviderWorkers,
+      state.settings.staveAutoFastMode,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const currentPresetId = detectStaveAutoModelPreset({
+    settings: {
+      staveAutoClassifierModel,
+      staveAutoSupervisorModel,
+      staveAutoPlanModel,
+      staveAutoAnalyzeModel,
+      staveAutoImplementModel,
+      staveAutoQuickEditModel,
+      staveAutoGeneralModel,
+      staveAutoVerifyModel,
+    },
+  });
+  const currentPreset = STAVE_AUTO_MODEL_PRESETS.find((preset) => preset.id === currentPresetId) ?? null;
+  const fallbackPreset = buildStaveAutoModelSettingsPatch({
+    presetId: currentPresetId ?? DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
+  });
 
   return (
     <SettingsCard
       title="Stave Auto"
-      description="Role-based defaults for Stave Auto. The classifier and supervisor decide intent and workflow, while these models remain the source of truth for actual execution."
+      description="Role-based defaults for Stave Auto. Apply a preset for a full role map, then fine-tune any individual model below."
     >
+      <LabeledField
+        title="Model Preset"
+        description="Applying a preset rewrites every Stave Auto role model at once."
+      >
+        <div className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-3">
+            {STAVE_AUTO_MODEL_PRESETS.map((preset) => (
+              <Button
+                key={preset.id}
+                className="h-auto min-h-20 items-start justify-start px-4 py-3 text-left"
+                variant={currentPresetId === preset.id ? "default" : "outline"}
+                onClick={() => updateSettings({ patch: buildStaveAutoModelSettingsPatch({ presetId: preset.id }) })}
+              >
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{preset.label}</p>
+                  <p className="text-xs opacity-80">{preset.description}</p>
+                </div>
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/25 px-3 py-2.5">
+            <Badge variant={currentPreset ? "default" : "secondary"}>
+              {currentPreset ? `Current: ${currentPreset.label}` : "Current: Custom"}
+            </Badge>
+            <p className="text-xs text-muted-foreground">
+              {currentPreset
+                ? currentPreset.description
+                : "Manual overrides are active. Pick a preset again to reapply a full Stave Auto model map."}
+            </p>
+          </div>
+        </div>
+      </LabeledField>
       <LabeledField title="Orchestration Mode" description="Off = direct routing only. Auto = orchestrate only when needed. Aggressive = bias toward multi-step workflows.">
         <Select
           value={staveAutoOrchestrationMode}
@@ -1192,12 +1248,22 @@ function StaveAutoCard() {
           </SelectContent>
         </Select>
       </LabeledField>
+      <LabeledField title="Fast Mode" description="Requests fast execution for Stave Auto turns. It is only applied to providers whose fast mode is available in this workspace.">
+        <ChoiceButtons
+          value={staveAutoFastMode ? "on" : "off"}
+          onChange={(value) => updateSettings({ patch: { staveAutoFastMode: value === "on" } })}
+          options={[
+            { value: "on", label: "On" },
+            { value: "off", label: "Off" },
+          ]}
+        />
+      </LabeledField>
       <LabeledField title="Supervisor Model" description="Used for orchestration planning and synthesis. Default: claude-opus-4-6.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"
           value={staveAutoSupervisorModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoSupervisorModel: normalizeModelSelection({ value, fallback: "claude-opus-4-6" }) } })}
+          onCommit={(value) => updateSettings({ patch: { staveAutoSupervisorModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoSupervisorModel }) } })}
         />
       </LabeledField>
       <LabeledField title="Plan Model" description="Used for strategy, design, and plan-only requests.">
@@ -1205,7 +1271,7 @@ function StaveAutoCard() {
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"
           value={staveAutoPlanModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoPlanModel: normalizeModelSelection({ value, fallback: "opusplan" }) } })}
+          onCommit={(value) => updateSettings({ patch: { staveAutoPlanModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoPlanModel }) } })}
         />
       </LabeledField>
       <LabeledField title="Analyze Model" description="Used for debugging, review, explanation, architecture, and root-cause analysis.">
@@ -1213,7 +1279,7 @@ function StaveAutoCard() {
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"
           value={staveAutoAnalyzeModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoAnalyzeModel: normalizeModelSelection({ value, fallback: "claude-opus-4-6" }) } })}
+          onCommit={(value) => updateSettings({ patch: { staveAutoAnalyzeModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoAnalyzeModel }) } })}
         />
       </LabeledField>
       <LabeledField title="Implement Model" description="Used for feature work, code generation, patching, refactors, and test writing.">
@@ -1221,7 +1287,7 @@ function StaveAutoCard() {
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"
           value={staveAutoImplementModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoImplementModel: normalizeModelSelection({ value, fallback: "gpt-5.3-codex" }) } })}
+          onCommit={(value) => updateSettings({ patch: { staveAutoImplementModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoImplementModel }) } })}
         />
       </LabeledField>
       <LabeledField title="Quick Edit Model" description="Used for rename, typo, and tiny targeted edits.">
@@ -1229,7 +1295,7 @@ function StaveAutoCard() {
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"
           value={staveAutoQuickEditModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoQuickEditModel: normalizeModelSelection({ value, fallback: "claude-haiku-4-5" }) } })}
+          onCommit={(value) => updateSettings({ patch: { staveAutoQuickEditModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoQuickEditModel }) } })}
         />
       </LabeledField>
       <LabeledField title="General Model" description="Used when the request does not strongly match another role.">
@@ -1237,7 +1303,7 @@ function StaveAutoCard() {
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"
           value={staveAutoGeneralModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoGeneralModel: normalizeModelSelection({ value, fallback: "claude-sonnet-4-6" }) } })}
+          onCommit={(value) => updateSettings({ patch: { staveAutoGeneralModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoGeneralModel }) } })}
         />
       </LabeledField>
       <LabeledField title="Verify Model" description="Used for validation, sanity checks, and review after implementation.">
@@ -1245,7 +1311,7 @@ function StaveAutoCard() {
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"
           value={staveAutoVerifyModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoVerifyModel: normalizeModelSelection({ value, fallback: "claude-sonnet-4-6" }) } })}
+          onCommit={(value) => updateSettings({ patch: { staveAutoVerifyModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoVerifyModel }) } })}
         />
       </LabeledField>
       <LabeledField title="Classifier Model" description="Lightweight model that decides whether to route directly or orchestrate.">
@@ -1253,7 +1319,7 @@ function StaveAutoCard() {
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"
           value={staveAutoClassifierModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoClassifierModel: normalizeModelSelection({ value, fallback: "claude-haiku-4-5" }) } })}
+          onCommit={(value) => updateSettings({ patch: { staveAutoClassifierModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoClassifierModel }) } })}
         />
       </LabeledField>
       <LabeledField title="Max Subtasks" description="Upper bound for supervisor-generated subtasks per orchestration run.">

@@ -86,6 +86,7 @@ export function PromptInput(args: PromptInputProps) {
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(NO_COMMAND_SELECTION);
   const [caretIndex, setCaretIndex] = useState(value.length);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const commandListRef = useRef<HTMLDivElement | null>(null);
   const wasTurnActiveRef = useRef(Boolean(isTurnActive));
   const interactionsDisabled = Boolean(disabled || isTurnActive);
   const maxTextareaHeight = 240;
@@ -244,6 +245,30 @@ export function PromptInput(args: PromptInputProps) {
       return Math.min(current, Math.max(filteredSkillItems.length - 1, 0));
     });
   }, [filteredSkillItems.length, skillPaletteOpen]);
+
+  useEffect(() => {
+    if (selectedCommandIndex === NO_COMMAND_SELECTION) {
+      return;
+    }
+    const list = commandListRef.current;
+    if (!list) {
+      return;
+    }
+    const selected = list.querySelector('[data-selected=""]');
+    selected?.scrollIntoView({ block: "nearest" });
+  }, [selectedCommandIndex]);
+
+  useEffect(() => {
+    if (selectedSkillIndex === NO_COMMAND_SELECTION) {
+      return;
+    }
+    const list = commandListRef.current;
+    if (!list) {
+      return;
+    }
+    const selected = list.querySelector('[data-selected=""]');
+    selected?.scrollIntoView({ block: "nearest" });
+  }, [selectedSkillIndex]);
 
   const filteredFiles = useMemo(() => {
     const normalized = fileFilter.trim().toLowerCase();
@@ -464,6 +489,11 @@ export function PromptInput(args: PromptInputProps) {
                 if (event.nativeEvent.isComposing) {
                   return;
                 }
+                // Palette open but has 0 items (empty state): block Enter from sending
+                if (activePalette !== null) {
+                  event.preventDefault();
+                  return;
+                }
                 event.preventDefault();
                 void submitCurrentMessage();
               }}
@@ -487,7 +517,7 @@ export function PromptInput(args: PromptInputProps) {
           className="w-[min(34rem,calc(100vw-2rem))] gap-0 rounded-xl border border-border/80 bg-popover p-1 shadow-lg"
         >
           <Command shouldFilter={false} className="rounded-lg border border-border/60 bg-background/70 p-0">
-            <CommandList className="max-h-72">
+            <CommandList ref={commandListRef} className="max-h-72">
               {activePalette === "skill" && filteredSkillItems.length === 0 ? (
                 <CommandEmpty>No matching skill.</CommandEmpty>
               ) : activePalette === "command" && filteredCommandItems.length === 0 ? (

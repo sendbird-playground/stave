@@ -38,12 +38,12 @@ describe("getNextCommandSelectionIndex", () => {
 });
 
 describe("getAcceptedCommandPaletteItem", () => {
-  test("does not accept anything on Enter without an explicit selection", () => {
+  test("accepts the first match on Enter even without an explicit selection", () => {
     expect(getAcceptedCommandPaletteItem({
       items,
       selectedIndex: NO_COMMAND_SELECTION,
       triggerKey: "Enter",
-    })).toBeNull();
+    })).toEqual(items[0]);
   });
 
   test("accepts the first match on Tab even without an explicit selection", () => {

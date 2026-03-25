@@ -108,7 +108,10 @@ export interface StaveProcessingPart extends MessagePartBase {
   supervisorModel?: string;
   /** Short human-readable reason from the Pre-processor. */
   reason: string;
-  fastMode?: boolean;
+  /** Whether the Pre-processor flagged this as an urgent request. */
+  fastModeRequested?: boolean;
+  /** Whether fast mode was actually applied to the resolved provider. */
+  fastModeApplied?: boolean;
 }
 
 export interface OrchestrationSubtaskState {

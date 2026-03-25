@@ -197,7 +197,7 @@ function getMessagePartScrollFingerprint(part: MessagePart): string {
     case "orchestration_progress":
       return `progress:${part.status}:${part.supervisorModel}:${part.subtasks.length}:${part.subtasks.map((subtask) => `${subtask.id}:${subtask.status}`).join(",")}`;
     case "stave_processing":
-      return `stave_processing:${part.strategy}:${part.model ?? ""}:${part.supervisorModel ?? ""}:${part.fastMode ? 1 : 0}`;
+      return `stave_processing:${part.strategy}:${part.model ?? ""}:${part.supervisorModel ?? ""}:${part.fastModeRequested ? 1 : 0}:${part.fastModeApplied ? 1 : 0}`;
   }
 }
 

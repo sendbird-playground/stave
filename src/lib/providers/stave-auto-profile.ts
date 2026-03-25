@@ -1,6 +1,19 @@
 import type { ProviderId, StaveAutoIntent, StaveAutoProfile, StaveWorkerRole } from "@/lib/providers/provider.types";
 
-type StaveAutoSettingsLike = {
+export type StaveAutoModelPresetId = "recommended" | "claude-only" | "codex-only";
+
+type StaveAutoModelProfile = {
+  classifierModel: string;
+  supervisorModel: string;
+  planModel: string;
+  analyzeModel: string;
+  implementModel: string;
+  quickEditModel: string;
+  generalModel: string;
+  verifyModel: string;
+};
+
+export interface StaveAutoModelSettingsPatch {
   staveAutoClassifierModel: string;
   staveAutoSupervisorModel: string;
   staveAutoPlanModel: string;
@@ -9,25 +22,127 @@ type StaveAutoSettingsLike = {
   staveAutoQuickEditModel: string;
   staveAutoGeneralModel: string;
   staveAutoVerifyModel: string;
+}
+
+type StaveAutoSettingsLike = StaveAutoModelSettingsPatch & {
   staveAutoOrchestrationMode: StaveAutoProfile["orchestrationMode"];
   staveAutoMaxSubtasks: number;
   staveAutoMaxParallelSubtasks: number;
   staveAutoAllowCrossProviderWorkers: boolean;
+  staveAutoFastMode: boolean;
+  claudeFastModeVisible: boolean;
+  codexFastModeVisible: boolean;
 };
 
+export const DEFAULT_STAVE_AUTO_MODEL_PRESET_ID: StaveAutoModelPresetId = "recommended";
+
+export const STAVE_AUTO_MODEL_PRESETS = [
+  {
+    id: "recommended",
+    label: "Recommended",
+    description: "Balanced Claude + Codex mix. Verify uses GPT-5.4.",
+  },
+  {
+    id: "claude-only",
+    label: "Claude Only",
+    description: "Keep every Stave Auto role on Claude models only.",
+  },
+  {
+    id: "codex-only",
+    label: "Codex Only",
+    description: "Keep every Stave Auto role on Codex models only.",
+  },
+] as const satisfies ReadonlyArray<{
+  id: StaveAutoModelPresetId;
+  label: string;
+  description: string;
+}>;
+
+const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAutoModelProfile> = {
+  recommended: {
+    classifierModel: "claude-haiku-4-5",
+    supervisorModel: "claude-opus-4-6",
+    planModel: "opusplan",
+    analyzeModel: "claude-opus-4-6",
+    implementModel: "gpt-5.3-codex",
+    quickEditModel: "claude-haiku-4-5",
+    generalModel: "claude-sonnet-4-6",
+    verifyModel: "gpt-5.4",
+  },
+  "claude-only": {
+    classifierModel: "claude-haiku-4-5",
+    supervisorModel: "claude-opus-4-6",
+    planModel: "opusplan",
+    analyzeModel: "claude-opus-4-6",
+    implementModel: "claude-sonnet-4-6",
+    quickEditModel: "claude-haiku-4-5",
+    generalModel: "claude-sonnet-4-6",
+    verifyModel: "claude-sonnet-4-6",
+  },
+  "codex-only": {
+    classifierModel: "gpt-5.4",
+    supervisorModel: "gpt-5.4",
+    planModel: "gpt-5.4",
+    analyzeModel: "gpt-5.4",
+    implementModel: "gpt-5.3-codex",
+    quickEditModel: "gpt-5.3-codex",
+    generalModel: "gpt-5.4",
+    verifyModel: "gpt-5.4",
+  },
+};
+
+function toSettingsPatch(args: { profile: StaveAutoModelProfile }): StaveAutoModelSettingsPatch {
+  const { profile } = args;
+  return {
+    staveAutoClassifierModel: profile.classifierModel,
+    staveAutoSupervisorModel: profile.supervisorModel,
+    staveAutoPlanModel: profile.planModel,
+    staveAutoAnalyzeModel: profile.analyzeModel,
+    staveAutoImplementModel: profile.implementModel,
+    staveAutoQuickEditModel: profile.quickEditModel,
+    staveAutoGeneralModel: profile.generalModel,
+    staveAutoVerifyModel: profile.verifyModel,
+  };
+}
+
+export function buildStaveAutoModelSettingsPatch(args: {
+  presetId: StaveAutoModelPresetId;
+}): StaveAutoModelSettingsPatch {
+  return toSettingsPatch({
+    profile: STAVE_AUTO_MODEL_PRESET_PROFILES[args.presetId],
+  });
+}
+
+export function detectStaveAutoModelPreset(args: {
+  settings: StaveAutoModelSettingsPatch;
+}): StaveAutoModelPresetId | null {
+  for (const preset of STAVE_AUTO_MODEL_PRESETS) {
+    const presetSettings = buildStaveAutoModelSettingsPatch({ presetId: preset.id });
+    if (
+      presetSettings.staveAutoClassifierModel === args.settings.staveAutoClassifierModel
+      && presetSettings.staveAutoSupervisorModel === args.settings.staveAutoSupervisorModel
+      && presetSettings.staveAutoPlanModel === args.settings.staveAutoPlanModel
+      && presetSettings.staveAutoAnalyzeModel === args.settings.staveAutoAnalyzeModel
+      && presetSettings.staveAutoImplementModel === args.settings.staveAutoImplementModel
+      && presetSettings.staveAutoQuickEditModel === args.settings.staveAutoQuickEditModel
+      && presetSettings.staveAutoGeneralModel === args.settings.staveAutoGeneralModel
+      && presetSettings.staveAutoVerifyModel === args.settings.staveAutoVerifyModel
+    ) {
+      return preset.id;
+    }
+  }
+  return null;
+}
+
 export const DEFAULT_STAVE_AUTO_PROFILE: StaveAutoProfile = {
-  classifierModel: "claude-haiku-4-5",
-  supervisorModel: "claude-opus-4-6",
-  planModel: "opusplan",
-  analyzeModel: "claude-opus-4-6",
-  implementModel: "gpt-5.3-codex",
-  quickEditModel: "claude-haiku-4-5",
-  generalModel: "claude-sonnet-4-6",
-  verifyModel: "claude-sonnet-4-6",
+  ...STAVE_AUTO_MODEL_PRESET_PROFILES[DEFAULT_STAVE_AUTO_MODEL_PRESET_ID],
   orchestrationMode: "auto",
   maxSubtasks: 3,
   maxParallelSubtasks: 2,
   allowCrossProviderWorkers: true,
+  claudeFastModeSupported: true,
+  codexFastModeSupported: true,
+  fastMode: false,
 };
 
 export function buildStaveAutoProfileFromSettings(args: {
@@ -47,6 +162,9 @@ export function buildStaveAutoProfileFromSettings(args: {
     maxSubtasks: settings.staveAutoMaxSubtasks,
     maxParallelSubtasks: settings.staveAutoMaxParallelSubtasks,
     allowCrossProviderWorkers: settings.staveAutoAllowCrossProviderWorkers,
+    claudeFastModeSupported: settings.claudeFastModeVisible,
+    codexFastModeSupported: settings.codexFastModeVisible,
+    fastMode: settings.staveAutoFastMode,
   };
 }
 

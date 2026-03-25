@@ -17,9 +17,19 @@ import {
   buildCanonicalConversationRequest,
 } from "@/lib/providers/canonical-request";
 import { getDefaultModelForProvider, listProviderIds } from "@/lib/providers/model-catalog";
-import { buildStaveAutoProfileFromSettings } from "@/lib/providers/stave-auto-profile";
+import {
+  buildStaveAutoModelSettingsPatch,
+  buildStaveAutoProfileFromSettings,
+  DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
+} from "@/lib/providers/stave-auto-profile";
 import { getCachedProviderCommandCatalog } from "@/lib/providers/provider-command-catalog";
-import { getArchiveFallbackTaskId, isTaskArchived, reorderTasksWithinFilter, type TaskFilter } from "@/lib/tasks";
+import {
+  getArchiveFallbackTaskId,
+  isTaskArchived,
+  normalizeSuggestedTaskTitle,
+  reorderTasksWithinFilter,
+  type TaskFilter,
+} from "@/lib/tasks";
 import {
   replayProviderEventsToTaskState,
 } from "@/lib/session/provider-event-replay";
@@ -221,6 +231,7 @@ export interface AppSettings {
   staveAutoMaxSubtasks: number;
   staveAutoMaxParallelSubtasks: number;
   staveAutoAllowCrossProviderWorkers: boolean;
+  staveAutoFastMode: boolean;
   rulesPresetPrimary: string;
   rulesPresetSecondary: string;
   permissionMode: "require-approval" | "auto-safe";
@@ -409,18 +420,12 @@ const defaultSettings: AppSettings = {
   modelClaude: getDefaultModelForProvider({ providerId: "claude-code" }),
   modelCodex: getDefaultModelForProvider({ providerId: "codex" }),
   modelStave: getDefaultModelForProvider({ providerId: "stave" }),
-  staveAutoClassifierModel: "claude-haiku-4-5",
-  staveAutoSupervisorModel: "claude-opus-4-6",
-  staveAutoPlanModel: "opusplan",
-  staveAutoAnalyzeModel: "claude-opus-4-6",
-  staveAutoImplementModel: "gpt-5.3-codex",
-  staveAutoQuickEditModel: "claude-haiku-4-5",
-  staveAutoGeneralModel: "claude-sonnet-4-6",
-  staveAutoVerifyModel: "claude-sonnet-4-6",
+  ...buildStaveAutoModelSettingsPatch({ presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID }),
   staveAutoOrchestrationMode: "auto",
   staveAutoMaxSubtasks: 3,
   staveAutoMaxParallelSubtasks: 2,
   staveAutoAllowCrossProviderWorkers: true,
+  staveAutoFastMode: false,
   rulesPresetPrimary: "typescript-best-practices",
   rulesPresetSecondary: "no-target-brand-keyword",
   permissionMode: "auto-safe",
@@ -2895,7 +2900,10 @@ export const useAppStore = create<AppState>()(
           })
             .then((result) => {
               if (result?.ok && result.title) {
-                get().renameTask({ taskId: capturedTaskId, title: result.title });
+                const safeTitle = normalizeSuggestedTaskTitle({ title: result.title });
+                if (safeTitle) {
+                  get().renameTask({ taskId: capturedTaskId, title: safeTitle });
+                }
               }
             })
             .catch(() => {

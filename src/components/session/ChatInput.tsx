@@ -212,6 +212,11 @@ export function ChatInput(args: ChatInputProps = {}) {
     codexFastMode,
     claudeFastModeVisible,
     codexFastModeVisible,
+    staveAutoFastMode,
+    staveAutoOrchestrationMode,
+    staveAutoMaxSubtasks,
+    staveAutoAllowCrossProviderWorkers,
+    staveAutoMaxParallelSubtasks,
   ] = useAppStore(useShallow((state) => [
     state.settings.modelClaude,
     state.settings.modelCodex,
@@ -241,6 +246,11 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.settings.codexFastMode,
     state.settings.claudeFastModeVisible,
     state.settings.codexFastModeVisible,
+    state.settings.staveAutoFastMode,
+    state.settings.staveAutoOrchestrationMode,
+    state.settings.staveAutoMaxSubtasks,
+    state.settings.staveAutoAllowCrossProviderWorkers,
+    state.settings.staveAutoMaxParallelSubtasks,
   ] as const));
   const providerSelectionTarget = activeTaskId || "draft:session";
   const skillCatalog = useAppStore((state) => state.skillCatalog);
@@ -276,15 +286,49 @@ export function ChatInput(args: ChatInputProps = {}) {
     }))
   );
   const runtimeQuickControls = useMemo(() => {
+    // Stave Auto dedicated controls
+    if (activeProvider === "stave") {
+      return [
+        {
+          id: "orchestration-mode",
+          label: "Orchestration",
+          value: staveAutoOrchestrationMode,
+          options: [
+            { label: "Off", value: "off" },
+            { label: "Auto", value: "auto" },
+            { label: "Aggressive", value: "aggressive" },
+          ],
+          onSelect: (value: string) => updateSettings({ patch: { staveAutoOrchestrationMode: value as "off" | "auto" | "aggressive" } }),
+        },
+        {
+          id: "fast-mode",
+          label: "Fast Mode",
+          value: staveAutoFastMode ? "on" : "off",
+          options: [
+            { label: "Off", value: "off" },
+            { label: "On", value: "on" },
+          ],
+          onSelect: (value: string) => updateSettings({ patch: { staveAutoFastMode: value === "on" } }),
+        },
+        {
+          id: "max-subtasks",
+          label: "Max Subtasks",
+          value: String(staveAutoMaxSubtasks),
+          options: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ label: String(n), value: String(n) })),
+          onSelect: (value: string) => updateSettings({ patch: { staveAutoMaxSubtasks: Number(value) } }),
+        },
+      ];
+    }
+
     // For the permission-mode selector, stave defaults to the Claude options
     // since Claude is the primary routing target.
-    const effectiveProvider = activeProvider === "stave" ? "claude-code" : activeProvider;
+    const effectiveProvider = activeProvider;
     const permissionOptions = getPermissionModeOptions(effectiveProvider).map((option) => ({
       value: option.value,
       label: option.label,
     }));
 
-    if (activeProvider === "claude-code" || activeProvider === "stave") {
+    if (activeProvider === "claude-code") {
       return [
         {
           id: "permission-mode",
@@ -366,9 +410,32 @@ export function ChatInput(args: ChatInputProps = {}) {
     codexModelReasoningEffort,
     codexWebSearchMode,
     permissionMode,
+    staveAutoFastMode,
+    staveAutoMaxSubtasks,
+    staveAutoOrchestrationMode,
     updateSettings,
   ]);
   const runtimeStatusItems = useMemo(() => {
+    if (activeProvider === "stave") {
+      return [
+        {
+          id: "timeout",
+          label: "Timeout",
+          value: formatProviderTimeout(providerTimeoutMs),
+        },
+        {
+          id: "cross-provider",
+          label: "Cross-Provider",
+          value: staveAutoAllowCrossProviderWorkers ? "On" : "Off",
+        },
+        {
+          id: "max-parallel",
+          label: "Max Parallel",
+          value: String(staveAutoMaxParallelSubtasks),
+        },
+      ];
+    }
+
     if (activeProvider === "claude-code") {
       return [
         {
@@ -472,6 +539,8 @@ export function ChatInput(args: ChatInputProps = {}) {
     codexShowRawAgentReasoning,
     codexSupportsReasoningSummaries,
     providerTimeoutMs,
+    staveAutoAllowCrossProviderWorkers,
+    staveAutoMaxParallelSubtasks,
   ]);
 
   function cancelPendingDraftSave() {
@@ -755,14 +824,20 @@ export function ChatInput(args: ChatInputProps = {}) {
               },
             });
           }}
-          fastMode={activeProvider === "codex" ? codexFastMode : claudeFastMode}
-          onFastModeChange={(activeProvider === "codex" ? codexFastModeVisible : claudeFastModeVisible) ? (enabled) => {
-            if (activeProvider === "codex") {
-              updateSettings({ patch: { codexFastMode: enabled } });
-            } else {
-              updateSettings({ patch: { claudeFastMode: enabled } });
-            }
-          } : undefined}
+          fastMode={activeProvider === "stave" ? staveAutoFastMode : activeProvider === "codex" ? codexFastMode : claudeFastMode}
+          onFastModeChange={
+            activeProvider === "stave"
+              ? (enabled) => updateSettings({ patch: { staveAutoFastMode: enabled } })
+              : (activeProvider === "codex" ? codexFastModeVisible : claudeFastModeVisible)
+                ? (enabled) => {
+                    if (activeProvider === "codex") {
+                      updateSettings({ patch: { codexFastMode: enabled } });
+                    } else {
+                      updateSettings({ patch: { claudeFastMode: enabled } });
+                    }
+                  }
+                : undefined
+          }
           permissionMode={permissionMode}
           runtimeQuickControls={runtimeQuickControls}
           runtimeStatusItems={runtimeStatusItems}

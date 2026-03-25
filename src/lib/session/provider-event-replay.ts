@@ -245,8 +245,16 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
         type: "stave_processing",
         strategy: event.strategy,
         reason: event.reason,
-        ...(event.strategy === "direct" && event.model ? { model: event.model, fastMode: event.fastMode } : {}),
-        ...(event.strategy === "orchestrate" && event.supervisorModel ? { supervisorModel: event.supervisorModel } : {}),
+        ...(event.strategy === "direct" && event.model
+          ? {
+              model: event.model,
+              fastModeRequested: event.fastModeRequested,
+              fastModeApplied: event.fastModeApplied,
+            }
+          : {}),
+        ...(event.strategy === "orchestrate" && event.supervisorModel
+          ? { supervisorModel: event.supervisorModel }
+          : {}),
       };
       return plan;
     }

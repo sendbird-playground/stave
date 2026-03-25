@@ -151,19 +151,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     });
 
     // Emit the structured execution plan so the UI can reflect it.
-    if (plan.strategy === "direct") {
-      const directModel = resolveStaveIntentModel({
-        profile,
-        intent: plan.intent,
-      });
-      args.onEvent?.({
-        type: "stave:execution_processing",
-        strategy: "direct",
-        model: directModel,
-        reason: plan.reason,
-        fastMode: plan.executionHints?.fastMode ?? false,
-      });
-    } else {
+    if (plan.strategy === "orchestrate") {
       args.onEvent?.({
         type: "stave:execution_processing",
         strategy: "orchestrate",
@@ -205,20 +193,40 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
         reason: plan.reason,
       };
 
+      const resolvedArgs = buildStaveResolvedArgs(args, resolvedTarget);
+
+      // Apply fast-mode hint if the Pre-processor flagged it OR the Stave Auto profile enables fast mode globally,
+      // guarded by per-provider support flags.
+      const claudeFastSupported = profile.claudeFastModeSupported !== false;
+      const codexFastSupported = profile.codexFastModeSupported !== false;
+      if (plan.executionHints?.fastMode || profile.fastMode) {
+        resolvedArgs.runtimeOptions = {
+          ...resolvedArgs.runtimeOptions,
+          ...(claudeFastSupported ? { claudeFastMode: true } : {}),
+          ...(codexFastSupported ? { codexFastMode: true } : {}),
+        };
+      }
+
+      // Compute the effective fast mode flag for the resolved provider.
+      const resolvedProvider = resolvedTarget.providerId;
+      const fastModeApplied =
+        resolvedProvider === "codex"
+          ? (resolvedArgs.runtimeOptions?.codexFastMode ?? false)
+          : (resolvedArgs.runtimeOptions?.claudeFastMode ?? false);
+
+      // Emit the structured execution plan so the UI can reflect it.
+      args.onEvent?.({
+        type: "stave:execution_processing",
+        strategy: "direct",
+        model: chosenModel,
+        reason: plan.reason,
+        fastModeRequested: (plan.executionHints?.fastMode ?? false) || (profile.fastMode ?? false),
+        fastModeApplied,
+      });
+
       // Notify the client of the resolved model (updates the message badge).
       // Note: the routing reason is already shown via the stave:execution_processing event → stave_processing MessagePart.
       args.onEvent?.({ type: "model_resolved", resolvedProviderId: resolvedTarget.providerId, resolvedModel: resolvedTarget.model });
-
-      const resolvedArgs = buildStaveResolvedArgs(args, resolvedTarget);
-
-      // Apply fast-mode hint if the Pre-processor flagged it.
-      if (plan.executionHints?.fastMode) {
-        resolvedArgs.runtimeOptions = {
-          ...resolvedArgs.runtimeOptions,
-          codexFastMode: true,
-          claudeFastMode: true,
-        };
-      }
 
       return runProviderTurn(resolvedArgs);
     }

@@ -128,7 +128,7 @@ contextBridge.exposeInMainWorld("api", {
       commands: ProviderSlashCommand[];
       detail: string;
     }>,
-    suggestTaskName: (args: { prompt: string }) =>
+    suggestTaskName: (args: { prompt: string; history?: Array<{ role: string; content: string }> }) =>
       ipcRenderer.invoke("provider:suggest-task-name", args) as Promise<{ ok: boolean; title?: string }>,
   },
   persistence: {

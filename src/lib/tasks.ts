@@ -7,6 +7,14 @@ export type TaskFilter = "active" | "archived" | "all";
 const relativeTimeFormatter = typeof Intl !== "undefined"
   ? new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
   : null;
+const AUTO_TASK_TITLE_MAX_LENGTH = 80;
+const AUTO_TASK_TITLE_MAX_WORDS = 12;
+const AUTO_TASK_TITLE_DISALLOWED_PATTERNS = [
+  /\b(i\s+(?:do not|don't)\s+have\s+enough\s+context|not enough context|need more context|without (?:the )?(?:full )?context)\b/i,
+  /\b(i\s+(?:can't|cannot|am unable|unable))\b/i,
+  /\b(latest message|conversation history|appears to be)\b/i,
+  /\bas an ai\b/i,
+];
 
 export function isTaskArchived(task: Pick<Task, "archivedAt">) {
   return Boolean(task.archivedAt);
@@ -87,6 +95,41 @@ export function filterTasksByName(args: { tasks: Task[]; query: string }) {
   }
   const lower = trimmed.toLowerCase();
   return args.tasks.filter((task) => task.title.toLowerCase().includes(lower));
+}
+
+export function normalizeSuggestedTaskTitle(args: { title: string }) {
+  const firstNonEmptyLine = args.title
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+
+  if (!firstNonEmptyLine) {
+    return null;
+  }
+
+  const normalized = firstNonEmptyLine
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return null;
+  }
+  if (normalized.length > AUTO_TASK_TITLE_MAX_LENGTH) {
+    return null;
+  }
+  if (normalized.split(/\s+/).length > AUTO_TASK_TITLE_MAX_WORDS) {
+    return null;
+  }
+  if (AUTO_TASK_TITLE_DISALLOWED_PATTERNS.some((pattern) => pattern.test(normalized))) {
+    return null;
+  }
+  if (/[.!?]/.test(normalized) && normalized.length > 40) {
+    return null;
+  }
+
+  return normalized;
 }
 
 export function getArchiveFallbackTaskId(args: { tasks: Task[]; archivedTaskId: string }) {

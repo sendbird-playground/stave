@@ -273,6 +273,6 @@ export function registerProviderHandlers() {
     if (!parsed.success) {
       return { ok: false };
     }
-    return suggestClaudeTaskName({ prompt: parsed.data.prompt });
+    return suggestClaudeTaskName({ prompt: parsed.data.prompt, history: parsed.data.history });
   });
 }

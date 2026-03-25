@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { getArchiveFallbackTaskId, getRespondingProviderId, getTaskCounts, getVisibleTasks, isTaskArchived, reorderTasksWithinFilter } from "../src/lib/tasks";
+import {
+  getArchiveFallbackTaskId,
+  getRespondingProviderId,
+  getTaskCounts,
+  getVisibleTasks,
+  isTaskArchived,
+  normalizeSuggestedTaskTitle,
+  reorderTasksWithinFilter,
+} from "../src/lib/tasks";
 import type { ChatMessage, Task } from "../src/types/chat";
 
 const tasks: Task[] = [
@@ -106,5 +114,15 @@ describe("task utils", () => {
   test("detects archived tasks", () => {
     expect(isTaskArchived(tasks[0]!)).toBe(false);
     expect(isTaskArchived(tasks[1]!)).toBe(true);
+  });
+
+  test("normalizes concise suggested task titles", () => {
+    expect(normalizeSuggestedTaskTitle({ title: "  \"Fix IPC Task Naming\"  " })).toBe("Fix IPC Task Naming");
+  });
+
+  test("rejects verbose context-apology suggestions", () => {
+    expect(normalizeSuggestedTaskTitle({
+      title: "I don't have enough context to generate an accurate task title. The message \"3번만 해줘\" appears to be the latest message in a conversation.",
+    })).toBeNull();
   });
 });

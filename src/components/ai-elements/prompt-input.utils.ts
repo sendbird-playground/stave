@@ -33,15 +33,9 @@ export function getAcceptedPaletteItem<T>(args: {
   selectedIndex: number;
   triggerKey: "Enter" | "Tab";
 }) {
-  const { items, selectedIndex, triggerKey } = args;
+  const { items, selectedIndex } = args;
   if (items.length === 0) {
     return null;
   }
-  if (triggerKey === "Tab") {
-    return items[selectedIndex] ?? items[0] ?? null;
-  }
-  if (selectedIndex === NO_COMMAND_SELECTION) {
-    return null;
-  }
-  return items[selectedIndex] ?? null;
+  return items[selectedIndex] ?? items[0] ?? null;
 }

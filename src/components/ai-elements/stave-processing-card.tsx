@@ -23,7 +23,7 @@ interface StaveProcessingCardProps {
 
 export function StaveProcessingCard({ part, className }: StaveProcessingCardProps) {
   const [open, setOpen] = useState(false);
-  const { strategy, model, supervisorModel, reason, fastMode } = part;
+  const { strategy, model, supervisorModel, reason, fastModeRequested, fastModeApplied } = part;
   const displayModel = strategy === "direct" ? model : supervisorModel;
   const providerForModel = displayModel ? inferProviderIdFromModel({ model: displayModel }) : "claude-code";
   const providerLabel = providerForModel === "codex" ? "Codex" : providerForModel === "stave" ? "Stave" : "Claude Code";
@@ -57,7 +57,7 @@ export function StaveProcessingCard({ part, className }: StaveProcessingCardProp
               orchestrate
             </Badge>
           ) : null}
-          {fastMode ? (
+          {fastModeApplied ? (
             <Badge variant="outline" className="h-4 gap-0.5 border-amber-400/50 px-1.5 text-[10px] leading-none text-amber-600">
               <Zap className="size-2.5" />
               fast
@@ -89,7 +89,12 @@ export function StaveProcessingCard({ part, className }: StaveProcessingCardProp
             <span className="font-medium text-foreground">Provider:</span> {providerLabel}
           </div>
           <div>
-            <span className="font-medium text-foreground">Fast mode:</span> {fastMode ? "Enabled" : "Off"}
+            <span className="font-medium text-foreground">Fast requested:</span>{" "}
+            {fastModeRequested ? "Yes" : "No"}
+          </div>
+          <div>
+            <span className="font-medium text-foreground">Fast applied:</span>{" "}
+            {fastModeApplied ? "Yes" : "No"}
           </div>
           <div className="sm:col-span-2">
             <span className="font-medium text-foreground">Reason:</span> {reason}

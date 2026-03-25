@@ -39,6 +39,7 @@ export function createMainWindow() {
       allowRunningInsecureContent: false,
     },
   });
+  window.maximize();
   if (shouldHideMacWindowButtons) {
     // Keep the custom Stave top bar without the native macOS traffic-light buttons.
     window.setWindowButtonVisibility(false);

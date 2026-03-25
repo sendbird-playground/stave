@@ -30,7 +30,8 @@ describe("provider IPC schemas", () => {
             strategy: "direct",
             model: "claude-sonnet-4-6",
             reason: "General task",
-            fastMode: false,
+            fastModeRequested: false,
+            fastModeApplied: false,
           }],
         }],
         input: {
@@ -74,7 +75,8 @@ describe("provider IPC schemas", () => {
               strategy: "direct",
               model: "claude-sonnet-4-6",
               reason: "General task",
-              fastMode: false,
+              fastModeRequested: false,
+              fastModeApplied: false,
             }],
           }],
         },
@@ -91,7 +93,8 @@ describe("provider IPC schemas", () => {
       strategy: "direct",
       model: "claude-sonnet-4-6",
       reason: "General task",
-      fastMode: false,
+      fastModeRequested: false,
+      fastModeApplied: false,
     });
   });
 });

@@ -89,6 +89,8 @@ React renderer         →  src/
 ### Provider Schema Guardrails
 
 - Treat `runtimeOptions` and all provider IPC payloads as **multi-file contracts**, not local types.
+- `electron/main/ipc/schemas.ts` is a **required check file** for any work touching provider turns, chat message parts, Stave Auto, provider events, replay payloads, preload/window API contracts, or settings that flow into a turn request.
+- Do not treat a change as complete until you have explicitly checked whether `electron/main/ipc/schemas.ts` needs a matching update. TypeScript passing elsewhere is not sufficient.
 - When adding, renaming, or deleting any provider runtime option or IPC field, update the same change across:
   - `electron/providers/types.ts`
   - `src/lib/providers/provider.types.ts`
@@ -96,8 +98,16 @@ React renderer         →  src/
   - `src/types/window-api.d.ts`
   - `electron/main/ipc/schemas.ts`
   - any producer/consumer call sites such as `src/store/app.store.ts` and session/input UI
+- Apply the same rule to:
+  - `MessagePart` / canonical conversation payload shape changes
+  - provider event payload changes
+  - Stave Auto / router / orchestration settings or request payload changes
+  - anything under `src/store/app.store.ts`, `src/types/chat.ts`, `src/lib/session/provider-event-replay.ts`, `electron/providers/`, or `electron/main/ipc/provider.ts` that affects provider request or response shapes
 - `electron/main/ipc/schemas.ts` uses strict Zod schemas. A new field that is not added there can break both providers at runtime even when TypeScript still passes elsewhere.
+- Assume strict IPC rejection first when chat turns suddenly stop working after a schema-ish change. Check `runtimeOptions`, canonical conversation parts, and discriminated unions in `electron/main/ipc/schemas.ts` before debugging deeper runtime logic.
 - Do not ship a new runtime option unless the end-to-end path has been checked from renderer call site → preload contract → IPC schema → main/provider runtime.
+- For any related change, verify the full path explicitly:
+  renderer producer → shared TS type → preload/window API → `electron/main/ipc/schemas.ts` strict Zod schema → main IPC handler → provider runtime/replay consumer.
 - After touching provider option schemas or IPC contracts, run `bun run typecheck` before finishing. If provider runtime code changed, also do a smoke check that both Claude and Codex can still start a turn or load their runtime entry path.
 - When upgrading `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, or the Codex/Claude CLI expectations, verify new option names and object shapes against the installed package types/docs in `node_modules` before wiring them into Stave. Do not assume flag names from memory.
 - If a change is intentionally provider-specific, note that explicitly in code or the final handoff. Otherwise, review the sibling provider adapter for symmetry.

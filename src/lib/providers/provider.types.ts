@@ -41,6 +41,9 @@ export interface StaveAutoProfile {
   maxSubtasks: number;
   maxParallelSubtasks: number;
   allowCrossProviderWorkers: boolean;
+  claudeFastModeSupported?: boolean;
+  codexFastModeSupported?: boolean;
+  fastMode?: boolean;
 }
 
 export interface CanonicalSkillContextPart {
@@ -98,7 +101,7 @@ export type NormalizedProviderEvent =
   | { type: "plan_ready"; planText: string }
   | { type: "system"; content: string }
   | { type: "model_resolved"; resolvedProviderId: ProviderId; resolvedModel: string }
-  | { type: "stave:execution_processing"; strategy: "direct" | "orchestrate"; model?: string; supervisorModel?: string; reason: string; fastMode?: boolean }
+  | { type: "stave:execution_processing"; strategy: "direct" | "orchestrate"; model?: string; supervisorModel?: string; reason: string; fastModeRequested?: boolean; fastModeApplied?: boolean }
   | { type: "stave:orchestration_processing"; supervisorModel: string; subtasks: Array<{ id: string; title: string; model: string; dependsOn: string[] }> }
   | { type: "stave:subtask_started"; subtaskId: string; index: number; total: number; title: string; model: string }
   | { type: "stave:subtask_done"; subtaskId: string; success: boolean }

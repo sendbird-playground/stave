@@ -6,7 +6,7 @@ The Stave Model Router is a built-in meta-provider that selects the best AI mode
 
 In the model selector, choose **Stave** from the provider list. The task is then stored with `provider: "stave"` and every subsequent turn in that task goes through the router.
 
-The model selector shows **Stave Auto** as the single model option. The chat surface shows a compact Stave routing card at the beginning of each assistant turn with the chosen model, strategy, and short reason. Expanded orchestration progress is shown in its own card. Raw routing JSON is treated as diagnostics data, not normal chat content.
+The model selector shows **Stave Auto** as the single model option. The chat surface shows a compact Stave routing card at the beginning of each assistant turn with the chosen model, strategy, short reason, and whether fast mode was requested vs actually applied. Expanded orchestration progress is shown in its own card. Raw routing JSON is treated as diagnostics data, not normal chat content.
 
 ## How the router works
 
@@ -37,7 +37,7 @@ The Pre-processor selected one direct intent. The routing runtime resolves that 
 
 1. Checks provider availability for the chosen model.
 2. If unavailable, substitutes an automatic fallback (see table below).
-3. Forwards the turn to the selected model with `fastMode` applied when the Pre-processor requested it.
+3. Forwards the turn to the selected model with fast mode applied when either the Pre-processor requested urgency or the Stave Auto Fast Mode setting is enabled.
 
 **Default direct intent palette:**
 
@@ -89,7 +89,17 @@ The router re-evaluates every turn independently. Within a single task, differen
 
 ## Settings
 
-Stave Auto now uses role-based settings under **Settings → Providers → Stave Auto**:
+Stave Auto now uses presets plus role-based settings under **Settings → Providers → Stave Auto**. Picking a preset rewrites the full role map, and you can still fine-tune any individual role afterwards.
+
+### Presets
+
+| Preset | Summary |
+|---|---|
+| `Recommended` | Current mixed default. Uses Claude for classifier/planning/analysis, Codex for implementation, and `gpt-5.4` for verify. |
+| `Claude Only` | Keeps every role on Claude models only. |
+| `Codex Only` | Keeps every role on Codex models only. |
+
+### Role settings
 
 | Setting | Default | Description |
 |---|---|---|
@@ -100,8 +110,9 @@ Stave Auto now uses role-based settings under **Settings → Providers → Stave
 | `staveAutoImplementModel` | `gpt-5.3-codex` | Implement/build/patch/refactor |
 | `staveAutoQuickEditModel` | `claude-haiku-4-5` | Tiny edits |
 | `staveAutoGeneralModel` | `claude-sonnet-4-6` | Balanced default |
-| `staveAutoVerifyModel` | `claude-sonnet-4-6` | Validation/review step in orchestration |
+| `staveAutoVerifyModel` | `gpt-5.4` | Validation/review step in orchestration |
 | `staveAutoOrchestrationMode` | `auto` | `off`, `auto`, or `aggressive` |
+| `staveAutoFastMode` | `false` | Request fast execution for Stave Auto turns when supported by the resolved provider |
 | `staveAutoMaxSubtasks` | `3` | Max subtasks per orchestration run |
 | `staveAutoMaxParallelSubtasks` | `2` | Max concurrent independent subtasks |
 | `staveAutoAllowCrossProviderWorkers` | `true` | Allow Claude + Codex workers in the same orchestration |

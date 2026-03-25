@@ -133,7 +133,8 @@ const StaveExecutionProcessingEventSchema = z.object({
   model: z.string().optional(),
   supervisorModel: z.string().optional(),
   reason: z.string(),
-  fastMode: z.boolean().optional(),
+  fastModeRequested: z.boolean().optional(),
+  fastModeApplied: z.boolean().optional(),
 });
 
 const StaveOrchestrationProcessingEventSchema = z.object({

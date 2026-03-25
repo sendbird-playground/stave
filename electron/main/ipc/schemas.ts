@@ -69,6 +69,9 @@ const RuntimeOptionsSchema = z.object({
     maxSubtasks: z.number().int().min(1).max(8),
     maxParallelSubtasks: z.number().int().min(1).max(8),
     allowCrossProviderWorkers: z.boolean(),
+    claudeFastModeSupported: z.boolean().optional(),
+    codexFastModeSupported: z.boolean().optional(),
+    fastMode: z.boolean().optional(),
   }).strict().optional(),
 }).strict().optional();
 
@@ -163,7 +166,8 @@ const CanonicalMessagePartSchema = z.discriminatedUnion("type", [
     model: z.string().max(200).optional(),
     supervisorModel: z.string().max(200).optional(),
     reason: z.string().max(5000),
-    fastMode: z.boolean().optional(),
+    fastModeRequested: z.boolean().optional(),
+    fastModeApplied: z.boolean().optional(),
   }).strict(),
   z.object({
     type: z.literal("orchestration_progress"),
