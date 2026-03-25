@@ -40,6 +40,8 @@ When using an existing shadcn component, prefer generating it with `bunx --bun s
 
 After generating shadcn components or copying UI code from external sources, verify that import paths match this project's configured aliases before finishing. In this repo, `tsconfig.json` resolves `@/*` to `src/*`, so generated `src/...` imports should be rewritten to `@/...`. More generally, do not assume copied code uses this repo's path layout; reconcile imports with the current `tsconfig` and `components.json` settings.
 
+When applying or reapplying a shadcn preset, do not stop at `shadcn init`. Update the preset reference in user-facing copy and documentation in the same piece of work, and review the related files that encode the preset shape in this repo: `components.json`, `src/globals.css`, `src/components/layout/settings-dialog-sections.tsx`, and `docs/ui/shadcn-preset.md`.
+
 ## Quick Reference
 
 - Runtime: **Bun**

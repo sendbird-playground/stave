@@ -10,6 +10,9 @@ import {
   getDefaultModelForProvider,
   normalizeModelSelection,
 } from "@/lib/providers/model-catalog";
+
+// All real (non-meta) model IDs available for Stave routing rule overrides
+const STAVE_ROUTING_MODEL_OPTIONS = [...CLAUDE_SDK_MODEL_OPTIONS, ...CODEX_SDK_MODEL_OPTIONS] as const;
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_PROVIDER_TIMEOUT_MS,
@@ -283,7 +286,7 @@ function ThemeSection() {
 
         <SettingsCard
           title="Design Tokens"
-          description="Defaults follow `bunx --bun shadcn@latest init --preset aIkf1TW`. Override any token below."
+          description="Defaults follow `bunx --bun shadcn@latest init --preset bNQ7GS20w`. Override any token below."
         >
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/30 p-3">
             <div className="flex items-center gap-2">
@@ -532,7 +535,7 @@ function RulesSection() {
 }
 
 function ChatSection() {
-  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, reasoningDefaultExpanded, fastModeVisible] = useAppStore(
+  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, reasoningDefaultExpanded, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
     useShallow((state) => [
       state.settings.smartSuggestions,
       state.settings.chatSendPreview,
@@ -543,7 +546,8 @@ function ChatSection() {
       state.settings.messageMonoFontFamily,
       state.settings.messageKoreanFontFamily,
       state.settings.reasoningDefaultExpanded,
-      state.settings.fastModeVisible,
+      state.settings.claudeFastModeVisible,
+      state.settings.codexFastModeVisible,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -657,12 +661,25 @@ function ChatSection() {
             />
           </LabeledField>
           <LabeledField
-            title="Show Fast Mode Toggle"
-            description="Show the Fast mode toggle button next to the model selector. The toggle controls on/off per provider separately in the Providers section."
+            title="Show Fast Mode Toggle (Claude)"
+            description="Show the Fast mode toggle button when Claude is the active provider."
           >
             <ChoiceButtons
-              value={fastModeVisible ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { fastModeVisible: value === "on" } })}
+              value={claudeFastModeVisible ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { claudeFastModeVisible: value === "on" } })}
+              options={[
+                { value: "on", label: "Show" },
+                { value: "off", label: "Hide" },
+              ]}
+            />
+          </LabeledField>
+          <LabeledField
+            title="Show Fast Mode Toggle (Codex)"
+            description="Show the Fast mode toggle button when Codex is the active provider."
+          >
+            <ChoiceButtons
+              value={codexFastModeVisible ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { codexFastModeVisible: value === "on" } })}
               options={[
                 { value: "on", label: "Show" },
                 { value: "off", label: "Hide" },
@@ -1080,6 +1097,88 @@ function EditorSection() {
   );
 }
 
+function StaveRoutingModelsCard() {
+  const [
+    staveModelPlanning,
+    staveModelEcosystem,
+    staveModelComplex,
+    staveModelCodeGen,
+    staveModelQuickEdit,
+    staveModelDefault,
+  ] = useAppStore(
+    useShallow((state) => [
+      state.settings.staveModelPlanning,
+      state.settings.staveModelEcosystem,
+      state.settings.staveModelComplex,
+      state.settings.staveModelCodeGen,
+      state.settings.staveModelQuickEdit,
+      state.settings.staveModelDefault,
+    ] as const),
+  );
+  const updateSettings = useAppStore((state) => state.updateSettings);
+
+  return (
+    <SettingsCard
+      title="Stave Routing Models"
+      description="The model used for each automatic routing rule. Any Claude or Codex model can be assigned — the provider is inferred from the model name."
+    >
+      <LabeledField title="Planning / Strategy" description="Triggered by plan · 계획 · 설계 · approach keywords (no analysis intent).">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-routing-model-options"
+          value={staveModelPlanning}
+          onCommit={(v) => updateSettings({ patch: { staveModelPlanning: normalizeModelSelection({ value: v, fallback: "opusplan" }) } })}
+        />
+      </LabeledField>
+      <LabeledField title="OpenAI Ecosystem" description="Triggered by OpenAI · gpt-5 · ChatGPT · o3 · o4 keywords.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-routing-model-options"
+          value={staveModelEcosystem}
+          onCommit={(v) => updateSettings({ patch: { staveModelEcosystem: normalizeModelSelection({ value: v, fallback: "gpt-5.4" }) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Complex Analysis" description="Triggered by analyze · 분석 · explain · why keywords with large context (long prompt, 4+ files, or 8+ messages).">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-routing-model-options"
+          value={staveModelComplex}
+          onCommit={(v) => updateSettings({ patch: { staveModelComplex: normalizeModelSelection({ value: v, fallback: "claude-opus-4-6" }) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Code Generation" description="Triggered by generate code · write a function · implement an algorithm on a short prompt.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-routing-model-options"
+          value={staveModelCodeGen}
+          onCommit={(v) => updateSettings({ patch: { staveModelCodeGen: normalizeModelSelection({ value: v, fallback: "gpt-5.3-codex" }) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Quick Edit" description="Triggered by rename · typo · 오타 · just fix · 간단하게 on a short prompt.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-routing-model-options"
+          value={staveModelQuickEdit}
+          onCommit={(v) => updateSettings({ patch: { staveModelQuickEdit: normalizeModelSelection({ value: v, fallback: "claude-haiku-4-5" }) } })}
+        />
+      </LabeledField>
+      <LabeledField title="Default" description="Used when none of the rules above match.">
+        <DraftInput
+          className="h-10 rounded-md border-border/80 bg-background"
+          list="stave-routing-model-options"
+          value={staveModelDefault}
+          onCommit={(v) => updateSettings({ patch: { staveModelDefault: normalizeModelSelection({ value: v, fallback: "claude-sonnet-4-6" }) } })}
+        />
+      </LabeledField>
+      <datalist id="stave-routing-model-options">
+        {STAVE_ROUTING_MODEL_OPTIONS.map((model) => (
+          <option key={model} value={model} />
+        ))}
+      </datalist>
+    </SettingsCard>
+  );
+}
+
 function ProvidersSection() {
   const [
     providerTimeoutMs,
@@ -1466,6 +1565,8 @@ function ProvidersSection() {
             />
           </LabeledField>
         </SettingsCard>
+
+        <StaveRoutingModelsCard />
       </SectionStack>
     </>
   );

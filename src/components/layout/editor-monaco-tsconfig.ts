@@ -176,7 +176,8 @@ function normalizePathTarget(value: string) {
   if (!trimmed || trimmed.startsWith("file:///")) {
     return trimmed;
   }
-  return normalizeWorkspaceRelativePath(trimmed);
+  const normalized = trimmed.replaceAll("\\", "/").replace(/\/+/g, "/");
+  return normalized.replace(/^\.\/+/, "");
 }
 
 export function parseWorkspaceTypeScriptCompilerOptions(value: string): WorkspaceTypeScriptCompilerOptions | null {

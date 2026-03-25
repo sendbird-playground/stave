@@ -2,36 +2,24 @@ import { createBridgeProviderSource, hasBridgeProviderSource } from "@/lib/provi
 import { createProviderAdapter } from "@/lib/providers/adapter.factory";
 import type { NormalizedProviderEvent, ProviderAdapter, ProviderEventSource, ProviderId } from "@/lib/providers/provider.types";
 
-const claudeUnavailableSource: ProviderEventSource<NormalizedProviderEvent> = {
+const bridgeUnavailableSource: ProviderEventSource<NormalizedProviderEvent> = {
   async *streamTurn() {
     yield { type: "system", content: "Provider bridge unavailable. Use bun run dev:desktop or bun run dev:all." };
     yield { type: "done" };
   },
 };
 
-const codexUnavailableSource: ProviderEventSource<NormalizedProviderEvent> = {
-  async *streamTurn() {
-    yield { type: "system", content: "Provider bridge unavailable. Use bun run dev:desktop or bun run dev:all." };
-    yield { type: "done" };
-  },
-};
-
-function createClaudeSource(): ProviderEventSource<NormalizedProviderEvent> {
+function createBridgeSource(providerId: ProviderId): ProviderEventSource<NormalizedProviderEvent> {
   if (hasBridgeProviderSource()) {
-    return createBridgeProviderSource<NormalizedProviderEvent>({ providerId: "claude-code" });
+    return createBridgeProviderSource<NormalizedProviderEvent>({ providerId });
   }
-  return claudeUnavailableSource;
-}
-
-function createCodexSource(): ProviderEventSource<NormalizedProviderEvent> {
-  if (hasBridgeProviderSource()) {
-    return createBridgeProviderSource<NormalizedProviderEvent>({ providerId: "codex" });
-  }
-  return codexUnavailableSource;
+  return bridgeUnavailableSource;
 }
 
 export function getProviderAdapter(args: { providerId: ProviderId }): ProviderAdapter {
-  const source = args.providerId === "claude-code" ? createClaudeSource() : createCodexSource();
+  // All three providers (claude-code, codex, stave) use the same IPC bridge.
+  // The stave meta-provider routes to the real provider on the electron side.
+  const source = createBridgeSource(args.providerId);
   return createProviderAdapter({
     id: args.providerId,
     source,

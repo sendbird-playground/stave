@@ -1,4 +1,4 @@
-import type { Attachment, ChatMessage, Task } from "@/types/chat";
+import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 export interface WorkspaceSummary {
@@ -10,6 +10,9 @@ export interface WorkspaceSummary {
 export interface TaskProviderConversationState {
   "claude-code"?: string;
   codex?: string;
+  // stave routes to claude-code/codex internally; this field is never set
+  // but must exist so ProviderId-indexed accesses type-check correctly.
+  stave?: string;
 }
 
 export interface WorkspaceSnapshot {
@@ -18,6 +21,8 @@ export interface WorkspaceSnapshot {
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
+  editorTabs?: EditorTab[];
+  activeEditorTabId?: string | null;
 }
 
 interface RequiredPersistenceApi {

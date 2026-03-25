@@ -1,5 +1,6 @@
 import { cleanupClaudeTask, getClaudeCommandCatalog, streamClaudeWithSdk } from "./claude-sdk-runtime";
 import { cleanupCodexTask, streamCodexWithSdk } from "./codex-sdk-runtime";
+import { buildStaveResolvedArgs, resolveStaveTarget } from "./stave-router";
 import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -113,6 +114,32 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     taskId: args.taskId,
   });
   const turnTimeoutMs = args.runtimeOptions?.providerTimeoutMs ?? sdkTurnTimeoutMs;
+
+  // ── Stave meta-provider: resolve the real target and re-enter ──────────────
+  if (args.providerId === "stave") {
+    const contextParts = args.conversation?.contextParts ?? [];
+    const attachedFileCount = contextParts.filter(
+      (p) => p.type === "file_context" || p.type === "image_context",
+    ).length;
+    const historyLength = args.conversation?.history?.length ?? 0;
+
+    const target = resolveStaveTarget({
+      prompt: args.prompt,
+      attachedFileCount,
+      historyLength,
+      routeModels: args.runtimeOptions?.staveRouteModels,
+    });
+
+    // Notify the client which provider + model was selected
+    args.onEvent?.({ type: "system", content: `[Stave] ${target.reason}` });
+    // Let the client know the resolved provider + model so the message badge can update
+    args.onEvent?.({ type: "model_resolved", resolvedProviderId: target.providerId, resolvedModel: target.model });
+
+    // Delegate to the real provider via a recursive call so that all
+    // timeout / abort / session logic is handled identically.
+    return runProviderTurn(buildStaveResolvedArgs(args, target));
+  }
+
   if (args.providerId === "claude-code") {
     let timedOut = false;
     try {
@@ -338,7 +365,8 @@ export const providerRuntime: ProviderRuntime = {
     })(),
   }),
   checkAvailability: ({ providerId }) => new Promise((resolve) => {
-    const command = providerId === "claude-code" ? "claude" : "codex";
+    // Stave delegates to claude-code as its primary routing target
+    const command = providerId === "claude-code" || providerId === "stave" ? "claude" : "codex";
     const child = spawn(command, ["--version"], { shell: true });
     let stdout = "";
     let stderr = "";
@@ -365,6 +393,15 @@ export const providerRuntime: ProviderRuntime = {
     });
   }),
   getCommandCatalog: async ({ providerId, cwd, runtimeOptions }) => {
+    if (providerId === "stave") {
+      return {
+        ok: true,
+        supported: false,
+        commands: [],
+        detail: "Stave auto-routing does not expose a native command catalog. Switch to Claude Code or Codex directly to access provider-specific commands.",
+      };
+    }
+
     if (providerId === "claude-code") {
       const result = await withTimeout({
         task: getClaudeCommandCatalog({ cwd, runtimeOptions }),

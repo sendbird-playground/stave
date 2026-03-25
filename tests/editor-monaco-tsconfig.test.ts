@@ -27,6 +27,28 @@ describe("parseWorkspaceTypeScriptCompilerOptions", () => {
     });
   });
 
+  test("preserves parent-relative path targets for baseUrl-relative aliases", () => {
+    const parsed = parseWorkspaceTypeScriptCompilerOptions(`
+      {
+        "compilerOptions": {
+          "baseUrl": "./app",
+          "paths": {
+            "history": ["../node_modules/history"],
+            "@/*": ["./*"]
+          }
+        }
+      }
+    `);
+
+    expect(parsed).toEqual({
+      baseUrl: "app",
+      paths: {
+        history: ["../node_modules/history"],
+        "@/*": ["*"],
+      },
+    });
+  });
+
   test("returns null for invalid tsconfig text", () => {
     expect(parseWorkspaceTypeScriptCompilerOptions("{ nope")).toBeNull();
   });

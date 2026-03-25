@@ -9,6 +9,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Architecture](architecture/runtime.md)
 - [Conversation flow](architecture/conversation-flow.md)
 - [Provider runtimes](providers/provider-runtimes.md)
+- [Stave Model Router](features/stave-model-router.md)
 - [Future SDK backlog](future/claude-sdk-candidates.md)
 - [AI Elements v1.9.0 upgrade plan (2026-03-16)](future/ai-elements-v1.9.0-upgrade-plan-2026-03-16.md)
 - [Shared skill management plan (2026-03-13)](future/shared-skill-management-plan-2026-03-13.md)

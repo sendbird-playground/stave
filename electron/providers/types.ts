@@ -1,6 +1,6 @@
 import type { CanonicalConversationRequest } from "../../src/lib/providers/provider.types";
 
-export type ProviderId = "claude-code" | "codex";
+export type ProviderId = "claude-code" | "codex" | "stave";
 
 export interface ProviderSlashCommand {
   name: string;
@@ -55,6 +55,15 @@ export interface StreamTurnArgs {
     codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
     codexFastMode?: boolean;
     codexResumeThreadId?: string;
+    /** Per-rule model overrides for the Stave meta-provider router. */
+    staveRouteModels?: {
+      planning?: string;
+      ecosystem?: string;
+      complex?: string;
+      codeGen?: string;
+      quickEdit?: string;
+      default?: string;
+    };
   };
 }
 
@@ -89,6 +98,7 @@ export type BridgeEvent =
   | { type: "tool_progress"; toolUseId: string; toolName: string; elapsedSeconds: number }
   | { type: "plan_ready"; planText: string }
   | { type: "system"; content: string }
+  | { type: "model_resolved"; resolvedProviderId: "claude-code" | "codex"; resolvedModel: string }
   | { type: "error"; message: string; recoverable: boolean }
   | { type: "done"; stop_reason?: string };
 

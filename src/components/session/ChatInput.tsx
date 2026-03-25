@@ -181,6 +181,7 @@ export function ChatInput(args: ChatInputProps = {}) {
   const [
     modelClaude,
     modelCodex,
+    modelStave,
     skillsEnabled,
     skillsAutoSuggest,
     customCommands,
@@ -204,10 +205,12 @@ export function ChatInput(args: ChatInputProps = {}) {
     codexPathOverride,
     claudeFastMode,
     codexFastMode,
-    fastModeVisible,
+    claudeFastModeVisible,
+    codexFastModeVisible,
   ] = useAppStore(useShallow((state) => [
     state.settings.modelClaude,
     state.settings.modelCodex,
+    state.settings.modelStave,
     state.settings.skillsEnabled,
     state.settings.skillsAutoSuggest,
     state.settings.customCommands,
@@ -231,7 +234,8 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.settings.codexPathOverride,
     state.settings.claudeFastMode,
     state.settings.codexFastMode,
-    state.settings.fastModeVisible,
+    state.settings.claudeFastModeVisible,
+    state.settings.codexFastModeVisible,
   ] as const));
   const providerSelectionTarget = activeTaskId || "draft:session";
   const skillCatalog = useAppStore((state) => state.skillCatalog);
@@ -243,9 +247,13 @@ export function ChatInput(args: ChatInputProps = {}) {
   });
   const draftSaveTimerRef = useRef<number | null>(null);
   const permissionMode: PermissionModeValue =
-    activeProvider === "claude-code" ? claudePermissionMode : codexApprovalPolicy;
+    activeProvider === "codex" ? codexApprovalPolicy : claudePermissionMode;
   const isEmpty = activeMessageCount === 0;
-  const activeModel = activeProvider === "claude-code" ? modelClaude : modelCodex;
+  const activeModel = activeProvider === "claude-code"
+    ? modelClaude
+    : activeProvider === "stave"
+      ? modelStave
+      : modelCodex;
   const selectedModelOption: ModelSelectorOption = {
     key: `${activeProvider}:${activeModel}`,
     providerId: activeProvider,
@@ -263,12 +271,15 @@ export function ChatInput(args: ChatInputProps = {}) {
     }))
   );
   const runtimeQuickControls = useMemo(() => {
-    const permissionOptions = getPermissionModeOptions(activeProvider).map((option) => ({
+    // For the permission-mode selector, stave defaults to the Claude options
+    // since Claude is the primary routing target.
+    const effectiveProvider = activeProvider === "stave" ? "claude-code" : activeProvider;
+    const permissionOptions = getPermissionModeOptions(effectiveProvider).map((option) => ({
       value: option.value,
       label: option.label,
     }));
 
-    if (activeProvider === "claude-code") {
+    if (activeProvider === "claude-code" || activeProvider === "stave") {
       return [
         {
           id: "permission-mode",
@@ -719,6 +730,17 @@ export function ChatInput(args: ChatInputProps = {}) {
               });
               return;
             }
+            if (selection.providerId === "stave") {
+              updateSettings({
+                patch: {
+                  modelStave: normalizeModelSelection({
+                    value: selection.model,
+                    fallback: getDefaultModelForProvider({ providerId: selection.providerId }),
+                  }),
+                },
+              });
+              return;
+            }
             updateSettings({
               patch: {
                 modelCodex: normalizeModelSelection({
@@ -728,12 +750,12 @@ export function ChatInput(args: ChatInputProps = {}) {
               },
             });
           }}
-          fastMode={activeProvider === "claude-code" ? claudeFastMode : codexFastMode}
-          onFastModeChange={fastModeVisible ? (enabled) => {
-            if (activeProvider === "claude-code") {
-              updateSettings({ patch: { claudeFastMode: enabled } });
-            } else {
+          fastMode={activeProvider === "codex" ? codexFastMode : claudeFastMode}
+          onFastModeChange={(activeProvider === "codex" ? codexFastModeVisible : claudeFastModeVisible) ? (enabled) => {
+            if (activeProvider === "codex") {
               updateSettings({ patch: { codexFastMode: enabled } });
+            } else {
+              updateSettings({ patch: { claudeFastMode: enabled } });
             }
           } : undefined}
           permissionMode={permissionMode}

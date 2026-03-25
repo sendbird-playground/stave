@@ -41,6 +41,15 @@ interface ProviderStreamTurnArgs {
     codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
     codexFastMode?: boolean;
     codexResumeThreadId?: string;
+    /** Per-rule model overrides for the Stave meta-provider router. */
+    staveRouteModels?: {
+      planning?: string;
+      ecosystem?: string;
+      complex?: string;
+      codeGen?: string;
+      quickEdit?: string;
+      default?: string;
+    };
   };
 }
 
@@ -134,12 +143,12 @@ interface WindowFsApi {
     conflict?: boolean;
     stderr?: string;
   }>;
-  readTypeDefs?: (args: { rootPath: string }) => Promise<{
+  readTypeDefs?: (args: { rootPath: string; entryFilePath?: string }) => Promise<{
     ok: boolean;
     libs: Array<{ content: string; filePath: string }>;
     stderr?: string;
   }>;
-  readSourceFiles?: (args: { rootPath: string }) => Promise<{
+  readSourceFiles?: (args: { rootPath: string; entryFilePath?: string }) => Promise<{
     ok: boolean;
     files: Array<{ content: string; filePath: string }>;
     stderr?: string;
@@ -326,7 +335,7 @@ interface WindowPersistenceApi {
       tasks: Array<{
         id: string;
         title: string;
-        provider: "claude-code" | "codex";
+        provider: "claude-code" | "codex" | "stave";
         updatedAt: string;
         unread: boolean;
       }>;
@@ -355,6 +364,19 @@ interface WindowPersistenceApi {
         "claude-code"?: string;
         codex?: string;
       }>;
+      editorTabs?: Array<{
+        id: string;
+        filePath: string;
+        kind?: "text" | "image";
+        language: string;
+        content: string;
+        originalContent?: string;
+        savedContent?: string;
+        baseRevision?: string | null;
+        hasConflict: boolean;
+        isDirty: boolean;
+      }>;
+      activeEditorTabId?: string | null;
     } | null;
   }>;
   upsertWorkspace?: (args: {
@@ -365,7 +387,7 @@ interface WindowPersistenceApi {
       tasks: Array<{
         id: string;
         title: string;
-        provider: "claude-code" | "codex";
+        provider: "claude-code" | "codex" | "stave";
         updatedAt: string;
         unread: boolean;
       }>;
@@ -394,6 +416,19 @@ interface WindowPersistenceApi {
         "claude-code"?: string;
         codex?: string;
       }>;
+      editorTabs?: Array<{
+        id: string;
+        filePath: string;
+        kind?: "text" | "image";
+        language: string;
+        content: string;
+        originalContent?: string;
+        savedContent?: string;
+        baseRevision?: string | null;
+        hasConflict: boolean;
+        isDirty: boolean;
+      }>;
+      activeEditorTabId?: string | null;
     };
   }) => Promise<{ ok: boolean }>;
   deleteWorkspace?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
@@ -403,7 +438,7 @@ interface WindowPersistenceApi {
       id: string;
       workspaceId: string;
       taskId: string;
-      providerId: "claude-code" | "codex";
+      providerId: "claude-code" | "codex" | "stave";
       createdAt: string;
       completedAt: string | null;
       eventCount: number;
@@ -415,7 +450,7 @@ interface WindowPersistenceApi {
       id: string;
       workspaceId: string;
       taskId: string;
-      providerId: "claude-code" | "codex";
+      providerId: "claude-code" | "codex" | "stave";
       createdAt: string;
       completedAt: string | null;
       eventCount: number;
@@ -429,7 +464,7 @@ interface WindowPersistenceApi {
       tasks: Array<{
         id: string;
         title: string;
-        provider: "claude-code" | "codex";
+        provider: "claude-code" | "codex" | "stave";
         updatedAt: string;
         unread: boolean;
       }>;
@@ -458,6 +493,19 @@ interface WindowPersistenceApi {
         "claude-code"?: string;
         codex?: string;
       }>;
+      editorTabs?: Array<{
+        id: string;
+        filePath: string;
+        kind?: "text" | "image";
+        language: string;
+        content: string;
+        originalContent?: string;
+        savedContent?: string;
+        baseRevision?: string | null;
+        hasConflict: boolean;
+        isDirty: boolean;
+      }>;
+      activeEditorTabId?: string | null;
     };
   }) => { ok: boolean };
   listTurnEvents?: (args: { turnId: string; afterSequence?: number; limit?: number }) => Promise<{

@@ -22,7 +22,7 @@ interface TurnSummaryRow {
   id: string;
   workspace_id: string;
   task_id: string;
-  provider_id: "claude-code" | "codex";
+  provider_id: "claude-code" | "codex" | "stave";
   created_at: string;
   completed_at: string | null;
   event_count: number;

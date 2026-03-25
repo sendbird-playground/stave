@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { resolveRootFilePath } from "../utils/filesystem";
+import { collectFocusedWorkspaceInspectContext } from "./filesystem-code-inspect";
 
 export interface MonacoVirtualFile {
   content: string;
@@ -17,6 +18,8 @@ const DEFAULT_MAX_PACKAGE_COUNT = 200;
 const DEFAULT_MAX_FILE_COUNT = 1200;
 const DEFAULT_MAX_DIRECTORY_DEPTH = 6;
 const TYPE_DECLARATION_FILE_PATTERN = /\.d\.(ts|mts|cts)$/;
+const PRIORITY_ROOT_PACKAGES = ["typescript", "react", "react-dom", "vite"] as const;
+const VERSIONED_TYPES_DIRECTORY_PATTERN = /^ts\d+(?:\.\d+)?$/;
 
 function toPosixPath(value: string) {
   return value.split(path.sep).join("/");
@@ -52,6 +55,24 @@ function collectRootDependencyNames(pkg: PackageJsonLike | null) {
   ]));
 }
 
+function collectPriorityRootDependencyNames(pkg: PackageJsonLike | null) {
+  const dependencyNames = collectRootDependencyNames(pkg);
+  const dependencySet = new Set(dependencyNames);
+  const priority = dependencyNames.filter((packageName) => packageName.startsWith("@types/"));
+
+  for (const packageName of PRIORITY_ROOT_PACKAGES) {
+    if (dependencySet.has(packageName)) {
+      priority.push(packageName);
+    }
+    const definitelyTypedPackageName = toDefinitelyTypedPackageName(packageName);
+    if (definitelyTypedPackageName && dependencySet.has(definitelyTypedPackageName)) {
+      priority.push(definitelyTypedPackageName);
+    }
+  }
+
+  return Array.from(new Set(priority));
+}
+
 function collectNestedDependencyNames(pkg: PackageJsonLike | null) {
   return Array.from(new Set([
     ...Object.keys(pkg?.dependencies ?? {}),
@@ -78,6 +99,7 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
 
 export async function readWorkspaceTypeDefinitionFiles(args: {
   rootPath?: string | null;
+  entryFilePath?: string | null;
   maxPackageCount?: number;
   maxFileCount?: number;
   maxDirectoryDepth?: number;
@@ -150,7 +172,7 @@ export async function readWorkspaceTypeDefinitionFiles(args: {
         }
         const absolutePath = path.join(currentDir, entry.name);
         if (entry.isDirectory()) {
-          if (entry.name === "node_modules") {
+          if (entry.name === "node_modules" || VERSIONED_TYPES_DIRECTORY_PATTERN.test(entry.name)) {
             continue;
           }
           await walk(absolutePath, depth + 1);
@@ -172,11 +194,24 @@ export async function readWorkspaceTypeDefinitionFiles(args: {
   }
 
   const rootPackageJson = await readJsonFile<PackageJsonLike>(path.join(rootPath, "package.json"));
-  if (!rootPackageJson) {
-    throw new Error("Unable to read package.json from workspace root.");
-  }
+  const focusedContext = args.entryFilePath
+    ? await collectFocusedWorkspaceInspectContext({
+      rootPath,
+      entryFilePath: args.entryFilePath,
+      maxSourceFileCount: 240,
+      maxPackageCount,
+    })
+    : null;
 
   enqueuePackage("@types/node");
+  for (const packageName of focusedContext?.packageNames ?? []) {
+    enqueuePackage(packageName);
+    enqueuePackage(toDefinitelyTypedPackageName(packageName));
+  }
+  for (const dependencyName of collectPriorityRootDependencyNames(rootPackageJson)) {
+    enqueuePackage(dependencyName);
+    enqueuePackage(toDefinitelyTypedPackageName(dependencyName));
+  }
   for (const dependencyName of collectRootDependencyNames(rootPackageJson)) {
     enqueuePackage(dependencyName);
     enqueuePackage(toDefinitelyTypedPackageName(dependencyName));

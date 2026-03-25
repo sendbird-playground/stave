@@ -113,6 +113,100 @@ describe("readWorkspaceTypeDefinitionFiles", () => {
     expect(filePaths).toContain("file:///node_modules/@types/better-sqlite3/index.d.ts");
   });
 
+  test("prioritizes direct @types packages without walking versioned duplicate directories", async () => {
+    const workspaceRoot = createTempWorkspace();
+    writeJson(path.join(workspaceRoot, "package.json"), {
+      devDependencies: {
+        "@types/node": "0.0.0",
+        "@types/react": "0.0.0",
+      },
+    });
+    writeJson(path.join(workspaceRoot, "node_modules/@types/node/package.json"), {
+      name: "@types/node",
+      types: "index.d.ts",
+    });
+    writeText(path.join(workspaceRoot, "node_modules/@types/node/index.d.ts"), "export interface NodeRoot {}\n");
+    writeText(path.join(workspaceRoot, "node_modules/@types/node/ts4.8/globals.d.ts"), "export interface LegacyNode {}\n");
+    writeText(path.join(workspaceRoot, "node_modules/@types/node/ts4.8/stream.d.ts"), "export interface LegacyStream {}\n");
+    writeJson(path.join(workspaceRoot, "node_modules/@types/react/package.json"), {
+      name: "@types/react",
+      types: "index.d.ts",
+    });
+    writeText(path.join(workspaceRoot, "node_modules/@types/react/index.d.ts"), "export interface ReactNode {}\n");
+
+    const libs = await readWorkspaceTypeDefinitionFiles({
+      rootPath: workspaceRoot,
+      maxFileCount: 4,
+      maxPackageCount: 10,
+    });
+    const filePaths = libs.map((file) => file.filePath);
+
+    expect(filePaths).toContain("file:///node_modules/@types/react/index.d.ts");
+    expect(filePaths.some((filePath) => filePath.includes("/ts4.8/"))).toBe(false);
+  });
+
+  test("prioritizes packages imported by the active file graph", async () => {
+    const workspaceRoot = createTempWorkspace();
+    writeJson(path.join(workspaceRoot, "package.json"), {
+      dependencies: {
+        alpha: "0.0.0",
+        history: "0.0.0",
+        "styled-components": "0.0.0",
+      },
+      devDependencies: {
+        "@types/styled-components": "0.0.0",
+      },
+    });
+    writeJson(path.join(workspaceRoot, "tsconfig.json"), {
+      compilerOptions: {
+        baseUrl: "./app",
+      },
+    });
+    writeText(
+      path.join(workspaceRoot, "app/main.tsx"),
+      [
+        "import { createBrowserHistory } from \"history\";",
+        "import styled from \"styled-components\";",
+        "export const App = styled.div`${createBrowserHistory}`;",
+      ].join("\n"),
+    );
+    writeJson(path.join(workspaceRoot, "node_modules/alpha/package.json"), {
+      name: "alpha",
+      types: "index.d.ts",
+    });
+    writeText(path.join(workspaceRoot, "node_modules/alpha/index.d.ts"), "export interface Alpha {}\n");
+    writeJson(path.join(workspaceRoot, "node_modules/history/package.json"), {
+      name: "history",
+      types: "index.d.ts",
+    });
+    writeText(path.join(workspaceRoot, "node_modules/history/index.d.ts"), "export declare function createBrowserHistory(): void;\n");
+    writeJson(path.join(workspaceRoot, "node_modules/@types/styled-components/package.json"), {
+      name: "@types/styled-components",
+      types: "index.d.ts",
+    });
+    writeText(path.join(workspaceRoot, "node_modules/@types/styled-components/index.d.ts"), "export default function styled(): void;\n");
+
+    const libs = await readWorkspaceTypeDefinitionFiles({
+      rootPath: workspaceRoot,
+      entryFilePath: "app/main.tsx",
+      maxFileCount: 4,
+      maxPackageCount: 8,
+    });
+    const filePaths = libs.map((file) => file.filePath);
+
+    expect(filePaths).toContain("file:///node_modules/history/index.d.ts");
+    expect(filePaths).toContain("file:///node_modules/@types/styled-components/index.d.ts");
+    expect(filePaths).not.toContain("file:///node_modules/alpha/index.d.ts");
+  });
+
+  test("returns an empty library set when the workspace has no root package.json", async () => {
+    const workspaceRoot = createTempWorkspace();
+
+    const libs = await readWorkspaceTypeDefinitionFiles({ rootPath: workspaceRoot });
+
+    expect(libs).toEqual([]);
+  });
+
   test("throws a descriptive error when rootPath is missing", async () => {
     await expect(readWorkspaceTypeDefinitionFiles({ rootPath: undefined })).rejects.toThrow("Workspace root path is required.");
   });

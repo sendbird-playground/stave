@@ -18,6 +18,12 @@ export const CODEX_SDK_MODEL_OPTIONS = [
   "gpt-5.3-codex",
 ] as const;
 
+// Stave meta-provider: a single "Auto" pseudo-model that the router replaces
+// at runtime with the best matching real model for each prompt.
+export const STAVE_META_MODEL_OPTIONS = [
+  "stave-auto",
+] as const;
+
 export interface ProviderDescriptor {
   id: ProviderId;
   label: string;
@@ -59,6 +65,21 @@ export const PROVIDER_DESCRIPTORS = [
       nativeCommandCatalog: false,
     },
   },
+  {
+    // Stave meta-provider: analyses each prompt and automatically routes to
+    // the best underlying provider+model (claude-code or codex).
+    id: "stave",
+    label: "Stave",
+    shortLabel: "Stave",
+    iconUrl: "stave-logo-dark.svg",
+    fallbackLabel: "S",
+    models: STAVE_META_MODEL_OPTIONS,
+    defaultModel: "stave-auto",
+    conversationLabel: "Stave router",
+    capabilities: {
+      nativeCommandCatalog: false,
+    },
+  },
 ] as const satisfies readonly ProviderDescriptor[];
 
 export function listProviderDescriptors() {
@@ -85,8 +106,11 @@ export function getProviderLabel(args: {
   return args.variant === "full" ? descriptor.label : descriptor.shortLabel;
 }
 
-export function getProviderIconUrl(args: { providerId: ProviderId }) {
-  return getProviderDescriptor(args).iconUrl;
+export function getProviderIconUrl(args: { providerId: ProviderId; isDarkMode?: boolean }) {
+  if (args.providerId === "stave") {
+    return args.isDarkMode ? "stave-logo-light.svg" : "stave-logo-dark.svg";
+  }
+  return getProviderDescriptor({ providerId: args.providerId }).iconUrl;
 }
 
 export function getProviderFallbackLabel(args: { providerId: ProviderId }) {
@@ -135,6 +159,7 @@ export function toHumanModelName(args: { model: string }) {
     "gpt-5.4": "GPT-5.4",
     "gpt-5-codex": "GPT-5-Codex",
     "gpt-5.3-codex": "GPT-5.3-Codex",
+    "stave-auto": "Stave Auto",
   };
   const exact = known[args.model];
   if (exact) {

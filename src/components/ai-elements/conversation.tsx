@@ -25,7 +25,10 @@ function toVirtualScrollBehavior(args?: ScrollToBottomArgs): "auto" | "smooth" |
 }
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
-const VIRTUAL_LIST_BOTTOM_GAP = 48;
+const VIRTUAL_LIST_BOTTOM_GAP = 24;
+// Threshold must exceed the bottom gap so the padding zone is always considered
+// "at bottom" — otherwise auto-scroll disengages while still in the gap area.
+const AT_BOTTOM_THRESHOLD = Math.max(32, VIRTUAL_LIST_BOTTOM_GAP + 8);
 
 function withExtraPaddingBottom(style: CSSProperties | undefined, extra: number): CSSProperties {
   const paddingBottom = style?.paddingBottom;
@@ -210,7 +213,7 @@ export function ConversationContent(props: ConversationContentProps) {
       onScroll={(event) => {
         const target = event.currentTarget;
         const distance = target.scrollHeight - target.scrollTop - target.clientHeight;
-        const nextAtBottom = distance < 32;
+        const nextAtBottom = distance < AT_BOTTOM_THRESHOLD;
         setAtBottom(nextAtBottom);
         wrappedSetStickToBottom(nextAtBottom);
 
@@ -460,7 +463,7 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       data={props.data}
       customScrollParent={containerEl ?? undefined}
       style={{ height: "100%" }}
-      atBottomThreshold={32}
+      atBottomThreshold={AT_BOTTOM_THRESHOLD}
       atBottomStateChange={handleAtBottomChange}
       followOutput={followOutput}
       computeItemKey={props.itemKey}

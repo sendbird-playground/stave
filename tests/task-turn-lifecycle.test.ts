@@ -80,6 +80,8 @@ describe("interruptWorkspaceTurnsBeforeTransition", () => {
         "task-b": [createStreamingAssistantMessage({ taskId: "task-b", provider: "codex" })],
       },
       promptDraftByTask: {},
+      editorTabs: [],
+      activeEditorTabId: null,
       activeTurnIdsByTask: {
         "task-a": "turn-a",
         "task-b": "turn-b",

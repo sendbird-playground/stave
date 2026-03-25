@@ -7,7 +7,7 @@ const PersistedTurnSummarySchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   taskId: z.string(),
-  providerId: z.union([z.literal("claude-code"), z.literal("codex")]),
+  providerId: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]),
   createdAt: z.string(),
   completedAt: z.string().nullable(),
   eventCount: z.number().int().nonnegative(),

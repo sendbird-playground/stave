@@ -1,7 +1,7 @@
 import { type PersistedTurnSummary } from "@/lib/db/turns.db";
 import { type TaskProviderConversationState, type WorkspaceSnapshot, upsertWorkspace } from "@/lib/db/workspaces.db";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
-import type { Attachment, ChatMessage, Task } from "@/types/chat";
+import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
 
 export const starterWorkspaceId = "base";
 export const defaultWorkspaceName = "Default Workspace";
@@ -13,6 +13,8 @@ export interface WorkspaceSessionState {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  editorTabs: EditorTab[];
+  activeEditorTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
   nativeConversationReadyByTask: Record<string, boolean>;
@@ -24,6 +26,8 @@ export function createEmptyWorkspaceState() {
     tasks: [] as Task[],
     messagesByTask: {} as Record<string, ChatMessage[]>,
     promptDraftByTask: {} as Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>,
+    editorTabs: [] as EditorTab[],
+    activeEditorTabId: null as string | null,
     providerConversationByTask: {} as Record<string, TaskProviderConversationState>,
   };
 }
@@ -36,7 +40,8 @@ export function buildNativeConversationReadyByTask(args: {
 
   for (const task of args.tasks) {
     const providerConversation = args.providerConversationByTask[task.id];
-    next[task.id] = Boolean(providerConversation?.[task.provider]?.trim());
+    // stave has no native conversation of its own; treat as not ready
+    next[task.id] = task.provider !== "stave" && Boolean(providerConversation?.[task.provider]?.trim());
   }
 
   return next;
@@ -185,12 +190,19 @@ export function buildWorkspaceSessionState(args: {
         latestTurns: args.latestTurns,
       })
     : (args.snapshot?.messagesByTask ?? empty.messagesByTask);
+  const editorTabs = args.snapshot?.editorTabs ?? empty.editorTabs;
+  const requestedActiveEditorTabId = args.snapshot?.activeEditorTabId ?? empty.activeEditorTabId;
+  const activeEditorTabId = editorTabs.some((tab) => tab.id === requestedActiveEditorTabId)
+    ? requestedActiveEditorTabId
+    : (editorTabs[0]?.id ?? null);
 
   return {
     activeTaskId: args.snapshot?.activeTaskId ?? empty.activeTaskId,
     tasks,
     messagesByTask,
     promptDraftByTask: args.snapshot?.promptDraftByTask ?? empty.promptDraftByTask,
+    editorTabs,
+    activeEditorTabId,
     activeTurnIdsByTask: {},
     providerConversationByTask,
     nativeConversationReadyByTask: buildNativeConversationReadyByTask({
@@ -205,6 +217,8 @@ export function createWorkspaceSnapshot(args: {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  editorTabs: EditorTab[];
+  activeEditorTabId: string | null;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
 }) {
   return {
@@ -212,6 +226,8 @@ export function createWorkspaceSnapshot(args: {
     tasks: args.tasks,
     messagesByTask: normalizeMessagesForSnapshot({ messagesByTask: args.messagesByTask }),
     promptDraftByTask: args.promptDraftByTask,
+    editorTabs: args.editorTabs,
+    activeEditorTabId: args.activeEditorTabId,
     providerConversationByTask: args.providerConversationByTask,
   };
 }
@@ -223,6 +239,8 @@ export async function persistWorkspaceSnapshot(args: {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  editorTabs: EditorTab[];
+  activeEditorTabId: string | null;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
 }) {
   await upsertWorkspace({
@@ -233,6 +251,8 @@ export async function persistWorkspaceSnapshot(args: {
       tasks: args.tasks,
       messagesByTask: args.messagesByTask,
       promptDraftByTask: args.promptDraftByTask,
+      editorTabs: args.editorTabs,
+      activeEditorTabId: args.activeEditorTabId,
       providerConversationByTask: args.providerConversationByTask,
     }),
   });

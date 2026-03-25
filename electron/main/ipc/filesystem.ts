@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   FilesystemDirectoryArgsSchema,
   FilesystemFileArgsSchema,
+  FilesystemInspectArgsSchema,
   FilesystemRootArgsSchema,
   FilesystemWriteFileArgsSchema,
   OpenExternalArgsSchema,
@@ -161,12 +162,15 @@ export function registerFilesystemHandlers() {
   });
 
   ipcMain.handle("fs:read-type-defs", async (_event, args: unknown) => {
-    const parsed = FilesystemRootArgsSchema.safeParse(args);
+    const parsed = FilesystemInspectArgsSchema.safeParse(args);
     if (!parsed.success) {
       return { ok: false, libs: [], stderr: "Invalid type definition request." };
     }
     try {
-      const libs = await readWorkspaceTypeDefinitionFiles({ rootPath: parsed.data.rootPath });
+      const libs = await readWorkspaceTypeDefinitionFiles({
+        rootPath: parsed.data.rootPath,
+        entryFilePath: parsed.data.entryFilePath,
+      });
       return { ok: true, libs };
     } catch (error) {
       return { ok: false, libs: [], stderr: String(error) };
@@ -174,12 +178,15 @@ export function registerFilesystemHandlers() {
   });
 
   ipcMain.handle("fs:read-source-files", async (_event, args: unknown) => {
-    const parsed = FilesystemRootArgsSchema.safeParse(args);
+    const parsed = FilesystemInspectArgsSchema.safeParse(args);
     if (!parsed.success) {
       return { ok: false, files: [], stderr: "Invalid source file request." };
     }
     try {
-      const files = await readWorkspaceSourceFiles({ rootPath: parsed.data.rootPath });
+      const files = await readWorkspaceSourceFiles({
+        rootPath: parsed.data.rootPath,
+        entryFilePath: parsed.data.entryFilePath,
+      });
       return { ok: true, files };
     } catch (error) {
       return { ok: false, files: [], stderr: String(error) };

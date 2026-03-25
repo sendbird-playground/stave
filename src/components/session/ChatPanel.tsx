@@ -51,6 +51,7 @@ import {
 } from "@/components/session/chat-panel.utils";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
+import { toHumanModelName } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, CodeDiffPart, FileContextPart, ImageContextPart, MessagePart } from "@/types/chat";
@@ -113,15 +114,15 @@ const CHAT_DIFF_VIEWER_STYLES = {
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
-function toProviderStartCase(args: { providerId: "claude-code" | "codex" }) {
+function toProviderStartCase(args: { providerId: "claude-code" | "codex" | "stave" }) {
   return args.providerId
     .split("-")
     .map((chunk) => `${chunk.slice(0, 1).toUpperCase()}${chunk.slice(1)}`)
     .join(" ");
 }
 
-function toProviderWaveToneClass(args: { providerId: "claude-code" | "codex" | "user" }) {
-  return args.providerId === "claude-code" ? "text-provider-claude" : "text-provider-codex";
+function toProviderWaveToneClass(args: { providerId: "claude-code" | "codex" | "stave" | "user" }) {
+  return args.providerId === "codex" ? "text-provider-codex" : "text-provider-claude";
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -752,7 +753,7 @@ interface MessageRowProps {
   message: {
     id: string;
     role: "user" | "assistant";
-    providerId: "claude-code" | "codex" | "user";
+    providerId: "claude-code" | "codex" | "stave" | "user";
     model: string;
     content: string;
     parts: MessagePart[];
@@ -798,11 +799,11 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
               {message.providerId !== "user" && message.model ? (
                 <MessageAction
                   key="provider-action"
-                  label={toProviderStartCase({ providerId: message.providerId })}
+                  label={toHumanModelName({ model: message.model })}
                   className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-white dark:bg-white/[0.06] px-2 text-sm font-normal text-foreground opacity-100"
                 >
                   <ModelIcon providerId={message.providerId} className="size-3.5" />
-                  {toProviderStartCase({ providerId: message.providerId })}
+                  {toHumanModelName({ model: message.model })}
                 </MessageAction>
               ) : null}
               <CopyButton key="copy-action" text={message.content} />

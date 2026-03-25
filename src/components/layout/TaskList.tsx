@@ -106,10 +106,13 @@ export function TaskList() {
       return;
     }
     setRenameValue(taskToRename.title);
-    window.setTimeout(() => {
+    // Use a small delay so focus is applied after Radix DropdownMenu
+    // finishes restoring focus to the trigger element on close.
+    const timer = window.setTimeout(() => {
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
-    }, 0);
+    }, 50);
+    return () => window.clearTimeout(timer);
   }, [taskToRename]);
 
   useEffect(() => {

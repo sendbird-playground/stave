@@ -28,13 +28,76 @@ describe("readWorkspaceSourceFiles", () => {
     const workspaceRoot = createTempWorkspace();
     writeText(path.join(workspaceRoot, "src/App.tsx"), "export const App = () => null;\n");
     writeText(path.join(workspaceRoot, "src/store/app.store.ts"), "export const useAppStore = () => null;\n");
+    writeText(path.join(workspaceRoot, "scripts/build.mjs"), "export default {};\n");
+    writeText(path.join(workspaceRoot, "src/legacy.jsx"), "export const Legacy = () => null;\n");
+
+    const files = await readWorkspaceSourceFiles({ rootPath: workspaceRoot });
+    const filePaths = files.map((file) => file.filePath).sort();
+
+    expect(filePaths).toEqual([
+      "file:///scripts/build.mjs",
+      "file:///src/App.tsx",
+      "file:///src/legacy.jsx",
+      "file:///src/store/app.store.ts",
+    ]);
+  });
+
+  test("skips test, story, and non-source support directories", async () => {
+    const workspaceRoot = createTempWorkspace();
+    writeText(path.join(workspaceRoot, "src/App.tsx"), "export const App = () => null;\n");
+    writeText(path.join(workspaceRoot, "src/App.test.tsx"), "export const AppTest = () => null;\n");
+    writeText(path.join(workspaceRoot, "src/App.stories.tsx"), "export const AppStory = () => null;\n");
+    writeText(path.join(workspaceRoot, "__mocks__/api.ts"), "export const mockApi = {};\n");
+    writeText(path.join(workspaceRoot, "docs/generated.ts"), "export const generated = {};\n");
 
     const files = await readWorkspaceSourceFiles({ rootPath: workspaceRoot });
     const filePaths = files.map((file) => file.filePath).sort();
 
     expect(filePaths).toEqual([
       "file:///src/App.tsx",
-      "file:///src/store/app.store.ts",
+    ]);
+  });
+
+  test("focuses on the active file import graph for tsconfig path aliases", async () => {
+    const workspaceRoot = createTempWorkspace();
+    writeText(path.join(workspaceRoot, "tsconfig.json"), JSON.stringify({
+      compilerOptions: {
+        baseUrl: "./app",
+        paths: {
+          "@feather/*": ["./feather/*"],
+        },
+      },
+    }));
+    writeText(
+      path.join(workspaceRoot, "app/main.tsx"),
+      [
+        "import { Button } from \"@feather/Button\";",
+        "import { localValue } from \"./local\";",
+        "export const App = () => Button + localValue;",
+      ].join("\n"),
+    );
+    writeText(
+      path.join(workspaceRoot, "app/feather/Button.tsx"),
+      [
+        "import { theme } from \"./theme\";",
+        "export const Button = theme;",
+      ].join("\n"),
+    );
+    writeText(path.join(workspaceRoot, "app/feather/theme.ts"), "export const theme = \"blue\";\n");
+    writeText(path.join(workspaceRoot, "app/local.ts"), "export const localValue = 1;\n");
+    writeText(path.join(workspaceRoot, "app/unrelated.ts"), "export const unrelated = true;\n");
+
+    const files = await readWorkspaceSourceFiles({
+      rootPath: workspaceRoot,
+      entryFilePath: "app/main.tsx",
+    });
+    const filePaths = files.map((file) => file.filePath).sort();
+
+    expect(filePaths).toEqual([
+      "file:///app/feather/Button.tsx",
+      "file:///app/feather/theme.ts",
+      "file:///app/local.ts",
+      "file:///app/main.tsx",
     ]);
   });
 

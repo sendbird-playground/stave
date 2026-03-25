@@ -112,7 +112,7 @@ export interface ChatMessage {
   id: string;
   role: MessageRole;
   model: string;
-  providerId: "claude-code" | "codex" | "user";
+  providerId: "claude-code" | "codex" | "stave" | "user";
   content: string;
   isStreaming?: boolean;
   isPlanResponse?: boolean;
@@ -131,7 +131,7 @@ export interface ChatMessage {
 export interface Task {
   id: string;
   title: string;
-  provider: "claude-code" | "codex";
+  provider: "claude-code" | "codex" | "stave";
   updatedAt: string;
   unread: boolean;
   archivedAt?: string | null;

@@ -479,6 +479,8 @@ describe("workspace snapshot schema compatibility", () => {
       attachments: [],
     });
     expect(loaded?.providerConversationByTask).toEqual({});
+    expect(loaded?.editorTabs).toEqual([]);
+    expect(loaded?.activeEditorTabId).toBeNull();
   });
 
   test("loads snapshots that include usage and prompt suggestions", async () => {
@@ -547,6 +549,8 @@ describe("workspace snapshot schema compatibility", () => {
         "claude-code": "session-live-2",
       },
     });
+    expect(loaded?.editorTabs).toEqual([]);
+    expect(loaded?.activeEditorTabId).toBeNull();
   });
 
 });
@@ -1080,5 +1084,113 @@ describe("workspace store hydration ordering", () => {
     expect(restoredState.messagesByTask["task-main"]?.at(-1)?.content).toBe(
       "Task 1 kept updating after the workspace switch."
     );
+  });
+
+  test("switchWorkspace restores per-workspace editor tabs", async () => {
+    const localStorage = createMemoryStorage();
+    localStorage.setItem("stave:workspace-fallback:v1", JSON.stringify([
+      {
+        id: "ws-alpha",
+        name: "alpha",
+        updatedAt: "2026-03-10T00:00:00.000Z",
+        snapshot: {
+          activeTaskId: "",
+          tasks: [],
+          messagesByTask: {},
+          editorTabs: [{
+            id: "file:src/alpha.ts",
+            filePath: "src/alpha.ts",
+            kind: "text",
+            language: "typescript",
+            content: "export const alpha = 1;\n",
+            originalContent: "export const alpha = 1;\n",
+            savedContent: "export const alpha = 1;\n",
+            baseRevision: "rev-alpha",
+            hasConflict: false,
+            isDirty: false,
+          }],
+          activeEditorTabId: "file:src/alpha.ts",
+        },
+      },
+      {
+        id: "ws-beta",
+        name: "beta",
+        updatedAt: "2026-03-10T00:01:00.000Z",
+        snapshot: {
+          activeTaskId: "",
+          tasks: [],
+          messagesByTask: {},
+          editorTabs: [{
+            id: "file:src/beta.ts",
+            filePath: "src/beta.ts",
+            kind: "text",
+            language: "typescript",
+            content: "export const beta = 2;\n",
+            originalContent: "export const beta = 2;\n",
+            savedContent: "export const beta = 2;\n",
+            baseRevision: "rev-beta",
+            hasConflict: false,
+            isDirty: false,
+          }],
+          activeEditorTabId: "file:src/beta.ts",
+        },
+      },
+    ]));
+
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          listFiles: async () => ({ ok: true, files: ["package.json"] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      workspaces: [
+        { id: "ws-alpha", name: "alpha", updatedAt: "2026-03-10T00:00:00.000Z" },
+        { id: "ws-beta", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
+      ],
+      activeWorkspaceId: "ws-alpha",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-alpha": "/tmp/stave-project",
+        "ws-beta": "/tmp/stave-project/.stave/workspaces/beta",
+      },
+      workspaceBranchById: {
+        "ws-alpha": "main",
+        "ws-beta": "beta",
+      },
+      workspaceDefaultById: {
+        "ws-alpha": true,
+        "ws-beta": false,
+      },
+      hasHydratedWorkspaces: false,
+    });
+
+    await useAppStore.getState().hydrateWorkspaces();
+
+    let nextState = useAppStore.getState();
+    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual(["src/alpha.ts"]);
+    expect(nextState.activeEditorTabId).toBe("file:src/alpha.ts");
+
+    await useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta" });
+
+    nextState = useAppStore.getState();
+    expect(nextState.activeWorkspaceId).toBe("ws-beta");
+    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual(["src/beta.ts"]);
+    expect(nextState.activeEditorTabId).toBe("file:src/beta.ts");
+
+    await useAppStore.getState().switchWorkspace({ workspaceId: "ws-alpha" });
+
+    nextState = useAppStore.getState();
+    expect(nextState.activeWorkspaceId).toBe("ws-alpha");
+    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual(["src/alpha.ts"]);
+    expect(nextState.activeEditorTabId).toBe("file:src/alpha.ts");
   });
 });

@@ -452,7 +452,7 @@ export function PromptInput(args: PromptInputProps) {
                 }
                 if (event.key === "Tab" && event.shiftKey && permissionMode && onPermissionModeChange) {
                   event.preventDefault();
-                  onPermissionModeChange(cyclePermissionMode({ providerId: selectedModel.providerId, current: permissionMode }));
+                  onPermissionModeChange(cyclePermissionMode({ providerId: selectedModel.providerId === "stave" ? "claude-code" : selectedModel.providerId, current: permissionMode }));
                   return;
                 }
                 if (event.key !== "Enter") {
@@ -810,7 +810,7 @@ export function PromptInput(args: PromptInputProps) {
                         Permission
                       </p>
                       <PermissionModeSelector
-                        providerId={selectedModel.providerId}
+                        providerId={selectedModel.providerId === "stave" ? "claude-code" : selectedModel.providerId}
                         value={permissionMode as PermissionModeValue}
                         disabled={interactionsDisabled}
                         onSelect={onPermissionModeChange!}

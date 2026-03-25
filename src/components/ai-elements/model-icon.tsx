@@ -2,6 +2,7 @@ import { useState } from "react";
 import { getProviderFallbackLabel, getProviderIconUrl } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store/app.store";
 
 interface ModelIconProps {
   providerId: ProviderId;
@@ -11,6 +12,7 @@ interface ModelIconProps {
 export function ModelIcon(args: ModelIconProps) {
   const { providerId, className } = args;
   const [failed, setFailed] = useState(false);
+  const isDarkMode = useAppStore((state) => state.isDarkMode);
 
   if (failed) {
     return (
@@ -28,7 +30,7 @@ export function ModelIcon(args: ModelIconProps) {
 
   return (
     <img
-      src={getProviderIconUrl({ providerId })}
+      src={getProviderIconUrl({ providerId, isDarkMode })}
       alt=""
       aria-hidden
       className={cn("size-4 shrink-0 object-contain", className)}

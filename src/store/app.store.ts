@@ -202,9 +202,18 @@ export interface AppSettings {
   messageMonoFontFamily: string;
   messageKoreanFontFamily: string;
   reasoningDefaultExpanded: boolean;
-  fastModeVisible: boolean;
+  claudeFastModeVisible: boolean;
+  codexFastModeVisible: boolean;
   modelClaude: string;
   modelCodex: string;
+  modelStave: string;
+  /** Per-rule model overrides for the Stave meta-provider router. */
+  staveModelPlanning: string;
+  staveModelEcosystem: string;
+  staveModelComplex: string;
+  staveModelCodeGen: string;
+  staveModelQuickEdit: string;
+  staveModelDefault: string;
   rulesPresetPrimary: string;
   rulesPresetSecondary: string;
   permissionMode: "require-approval" | "auto-safe";
@@ -382,9 +391,17 @@ const defaultSettings: AppSettings = {
   messageMonoFontFamily: "JetBrains Mono",
   messageKoreanFontFamily: "Pretendard Variable",
   reasoningDefaultExpanded: false,
-  fastModeVisible: true,
+  claudeFastModeVisible: true,
+  codexFastModeVisible: true,
   modelClaude: getDefaultModelForProvider({ providerId: "claude-code" }),
   modelCodex: getDefaultModelForProvider({ providerId: "codex" }),
+  modelStave: getDefaultModelForProvider({ providerId: "stave" }),
+  staveModelPlanning: "opusplan",
+  staveModelEcosystem: "gpt-5.4",
+  staveModelComplex: "claude-opus-4-6",
+  staveModelCodeGen: "gpt-5.3-codex",
+  staveModelQuickEdit: "claude-haiku-4-5",
+  staveModelDefault: "claude-sonnet-4-6",
   rulesPresetPrimary: "typescript-best-practices",
   rulesPresetSecondary: "no-target-brand-keyword",
   permissionMode: "auto-safe",
@@ -500,12 +517,31 @@ function normalizeLayoutState(layout: LayoutState): LayoutState {
   };
 }
 
+function isDiffEditorTab(tab: Pick<EditorTab, "id" | "kind" | "originalContent"> | null | undefined) {
+  return Boolean(
+    tab
+    && tab.kind !== "image"
+    && !tab.id.startsWith("file:")
+    && tab.originalContent !== undefined
+  );
+}
+
+function resolveEditorDiffMode(args: {
+  editorTabs: EditorTab[];
+  activeEditorTabId: string | null;
+}) {
+  const activeTab = args.editorTabs.find((tab) => tab.id === args.activeEditorTabId);
+  return isDiffEditorTab(activeTab);
+}
+
 function createWorkspaceSessionStateFromAppState(state: Pick<
   AppState,
   | "activeTaskId"
   | "tasks"
   | "messagesByTask"
   | "promptDraftByTask"
+  | "editorTabs"
+  | "activeEditorTabId"
   | "activeTurnIdsByTask"
   | "providerConversationByTask"
   | "nativeConversationReadyByTask"
@@ -515,6 +551,8 @@ function createWorkspaceSessionStateFromAppState(state: Pick<
     tasks: state.tasks,
     messagesByTask: state.messagesByTask,
     promptDraftByTask: state.promptDraftByTask,
+    editorTabs: state.editorTabs,
+    activeEditorTabId: state.activeEditorTabId,
     activeTurnIdsByTask: state.activeTurnIdsByTask,
     providerConversationByTask: state.providerConversationByTask,
     nativeConversationReadyByTask: state.nativeConversationReadyByTask,
@@ -527,6 +565,8 @@ function createActiveWorkspaceStatePatch(session: WorkspaceSessionState) {
     tasks: session.tasks,
     messagesByTask: session.messagesByTask,
     promptDraftByTask: session.promptDraftByTask,
+    editorTabs: session.editorTabs,
+    activeEditorTabId: session.activeEditorTabId,
     activeTurnIdsByTask: session.activeTurnIdsByTask,
     providerConversationByTask: session.providerConversationByTask,
     nativeConversationReadyByTask: session.nativeConversationReadyByTask,
@@ -554,6 +594,8 @@ function saveActiveWorkspaceRuntimeCache(args: {
     | "tasks"
     | "messagesByTask"
     | "promptDraftByTask"
+    | "editorTabs"
+    | "activeEditorTabId"
     | "activeTurnIdsByTask"
     | "providerConversationByTask"
     | "nativeConversationReadyByTask"
@@ -1228,6 +1270,8 @@ export const useAppStore = create<AppState>()(
           tasks: empty.tasks,
           messagesByTask: empty.messagesByTask,
           promptDraftByTask: empty.promptDraftByTask,
+          editorTabs: empty.editorTabs,
+          activeEditorTabId: empty.activeEditorTabId,
           providerConversationByTask: empty.providerConversationByTask,
         });
         const workspaceState = buildWorkspaceSessionState({
@@ -1236,6 +1280,8 @@ export const useAppStore = create<AppState>()(
             tasks: empty.tasks,
             messagesByTask: empty.messagesByTask,
             promptDraftByTask: empty.promptDraftByTask,
+            editorTabs: empty.editorTabs,
+            activeEditorTabId: empty.activeEditorTabId,
             providerConversationByTask: empty.providerConversationByTask,
           }),
         });
@@ -1346,6 +1392,8 @@ export const useAppStore = create<AppState>()(
             tasks: [],
             messagesByTask: {},
             promptDraftByTask: {},
+            editorTabs: [],
+            activeEditorTabId: null,
             providerConversationByTask: {},
           });
           initialRows = await listWorkspaceSummaries();
@@ -1441,6 +1489,8 @@ export const useAppStore = create<AppState>()(
                   tasks: [],
                   messagesByTask: {},
                   promptDraftByTask: {},
+                  editorTabs: [],
+                  activeEditorTabId: null,
                   providerConversationByTask: {},
                 });
               }
@@ -1537,6 +1587,8 @@ export const useAppStore = create<AppState>()(
           tasks: state.tasks,
           messagesByTask: state.messagesByTask,
           promptDraftByTask: state.promptDraftByTask,
+          editorTabs: state.editorTabs,
+          activeEditorTabId: state.activeEditorTabId,
           providerConversationByTask: state.providerConversationByTask,
         });
 
@@ -1559,6 +1611,8 @@ export const useAppStore = create<AppState>()(
           tasks: state.tasks,
           messagesByTask: state.messagesByTask,
           promptDraftByTask: state.promptDraftByTask,
+          editorTabs: state.editorTabs,
+          activeEditorTabId: state.activeEditorTabId,
           providerConversationByTask: state.providerConversationByTask,
         });
       },
@@ -1709,8 +1763,6 @@ export const useAppStore = create<AppState>()(
             workspaceDefaultById: {},
             workspaceRootName: null,
             projectFiles: [],
-            editorTabs: [],
-            activeEditorTabId: null,
             taskCheckpointById: {},
             workspaceRuntimeCacheById: nextRuntimeCacheById,
             taskWorkspaceIdById: nextTaskWorkspaceIdById,
@@ -1799,6 +1851,8 @@ export const useAppStore = create<AppState>()(
           tasks: empty.tasks,
           messagesByTask: empty.messagesByTask,
           promptDraftByTask: empty.promptDraftByTask,
+          editorTabs: empty.editorTabs,
+          activeEditorTabId: empty.activeEditorTabId,
           providerConversationByTask: empty.providerConversationByTask,
         });
         await persistWorkspaceSnapshot({
@@ -1808,6 +1862,8 @@ export const useAppStore = create<AppState>()(
           tasks: snapshot.tasks,
           messagesByTask: snapshot.messagesByTask,
           promptDraftByTask: snapshot.promptDraftByTask ?? {},
+          editorTabs: snapshot.editorTabs ?? [],
+          activeEditorTabId: snapshot.activeEditorTabId ?? null,
           providerConversationByTask: snapshot.providerConversationByTask ?? {},
         });
         const workspaceState = buildWorkspaceSessionState({ snapshot });
@@ -2000,6 +2056,13 @@ export const useAppStore = create<AppState>()(
               tasks: workspaceState.tasks,
             }),
             ...workspaceState,
+            layout: {
+              ...state.layout,
+              editorDiffMode: resolveEditorDiffMode({
+                editorTabs: workspaceState.editorTabs,
+                activeEditorTabId: workspaceState.activeEditorTabId,
+              }),
+            },
             projectFiles: files,
           };
         });
@@ -2482,7 +2545,10 @@ export const useAppStore = create<AppState>()(
             draftProvider: provider,
             nativeConversationReadyByTask: {
               ...state.nativeConversationReadyByTask,
-              [taskId]: Boolean(state.providerConversationByTask[taskId]?.[provider]?.trim()),
+              // stave has no native conversation ID of its own; treat as not ready
+              [taskId]: provider !== "stave" && Boolean(
+                (state.providerConversationByTask[taskId] as Record<string, string | undefined>)?.[provider]?.trim(),
+              ),
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
@@ -2679,7 +2745,9 @@ export const useAppStore = create<AppState>()(
         // ordinary prompts.
         const activeModel = provider === "claude-code"
           ? state.settings.modelClaude
-          : state.settings.modelCodex;
+          : provider === "stave"
+            ? state.settings.modelStave
+            : state.settings.modelCodex;
         const providerCommandCatalog = getCachedProviderCommandCatalog({
           providerId: provider,
           cwd: workspaceCwd,
@@ -3066,6 +3134,8 @@ export const useAppStore = create<AppState>()(
               tasks: persistedInactiveWorkspaceSession.session.tasks,
               messagesByTask: persistedInactiveWorkspaceSession.session.messagesByTask,
               promptDraftByTask: persistedInactiveWorkspaceSession.session.promptDraftByTask,
+              editorTabs: persistedInactiveWorkspaceSession.session.editorTabs,
+              activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
               providerConversationByTask: persistedInactiveWorkspaceSession.session.providerConversationByTask,
             });
           }
@@ -3092,10 +3162,20 @@ export const useAppStore = create<AppState>()(
             claudeThinkingMode: get().settings.claudeThinkingMode,
             claudeAgentProgressSummaries: get().settings.claudeAgentProgressSummaries,
             claudeFastMode: get().settings.claudeFastMode,
-            ...(provider === "claude-code"
-              && providerConversation?.["claude-code"]?.trim()
-              ? { claudeResumeSessionId: providerConversation["claude-code"] }
-              : {}),
+            // Resume IDs: for stave, forward both so the router can continue
+            // whichever underlying provider it routed to on the previous turn.
+            ...(provider === "stave"
+              ? {
+                  ...(providerConversation?.["claude-code"]?.trim()
+                    ? { claudeResumeSessionId: providerConversation["claude-code"] }
+                    : {}),
+                  ...(providerConversation?.codex?.trim()
+                    ? { codexResumeThreadId: providerConversation.codex }
+                    : {}),
+                }
+              : provider === "claude-code" && providerConversation?.["claude-code"]?.trim()
+                ? { claudeResumeSessionId: providerConversation["claude-code"] }
+                : {}),
             codexSandboxMode: get().settings.codexSandboxMode,
             codexSkipGitRepoCheck: get().settings.codexSkipGitRepoCheck,
             codexNetworkAccessEnabled: get().settings.codexNetworkAccessEnabled,
@@ -3109,10 +3189,17 @@ export const useAppStore = create<AppState>()(
             codexReasoningSummary: get().settings.codexReasoningSummary,
             codexSupportsReasoningSummaries: get().settings.codexSupportsReasoningSummaries,
             codexFastMode: get().settings.codexFastMode,
-            ...(provider === "codex"
-              && providerConversation?.codex?.trim()
+            ...(provider === "codex" && providerConversation?.codex?.trim()
               ? { codexResumeThreadId: providerConversation.codex }
               : {}),
+            staveRouteModels: {
+              planning: get().settings.staveModelPlanning,
+              ecosystem: get().settings.staveModelEcosystem,
+              complex: get().settings.staveModelComplex,
+              codeGen: get().settings.staveModelCodeGen,
+              quickEdit: get().settings.staveModelQuickEdit,
+              default: get().settings.staveModelDefault,
+            },
           },
           onEvent: ({ event }) => {
             queuedEvents.push(event);
@@ -3446,6 +3533,9 @@ export const useAppStore = create<AppState>()(
                 : state.editorTabs,
               activeEditorTabId: existing.id,
               layout: { ...state.layout, editorVisible: true, editorDiffMode: true },
+              workspaceSnapshotVersion: shouldRefreshExisting || state.activeEditorTabId !== existing.id
+                ? incrementWorkspaceSnapshotVersion(state)
+                : state.workspaceSnapshotVersion,
             };
           }
 
@@ -3466,6 +3556,7 @@ export const useAppStore = create<AppState>()(
             editorTabs: [...state.editorTabs, nextTab],
             activeEditorTabId: nextTab.id,
             layout: { ...state.layout, editorVisible: true, editorDiffMode: true },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
       },
@@ -3493,6 +3584,9 @@ export const useAppStore = create<AppState>()(
             return {
               activeEditorTabId: existing.id,
               layout: { ...state.layout, editorVisible: true, editorDiffMode: false },
+              workspaceSnapshotVersion: state.activeEditorTabId !== existing.id
+                ? incrementWorkspaceSnapshotVersion(state)
+                : state.workspaceSnapshotVersion,
             };
           }
 
@@ -3515,24 +3609,30 @@ export const useAppStore = create<AppState>()(
             editorTabs: [...state.editorTabs, nextTab],
             activeEditorTabId: nextTab.id,
             layout: { ...state.layout, editorVisible: true, editorDiffMode: false },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
       },
       setActiveEditorTab: ({ tabId }) =>
         set((state) => {
+          if (state.activeEditorTabId === tabId) {
+            return {};
+          }
           const selectedTab = state.editorTabs.find((tab) => tab.id === tabId);
           if (!selectedTab) {
-            return { activeEditorTabId: tabId };
+            return {
+              activeEditorTabId: tabId,
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+            };
           }
-          const isDiffTab = selectedTab.kind !== "image"
-            && !selectedTab.id.startsWith("file:")
-            && selectedTab.originalContent !== null;
+          const isDiffTab = isDiffEditorTab(selectedTab);
           return {
             activeEditorTabId: tabId,
             layout: {
               ...state.layout,
               editorDiffMode: isDiffTab,
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         }),
       reorderEditorTabs: ({ fromTabId, toTabId }) =>
@@ -3549,7 +3649,10 @@ export const useAppStore = create<AppState>()(
             return {};
           }
           nextTabs.splice(toIndex, 0, movedTab);
-          return { editorTabs: nextTabs };
+          return {
+            editorTabs: nextTabs,
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
         }),
       closeEditorTab: ({ tabId }) =>
         set((state) => {
@@ -3566,16 +3669,20 @@ export const useAppStore = create<AppState>()(
                 ...state.layout,
                 editorDiffMode: false,
               },
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
             };
           }
 
           if (state.activeEditorTabId !== tabId) {
-            return { editorTabs: nextTabs };
+            return {
+              editorTabs: nextTabs,
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+            };
           }
 
           const fallbackIndex = Math.max(0, closingIndex - 1);
           const fallbackTab = nextTabs[fallbackIndex] ?? nextTabs[0];
-          const isDiffTab = Boolean(fallbackTab && !fallbackTab.id.startsWith("file:") && fallbackTab.originalContent !== null);
+          const isDiffTab = isDiffEditorTab(fallbackTab);
 
           return {
             editorTabs: nextTabs,
@@ -3584,25 +3691,34 @@ export const useAppStore = create<AppState>()(
               ...state.layout,
               editorDiffMode: isDiffTab,
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         }),
       updateEditorContent: ({ tabId, content }) => {
-        set((state) => ({
-          editorTabs: state.editorTabs.map((tab) => {
-            if (tab.id !== tabId) {
+        set((state) => {
+          let changed = false;
+          const nextTabs = state.editorTabs.map((tab) => {
+            if (tab.id !== tabId || tab.kind === "image" || tab.content === content) {
               return tab;
             }
-            if (tab.kind === "image") {
-              return tab;
-            }
+            changed = true;
             return {
               ...tab,
               content,
               isDirty: (tab.savedContent ?? tab.originalContent ?? tab.content) !== content,
               hasConflict: false,
             };
-          }),
-        }));
+          });
+
+          if (!changed) {
+            return {};
+          }
+
+          return {
+            editorTabs: nextTabs,
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
       },
       saveActiveEditorTab: async () => {
         const state = get();
@@ -3647,6 +3763,7 @@ export const useAppStore = create<AppState>()(
                     }
                   : tab
               ),
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
             }));
           }
           return { ok: false, conflict: result.conflict };
@@ -3665,6 +3782,7 @@ export const useAppStore = create<AppState>()(
                 }
               : tab
           ),
+          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
         }));
 
         return { ok: true };
@@ -3743,6 +3861,7 @@ export const useAppStore = create<AppState>()(
               isDirty: false,
             };
           }),
+          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
         }));
       },
       sendEditorContextToChat: ({ taskId, instruction }) => {
@@ -3803,6 +3922,14 @@ export const useAppStore = create<AppState>()(
         // Merge with defaultSettings so newly added fields are never undefined
         // for users whose persisted state pre-dates those fields.
         state.settings = { ...defaultSettings, ...state.settings };
+        // Migrate legacy fastModeVisible → per-provider fields.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw = state.settings as any;
+        if (typeof raw.fastModeVisible === "boolean") {
+          state.settings.claudeFastModeVisible ??= raw.fastModeVisible;
+          state.settings.codexFastModeVisible ??= raw.fastModeVisible;
+          delete raw.fastModeVisible;
+        }
         state.settings.codexApprovalPolicy = normalizeCodexApprovalPolicy({
           value: state.settings.codexApprovalPolicy,
         });

@@ -16,6 +16,8 @@ const SKILL_SCOPE_PRIORITY = {
 const SKILL_PROVIDER_PRIORITY = {
   "claude-code": 2,
   codex: 2,
+  // stave is a meta-provider; give it the same priority as the real providers
+  stave: 2,
   shared: 1,
 } as const;
 

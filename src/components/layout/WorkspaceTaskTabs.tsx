@@ -1,5 +1,5 @@
 import { Check, Copy, Ellipsis, Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
@@ -59,6 +59,8 @@ export function WorkspaceTaskTabs() {
   const [renameValue, setRenameValue] = useState("");
   const [taskToViewSession, setTaskToViewSession] = useState<{ id: string; title: string } | null>(null);
   const [copiedSessionIdKey, setCopiedSessionIdKey] = useState<string | null>(null);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dropTargetTaskId, setDropTargetTaskId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const tasks = useAppStore((state) => state.tasks);
   const activeTaskId = useAppStore((state) => state.activeTaskId);
@@ -70,6 +72,7 @@ export function WorkspaceTaskTabs() {
   const renameTask = useAppStore((state) => state.renameTask);
   const exportTask = useAppStore((state) => state.exportTask);
   const restoreTask = useAppStore((state) => state.restoreTask);
+  const reorderTasks = useAppStore((state) => state.reorderTasks);
 
   const visibleTasks = tasks.filter((task) => !isTaskArchived(task));
   const archivedTasks = tasks.filter((task) => isTaskArchived(task));
@@ -85,10 +88,13 @@ export function WorkspaceTaskTabs() {
       return;
     }
     setRenameValue(taskToRename.title);
-    window.setTimeout(() => {
+    // Use a small delay so focus is applied after Radix DropdownMenu
+    // finishes restoring focus to the trigger element on close.
+    const timer = window.setTimeout(() => {
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
-    }, 0);
+    }, 50);
+    return () => window.clearTimeout(timer);
   }, [taskToRename]);
 
   useEffect(() => {
@@ -110,6 +116,22 @@ export function WorkspaceTaskTabs() {
     }
     renameTask({ taskId: taskToRename.id, title: nextTitle });
     setTaskToRename(null);
+  }
+
+  function handleTaskDragStart(event: DragEvent<HTMLDivElement>, taskId: string) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", taskId);
+    setDraggingTaskId(taskId);
+  }
+
+  function handleTaskDrop(event: DragEvent<HTMLDivElement>, overTaskId: string) {
+    event.preventDefault();
+    const activeTaskId = draggingTaskId ?? event.dataTransfer.getData("text/plain");
+    if (activeTaskId && activeTaskId !== overTaskId) {
+      reorderTasks({ activeTaskId, overTaskId, filter: "active" });
+    }
+    setDropTargetTaskId(null);
+    setDraggingTaskId(null);
   }
 
   async function copySessionIdentifier(args: { key: string; value: string }) {
@@ -140,11 +162,26 @@ export function WorkspaceTaskTabs() {
                   return (
                     <div
                       key={task.id}
+                      draggable
+                      onDragStart={(event) => handleTaskDragStart(event, task.id)}
+                      onDragEnd={() => {
+                        setDraggingTaskId(null);
+                        setDropTargetTaskId(null);
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        if (draggingTaskId && draggingTaskId !== task.id) {
+                          setDropTargetTaskId(task.id);
+                        }
+                      }}
+                      onDrop={(event) => handleTaskDrop(event, task.id)}
                       className={cn(
-                        "flex h-11 items-center gap-1 rounded-md border px-2",
+                        "flex h-11 cursor-grab items-center gap-1 rounded-md border px-2",
                         isActive
                           ? "border-primary/50 bg-background shadow-sm"
-                          : "border-border/70 bg-background/70"
+                          : "border-border/70 bg-background/70",
+                        draggingTaskId === task.id && "cursor-grabbing opacity-70",
+                        dropTargetTaskId === task.id && draggingTaskId && draggingTaskId !== task.id && "outline outline-1 outline-primary/60",
                       )}
                     >
                       <button

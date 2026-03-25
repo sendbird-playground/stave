@@ -1,5 +1,5 @@
 import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
-import type { Attachment, ChatMessage, Task } from "@/types/chat";
+import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
 import {
   interruptActiveTaskTurns,
   persistWorkspaceSnapshot,
@@ -28,6 +28,8 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  editorTabs: EditorTab[];
+  activeEditorTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
   workspaceName: string;
@@ -75,6 +77,8 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
     tasks: args.tasks,
     messagesByTask: interrupted.messagesByTask,
     promptDraftByTask: args.promptDraftByTask,
+    editorTabs: args.editorTabs,
+    activeEditorTabId: args.activeEditorTabId,
     providerConversationByTask: args.providerConversationByTask,
   });
 

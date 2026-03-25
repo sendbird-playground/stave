@@ -1,5 +1,50 @@
 # Provider Runtimes
 
+## Stave Model Router
+
+The Stave Model Router is a meta-provider that sits above the real Claude and Codex runtimes. When a task uses the `stave` provider, the router analyses each prompt and automatically forwards the turn to the most suitable underlying provider and model.
+
+High-level flow:
+
+1. The renderer submits a turn with `providerId: "stave"`.
+2. `electron/providers/runtime.ts` detects the `stave` provider and calls `resolveStaveTarget(...)` from `electron/providers/stave-router.ts`.
+3. `resolveStaveTarget` is a pure function. It scores the prompt against several pattern sets and returns a `StaveRouteTarget` containing `{ providerId, model, reason }`.
+4. A `system` `BridgeEvent` is emitted immediately, e.g. `[Stave] Planning intent → Claude Opus Plan`, so the chat surface shows which model was selected and why.
+5. `buildStaveResolvedArgs` rewrites the `StreamTurnArgs` with the resolved provider and model.
+6. `runProviderTurn` is called recursively with the rewritten args, so all timeout, abort, and approval logic is handled identically to a direct turn.
+
+### Routing table
+
+| Priority | Trigger condition | Provider | Model |
+|----------|-------------------|----------|-------|
+| 1 | Planning / strategy intent (no deep analysis) | `claude-code` | `opusplan` |
+| 2 | OpenAI / GPT ecosystem keywords | `codex` | `gpt-5.4` |
+| 3 | Deep analysis or complex planning with large context | `claude-code` | `claude-opus-4-6` |
+| 4 | Precise code generation, short prompt | `codex` | `gpt-5.3-codex` |
+| 5 | Quick targeted edit, short prompt | `claude-code` | `claude-haiku-4-5` |
+| 6 | Default (general task) | `claude-code` | `claude-sonnet-4-6` |
+
+### Complexity signals
+
+- **Prompt length > 1 200 characters** → treated as complex
+- **Attached files ≥ 4** → treated as complex
+- **Conversation history ≥ 8 messages** → treated as complex
+- **Prompt length < 350 characters** → treated as short / quick
+
+### Availability check
+
+The Stave router is considered available when the Claude CLI is available, since `claude-code` is the primary routing target. Codex availability is checked only if the router decides to delegate to Codex.
+
+### Native command catalog
+
+The Stave provider does not expose a native command catalog. Switching to `claude-code` or `codex` directly gives access to the full provider-specific slash command sets.
+
+### Source file
+
+`electron/providers/stave-router.ts` — pure functions only, no I/O, no side effects.
+
+---
+
 ## Claude runtime
 
 Claude turns are handled in `electron/providers/claude-sdk-runtime.ts`.

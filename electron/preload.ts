@@ -176,8 +176,8 @@ contextBridge.exposeInMainWorld("api", {
     readFileDataUrl: (args: { rootPath: string; filePath: string }) => ipcRenderer.invoke("fs:read-file-data-url", args),
     writeFile: (args: { rootPath: string; filePath: string; content: string; expectedRevision?: string | null }) =>
       ipcRenderer.invoke("fs:write-file", args),
-    readTypeDefs: (args: { rootPath: string }) => ipcRenderer.invoke("fs:read-type-defs", args),
-    readSourceFiles: (args: { rootPath: string }) => ipcRenderer.invoke("fs:read-source-files", args),
+    readTypeDefs: (args: { rootPath: string; entryFilePath?: string }) => ipcRenderer.invoke("fs:read-type-defs", args),
+    readSourceFiles: (args: { rootPath: string; entryFilePath?: string }) => ipcRenderer.invoke("fs:read-source-files", args),
   },
   skills: {
     getCatalog: (args?: { workspacePath?: string }) =>

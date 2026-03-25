@@ -30,6 +30,19 @@ export interface PersistenceWorkspaceSnapshot {
   tasks: PersistenceTaskRow[];
   messagesByTask: Record<string, PersistenceChatMessageRow[]>;
   promptDraftByTask?: Record<string, { text: string; attachedFilePaths: string[] }>;
+  editorTabs?: Array<{
+    id: string;
+    filePath: string;
+    kind?: "text" | "image";
+    language: string;
+    content: string;
+    originalContent?: string;
+    savedContent?: string;
+    baseRevision?: string | null;
+    hasConflict: boolean;
+    isDirty: boolean;
+  }>;
+  activeEditorTabId?: string | null;
 }
 
 export interface PersistenceWorkspaceSummary {

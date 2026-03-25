@@ -9,7 +9,7 @@ import type {
 } from "@/types/chat";
 import type { SkillPromptContext } from "@/lib/skills/types";
 
-export type ProviderId = "claude-code" | "codex";
+export type ProviderId = "claude-code" | "codex" | "stave";
 
 export interface ProviderCommandCatalogRequest {
   providerId: ProviderId;
@@ -78,6 +78,7 @@ export type NormalizedProviderEvent =
   | { type: "user_input"; toolName: string; requestId: string; questions: UserInputQuestion[] }
   | { type: "plan_ready"; planText: string }
   | { type: "system"; content: string }
+  | { type: "model_resolved"; resolvedProviderId: ProviderId; resolvedModel: string }
   | { type: "error"; message: string; recoverable: boolean }
   | { type: "done"; stop_reason?: "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | string };
 

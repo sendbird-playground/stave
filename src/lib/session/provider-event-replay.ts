@@ -147,6 +147,7 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
     case "usage":
     case "prompt_suggestions":
     case "plan_ready":
+    case "model_resolved":
     case "done":
       return null;
   }
@@ -244,6 +245,14 @@ export function appendProviderEventToAssistant(args: {
       content: args.event.planText,
       isPlanResponse: true,
       planText: args.event.planText,
+    };
+  }
+
+  if (args.event.type === "model_resolved") {
+    return {
+      ...args.message,
+      providerId: args.event.resolvedProviderId,
+      model: args.event.resolvedModel,
     };
   }
 

@@ -1,0 +1,602 @@
+import { describe, expect, test } from "bun:test";
+import { buildStaveResolvedArgs, resolveStaveTarget } from "../electron/providers/stave-router";
+import type { StreamTurnArgs } from "../electron/providers/types";
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+/** Repeat a string until it reaches at least `length` characters. */
+function padTo(base: string, length: number): string {
+  return base.repeat(Math.ceil(length / base.length)).slice(0, length);
+}
+
+function minimalArgs(overrides: Partial<StreamTurnArgs> = {}): StreamTurnArgs {
+  return {
+    providerId: "stave",
+    prompt: "hello",
+    cwd: "/tmp/workspace",
+    ...overrides,
+  };
+}
+
+// ── resolveStaveTarget ────────────────────────────────────────────────────────
+
+describe("resolveStaveTarget", () => {
+  // ── Rule 1: planning intent → opusplan ──────────────────────────────────
+
+  describe("Rule 1 — planning intent → opusplan", () => {
+    test("routes '계획' keyword to opusplan", () => {
+      const result = resolveStaveTarget({ prompt: "이 기능 어떻게 구현할 계획을 세워줘" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("opusplan");
+    });
+
+    test("routes '설계' keyword to opusplan", () => {
+      const result = resolveStaveTarget({ prompt: "새로운 모듈 설계 방향을 잡아줘" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("opusplan");
+    });
+
+    test("routes '전략' keyword to opusplan", () => {
+      const result = resolveStaveTarget({ prompt: "마이그레이션 전략을 어떻게 잡을까?" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("opusplan");
+    });
+
+    test("routes 'approach' keyword to opusplan", () => {
+      const result = resolveStaveTarget({ prompt: "What's the best approach to add OAuth to this app?" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("opusplan");
+    });
+
+    test("routes 'how should I structure' to opusplan", () => {
+      const result = resolveStaveTarget({ prompt: "How should I structure the new payment module?" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("opusplan");
+    });
+
+    test("routes 'before implement' to opusplan", () => {
+      const result = resolveStaveTarget({ prompt: "Before I implement this feature, give me a plan." });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("opusplan");
+    });
+
+    test("does NOT route to opusplan when analysisScore > 0 (mixed intent)", () => {
+      // Has both 'plan' and 'analyze' → falls through to rules 2–6
+      const result = resolveStaveTarget({
+        prompt: "Analyze the codebase and give me a refactoring plan",
+      });
+      expect(result.model).not.toBe("opusplan");
+    });
+
+    test("does NOT route to opusplan for a 3-char-or-shorter prompt", () => {
+      // len > 3 guard prevents accidental single-char / blank matches
+      const result = resolveStaveTarget({ prompt: "pl" });
+      expect(result.model).not.toBe("opusplan");
+    });
+
+    test("routes a short 'plan' keyword prompt to opusplan", () => {
+      // "plan" (4 chars) exceeds the len > 3 guard and should route
+      const result = resolveStaveTarget({ prompt: "plan" });
+      expect(result.model).toBe("opusplan");
+    });
+
+    test("routes '어떻게 할까' to opusplan", () => {
+      const result = resolveStaveTarget({ prompt: "이 버그 어떻게할까 좋은 방향을 알려줘" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("opusplan");
+    });
+  });
+
+  // ── Rule 2: OpenAI / GPT ecosystem → gpt-5.4 ────────────────────────────
+
+  describe("Rule 2 — OpenAI ecosystem keywords → gpt-5.4", () => {
+    test("routes 'OpenAI' keyword to gpt-5.4", () => {
+      const result = resolveStaveTarget({ prompt: "How do I call the OpenAI chat API?" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.4");
+    });
+
+    test("routes 'ChatGPT' keyword to gpt-5.4", () => {
+      const result = resolveStaveTarget({ prompt: "Integrate ChatGPT into this app" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.4");
+    });
+
+    test("routes 'gpt-4' keyword to gpt-5.4", () => {
+      const result = resolveStaveTarget({ prompt: "Switch from gpt-4 to gpt-5 in this code" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.4");
+    });
+
+    test("routes 'gpt-5' keyword to gpt-5.4", () => {
+      const result = resolveStaveTarget({ prompt: "How do I use gpt-5 via the API?" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.4");
+    });
+
+    test("routes 'openai api' keyword to gpt-5.4", () => {
+      const result = resolveStaveTarget({ prompt: "Wrap the openai api in a helper function" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.4");
+    });
+
+    test("routes 'o3' keyword to gpt-5.4", () => {
+      const result = resolveStaveTarget({ prompt: "What changed from o3 to o4?" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.4");
+    });
+
+    test("routes 'o3-mini' keyword to gpt-5.4", () => {
+      const result = resolveStaveTarget({ prompt: "Write code that calls o3-mini for embeddings" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.4");
+    });
+
+    test("takes priority over quick-edit signals", () => {
+      // Contains 'rename' (quick-edit) but also 'openai' → ecosystem wins
+      const result = resolveStaveTarget({ prompt: "Just rename the openai client variable" });
+      expect(result.model).toBe("gpt-5.4");
+    });
+  });
+
+  // ── Rule 3: complex analysis / planning → claude-opus-4-6 ──────────────
+
+  describe("Rule 3 — complex analysis/planning → claude-opus-4-6", () => {
+    test("routes long analysis prompt (> 1200 chars) to claude-opus-4-6", () => {
+      const longPrompt = padTo("Explain how the authentication system works. ", 1201);
+      const result = resolveStaveTarget({ prompt: longPrompt });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+
+    test("routes analysis prompt with 4+ attached files to claude-opus-4-6", () => {
+      const result = resolveStaveTarget({
+        prompt: "Analyze all these files and summarize what they do",
+        attachedFileCount: 4,
+      });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+
+    test("routes analysis prompt with 8+ history messages to claude-opus-4-6", () => {
+      const result = resolveStaveTarget({
+        prompt: "Why does this module keep crashing?",
+        historyLength: 8,
+      });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+
+    test("routes mixed plan+analysis complex prompt to claude-opus-4-6 (not opusplan)", () => {
+      const longPrompt = padTo("Analyze the codebase and give me a refactoring plan. ", 1201);
+      const result = resolveStaveTarget({ prompt: longPrompt });
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+
+    test("routes '분석' keyword with large context to claude-opus-4-6", () => {
+      const result = resolveStaveTarget({
+        prompt: "이 코드베이스 전체를 분석해줘",
+        attachedFileCount: 5,
+      });
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+
+    test("does NOT route short analysis prompt (< 1200 chars, < 4 files, < 8 messages) to opus", () => {
+      // Short 'why' prompt with no complexity signals → falls through to default
+      const result = resolveStaveTarget({ prompt: "Why is this function slow?" });
+      expect(result.model).not.toBe("claude-opus-4-6");
+    });
+  });
+
+  // ── Rule 4: precise code generation → gpt-5.3-codex ────────────────────
+
+  describe("Rule 4 — precise code generation → gpt-5.3-codex", () => {
+    test("routes 'write a function' to gpt-5.3-codex", () => {
+      const result = resolveStaveTarget({ prompt: "Write a function to validate email addresses" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.3-codex");
+    });
+
+    test("routes 'generate code' to gpt-5.3-codex", () => {
+      const result = resolveStaveTarget({ prompt: "Generate code for a binary search tree" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.3-codex");
+    });
+
+    test("routes 'implement a function' to gpt-5.3-codex", () => {
+      const result = resolveStaveTarget({ prompt: "Implement a function to debounce API calls" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.3-codex");
+    });
+
+    test("routes 'implement an algorithm' to gpt-5.3-codex", () => {
+      const result = resolveStaveTarget({ prompt: "Implement an algorithm for topological sort" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.3-codex");
+    });
+
+    test("routes 'write a class' to gpt-5.3-codex", () => {
+      const result = resolveStaveTarget({ prompt: "Write a class for managing user sessions" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.3-codex");
+    });
+
+    test("does NOT route long code-gen prompt (>= 350 chars) to gpt-5.3-codex", () => {
+      // isShort = false → falls through to default
+      const longPrompt = padTo("Write a function that sorts arrays. ", 350);
+      const result = resolveStaveTarget({ prompt: longPrompt });
+      expect(result.model).not.toBe("gpt-5.3-codex");
+    });
+  });
+
+  // ── Rule 5: quick targeted edit → claude-haiku-4-5 ──────────────────────
+
+  describe("Rule 5 — quick targeted edit → claude-haiku-4-5", () => {
+    test("routes 'typo' keyword to claude-haiku-4-5", () => {
+      const result = resolveStaveTarget({ prompt: "Fix the typo on line 23" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-haiku-4-5");
+    });
+
+    test("routes 'rename' keyword to claude-haiku-4-5", () => {
+      const result = resolveStaveTarget({ prompt: "Rename getUserById to findUserById" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-haiku-4-5");
+    });
+
+    test("routes 'just fix' keyword to claude-haiku-4-5", () => {
+      const result = resolveStaveTarget({ prompt: "Just fix the missing semicolon" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-haiku-4-5");
+    });
+
+    test("routes 'quick fix' keyword to claude-haiku-4-5", () => {
+      const result = resolveStaveTarget({ prompt: "Quick fix: remove the extra import" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-haiku-4-5");
+    });
+
+    test("routes '오타' keyword to claude-haiku-4-5", () => {
+      const result = resolveStaveTarget({ prompt: "오타 수정해줘" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-haiku-4-5");
+    });
+
+    test("routes '간단하게' keyword to claude-haiku-4-5", () => {
+      const result = resolveStaveTarget({ prompt: "간단하게 변수명 바꿔줘" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-haiku-4-5");
+    });
+
+    test("routes '이름 변경' keyword to claude-haiku-4-5", () => {
+      const result = resolveStaveTarget({ prompt: "이름 변경: userId → accountId" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-haiku-4-5");
+    });
+
+    test("does NOT route long quick-edit prompt (>= 350 chars) to haiku", () => {
+      const longPrompt = padTo("Just fix this variable. ", 350);
+      const result = resolveStaveTarget({ prompt: longPrompt });
+      expect(result.model).not.toBe("claude-haiku-4-5");
+    });
+  });
+
+  // ── Rule 6: default → claude-sonnet-4-6 ─────────────────────────────────
+
+  describe("Rule 6 — default → claude-sonnet-4-6", () => {
+    test("routes generic implementation request to claude-sonnet-4-6", () => {
+      const result = resolveStaveTarget({ prompt: "Add error handling to the fetchUser function" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-sonnet-4-6");
+    });
+
+    test("routes debugging request to claude-sonnet-4-6", () => {
+      const result = resolveStaveTarget({ prompt: "Debug the login flow for me" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-sonnet-4-6");
+    });
+
+    test("routes test-writing request to claude-sonnet-4-6", () => {
+      const result = resolveStaveTarget({ prompt: "Write unit tests for the UserService class" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-sonnet-4-6");
+    });
+
+    test("routes code review request to claude-sonnet-4-6", () => {
+      const result = resolveStaveTarget({ prompt: "Review this PR and give me feedback" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-sonnet-4-6");
+    });
+
+    test("routes empty prompt to claude-sonnet-4-6", () => {
+      const result = resolveStaveTarget({ prompt: "" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-sonnet-4-6");
+    });
+  });
+
+  // ── Complexity signal thresholds ─────────────────────────────────────────
+
+  describe("complexity signal thresholds", () => {
+    test("prompt exactly 1200 chars is NOT complex (threshold is > 1200)", () => {
+      const prompt = padTo("Explain why this function is slow. ", 1200);
+      const result = resolveStaveTarget({ prompt });
+      // analysisScore = 1 but isComplex = false → should not hit Rule 3
+      expect(result.model).not.toBe("claude-opus-4-6");
+    });
+
+    test("prompt exactly 1201 chars IS complex", () => {
+      const prompt = padTo("Explain why this function is slow. ", 1201);
+      const result = resolveStaveTarget({ prompt });
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+
+    test("3 attached files is NOT complex (threshold is >= 4)", () => {
+      const result = resolveStaveTarget({
+        prompt: "Analyze these files",
+        attachedFileCount: 3,
+      });
+      expect(result.model).not.toBe("claude-opus-4-6");
+    });
+
+    test("4 attached files IS complex", () => {
+      const result = resolveStaveTarget({
+        prompt: "Analyze these files",
+        attachedFileCount: 4,
+      });
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+
+    test("7 history messages is NOT complex (threshold is >= 8)", () => {
+      const result = resolveStaveTarget({
+        prompt: "Why does this crash?",
+        historyLength: 7,
+      });
+      expect(result.model).not.toBe("claude-opus-4-6");
+    });
+
+    test("8 history messages IS complex", () => {
+      const result = resolveStaveTarget({
+        prompt: "Why does this crash?",
+        historyLength: 8,
+      });
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+  });
+
+  // ── isShort boundary ─────────────────────────────────────────────────────
+
+  describe("isShort boundary (< 350 chars)", () => {
+    test("prompt exactly 350 chars is NOT short (threshold is < 350)", () => {
+      const prompt = padTo("Write a function for sorting. ", 350);
+      // codeGenScore = 1 but isShort = false → falls to default
+      const result = resolveStaveTarget({ prompt });
+      expect(result.model).not.toBe("gpt-5.3-codex");
+      expect(result.model).not.toBe("claude-haiku-4-5");
+    });
+
+    test("prompt exactly 349 chars IS short", () => {
+      const prompt = padTo("Write a function for sorting. ", 349);
+      const result = resolveStaveTarget({ prompt });
+      expect(result.model).toBe("gpt-5.3-codex");
+    });
+  });
+
+  // ── reason field ─────────────────────────────────────────────────────────
+
+  describe("reason field", () => {
+    test("includes a non-empty reason for every routing decision", () => {
+      const prompts = [
+        "이 기능 어떻게 구현할 계획을 세워줘",
+        "OpenAI API 연동 코드 짜줘",
+        padTo("Explain the entire architecture. ", 1201),
+        "Write a function to validate emails",
+        "Just fix the typo",
+        "Implement the new dashboard feature",
+      ];
+      for (const prompt of prompts) {
+        const result = resolveStaveTarget({ prompt });
+        expect(result.reason.length).toBeGreaterThan(0);
+      }
+    });
+
+    test("reason mentions the resolved model name", () => {
+      const result = resolveStaveTarget({ prompt: "계획 세워줘" });
+      // reason always contains the raw model id (e.g. "opusplan")
+      expect(result.reason).toContain(result.model);
+    });
+  });
+});
+
+// ── routeModels overrides ─────────────────────────────────────────────────────
+
+describe("routeModels overrides", () => {
+  test("overrides the planning rule model", () => {
+    const result = resolveStaveTarget({
+      prompt: "이 기능 설계 방향 잡아줘",
+      routeModels: { planning: "claude-opus-4-6" },
+    });
+    expect(result.model).toBe("claude-opus-4-6");
+    expect(result.providerId).toBe("claude-code");
+  });
+
+  test("overrides the ecosystem rule model with a Claude model", () => {
+    const result = resolveStaveTarget({
+      prompt: "How do I integrate the OpenAI API?",
+      routeModels: { ecosystem: "claude-sonnet-4-6" },
+    });
+    expect(result.model).toBe("claude-sonnet-4-6");
+    // provider is inferred from the overridden model name → claude-code
+    expect(result.providerId).toBe("claude-code");
+  });
+
+  test("overrides the complex rule model with a Codex model", () => {
+    const longPrompt = padTo("Analyze why the system is failing. ", 1201);
+    const result = resolveStaveTarget({
+      prompt: longPrompt,
+      routeModels: { complex: "gpt-5.4" },
+    });
+    expect(result.model).toBe("gpt-5.4");
+    expect(result.providerId).toBe("codex");
+  });
+
+  test("overrides the codeGen rule model", () => {
+    const result = resolveStaveTarget({
+      prompt: "Write a function to parse CSV files",
+      routeModels: { codeGen: "claude-haiku-4-5" },
+    });
+    expect(result.model).toBe("claude-haiku-4-5");
+    expect(result.providerId).toBe("claude-code");
+  });
+
+  test("overrides the quickEdit rule model", () => {
+    const result = resolveStaveTarget({
+      prompt: "Just fix the typo here",
+      routeModels: { quickEdit: "claude-sonnet-4-6" },
+    });
+    expect(result.model).toBe("claude-sonnet-4-6");
+  });
+
+  test("overrides the default rule model", () => {
+    const result = resolveStaveTarget({
+      prompt: "Add error handling to fetchUser",
+      routeModels: { default: "gpt-5.4" },
+    });
+    expect(result.model).toBe("gpt-5.4");
+    expect(result.providerId).toBe("codex");
+  });
+
+  test("partial override leaves unspecified rules at their built-in defaults", () => {
+    const result = resolveStaveTarget({
+      prompt: "Just fix the typo here",
+      routeModels: { planning: "claude-opus-4-6" }, // only planning is overridden
+    });
+    // quickEdit rule fires (typo + short), which was NOT overridden
+    expect(result.model).toBe("claude-haiku-4-5");
+  });
+
+  test("reason string includes the overridden model name", () => {
+    const result = resolveStaveTarget({
+      prompt: "이 기능 계획 세워줘",
+      routeModels: { planning: "claude-opus-4-6" },
+    });
+    expect(result.reason).toContain("claude-opus-4-6");
+  });
+
+  test("infers claude-code provider for any Claude model string", () => {
+    for (const model of ["claude-opus-4-6", "opusplan", "claude-sonnet-4-6", "claude-haiku-4-5"]) {
+      const result = resolveStaveTarget({
+        prompt: "Add error handling",
+        routeModels: { default: model },
+      });
+      expect(result.providerId).toBe("claude-code");
+    }
+  });
+
+  test("infers codex provider for any Codex model string", () => {
+    for (const model of ["gpt-5.4", "gpt-5.3-codex"]) {
+      const result = resolveStaveTarget({
+        prompt: "Add error handling",
+        routeModels: { default: model },
+      });
+      expect(result.providerId).toBe("codex");
+    }
+  });
+
+  test("falls back to claude-code for an unknown custom model string", () => {
+    const result = resolveStaveTarget({
+      prompt: "Add error handling",
+      routeModels: { default: "my-custom-model" },
+    });
+    expect(result.model).toBe("my-custom-model");
+    expect(result.providerId).toBe("claude-code");
+  });
+});
+
+// ── buildStaveResolvedArgs ────────────────────────────────────────────────────
+
+describe("buildStaveResolvedArgs", () => {
+  const target = {
+    providerId: "claude-code" as const,
+    model: "claude-opus-4-6",
+    reason: "test",
+  };
+
+  test("replaces providerId with the resolved provider", () => {
+    const args = minimalArgs({ providerId: "stave" });
+    const resolved = buildStaveResolvedArgs(args, target);
+    expect(resolved.providerId).toBe("claude-code");
+  });
+
+  test("sets model in runtimeOptions", () => {
+    const args = minimalArgs();
+    const resolved = buildStaveResolvedArgs(args, target);
+    expect(resolved.runtimeOptions?.model).toBe("claude-opus-4-6");
+  });
+
+  test("preserves existing runtimeOptions fields alongside the new model", () => {
+    const args = minimalArgs({
+      runtimeOptions: { claudePermissionMode: "acceptEdits", debug: true },
+    });
+    const resolved = buildStaveResolvedArgs(args, target);
+    expect(resolved.runtimeOptions?.claudePermissionMode).toBe("acceptEdits");
+    expect(resolved.runtimeOptions?.debug).toBe(true);
+    expect(resolved.runtimeOptions?.model).toBe("claude-opus-4-6");
+  });
+
+  test("preserves all top-level args (prompt, cwd, taskId, etc.)", () => {
+    const args = minimalArgs({ prompt: "hello world", cwd: "/my/project", taskId: "task-42" });
+    const resolved = buildStaveResolvedArgs(args, target);
+    expect(resolved.prompt).toBe("hello world");
+    expect(resolved.cwd).toBe("/my/project");
+    expect(resolved.taskId).toBe("task-42");
+  });
+
+  test("updates conversation.target when conversation is present", () => {
+    const args = minimalArgs({
+      conversation: {
+        mode: "chat",
+        history: [],
+        input: { role: "user", content: "hi", parts: [] },
+        contextParts: [],
+        target: { providerId: "stave", model: "stave-auto" },
+      },
+    });
+    const resolved = buildStaveResolvedArgs(args, target);
+    expect(resolved.conversation?.target.providerId).toBe("claude-code");
+    expect(resolved.conversation?.target.model).toBe("claude-opus-4-6");
+  });
+
+  test("does not add a conversation field when none was present", () => {
+    const args = minimalArgs({ conversation: undefined });
+    const resolved = buildStaveResolvedArgs(args, target);
+    expect(resolved.conversation).toBeUndefined();
+  });
+
+  test("preserves conversation history and context parts unchanged", () => {
+    const historyEntry = { role: "user" as const, content: "prev message", parts: [] };
+    const args = minimalArgs({
+      conversation: {
+        mode: "chat",
+        history: [historyEntry],
+        input: { role: "user", content: "hi", parts: [] },
+        contextParts: [],
+        target: { providerId: "stave", model: "stave-auto" },
+      },
+    });
+    const resolved = buildStaveResolvedArgs(args, target);
+    expect(resolved.conversation?.history).toEqual([historyEntry]);
+  });
+
+  test("correctly routes to codex target", () => {
+    const codexTarget = {
+      providerId: "codex" as const,
+      model: "gpt-5.4",
+      reason: "test",
+    };
+    const args = minimalArgs({ providerId: "stave" });
+    const resolved = buildStaveResolvedArgs(args, codexTarget);
+    expect(resolved.providerId).toBe("codex");
+    expect(resolved.runtimeOptions?.model).toBe("gpt-5.4");
+  });
+});

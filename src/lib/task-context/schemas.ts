@@ -107,7 +107,7 @@ const ChatMessageSchema = z.object({
   id: z.string(),
   role: z.union([z.literal("user"), z.literal("assistant")]),
   model: z.string(),
-  providerId: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("user")]),
+  providerId: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave"), z.literal("user")]),
   content: z.string(),
   isStreaming: z.boolean().optional(),
   isPlanResponse: z.boolean().optional(),
@@ -126,7 +126,7 @@ const ChatMessageSchema = z.object({
 const TaskSchema = z.object({
   id: z.string(),
   title: z.string(),
-  provider: z.union([z.literal("claude-code"), z.literal("codex")]),
+  provider: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]),
   updatedAt: z.string(),
   unread: z.boolean(),
   archivedAt: z.string().nullable().optional().transform((value) => value ?? null),
@@ -135,6 +135,19 @@ const TaskSchema = z.object({
 const TaskProviderConversationStateSchema = z.object({
   "claude-code": z.string().optional(),
   codex: z.string().optional(),
+});
+
+const EditorTabSchema = z.object({
+  id: z.string(),
+  filePath: z.string(),
+  kind: z.union([z.literal("text"), z.literal("image")]).optional(),
+  language: z.string(),
+  content: z.string(),
+  originalContent: z.string().optional(),
+  savedContent: z.string().optional(),
+  baseRevision: z.string().nullable().optional(),
+  hasConflict: z.boolean(),
+  isDirty: z.boolean(),
 });
 
 export const WorkspaceSnapshotSchema = z.object({
@@ -147,6 +160,8 @@ export const WorkspaceSnapshotSchema = z.object({
     attachments: z.array(AttachmentSchema).optional().default([]),
   })).optional().default({}),
   providerConversationByTask: z.record(z.string(), TaskProviderConversationStateSchema).optional().default({}),
+  editorTabs: z.array(EditorTabSchema).optional().default([]),
+  activeEditorTabId: z.string().nullable().optional().default(null),
 });
 
 export function parseWorkspaceSnapshot(args: { payload: unknown }): WorkspaceSnapshot | null {

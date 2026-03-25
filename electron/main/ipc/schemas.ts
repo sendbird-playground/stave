@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const ProviderIdSchema = z.union([z.literal("claude-code"), z.literal("codex")]);
+export const ProviderIdSchema = z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]);
 
 export const SkillCatalogArgsSchema = z.object({
   workspacePath: z.string().max(4096).optional(),
@@ -275,6 +275,10 @@ const FilesystemFilePathSchema = z.string().min(1).max(4096);
 
 export const FilesystemRootArgsSchema = z.object({
   rootPath: FilesystemRootPathSchema,
+}).strict();
+
+export const FilesystemInspectArgsSchema = FilesystemRootArgsSchema.extend({
+  entryFilePath: z.string().max(4096).optional(),
 }).strict();
 
 export const FilesystemDirectoryArgsSchema = z.object({
