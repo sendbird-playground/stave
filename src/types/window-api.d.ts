@@ -281,6 +281,33 @@ interface WindowSourceControlApi {
   mergeBranch?: (args: { branch: string; cwd?: string }) => Promise<SourceControlCommandResult>;
   rebaseBranch?: (args: { branch: string; cwd?: string }) => Promise<SourceControlCommandResult>;
   cherryPick?: (args: { commit: string; cwd?: string }) => Promise<SourceControlCommandResult>;
+  getGraphLog?: (args: { cwd?: string; limit?: number; skip?: number; branch?: string }) => Promise<{
+    ok: boolean;
+    commits: Array<{
+      hash: string;
+      abbrevHash: string;
+      parents: string[];
+      authorName: string;
+      authorEmail: string;
+      authorDateISO: string;
+      subject: string;
+      refs: string[];
+    }>;
+    hasMore: boolean;
+    stderr: string;
+  }>;
+  getCommitDetail?: (args: { hash: string; cwd?: string }) => Promise<{
+    ok: boolean;
+    hash: string;
+    parents: string[];
+    authorName: string;
+    authorEmail: string;
+    authorDateISO: string;
+    body: string;
+    refs: string[];
+    files: Array<{ status: string; path: string }>;
+    stderr: string;
+  }>;
 }
 
 interface WindowPersistenceApi {

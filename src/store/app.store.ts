@@ -56,10 +56,11 @@ interface LayoutState {
   taskListCollapsed: boolean;
   editorPanelWidth: number;
   explorerPanelWidth: number;
+  gitGraphPanelWidth: number;
   terminalDockHeight: number;
   editorVisible: boolean;
   sidebarOverlayVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes";
+  sidebarOverlayTab: "explorer" | "changes" | "git-graph";
   terminalDocked: boolean;
   editorDiffMode: boolean;
 }
@@ -520,7 +521,8 @@ function normalizeLayoutState(layout: LayoutState): LayoutState {
   return {
     ...layout,
     editorPanelWidth: Math.max(MIN_EDITOR_PANEL_WIDTH, layout.editorPanelWidth),
-    sidebarOverlayTab: layout.sidebarOverlayTab === "changes" ? "changes" : "explorer",
+    sidebarOverlayTab: (["explorer", "changes", "git-graph"] as const).includes(layout.sidebarOverlayTab as "explorer" | "changes" | "git-graph") ? layout.sidebarOverlayTab : "explorer",
+    gitGraphPanelWidth: Math.max(360, layout.gitGraphPanelWidth ?? 420),
   };
 }
 
@@ -1352,6 +1354,7 @@ export const useAppStore = create<AppState>()(
         taskListCollapsed: false,
         editorPanelWidth: DEFAULT_EDITOR_PANEL_WIDTH,
         explorerPanelWidth: 300,
+        gitGraphPanelWidth: 420,
         terminalDockHeight: 210,
         editorVisible: false,
         sidebarOverlayVisible: false,

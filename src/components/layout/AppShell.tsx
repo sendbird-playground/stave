@@ -22,6 +22,7 @@ type ResizableLayoutKey =
   | "taskListWidth"
   | "editorPanelWidth"
   | "explorerPanelWidth"
+  | "gitGraphPanelWidth"
   | "terminalDockHeight";
 
 const TASK_LIST_MAX_WIDTH = 340;
@@ -45,7 +46,9 @@ export function AppShell() {
     editorVisible,
     editorPanelWidth,
     sidebarOverlayVisible,
+    sidebarOverlayTab,
     explorerPanelWidth,
+    gitGraphPanelWidth,
     terminalDocked,
     terminalDockHeight,
     setLayout,
@@ -56,11 +59,16 @@ export function AppShell() {
     state.layout.editorVisible,
     state.layout.editorPanelWidth,
     state.layout.sidebarOverlayVisible,
+    state.layout.sidebarOverlayTab,
     state.layout.explorerPanelWidth,
+    state.layout.gitGraphPanelWidth ?? 420,
     state.layout.terminalDocked,
     state.layout.terminalDockHeight ?? 210,
     state.setLayout,
   ] as const));
+  const overlayWidth = sidebarOverlayTab === "git-graph" ? gitGraphPanelWidth : explorerPanelWidth;
+  const overlayMinWidth = sidebarOverlayTab === "git-graph" ? 360 : 200;
+  const overlayResizeKey: "gitGraphPanelWidth" | "explorerPanelWidth" = sidebarOverlayTab === "git-graph" ? "gitGraphPanelWidth" : "explorerPanelWidth";
   const hasProject = Boolean(projectPath);
   const panelRowRef = useRef<HTMLDivElement>(null);
   const pendingLayoutPatchRef = useRef<Partial<Record<ResizableLayoutKey, number>> | null>(null);
@@ -326,7 +334,7 @@ export function AppShell() {
                           const startWidth = editorPanelWidth;
                           const onMove = (moveEvent: MouseEvent) => {
                             const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
-                            const explorerWidth = sidebarOverlayVisible ? explorerPanelWidth : 0;
+                            const explorerWidth = sidebarOverlayVisible ? overlayWidth : 0;
                             const separators = sidebarOverlayVisible ? 10 : 5;
                             const chatMinWidth = 420;
                             const maxEditor = Math.max(0, containerWidth - chatMinWidth - explorerWidth - separators);
@@ -358,16 +366,16 @@ export function AppShell() {
                         onMouseDown={(event) => {
                           event.preventDefault();
                           const startX = event.clientX;
-                          const startWidth = explorerPanelWidth;
+                          const startWidth = overlayWidth;
                           const onMove = (moveEvent: MouseEvent) => {
                             const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
                             const editorWidth = editorVisible ? editorPanelWidth : 0;
                             const separators = editorVisible ? 10 : 5;
                             const chatMinWidth = 420;
-                            const maxExplorer = Math.max(200, containerWidth - chatMinWidth - editorWidth - separators);
+                            const maxExplorer = Math.max(overlayMinWidth, containerWidth - chatMinWidth - editorWidth - separators);
                             const delta = startX - moveEvent.clientX;
-                            const next = Math.max(200, Math.min(maxExplorer, startWidth + delta));
-                            scheduleLayoutResizePatch("explorerPanelWidth", next);
+                            const next = Math.max(overlayMinWidth, Math.min(maxExplorer, startWidth + delta));
+                            scheduleLayoutResizePatch(overlayResizeKey, next);
                           };
                           const onUp = () => {
                             flushPendingLayoutPatch();
@@ -378,8 +386,8 @@ export function AppShell() {
                           window.addEventListener("mouseup", onUp);
                         }}
                       />
-                      <Suspense fallback={<aside className="rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm" style={{ width: `${explorerPanelWidth}px` }}>Loading panel...</aside>}>
-                        <div className="hidden h-full min-w-0 lg:block" style={{ width: `${explorerPanelWidth}px` }}>
+                      <Suspense fallback={<aside className="rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm" style={{ width: `${overlayWidth}px` }}>Loading panel...</aside>}>
+                        <div className="hidden h-full min-w-0 lg:block" style={{ width: `${overlayWidth}px` }}>
                           <RenderProfiler id="EditorPanel" thresholdMs={8}>
                             <EditorPanel />
                           </RenderProfiler>

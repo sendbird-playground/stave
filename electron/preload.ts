@@ -228,6 +228,8 @@ contextBridge.exposeInMainWorld("api", {
     mergeBranch: (args: { branch: string; cwd?: string }) => ipcRenderer.invoke("scm:merge-branch", args),
     rebaseBranch: (args: { branch: string; cwd?: string }) => ipcRenderer.invoke("scm:rebase-branch", args),
     cherryPick: (args: { commit: string; cwd?: string }) => ipcRenderer.invoke("scm:cherry-pick", args),
+    getGraphLog: (args: { cwd?: string; limit?: number; skip?: number; branch?: string }) => ipcRenderer.invoke("scm:graph-log", args),
+    getCommitDetail: (args: { hash: string; cwd?: string }) => ipcRenderer.invoke("scm:commit-detail", args),
   },
   window: {
     minimize: () => ipcRenderer.invoke("window:minimize"),

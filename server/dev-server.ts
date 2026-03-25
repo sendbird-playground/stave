@@ -428,6 +428,73 @@ const server = Bun.serve({
       return json(await runCommand({ cmd: `git cherry-pick ${JSON.stringify(commit)}`, cwd: body.cwd }));
     }
 
+    if (url.pathname === "/api/scm/graph-log" && req.method === "POST") {
+      const body = await readJson<{ cwd?: string; limit?: number; skip?: number; branch?: string }>(req);
+      const limit = Math.max(1, Math.min(500, body.limit ?? 100));
+      const skip = Math.max(0, body.skip ?? 0);
+      const branchFilter = body.branch?.trim();
+      const branchArg = branchFilter ? JSON.stringify(branchFilter) : "--all";
+      const result = await runCommand({
+        cmd: `git log ${branchArg} -n ${limit} --skip=${skip} --pretty=format:%H%x09%P%x09%an%x09%ae%x09%aI%x09%s%x09%D`,
+        cwd: body.cwd,
+      });
+      if (!result.ok) {
+        return json({ ok: false, commits: [], hasMore: false, stderr: result.stderr });
+      }
+      const commits = result.stdout
+        .split("\n")
+        .filter(Boolean)
+        .map((line: string) => {
+          const parts = line.split("\t");
+          const hash = parts[0] ?? "";
+          return {
+            hash,
+            abbrevHash: hash.slice(0, 7),
+            parents: (parts[1] ?? "") ? (parts[1] ?? "").split(" ") : [],
+            authorName: parts[2] ?? "",
+            authorEmail: parts[3] ?? "",
+            authorDateISO: parts[4] ?? "",
+            subject: parts[5] ?? "",
+            refs: (parts[6] ?? "") ? (parts[6] ?? "").split(", ").map((r: string) => r.trim()).filter(Boolean) : [],
+          };
+        });
+      return json({ ok: true, commits, hasMore: commits.length === limit, stderr: "" });
+    }
+
+    if (url.pathname === "/api/scm/commit-detail" && req.method === "POST") {
+      const body = await readJson<{ hash: string; cwd?: string }>(req);
+      const hash = body.hash.trim();
+      if (!hash) {
+        return json({ ok: false, hash: "", parents: [], authorName: "", authorEmail: "", authorDateISO: "", body: "", refs: [], files: [], stderr: "Commit hash is required." }, 400);
+      }
+      const [showResult, diffTreeResult] = await Promise.all([
+        runCommand({ cmd: `git show --no-patch --pretty=format:%H%x00%P%x00%an%x00%ae%x00%aI%x00%B%x00%D ${JSON.stringify(hash)}`, cwd: body.cwd }),
+        runCommand({ cmd: `git diff-tree --no-commit-id -r --name-status ${JSON.stringify(hash)}`, cwd: body.cwd }),
+      ]);
+      if (!showResult.ok) {
+        return json({ ok: false, hash, parents: [], authorName: "", authorEmail: "", authorDateISO: "", body: "", refs: [], files: [], stderr: showResult.stderr });
+      }
+      const parts = showResult.stdout.split("\0");
+      const files = diffTreeResult.ok
+        ? diffTreeResult.stdout.split("\n").filter(Boolean).map((line: string) => {
+            const [status = "", ...pathParts] = line.split("\t");
+            return { status, path: pathParts.join("\t") };
+          })
+        : [];
+      return json({
+        ok: true,
+        hash: parts[0] ?? "",
+        parents: (parts[1] ?? "") ? (parts[1] ?? "").split(" ") : [],
+        authorName: parts[2] ?? "",
+        authorEmail: parts[3] ?? "",
+        authorDateISO: parts[4] ?? "",
+        body: (parts[5] ?? "").trim(),
+        refs: (parts[6] ?? "") ? (parts[6] ?? "").split(", ").map((r: string) => r.trim()).filter(Boolean) : [],
+        files,
+        stderr: "",
+      });
+    }
+
     if (url.pathname === "/api/terminal/create" && req.method === "POST") {
       const body = await readJson<{ cwd?: string; shell?: string }>(req);
       const shell = body.shell?.trim() || process.env.SHELL || "/usr/bin/zsh";

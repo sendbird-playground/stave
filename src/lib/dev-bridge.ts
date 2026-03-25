@@ -119,6 +119,8 @@ export function installDevApiBridge() {
       mergeBranch: (args: { branch: string; cwd?: string }) => postJson({ path: "/api/scm/branch-merge", body: args }),
       rebaseBranch: (args: { branch: string; cwd?: string }) => postJson({ path: "/api/scm/branch-rebase", body: args }),
       cherryPick: (args: { commit: string; cwd?: string }) => postJson({ path: "/api/scm/cherry-pick", body: args }),
+      getGraphLog: (args: { cwd?: string; limit?: number; skip?: number; branch?: string }) => postJson({ path: "/api/scm/graph-log", body: args }),
+      getCommitDetail: (args: { hash: string; cwd?: string }) => postJson({ path: "/api/scm/commit-detail", body: args }),
     },
   };
 }

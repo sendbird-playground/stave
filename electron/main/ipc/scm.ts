@@ -178,4 +178,106 @@ export function registerScmHandlers() {
     }
     return runCommand({ command: `git cherry-pick "${quotePath({ value: commit })}"`, cwd: args.cwd });
   });
+
+  ipcMain.handle(
+    "scm:graph-log",
+    async (_event, args: { cwd?: string; limit?: number; skip?: number; branch?: string }) => {
+      const limit = Math.max(1, Math.min(500, args.limit ?? 100));
+      const skip = Math.max(0, args.skip ?? 0);
+
+      const branchFilter = args.branch?.trim();
+      const branchArg = branchFilter ? `"${quotePath({ value: branchFilter })}"` : "--all";
+
+      const result = await runCommand({
+        command: `git log ${branchArg} -n ${limit} --skip=${skip} --pretty=format:%H%x09%P%x09%an%x09%ae%x09%aI%x09%s%x09%D`,
+        cwd: args.cwd,
+      });
+
+      if (!result.ok) {
+        return { ok: false, commits: [], hasMore: false, stderr: result.stderr };
+      }
+
+      const commits = result.stdout
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const parts = line.split("\t");
+          const hash = parts[0] ?? "";
+          const parentStr = parts[1] ?? "";
+          const authorName = parts[2] ?? "";
+          const authorEmail = parts[3] ?? "";
+          const authorDateISO = parts[4] ?? "";
+          const subject = parts[5] ?? "";
+          const refsStr = parts[6] ?? "";
+
+          return {
+            hash,
+            abbrevHash: hash.slice(0, 7),
+            parents: parentStr ? parentStr.split(" ") : [],
+            authorName,
+            authorEmail,
+            authorDateISO,
+            subject,
+            refs: refsStr ? refsStr.split(", ").map((r) => r.trim()).filter(Boolean) : [],
+          };
+        });
+
+      return { ok: true, commits, hasMore: commits.length === limit, stderr: "" };
+    },
+  );
+
+  ipcMain.handle("scm:commit-detail", async (_event, args: { hash: string; cwd?: string }) => {
+    const hash = args.hash.trim();
+    if (!hash) {
+      return { ok: false, hash: "", parents: [], authorName: "", authorEmail: "", authorDateISO: "", body: "", refs: [], files: [], stderr: "Commit hash is required." };
+    }
+    const safeHash = quotePath({ value: hash });
+
+    const [showResult, diffTreeResult] = await Promise.all([
+      runCommand({
+        command: `git show --no-patch --pretty=format:%H%x00%P%x00%an%x00%ae%x00%aI%x00%B%x00%D "${safeHash}"`,
+        cwd: args.cwd,
+      }),
+      runCommand({
+        command: `git diff-tree --no-commit-id -r --name-status "${safeHash}"`,
+        cwd: args.cwd,
+      }),
+    ]);
+
+    if (!showResult.ok) {
+      return { ok: false, hash, parents: [], authorName: "", authorEmail: "", authorDateISO: "", body: "", refs: [], files: [], stderr: showResult.stderr };
+    }
+
+    const parts = showResult.stdout.split("\0");
+    const commitHash = parts[0] ?? "";
+    const parentStr = parts[1] ?? "";
+    const authorName = parts[2] ?? "";
+    const authorEmail = parts[3] ?? "";
+    const authorDateISO = parts[4] ?? "";
+    const body = (parts[5] ?? "").trim();
+    const refsStr = parts[6] ?? "";
+
+    const files = diffTreeResult.ok
+      ? diffTreeResult.stdout
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => {
+            const [status = "", ...pathParts] = line.split("\t");
+            return { status, path: pathParts.join("\t") };
+          })
+      : [];
+
+    return {
+      ok: true,
+      hash: commitHash,
+      parents: parentStr ? parentStr.split(" ") : [],
+      authorName,
+      authorEmail,
+      authorDateISO,
+      body,
+      refs: refsStr ? refsStr.split(", ").map((r) => r.trim()).filter(Boolean) : [],
+      files,
+      stderr: "",
+    };
+  });
 }

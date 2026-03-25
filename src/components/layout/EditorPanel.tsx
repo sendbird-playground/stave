@@ -9,11 +9,12 @@ import {
   FolderOpen,
   FolderTree,
   GitBranch,
+  GitGraph,
   LoaderCircle,
   RefreshCcw,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { workspaceFsAdapter } from "@/lib/fs";
@@ -22,6 +23,10 @@ import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { collectAncestorFolders, normalizeRelativeInputPath } from "./editor-panel.utils";
+
+const GitGraphPanel = lazy(() =>
+  import("@/components/git-graph/GitGraphPanel").then((m) => ({ default: m.GitGraphPanel }))
+);
 
 interface SourceControlItem {
   code: string;
@@ -542,6 +547,19 @@ export function EditorPanel() {
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Changes</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "git-graph" && "bg-secondary/80 text-foreground")}
+                    onClick={() => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "git-graph" } })}
+                  >
+                    <GitGraph className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Git Graph</TooltipContent>
+              </Tooltip>
             </div>
             <div className="flex items-center gap-1.5">
               <Tooltip>
@@ -690,7 +708,7 @@ export function EditorPanel() {
                 ))}
               </div>
             </>
-          ) : (
+          ) : rightTab === "changes" ? (
             <>
               <p className="mb-1 text-sm text-muted-foreground">Branch: {sourceBranch} | Changes ({filteredScmItems.length})</p>
               {hasConflicts ? <p className="mb-1 text-sm text-warning-foreground">Conflict detected.</p> : null}
@@ -719,7 +737,7 @@ export function EditorPanel() {
                 ))}
               </div>
             </>
-          )}
+          ) : null}
         </div>
 
         {rightTab === "changes" ? (
@@ -735,6 +753,12 @@ export function EditorPanel() {
               ))}
             </div>
           </div>
+        ) : null}
+
+        {rightTab === "git-graph" ? (
+          <Suspense fallback={<div className="flex-1 p-4 text-sm text-muted-foreground">Loading Git Graph...</div>}>
+            <GitGraphPanel />
+          </Suspense>
         ) : null}
       </div>
     </aside>

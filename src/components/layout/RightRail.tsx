@@ -1,4 +1,4 @@
-import { FileCode2, FolderTree, GitBranch, TerminalSquare } from "lucide-react";
+import { FileCode2, FolderTree, GitBranch, GitGraph, TerminalSquare } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ export function RightRail() {
     state.setLayout,
   ] as const));
 
-  function toggleSidebarTab(tab: "explorer" | "changes") {
+  function toggleSidebarTab(tab: "explorer" | "changes" | "git-graph") {
     if (sidebarOverlayVisible && sidebarOverlayTab === tab) {
       setLayout({ patch: { sidebarOverlayVisible: false } });
       return;
@@ -91,6 +91,24 @@ export function RightRail() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">Changes</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant={sidebarOverlayVisible && sidebarOverlayTab === "git-graph" ? "default" : "ghost"}
+                disabled={!hasProject}
+                className={cn(
+                  "h-10 w-10 rounded-md border border-transparent p-0",
+                  !(sidebarOverlayVisible && sidebarOverlayTab === "git-graph") && "hover:border-border/80 hover:bg-secondary/70"
+                )}
+                onClick={() => toggleSidebarTab("git-graph")}
+                aria-label="Git Graph"
+              >
+                <GitGraph className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Git Graph</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
