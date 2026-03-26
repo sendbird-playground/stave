@@ -2,6 +2,8 @@
 
 Stave is an Electron-based AI coding workspace built with Bun, React, Vite, and TypeScript.
 
+![Stave](docs/screenshots/stave-app.png)
+
 ## Try Stave on macOS
 
 If you already have GitHub CLI authenticated for `sendbird-playground`, install the latest internal macOS build with one command:
