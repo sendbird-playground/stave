@@ -23,6 +23,7 @@ describe("install guide", () => {
 
     expect(installer).toContain("gh release download");
     expect(installer).toContain("Stave-macOS.zip");
+    expect(installer).toContain("ditto \"$SOURCE_APP\" \"$TARGET_APP\"");
     expect(installer).toContain("xattr -dr com.apple.quarantine");
     expect(installer).toContain("gh auth login");
   });

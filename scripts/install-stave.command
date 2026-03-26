@@ -14,6 +14,6 @@ fi
 
 mkdir -p "$TARGET_DIR"
 rm -rf "$TARGET_APP"
-cp -R "$SOURCE_APP" "$TARGET_APP"
+ditto "$SOURCE_APP" "$TARGET_APP"
 xattr -dr com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
 open "$TARGET_APP"

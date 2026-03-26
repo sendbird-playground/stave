@@ -16,12 +16,14 @@ describe("release packaging workflow", () => {
     expect(workflow).toContain("files: release/Stave-macOS.zip");
     expect(bundlePrep).toContain("Install Stave.command");
     expect(bundlePrep).toContain("Install Stave in Terminal.txt");
+    expect(bundlePrep).toContain("verbatimSymlinks: true");
   });
 
   test("ships an installer helper that removes quarantine after copying the app", () => {
     const installer = readFileSync(path.join(repoRoot, "scripts", "install-stave.command"), "utf8");
 
     expect(installer).toContain("$HOME/Applications");
+    expect(installer).toContain("ditto \"$SOURCE_APP\" \"$TARGET_APP\"");
     expect(installer).toContain("xattr -dr com.apple.quarantine");
     expect(installer).toContain("open \"$TARGET_APP\"");
   });
