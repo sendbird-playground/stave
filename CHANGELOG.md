@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.19](https://github.com/sendbird-playground/stave/compare/v0.0.18...v0.0.19) (2026-03-26)
+
+### Bug Fixes
+
+* **desktop:** repair packaged runtimes and app metadata ([#10](https://github.com/sendbird-playground/stave/issues/10)) ([69cb40e](https://github.com/sendbird-playground/stave/commit/69cb40e6e2bb68ffccb2fbeaf8f5d9daa40b4b1b))
+
 ## [0.0.18](https://github.com/sendbird-playground/stave/compare/v0.0.17...v0.0.18) (2026-03-26)
 
 ### Features
