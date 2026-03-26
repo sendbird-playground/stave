@@ -77,6 +77,9 @@ interface WindowProviderApi {
     prompt: string;
     history?: Array<{ role: string; content: string }>;
   }) => Promise<{ ok: boolean; title?: string }>;
+  /** Generates a conventional commit message from the current git diff in the
+   *  given working directory using a lightweight single-turn Claude query. */
+  suggestCommitMessage?: (args: { cwd?: string }) => Promise<{ ok: boolean; message?: string }>;
 }
 
 interface WindowFsApi {

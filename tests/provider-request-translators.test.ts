@@ -66,6 +66,61 @@ describe("provider request translators", () => {
     expect(prompt).toContain("[Current User Input]");
   });
 
+  test("skips Codex resume when the task switches to a different Codex model", () => {
+    const conversation = createConversation({
+      history: [
+        {
+          role: "assistant",
+          providerId: "codex",
+          model: "gpt-5.3-codex",
+          content: "Patched the runtime.",
+          parts: [{ type: "text", text: "Patched the runtime." }],
+        },
+      ],
+      resume: {
+        nativeConversationId: "thread_456",
+      },
+    });
+
+    const prompt = buildProviderTurnPrompt({
+      providerId: "codex",
+      prompt: "fallback prompt",
+      conversation,
+    });
+
+    expect(prompt).toContain("[Task Shared Context]");
+    expect(resolveProviderResumeConversationId({
+      conversation,
+      fallbackResumeId: "thread_override",
+    })).toBeUndefined();
+  });
+
+  test("preserves Codex resume when the task stays on the same Codex model", () => {
+    const conversation = createConversation({
+      history: [
+        {
+          role: "assistant",
+          providerId: "codex",
+          model: "gpt-5.4",
+          content: "Patched the runtime.",
+          parts: [{ type: "text", text: "Patched the runtime." }],
+        },
+      ],
+      resume: {
+        nativeConversationId: "thread_456",
+      },
+    });
+
+    const prompt = buildProviderTurnPrompt({
+      providerId: "codex",
+      prompt: "fallback prompt",
+      conversation,
+    });
+
+    expect(prompt).not.toContain("[Task Shared Context]");
+    expect(resolveProviderResumeConversationId({ conversation })).toBe("thread_456");
+  });
+
   test("reads resume ids from canonical conversation metadata", () => {
     const conversation = createConversation({
       resume: {

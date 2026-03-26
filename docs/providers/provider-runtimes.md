@@ -130,6 +130,8 @@ Stave now forwards an explicit `show_raw_agent_reasoning: false` override when t
 
 Codex threads are keyed by task/cwd plus the active sandbox, network, approval, model, reasoning, and web-search settings so Stave can preserve thread context without mixing incompatible runtime modes.
 
+When a task switches from one Codex model to another, Stave does not attempt to resume the older native thread. Instead it replays the task history into a fresh Codex thread so model-bound session errors do not break the next turn.
+
 ## Supported Codex baseline
 
 - Codex SDK: `@openai/codex-sdk@0.115.0`

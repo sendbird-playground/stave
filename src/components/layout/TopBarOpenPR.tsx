@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { GitPullRequest, LoaderCircle } from "lucide-react";
 import {
@@ -33,7 +33,7 @@ interface ScmStatusItem {
   code: string;
 }
 
-type Step = "idle" | "checking" | "confirm" | "committing" | "pushing" | "opening";
+type Step = "idle" | "checking" | "confirm" | "generating" | "committing" | "pushing" | "opening";
 
 export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const [step, setStep] = useState<Step>("idle");
@@ -154,7 +154,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     setDialogOpen(true);
   }
 
-  function generateAutoMessage() {
+  function generateFallbackMessage() {
     const added = changedFiles.filter((f) => f.code === "?" || f.code === "A").length;
     const modified = changedFiles.filter((f) => f.code === "M").length;
     const deleted = changedFiles.filter((f) => f.code === "D").length;
@@ -162,7 +162,28 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     if (added > 0) parts.push(`${added} added`);
     if (modified > 0) parts.push(`${modified} modified`);
     if (deleted > 0) parts.push(`${deleted} deleted`);
-    return `Update: ${parts.join(", ") || `${changedFiles.length} changes`}`;
+    return `chore: update ${parts.join(", ") || `${changedFiles.length} changes`}`;
+  }
+
+  async function handleAutoCommitAndPush() {
+    const suggestCommitMessage = window.api?.provider?.suggestCommitMessage;
+
+    setStep("generating");
+
+    let message = generateFallbackMessage();
+
+    if (suggestCommitMessage) {
+      try {
+        const result = await suggestCommitMessage({ cwd: workspaceCwd });
+        if (result.ok && result.message) {
+          message = result.message;
+        }
+      } catch {
+        // fall through to use fallback message
+      }
+    }
+
+    await handleCommitAndPush(message);
   }
 
   async function handleCommitAndPush(message: string) {
@@ -198,9 +219,18 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     await pushAndOpenPR();
   }
 
+  function handleConfirmSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (step === "committing" || step === "generating") {
+      return;
+    }
+    void handleCommitAndPush(commitMessage.trim() || generateFallbackMessage());
+  }
+
   const isBusy = step !== "idle" && step !== "confirm";
   const statusLabel =
     step === "checking" ? "Checking..." :
+    step === "generating" ? "Generating..." :
     step === "committing" ? "Committing..." :
     step === "pushing" ? "Pushing..." :
     step === "opening" ? "Opening..." :
@@ -212,7 +242,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         <TooltipTrigger asChild>
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary/60 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
             style={props.noDragStyle}
             onClick={() => void handleClick()}
             disabled={isBusy}
@@ -237,52 +267,50 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               Commit before opening a PR.
             </DialogDescription>
           </DialogHeader>
+          <form className="space-y-4" onSubmit={handleConfirmSubmit}>
+            <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 text-xs">
+              {changedFiles.map((file) => (
+                <div key={file.path} className="flex items-center gap-2 py-0.5">
+                  <span className="w-5 shrink-0 text-center font-mono font-medium text-muted-foreground">{file.code}</span>
+                  <span className="truncate font-mono">{file.path}</span>
+                </div>
+              ))}
+            </div>
 
-          <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 text-xs">
-            {changedFiles.map((file) => (
-              <div key={file.path} className="flex items-center gap-2 py-0.5">
-                <span className="w-5 shrink-0 text-center font-mono font-medium text-muted-foreground">{file.code}</span>
-                <span className="truncate font-mono">{file.path}</span>
-              </div>
-            ))}
-          </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="commit-message-input">
+                Commit message
+              </label>
+              <Input
+                autoFocus
+                id="commit-message-input"
+                className="h-9 text-sm"
+                placeholder={generateFallbackMessage()}
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+              />
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="commit-message-input">
-              Commit message
-            </label>
-            <Input
-              id="commit-message-input"
-              className="h-9 text-sm"
-              placeholder={generateAutoMessage()}
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void handleCommitAndPush(commitMessage.trim() || generateAutoMessage());
-                }
-              }}
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={step === "committing"}
-              onClick={() => void handleCommitAndPush(generateAutoMessage())}
-            >
-              {step === "committing" ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              Auto commit &amp; push
-            </Button>
-            <Button
-              disabled={step === "committing"}
-              onClick={() => void handleCommitAndPush(commitMessage.trim() || generateAutoMessage())}
-            >
-              {step === "committing" ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              Commit &amp; push
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={step === "committing" || step === "generating"}
+                onClick={() => void handleCommitAndPush(commitMessage.trim() || generateFallbackMessage())}
+              >
+                {step === "committing" ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                Commit &amp; push
+              </Button>
+              <Button
+                type="button"
+                disabled={step === "committing" || step === "generating"}
+                onClick={() => void handleAutoCommitAndPush()}
+              >
+                {step === "generating" || step === "committing" ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                Auto commit &amp; push
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </>

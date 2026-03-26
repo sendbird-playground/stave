@@ -1398,11 +1398,11 @@ function StaveAutoCard() {
             {STAVE_AUTO_MODEL_PRESETS.map((preset) => (
               <Button
                 key={preset.id}
-                className="h-auto min-h-20 items-start justify-start px-4 py-3 text-left"
+                className="h-auto min-h-20 items-start justify-start whitespace-normal px-4 py-3 text-left"
                 variant={currentPresetId === preset.id ? "default" : "outline"}
                 onClick={() => updateSettings({ patch: buildStaveAutoModelSettingsPatch({ presetId: preset.id }) })}
               >
-                <div className="space-y-1">
+                <div className="w-full space-y-1">
                   <p className="text-sm font-medium">{preset.label}</p>
                   <p className="text-xs opacity-80">{preset.description}</p>
                 </div>

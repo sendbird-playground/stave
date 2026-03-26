@@ -1236,3 +1236,74 @@ export async function suggestClaudeTaskName(args: {
     return { ok: false };
   }
 }
+
+// ── Auto commit message suggestion ────────────────────────────────────────────
+// Runs a lightweight, single-turn Claude query to produce a conventional commit
+// message based on the git diff of changed files.  Intentionally isolated from
+// the main task session so the query never appears in the user's conversation.
+
+export async function suggestClaudeCommitMessage(args: {
+  diff: string;
+  fileList: string;
+}): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    if (!queryFn) {
+      return { ok: false };
+    }
+
+    const claudeExecutablePath = resolveClaudeExecutablePath();
+
+    const commitPrompt = [
+      "You are a git commit message generator. Generate a single concise commit message following the Conventional Commits specification.",
+      "Format: <type>(<optional scope>): <short description>",
+      "Allowed types: feat, fix, refactor, style, docs, test, build, ci, chore, perf",
+      "Rules:",
+      "- Subject line must be 72 characters or fewer",
+      "- Use imperative mood (e.g., 'add feature' not 'added feature')",
+      "- No period at the end",
+      "- Return ONLY the commit message — no quotes, no explanation, no extra lines",
+      "",
+      "Changed files (git status --porcelain):",
+      args.fileList || "(no file list available)",
+      ...(args.diff.length > 0 ? [
+        "",
+        "Git diff (may be truncated):",
+        args.diff.slice(0, 6000),
+      ] : []),
+    ].join("\n");
+
+    const stream = queryFn({
+      prompt: commitPrompt,
+      options: {
+        permissionMode: "default",
+        maxTurns: 1,
+        cwd: process.cwd(),
+        model: "claude-haiku-4-5",
+        ...(claudeExecutablePath ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
+        env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
+      },
+    }) as Query;
+
+    const textParts: string[] = [];
+    for await (const message of stream) {
+      if (message.type === "assistant") {
+        const assistantMsg = message as SDKAssistantMessage;
+        const contentBlocks = assistantMsg.message?.content;
+        if (!Array.isArray(contentBlocks)) continue;
+        for (const block of contentBlocks) {
+          const b = block as { type?: string; text?: string };
+          if (b.type === "text" && b.text) {
+            textParts.push(b.text);
+          }
+        }
+      }
+    }
+
+    const commitMessage = textParts.join("").trim().split("\n")[0]?.trim();
+    return commitMessage ? { ok: true, message: commitMessage } : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}

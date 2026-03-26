@@ -117,6 +117,11 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
             sequences: [[modifierLabel, "P"]],
           },
           {
+            label: "Dialog primary action",
+            description: "Run Save/Create/Open/Confirm in the active dialog. Use modifier+Enter in multiline fields.",
+            sequences: [["Enter"], [modifierLabel, "Enter"]],
+          },
+          {
             label: "Save file",
             description: "Save the active editor tab.",
             sequences: [[modifierLabel, "S"]],

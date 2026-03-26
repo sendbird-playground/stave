@@ -83,7 +83,7 @@ export function TaskList() {
   const visibleTasks = useMemo(() => getVisibleTasks({ tasks, filter: taskFilter }), [taskFilter, tasks]);
   const shortcutModifierLabel =
     typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
-      ? "Cmd"
+      ? "⌘"
       : "Ctrl";
   const taskShortcutsEnabled = taskFilter === "active";
   const taskReorderingEnabled = visibleTasks.length > 1;
