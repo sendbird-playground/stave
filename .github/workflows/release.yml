@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Rebuild native modules for Electron
+        run: bun run rebuild:electron-deps
+
       - name: Build desktop app
         run: bun run build:desktop
 
