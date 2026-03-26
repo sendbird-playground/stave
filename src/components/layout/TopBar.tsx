@@ -54,7 +54,8 @@ export function TopBar() {
     state.workspacePathById,
     state.projectPath,
   ] as const));
-  const activeWorkspacePath = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
+  const hasProjectContext = Boolean(projectPath?.trim());
+  const activeWorkspacePath = hasProjectContext ? (workspacePathById[activeWorkspaceId] ?? projectPath ?? "") : "";
   const workspacePathLabel = formatWorkspacePathLabel({
     workspacePath: activeWorkspacePath,
     projectPath,
@@ -134,8 +135,8 @@ export function TopBar() {
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <TooltipProvider>
-            <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
-            {activeWorkspacePath ? (
+            {hasProjectContext ? <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
+            {hasProjectContext && activeWorkspacePath ? (
               <div className="flex min-w-0 items-center gap-1" style={TOP_BAR_NO_DRAG_STYLE}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -184,17 +185,18 @@ export function TopBar() {
                 </Tooltip>
               </div>
             ) : null}
-            <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+            {hasProjectContext ? <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
           </TooltipProvider>
         </div>
         <div
           className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
           style={TOP_BAR_NO_DRAG_STYLE}
         >
-          <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+          {hasProjectContext ? <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5" style={TOP_BAR_NO_DRAG_STYLE}>
           <TopBarUtilityActions
+            canRefreshProjectFiles={hasProjectContext}
             isDarkMode={isDarkMode}
             noDragStyle={TOP_BAR_NO_DRAG_STYLE}
             onRefresh={handleRefreshProjectFiles}

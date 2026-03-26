@@ -3,6 +3,7 @@ import { memo, type CSSProperties } from "react";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 
 interface TopBarUtilityActionsProps {
+  canRefreshProjectFiles: boolean;
   isDarkMode: boolean;
   noDragStyle: CSSProperties;
   onRefresh: () => void;
@@ -14,6 +15,7 @@ interface TopBarUtilityActionsProps {
 }
 
 export const TopBarUtilityActions = memo(function TopBarUtilityActions({
+  canRefreshProjectFiles,
   isDarkMode,
   noDragStyle,
   onRefresh,
@@ -26,14 +28,16 @@ export const TopBarUtilityActions = memo(function TopBarUtilityActions({
   return (
     <TooltipProvider>
       <div className="flex shrink-0 items-center gap-1.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" onClick={onRefresh} style={noDragStyle}>
-              <RefreshCw className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Refresh project files</TooltipContent>
-        </Tooltip>
+        {canRefreshProjectFiles ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" onClick={onRefresh} style={noDragStyle}>
+                <RefreshCw className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Refresh project files</TooltipContent>
+          </Tooltip>
+        ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
