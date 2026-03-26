@@ -57,10 +57,16 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
 
   const isDefaultWorkspace = Boolean(workspaceDefaultById[activeWorkspaceId]);
   const activeWorkspaceBranch = workspaceBranchById[activeWorkspaceId];
-  const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
+  const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
+  const hasWorkspaceContext = Boolean(activeWorkspaceId && workspaceCwd);
 
   // Load current branch on mount and when workspace changes
   useEffect(() => {
+    if (!hasWorkspaceContext) {
+      setCurrentBranch(null);
+      return;
+    }
+
     async function detectBranch() {
       const listBranches = window.api?.sourceControl?.listBranches;
       if (!listBranches) return;
@@ -70,7 +76,7 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
       }
     }
     void detectBranch();
-  }, [activeWorkspaceId, workspaceCwd]);
+  }, [activeWorkspaceId, hasWorkspaceContext, workspaceCwd]);
 
   useEffect(() => {
     if (activeWorkspaceBranch) {
@@ -79,6 +85,11 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
   }, [activeWorkspaceBranch]);
 
   async function loadBranches() {
+    if (!hasWorkspaceContext) {
+      setBranchError("No workspace selected.");
+      return;
+    }
+
     const listBranches = window.api?.sourceControl?.listBranches;
     if (!listBranches) {
       setBranchError("Source Control bridge unavailable.");
@@ -100,9 +111,9 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
   }
 
   useEffect(() => {
-    if (!branchOpen || !isDefaultWorkspace) return;
+    if (!hasWorkspaceContext || !branchOpen || !isDefaultWorkspace) return;
     void loadBranches();
-  }, [branchOpen, isDefaultWorkspace, activeWorkspaceId]);
+  }, [activeWorkspaceId, branchOpen, hasWorkspaceContext, isDefaultWorkspace]);
 
   useEffect(() => {
     if (!isDefaultWorkspace) {
@@ -186,7 +197,7 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
     return true;
   }
 
-  if (!currentBranch) return null;
+  if (!hasWorkspaceContext || !currentBranch) return null;
 
   // Default workspace: show dropdown to switch branches
   if (isDefaultWorkspace) {

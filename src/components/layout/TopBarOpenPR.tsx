@@ -58,10 +58,11 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   ] as const));
 
   const isDefaultWorkspace = Boolean(workspaceDefaultById[activeWorkspaceId]);
-  const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
+  const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
+  const hasWorkspaceContext = Boolean(activeWorkspaceId && workspaceCwd);
   const currentBranch = workspaceBranchById[activeWorkspaceId];
 
-  if (isDefaultWorkspace) return null;
+  if (!hasWorkspaceContext || isDefaultWorkspace) return null;
 
   async function resolveOwnerRepo(): Promise<string | null> {
     const runCommand = window.api?.terminal?.runCommand;
