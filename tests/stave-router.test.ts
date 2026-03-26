@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildStaveResolvedArgs, resolveStaveTarget } from "../electron/providers/stave-router";
 import type { StreamTurnArgs } from "../electron/providers/types";
+import { DEFAULT_STAVE_AUTO_PROFILE } from "../src/lib/providers/stave-auto-profile";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,55 +88,25 @@ describe("resolveStaveTarget", () => {
     });
   });
 
-  // ── Rule 2: OpenAI / GPT ecosystem → gpt-5.4 ────────────────────────────
+  // ── Rule 2: OpenAI keywords follow normal intent rules ──────────────────
 
-  describe("Rule 2 — OpenAI ecosystem keywords → gpt-5.4", () => {
-    test("routes 'OpenAI' keyword to gpt-5.4", () => {
+  describe("Rule 2 — OpenAI keywords follow normal intent rules", () => {
+    test("treats OpenAI API questions as general requests by default", () => {
       const result = resolveStaveTarget({ prompt: "How do I call the OpenAI chat API?" });
-      expect(result.providerId).toBe("codex");
-      expect(result.model).toBe("gpt-5.4");
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-sonnet-4-6");
     });
 
-    test("routes 'ChatGPT' keyword to gpt-5.4", () => {
-      const result = resolveStaveTarget({ prompt: "Integrate ChatGPT into this app" });
-      expect(result.providerId).toBe("codex");
-      expect(result.model).toBe("gpt-5.4");
-    });
-
-    test("routes 'gpt-4' keyword to gpt-5.4", () => {
-      const result = resolveStaveTarget({ prompt: "Switch from gpt-4 to gpt-5 in this code" });
-      expect(result.providerId).toBe("codex");
-      expect(result.model).toBe("gpt-5.4");
-    });
-
-    test("routes 'gpt-5' keyword to gpt-5.4", () => {
-      const result = resolveStaveTarget({ prompt: "How do I use gpt-5 via the API?" });
-      expect(result.providerId).toBe("codex");
-      expect(result.model).toBe("gpt-5.4");
-    });
-
-    test("routes 'openai api' keyword to gpt-5.4", () => {
-      const result = resolveStaveTarget({ prompt: "Wrap the openai api in a helper function" });
-      expect(result.providerId).toBe("codex");
-      expect(result.model).toBe("gpt-5.4");
-    });
-
-    test("routes 'o3' keyword to gpt-5.4", () => {
-      const result = resolveStaveTarget({ prompt: "What changed from o3 to o4?" });
-      expect(result.providerId).toBe("codex");
-      expect(result.model).toBe("gpt-5.4");
-    });
-
-    test("routes 'o3-mini' keyword to gpt-5.4", () => {
+    test("still routes implementation prompts about OpenAI to the implement model", () => {
       const result = resolveStaveTarget({ prompt: "Write code that calls o3-mini for embeddings" });
       expect(result.providerId).toBe("codex");
-      expect(result.model).toBe("gpt-5.4");
+      expect(result.model).toBe("gpt-5.3-codex");
     });
 
-    test("takes priority over quick-edit signals", () => {
-      // Contains 'rename' (quick-edit) but also 'openai' → ecosystem wins
+    test("lets quick-edit heuristics win when the prompt is a tiny OpenAI rename", () => {
       const result = resolveStaveTarget({ prompt: "Just rename the openai client variable" });
-      expect(result.model).toBe("gpt-5.4");
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-haiku-4-5");
     });
   });
 
@@ -221,11 +192,17 @@ describe("resolveStaveTarget", () => {
       expect(result.model).toBe("gpt-5.3-codex");
     });
 
-    test("does NOT route long code-gen prompt (>= 350 chars) to gpt-5.3-codex", () => {
-      // isShort = false → falls through to default
+    test("keeps long code-gen prompts on gpt-5.3-codex", () => {
+      // implement intent is not gated by the short-prompt threshold
       const longPrompt = padTo("Write a function that sorts arrays. ", 350);
       const result = resolveStaveTarget({ prompt: longPrompt });
-      expect(result.model).not.toBe("gpt-5.3-codex");
+      expect(result.model).toBe("gpt-5.3-codex");
+    });
+
+    test("routes test-writing requests to gpt-5.3-codex", () => {
+      const result = resolveStaveTarget({ prompt: "Write unit tests for the UserService class" });
+      expect(result.providerId).toBe("codex");
+      expect(result.model).toBe("gpt-5.3-codex");
     });
   });
 
@@ -292,12 +269,6 @@ describe("resolveStaveTarget", () => {
 
     test("routes debugging request to claude-sonnet-4-6", () => {
       const result = resolveStaveTarget({ prompt: "Debug the login flow for me" });
-      expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-sonnet-4-6");
-    });
-
-    test("routes test-writing request to claude-sonnet-4-6", () => {
-      const result = resolveStaveTarget({ prompt: "Write unit tests for the UserService class" });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("claude-sonnet-4-6");
     });
@@ -369,9 +340,9 @@ describe("resolveStaveTarget", () => {
   describe("isShort boundary (< 350 chars)", () => {
     test("prompt exactly 350 chars is NOT short (threshold is < 350)", () => {
       const prompt = padTo("Write a function for sorting. ", 350);
-      // codeGenScore = 1 but isShort = false → falls to default
+      // quick-edit is gated by length, but implement intent is not
       const result = resolveStaveTarget({ prompt });
-      expect(result.model).not.toBe("gpt-5.3-codex");
+      expect(result.model).toBe("gpt-5.3-codex");
       expect(result.model).not.toBe("claude-haiku-4-5");
     });
 
@@ -408,96 +379,92 @@ describe("resolveStaveTarget", () => {
   });
 });
 
-// ── routeModels overrides ─────────────────────────────────────────────────────
+function customProfile(overrides: Partial<typeof DEFAULT_STAVE_AUTO_PROFILE>) {
+  return {
+    ...DEFAULT_STAVE_AUTO_PROFILE,
+    ...overrides,
+  };
+}
 
-describe("routeModels overrides", () => {
-  test("overrides the planning rule model", () => {
+// ── profile overrides ────────────────────────────────────────────────────────
+
+describe("profile overrides", () => {
+  test("overrides the planning intent model through the active profile", () => {
     const result = resolveStaveTarget({
       prompt: "이 기능 설계 방향 잡아줘",
-      routeModels: { planning: "claude-opus-4-6" },
+      profile: customProfile({ planModel: "claude-opus-4-6" }),
     });
     expect(result.model).toBe("claude-opus-4-6");
     expect(result.providerId).toBe("claude-code");
   });
 
-  test("overrides the ecosystem rule model with a Claude model", () => {
+  test("overrides the general intent model through the active profile", () => {
     const result = resolveStaveTarget({
       prompt: "How do I integrate the OpenAI API?",
-      routeModels: { ecosystem: "claude-sonnet-4-6" },
+      profile: customProfile({ generalModel: "gpt-5.4" }),
     });
-    expect(result.model).toBe("claude-sonnet-4-6");
-    // provider is inferred from the overridden model name → claude-code
-    expect(result.providerId).toBe("claude-code");
+    expect(result.model).toBe("gpt-5.4");
+    expect(result.providerId).toBe("codex");
   });
 
-  test("overrides the complex rule model with a Codex model", () => {
+  test("overrides the analyze intent model through the active profile", () => {
     const longPrompt = padTo("Analyze why the system is failing. ", 1201);
     const result = resolveStaveTarget({
       prompt: longPrompt,
-      routeModels: { complex: "gpt-5.4" },
+      profile: customProfile({ analyzeModel: "gpt-5.4" }),
     });
     expect(result.model).toBe("gpt-5.4");
     expect(result.providerId).toBe("codex");
   });
 
-  test("overrides the codeGen rule model", () => {
+  test("overrides the implement intent model through the active profile", () => {
     const result = resolveStaveTarget({
       prompt: "Write a function to parse CSV files",
-      routeModels: { codeGen: "claude-haiku-4-5" },
+      profile: customProfile({ implementModel: "claude-haiku-4-5" }),
     });
     expect(result.model).toBe("claude-haiku-4-5");
     expect(result.providerId).toBe("claude-code");
   });
 
-  test("overrides the quickEdit rule model", () => {
+  test("overrides the quick-edit intent model through the active profile", () => {
     const result = resolveStaveTarget({
       prompt: "Just fix the typo here",
-      routeModels: { quickEdit: "claude-sonnet-4-6" },
+      profile: customProfile({ quickEditModel: "claude-sonnet-4-6" }),
     });
     expect(result.model).toBe("claude-sonnet-4-6");
   });
 
-  test("overrides the default rule model", () => {
-    const result = resolveStaveTarget({
-      prompt: "Add error handling to fetchUser",
-      routeModels: { default: "gpt-5.4" },
-    });
-    expect(result.model).toBe("gpt-5.4");
-    expect(result.providerId).toBe("codex");
-  });
-
-  test("partial override leaves unspecified rules at their built-in defaults", () => {
+  test("partial profile overrides leave other intents on their defaults", () => {
     const result = resolveStaveTarget({
       prompt: "Just fix the typo here",
-      routeModels: { planning: "claude-opus-4-6" }, // only planning is overridden
+      profile: customProfile({ planModel: "claude-opus-4-6" }),
     });
-    // quickEdit rule fires (typo + short), which was NOT overridden
     expect(result.model).toBe("claude-haiku-4-5");
   });
 
-  test("reason string includes the overridden model name", () => {
+  test("reason strings reflect the resolved override model", () => {
     const result = resolveStaveTarget({
       prompt: "이 기능 계획 세워줘",
-      routeModels: { planning: "claude-opus-4-6" },
+      profile: customProfile({ planModel: "claude-opus-4-6" }),
     });
     expect(result.reason).toContain("claude-opus-4-6");
   });
 
-  test("infers claude-code provider for any Claude model string", () => {
+  test("infers claude-code provider for overridden Claude-family models", () => {
     for (const model of ["claude-opus-4-6", "opusplan", "claude-sonnet-4-6", "claude-haiku-4-5"]) {
       const result = resolveStaveTarget({
         prompt: "Add error handling",
-        routeModels: { default: model },
+        profile: customProfile({ generalModel: model }),
       });
       expect(result.providerId).toBe("claude-code");
     }
   });
 
-  test("infers codex provider for any Codex model string", () => {
+  test("infers codex provider for overridden Codex-family models", () => {
     for (const model of ["gpt-5.4", "gpt-5.3-codex"]) {
       const result = resolveStaveTarget({
         prompt: "Add error handling",
-        routeModels: { default: model },
+        profile: customProfile({ generalModel: model }),
       });
       expect(result.providerId).toBe("codex");
     }
@@ -506,7 +473,7 @@ describe("routeModels overrides", () => {
   test("falls back to claude-code for an unknown custom model string", () => {
     const result = resolveStaveTarget({
       prompt: "Add error handling",
-      routeModels: { default: "my-custom-model" },
+      profile: customProfile({ generalModel: "my-custom-model" }),
     });
     expect(result.model).toBe("my-custom-model");
     expect(result.providerId).toBe("claude-code");

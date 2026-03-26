@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.0.18](https://github.com/sendbird-playground/stave/compare/v0.0.17...v0.0.18) (2026-03-26)
+
+### Features
+
+* add open in feature, repo level settings inc postintall ([#5](https://github.com/sendbird-playground/stave/issues/5)) ([3459cc2](https://github.com/sendbird-playground/stave/commit/3459cc2e13631e92ca2f9ab1074e6ebf5ec52af1))
+* add top-bar file search with Cmd+P quick open ([#7](https://github.com/sendbird-playground/stave/issues/7)) ([8f8f992](https://github.com/sendbird-playground/stave/commit/8f8f9922d353b145d38a49a64b0ecfc628979e98))
+* AI inline code completions in editor ([#10](https://github.com/sendbird-playground/stave/issues/10)) ([ae09cd9](https://github.com/sendbird-playground/stave/commit/ae09cd9259706034c722c3bfbc4b11b1f966a9ab))
+* **claude:** upgrade SDK and set default to acceptEdits ([#7](https://github.com/sendbird-playground/stave/issues/7)) ([20dbde8](https://github.com/sendbird-playground/stave/commit/20dbde8c468268e49cc20a2a9b6d71bcf4b196e2))
+* Cmd+W closes editor tab first, add confirmBeforeClose setting ([#6](https://github.com/sendbird-playground/stave/issues/6)) ([b7e0928](https://github.com/sendbird-playground/stave/commit/b7e0928ebe546ae7519d84425ecd5441b77dd6b6))
+* polish dialogs and codex resume handling ([#8](https://github.com/sendbird-playground/stave/issues/8)) ([52504e8](https://github.com/sendbird-playground/stave/commit/52504e878a9d7f9cf147d336681e4138c4b4f1c8))
+* **stave:** add orchestration runtime and processing UI ([#3](https://github.com/sendbird-playground/stave/issues/3)) ([4c8c4fb](https://github.com/sendbird-playground/stave/commit/4c8c4fbcf7114cffaafb06bf61ecd5fb79ed4203))
+* **stave:** redesign auto routing and orchestration ([#4](https://github.com/sendbird-playground/stave/issues/4)) ([82b9216](https://github.com/sendbird-playground/stave/commit/82b921650ad4c3393c61c73670e40c27bdb8affe))
+* window maximize, Stave Auto presets & fast mode, responsive file search, task title filters ([2dd92c0](https://github.com/sendbird-playground/stave/commit/2dd92c06da286ad65b858b588b038cf9990f830f))
+
+### Bug Fixes
+
+* add ~/.claude/local to CLI path resolution ([#2](https://github.com/sendbird-playground/stave/issues/2)) ([33189cd](https://github.com/sendbird-playground/stave/commit/33189cded69170f87d529bf517b830ed25213b56))
+* harden better-sqlite3 Electron ABI compatibility and install workflow ([#3](https://github.com/sendbird-playground/stave/issues/3)) ([97296c8](https://github.com/sendbird-playground/stave/commit/97296c889e8d04496a0f8ab12cc027dd75598b97))
+* keyboard shortcuts drawer full-height background ([#8](https://github.com/sendbird-playground/stave/issues/8)) ([2c918c5](https://github.com/sendbird-playground/stave/commit/2c918c514c8def6cbf6ef68ee322f85686c062d7))
+* stave-worktree-pr-flow not create another worktree ([#6](https://github.com/sendbird-playground/stave/issues/6)) ([3b08c0b](https://github.com/sendbird-playground/stave/commit/3b08c0b743ae20a8e4629445107929821b5c7776))
+* **ui:** restore provider wave indicator tones ([#9](https://github.com/sendbird-playground/stave/issues/9)) ([ab4cb5b](https://github.com/sendbird-playground/stave/commit/ab4cb5bc8019fed7c05919aeb0b8ff73e74ca736))
+* update better-sqlite3 Electron patch for v12.6.2 ([#2](https://github.com/sendbird-playground/stave/issues/2)) ([f6593b7](https://github.com/sendbird-playground/stave/commit/f6593b7761a6859526a7d070c276a17c4daf8dca))
+* **workspace:** preserve existing DB data when localStorage is cleared ([40009c6](https://github.com/sendbird-playground/stave/commit/40009c620ec777b9a709713de6b48f0c308b97f3))
+
 ## [0.0.17](https://github.com/astyfx/stave/compare/v0.0.16...v0.0.17) (2026-03-25)
 
 ### Highlights
