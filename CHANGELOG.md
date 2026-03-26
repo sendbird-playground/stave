@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.22](https://github.com/sendbird-playground/stave/compare/v0.0.21...v0.0.22) (2026-03-26)
+
+### Bug Fixes
+
+* add gh-authenticated macOS installer flow ([#21](https://github.com/sendbird-playground/stave/issues/21)) ([ed68911](https://github.com/sendbird-playground/stave/commit/ed68911))
+
 ## [0.0.21](https://github.com/sendbird-playground/stave/compare/v0.0.20...v0.0.21) (2026-03-26)
 
 ### Bug Fixes
