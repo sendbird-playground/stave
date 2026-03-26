@@ -1,5 +1,6 @@
 appId: com.astyfx.stave
 productName: Stave
+afterPack: ./scripts/after-pack.cjs
 files:
   - out/**
   - package.json
@@ -7,6 +8,7 @@ directories:
   output: release
 asar: true
 asarUnpack:
+  - "**/*.node"
   - node_modules/@openai/codex*/vendor/**
   - node_modules/@anthropic-ai/claude-agent-sdk/vendor/**
 npmRebuild: false
