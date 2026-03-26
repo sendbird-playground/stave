@@ -55,7 +55,10 @@ interface WindowProviderApi {
     ok: boolean;
     message?: string;
   }>;
-  checkAvailability?: (args: { providerId: ProviderId }) => Promise<{
+  checkAvailability?: (args: {
+    providerId: ProviderId;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<{
     ok: boolean;
     available: boolean;
     detail: string;

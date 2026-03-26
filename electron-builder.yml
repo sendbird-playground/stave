@@ -6,6 +6,9 @@ files:
 directories:
   output: release
 asar: true
+asarUnpack:
+  - node_modules/@openai/codex*/vendor/**
+  - node_modules/@anthropic-ai/claude-agent-sdk/vendor/**
 npmRebuild: false
 linux:
   target:
@@ -18,3 +21,5 @@ win:
 mac:
   target:
     - dmg
+  extendInfo:
+    LSExtensionIsHidden: true

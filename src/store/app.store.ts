@@ -2720,9 +2720,15 @@ export const useAppStore = create<AppState>()(
         if (!checkAvailability) {
           return;
         }
+        const codexPathOverride = get().settings.codexPathOverride || undefined;
         const availabilityEntries = await Promise.all(
           listProviderIds().map(async (providerId) => {
-            const result = await checkAvailability({ providerId });
+            const result = await checkAvailability({
+              providerId,
+              runtimeOptions: codexPathOverride
+                ? { codexPathOverride }
+                : undefined,
+            });
             return [providerId, result.ok && result.available] as const;
           }),
         );

@@ -116,7 +116,7 @@ contextBridge.exposeInMainWorld("api", {
       answers?: Record<string, string>;
       denied?: boolean;
     }) => ipcRenderer.invoke("provider:respond-user-input", args),
-    checkAvailability: (args: { providerId: ProviderId }) =>
+    checkAvailability: (args: { providerId: ProviderId; runtimeOptions?: StreamTurnArgs["runtimeOptions"] }) =>
       ipcRenderer.invoke("provider:check-availability", args),
     getCommandCatalog: (args: {
       providerId: ProviderId;

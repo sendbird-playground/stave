@@ -1,17 +1,29 @@
-import { cleanupClaudeTask, getClaudeCommandCatalog, streamClaudeWithSdk } from "./claude-sdk-runtime";
-import { cleanupCodexTask, streamCodexWithSdk } from "./codex-sdk-runtime";
+import {
+  cleanupClaudeTask,
+  getClaudeCommandCatalog,
+  resolveClaudeExecutablePath,
+  streamClaudeWithSdk,
+} from "./claude-sdk-runtime";
+import {
+  cleanupCodexTask,
+  resolveCodexExecutablePath,
+  streamCodexWithSdk,
+} from "./codex-sdk-runtime";
 import { buildStaveResolvedArgs } from "./stave-router";
 import { runPreprocessor } from "./stave-preprocessor";
-import { getCachedAvailability } from "./stave-availability";
+import { getCachedAvailability, setCachedAvailability } from "./stave-availability";
 import { runOrchestrator } from "./stave-orchestrator";
 import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
+import { buildExecutableLookupEnv } from "./executable-path";
 import {
   DEFAULT_STAVE_AUTO_PROFILE,
   resolveStaveIntentModel,
   resolveStaveProviderForModel,
 } from "../../src/lib/providers/stave-auto-profile";
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
+import path from "node:path";
 
 const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000);
 type ActiveRuntimeSession = {
@@ -30,6 +42,10 @@ type ActiveRuntimeSession = {
 
 const activeSessions = new Map<string, ActiveRuntimeSession>();
 const activeStreams = new Map<string, { events: BridgeEvent[]; done: boolean }>();
+const CODEX_LOOKUP_PATHS = [
+  `${homedir()}/.bun/bin`,
+  `${homedir()}/.local/bin`,
+] as const;
 
 function upsertActiveSession(args: {
   turnId: string;
@@ -91,6 +107,66 @@ function clearActiveTaskSessions(args: { taskId: string }) {
     session.abort?.();
     activeSessions.delete(turnId);
   }
+}
+
+function describeClaudeAvailability() {
+  const executablePath = resolveClaudeExecutablePath();
+  const available = executablePath.length > 0;
+  const detail = available
+    ? `Resolved Claude CLI: ${executablePath}`
+    : "Claude CLI not found from STAVE_CLAUDE_CLI_PATH, CLAUDE_CODE_PATH, login-shell PATH, or home-bin candidates.";
+  setCachedAvailability("claude-code", available);
+  return { available, detail };
+}
+
+function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {}) {
+  const executablePath = resolveCodexExecutablePath({
+    explicitPath: args.runtimeOptions?.codexPathOverride,
+  });
+  if (!executablePath) {
+    setCachedAvailability("codex", false);
+    return {
+      available: false,
+      detail: "Codex executable not found from runtime override, env vars, login-shell PATH, home-bin candidates, or bundled SDK binary.",
+    };
+  }
+
+  const env = buildExecutableLookupEnv({
+    extraPaths: [
+      ...CODEX_LOOKUP_PATHS,
+      path.dirname(executablePath),
+    ],
+  });
+  const versionProbe = spawnSync(executablePath, ["--version"], {
+    encoding: "utf8",
+    env,
+  });
+  const available = versionProbe.status === 0;
+  const detail = available
+    ? `Resolved Codex executable: ${executablePath}`
+    : [
+        `Codex executable probe failed: ${executablePath}`,
+        (versionProbe.stderr ?? "").trim(),
+        versionProbe.error ? String(versionProbe.error) : "",
+      ].filter(Boolean).join("\n");
+  setCachedAvailability("codex", available);
+  return { available, detail };
+}
+
+function describeStaveAvailability(args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {}) {
+  const claude = describeClaudeAvailability();
+  const codex = describeCodexAvailability(args);
+  const available = claude.available || codex.available;
+  setCachedAvailability("stave", available);
+  return {
+    available,
+    detail: [
+      `Claude: ${claude.available ? "available" : "unavailable"}`,
+      claude.detail,
+      `Codex: ${codex.available ? "available" : "unavailable"}`,
+      codex.detail,
+    ].join("\n"),
+  };
 }
 
 async function withTimeout<T>(args: {
@@ -467,34 +543,18 @@ export const providerRuntime: ProviderRuntime = {
       };
     })(),
   }),
-  checkAvailability: ({ providerId }) => new Promise((resolve) => {
-    // Stave delegates to claude-code as its primary routing target
-    const command = providerId === "claude-code" || providerId === "stave" ? "claude" : "codex";
-    const child = spawn(command, ["--version"], { shell: true });
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", (error) => {
-      resolve({
-        ok: true,
-        available: false,
-        detail: String(error),
-      });
-    });
-    child.on("close", (code) => {
-      resolve({
-        ok: true,
-        available: code === 0,
-        detail: [stdout.trim(), stderr.trim()].filter(Boolean).join("\n"),
-      });
-    });
-  }),
+  checkAvailability: async ({ providerId, runtimeOptions }) => {
+    if (providerId === "claude-code") {
+      const result = describeClaudeAvailability();
+      return { ok: true, ...result };
+    }
+    if (providerId === "codex") {
+      const result = describeCodexAvailability({ runtimeOptions });
+      return { ok: true, ...result };
+    }
+    const result = describeStaveAvailability({ runtimeOptions });
+    return { ok: true, ...result };
+  },
   getCommandCatalog: async ({ providerId, cwd, runtimeOptions }) => {
     if (providerId === "stave") {
       return {

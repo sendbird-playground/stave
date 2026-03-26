@@ -97,7 +97,7 @@ export interface ProviderRuntime {
     answers?: Record<string, string>;
     denied?: boolean;
   }) => { ok: boolean; message: string };
-  checkAvailability: (args: { providerId: ProviderId }) => Promise<{
+  checkAvailability: (args: { providerId: ProviderId; runtimeOptions?: StreamTurnArgs["runtimeOptions"] }) => Promise<{
     ok: boolean;
     available: boolean;
     detail: string;

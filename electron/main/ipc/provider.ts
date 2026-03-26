@@ -5,9 +5,9 @@ import { suggestClaudeTaskName, suggestClaudeCommitMessage } from "../../provide
 import type { StreamTurnArgs } from "../../providers/types";
 import {
   ApprovalResponseArgsSchema,
+  CheckAvailabilityArgsSchema,
   CleanupTaskArgsSchema,
   ProviderCommandCatalogArgsSchema,
-  ProviderIdSchema,
   StreamReadArgsSchema,
   StreamTurnArgsSchema,
   SuggestCommitMessageArgsSchema,
@@ -244,11 +244,11 @@ export function registerProviderHandlers() {
   });
 
   ipcMain.handle("provider:check-availability", (_event, args: unknown) => {
-    const parsedProviderId = ProviderIdSchema.safeParse((args as { providerId?: unknown })?.providerId);
-    if (!parsedProviderId.success) {
+    const parsedArgs = CheckAvailabilityArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
       return { ok: false, available: false, detail: "Invalid provider availability request." };
     }
-    return providerRuntime.checkAvailability({ providerId: parsedProviderId.data });
+    return providerRuntime.checkAvailability(parsedArgs.data);
   });
 
   ipcMain.handle("provider:get-command-catalog", (_event, args: unknown) => {

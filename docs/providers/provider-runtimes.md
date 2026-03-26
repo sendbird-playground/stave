@@ -134,22 +134,23 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 
 ## Supported Codex baseline
 
-- Codex SDK: `@openai/codex-sdk@0.115.0`
-- Codex CLI baseline: `0.115.0`
+- Codex SDK: `@openai/codex-sdk@0.116.0`
+- Codex CLI baseline: `0.116.0`
 
-Stave expects a local Codex CLI installation. A user-configured binary path takes precedence over PATH-based discovery.
+Stave prefers an explicit/user-installed Codex CLI when available, but can also fall back to the bundled SDK binary. A user-configured binary path still takes precedence over auto-discovery.
 
 ## Executable path resolution
 
-Stave does not hardcode one binary path. It probes a small set of candidates and accepts only executable files.
+Stave does not hardcode one binary path. It probes a small set of candidates, merges the Electron process PATH with the user's login-shell PATH plus common homebrew/home-bin locations, and accepts only executable files.
 
 ### Codex CLI lookup order
 
 1. `runtimeOptions.codexPathOverride`
 2. `STAVE_CODEX_CLI_PATH`
-3. `STAVE_CODEX_CMD` resolved through `which`
-4. default `codex` resolved through `which`
-5. explicit probes of `~/.bun/bin/codex` and `~/.local/bin/codex`
+3. explicit probes of `~/.bun/bin/codex` and `~/.local/bin/codex`
+4. `STAVE_CODEX_CMD` resolved through the merged PATH
+5. default `codex` resolved through the merged PATH
+6. bundled `@openai/codex-<platform>` SDK binary, rewritten to `app.asar.unpacked` in packaged builds
 
 If multiple executable candidates exist, Stave runs `candidate --version`, parses semver, and prefers the newest valid version.
 
@@ -157,8 +158,11 @@ If multiple executable candidates exist, Stave runs `candidate --version`, parse
 
 1. `STAVE_CLAUDE_CLI_PATH`
 2. `CLAUDE_CODE_PATH`
-3. `~/.bun/bin/claude`
-4. `~/.local/bin/claude`
+3. `~/.claude/local/claude`
+4. `~/.bun/bin/claude`
+5. `~/.local/bin/claude`
+6. `STAVE_CLAUDE_CMD` resolved through the merged PATH
+7. default `claude` resolved through the merged PATH
 
 Each candidate must be executable and respond successfully to `--version`. If multiple valid candidates exist, Stave sorts them by parsed version and chooses the newest one.
 
@@ -166,6 +170,7 @@ Each candidate must be executable and respond successfully to `--version`. If mu
 
 - `STAVE_PROVIDER_TIMEOUT_MS`
 - `STAVE_CLAUDE_CLI_PATH`
+- `STAVE_CLAUDE_CMD`
 - `CLAUDE_CODE_PATH`
 - `STAVE_CLAUDE_DEBUG`
 - `STAVE_CODEX_CLI_PATH`

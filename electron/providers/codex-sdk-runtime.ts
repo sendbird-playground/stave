@@ -1,6 +1,11 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
 import type { Thread, ThreadEvent, ThreadItem, TurnCompletedEvent, TurnOptions } from "@openai/codex-sdk";
-import { resolveExecutablePath } from "./executable-path";
+import {
+  buildExecutableLookupEnv,
+  canExecutePath,
+  resolveExecutablePath,
+  toAsarUnpackedPath,
+} from "./executable-path";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -10,6 +15,7 @@ import {
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 const threadByTask = new Map<string, Thread>();
@@ -17,6 +23,11 @@ const threadIdByTask = new Map<string, string>();
 
 const SUPPORTED_CODEX_SDK_VERSION = "0.116.0";
 const SUPPORTED_CODEX_CLI_VERSION = "0.116.0";
+const CODEX_LOOKUP_PATHS = [
+  `${homedir()}/.bun/bin`,
+  `${homedir()}/.local/bin`,
+] as const;
+const moduleRequire = createRequire(import.meta.url);
 
 function parseBooleanEnv(args: { value: string | undefined; fallback: boolean }) {
   const normalized = args.value?.trim().toLowerCase();
@@ -84,22 +95,27 @@ function toCodexUserFacingErrorMessage(args: { message: string }) {
   return args.message;
 }
 
-function buildCodexEnv() {
+function buildCodexEnv(args: { executablePath?: string } = {}) {
   const nextEnv = { ...process.env };
   delete nextEnv.ELECTRON_RUN_AS_NODE;
   delete nextEnv.ELECTRON_NO_ATTACH_CONSOLE;
   delete nextEnv.ELECTRON_NO_ASAR;
-  if (!nextEnv.PATH) {
-    nextEnv.PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-  }
+  nextEnv.PATH = buildExecutableLookupEnv({
+    baseEnv: nextEnv,
+    extraPaths: [
+      ...CODEX_LOOKUP_PATHS,
+      args.executablePath ? path.dirname(args.executablePath) : "",
+    ],
+  }).PATH;
   return nextEnv as Record<string, string>;
 }
 
 function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }) {
+  const env = buildCodexEnv({ executablePath: args.executablePath });
   const versionProbe = args.executablePath
     ? spawnSync(args.executablePath, ["--version"], {
       encoding: "utf8",
-      env: process.env,
+      env,
     })
     : null;
   return {
@@ -224,11 +240,88 @@ function isExecutableFile(args: { path: string }) {
   }
 }
 
-function resolveCodexExecutablePath() {
+function resolveCodexTargetTriple() {
+  const { platform, arch } = process;
+  if (platform === "linux" || platform === "android") {
+    if (arch === "x64") {
+      return {
+        targetTriple: "x86_64-unknown-linux-musl",
+        platformPackage: "@openai/codex-linux-x64",
+      } as const;
+    }
+    if (arch === "arm64") {
+      return {
+        targetTriple: "aarch64-unknown-linux-musl",
+        platformPackage: "@openai/codex-linux-arm64",
+      } as const;
+    }
+    return null;
+  }
+  if (platform === "darwin") {
+    if (arch === "x64") {
+      return {
+        targetTriple: "x86_64-apple-darwin",
+        platformPackage: "@openai/codex-darwin-x64",
+      } as const;
+    }
+    if (arch === "arm64") {
+      return {
+        targetTriple: "aarch64-apple-darwin",
+        platformPackage: "@openai/codex-darwin-arm64",
+      } as const;
+    }
+    return null;
+  }
+  if (platform === "win32") {
+    if (arch === "x64") {
+      return {
+        targetTriple: "x86_64-pc-windows-msvc",
+        platformPackage: "@openai/codex-win32-x64",
+      } as const;
+    }
+    if (arch === "arm64") {
+      return {
+        targetTriple: "aarch64-pc-windows-msvc",
+        platformPackage: "@openai/codex-win32-arm64",
+      } as const;
+    }
+  }
+  return null;
+}
+
+function resolveBundledCodexExecutablePath() {
+  const resolvedTarget = resolveCodexTargetTriple();
+  if (!resolvedTarget) {
+    return "";
+  }
+
+  try {
+    const codexPackageJsonPath = moduleRequire.resolve("@openai/codex/package.json");
+    const codexRequire = createRequire(codexPackageJsonPath);
+    const platformPackageJsonPath = codexRequire.resolve(`${resolvedTarget.platformPackage}/package.json`);
+    const vendorRoot = path.join(path.dirname(platformPackageJsonPath), "vendor");
+    const binaryName = process.platform === "win32" ? "codex.exe" : "codex";
+    return toAsarUnpackedPath(path.join(
+      vendorRoot,
+      resolvedTarget.targetTriple,
+      "codex",
+      binaryName,
+    ));
+  } catch {
+    return "";
+  }
+}
+
+export function resolveCodexExecutablePath(args: { explicitPath?: string } = {}) {
+  if (args.explicitPath?.trim()) {
+    return args.explicitPath.trim();
+  }
+
   const baseResolved = resolveExecutablePath({
     absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
     commandEnvVar: "STAVE_CODEX_CMD",
     defaultCommand: "codex",
+    extraPaths: [...CODEX_LOOKUP_PATHS],
   }) ?? "";
 
   const candidates = [
@@ -236,6 +329,7 @@ function resolveCodexExecutablePath() {
     `${homedir()}/.bun/bin/codex`,
     `${homedir()}/.local/bin/codex`,
     baseResolved,
+    resolveBundledCodexExecutablePath(),
   ].filter((value, index, arr) => value.length > 0 && arr.indexOf(value) === index);
 
   let selectedPath = baseResolved;
@@ -245,9 +339,10 @@ function resolveCodexExecutablePath() {
     if (!isExecutableFile({ path: candidate })) {
       continue;
     }
+    const env = buildCodexEnv({ executablePath: candidate });
     const versionProbe = spawnSync(candidate, ["--version"], {
       encoding: "utf8",
-      env: process.env,
+      env,
     });
     if (versionProbe.status !== 0) {
       continue;
@@ -565,13 +660,15 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
       return unavailableEvents;
     }
 
-    const codexExecutablePath = args.runtimeOptions?.codexPathOverride?.trim() || resolveCodexExecutablePath();
+    const codexExecutablePath = resolveCodexExecutablePath({
+      explicitPath: args.runtimeOptions?.codexPathOverride,
+    });
     diagnostics = buildCodexDiagnostics({ executablePath: codexExecutablePath ?? "", taskId: args.taskId });
 
     const codexConfig = buildCodexConfigOverrides({ runtimeOptions: args.runtimeOptions });
     const codex = new CodexCtor({
       ...(codexExecutablePath ? { codexPathOverride: codexExecutablePath } : {}),
-      env: buildCodexEnv(),
+      env: buildCodexEnv({ executablePath: codexExecutablePath }),
       ...(codexConfig ? { config: codexConfig } : {}),
     });
     const threadKey = buildThreadKey({

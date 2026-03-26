@@ -79,6 +79,11 @@ const RuntimeOptionsSchema = z.object({
   }).strict().optional(),
 }).strict().optional();
 
+export const CheckAvailabilityArgsSchema = z.object({
+  providerId: ProviderIdSchema,
+  runtimeOptions: RuntimeOptionsSchema,
+}).strict();
+
 const UserInputOptionSchema = z.object({
   label: z.string().max(500),
   description: z.string().max(5000),

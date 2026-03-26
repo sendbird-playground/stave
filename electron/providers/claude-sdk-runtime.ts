@@ -10,11 +10,11 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { toText } from "./utils";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
-import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
+import { buildExecutableLookupEnv, canExecutePath, resolveExecutablePath } from "./executable-path";
 
 /** SDK-level permission modes accepted by the claude-agent-sdk query() API. */
 type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
@@ -33,6 +33,11 @@ const ClaudePermissionResultSchema = z.union([
 ]);
 
 type ClaudePermissionResult = z.infer<typeof ClaudePermissionResultSchema>;
+const CLAUDE_LOOKUP_PATHS = [
+  `${homedir()}/.claude/local`,
+  `${homedir()}/.bun/bin`,
+  `${homedir()}/.local/bin`,
+] as const;
 
 function parseBooleanEnv(args: { value: string | undefined; fallback: boolean }) {
   const normalized = args.value?.trim().toLowerCase();
@@ -66,15 +71,6 @@ function resolveClaudePermissionMode(args: {
   return args.fallback;
 }
 
-function canExecute(args: { path: string }) {
-  try {
-    accessSync(args.path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function parseClaudeVersion(args: { value: string }) {
   const match = args.value.match(/(\d+)\.(\d+)\.(\d+)/);
   if (!match) {
@@ -98,9 +94,12 @@ function compareVersion(a: { major: number; minor: number; patch: number }, b: {
 }
 
 function probeClaudeExecutable(args: { path: string }) {
+  const env = buildExecutableLookupEnv({
+    extraPaths: [...CLAUDE_LOOKUP_PATHS, path.dirname(args.path)],
+  });
   const result = spawnSync(args.path, ["--version"], {
     encoding: "utf8",
-    env: process.env,
+    env,
   });
   if (result.status !== 0) {
     return null;
@@ -114,19 +113,28 @@ function probeClaudeExecutable(args: { path: string }) {
   };
 }
 
-function resolveClaudeExecutablePath() {
+export function resolveClaudeExecutablePath() {
+  const baseResolved = resolveExecutablePath({
+    absolutePathEnvVar: "STAVE_CLAUDE_CLI_PATH",
+    absolutePathEnvVars: ["CLAUDE_CODE_PATH"],
+    commandEnvVar: "STAVE_CLAUDE_CMD",
+    defaultCommand: "claude",
+    extraPaths: [...CLAUDE_LOOKUP_PATHS],
+  }) ?? "";
+
   const candidates = [
     process.env.STAVE_CLAUDE_CLI_PATH,
     process.env.CLAUDE_CODE_PATH,
     `${homedir()}/.claude/local/claude`,
     `${homedir()}/.bun/bin/claude`,
     `${homedir()}/.local/bin/claude`,
+    baseResolved,
   ]
     .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value));
+    .filter((value, index, entries): value is string => Boolean(value) && entries.indexOf(value) === index);
 
   const available = candidates
-    .filter((candidate) => canExecute({ path: candidate }))
+    .filter((candidate) => canExecutePath({ path: candidate }))
     .map((candidate) => probeClaudeExecutable({ path: candidate }))
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
@@ -160,20 +168,14 @@ function buildClaudeEnv(args: { executablePath: string }) {
   delete env.ELECTRON_ENABLE_STACK_DUMPING;
   delete env.ELECTRON_DISABLE_SECURITY_WARNINGS;
 
-  const currentPath = process.env.PATH ?? "";
-  const prepends = new Set<string>([
-    `${homedir()}/.claude/local`,
-    `${homedir()}/.bun/bin`,
-    `${homedir()}/.local/bin`,
-    args.executablePath ? path.dirname(args.executablePath) : "",
-  ]);
-  const mergedPath = [...prepends].filter(Boolean).join(":");
-  const finalPath = mergedPath.length > 0
-    ? `${mergedPath}${currentPath ? `:${currentPath}` : ""}`
-    : currentPath;
-
   env.CLAUDECODE = undefined;
-  env.PATH = finalPath;
+  env.PATH = buildExecutableLookupEnv({
+    baseEnv: env,
+    extraPaths: [
+      ...CLAUDE_LOOKUP_PATHS,
+      args.executablePath ? path.dirname(args.executablePath) : "",
+    ],
+  }).PATH;
   return env;
 }
 
@@ -202,7 +204,7 @@ function buildClaudeDiagnostics(args: {
     taskId: args.taskId ?? "default",
     cwd: args.cwd,
     executablePath: args.executablePath || "<sdk-default>",
-    executableExists: args.executablePath ? canExecute({ path: args.executablePath }) : null,
+    executableExists: args.executablePath ? canExecutePath({ path: args.executablePath }) : null,
     envPathHead: summarizePath({ value: env.PATH }),
     electronEnv: {
       ELECTRON_RUN_AS_NODE: process.env.ELECTRON_RUN_AS_NODE ?? "",
