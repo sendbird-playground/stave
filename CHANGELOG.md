@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.23](https://github.com/sendbird-playground/stave/compare/v0.0.22...v0.0.23) (2026-03-26)
+
+### Bug Fixes
+
+* **release:** preserve macOS framework symlinks ([#23](https://github.com/sendbird-playground/stave/issues/23)) ([723c199](https://github.com/sendbird-playground/stave/commit/723c199))
+
 ## [0.0.22](https://github.com/sendbird-playground/stave/compare/v0.0.21...v0.0.22) (2026-03-26)
 
 ### Bug Fixes
