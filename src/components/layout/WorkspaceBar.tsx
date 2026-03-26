@@ -389,7 +389,11 @@ export function WorkspaceBar() {
                   <span className="truncate">{workspacePathLabel}</span>
                 </div>
               </TooltipTrigger>
-              <TooltipContent side="bottom">{workspacePathById[activeWorkspaceId]}</TooltipContent>
+              <TooltipContent side="bottom" className="max-w-[min(42rem,calc(100vw-2rem))]">
+                <span className="break-all whitespace-normal">
+                  {workspacePathById[activeWorkspaceId]}
+                </span>
+              </TooltipContent>
             </Tooltip>
           ) : null}
           {!isDefaultWorkspace ? (
