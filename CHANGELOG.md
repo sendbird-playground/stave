@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.21](https://github.com/sendbird-playground/stave/compare/v0.0.20...v0.0.21) (2026-03-26)
+
+### Bug Fixes
+
+* **desktop:** ship internal macOS app bundle zip ([#19](https://github.com/sendbird-playground/stave/issues/19)) ([20ae651](https://github.com/sendbird-playground/stave/commit/20ae651))
+* wrap topbar workspace path tooltip ([#18](https://github.com/sendbird-playground/stave/issues/18)) ([44055d8](https://github.com/sendbird-playground/stave/commit/44055d8))
+* **paths:** remove user-specific absolute paths ([#17](https://github.com/sendbird-playground/stave/issues/17)) ([9314def](https://github.com/sendbird-playground/stave/commit/9314def))
+
 ## [0.0.20](https://github.com/sendbird-playground/stave/compare/v0.0.19...v0.0.20) (2026-03-26)
 
 ### Features
