@@ -9,6 +9,8 @@ WORK_DIR="$(mktemp -d -t stave-install.XXXXXX)"
 ARCHIVE_PATH="${WORK_DIR}/${ASSET_NAME}"
 EXTRACT_DIR="${WORK_DIR}/extracted"
 TARGET_APP="${INSTALL_DIR}/${APP_NAME}.app"
+FRAMEWORK_LINK_RELATIVE="Contents/Frameworks/Electron Framework.framework/Electron Framework"
+FRAMEWORK_CURRENT_RELATIVE="Contents/Frameworks/Electron Framework.framework/Versions/Current/Electron Framework"
 
 info() {
   printf "==> %s\n" "$1"
@@ -33,6 +35,7 @@ trap cleanup EXIT
 
 require_command gh
 require_command ditto
+require_command readlink
 require_command xattr
 require_command open
 
@@ -64,6 +67,18 @@ if [ -z "$SOURCE_APP" ] || [ ! -d "$SOURCE_APP" ]; then
   error "Expected ${APP_NAME}.app in the extracted release bundle, but it was not found."
 fi
 
+FRAMEWORK_LINK="${SOURCE_APP}/${FRAMEWORK_LINK_RELATIVE}"
+FRAMEWORK_TARGET="$(readlink "$FRAMEWORK_LINK" || true)"
+if [ -z "$FRAMEWORK_TARGET" ]; then
+  error "Release bundle is invalid: Electron Framework link is missing."
+fi
+if [ "${FRAMEWORK_TARGET#/}" != "$FRAMEWORK_TARGET" ]; then
+  error "Release bundle is invalid: Electron Framework uses an absolute symlink target (${FRAMEWORK_TARGET}). Install a newer Stave release."
+fi
+if [ ! -e "${SOURCE_APP}/${FRAMEWORK_CURRENT_RELATIVE}" ]; then
+  error "Release bundle is invalid: Electron Framework binary is missing from the app bundle."
+fi
+
 mkdir -p "$INSTALL_DIR"
 
 if [ -d "$TARGET_APP" ]; then
@@ -72,7 +87,7 @@ if [ -d "$TARGET_APP" ]; then
 fi
 
 info "Installing ${APP_NAME} into ${INSTALL_DIR}..."
-cp -R "$SOURCE_APP" "$TARGET_APP"
+ditto "$SOURCE_APP" "$TARGET_APP"
 
 info "Removing quarantine attribute..."
 xattr -dr com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
