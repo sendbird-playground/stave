@@ -2,6 +2,16 @@
 
 Stave is an Electron-based AI coding workspace built with Bun, React, Vite, and TypeScript.
 
+## Try Stave on macOS
+
+If you already have GitHub CLI authenticated for `sendbird-playground`, install the latest internal macOS build with one command:
+
+```bash
+gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/install-latest-release.sh | bash
+```
+
+If this is your first time using `gh`, or you need SSO/scope troubleshooting, see the full [Install Guide](docs/install-guide.md).
+
 ## Highlights
 
 - desktop-first Claude and Codex workspace
@@ -145,11 +155,7 @@ bun run package:linux:deb
 
 ### GitHub release packaging
 
-For internal macOS installs, prefer the authenticated one-command installer documented in [docs/install-guide.md](docs/install-guide.md):
-
-```bash
-gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/install-latest-release.sh | bash
-```
+For internal macOS installs, the preferred path is the authenticated one-command installer documented in [docs/install-guide.md](docs/install-guide.md). The GitHub `Release` workflow also publishes a manual zip fallback for direct bundle download.
 
 The GitHub `Release` workflow now builds an unpacked `Stave.app`, then creates a `Stave-macOS.zip` bundle that contains:
 
@@ -159,7 +165,7 @@ The GitHub `Release` workflow now builds an unpacked `Stave.app`, then creates a
 
 `Install Stave.command` copies the app into `~/Applications`, removes the macOS quarantine attribute, and launches Stave. Because the downloaded `.command` helper itself may still be blocked by Gatekeeper, the bundle also includes `Install Stave in Terminal.txt` with a Terminal-safe fallback that runs the same installer via `sh`. This is intended for internal team distribution where Apple Developer signing and notarization are not in use.
 
-Recommended install flow for teammates:
+Manual zip fallback:
 
 1. Download `Stave-macOS.zip`
 2. Unzip it

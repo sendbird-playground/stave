@@ -9,6 +9,8 @@ describe("install guide", () => {
     const readme = readFileSync(path.join(repoRoot, "README.md"), "utf8");
     const guide = readFileSync(path.join(repoRoot, "docs", "install-guide.md"), "utf8");
 
+    expect(readme).toContain("## Try Stave on macOS");
+    expect(readme.indexOf("## Try Stave on macOS")).toBeLessThan(readme.indexOf("## Highlights"));
     expect(readme).toContain("docs/install-guide.md");
     expect(readme).toContain("gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/install-latest-release.sh | bash");
     expect(guide).toContain("gh auth login");
