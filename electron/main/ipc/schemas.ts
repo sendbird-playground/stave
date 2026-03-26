@@ -10,6 +10,10 @@ export const SuggestTaskNameArgsSchema = z.object({
   }).strict()).max(20).optional(),
 }).strict();
 
+export const SuggestCommitMessageArgsSchema = z.object({
+  cwd: z.string().max(4096).optional(),
+}).strict();
+
 export const SkillCatalogArgsSchema = z.object({
   workspacePath: z.string().max(4096).optional(),
 }).strict();

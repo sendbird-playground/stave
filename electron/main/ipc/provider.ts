@@ -1,7 +1,7 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { providerRuntime } from "../../providers/runtime";
-import { suggestClaudeTaskName } from "../../providers/claude-sdk-runtime";
+import { suggestClaudeTaskName, suggestClaudeCommitMessage } from "../../providers/claude-sdk-runtime";
 import type { StreamTurnArgs } from "../../providers/types";
 import {
   ApprovalResponseArgsSchema,
@@ -10,11 +10,13 @@ import {
   ProviderIdSchema,
   StreamReadArgsSchema,
   StreamTurnArgsSchema,
+  SuggestCommitMessageArgsSchema,
   SuggestTaskNameArgsSchema,
   UserInputResponseArgsSchema,
 } from "./schemas";
 import { ensurePersistenceReady } from "../state";
 import { isDoneEvent, toEventType } from "../utils/provider-events";
+import { runCommand } from "../utils/command";
 
 function formatSchemaIssuePath(path: PropertyKey[]) {
   if (path.length === 0) {
@@ -274,5 +276,25 @@ export function registerProviderHandlers() {
       return { ok: false };
     }
     return suggestClaudeTaskName({ prompt: parsed.data.prompt, history: parsed.data.history });
+  });
+
+  // Lightweight, single-turn query that generates a conventional commit message
+  // from the current git diff.  Runs isolated from any task conversation.
+  ipcMain.handle("provider:suggest-commit-message", async (_event, args: unknown) => {
+    const parsed = SuggestCommitMessageArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false };
+    }
+
+    const cwd = parsed.data.cwd;
+    const [diffResult, statusResult] = await Promise.all([
+      runCommand({ command: "git diff HEAD", cwd }),
+      runCommand({ command: "git status --porcelain", cwd }),
+    ]);
+
+    const diff = diffResult.ok ? diffResult.stdout.trim() : "";
+    const fileList = statusResult.ok ? statusResult.stdout.trim() : "";
+
+    return suggestClaudeCommitMessage({ diff, fileList });
   });
 }

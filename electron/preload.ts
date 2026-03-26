@@ -130,6 +130,8 @@ contextBridge.exposeInMainWorld("api", {
     }>,
     suggestTaskName: (args: { prompt: string; history?: Array<{ role: string; content: string }> }) =>
       ipcRenderer.invoke("provider:suggest-task-name", args) as Promise<{ ok: boolean; title?: string }>,
+    suggestCommitMessage: (args: { cwd?: string }) =>
+      ipcRenderer.invoke("provider:suggest-commit-message", args) as Promise<{ ok: boolean; message?: string }>,
   },
   persistence: {
     listWorkspaces: () => ipcRenderer.invoke("persistence:list-workspaces"),
