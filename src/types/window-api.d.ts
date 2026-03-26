@@ -286,6 +286,7 @@ interface WindowSourceControlApi {
     ok: boolean;
     current: string;
     branches: string[];
+    remoteBranches: string[];
     worktreePathByBranch: Record<string, string>;
     stderr: string;
   }>;
