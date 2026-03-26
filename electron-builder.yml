@@ -1,6 +1,5 @@
 appId: com.astyfx.stave
 productName: Stave
-afterPack: ./scripts/after-pack.cjs
 files:
   - out/**
   - package.json

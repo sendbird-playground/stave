@@ -141,6 +141,24 @@ bun run package:linux:appimage
 bun run package:linux:deb
 ```
 
+`bun run package:desktop` creates an unpacked `.app` bundle for local validation.
+
+### GitHub release packaging
+
+The GitHub `Release` workflow now builds an unpacked `Stave.app`, then creates a `Stave-macOS.zip` bundle that contains:
+
+- `Stave.app`
+- `Install Stave.command`
+
+`Install Stave.command` copies the app into `~/Applications`, removes the macOS quarantine attribute, and launches Stave. This is intended for internal team distribution where Apple Developer signing and notarization are not in use.
+
+Recommended install flow for teammates:
+
+1. Download `Stave-macOS.zip`
+2. Unzip it
+3. Double-click `Install Stave.command`
+4. Stave is installed into `~/Applications/Stave.app` and opened
+
 ### Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -150,6 +168,7 @@ bun run package:linux:deb
 | `[persistence] upsert-workspace-sync failed` in Electron logs | Same as above, check the full error message | `bun run rebuild:electron-deps` |
 | `Patch signature not found` error during rebuild | `better-sqlite3` version changed or `node_modules` corrupted | `bun install && bun run rebuild:electron-deps` |
 | Build fails with `node-gyp` errors | Missing C++ toolchain | Install Xcode CLT / build-essential (see Prerequisites) |
+| GitHub release app is blocked by Gatekeeper when opened directly | The browser download added the macOS quarantine attribute | Run `Install Stave.command`, or manually run `xattr -dr com.apple.quarantine ~/Applications/Stave.app` |
 | macOS repeatedly asks "Allow Stave to access files in your … folder?" when opening files in the editor or attaching files/images to a prompt | macOS TCC requires explicit per-folder consent the first time Stave reads from Desktop, Documents, or Downloads. In production this prompt appears once and is then remembered permanently. In development builds the Electron binary changes on every rebuild, which invalidates the stored TCC grant and causes the dialog to reappear each session. | **Production:** approve the dialog once — it will not appear again. **Development:** grant permanent access via **System Settings → Privacy & Security → Files and Folders → Stave** (toggle each folder on). |
 
 ## Docs
