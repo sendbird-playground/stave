@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.0.20](https://github.com/sendbird-playground/stave/compare/v0.0.19...v0.0.20) (2026-03-26)
+
+### Features
+
+* allow creating workspace from remote branches ([#12](https://github.com/sendbird-playground/stave/issues/12)) ([4bb2c7c](https://github.com/sendbird-playground/stave/commit/4bb2c7c))
+* increase provider timeout options to 30m/1h/2h/3h ([#13](https://github.com/sendbird-playground/stave/issues/13)) ([df8ae88](https://github.com/sendbird-playground/stave/commit/df8ae88))
+
+### Bug Fixes
+
+* **workspace:** clean up git worktree and branch on workspace delete ([#15](https://github.com/sendbird-playground/stave/issues/15)) ([b7cbc13](https://github.com/sendbird-playground/stave/commit/b7cbc13))
+
 ## [0.0.19](https://github.com/sendbird-playground/stave/compare/v0.0.18...v0.0.19) (2026-03-26)
 
 ### Bug Fixes
