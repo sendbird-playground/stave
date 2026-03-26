@@ -1895,7 +1895,7 @@ export const useAppStore = create<AppState>()(
         const workspaceInitCommand = normalizeWorkspaceInitCommand({
           value: initCommand ?? projectWorkspaceInitCommand,
         });
-        const baseBranch = (fromBranch?.trim() || current.defaultBranch || "main").replace(/^origin\//, "");
+        const baseBranch = fromBranch?.trim() || current.defaultBranch || "main";
         const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
         const runner = window.api?.terminal?.runCommand;
         if (runner) {

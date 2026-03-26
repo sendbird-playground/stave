@@ -116,6 +116,7 @@ export function registerScmHandlers() {
 
   ipcMain.handle("scm:list-branches", async (_event, args: { cwd?: string }) => {
     const listResult = await runCommand({ command: "git branch --format='%(refname:short)'", cwd: args.cwd });
+    const listRemoteResult = await runCommand({ command: "git branch -r --format='%(refname:short)'", cwd: args.cwd });
     const currentResult = await runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd: args.cwd });
     const worktreeResult = await runCommand({ command: "git worktree list --porcelain", cwd: args.cwd });
 
@@ -127,6 +128,12 @@ export function registerScmHandlers() {
             .split("\n")
             .map((name) => name.trim())
             .filter(Boolean)
+        : [],
+      remoteBranches: listRemoteResult.ok
+        ? listRemoteResult.stdout
+            .split("\n")
+            .map((name) => name.trim())
+            .filter((name) => Boolean(name) && !name.endsWith("/HEAD"))
         : [],
       worktreePathByBranch: worktreeResult.ok ? parseWorktreePathByBranch({ stdout: worktreeResult.stdout }) : {},
       stderr: [listResult.stderr, currentResult.stderr].filter(Boolean).join("\n").trim(),

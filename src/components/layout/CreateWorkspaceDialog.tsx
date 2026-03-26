@@ -1,7 +1,7 @@
 import { GitBranch, X } from "lucide-react";
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button, Card, Input, Textarea, toast } from "@/components/ui";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 interface CreateWorkspaceDialogProps {
@@ -33,6 +33,7 @@ export function CreateWorkspaceDialog({
   const [fromBranch, setFromBranch] = useState("main");
   const [initCommand, setInitCommand] = useState(defaultInitCommand);
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
+  const [availableRemoteBranches, setAvailableRemoteBranches] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) {
@@ -47,6 +48,7 @@ export function CreateWorkspaceDialog({
     void listBranches({ cwd }).then((result) => {
       if (result?.ok) {
         setAvailableBranches(result.branches);
+        setAvailableRemoteBranches(result.remoteBranches ?? []);
       }
     });
   }, [activeBranch, cwd, open]);
@@ -188,9 +190,20 @@ export function CreateWorkspaceDialog({
                   <SelectValue placeholder="Select a branch" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableBranches.map((branch) => (
-                    <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-                  ))}
+                  <SelectGroup>
+                    <SelectLabel>Local</SelectLabel>
+                    {availableBranches.map((branch) => (
+                      <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                  {availableRemoteBranches.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Remote</SelectLabel>
+                      {availableRemoteBranches.map((branch) => (
+                        <SelectItem key={branch} value={branch}>{branch}</SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
                 </SelectContent>
               </Select>
             </button>
