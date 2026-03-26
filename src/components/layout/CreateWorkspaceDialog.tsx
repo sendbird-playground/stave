@@ -1,12 +1,14 @@
 import { GitBranch, X } from "lucide-react";
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { CreateWorkspaceBranchPicker } from "@/components/layout/CreateWorkspaceBranchPicker";
+import { resolveDefaultCreateWorkspaceBaseBranch } from "@/components/layout/CreateWorkspaceBranchPicker.utils";
 import { Button, Card, Input, Textarea, toast } from "@/components/ui";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 interface CreateWorkspaceDialogProps {
   open: boolean;
   activeBranch: string;
+  defaultBranch: string;
   cwd?: string;
   defaultInitCommand?: string;
   onOpenChange: (open: boolean) => void;
@@ -21,6 +23,7 @@ interface CreateWorkspaceDialogProps {
 export function CreateWorkspaceDialog({
   open,
   activeBranch,
+  defaultBranch,
   cwd,
   defaultInitCommand = "",
   onOpenChange,
@@ -34,24 +37,55 @@ export function CreateWorkspaceDialog({
   const [initCommand, setInitCommand] = useState(defaultInitCommand);
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
   const [availableRemoteBranches, setAvailableRemoteBranches] = useState<string[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
 
   useEffect(() => {
     if (!open) {
       return;
     }
-    setFromBranch(activeBranch || "main");
+
+    const fallbackBaseBranch = resolveDefaultCreateWorkspaceBaseBranch({
+      activeBranch,
+      defaultBranch,
+      localBranches: [],
+      remoteBranches: [],
+    });
+
+    setFromBranch(fallbackBaseBranch);
     setInitCommand(defaultInitCommand);
+    setAvailableBranches([]);
+    setAvailableRemoteBranches([]);
     const listBranches = window.api?.sourceControl?.listBranches;
     if (!listBranches) {
+      setLoadingBranches(false);
       return;
     }
+
+    let cancelled = false;
+    setLoadingBranches(true);
     void listBranches({ cwd }).then((result) => {
-      if (result?.ok) {
-        setAvailableBranches(result.branches);
-        setAvailableRemoteBranches(result.remoteBranches ?? []);
+      if (!result?.ok || cancelled) {
+        return;
+      }
+
+      setAvailableBranches(result.branches);
+      setAvailableRemoteBranches(result.remoteBranches ?? []);
+      setFromBranch(resolveDefaultCreateWorkspaceBaseBranch({
+        activeBranch,
+        defaultBranch,
+        localBranches: result.branches,
+        remoteBranches: result.remoteBranches ?? [],
+      }));
+    }).finally(() => {
+      if (!cancelled) {
+        setLoadingBranches(false);
       }
     });
-  }, [activeBranch, cwd, open]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranch, cwd, defaultBranch, defaultInitCommand, open]);
 
   useEffect(() => {
     if (open) {
@@ -62,7 +96,16 @@ export function CreateWorkspaceDialog({
     setCreatingWorkspace(false);
     setCreationMode("branch");
     setInitCommand(defaultInitCommand);
-  }, [defaultInitCommand, open]);
+    setAvailableBranches([]);
+    setAvailableRemoteBranches([]);
+    setLoadingBranches(false);
+    setFromBranch(resolveDefaultCreateWorkspaceBaseBranch({
+      activeBranch,
+      defaultBranch,
+      localBranches: [],
+      remoteBranches: [],
+    }));
+  }, [activeBranch, defaultBranch, defaultInitCommand, open]);
 
   if (!open) {
     return null;
@@ -171,53 +214,58 @@ export function CreateWorkspaceDialog({
             />
           </div>
           <p className="mb-2 text-sm font-medium">Creation Methods</p>
-          <div className="space-y-2">
-            <button
-              type="button"
+          <div className="space-y-2" role="radiogroup" aria-label="Creation methods">
+            <div
+              role="radio"
+              aria-checked={creationMode === "branch"}
               className={cn(
-                "w-full rounded-sm border p-3 text-left",
+                "w-full rounded-sm border p-3",
                 creationMode === "branch" ? "border-primary bg-secondary/50" : "border-border/80 bg-card",
               )}
-              onClick={() => setCreationMode("branch")}
             >
-              <p className="flex items-center gap-2 text-base font-semibold">
-                <GitBranch className="size-4" />
-                Create From Branch
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">Create worktree from the selected base branch.</p>
-              <Select value={fromBranch} onValueChange={setFromBranch}>
-                <SelectTrigger className="mt-2 h-8 text-sm" onClick={(event) => event.stopPropagation()}>
-                  <SelectValue placeholder="Select a branch" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>Local</SelectLabel>
-                    {availableBranches.map((branch) => (
-                      <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-                    ))}
-                  </SelectGroup>
-                  {availableRemoteBranches.length > 0 && (
-                    <SelectGroup>
-                      <SelectLabel>Remote</SelectLabel>
-                      {availableRemoteBranches.map((branch) => (
-                        <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  )}
-                </SelectContent>
-              </Select>
-            </button>
-            <button
-              type="button"
+              <button
+                type="button"
+                className="w-full text-left"
+                onClick={() => setCreationMode("branch")}
+              >
+                <p className="flex items-center gap-2 text-base font-semibold">
+                  <GitBranch className="size-4" />
+                  Create From Branch
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">Create worktree from a searchable base branch list with remote bases prioritized.</p>
+              </button>
+              <div className="mt-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Base Branch</p>
+                <CreateWorkspaceBranchPicker
+                  value={fromBranch}
+                  defaultBranch={defaultBranch}
+                  localBranches={availableBranches}
+                  loading={loadingBranches}
+                  remoteBranches={availableRemoteBranches}
+                  onChange={(nextBranch) => {
+                    setCreationMode("branch");
+                    setFromBranch(nextBranch);
+                  }}
+                />
+              </div>
+            </div>
+            <div
+              role="radio"
+              aria-checked={creationMode === "clean"}
               className={cn(
-                "w-full rounded-sm border p-3 text-left",
+                "w-full rounded-sm border p-3",
                 creationMode === "clean" ? "border-primary bg-secondary/50" : "border-border/80 bg-card",
               )}
-              onClick={() => setCreationMode("clean")}
             >
-              <p className="text-base font-semibold">Create Clean Workspace</p>
-              <p className="mt-1 text-sm text-muted-foreground">Create a new isolated worktree with a fresh branch.</p>
-            </button>
+              <button
+                type="button"
+                className="w-full text-left"
+                onClick={() => setCreationMode("clean")}
+              >
+                <p className="text-base font-semibold">Create Clean Workspace</p>
+                <p className="mt-1 text-sm text-muted-foreground">Create a new isolated worktree with a fresh branch.</p>
+              </button>
+            </div>
           </div>
           <div className="mt-4">
             <p className="mb-2 text-sm font-medium">Post-Create Command</p>

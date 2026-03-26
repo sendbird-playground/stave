@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const MAX_PROVIDER_TIMEOUT_MS = 10_800_000;
+
 export const ProviderIdSchema = z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]);
 
 export const SuggestTaskNameArgsSchema = z.object({
@@ -22,7 +24,7 @@ const RuntimeOptionsSchema = z.object({
   model: z.string().max(200).optional(),
   chatStreamingEnabled: z.boolean().optional(),
   debug: z.boolean().optional(),
-  providerTimeoutMs: z.number().int().min(1).max(3_600_000).optional(),
+  providerTimeoutMs: z.number().int().min(1).max(MAX_PROVIDER_TIMEOUT_MS).optional(),
   claudePermissionMode: z.union([
     z.literal("default"),
     z.literal("acceptEdits"),
