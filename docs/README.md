@@ -6,6 +6,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 
 ## Map
 
+- [Install Guide](install-guide.md)
 - [Architecture](architecture/runtime.md)
 - [Conversation flow](architecture/conversation-flow.md)
 - [Provider runtimes](providers/provider-runtimes.md)
