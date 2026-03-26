@@ -7,6 +7,8 @@ import {
   mapClaudeMessageToEvents,
 } from "../electron/providers/claude-sdk-runtime";
 
+const workspaceRoot = "/workspace/stave";
+
 describe("mapClaudeMessageToEvents", () => {
   test("surfaces Claude init session ids as provider conversation metadata", () => {
     const events = mapClaudeMessageToEvents({
@@ -200,13 +202,13 @@ describe("buildClaudeUserInputPermissionResult", () => {
 describe("buildClaudeSystemPrompt", () => {
   test("anchors relative paths to the active workspace root", () => {
     expect(buildClaudeSystemPrompt({
-      cwd: "/home/astyfx/stave",
-    })).toContain("Current workspace root: /home/astyfx/stave");
+      cwd: workspaceRoot,
+    })).toContain(`Current workspace root: ${workspaceRoot}`);
   });
 
   test("preserves any existing system prompt before appending workspace rules", () => {
     const systemPrompt = buildClaudeSystemPrompt({
-      cwd: "/home/astyfx/stave",
+      cwd: workspaceRoot,
       baseSystemPrompt: "Follow repository conventions.",
     });
 

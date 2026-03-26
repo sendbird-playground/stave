@@ -2,7 +2,7 @@
 
 ## Purpose 
 
-Project policy entrypoint for `/home/astyfx/stave`.
+Project policy entrypoint for this repository root, regardless of the local checkout path.
 
 ## Local Override (MUST)
 
