@@ -16,6 +16,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { z } from "zod";
 
+/** SDK-level permission modes accepted by the claude-agent-sdk query() API. */
 type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
 
 const ClaudePermissionResultSchema = z.union([
@@ -796,7 +797,7 @@ export async function getClaudeCommandCatalog(args: {
     const permissionMode = resolveClaudePermissionMode({
       runtimeValue: args.runtimeOptions?.claudePermissionMode,
       envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
-      fallback: "bypassPermissions",
+      fallback: "acceptEdits",
     });
     const allowDangerouslySkipPermissions = args.runtimeOptions?.claudeAllowDangerouslySkipPermissions
       ?? parseBooleanEnv({
@@ -958,7 +959,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     const permissionMode = resolveClaudePermissionMode({
       runtimeValue: args.runtimeOptions?.claudePermissionMode,
       envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
-      fallback: "bypassPermissions",
+      fallback: "acceptEdits",
     });
     const allowDangerouslySkipPermissions = args.runtimeOptions?.claudeAllowDangerouslySkipPermissions
       ?? parseBooleanEnv({

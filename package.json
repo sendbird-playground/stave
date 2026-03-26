@@ -35,7 +35,7 @@
     "test:ci": "bun run typecheck && bun test && bun run build && bun run build:desktop"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.81",
+    "@anthropic-ai/claude-agent-sdk": "0.2.83",
     "@anthropic-ai/sdk": "^0.80.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
