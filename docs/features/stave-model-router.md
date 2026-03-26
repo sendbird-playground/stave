@@ -87,6 +87,8 @@ Both stages consult a 30-second TTL in-process cache (`stave-availability.ts`) t
 
 The router re-evaluates every turn independently. Within a single task, different messages can be routed to different models. Provider-native conversation IDs (Claude session ID, Codex thread ID) are preserved separately per provider, so switching between providers within a task does not lose context.
 
+Codex threads remain model-sensitive. If a task previously used one Codex model and the next turn resolves to another, Stave starts a fresh Codex thread and replays task history instead of resuming the older thread.
+
 ## Settings
 
 Stave Auto now uses presets plus role-based settings under **Settings → Providers → Stave Auto**. Picking a preset rewrites the full role map, and you can still fine-tune any individual role afterwards.
