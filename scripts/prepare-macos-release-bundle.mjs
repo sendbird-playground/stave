@@ -22,6 +22,7 @@ function main() {
   }
 
   const installerSourcePath = path.join(repoRoot, "scripts", "install-stave.command");
+  const terminalGuideSourcePath = path.join(repoRoot, "scripts", "install-stave-in-terminal.txt");
   const stagingRoot = path.join(releaseRoot, bundleDirectoryName);
   const archivePath = path.join(releaseRoot, archiveName);
 
@@ -31,6 +32,7 @@ function main() {
 
   cpSync(appBundlePath, path.join(stagingRoot, `${productName}.app`), { recursive: true });
   copyFileSync(installerSourcePath, path.join(stagingRoot, "Install Stave.command"));
+  copyFileSync(terminalGuideSourcePath, path.join(stagingRoot, "Install Stave in Terminal.txt"));
   chmodSync(path.join(stagingRoot, "Install Stave.command"), 0o755);
 
   execFileSync("ditto", ["-c", "-k", "--keepParent", bundleDirectoryName, archiveName], {
