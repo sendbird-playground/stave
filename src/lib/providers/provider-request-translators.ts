@@ -1,12 +1,6 @@
 import { buildLegacyPromptFromCanonicalRequest } from "./canonical-request";
 import type { CanonicalConversationRequest, ProviderId } from "./provider.types";
 
-function getSelectedSkillCommands(conversation: CanonicalConversationRequest) {
-  return conversation.contextParts
-    .filter((part): part is Extract<typeof part, { type: "skill_context" }> => part.type === "skill_context")
-    .flatMap((part) => part.skills.map((skill) => `/${skill.slug}`));
-}
-
 function getStoredResumeConversationId(conversation?: CanonicalConversationRequest) {
   const value = conversation?.resume?.nativeConversationId?.trim();
   return value ? value : undefined;
@@ -65,18 +59,11 @@ export function buildClaudePromptFromConversation(args: {
   conversation: CanonicalConversationRequest;
   fallbackPrompt: string;
 }) {
-  const basePrompt = buildLegacyPromptFromCanonicalRequest({
+  return buildLegacyPromptFromCanonicalRequest({
     request: args.conversation,
     includeHistory: shouldIncludeHistory(args.conversation),
-    includeSkillContext: false,
+    includeSkillContext: true,
   }) || args.fallbackPrompt;
-  const skillCommands = getSelectedSkillCommands(args.conversation);
-
-  if (skillCommands.length === 0) {
-    return basePrompt;
-  }
-
-  return `${skillCommands.join("\n")}\n\n${basePrompt}`.trim();
 }
 
 export function buildCodexPromptFromConversation(args: {
