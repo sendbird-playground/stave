@@ -2032,13 +2032,24 @@ export const useAppStore = create<AppState>()(
           return;
         }
         const workspacePath = state.workspacePathById[workspaceId];
+        const workspaceBranch = state.workspaceBranchById[workspaceId];
         const projectPath = state.projectPath;
         const runner = window.api?.terminal?.runCommand;
         if (runner && projectPath && workspacePath) {
-          await runner({
+          const removeResult = await runner({
             cwd: projectPath,
             command: `git worktree remove --force ${JSON.stringify(workspacePath)}`,
           });
+          if (!removeResult.ok) {
+            await runner({ cwd: projectPath, command: `rm -rf ${JSON.stringify(workspacePath)}` });
+            await runner({ cwd: projectPath, command: "git worktree prune" });
+          }
+          if (workspaceBranch) {
+            await runner({
+              cwd: projectPath,
+              command: `git branch -D ${JSON.stringify(workspaceBranch)}`,
+            });
+          }
         }
         await deleteWorkspacePersistence({ workspaceId });
         const nextWorkspace = state.workspaces.find((item) => state.workspaceDefaultById[item.id]) ?? state.workspaces[0];
