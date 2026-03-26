@@ -79,7 +79,12 @@ function findOptionLabel(
 }
 
 function formatProviderTimeout(value: number) {
-  return `${Math.round(value / 60000)} min`;
+  const minutes = Math.round(value / 60000);
+  if (minutes >= 60) {
+    const hours = minutes / 60;
+    return hours === 1 ? `${hours} hour` : `${hours} hours`;
+  }
+  return `${minutes} min`;
 }
 
 function formatTitleCaseValue(value: string) {
