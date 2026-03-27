@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { appendProviderEventToAssistant } from "@/lib/session/provider-event-replay";
+import {
+  appendProviderEventToAssistant,
+  replayProviderEventsToTaskState,
+} from "@/lib/session/provider-event-replay";
 import type { ChatMessage, OrchestrationProgressPart, StaveProcessingPart } from "@/types/chat";
 
 function createMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
@@ -150,6 +153,59 @@ describe("appendProviderEventToAssistant", () => {
     expect(updated.parts.at(-1)).toEqual({
       type: "text",
       text: "{\"strategy\":\"direct\",\"model\":\"gpt-5.4\",\"reason\":\"return as data\"}",
+    });
+  });
+});
+
+describe("plan response replay", () => {
+  test("appends a dedicated plan message after prior assistant content", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "text", text: "I have a plan ready." },
+        { type: "plan_ready", planText: "1. Inspect\n2. Patch" },
+        { type: "done" },
+      ],
+      provider: "claude-code",
+      model: "claude-sonnet-4-6",
+    });
+
+    expect(replayed.messages).toHaveLength(2);
+    expect(replayed.messages[0]).toMatchObject({
+      content: "I have a plan ready.",
+    });
+    expect(replayed.messages[0]?.isPlanResponse).not.toBe(true);
+    expect(replayed.messages[1]).toMatchObject({
+      providerId: "claude-code",
+      model: "claude-sonnet-4-6",
+      content: "1. Inspect\n2. Patch",
+      isPlanResponse: true,
+      planText: "1. Inspect\n2. Patch",
+      isStreaming: false,
+    });
+  });
+
+  test("stores a standalone plan response when plan_ready arrives first", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "plan_ready", planText: "1. Reproduce\n2. Fix" },
+        { type: "done" },
+      ],
+      provider: "claude-code",
+      model: "claude-sonnet-4-6",
+    });
+
+    expect(replayed.messages).toHaveLength(1);
+    expect(replayed.messages[0]).toMatchObject({
+      providerId: "claude-code",
+      model: "claude-sonnet-4-6",
+      content: "1. Reproduce\n2. Fix",
+      isPlanResponse: true,
+      planText: "1. Reproduce\n2. Fix",
+      isStreaming: false,
     });
   });
 });
