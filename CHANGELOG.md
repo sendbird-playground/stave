@@ -1,3 +1,19 @@
+## [0.0.24](https://github.com/sendbird-playground/stave/compare/v0.0.23...v0.0.24) (2026-03-27)
+
+### Features
+
+* **commands:** add /stave:sync to fetch and pull current branch ([#30](https://github.com/sendbird-playground/stave/issues/30)) ([599d0a5](https://github.com/sendbird-playground/stave/commit/599d0a5099075ff3dc53ba91971e84f44dd50db3))
+* **subagent:** show task_progress inside SubagentCard via Hook-based agent tracking ([#35](https://github.com/sendbird-playground/stave/issues/35)) ([828e8ce](https://github.com/sendbird-playground/stave/commit/828e8ceacdf2f123b00c68410a99b184172cd6d6))
+
+### Bug Fixes
+
+* add searchable branch picker and restore long timeouts ([#27](https://github.com/sendbird-playground/stave/issues/27)) ([2099cd9](https://github.com/sendbird-playground/stave/commit/2099cd9ff2d160f502f0569134e6107b42c92d7e))
+* **chat:** scroll to bottom when switching tasks ([#28](https://github.com/sendbird-playground/stave/issues/28)) ([13f159e](https://github.com/sendbird-playground/stave/commit/13f159e4cf4cc2ae8604631db14de9fcd1290766))
+* improve file search layout and responsiveness ([#32](https://github.com/sendbird-playground/stave/issues/32)) ([188964e](https://github.com/sendbird-playground/stave/commit/188964e314d568b69bf70fd18fcac25b4a16e8f9))
+* **scm:** filter stale branches from workspace creation dialog ([#26](https://github.com/sendbird-playground/stave/issues/26)) ([fc36fb9](https://github.com/sendbird-playground/stave/commit/fc36fb95e3d5163b586759fef50947e661608934))
+* **stave:** skill fast-path bypasses preprocessor and unifies skill visibility ([#34](https://github.com/sendbird-playground/stave/issues/34)) ([708417d](https://github.com/sendbird-playground/stave/commit/708417d6792ea9eb45d8309621d670dc3fe22e9d))
+* **topbar:** consolidate open-in actions into overflow dropdown ([#29](https://github.com/sendbird-playground/stave/issues/29)) ([fd0c2a2](https://github.com/sendbird-playground/stave/commit/fd0c2a2926c0beb0049c0e5d23010ba2d8e1d1c4))
+* **topbar:** hide project-only UI when no project/workspace is selected ([#25](https://github.com/sendbird-playground/stave/issues/25)) ([bf3ad22](https://github.com/sendbird-playground/stave/commit/bf3ad22e42b96f915d6233f9c983b733216a7035))
 # Changelog
 
 ## [0.0.23](https://github.com/sendbird-playground/stave/compare/v0.0.22...v0.0.23) (2026-03-26)

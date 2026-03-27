@@ -144,6 +144,7 @@ export const NORMALIZED_PROVIDER_EVENT_TYPES = [
   "user_input",
   "plan_ready",
   "system",
+  "subagent_progress",
   "model_resolved",
   "stave:execution_processing",
   "stave:orchestration_processing",
