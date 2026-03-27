@@ -2,6 +2,8 @@
 
 Stave is an Electron-based AI coding workspace built with Bun, React, Vite, and TypeScript.
 
+**Website →** https://shiny-barnacle-5vmm96j.pages.github.io/
+
 ![Stave](docs/screenshots/stave-app.png)
 
 ## Try Stave on macOS
@@ -13,18 +15,6 @@ gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground
 ```
 
 If this is your first time using `gh`, or you need SSO/scope troubleshooting, see the full [Install Guide](docs/install-guide.md).
-
-## GitHub Pages landing page
-
-This repository includes a static product landing page under `landing/` for GitHub Pages deployment.
-
-- entry: `landing/index.html`
-- styles: `landing/styles.css`
-- interaction script: `landing/app.js`
-- assets: `landing/assets/`
-
-Deployment is handled by [.github/workflows/github-pages-landing.yml](.github/workflows/github-pages-landing.yml).  
-The workflow publishes the `landing/` directory when `main` receives landing-page changes.
 
 ## Highlights
 
@@ -220,7 +210,6 @@ Stable project documentation now lives under `docs/`.
 - [Developer diagnostics](docs/developer/diagnostics.md)
 - [shadcn preset](docs/ui/shadcn-preset.md)
 - [Project / workspace / task shell redesign](docs/ui/project-workspace-task-shell.md)
-- [GitHub Pages landing page](docs/ui/github-landing-page.md)
 
 ## Project structure
 
