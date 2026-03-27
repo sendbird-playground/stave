@@ -69,19 +69,79 @@ import {
   type WorkspaceSessionState,
 } from "@/store/workspace-session-state";
 import { normalizeComparablePath, parseGitWorktrees } from "@/lib/source-control-worktrees";
+import {
+  type LayoutState,
+  TASK_LIST_MIN_WIDTH,
+  MIN_EDITOR_PANEL_WIDTH,
+  DEFAULT_EDITOR_PANEL_WIDTH,
+  mergeLayoutPatch,
+  normalizeLayoutState,
+  isDiffEditorTab,
+  resolveEditorDiffMode,
+} from "@/store/layout.utils";
+import {
+  type ThemeTokenName,
+  type ThemeModeName,
+  type ThemeTokenValues,
+  type ThemeOverrideValues,
+  THEME_TOKEN_NAMES,
+  PRESET_THEME_TOKENS,
+  applyThemeClass,
+  applyThemeOverrides,
+  applyFontOverrides,
+  resolveDarkModeForTheme,
+} from "@/store/theme.utils";
+import {
+  type RecentProjectState,
+  normalizeWorkspaceInitCommand,
+  normalizeProjectWorkspaceInitCommand,
+  normalizeProjectWorkspaceRootNodeModulesSymlinkPreference,
+  resolveProjectWorkspaceInitCommand,
+  resolveProjectWorkspaceRootNodeModulesSymlinkPreference,
+  summarizeTerminalCommandDetail,
+  summarizeWorkspaceInitCommand,
+  buildWorkspaceRootNodeModulesSymlinkCommand,
+  buildWorkspaceCreationNotice,
+  registerTaskWorkspaceOwnership,
+  resolveWorkspaceName,
+  removeWorkspaceRuntimeCacheEntries,
+  areStringArraysEqual,
+  moveArrayItem,
+  sanitizeBranchName,
+  toWorkspaceFolderName,
+  resolveProjectNameFromPath,
+  hashProjectPath,
+  buildProjectDefaultWorkspaceId,
+  buildImportedWorktreeWorkspaceId,
+  resolveImportedWorktreeName,
+  resolveCurrentProjectDefaultWorkspaceId,
+  cloneRecentProjectState,
+  normalizeRecentProjectStates,
+  upsertRecentProjectState,
+  captureCurrentProjectState,
+} from "@/store/project.utils";
+import {
+  resolveLanguage,
+  normalizeProviderTimeoutMs,
+  isImageFilePath,
+  updateMessageById,
+  applyApprovalState,
+  applyUserInputState,
+} from "@/store/editor.utils";
 
-interface LayoutState {
-  taskListWidth: number;
-  taskListCollapsed: boolean;
-  editorPanelWidth: number;
-  explorerPanelWidth: number;
-  terminalDockHeight: number;
-  editorVisible: boolean;
-  sidebarOverlayVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes";
-  terminalDocked: boolean;
-  editorDiffMode: boolean;
-}
+export { TASK_LIST_MIN_WIDTH, MIN_EDITOR_PANEL_WIDTH, DEFAULT_EDITOR_PANEL_WIDTH } from "@/store/layout.utils";
+export type { LayoutState } from "@/store/layout.utils";
+export {
+  THEME_TOKEN_NAMES,
+  PRESET_THEME_TOKENS,
+} from "@/store/theme.utils";
+export type {
+  ThemeTokenName,
+  ThemeModeName,
+  ThemeTokenValues,
+  ThemeOverrideValues,
+} from "@/store/theme.utils";
+export type { RecentProjectState } from "@/store/project.utils";
 
 interface SkillCatalogState {
   status: "idle" | "loading" | "ready" | "error";
@@ -92,119 +152,8 @@ interface SkillCatalogState {
   detail: string;
 }
 
-interface RecentProjectState {
-  projectPath: string;
-  projectName: string;
-  lastOpenedAt: string;
-  defaultBranch: string;
-  workspaces: WorkspaceSummary[];
-  activeWorkspaceId: string;
-  workspaceBranchById: Record<string, string>;
-  workspacePathById: Record<string, string>;
-  workspaceDefaultById: Record<string, boolean>;
-  newWorkspaceInitCommand?: string;
-  newWorkspaceUseRootNodeModulesSymlink?: boolean;
-}
-
 const APP_STORE_KEY = "stave-store";
-export const TASK_LIST_MIN_WIDTH = 290;
-export const MIN_EDITOR_PANEL_WIDTH = 600;
-export const DEFAULT_EDITOR_PANEL_WIDTH = 720;
 export { DEFAULT_PROVIDER_TIMEOUT_MS, PROVIDER_TIMEOUT_OPTIONS } from "@/lib/providers/runtime-option-contract";
-const MAX_RECENT_PROJECTS = 12;
-
-export const THEME_TOKEN_NAMES = [
-  "background",
-  "foreground",
-  "card",
-  "card-foreground",
-  "popover",
-  "popover-foreground",
-  "primary",
-  "primary-foreground",
-  "secondary",
-  "secondary-foreground",
-  "muted",
-  "muted-foreground",
-  "accent",
-  "accent-foreground",
-  "destructive",
-  "border",
-  "input",
-  "ring",
-  "sidebar",
-  "sidebar-foreground",
-  "sidebar-primary",
-  "sidebar-primary-foreground",
-  "sidebar-accent",
-  "sidebar-accent-foreground",
-  "sidebar-border",
-  "sidebar-ring",
-] as const;
-
-export type ThemeTokenName = (typeof THEME_TOKEN_NAMES)[number];
-export type ThemeModeName = "light" | "dark";
-export type ThemeTokenValues = Record<ThemeTokenName, string>;
-export type ThemeOverrideValues = Partial<Record<ThemeTokenName, string>>;
-
-export const PRESET_THEME_TOKENS: Record<ThemeModeName, ThemeTokenValues> = {
-  light: {
-    background: "oklch(1 0 0)",
-    foreground: "oklch(0.145 0 0)",
-    card: "oklch(1 0 0)",
-    "card-foreground": "oklch(0.145 0 0)",
-    popover: "oklch(1 0 0)",
-    "popover-foreground": "oklch(0.145 0 0)",
-    primary: "oklch(0.205 0 0)",
-    "primary-foreground": "oklch(0.985 0 0)",
-    secondary: "oklch(0.97 0 0)",
-    "secondary-foreground": "oklch(0.205 0 0)",
-    muted: "oklch(0.97 0 0)",
-    "muted-foreground": "oklch(0.556 0 0)",
-    accent: "oklch(0.205 0 0)",
-    "accent-foreground": "oklch(0.985 0 0)",
-    destructive: "oklch(0.58 0.22 27)",
-    border: "oklch(0.922 0 0)",
-    input: "oklch(0.922 0 0)",
-    ring: "oklch(0.708 0 0)",
-    sidebar: "oklch(0.985 0 0)",
-    "sidebar-foreground": "oklch(0.145 0 0)",
-    "sidebar-primary": "oklch(0.205 0 0)",
-    "sidebar-primary-foreground": "oklch(0.985 0 0)",
-    "sidebar-accent": "oklch(0.97 0 0)",
-    "sidebar-accent-foreground": "oklch(0.205 0 0)",
-    "sidebar-border": "oklch(0.922 0 0)",
-    "sidebar-ring": "oklch(0.708 0 0)",
-  },
-  dark: {
-    background: "oklch(0.145 0 0)",
-    foreground: "oklch(0.985 0 0)",
-    card: "oklch(0.205 0 0)",
-    "card-foreground": "oklch(0.985 0 0)",
-    popover: "oklch(0.205 0 0)",
-    "popover-foreground": "oklch(0.985 0 0)",
-    primary: "oklch(0.87 0 0)",
-    "primary-foreground": "oklch(0.205 0 0)",
-    secondary: "oklch(0.269 0 0)",
-    "secondary-foreground": "oklch(0.985 0 0)",
-    muted: "oklch(0.269 0 0)",
-    "muted-foreground": "oklch(0.708 0 0)",
-    accent: "oklch(0.87 0 0)",
-    "accent-foreground": "oklch(0.205 0 0)",
-    destructive: "oklch(0.704 0.191 22.216)",
-    border: "oklch(1 0 0 / 10%)",
-    input: "oklch(1 0 0 / 15%)",
-    ring: "oklch(0.556 0 0)",
-    sidebar: "oklch(0.205 0 0)",
-    "sidebar-foreground": "oklch(0.985 0 0)",
-    "sidebar-primary": "oklch(0.488 0.243 264.376)",
-    "sidebar-primary-foreground": "oklch(0.985 0 0)",
-    "sidebar-accent": "oklch(0.269 0 0)",
-    "sidebar-accent-foreground": "oklch(0.985 0 0)",
-    "sidebar-border": "oklch(1 0 0 / 10%)",
-    "sidebar-ring": "oklch(0.556 0 0)",
-  },
-};
 
 export interface AppSettings {
   themeMode: "light" | "dark" | "system";
@@ -493,651 +442,8 @@ function createDefaultProviderAvailability() {
   ) as Record<ProviderId, boolean>;
 }
 
-function normalizeWorkspaceInitCommand(args: { value?: string | null }) {
-  return args.value?.trim() ?? "";
-}
-
-function normalizeProjectWorkspaceInitCommand(args: { value?: string | null }) {
-  return normalizeWorkspaceInitCommand({ value: args.value });
-}
-
-function normalizeProjectWorkspaceRootNodeModulesSymlinkPreference(args: { value?: boolean | null }) {
-  return args.value === true;
-}
-
-function resolveProjectWorkspaceInitCommand(args: {
-  projectPath?: string | null;
-  recentProjects: RecentProjectState[];
-}) {
-  const projectPath = args.projectPath?.trim();
-  if (!projectPath) {
-    return "";
-  }
-  const project = args.recentProjects.find((item) => item.projectPath === projectPath);
-  return normalizeProjectWorkspaceInitCommand({ value: project?.newWorkspaceInitCommand });
-}
-
-function resolveProjectWorkspaceRootNodeModulesSymlinkPreference(args: {
-  projectPath?: string | null;
-  recentProjects: RecentProjectState[];
-}) {
-  const projectPath = args.projectPath?.trim();
-  if (!projectPath) {
-    return false;
-  }
-  const project = args.recentProjects.find((item) => item.projectPath === projectPath);
-  return normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
-    value: project?.newWorkspaceUseRootNodeModulesSymlink,
-  });
-}
-
-function summarizeTerminalCommandDetail(args: { stdout?: string; stderr?: string; fallback: string }) {
-  const detail = (args.stderr || args.stdout || "").trim();
-  if (!detail) {
-    return args.fallback;
-  }
-
-  return detail.split("\n")[0]?.trim().slice(0, 240) || args.fallback;
-}
-
-function summarizeWorkspaceInitCommand(args: { command: string; maxLength?: number }) {
-  const normalized = normalizeWorkspaceInitCommand({ value: args.command });
-  const maxLength = args.maxLength ?? 96;
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
-}
-
-function buildWorkspaceRootNodeModulesSymlinkCommand(args: { projectPath: string }) {
-  const sourcePath = `${args.projectPath}/node_modules`;
-  return [
-    "if [ -e node_modules ] || [ -L node_modules ]; then",
-    "  echo \"node_modules already exists; skipping shared root symlink.\"",
-    `elif [ ! -e ${JSON.stringify(sourcePath)} ] && [ ! -L ${JSON.stringify(sourcePath)} ]; then`,
-    "  echo \"Repository root is missing node_modules; cannot create shared symlink.\" >&2",
-    "  exit 1",
-    "else",
-    `  ln -s ${JSON.stringify(sourcePath)} node_modules`,
-    "fi",
-  ].join("\n");
-}
-
-function buildWorkspaceCreationNotice(args: {
-  notices: Array<{ level: "success" | "warning"; message: string }>;
-}): { noticeLevel: "success" | "warning"; message: string } | undefined {
-  if (args.notices.length === 0) {
-    return undefined;
-  }
-
-  const noticeLevel = args.notices.some((notice) => notice.level === "warning") ? "warning" : "success";
-  return {
-    noticeLevel,
-    message: `Workspace created${noticeLevel === "warning" ? ", with warnings" : ""}. ${args.notices.map((notice) => notice.message).join(" ")}`,
-  };
-}
-
 function incrementWorkspaceSnapshotVersion(state: Pick<AppState, "workspaceSnapshotVersion">) {
   return state.workspaceSnapshotVersion + 1;
-}
-
-function mergeLayoutPatch(args: { layout: LayoutState; patch: Partial<LayoutState> }) {
-  let changed = false;
-  const nextLayout: LayoutState = normalizeLayoutState({ ...args.layout });
-
-  for (const [rawKey, rawValue] of Object.entries(args.patch)) {
-    const key = rawKey as keyof LayoutState;
-    const value = rawValue as LayoutState[keyof LayoutState];
-    if (value === undefined || Object.is(nextLayout[key], value)) {
-      continue;
-    }
-    nextLayout[key] = value as never;
-    changed = true;
-  }
-
-  const normalizedLayout = normalizeLayoutState(nextLayout);
-  return changed ? normalizedLayout : null;
-}
-
-function normalizeLayoutState(layout: LayoutState): LayoutState {
-  return {
-    ...layout,
-    editorPanelWidth: Math.max(MIN_EDITOR_PANEL_WIDTH, layout.editorPanelWidth),
-    sidebarOverlayTab: layout.sidebarOverlayTab === "changes" ? "changes" : "explorer",
-  };
-}
-
-function isDiffEditorTab(tab: Pick<EditorTab, "id" | "kind" | "originalContent"> | null | undefined) {
-  return Boolean(
-    tab
-    && tab.kind !== "image"
-    && !tab.id.startsWith("file:")
-    && tab.originalContent !== undefined
-  );
-}
-
-function resolveEditorDiffMode(args: {
-  editorTabs: EditorTab[];
-  activeEditorTabId: string | null;
-}) {
-  const activeTab = args.editorTabs.find((tab) => tab.id === args.activeEditorTabId);
-  return isDiffEditorTab(activeTab);
-}
-
-function registerTaskWorkspaceOwnership(args: {
-  taskWorkspaceIdById: Record<string, string>;
-  workspaceId: string;
-  tasks: Task[];
-}) {
-  const next = { ...args.taskWorkspaceIdById };
-  for (const task of args.tasks) {
-    next[task.id] = args.workspaceId;
-  }
-  return next;
-}
-
-function resolveWorkspaceName(args: {
-  state: Pick<AppState, "workspaces" | "recentProjects">;
-  workspaceId: string;
-}) {
-  const activeWorkspaceName = args.state.workspaces.find((workspace) => workspace.id === args.workspaceId)?.name;
-  if (activeWorkspaceName) {
-    return activeWorkspaceName;
-  }
-  for (const project of args.state.recentProjects) {
-    const workspaceName = project.workspaces.find((workspace) => workspace.id === args.workspaceId)?.name;
-    if (workspaceName) {
-      return workspaceName;
-    }
-  }
-  return defaultWorkspaceName;
-}
-
-function removeWorkspaceRuntimeCacheEntries(args: {
-  workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
-  workspaceIds: string[];
-}) {
-  if (args.workspaceIds.length === 0) {
-    return args.workspaceRuntimeCacheById;
-  }
-  const ids = new Set(args.workspaceIds);
-  return Object.fromEntries(
-    Object.entries(args.workspaceRuntimeCacheById).filter(([workspaceId]) => !ids.has(workspaceId))
-  );
-}
-
-function areStringArraysEqual(left: string[], right: string[]) {
-  if (left === right) {
-    return true;
-  }
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
-  if (
-    fromIndex < 0
-    || toIndex < 0
-    || fromIndex >= items.length
-    || toIndex >= items.length
-    || fromIndex === toIndex
-  ) {
-    return items;
-  }
-
-  const next = [...items];
-  const [moved] = next.splice(fromIndex, 1);
-  if (typeof moved === "undefined") {
-    return items;
-  }
-  next.splice(toIndex, 0, moved);
-  return next;
-}
-
-function sanitizeBranchName(args: { value: string }) {
-  return args.value
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9._/-]+/g, "-")
-    .replaceAll(/-+/g, "-")
-    .replaceAll(/^\-|\-$/g, "");
-}
-
-function toWorkspaceFolderName(args: { branch: string }) {
-  return args.branch.replaceAll("/", "__");
-}
-
-function resolveLanguage(args: { filePath: string }) {
-  if (isImageFilePath({ filePath: args.filePath })) {
-    return "image";
-  }
-  const path = args.filePath.toLowerCase();
-  const ext = path.slice(path.lastIndexOf("."));
-  const extMap: Record<string, string> = {
-    ".ts": "typescript",
-    ".tsx": "typescript",
-    ".mts": "typescript",
-    ".cts": "typescript",
-    ".js": "javascript",
-    ".jsx": "javascript",
-    ".mjs": "javascript",
-    ".cjs": "javascript",
-    ".json": "json",
-    ".jsonc": "json",
-    ".md": "markdown",
-    ".mdx": "markdown",
-    ".css": "css",
-    ".scss": "scss",
-    ".less": "less",
-    ".html": "html",
-    ".htm": "html",
-    ".xml": "xml",
-    ".svg": "xml",
-    ".yaml": "yaml",
-    ".yml": "yaml",
-    ".toml": "ini",
-    ".py": "python",
-    ".pyi": "python",
-    ".go": "go",
-    ".rs": "rust",
-    ".java": "java",
-    ".c": "c",
-    ".h": "c",
-    ".cpp": "cpp",
-    ".cc": "cpp",
-    ".cxx": "cpp",
-    ".cs": "csharp",
-    ".php": "php",
-    ".rb": "ruby",
-    ".swift": "swift",
-    ".kt": "kotlin",
-    ".kts": "kotlin",
-    ".sh": "shell",
-    ".bash": "shell",
-    ".zsh": "shell",
-    ".fish": "shell",
-    ".ps1": "powershell",
-    ".sql": "sql",
-    ".graphql": "graphql",
-    ".gql": "graphql",
-    ".dockerfile": "dockerfile",
-    ".tf": "hcl",
-    ".lua": "lua",
-    ".r": "r",
-    ".dart": "dart",
-    ".vue": "html",
-    ".svelte": "html",
-  };
-  if (extMap[ext]) {
-    return extMap[ext];
-  }
-  const basename = path.split("/").at(-1) ?? "";
-  if (basename === "dockerfile" || basename.startsWith("dockerfile.")) {
-    return "dockerfile";
-  }
-  if (basename === "makefile" || basename === "gnumakefile") {
-    return "makefile";
-  }
-  return "plaintext";
-}
-
-function normalizeProviderTimeoutMs(args: { value: number | null | undefined }) {
-  return PROVIDER_TIMEOUT_OPTIONS.includes(args.value as (typeof PROVIDER_TIMEOUT_OPTIONS)[number])
-    ? args.value!
-    : DEFAULT_PROVIDER_TIMEOUT_MS;
-}
-
-function isImageFilePath(args: { filePath: string }) {
-  const value = args.filePath.toLowerCase();
-  return value.endsWith(".png")
-    || value.endsWith(".jpg")
-    || value.endsWith(".jpeg")
-    || value.endsWith(".gif")
-    || value.endsWith(".webp")
-    || value.endsWith(".svg")
-    || value.endsWith(".bmp")
-    || value.endsWith(".ico")
-    || value.endsWith(".avif");
-}
-
-function updateMessageById(args: {
-  messages: ChatMessage[];
-  messageId: string;
-  update: (message: ChatMessage) => ChatMessage;
-}) {
-  return args.messages.map((message) =>
-    message.id === args.messageId ? args.update(message) : message
-  );
-}
-
-function applyApprovalState(args: {
-  taskId: string;
-  messageId: string;
-  requestId: string;
-  approved: boolean;
-}) {
-  useAppStore.setState((state) => {
-    const current = state.messagesByTask[args.taskId] ?? [];
-    return {
-      messagesByTask: {
-        ...state.messagesByTask,
-        [args.taskId]: updateMessageById({
-          messages: current,
-          messageId: args.messageId,
-          update: (message) => ({
-            ...message,
-            parts: updateApprovalPartsByRequestId({
-              parts: message.parts,
-              requestId: args.requestId,
-              approved: args.approved,
-            }),
-          }),
-        }),
-      },
-      workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-    };
-  });
-}
-
-function applyUserInputState(args: {
-  taskId: string;
-  messageId: string;
-  requestId: string;
-  answers?: Record<string, string>;
-  denied?: boolean;
-}) {
-  useAppStore.setState((state) => {
-    const current = state.messagesByTask[args.taskId] ?? [];
-    return {
-      messagesByTask: {
-        ...state.messagesByTask,
-        [args.taskId]: updateMessageById({
-          messages: current,
-          messageId: args.messageId,
-          update: (message) => ({
-            ...message,
-            parts: updateUserInputPartsByRequestId({
-              parts: message.parts,
-              requestId: args.requestId,
-              answers: args.answers,
-              denied: args.denied,
-            }),
-          }),
-        }),
-      },
-      workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-    };
-  });
-}
-
-function applyThemeClass(args: { enabled: boolean }) {
-  if (typeof document === "undefined") {
-    return;
-  }
-  document.documentElement.classList.toggle("dark", args.enabled);
-}
-
-function buildThemeOverrideCss(args: { themeOverrides: AppSettings["themeOverrides"] }) {
-  const blocks: string[] = [];
-
-  for (const mode of ["light", "dark"] as const) {
-    const overrides = args.themeOverrides[mode];
-    const declarations = Object.entries(overrides)
-      .filter((entry): entry is [ThemeTokenName, string] => Boolean(entry[1]?.trim()))
-      .map(([token, value]) => `--${token}: ${value};`);
-
-    if (declarations.length === 0) {
-      continue;
-    }
-
-    const selector = mode === "light" ? ":root" : ".dark";
-    blocks.push(`${selector}{${declarations.join("")}}`);
-  }
-
-  return blocks.join("\n");
-}
-
-function applyThemeOverrides(args: { themeOverrides: AppSettings["themeOverrides"] }) {
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  const styleId = "stave-theme-overrides";
-  const css = buildThemeOverrideCss({ themeOverrides: args.themeOverrides });
-  let element = document.getElementById(styleId) as HTMLStyleElement | null;
-
-  if (!css) {
-    element?.remove();
-    return;
-  }
-
-  if (!element) {
-    element = document.createElement("style");
-    element.id = styleId;
-    document.head.appendChild(element);
-  }
-
-  element.textContent = css;
-}
-
-function applyFontOverrides(args: {
-  messageFontFamily: string;
-  messageMonoFontFamily: string;
-  messageKoreanFontFamily: string;
-}) {
-  if (typeof document === "undefined") {
-    return;
-  }
-  const root = document.documentElement;
-  const sans = [args.messageFontFamily, args.messageKoreanFontFamily, "sans-serif"]
-    .filter(Boolean)
-    .join(", ");
-  const mono = [args.messageMonoFontFamily, "monospace"]
-    .filter(Boolean)
-    .join(", ");
-  root.style.setProperty("--font-sans", sans);
-  root.style.setProperty("--font-mono", mono);
-}
-
-function resolveDarkModeForTheme(args: { themeMode: AppSettings["themeMode"]; fallback?: boolean }) {
-  if (args.themeMode === "dark") {
-    return true;
-  }
-  if (args.themeMode === "light") {
-    return false;
-  }
-  if (typeof window === "undefined") {
-    return args.fallback ?? true;
-  }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
-function resolveProjectNameFromPath(args: { projectPath: string }) {
-  return args.projectPath
-    .split(/[\\/]/)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .at(-1) ?? "project";
-}
-
-function hashProjectPath(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-function buildProjectDefaultWorkspaceId(args: { projectPath?: string | null }) {
-  const projectPath = args.projectPath?.trim();
-  return projectPath ? `base:${hashProjectPath(normalizeComparablePath(projectPath))}` : starterWorkspaceId;
-}
-
-function buildImportedWorktreeWorkspaceId(args: { projectPath: string; worktreePath: string }) {
-  return `worktree:${hashProjectPath(`${normalizeComparablePath(args.projectPath)}::${normalizeComparablePath(args.worktreePath)}`)}`;
-}
-
-function resolveImportedWorktreeName(args: { branch?: string | null; worktreePath: string }) {
-  return args.branch?.trim() || resolveProjectNameFromPath({ projectPath: args.worktreePath });
-}
-
-function resolveCurrentProjectDefaultWorkspaceId(args: {
-  projectPath?: string | null;
-  workspaces: WorkspaceSummary[];
-  workspaceDefaultById: Record<string, boolean>;
-}) {
-  const rememberedDefaultWorkspaceId = Object.entries(args.workspaceDefaultById)
-    .find(([, isDefault]) => isDefault)?.[0];
-  if (rememberedDefaultWorkspaceId) {
-    return rememberedDefaultWorkspaceId;
-  }
-  return args.workspaces.find((workspace) => workspace.id === starterWorkspaceId)?.id
-    ?? args.workspaces.find((workspace) => workspace.name.toLowerCase() === defaultWorkspaceName.toLowerCase())?.id
-    ?? buildProjectDefaultWorkspaceId({ projectPath: args.projectPath });
-}
-
-function cloneRecentProjectState(project: RecentProjectState): RecentProjectState {
-  return {
-    ...project,
-    workspaces: [...project.workspaces],
-    workspaceBranchById: { ...project.workspaceBranchById },
-    workspacePathById: { ...project.workspacePathById },
-    workspaceDefaultById: { ...project.workspaceDefaultById },
-    newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
-      value: project.newWorkspaceInitCommand,
-    }),
-    newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
-      value: project.newWorkspaceUseRootNodeModulesSymlink,
-    }),
-  };
-}
-
-function normalizeRecentProjectStates(args: { projects?: RecentProjectState[] | null }) {
-  let normalizedProjects: RecentProjectState[] = [];
-
-  for (const project of args.projects ?? []) {
-    const projectPath = project?.projectPath?.trim();
-    if (!projectPath) {
-      continue;
-    }
-
-    const lastOpenedAt = project.lastOpenedAt?.trim() || new Date().toISOString();
-    const defaultBranch = project.defaultBranch?.trim() || "main";
-    const workspaceBranchById = { ...(project.workspaceBranchById ?? {}) };
-    const workspacePathById = { ...(project.workspacePathById ?? {}) };
-    const workspaceDefaultById = { ...(project.workspaceDefaultById ?? {}) };
-    const providedWorkspaces = Array.isArray(project.workspaces)
-      ? project.workspaces.filter((workspace) => Boolean(workspace?.id && workspace?.name))
-      : [];
-    const initialDefaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
-      projectPath,
-      workspaces: providedWorkspaces,
-      workspaceDefaultById,
-    });
-    const workspaces = providedWorkspaces.length > 0
-      ? providedWorkspaces.map((workspace) => ({
-          id: workspace.id,
-          name: workspace.name,
-          updatedAt: workspace.updatedAt || lastOpenedAt,
-        }))
-      : [{
-          id: initialDefaultWorkspaceId,
-          name: defaultWorkspaceName,
-          updatedAt: lastOpenedAt,
-        }];
-    const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
-      projectPath,
-      workspaces,
-      workspaceDefaultById,
-    });
-    const activeWorkspaceId = workspaces.some((workspace) => workspace.id === project.activeWorkspaceId)
-      ? project.activeWorkspaceId
-      : defaultWorkspaceId;
-
-    workspaceBranchById[defaultWorkspaceId] = workspaceBranchById[defaultWorkspaceId] || defaultBranch;
-    workspacePathById[defaultWorkspaceId] = workspacePathById[defaultWorkspaceId] || projectPath;
-    normalizedProjects = upsertRecentProjectState({
-      projects: normalizedProjects,
-      project: {
-        projectPath,
-        projectName: project.projectName?.trim() || resolveProjectNameFromPath({ projectPath }),
-        lastOpenedAt,
-        defaultBranch,
-        workspaces,
-        activeWorkspaceId,
-        workspaceBranchById,
-        workspacePathById,
-        workspaceDefaultById: {
-          ...workspaceDefaultById,
-          [defaultWorkspaceId]: true,
-        },
-        newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
-          value: project.newWorkspaceInitCommand,
-        }),
-        newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
-          value: project.newWorkspaceUseRootNodeModulesSymlink,
-        }),
-      },
-    });
-  }
-
-  return normalizedProjects;
-}
-
-function upsertRecentProjectState(args: { projects: RecentProjectState[]; project: RecentProjectState }) {
-  const nextProject = cloneRecentProjectState(args.project);
-  const existingIndex = args.projects.findIndex((item) => item.projectPath === args.project.projectPath);
-  if (existingIndex >= 0) {
-    return args.projects.map((item, index) => (index === existingIndex ? nextProject : cloneRecentProjectState(item)));
-  }
-  return [...args.projects.map((project) => cloneRecentProjectState(project)), nextProject]
-    .slice(-MAX_RECENT_PROJECTS);
-}
-
-function captureCurrentProjectState(args: {
-  recentProjects: RecentProjectState[];
-  projectPath: string | null;
-  workspaceRootName: string | null;
-  defaultBranch: string;
-  workspaces: WorkspaceSummary[];
-  activeWorkspaceId: string;
-  workspaceBranchById: Record<string, string>;
-  workspacePathById: Record<string, string>;
-  workspaceDefaultById: Record<string, boolean>;
-}): RecentProjectState[] {
-  if (!args.projectPath) {
-    return args.recentProjects.map((project) => cloneRecentProjectState(project));
-  }
-  return upsertRecentProjectState({
-    projects: args.recentProjects,
-    project: {
-      projectPath: args.projectPath,
-      projectName: args.workspaceRootName ?? "project",
-      lastOpenedAt: new Date().toISOString(),
-      defaultBranch: args.defaultBranch,
-      workspaces: args.workspaces,
-      activeWorkspaceId: args.activeWorkspaceId,
-      workspaceBranchById: args.workspaceBranchById,
-      workspacePathById: args.workspacePathById,
-      workspaceDefaultById: args.workspaceDefaultById,
-      newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
-        projectPath: args.projectPath,
-        recentProjects: args.recentProjects,
-      }),
-      newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
-        projectPath: args.projectPath,
-        recentProjects: args.recentProjects,
-      }),
-    },
-  });
 }
 
 export const useAppStore = create<AppState>()(
@@ -3226,12 +2532,14 @@ export const useAppStore = create<AppState>()(
                 });
                 return;
               }
-              applyApprovalState({
+              set((state) => applyApprovalState({
+                messagesByTask: state.messagesByTask,
+                workspaceSnapshotVersion: state.workspaceSnapshotVersion,
                 taskId,
                 messageId,
                 requestId: approvalPart.requestId,
                 approved,
-              });
+              }));
             }).catch((error) => {
               set((state) => {
                 const current = state.messagesByTask[taskId] ?? [];
@@ -3285,12 +2593,14 @@ export const useAppStore = create<AppState>()(
           return;
         }
         if (approvalPart) {
-          applyApprovalState({
+          set((state) => applyApprovalState({
+            messagesByTask: state.messagesByTask,
+            workspaceSnapshotVersion: state.workspaceSnapshotVersion,
             taskId,
             messageId,
             requestId: approvalPart.requestId,
             approved,
-          });
+          }));
           return;
         }
       },
@@ -3333,13 +2643,15 @@ export const useAppStore = create<AppState>()(
                 });
                 return;
               }
-              applyUserInputState({
+              set((state) => applyUserInputState({
+                messagesByTask: state.messagesByTask,
+                workspaceSnapshotVersion: state.workspaceSnapshotVersion,
                 taskId,
                 messageId,
                 requestId: userInputPart.requestId,
                 answers,
                 denied,
-              });
+              }));
             }).catch((error) => {
               set((state) => {
                 const current = state.messagesByTask[taskId] ?? [];
@@ -3393,13 +2705,15 @@ export const useAppStore = create<AppState>()(
           return;
         }
         if (userInputPart) {
-          applyUserInputState({
+          set((state) => applyUserInputState({
+            messagesByTask: state.messagesByTask,
+            workspaceSnapshotVersion: state.workspaceSnapshotVersion,
             taskId,
             messageId,
             requestId: userInputPart.requestId,
             answers,
             denied,
-          });
+          }));
         }
       },
       resolveDiff: ({ taskId, messageId, accepted, partIndex }) => {
