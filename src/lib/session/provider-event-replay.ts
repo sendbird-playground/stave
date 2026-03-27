@@ -192,7 +192,7 @@ function isLikelyStaveExecutionProcessingPayload(value: unknown): boolean {
 
   const candidate = value as Record<string, unknown>;
   if (candidate.strategy === "direct") {
-    return typeof candidate.model === "string" && typeof candidate.reason === "string";
+    return (typeof candidate.model === "string" || typeof candidate.intent === "string") && typeof candidate.reason === "string";
   }
 
   if (candidate.strategy === "orchestrate") {
