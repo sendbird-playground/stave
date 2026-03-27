@@ -2970,6 +2970,68 @@ export const useAppStore = create<AppState>()(
           if (shouldClearProviderConversation) {
             void window.api?.provider?.cleanupTask?.({ taskId: resolvedTaskId });
           }
+
+          // ── /stave:sync – async git fetch + pull ─────────────────────────
+          if (commandResult.action === "sync" && runCommand && workspaceCwd) {
+            const syncTaskId = resolvedTaskId;
+            // Compute the assistant message ID deterministically so we can
+            // update the same message once the async operations finish.
+            const currentForSync = get().messagesByTask[syncTaskId] ?? [];
+            const syncAssistantMessageId = currentForSync[currentForSync.length - 1]?.id;
+
+            void (async () => {
+              const lines: string[] = [];
+
+              // 1. git fetch --all --prune
+              const fetchResult = await runCommand({ cwd: workspaceCwd, command: "git fetch --all --prune" });
+              if (fetchResult.ok) {
+                lines.push("✓ git fetch --all --prune");
+              } else {
+                lines.push(`✗ git fetch failed (exit ${fetchResult.code})`);
+                if (fetchResult.stderr.trim()) {
+                  lines.push(fetchResult.stderr.trim());
+                }
+              }
+
+              // 2. git pull --ff-only (only attempt if fetch succeeded)
+              if (fetchResult.ok) {
+                const pullResult = await runCommand({ cwd: workspaceCwd, command: "git pull --ff-only" });
+                if (pullResult.ok) {
+                  const pullSummary = pullResult.stdout.trim() || "Already up to date.";
+                  lines.push(`✓ git pull --ff-only`);
+                  lines.push(pullSummary);
+                } else {
+                  lines.push(`✗ git pull --ff-only failed (exit ${pullResult.code})`);
+                  if (pullResult.stderr.trim()) {
+                    lines.push(pullResult.stderr.trim());
+                  }
+                  lines.push("Tip: If fast-forward is not possible, resolve manually with git merge or git rebase.");
+                }
+              }
+
+              // 3. Update the assistant message with the final result
+              const resultText = lines.join("\n");
+              if (syncAssistantMessageId) {
+                set((state) => ({
+                  messagesByTask: {
+                    ...state.messagesByTask,
+                    [syncTaskId]: updateMessageById({
+                      messages: state.messagesByTask[syncTaskId] ?? [],
+                      messageId: syncAssistantMessageId,
+                      update: (message) => ({
+                        ...message,
+                        content: resultText,
+                        parts: [createUserTextPart({ text: resultText })],
+                      }),
+                    }),
+                  },
+                  workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+                }));
+              }
+            })();
+          }
+          // ── End /stave:sync ──────────────────────────────────────────────
+
           return; // skip runProviderTurn entirely
         }
         // ── End slash-command interception ────────────────────────────────
