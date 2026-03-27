@@ -1,7 +1,7 @@
-import { FolderTree, LoaderCircle, Code2, SquareTerminal, FolderOpen } from "lucide-react";
+import { FolderTree, LoaderCircle, Code2, SquareTerminal, FolderOpen, ChevronDown } from "lucide-react";
 import { Suspense, lazy, useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Card, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import { Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { useAppStore } from "@/store/app.store";
 import { TopBarBranchDropdown } from "@/components/layout/TopBarBranchDropdown";
 import { TopBarFileSearch } from "@/components/layout/TopBarFileSearch";
@@ -137,52 +137,45 @@ export function TopBar() {
           <TooltipProvider>
             {hasProjectContext ? <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
             {hasProjectContext && activeWorkspacePath ? (
-              <div className="flex min-w-0 items-center gap-1" style={TOP_BAR_NO_DRAG_STYLE}>
+              <div className="flex min-w-0 items-center" style={TOP_BAR_NO_DRAG_STYLE}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="inline-flex max-w-[220px] items-center gap-2 rounded-md border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
+                    <div className="inline-flex max-w-[220px] items-center gap-2 rounded-l-md border border-r-0 border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
                       <FolderTree className="size-3.5 shrink-0" />
                       <span className="truncate font-mono">{workspacePathLabel}</span>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">{activeWorkspacePath}</TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
-                      onClick={() => void window.api?.shell?.showInFinder?.({ path: activeWorkspacePath })}
-                    >
-                      <FolderOpen className="size-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Open in Finder</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
-                      onClick={() => void window.api?.shell?.openInVSCode?.({ path: activeWorkspacePath })}
-                    >
-                      <Code2 className="size-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Open in VS Code</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
-                      onClick={() => void window.api?.shell?.openInTerminal?.({ path: activeWorkspacePath })}
-                    >
-                      <SquareTerminal className="size-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Open in Terminal</TooltipContent>
-                </Tooltip>
+                <DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center justify-center rounded-r-md border border-border/60 bg-background/60 px-1 py-1 text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
+                        >
+                          <ChevronDown className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Open in…</TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="start" className="min-w-[160px]">
+                    <DropdownMenuItem onClick={() => void window.api?.shell?.showInFinder?.({ path: activeWorkspacePath })}>
+                      <FolderOpen className="size-4" />
+                      Open in Finder
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void window.api?.shell?.openInVSCode?.({ path: activeWorkspacePath })}>
+                      <Code2 className="size-4" />
+                      Open in VS Code
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void window.api?.shell?.openInTerminal?.({ path: activeWorkspacePath })}>
+                      <SquareTerminal className="size-4" />
+                      Open in Terminal
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : null}
             {hasProjectContext ? <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
