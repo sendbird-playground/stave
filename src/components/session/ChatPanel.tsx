@@ -936,6 +936,15 @@ function ChatPanelMessageList(args: {
   const autoScrollKey = `${visibleMessages.length}:${lastVisibleMessageScrollFingerprint}`;
   const forceScrollKey = latestVisibleMessageId;
 
+  // Stable callback so that memo(MessageRow) can skip re-rendering unchanged
+  // rows when the streaming message updates.
+  const onOpenReplay = useCallback(() => {
+    args.onOpenSessionReplay({
+      view: "replay",
+      replayFilter: "tools",
+    });
+  }, [args.onOpenSessionReplay]);
+
   return (
     <ConversationContent
       autoScrollKey={autoScrollKey}
@@ -970,10 +979,7 @@ function ChatPanelMessageList(args: {
               chatStreamingEnabled={chatStreamingEnabled}
               isFirst={index === 0}
               liveStreamingMessageId={liveStreamingMessageId}
-              onOpenReplay={() => args.onOpenSessionReplay({
-                view: "replay",
-                replayFilter: "tools",
-              })}
+              onOpenReplay={onOpenReplay}
               message={message}
             />
           )}

@@ -1,4 +1,5 @@
 import type { HTMLAttributes, MouseEvent, ReactNode } from "react";
+import { useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,96 @@ export function MarkdownMessage({
   className,
   ...props
 }: MarkdownMessageProps) {
+  // ---------------------------------------------------------------------------
+  // Stable ReactMarkdown `components` object.
+  //
+  // ReactMarkdown uses each component function as a React component type via
+  // createElement(). If the function reference changes between renders, React
+  // treats it as a *different* component and unmounts/remounts the subtree.
+  // For CodeBlockContent this means losing the highlighted-HTML state and
+  // flashing the un-highlighted fallback while Shiki re-runs.
+  //
+  // We keep the component functions stable by storing mutable props in refs
+  // and reading them inside the (stable) component closures.
+  // ---------------------------------------------------------------------------
+  const renderBlockCodeRef = useRef(renderBlockCode);
+  renderBlockCodeRef.current = renderBlockCode;
+  const messageCodeFontSizeRef = useRef(messageCodeFontSize);
+  messageCodeFontSizeRef.current = messageCodeFontSize;
+  const onFileLinkClickRef = useRef(onFileLinkClick);
+  onFileLinkClickRef.current = onFileLinkClick;
+
+  const components = useMemo(() => ({
+    p: ({ children }: { children?: ReactNode }) => <p className="my-2 whitespace-pre-wrap first:mt-0 last:mb-0">{children}</p>,
+    ul: ({ children }: { children?: ReactNode }) => (
+      <ul className="my-2 ml-5 list-disc pl-1 marker:text-muted-foreground [&_ol]:my-1 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:my-1 [&_ul]:ml-5 [&_ul]:list-disc">
+        {children}
+      </ul>
+    ),
+    ol: ({ children }: { children?: ReactNode }) => (
+      <ol className="my-2 ml-5 list-decimal pl-1 marker:text-muted-foreground [&_ol]:my-1 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:my-1 [&_ul]:ml-5 [&_ul]:list-disc">
+        {children}
+      </ol>
+    ),
+    li: ({ children }: { children?: ReactNode }) => <li className="my-1 marker:text-muted-foreground [&>p]:my-0">{children}</li>,
+    code: ({ className: codeClassName, children }: { className?: string; children?: ReactNode }) => {
+      const lang = /language-(\w+)/.exec(codeClassName ?? "")?.[1];
+      const text = String(children);
+      const isBlock = Boolean(lang) || text.includes("\n");
+      if (isBlock) {
+        const renderFn = renderBlockCodeRef.current;
+        if (renderFn) {
+          return renderFn({
+            code: text.replace(/\n$/, ""),
+            language: lang,
+          });
+        }
+        return <pre><code>{text.replace(/\n$/, "")}</code></pre>;
+      }
+      return (
+        <code
+          className={cn(
+            "rounded bg-muted px-1 py-0.5 font-mono",
+            resolveMessageSizeClass(messageCodeFontSizeRef.current),
+          )}
+        >
+          {children}
+        </code>
+      );
+    },
+    pre: ({ children }: { children?: ReactNode }) => <>{children}</>,
+    a: ({ href, children }: { href?: string; children?: ReactNode }) => (
+      <a
+        href={href}
+        className="text-primary underline underline-offset-2"
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href })}
+      >
+        {children}
+      </a>
+    ),
+    table: ({ children }: { children?: ReactNode }) => (
+      <Table className="my-3 w-full table-fixed border-separate border-spacing-0 rounded-md border border-border/70 bg-card text-sm">
+        {children}
+      </Table>
+    ),
+    thead: ({ children }: { children?: ReactNode }) => <TableHeader className="bg-muted/40">{children}</TableHeader>,
+    tbody: ({ children }: { children?: ReactNode }) => <TableBody>{children}</TableBody>,
+    tr: ({ children }: { children?: ReactNode }) => <TableRow className="hover:bg-muted/30">{children}</TableRow>,
+    th: ({ children }: { children?: ReactNode }) => (
+      <TableHead className="h-auto border-r border-border/70 px-3 py-2 align-top whitespace-normal break-words [overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap [&_code]:break-all last:border-r-0">
+        {children}
+      </TableHead>
+    ),
+    td: ({ children }: { children?: ReactNode }) => (
+      <TableCell className="border-r border-border/70 px-3 py-2 align-top whitespace-normal break-words [overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap [&_code]:break-all last:border-r-0">
+        {children}
+      </TableCell>
+    ),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
+
   return (
     <div
       className={cn(
@@ -55,74 +146,7 @@ export function MarkdownMessage({
       ) : (
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{
-            p: ({ children }) => <p className="my-2 whitespace-pre-wrap first:mt-0 last:mb-0">{children}</p>,
-            ul: ({ children }) => (
-              <ul className="my-2 ml-5 list-disc pl-1 marker:text-muted-foreground [&_ol]:my-1 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:my-1 [&_ul]:ml-5 [&_ul]:list-disc">
-                {children}
-              </ul>
-            ),
-            ol: ({ children }) => (
-              <ol className="my-2 ml-5 list-decimal pl-1 marker:text-muted-foreground [&_ol]:my-1 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:my-1 [&_ul]:ml-5 [&_ul]:list-disc">
-                {children}
-              </ol>
-            ),
-            li: ({ children }) => <li className="my-1 marker:text-muted-foreground [&>p]:my-0">{children}</li>,
-            code: ({ className: codeClassName, children }) => {
-              const lang = /language-(\w+)/.exec(codeClassName ?? "")?.[1];
-              const text = String(children);
-              const isBlock = Boolean(lang) || text.includes("\n");
-              if (isBlock) {
-                if (renderBlockCode) {
-                  return renderBlockCode({
-                    code: text.replace(/\n$/, ""),
-                    language: lang,
-                  });
-                }
-                return <pre><code>{text.replace(/\n$/, "")}</code></pre>;
-              }
-              return (
-                <code
-                  className={cn(
-                    "rounded bg-muted px-1 py-0.5 font-mono",
-                    resolveMessageSizeClass(messageCodeFontSize),
-                  )}
-                >
-                  {children}
-                </code>
-              );
-            },
-            pre: ({ children }) => <>{children}</>,
-            a: ({ href, children }) => (
-              <a
-                href={href}
-                className="text-primary underline underline-offset-2"
-                target="_blank"
-                rel="noreferrer"
-                onClick={(event) => void onFileLinkClick?.({ event, href })}
-              >
-                {children}
-              </a>
-            ),
-            table: ({ children }) => (
-              <Table className="my-3 w-full table-fixed border-separate border-spacing-0 rounded-md border border-border/70 bg-card text-sm">
-                {children}
-              </Table>
-            ),
-            thead: ({ children }) => <TableHeader className="bg-muted/40">{children}</TableHeader>,
-            tbody: ({ children }) => <TableBody>{children}</TableBody>,
-            tr: ({ children }) => <TableRow className="hover:bg-muted/30">{children}</TableRow>,
-            th: ({ children }) => (
-              <TableHead className="h-auto border-r border-border/70 px-3 py-2 align-top whitespace-normal break-words [overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap [&_code]:break-all last:border-r-0">
-                {children}
-              </TableHead>
-            ),
-            td: ({ children }) => (
-              <TableCell className="border-r border-border/70 px-3 py-2 align-top whitespace-normal break-words [overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap [&_code]:break-all last:border-r-0">
-                {children}
-              </TableCell>
-            ),
-          }}
+          components={components}
         >
           {content}
         </ReactMarkdown>
