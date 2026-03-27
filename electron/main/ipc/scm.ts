@@ -115,7 +115,11 @@ export function registerScmHandlers() {
   });
 
   ipcMain.handle("scm:list-branches", async (_event, args: { cwd?: string }) => {
-    const listResult = await runCommand({ command: "git branch --format='%(refname:short)'", cwd: args.cwd });
+    // Best effort: prune deleted remote branches before reading branch lists.
+    // Ignore failures so branch listing still works when offline or without origin.
+    await runCommand({ command: "git remote prune origin", cwd: args.cwd });
+
+    const listResult = await runCommand({ command: "git branch --format='%(refname:short)|%(upstream:track)'", cwd: args.cwd });
     const listRemoteResult = await runCommand({ command: "git branch -r --format='%(refname:short)'", cwd: args.cwd });
     const currentResult = await runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd: args.cwd });
     const worktreeResult = await runCommand({ command: "git worktree list --porcelain", cwd: args.cwd });
@@ -126,14 +130,16 @@ export function registerScmHandlers() {
       branches: listResult.ok
         ? listResult.stdout
             .split("\n")
-            .map((name) => name.trim())
+            .map((line) => line.trim())
             .filter(Boolean)
+            .filter((line) => !line.endsWith("|[gone]"))
+            .map((line) => line.split("|")[0] ?? line)
         : [],
       remoteBranches: listRemoteResult.ok
         ? listRemoteResult.stdout
             .split("\n")
             .map((name) => name.trim())
-            .filter((name) => Boolean(name) && !name.endsWith("/HEAD"))
+            .filter((name) => Boolean(name) && name.includes("/") && !name.endsWith("/HEAD"))
         : [],
       worktreePathByBranch: worktreeResult.ok ? parseWorktreePathByBranch({ stdout: worktreeResult.stdout }) : {},
       stderr: [listResult.stderr, currentResult.stderr].filter(Boolean).join("\n").trim(),

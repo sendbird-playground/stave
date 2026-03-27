@@ -197,6 +197,30 @@ describe("resolveCommandInput", () => {
     expect(result.response).toContain("Unknown Stave command: /stave:unknown");
     expect(result.response).toContain("/stave:help");
   });
+
+  test("returns sync action with workspace path for /stave:sync", () => {
+    const result = resolveCommandInput("/stave:sync", createContext({ workspaceCwd: "/home/user/project" }));
+
+    expect(result.kind).toBe("local-response");
+    if (result.kind !== "local-response") {
+      return;
+    }
+    expect(result.source).toBe("stave_builtin");
+    expect(result.command).toBe("/stave:sync");
+    expect(result.action).toBe("sync");
+    expect(result.response).toContain("/home/user/project");
+  });
+
+  test("returns sync action even without workspace path", () => {
+    const result = resolveCommandInput("/stave:sync", createContext({ workspaceCwd: undefined }));
+
+    expect(result.kind).toBe("local-response");
+    if (result.kind !== "local-response") {
+      return;
+    }
+    expect(result.action).toBe("sync");
+    expect(result.response).toContain("unknown workspace");
+  });
 });
 
 describe("getSlashCommandSearchQuery", () => {
@@ -217,6 +241,7 @@ describe("buildCommandPaletteItems", () => {
     });
 
     expect(palette.items.map((item) => item.command)).toContain("/stave:status");
+    expect(palette.items.map((item) => item.command)).toContain("/stave:sync");
     expect(palette.items.map((item) => item.command)).toContain("/stave:meow");
     expect(palette.items.map((item) => item.command)).toContain("/simplify");
     expect(palette.providerNote.title).toBe("Claude native commands");
@@ -245,5 +270,10 @@ describe("filterCommandPaletteItems", () => {
       items: palette.items,
       query: "/simp",
     }).map((item) => item.command)).toContain("/simplify");
+
+    expect(filterCommandPaletteItems({
+      items: palette.items,
+      query: "/sync",
+    }).map((item) => item.command)).toContain("/stave:sync");
   });
 });

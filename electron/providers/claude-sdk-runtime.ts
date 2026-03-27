@@ -12,9 +12,16 @@ import { toText } from "./utils";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { homedir } from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { z } from "zod";
-import { buildExecutableLookupEnv, canExecutePath, resolveExecutablePath } from "./executable-path";
+import { canExecutePath, resolveExecutablePath } from "./executable-path";
+import {
+  buildRuntimeProcessEnv,
+  compareSemverVersions,
+  parseBooleanEnv,
+  parseSemverVersion,
+  probeExecutableVersion,
+  summarizePathHead,
+} from "./runtime-shared";
 
 /** SDK-level permission modes accepted by the claude-agent-sdk query() API. */
 type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
@@ -39,20 +46,6 @@ const CLAUDE_LOOKUP_PATHS = [
   `${homedir()}/.local/bin`,
 ] as const;
 
-function parseBooleanEnv(args: { value: string | undefined; fallback: boolean }) {
-  const normalized = args.value?.trim().toLowerCase();
-  if (!normalized) {
-    return args.fallback;
-  }
-  if (["1", "true", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-  if (["0", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-  return args.fallback;
-}
-
 function resolveClaudePermissionMode(args: {
   runtimeValue?: ClaudePermissionMode;
   envValue?: string;
@@ -71,45 +64,23 @@ function resolveClaudePermissionMode(args: {
   return args.fallback;
 }
 
-function parseClaudeVersion(args: { value: string }) {
-  const match = args.value.match(/(\d+)\.(\d+)\.(\d+)/);
-  if (!match) {
-    return null;
-  }
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-  };
-}
-
-function compareVersion(a: { major: number; minor: number; patch: number }, b: { major: number; minor: number; patch: number }) {
-  if (a.major !== b.major) {
-    return a.major - b.major;
-  }
-  if (a.minor !== b.minor) {
-    return a.minor - b.minor;
-  }
-  return a.patch - b.patch;
-}
-
 function probeClaudeExecutable(args: { path: string }) {
-  const env = buildExecutableLookupEnv({
-    extraPaths: [...CLAUDE_LOOKUP_PATHS, path.dirname(args.path)],
+  const env = buildRuntimeProcessEnv({
+    executablePath: args.path,
+    extraPaths: CLAUDE_LOOKUP_PATHS,
   });
-  const result = spawnSync(args.path, ["--version"], {
-    encoding: "utf8",
+  const result = probeExecutableVersion({
+    executablePath: args.path,
     env,
   });
   if (result.status !== 0) {
     return null;
   }
-  const text = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim();
-  const version = parseClaudeVersion({ value: text });
+  const version = parseSemverVersion({ value: result.text });
   return {
     path: args.path,
     version,
-    raw: text,
+    raw: result.text,
   };
 }
 
@@ -144,7 +115,7 @@ export function resolveClaudeExecutablePath() {
 
   available.sort((left, right) => {
     if (left.version && right.version) {
-      return compareVersion(right.version, left.version);
+      return compareSemverVersions(right.version, left.version);
     }
     if (left.version) {
       return -1;
@@ -159,32 +130,11 @@ export function resolveClaudeExecutablePath() {
 }
 
 function buildClaudeEnv(args: { executablePath: string }) {
-  const env = { ...process.env } as Record<string, string | undefined>;
-  // Prevent Electron parent-process env from breaking spawned CLI behavior.
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.ELECTRON_NO_ATTACH_CONSOLE;
-  delete env.ELECTRON_NO_ASAR;
-  delete env.ELECTRON_ENABLE_LOGGING;
-  delete env.ELECTRON_ENABLE_STACK_DUMPING;
-  delete env.ELECTRON_DISABLE_SECURITY_WARNINGS;
-
-  env.CLAUDECODE = undefined;
-  env.PATH = buildExecutableLookupEnv({
-    baseEnv: env,
-    extraPaths: [
-      ...CLAUDE_LOOKUP_PATHS,
-      args.executablePath ? path.dirname(args.executablePath) : "",
-    ],
-  }).PATH;
-  return env;
-}
-
-function summarizePath(args: { value: string | undefined }) {
-  return (args.value ?? "")
-    .split(":")
-    .filter(Boolean)
-    .slice(0, 8)
-    .join(":");
+  return buildRuntimeProcessEnv({
+    executablePath: args.executablePath,
+    extraPaths: CLAUDE_LOOKUP_PATHS,
+    unsetEnvKeys: ["CLAUDECODE"],
+  });
 }
 
 function buildClaudeDiagnostics(args: {
@@ -194,8 +144,8 @@ function buildClaudeDiagnostics(args: {
 }) {
   const env = buildClaudeEnv({ executablePath: args.executablePath });
   const versionProbe = args.executablePath
-    ? spawnSync(args.executablePath, ["--version"], {
-      encoding: "utf8",
+    ? probeExecutableVersion({
+      executablePath: args.executablePath,
       env,
     })
     : null;
@@ -205,7 +155,7 @@ function buildClaudeDiagnostics(args: {
     cwd: args.cwd,
     executablePath: args.executablePath || "<sdk-default>",
     executableExists: args.executablePath ? canExecutePath({ path: args.executablePath }) : null,
-    envPathHead: summarizePath({ value: env.PATH }),
+    envPathHead: summarizePathHead({ value: env.PATH }),
     electronEnv: {
       ELECTRON_RUN_AS_NODE: process.env.ELECTRON_RUN_AS_NODE ?? "",
       ELECTRON_NO_ATTACH_CONSOLE: process.env.ELECTRON_NO_ATTACH_CONSOLE ?? "",
@@ -215,9 +165,9 @@ function buildClaudeDiagnostics(args: {
       ? {
         status: versionProbe.status,
         signal: versionProbe.signal,
-        error: versionProbe.error ? String(versionProbe.error) : "",
-        stdout: (versionProbe.stdout ?? "").trim(),
-        stderr: (versionProbe.stderr ?? "").trim(),
+        error: versionProbe.error,
+        stdout: versionProbe.stdout,
+        stderr: versionProbe.stderr,
       }
       : null,
   };

@@ -1,15 +1,16 @@
 import MonacoEditor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import type { editor as MonacoEditorApi, IPosition, IRange } from "monaco-editor";
-import { AlignJustify, Columns2, FileCode2, PenLine, Save, Send, X } from "lucide-react";
+import { FileCode2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
-import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { copyTextToClipboard } from "@/lib/clipboard";
-import { cn } from "@/lib/utils";
 import { buildDiffEditorModelPath, releaseDiffEditorModels, type DiffEditorModelOwner } from "./editor-main-panel.utils";
+import { EditorImagePreviewOverlay } from "./editor-image-preview-overlay";
+import { EditorMainTabStrip } from "./editor-main-tab-strip";
+import { EditorMainToolbar } from "./editor-main-toolbar";
 import {
   clearLanguageIntelligenceMarkers,
   configureMonacoLanguageIntelligence,
@@ -447,6 +448,10 @@ async function ensureWorkspaceSourceFilesLoaded(args: {
         monaco: args.monaco,
         files: nextFiles,
       }));
+      args.state.sourceFileDisposables.push(...addMonacoExtraLibs({
+        monaco: args.monaco,
+        files: nextFiles,
+      }));
     })
     .finally(() => {
       args.state.sourceFilesPromises.delete(contextKey);
@@ -653,8 +658,6 @@ export function EditorMainPanel() {
   const activeTab = editorTabs.find((tab) => tab.id === activeEditorTabId) ?? null;
   const isImageTab = (tab: { kind?: "text" | "image"; language: string } | null) =>
     Boolean(tab && (tab.kind === "image" || tab.language === "image"));
-  const isChatDiffTab = (tab: { id: string; kind?: "text" | "image"; originalContent?: string } | null) =>
-    Boolean(tab && tab.kind !== "image" && !tab.id.startsWith("file:") && tab.originalContent != null);
   const activeTabIsImage = isImageTab(activeTab);
   const monacoTheme = isDarkMode ? "vs-dark" : "vs";
   const activeModelPath = activeTab ? toMonacoModelPath(activeTab.filePath) : undefined;
@@ -921,246 +924,36 @@ export function EditorMainPanel() {
 
   return (
     <section data-testid="editor-main" className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col rounded-lg border border-border/80 bg-card shadow-sm">
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/80 px-3 text-sm">
-        <p className="inline-flex items-center gap-2 font-medium text-foreground">
-          <FileCode2 className="size-4 text-muted-foreground" />
-          Editor
-        </p>
-        <TooltipProvider>
-          <div className="flex items-center gap-1.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    disabled={!activeTab?.isDirty || activeTabIsImage}
-                    onClick={() => void saveActiveEditorTab()}
-                  >
-                    <Save className="size-4" />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Save (Ctrl S)</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    disabled={!activeTab?.originalContent || activeTabIsImage}
-                    onClick={toggleEditorDiffMode}
-                  >
-                    {editorDiffMode ? <PenLine className="size-4" /> : <Columns2 className="size-4" />}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{editorDiffMode ? "Back to Edit" : "View Diff"}</TooltipContent>
-            </Tooltip>
-            {showDiffDisplayControls ? (
-              <div className="flex items-center gap-0.5 rounded-md border border-border/80 bg-background/70 p-0.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className={cn(
-                        "h-6 w-6 rounded-sm p-0 text-muted-foreground",
-                        diffViewMode === "unified" && "bg-secondary text-foreground",
-                      )}
-                      onClick={() => updateSettings({ patch: { diffViewMode: "unified" } })}
-                      aria-label="Unified Diff"
-                    >
-                      <AlignJustify className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Unified Diff</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className={cn(
-                        "h-6 w-6 rounded-sm p-0 text-muted-foreground",
-                        diffViewMode === "split" && "bg-secondary text-foreground",
-                      )}
-                      onClick={() => updateSettings({ patch: { diffViewMode: "split" } })}
-                      aria-label="Split Diff"
-                    >
-                      <Columns2 className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Split Diff</TooltipContent>
-                </Tooltip>
-              </div>
-            ) : null}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    disabled={!activeTab}
-                    onClick={() => sendEditorContextToChat({ taskId: activeTaskId })}
-                  >
-                    <Send className="size-4" />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Send to Agent</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                  onClick={() => setLayout({ patch: { editorVisible: false } })}
-                >
-                  <X className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Close Editor</TooltipContent>
-            </Tooltip>
-          </div>
-        </TooltipProvider>
-      </div>
+      <EditorMainToolbar
+        activeTab={activeTab}
+        activeTabIsImage={activeTabIsImage}
+        editorDiffMode={editorDiffMode}
+        diffViewMode={diffViewMode}
+        showDiffDisplayControls={showDiffDisplayControls}
+        onSave={() => void saveActiveEditorTab()}
+        onToggleEditorDiffMode={toggleEditorDiffMode}
+        onChangeDiffViewMode={(mode) => updateSettings({ patch: { diffViewMode: mode } })}
+        onSendToAgent={() => sendEditorContextToChat({ taskId: activeTaskId })}
+        onCloseEditor={() => setLayout({ patch: { editorVisible: false } })}
+      />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface text-editor-foreground">
-        {editorTabs.length > 0 && <div
-          className="tab-strip-scroll min-w-0 w-full max-w-full flex items-end gap-0.5 overflow-x-auto border-b border-border/80 bg-transparent pt-px"
-          onWheel={(event) => {
-            if (event.deltaY !== 0) {
-              event.currentTarget.scrollLeft += event.deltaY;
-              event.preventDefault();
-            }
-          }}
-        >
-          {editorTabs.map((tab) => (
-            <ContextMenu key={tab.id} onOpenChange={(open) => { if (open) setActiveEditorTab({ tabId: tab.id }); }}>
-              <ContextMenuTrigger asChild>
-                <div
-                  draggable
-                  onDragStart={(event) => handleTabDragStart(event, tab.id)}
-                  onDragEnd={() => {
-                    setDraggingTabId(null);
-                    setDropTargetTabId(null);
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    if (draggingTabId && draggingTabId !== tab.id) {
-                      setDropTargetTabId(tab.id);
-                    }
-                  }}
-                  onDrop={(event) => handleTabDrop(event, tab.id)}
-                  className={[
-                    "group -mb-px flex shrink-0 items-center gap-1.5 rounded-t-md border px-3 py-1.5 text-sm transition-colors",
-                    tab.id === activeEditorTabId
-                      ? "border-border/80 border-b-editor bg-editor-tab-active text-editor-foreground"
-                      : "border-transparent border-b-border/80 bg-editor-tab text-muted-foreground hover:bg-editor-muted hover:text-editor-foreground",
-                    dropTargetTabId === tab.id && draggingTabId && draggingTabId !== tab.id ? "outline outline-1 outline-primary/60" : "",
-                  ].join(" ")}
-                >
-                  <button
-                    type="button"
-                    className="max-w-56 min-w-0 truncate text-left"
-                    title={tab.filePath}
-                    onClick={() => setActiveEditorTab({ tabId: tab.id })}
-                  >
-                    {tab.filePath.split("/").filter(Boolean).at(-1) ?? tab.filePath}
-                  </button>
-                  {isChatDiffTab(tab) ? (
-                    <Badge variant="outline" className="h-4 rounded-sm px-1 text-[10px] uppercase tracking-[0.08em]">
-                      Diff
-                    </Badge>
-                  ) : null}
-                  {tab.isDirty ? <span className="text-sm leading-none text-success">●</span> : null}
-                  {tab.hasConflict ? <span className="rounded px-1 text-sm font-medium text-warning">!</span> : null}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`close-${tab.filePath}`}
-                    className={[
-                      "ml-1 size-4 rounded-sm p-0 transition-colors",
-                      "text-muted-foreground hover:bg-editor-muted hover:text-editor-foreground",
-                      tab.id === activeEditorTabId ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                    ].join(" ")}
-                    onClick={() => {
-                      requestCloseTab(tab.id);
-                    }}
-                  >
-                    <X className="size-3" />
-                  </Button>
-                </div>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem onSelect={() => requestCloseTab(tab.id)}>Close</ContextMenuItem>
-                <ContextMenuItem
-                  onSelect={() =>
-                    requestCloseTabs({
-                      tabIds: editorTabs.filter((t) => t.id !== tab.id).map((t) => t.id),
-                      title: "Close Other Tabs",
-                      description: "Close all tabs except this tab?",
-                    })
-                  }
-                >
-                  Close Others
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onSelect={() => {
-                    const startIndex = editorTabs.findIndex((t) => t.id === tab.id);
-                    const rightTabIds = startIndex >= 0 ? editorTabs.slice(startIndex + 1).map((t) => t.id) : [];
-                    requestCloseTabs({
-                      tabIds: rightTabIds,
-                      title: "Close Tabs to the Right",
-                      description: "Close all tabs to the right?",
-                    });
-                  }}
-                >
-                  Close to the Right
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onSelect={() =>
-                    requestCloseTabs({
-                      tabIds: editorTabs.filter((t) => !t.isDirty).map((t) => t.id),
-                      title: "Close Saved Tabs",
-                      description: "Close all saved tabs?",
-                    })
-                  }
-                >
-                  Close Saved
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onSelect={() =>
-                    requestCloseTabs({
-                      tabIds: editorTabs.map((t) => t.id),
-                      title: "Close All Tabs",
-                      description: "Close all open tabs?",
-                    })
-                  }
-                >
-                  Close All
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => void copyText(resolveAbsolutePath(tab.filePath))}>
-                  Copy Path
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => void copyText(tab.filePath)}>
-                  Copy Relative Path
-                </ContextMenuItem>
-                <ContextMenuItem onSelect={() => void copyText(tab.filePath.split("/").filter(Boolean).join(" > "))}>
-                  Copy Breadcrumbs Path
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          ))}
-        </div>}
+        <EditorMainTabStrip
+          editorTabs={editorTabs}
+          activeEditorTabId={activeEditorTabId}
+          draggingTabId={draggingTabId}
+          dropTargetTabId={dropTargetTabId}
+          onSetDraggingTabId={setDraggingTabId}
+          onSetDropTargetTabId={setDropTargetTabId}
+          onTabDragStart={handleTabDragStart}
+          onTabDrop={handleTabDrop}
+          onActivateTab={(tabId) => setActiveEditorTab({ tabId })}
+          onRequestCloseTab={requestCloseTab}
+          onRequestCloseTabs={requestCloseTabs}
+          onCopyPath={(filePath) => void copyText(resolveAbsolutePath(filePath))}
+          onCopyRelativePath={(filePath) => void copyText(filePath)}
+          onCopyBreadcrumbs={(filePath) => void copyText(filePath.split("/").filter(Boolean).join(" > "))}
+        />
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {activeTab ? (
@@ -1272,36 +1065,12 @@ export function EditorMainPanel() {
           )}
         </div>
       </div>
-      {imagePreviewOpen && activeTabIsImage && activeTab ? (
-        <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Image full screen preview"
-          onClick={() => setImagePreviewOpen(false)}
-        >
-          <button
-            type="button"
-            className="absolute right-4 top-4 rounded-sm border border-border/80 bg-card/90 px-2 py-1 text-sm text-foreground hover:bg-accent"
-            onClick={(event) => {
-              event.stopPropagation();
-              setImagePreviewOpen(false);
-            }}
-          >
-            Close
-          </button>
-          <img
-            src={activeTab.content}
-            alt={activeTab.filePath.split("/").filter(Boolean).at(-1) ?? activeTab.filePath}
-            className="max-h-full max-w-full cursor-zoom-out object-contain"
-            title="Click to close full screen"
-            onClick={(event) => {
-              event.stopPropagation();
-              setImagePreviewOpen(false);
-            }}
-          />
-        </div>
-      ) : null}
+      <EditorImagePreviewOverlay
+        open={Boolean(imagePreviewOpen && activeTabIsImage && activeTab)}
+        imageSrc={activeTab?.content ?? ""}
+        alt={activeTab ? activeTab.filePath.split("/").filter(Boolean).at(-1) ?? activeTab.filePath : "Image preview"}
+        onClose={() => setImagePreviewOpen(false)}
+      />
       <ConfirmDialog
         open={Boolean(tabToClose)}
         title="Close Tab Without Saving"

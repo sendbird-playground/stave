@@ -164,6 +164,9 @@ export function AppShell() {
       const hasMod = event.ctrlKey || event.metaKey;
 
       if (hasMod && !event.shiftKey && event.key.toLowerCase() === "p") {
+        if (!store.projectPath?.trim()) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         handleFocusFileSearch();

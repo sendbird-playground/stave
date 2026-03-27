@@ -6,11 +6,14 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 
 ## Map
 
+- [Install Guide](install-guide.md)
 - [Architecture](architecture/runtime.md)
 - [Conversation flow](architecture/conversation-flow.md)
 - [Provider runtimes](providers/provider-runtimes.md)
 - [Stave Model Router](features/stave-model-router.md)
 - [Future SDK backlog](future/claude-sdk-candidates.md)
+- [Codebase simplification plan (2026-03-26)](future/codebase-simplification-plan-2026-03-26.md)
+- [Codebase simplification report (2026-03-27)](future/codebase-simplification-report-2026-03-27.md)
 - [AI Elements v1.9.0 upgrade plan (2026-03-16)](future/ai-elements-v1.9.0-upgrade-plan-2026-03-16.md)
 - [Shared skill management plan (2026-03-13)](future/shared-skill-management-plan-2026-03-13.md)
 - [Session Replay](features/session-replay.md)

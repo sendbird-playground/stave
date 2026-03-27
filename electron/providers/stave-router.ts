@@ -8,7 +8,8 @@
  */
 
 import type { StreamTurnArgs } from "./types";
-import type { StaveAutoIntent, StaveAutoProfile } from "../../src/lib/providers/provider.types";
+import type { CanonicalConversationRequest, StaveAutoIntent, StaveAutoProfile } from "../../src/lib/providers/provider.types";
+import type { SkillCatalogProvider } from "../../src/lib/skills/types";
 import {
   DEFAULT_STAVE_AUTO_PROFILE,
   resolveStaveIntentModel,
@@ -106,6 +107,61 @@ export function resolveStaveTarget(args: {
     providerId: resolveStaveProviderForModel({ model }),
     model,
     reason: reasons[intent],
+  };
+}
+
+/**
+ * Skill fast-path: when the request contains skill_context in contextParts,
+ * bypass the preprocessor entirely and route directly to the appropriate model
+ * based on the skill's declared provider.
+ *
+ * Returns `null` when no skill context is present (normal preprocessor flow).
+ */
+export function resolveSkillFastPath(args: {
+  contextParts: CanonicalConversationRequest["contextParts"];
+  profile: StaveAutoProfile;
+}): StaveRouteTarget | null {
+  const skillPart = args.contextParts.find(
+    (p): p is Extract<typeof p, { type: "skill_context" }> =>
+      p.type === "skill_context",
+  );
+  if (!skillPart || skillPart.skills.length === 0) {
+    return null;
+  }
+
+  const skills = skillPart.skills;
+  const skillNames = skills.map((s) => s.name).join(", ");
+
+  // Determine the dominant provider across all skills.
+  // If all skills share the same concrete provider, use it. Otherwise fall back to "shared".
+  const providers = new Set<SkillCatalogProvider>(skills.map((s) => s.provider));
+  // Normalize: "stave" is not a concrete executor, treat it as "shared".
+  if (providers.has("stave")) {
+    providers.delete("stave");
+    providers.add("shared");
+  }
+  // If after normalization there is exactly one non-"shared" provider, use it.
+  const concreteProviders = new Set([...providers].filter((p) => p !== "shared"));
+  const dominantProvider: SkillCatalogProvider =
+    concreteProviders.size === 1
+      ? [...concreteProviders][0]
+      : "shared";
+
+  // Resolve model from the profile based on the dominant provider.
+  let model: string;
+  if (dominantProvider === "codex") {
+    model = args.profile.implementModel;
+  } else if (dominantProvider === "claude-code") {
+    model = args.profile.generalModel;
+  } else {
+    // "shared" — use the profile's general-purpose model.
+    model = args.profile.generalModel;
+  }
+
+  return {
+    providerId: resolveStaveProviderForModel({ model }),
+    model,
+    reason: `Skill fast-path → ${skillNames}`,
   };
 }
 

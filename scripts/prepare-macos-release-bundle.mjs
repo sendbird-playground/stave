@@ -11,6 +11,13 @@ const productName = "Stave";
 const bundleDirectoryName = "Stave";
 const archiveName = "Stave-macOS.zip";
 
+export function copyMacAppBundle(args) {
+  cpSync(args.sourceAppBundlePath, args.destinationAppBundlePath, {
+    recursive: true,
+    verbatimSymlinks: true,
+  });
+}
+
 function main() {
   const appBundlePath = findMacAppBundle({
     releaseRoot,
@@ -22,6 +29,7 @@ function main() {
   }
 
   const installerSourcePath = path.join(repoRoot, "scripts", "install-stave.command");
+  const terminalGuideSourcePath = path.join(repoRoot, "scripts", "install-stave-in-terminal.txt");
   const stagingRoot = path.join(releaseRoot, bundleDirectoryName);
   const archivePath = path.join(releaseRoot, archiveName);
 
@@ -29,8 +37,12 @@ function main() {
   rmSync(archivePath, { force: true });
   mkdirSync(stagingRoot, { recursive: true });
 
-  cpSync(appBundlePath, path.join(stagingRoot, `${productName}.app`), { recursive: true });
+  copyMacAppBundle({
+    sourceAppBundlePath: appBundlePath,
+    destinationAppBundlePath: path.join(stagingRoot, `${productName}.app`),
+  });
   copyFileSync(installerSourcePath, path.join(stagingRoot, "Install Stave.command"));
+  copyFileSync(terminalGuideSourcePath, path.join(stagingRoot, "Install Stave in Terminal.txt"));
   chmodSync(path.join(stagingRoot, "Install Stave.command"), 0o755);
 
   execFileSync("ditto", ["-c", "-k", "--keepParent", bundleDirectoryName, archiveName], {

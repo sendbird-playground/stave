@@ -2,6 +2,18 @@
 
 Stave is an Electron-based AI coding workspace built with Bun, React, Vite, and TypeScript.
 
+![Stave](docs/screenshots/stave-app.png)
+
+## Try Stave on macOS
+
+If you already have GitHub CLI authenticated for `sendbird-playground`, install the latest internal macOS build with one command:
+
+```bash
+gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/install-latest-release.sh | bash
+```
+
+If this is your first time using `gh`, or you need SSO/scope troubleshooting, see the full [Install Guide](docs/install-guide.md).
+
 ## Highlights
 
 - desktop-first Claude and Codex workspace
@@ -145,19 +157,23 @@ bun run package:linux:deb
 
 ### GitHub release packaging
 
+For internal macOS installs, the preferred path is the authenticated one-command installer documented in [docs/install-guide.md](docs/install-guide.md). The GitHub `Release` workflow also publishes a manual zip fallback for direct bundle download.
+
 The GitHub `Release` workflow now builds an unpacked `Stave.app`, then creates a `Stave-macOS.zip` bundle that contains:
 
 - `Stave.app`
 - `Install Stave.command`
+- `Install Stave in Terminal.txt`
 
-`Install Stave.command` copies the app into `~/Applications`, removes the macOS quarantine attribute, and launches Stave. This is intended for internal team distribution where Apple Developer signing and notarization are not in use.
+`Install Stave.command` copies the app into `~/Applications`, removes the macOS quarantine attribute, and launches Stave. Because the downloaded `.command` helper itself may still be blocked by Gatekeeper, the bundle also includes `Install Stave in Terminal.txt` with a Terminal-safe fallback that runs the same installer via `sh`. This is intended for internal team distribution where Apple Developer signing and notarization are not in use.
 
-Recommended install flow for teammates:
+Manual zip fallback:
 
 1. Download `Stave-macOS.zip`
 2. Unzip it
 3. Double-click `Install Stave.command`
-4. Stave is installed into `~/Applications/Stave.app` and opened
+4. If macOS blocks the helper, follow `Install Stave in Terminal.txt`
+5. Stave is installed into `~/Applications/Stave.app` and opened
 
 ### Troubleshooting
 
@@ -168,7 +184,7 @@ Recommended install flow for teammates:
 | `[persistence] upsert-workspace-sync failed` in Electron logs | Same as above, check the full error message | `bun run rebuild:electron-deps` |
 | `Patch signature not found` error during rebuild | `better-sqlite3` version changed or `node_modules` corrupted | `bun install && bun run rebuild:electron-deps` |
 | Build fails with `node-gyp` errors | Missing C++ toolchain | Install Xcode CLT / build-essential (see Prerequisites) |
-| GitHub release app is blocked by Gatekeeper when opened directly | The browser download added the macOS quarantine attribute | Run `Install Stave.command`, or manually run `xattr -dr com.apple.quarantine ~/Applications/Stave.app` |
+| GitHub release app or installer helper is blocked by Gatekeeper | The browser download added the macOS quarantine attribute to the bundle contents | Run `Install Stave.command`. If macOS blocks that helper too, follow `Install Stave in Terminal.txt`, or manually run `xattr -dr com.apple.quarantine ~/Applications/Stave.app` after copying the app into `~/Applications` |
 | macOS repeatedly asks "Allow Stave to access files in your … folder?" when opening files in the editor or attaching files/images to a prompt | macOS TCC requires explicit per-folder consent the first time Stave reads from Desktop, Documents, or Downloads. In production this prompt appears once and is then remembered permanently. In development builds the Electron binary changes on every rebuild, which invalidates the stored TCC grant and causes the dialog to reappear each session. | **Production:** approve the dialog once — it will not appear again. **Development:** grant permanent access via **System Settings → Privacy & Security → Files and Folders → Stave** (toggle each folder on). |
 
 ## Docs
@@ -176,10 +192,13 @@ Recommended install flow for teammates:
 Stable project documentation now lives under `docs/`.
 
 - [Documentation index](docs/README.md)
+- [Install Guide](docs/install-guide.md)
 - [Runtime architecture](docs/architecture/runtime.md)
 - [Conversation flow](docs/architecture/conversation-flow.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
 - [Future SDK backlog](docs/future/claude-sdk-candidates.md)
+- [Codebase simplification plan (2026-03-26)](docs/future/codebase-simplification-plan-2026-03-26.md)
+- [Codebase simplification report (2026-03-27)](docs/future/codebase-simplification-report-2026-03-27.md)
 - [Shared skill management plan (2026-03-13)](docs/future/shared-skill-management-plan-2026-03-13.md)
 - [Session Replay](docs/features/session-replay.md)
 - [Skill selector](docs/features/skill-selector.md)

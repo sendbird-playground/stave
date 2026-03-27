@@ -461,6 +461,7 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
         }
       }}
       data={props.data}
+      initialTopMostItemIndex={lastIndex >= 0 ? lastIndex : 0}
       customScrollParent={containerEl ?? undefined}
       style={{ height: "100%" }}
       atBottomThreshold={AT_BOTTOM_THRESHOLD}

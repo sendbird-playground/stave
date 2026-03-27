@@ -1,8 +1,6 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
 import type { Thread, ThreadEvent, ThreadItem, TurnCompletedEvent, TurnOptions } from "@openai/codex-sdk";
 import {
-  buildExecutableLookupEnv,
-  canExecutePath,
   resolveExecutablePath,
   toAsarUnpackedPath,
 } from "./executable-path";
@@ -12,11 +10,16 @@ import {
   buildProviderTurnPrompt,
   resolveProviderResumeConversationId,
 } from "../../src/lib/providers/provider-request-translators";
-import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import {
+  buildRuntimeProcessEnv,
+  parseBooleanEnv,
+  parseSemverVersion,
+  probeExecutableVersion,
+} from "./runtime-shared";
 
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
@@ -28,20 +31,6 @@ const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.local/bin`,
 ] as const;
 const moduleRequire = createRequire(import.meta.url);
-
-function parseBooleanEnv(args: { value: string | undefined; fallback: boolean }) {
-  const normalized = args.value?.trim().toLowerCase();
-  if (!normalized) {
-    return args.fallback;
-  }
-  if (["1", "true", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-  if (["0", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-  return args.fallback;
-}
 
 function resolveSandboxMode(args: {
   runtimeValue?: "read-only" | "workspace-write" | "danger-full-access";
@@ -96,25 +85,17 @@ function toCodexUserFacingErrorMessage(args: { message: string }) {
 }
 
 function buildCodexEnv(args: { executablePath?: string } = {}) {
-  const nextEnv = { ...process.env };
-  delete nextEnv.ELECTRON_RUN_AS_NODE;
-  delete nextEnv.ELECTRON_NO_ATTACH_CONSOLE;
-  delete nextEnv.ELECTRON_NO_ASAR;
-  nextEnv.PATH = buildExecutableLookupEnv({
-    baseEnv: nextEnv,
-    extraPaths: [
-      ...CODEX_LOOKUP_PATHS,
-      args.executablePath ? path.dirname(args.executablePath) : "",
-    ],
-  }).PATH;
-  return nextEnv as Record<string, string>;
+  return buildRuntimeProcessEnv({
+    executablePath: args.executablePath,
+    extraPaths: CODEX_LOOKUP_PATHS,
+  }) as Record<string, string>;
 }
 
 function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }) {
   const env = buildCodexEnv({ executablePath: args.executablePath });
   const versionProbe = args.executablePath
-    ? spawnSync(args.executablePath, ["--version"], {
-      encoding: "utf8",
+    ? probeExecutableVersion({
+      executablePath: args.executablePath,
       env,
     })
     : null;
@@ -127,9 +108,9 @@ function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }
       ? {
         status: versionProbe.status,
         signal: versionProbe.signal,
-        error: versionProbe.error ? String(versionProbe.error) : "",
-        stdout: (versionProbe.stdout ?? "").trim(),
-        stderr: (versionProbe.stderr ?? "").trim(),
+        error: versionProbe.error,
+        stdout: versionProbe.stdout,
+        stderr: versionProbe.stderr,
       }
       : null,
   };
@@ -209,14 +190,14 @@ function rememberThreadId(args: { threadKey: string; threadId?: string }) {
 }
 
 function parseVersionFromStdout(args: { stdout: string }) {
-  const match = args.stdout.match(/(\d+)\.(\d+)\.(\d+)/);
-  if (!match) {
+  const parsed = parseSemverVersion({ value: args.stdout });
+  if (!parsed) {
     return null;
   }
   return [
-    Number(match[1] ?? 0),
-    Number(match[2] ?? 0),
-    Number(match[3] ?? 0),
+    parsed.major,
+    parsed.minor,
+    parsed.patch,
   ] as const;
 }
 
@@ -340,14 +321,14 @@ export function resolveCodexExecutablePath(args: { explicitPath?: string } = {})
       continue;
     }
     const env = buildCodexEnv({ executablePath: candidate });
-    const versionProbe = spawnSync(candidate, ["--version"], {
-      encoding: "utf8",
+    const versionProbe = probeExecutableVersion({
+      executablePath: candidate,
       env,
     });
     if (versionProbe.status !== 0) {
       continue;
     }
-    const parsed = parseVersionFromStdout({ stdout: versionProbe.stdout ?? "" });
+    const parsed = parseVersionFromStdout({ stdout: versionProbe.stdout });
     if (!parsed) {
       if (!selectedPath) {
         selectedPath = candidate;
