@@ -61,10 +61,10 @@ describe("resolveCommandInput", () => {
       return;
     }
     expect(result.command).toBe("/stave:status");
-    expect(result.response).toContain("Task: Demo task");
-    expect(result.response).toContain("Provider: Codex (gpt-5.4)");
-    expect(result.response).toContain("Workspace: /tmp/demo");
-    expect(result.response).toContain("Turn: idle");
+    expect(result.response).toContain("Demo task");
+    expect(result.response).toContain("Codex (gpt-5.4)");
+    expect(result.response).toContain("/tmp/demo");
+    expect(result.response).toContain("| **Turn** | idle |");
   });
 
   test("routes custom Stave commands locally even when settings omit the namespace", () => {
@@ -124,13 +124,13 @@ describe("resolveCommandInput", () => {
     if (result.kind !== "local-response") {
       return;
     }
-    expect(result.response).toContain("Assistant turns with usage: 2");
-    expect(result.response).toContain("Input tokens: 2,000");
-    expect(result.response).toContain("Output tokens: 500");
-    expect(result.response).toContain("Cache read tokens: 50");
-    expect(result.response).toContain("Cache creation tokens: 25");
-    expect(result.response).toContain("Total cost: $0.0223");
-    expect(result.response).toContain("Last response: in 800 / out 200");
+    expect(result.response).toContain("| **Assistant turns with usage** | 2 |");
+    expect(result.response).toContain("| **Input tokens** | 2,000 |");
+    expect(result.response).toContain("| **Output tokens** | 500 |");
+    expect(result.response).toContain("| **Cache read tokens** | 50 |");
+    expect(result.response).toContain("| **Cache creation tokens** | 25 |");
+    expect(result.response).toContain("$0.0223");
+    expect(result.response).toContain("in 800 / out 200");
   });
 
   test("preserves clear behavior under /stave:clear", () => {
@@ -173,9 +173,10 @@ describe("resolveCommandInput", () => {
       return;
     }
     expect(result.source).toBe("provider_meta");
-    expect(result.response).toContain("Unknown Claude command for this workspace: /usage");
+    expect(result.response).toContain("Unknown Claude command for this workspace");
+    expect(result.response).toContain("/usage");
     expect(result.response).toContain("/keybindings-help");
-    expect(result.response).toContain("Try /stave:usage");
+    expect(result.response).toContain("/stave:usage");
   });
 
   test("keeps provider-namespaced commands untouched for passthrough", () => {
@@ -194,7 +195,8 @@ describe("resolveCommandInput", () => {
       return;
     }
     expect(result.source).toBe("stave_meta");
-    expect(result.response).toContain("Unknown Stave command: /stave:unknown");
+    expect(result.response).toContain("Unknown Stave command");
+    expect(result.response).toContain("/stave:unknown");
     expect(result.response).toContain("/stave:help");
   });
 
