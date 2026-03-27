@@ -1,4 +1,5 @@
 import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
+import { sanitizeMessagePartPayload } from "@/lib/file-context-sanitization";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import {
   hasRenderableAssistantContent,
@@ -23,18 +24,18 @@ function buildMessageId(args: { taskId: string; count: number }) {
 }
 
 function createTextPart(args: { text: string }): TextPart {
-  return {
+  return sanitizeMessagePartPayload({
     type: "text",
     text: args.text,
-  };
+  });
 }
 
 function createThinkingPart(args: { text: string; isStreaming: boolean }): ThinkingPart {
-  return {
+  return sanitizeMessagePartPayload({
     type: "thinking",
     text: args.text,
     isStreaming: args.isStreaming,
-  };
+  });
 }
 
 function createToolPart(args: {
@@ -44,14 +45,14 @@ function createToolPart(args: {
   output?: string;
   state: ToolUsePart["state"];
 }): ToolUsePart {
-  return {
+  return sanitizeMessagePartPayload({
     type: "tool_use",
     toolUseId: args.toolUseId,
     toolName: args.toolName,
     input: args.input,
     output: args.output,
     state: args.state,
-  };
+  });
 }
 
 function createDiffPart(args: {
@@ -60,13 +61,13 @@ function createDiffPart(args: {
   newContent: string;
   status: CodeDiffPart["status"];
 }): CodeDiffPart {
-  return {
+  return sanitizeMessagePartPayload({
     type: "code_diff",
     filePath: args.filePath,
     oldContent: args.oldContent,
     newContent: args.newContent,
     status: args.status,
-  };
+  });
 }
 
 function createApprovalPart(args: {
@@ -74,13 +75,13 @@ function createApprovalPart(args: {
   toolName: string;
   description: string;
 }): ApprovalPart {
-  return {
+  return sanitizeMessagePartPayload({
     type: "approval",
     toolName: args.toolName,
     requestId: args.requestId,
     description: args.description,
     state: "approval-requested",
-  };
+  });
 }
 
 function createUserInputPart(args: {
@@ -88,13 +89,13 @@ function createUserInputPart(args: {
   toolName: string;
   questions: UserInputPart["questions"];
 }): UserInputPart {
-  return {
+  return sanitizeMessagePartPayload({
     type: "user_input",
     requestId: args.requestId,
     toolName: args.toolName,
     questions: args.questions,
     state: "input-requested",
-  };
+  });
 }
 
 function isAgentToolPart(part: MessagePart): part is ToolUsePart {
@@ -298,20 +299,20 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
         questions: event.questions,
       });
     case "system":
-      return {
+      return sanitizeMessagePartPayload({
         type: "system_event",
         content: event.content,
-      };
+      });
     case "subagent_progress":
       // Handled separately in appendProviderEventToAssistant — not a standalone part.
       return null;
     case "error":
-      return {
+      return sanitizeMessagePartPayload({
         type: "system_event",
         content: `[error] ${event.message}`,
-      };
+      });
     case "stave:execution_processing": {
-      const plan: StaveProcessingPart = {
+      const plan = sanitizeMessagePartPayload({
         type: "stave_processing",
         strategy: event.strategy,
         reason: event.reason,
@@ -325,7 +326,7 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
         ...(event.strategy === "orchestrate" && event.supervisorModel
           ? { supervisorModel: event.supervisorModel }
           : {}),
-      };
+      } satisfies StaveProcessingPart);
       return plan;
     }
     case "tool_progress":

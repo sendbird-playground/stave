@@ -4,6 +4,7 @@ import { Button, Textarea, WaveIndicator } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
 import { APPROVE_PLAN_MESSAGE } from "@/lib/providers/plan-response";
 import { useAppStore } from "@/store/app.store";
+import { resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
 import { useShallow } from "zustand/react/shallow";
 
 type ViewState = "normal" | "minimized" | "expanded";
@@ -26,17 +27,12 @@ export function PlanViewer() {
     return messages?.at(-1);
   });
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
-  const planText = lastMessage?.planText?.trim() ?? "";
-
-  const isClaudePlanMode = activeProvider === "claude-code" && claudePermissionMode === "plan";
-  const isPlanPreparing = isClaudePlanMode && isTurnActive;
-  const isPlanPending =
-    activeProvider === "claude-code" &&
-    !isTurnActive &&
-    lastMessage?.role === "assistant" &&
-    lastMessage.providerId === "claude-code" &&
-    lastMessage.isPlanResponse === true &&
-    !lastMessage.isStreaming;
+  const { planText, isPlanPreparing, isPlanPending } = resolvePlanViewerState({
+    activeProvider,
+    claudePermissionMode,
+    lastMessage,
+    isTurnActive,
+  });
 
   // Reset view state when a new plan arrives so it opens fully
   useEffect(() => {

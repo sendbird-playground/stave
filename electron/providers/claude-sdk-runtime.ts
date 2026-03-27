@@ -1,5 +1,9 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
 import { buildProviderTurnPrompt, resolveProviderResumeConversationId } from "../../src/lib/providers/provider-request-translators";
+import {
+  MAX_PROVIDER_APPROVAL_DESCRIPTION_CHARS,
+  sanitizeTextField,
+} from "../../src/lib/file-context-sanitization";
 import type {
   Query,
   SDKMessage,
@@ -271,7 +275,11 @@ function summarizeClaudePermissionRequest(args: {
     details.push(`Input: ${renderedInput}`);
   }
   return details.length > 0
-    ? details.join("\n")
+    ? sanitizeTextField({
+        value: details.join("\n"),
+        label: "approval description",
+        maxChars: MAX_PROVIDER_APPROVAL_DESCRIPTION_CHARS,
+      })
     : `Claude requested permission to run ${args.toolName}.`;
 }
 

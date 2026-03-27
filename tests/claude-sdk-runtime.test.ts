@@ -147,6 +147,31 @@ describe("mapClaudeMessageToEvents", () => {
       { type: "tool_progress", toolUseId: "tool-abc", toolName: "Bash", elapsedSeconds: 15 },
     ]);
   });
+
+  test("surfaces ExitPlanMode tool use as a plan_ready event", () => {
+    const events = mapClaudeMessageToEvents({
+      message: {
+        type: "assistant",
+        message: {
+          content: [{
+            type: "tool_use",
+            name: "ExitPlanMode",
+            input: {
+              plan: "1. Inspect the task\n2. Ship the patch",
+            },
+          }],
+        },
+      } as never,
+      claudeDebugStream: false,
+    });
+
+    expect(events).toEqual([
+      {
+        type: "plan_ready",
+        planText: "1. Inspect the task\n2. Ship the patch",
+      },
+    ]);
+  });
 });
 
 describe("buildClaudeApprovalPermissionResult", () => {

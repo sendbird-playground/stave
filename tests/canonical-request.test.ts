@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { MAX_FILE_CONTEXT_CONTENT_CHARS } from "@/lib/file-context-sanitization";
+import {
+  MAX_FILE_CONTEXT_CONTENT_CHARS,
+  MAX_PROVIDER_APPROVAL_DESCRIPTION_CHARS,
+} from "@/lib/file-context-sanitization";
 import {
   buildCanonicalConversationRequest,
   buildLegacyPromptFromCanonicalRequest,
@@ -166,5 +169,37 @@ describe("canonical request builder", () => {
     }
     expect(historyPart.output).toContain("tool output truncated");
     expect(historyPart.output?.length).toBeLessThanOrEqual(MAX_FILE_CONTEXT_CONTENT_CHARS);
+  });
+
+  test("sanitizes oversized approval descriptions before serializing history", () => {
+    const oversizedApprovalDescription = "Input: ".concat("x".repeat(MAX_PROVIDER_APPROVAL_DESCRIPTION_CHARS + 512));
+    const request = buildCanonicalConversationRequest({
+      providerId: "claude-code",
+      model: "claude-sonnet-4-6",
+      history: [{
+        id: "assistant-approval",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        providerId: "claude-code",
+        content: "",
+        parts: [{
+          type: "approval",
+          toolName: "ExitPlanMode",
+          requestId: "approval-1",
+          description: oversizedApprovalDescription,
+          state: "approval-requested",
+        }],
+      }],
+      userInput: "continue",
+      mode: "chat",
+    });
+
+    const historyPart = request.history[0]?.parts[0];
+    expect(historyPart?.type).toBe("approval");
+    if (!historyPart || historyPart.type !== "approval") {
+      throw new Error("expected approval history part");
+    }
+    expect(historyPart.description).toContain("approval description truncated");
+    expect(historyPart.description.length).toBeLessThanOrEqual(MAX_PROVIDER_APPROVAL_DESCRIPTION_CHARS);
   });
 });
