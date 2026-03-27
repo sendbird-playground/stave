@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { buildStaveResolvedArgs, resolveStaveTarget } from "../electron/providers/stave-router";
+import { buildStaveResolvedArgs, resolveSkillFastPath, resolveStaveTarget } from "../electron/providers/stave-router";
 import type { StreamTurnArgs } from "../electron/providers/types";
+import type { CanonicalConversationRequest } from "../src/lib/providers/provider.types";
+import type { SkillPromptContext } from "../src/lib/skills/types";
 import { DEFAULT_STAVE_AUTO_PROFILE } from "../src/lib/providers/stave-auto-profile";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -477,6 +479,155 @@ describe("profile overrides", () => {
     });
     expect(result.model).toBe("my-custom-model");
     expect(result.providerId).toBe("claude-code");
+  });
+});
+
+// ── resolveSkillFastPath ──────────────────────────────────────────────────────
+
+function makeSkill(overrides: Partial<SkillPromptContext> = {}): SkillPromptContext {
+  return {
+    id: "skill-1",
+    slug: "commit",
+    name: "Commit",
+    description: "Create a git commit",
+    scope: "local",
+    provider: "claude-code",
+    path: "/skills/commit.md",
+    invocationToken: "$commit",
+    instructions: "Run git commit",
+    ...overrides,
+  };
+}
+
+function makeContextParts(
+  skills: SkillPromptContext[],
+): CanonicalConversationRequest["contextParts"] {
+  if (skills.length === 0) {
+    return [];
+  }
+  return [{ type: "skill_context" as const, skills }];
+}
+
+describe("resolveSkillFastPath", () => {
+  test("returns null when contextParts has no skill_context", () => {
+    const result = resolveSkillFastPath({
+      contextParts: [],
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).toBeNull();
+  });
+
+  test("returns null when skill_context has an empty skills array", () => {
+    const result = resolveSkillFastPath({
+      contextParts: [{ type: "skill_context", skills: [] }],
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).toBeNull();
+  });
+
+  test("routes claude-code skill to generalModel (claude-sonnet-4-6)", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([makeSkill({ provider: "claude-code" })]),
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.providerId).toBe("claude-code");
+    expect(result!.model).toBe("claude-sonnet-4-6");
+  });
+
+  test("routes codex skill to implementModel (gpt-5.3-codex)", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([makeSkill({ provider: "codex" })]),
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.providerId).toBe("codex");
+    expect(result!.model).toBe("gpt-5.3-codex");
+  });
+
+  test("routes shared skill to generalModel", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([makeSkill({ provider: "shared" })]),
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.model).toBe("claude-sonnet-4-6");
+  });
+
+  test("routes stave-provider skill to generalModel (treated as shared)", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([makeSkill({ provider: "stave" })]),
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.model).toBe("claude-sonnet-4-6");
+  });
+
+  test("multiple claude-code skills all route to claude-code", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([
+        makeSkill({ id: "s1", name: "Commit", provider: "claude-code" }),
+        makeSkill({ id: "s2", name: "Review", provider: "claude-code" }),
+      ]),
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.providerId).toBe("claude-code");
+    expect(result!.model).toBe("claude-sonnet-4-6");
+  });
+
+  test("mixed providers (claude-code + codex) fall back to generalModel", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([
+        makeSkill({ id: "s1", name: "Commit", provider: "claude-code" }),
+        makeSkill({ id: "s2", name: "Generate", provider: "codex" }),
+      ]),
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).not.toBeNull();
+    // Mixed → shared → generalModel
+    expect(result!.model).toBe("claude-sonnet-4-6");
+  });
+
+  test("reason string includes skill name", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([makeSkill({ name: "My Cool Skill" })]),
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.reason).toContain("My Cool Skill");
+    expect(result!.reason).toContain("Skill fast-path");
+  });
+
+  test("respects profile overrides for generalModel", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([makeSkill({ provider: "claude-code" })]),
+      profile: customProfile({ generalModel: "claude-opus-4-6" }),
+    });
+    expect(result).not.toBeNull();
+    expect(result!.model).toBe("claude-opus-4-6");
+    expect(result!.providerId).toBe("claude-code");
+  });
+
+  test("respects profile overrides for implementModel (codex skill)", () => {
+    const result = resolveSkillFastPath({
+      contextParts: makeContextParts([makeSkill({ provider: "codex" })]),
+      profile: customProfile({ implementModel: "gpt-5.4" }),
+    });
+    expect(result).not.toBeNull();
+    expect(result!.model).toBe("gpt-5.4");
+    expect(result!.providerId).toBe("codex");
+  });
+
+  test("ignores non-skill contextParts (file_context, image_context)", () => {
+    const contextParts: CanonicalConversationRequest["contextParts"] = [
+      { type: "file_context", filePath: "/foo.ts", content: "const x = 1;", language: "typescript" },
+    ];
+    const result = resolveSkillFastPath({
+      contextParts,
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+    });
+    expect(result).toBeNull();
   });
 });
 
