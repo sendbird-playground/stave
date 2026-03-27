@@ -1,3 +1,14 @@
+## [0.0.25](https://github.com/sendbird-playground/stave/compare/v0.0.24...v0.0.25) (2026-03-27)
+
+### Features
+
+* add GitHub Pages landing page for Stave ([#38](https://github.com/sendbird-playground/stave/issues/38)) ([5887ce8](https://github.com/sendbird-playground/stave/commit/5887ce8140bf75bc1b33abf58330fc55e0bb3037))
+
+### Bug Fixes
+
+* **ipc:** sanitize oversized plan approval payloads ([#39](https://github.com/sendbird-playground/stave/issues/39)) ([8b03dd7](https://github.com/sendbird-playground/stave/commit/8b03dd72045f73a9f1e692018e52aec8c633147c))
+* **stave-auto:** suppress routing JSON when payload uses intent field ([#41](https://github.com/sendbird-playground/stave/issues/41)) ([edec318](https://github.com/sendbird-playground/stave/commit/edec318513a86d6c28745a6fca5cbdd0c9771977))
+* **workspace:** reuse root node_modules in worktrees ([#37](https://github.com/sendbird-playground/stave/issues/37)) ([d1aa2d8](https://github.com/sendbird-playground/stave/commit/d1aa2d88f721bcdf6064236af4471ec640611685))
 ## [0.0.24](https://github.com/sendbird-playground/stave/compare/v0.0.23...v0.0.24) (2026-03-27)
 
 ### Features
