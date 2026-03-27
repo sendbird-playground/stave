@@ -1,5 +1,5 @@
 import type { HTMLAttributes } from "react";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, memo, useContext, useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { createHighlighter } from "shiki";
 import type { BundledLanguage } from "shiki";
@@ -82,6 +82,18 @@ export function CodeBlock({ code, language, showLineNumbers, className, children
 }
 
 // ---------------------------------------------------------------------------
+// Highlight cache – survives component unmount/remount so previously
+// highlighted code blocks never flash the un-highlighted fallback.
+// ---------------------------------------------------------------------------
+
+const _highlightCache = new Map<string, string>();
+const MAX_HIGHLIGHT_CACHE_SIZE = 500;
+
+function getHighlightCacheKey(code: string, language: string) {
+  return `${language}\0${code}`;
+}
+
+// ---------------------------------------------------------------------------
 // CodeBlockContent — async Shiki render
 // ---------------------------------------------------------------------------
 
@@ -91,8 +103,11 @@ interface CodeBlockContentProps {
   showLineNumbers?: boolean;
 }
 
-export function CodeBlockContent({ code, language }: CodeBlockContentProps) {
-  const [html, setHtml] = useState<string | null>(null);
+export const CodeBlockContent = memo(function CodeBlockContent({ code, language }: CodeBlockContentProps) {
+  const resolvedLang = language ?? "bash";
+  const cacheKey = getHighlightCacheKey(code, resolvedLang);
+  const cached = _highlightCache.get(cacheKey);
+  const [html, setHtml] = useState<string | null>(cached ?? null);
   const messageCodeFontSize = useAppStore((state) => state.settings.messageCodeFontSize);
   const codeSizeClass = messageCodeFontSize === "xl"
     ? "text-xl"
@@ -101,13 +116,30 @@ export function CodeBlockContent({ code, language }: CodeBlockContentProps) {
       : "text-base";
 
   useEffect(() => {
+    // Already cached – apply immediately and skip the async path.
+    const existing = _highlightCache.get(cacheKey);
+    if (existing) {
+      setHtml(existing);
+      return;
+    }
+
     let cancelled = false;
     getHighlighter().then((hl) => {
       if (cancelled) return;
       try {
-        const lang = (language ?? "bash") as BundledLanguage;
+        const lang = resolvedLang as BundledLanguage;
         const result = hl.codeToHtml(code, { lang, theme: "github-dark" });
-        if (!cancelled) setHtml(result);
+        if (!cancelled) {
+          // Evict oldest entry when cache is full.
+          if (_highlightCache.size >= MAX_HIGHLIGHT_CACHE_SIZE) {
+            const firstKey = _highlightCache.keys().next().value;
+            if (firstKey !== undefined) {
+              _highlightCache.delete(firstKey);
+            }
+          }
+          _highlightCache.set(cacheKey, result);
+          setHtml(result);
+        }
       } catch {
         if (!cancelled) setHtml(null);
       }
@@ -115,7 +147,7 @@ export function CodeBlockContent({ code, language }: CodeBlockContentProps) {
     return () => {
       cancelled = true;
     };
-  }, [code, language]);
+  }, [code, resolvedLang, cacheKey]);
 
   if (html) {
     return (
@@ -137,7 +169,7 @@ export function CodeBlockContent({ code, language }: CodeBlockContentProps) {
       <code>{code}</code>
     </pre>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Header sub-components
