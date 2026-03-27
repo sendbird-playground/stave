@@ -133,7 +133,7 @@ export function TopBar() {
         className="relative z-30 flex h-12 items-center justify-between gap-3 border-b border-border/70 bg-card px-3.5"
         style={TOP_BAR_DRAG_STYLE}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
           <TooltipProvider>
             {hasProjectContext ? <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
             {hasProjectContext && activeWorkspacePath ? (
@@ -182,8 +182,7 @@ export function TopBar() {
           </TooltipProvider>
         </div>
         <div
-          className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
-          style={TOP_BAR_NO_DRAG_STYLE}
+          className="hidden min-w-0 flex-1 justify-center lg:flex"
         >
           {hasProjectContext ? <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
         </div>
