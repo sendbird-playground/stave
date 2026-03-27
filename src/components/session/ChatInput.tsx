@@ -1,10 +1,7 @@
 import { PromptInput, Suggestion, Suggestions } from "@/components/ai-elements";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { ModelSelectorOption } from "@/components/ai-elements/model-selector";
-import {
-  getPermissionModeOptions,
-  type PermissionModeValue,
-} from "@/components/ai-elements/permission-mode-selector";
+import { type PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
 import { buildCommandPaletteItems } from "@/lib/commands";
 import {
   getCachedProviderCommandCatalog,
@@ -27,6 +24,11 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { Attachment, ChatMessage } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
+import {
+  buildChatInputRuntimeQuickControls,
+  buildChatInputRuntimeStatusItems,
+  buildCommandCatalogRuntimeOptions,
+} from "./chat-input.runtime";
 import { getLatestPromptSuggestions, mergePromptSuggestionWithDraft } from "./chat-input.utils";
 
 interface ChatInputProps {
@@ -36,78 +38,6 @@ interface ChatInputProps {
 const EMPTY_PROMPT_DRAFT = { text: "", attachedFilePaths: [] as string[], attachments: [] as Attachment[] };
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const PROMPT_DRAFT_SAVE_DELAY_MS = 250;
-const CLAUDE_THINKING_OPTIONS = [
-  { value: "adaptive", label: "Adaptive" },
-  { value: "enabled", label: "Enabled" },
-  { value: "disabled", label: "Disabled" },
-] as const;
-const CLAUDE_EFFORT_OPTIONS = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "max", label: "Max" },
-] as const;
-const CODEX_EFFORT_OPTIONS = [
-  { value: "minimal", label: "Minimal" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "xhigh", label: "X-High" },
-] as const;
-const CODEX_WEB_SEARCH_OPTIONS = [
-  { value: "disabled", label: "Disabled" },
-  { value: "cached", label: "Cached" },
-  { value: "live", label: "Live" },
-] as const;
-const CODEX_REASONING_SUMMARY_OPTIONS = [
-  { value: "auto", label: "Auto" },
-  { value: "concise", label: "Concise" },
-  { value: "detailed", label: "Detailed" },
-  { value: "none", label: "None" },
-] as const;
-const CODEX_REASONING_SUPPORT_OPTIONS = [
-  { value: "auto", label: "Auto" },
-  { value: "enabled", label: "Enabled" },
-  { value: "disabled", label: "Disabled" },
-] as const;
-
-function findOptionLabel(
-  options: ReadonlyArray<{ value: string; label: string }>,
-  value: string,
-) {
-  return options.find((option) => option.value === value)?.label ?? value;
-}
-
-function formatProviderTimeout(value: number) {
-  const minutes = Math.round(value / 60000);
-  if (minutes >= 60) {
-    const hours = minutes / 60;
-    return hours === 1 ? `${hours} hour` : `${hours} hours`;
-  }
-  return `${minutes} min`;
-}
-
-function formatTitleCaseValue(value: string) {
-  return value
-    .split(/[-_]+/g)
-    .filter(Boolean)
-    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
-}
-
-function formatShortPath(value: string) {
-  const normalized = value.trim();
-  if (!normalized) {
-    return "";
-  }
-
-  const parts = normalized.split(/[\\/]+/).filter(Boolean);
-  if (parts.length <= 2) {
-    return normalized;
-  }
-  return `.../${parts.slice(-2).join("/")}`;
-}
-
 interface ChatInputSuggestionsProps {
   activeTaskId: string;
   isTurnActive: boolean;
@@ -291,251 +221,49 @@ export function ChatInput(args: ChatInputProps = {}) {
     }))
   );
   const runtimeQuickControls = useMemo(() => {
-    // Stave Auto dedicated controls
-    if (activeProvider === "stave") {
-      return [
-        {
-          id: "orchestration-mode",
-          label: "Orchestration",
-          value: staveAutoOrchestrationMode,
-          options: [
-            { label: "Off", value: "off" },
-            { label: "Auto", value: "auto" },
-            { label: "Aggressive", value: "aggressive" },
-          ],
-          onSelect: (value: string) => updateSettings({ patch: { staveAutoOrchestrationMode: value as "off" | "auto" | "aggressive" } }),
-        },
-        {
-          id: "fast-mode",
-          label: "Fast Mode",
-          value: staveAutoFastMode ? "on" : "off",
-          options: [
-            { label: "Off", value: "off" },
-            { label: "On", value: "on" },
-          ],
-          onSelect: (value: string) => updateSettings({ patch: { staveAutoFastMode: value === "on" } }),
-        },
-        {
-          id: "max-subtasks",
-          label: "Max Subtasks",
-          value: String(staveAutoMaxSubtasks),
-          options: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ label: String(n), value: String(n) })),
-          onSelect: (value: string) => updateSettings({ patch: { staveAutoMaxSubtasks: Number(value) } }),
-        },
-      ];
-    }
-
-    // For the permission-mode selector, stave defaults to the Claude options
-    // since Claude is the primary routing target.
-    const effectiveProvider = activeProvider;
-    const permissionOptions = getPermissionModeOptions(effectiveProvider).map((option) => ({
-      value: option.value,
-      label: option.label,
-    }));
-
-    if (activeProvider === "claude-code") {
-      return [
-        {
-          id: "permission-mode",
-          label: "Permission",
-          value: permissionMode,
-          options: permissionOptions,
-          onSelect: (value: string) => updateSettings({
-            patch: {
-              claudePermissionMode: value as typeof claudePermissionMode,
-            },
-          }),
-        },
-        {
-          id: "thinking-mode",
-          label: "Thinking",
-          value: claudeThinkingMode,
-          options: CLAUDE_THINKING_OPTIONS,
-          onSelect: (value: string) => updateSettings({
-            patch: {
-              claudeThinkingMode: value as typeof claudeThinkingMode,
-            },
-          }),
-        },
-        {
-          id: "effort",
-          label: "Effort",
-          value: claudeEffort,
-          options: CLAUDE_EFFORT_OPTIONS,
-          onSelect: (value: string) => updateSettings({
-            patch: {
-              claudeEffort: value as typeof claudeEffort,
-            },
-          }),
-        },
-      ];
-    }
-
-    return [
-      {
-        id: "permission-mode",
-        label: "Approval",
-        value: permissionMode,
-        options: permissionOptions,
-        onSelect: (value: string) => updateSettings({
-          patch: {
-            codexApprovalPolicy: value as typeof codexApprovalPolicy,
-          },
-        }),
-      },
-      {
-        id: "effort",
-        label: "Effort",
-        value: codexModelReasoningEffort,
-        options: CODEX_EFFORT_OPTIONS,
-        onSelect: (value: string) => updateSettings({
-          patch: {
-            codexModelReasoningEffort: value as typeof codexModelReasoningEffort,
-          },
-        }),
-      },
-      {
-        id: "web-search",
-        label: "Web Search",
-        value: codexWebSearchMode,
-        options: CODEX_WEB_SEARCH_OPTIONS,
-        onSelect: (value: string) => updateSettings({
-          patch: {
-            codexWebSearchMode: value as typeof codexWebSearchMode,
-          },
-        }),
-      },
-    ];
-  }, [
-    activeProvider,
-    claudeEffort,
-    claudePermissionMode,
-    claudeThinkingMode,
-    codexApprovalPolicy,
-    codexModelReasoningEffort,
-    codexWebSearchMode,
-    permissionMode,
-    staveAutoFastMode,
-    staveAutoMaxSubtasks,
-    staveAutoOrchestrationMode,
-    updateSettings,
-  ]);
-  const runtimeStatusItems = useMemo(() => {
-    if (activeProvider === "stave") {
-      return [
-        {
-          id: "timeout",
-          label: "Timeout",
-          value: formatProviderTimeout(providerTimeoutMs),
-        },
-        {
-          id: "cross-provider",
-          label: "Cross-Provider",
-          value: staveAutoAllowCrossProviderWorkers ? "On" : "Off",
-        },
-        {
-          id: "max-parallel",
-          label: "Max Parallel",
-          value: String(staveAutoMaxParallelSubtasks),
-        },
-      ];
-    }
-
-    if (activeProvider === "claude-code") {
-      return [
-        {
-          id: "timeout",
-          label: "Timeout",
-          value: formatProviderTimeout(providerTimeoutMs),
-        },
-        {
-          id: "sandbox",
-          label: "Sandbox",
-          value: claudeSandboxEnabled ? "Enabled" : "Disabled",
-        },
-        {
-          id: "unsandboxed",
-          label: "Unsandboxed",
-          value: claudeAllowUnsandboxedCommands ? "On" : "Off",
-        },
-        {
-          id: "dangerous-skip",
-          label: "Dangerous Skip",
-          value: claudeAllowDangerouslySkipPermissions ? "On" : "Off",
-        },
-        {
-          id: "progress-summaries",
-          label: "Progress Summaries",
-          value: claudeAgentProgressSummaries ? "On" : "Off",
-        },
-        {
-          id: "fast-mode",
-          label: "Fast Mode",
-          value: claudeFastMode ? "On" : "Off",
-          tone: claudeFastMode ? "warning" as const : "default" as const,
-        },
-      ];
-    }
-
-    return [
-      {
-        id: "timeout",
-        label: "Timeout",
-        value: formatProviderTimeout(providerTimeoutMs),
-      },
-      {
-        id: "sandbox",
-        label: "Sandbox",
-        value: formatTitleCaseValue(codexSandboxMode),
-        tone: codexSandboxMode === "danger-full-access" ? "warning" as const : "default" as const,
-      },
-      {
-        id: "network",
-        label: "Network",
-        value: codexNetworkAccessEnabled ? "On" : "Off",
-      },
-      {
-        id: "git-check",
-        label: "Git Check",
-        value: codexSkipGitRepoCheck ? "Skipped" : "Required",
-      },
-      {
-        id: "raw-reasoning",
-        label: "Raw Reasoning",
-        value: codexShowRawAgentReasoning ? "On" : "Off",
-      },
-      {
-        id: "summary",
-        label: "Summary",
-        value: findOptionLabel(CODEX_REASONING_SUMMARY_OPTIONS, codexReasoningSummary),
-      },
-      {
-        id: "summary-support",
-        label: "Summary Support",
-        value: findOptionLabel(CODEX_REASONING_SUPPORT_OPTIONS, codexSupportsReasoningSummaries),
-      },
-      {
-        id: "fast-mode",
-        label: "Fast Mode",
-        value: codexFastMode ? "On" : "Off",
-        tone: codexFastMode ? "warning" as const : "default" as const,
-      },
-      ...(codexPathOverride.trim()
-        ? [{
-            id: "codex-binary",
-            label: "Binary",
-            value: formatShortPath(codexPathOverride),
-          }]
-        : []),
-    ];
+    return buildChatInputRuntimeQuickControls({
+      activeProvider,
+      permissionMode,
+      providerTimeoutMs,
+      claudePermissionMode,
+      claudeAllowDangerouslySkipPermissions,
+      claudeSandboxEnabled,
+      claudeAllowUnsandboxedCommands,
+      claudeEffort,
+      claudeThinkingMode,
+      claudeAgentProgressSummaries,
+      claudeFastMode,
+      codexSandboxMode,
+      codexSkipGitRepoCheck,
+      codexNetworkAccessEnabled,
+      codexApprovalPolicy,
+      codexModelReasoningEffort,
+      codexWebSearchMode,
+      codexShowRawAgentReasoning,
+      codexReasoningSummary,
+      codexSupportsReasoningSummaries,
+      codexFastMode,
+      codexPathOverride,
+      staveAutoFastMode,
+      staveAutoOrchestrationMode,
+      staveAutoMaxSubtasks,
+      staveAutoAllowCrossProviderWorkers,
+      staveAutoMaxParallelSubtasks,
+      updateSettings,
+    });
   }, [
     activeProvider,
     claudeAllowDangerouslySkipPermissions,
     claudeAgentProgressSummaries,
     claudeAllowUnsandboxedCommands,
+    claudeEffort,
     claudeFastMode,
+    claudePermissionMode,
     claudeSandboxEnabled,
+    claudeThinkingMode,
+    codexApprovalPolicy,
     codexFastMode,
+    codexModelReasoningEffort,
     codexNetworkAccessEnabled,
     codexPathOverride,
     codexReasoningSummary,
@@ -543,9 +271,76 @@ export function ChatInput(args: ChatInputProps = {}) {
     codexSkipGitRepoCheck,
     codexShowRawAgentReasoning,
     codexSupportsReasoningSummaries,
+    codexWebSearchMode,
+    permissionMode,
     providerTimeoutMs,
     staveAutoAllowCrossProviderWorkers,
+    staveAutoFastMode,
     staveAutoMaxParallelSubtasks,
+    staveAutoMaxSubtasks,
+    staveAutoOrchestrationMode,
+    updateSettings,
+  ]);
+  const runtimeStatusItems = useMemo(() => {
+    return buildChatInputRuntimeStatusItems({
+      activeProvider,
+      permissionMode,
+      providerTimeoutMs,
+      claudePermissionMode,
+      claudeAllowDangerouslySkipPermissions,
+      claudeSandboxEnabled,
+      claudeAllowUnsandboxedCommands,
+      claudeEffort,
+      claudeThinkingMode,
+      claudeAgentProgressSummaries,
+      claudeFastMode,
+      codexSandboxMode,
+      codexSkipGitRepoCheck,
+      codexNetworkAccessEnabled,
+      codexApprovalPolicy,
+      codexModelReasoningEffort,
+      codexWebSearchMode,
+      codexShowRawAgentReasoning,
+      codexReasoningSummary,
+      codexSupportsReasoningSummaries,
+      codexFastMode,
+      codexPathOverride,
+      staveAutoFastMode,
+      staveAutoOrchestrationMode,
+      staveAutoMaxSubtasks,
+      staveAutoAllowCrossProviderWorkers,
+      staveAutoMaxParallelSubtasks,
+      updateSettings,
+    });
+  }, [
+    activeProvider,
+    claudeAllowDangerouslySkipPermissions,
+    claudeAgentProgressSummaries,
+    claudeAllowUnsandboxedCommands,
+    claudeEffort,
+    claudeFastMode,
+    claudePermissionMode,
+    claudeSandboxEnabled,
+    claudeThinkingMode,
+    codexApprovalPolicy,
+    codexFastMode,
+    codexModelReasoningEffort,
+    codexNetworkAccessEnabled,
+    codexPathOverride,
+    codexReasoningSummary,
+    codexSandboxMode,
+    codexSkipGitRepoCheck,
+    codexShowRawAgentReasoning,
+    codexSupportsReasoningSummaries,
+    codexWebSearchMode,
+    permissionMode,
+    providerTimeoutMs,
+    staveAutoAllowCrossProviderWorkers,
+    staveAutoFastMode,
+    staveAutoMaxParallelSubtasks,
+    staveAutoMaxSubtasks,
+    staveAutoOrchestrationMode,
+    updateSettings,
   ]);
 
   function cancelPendingDraftSave() {
@@ -669,19 +464,22 @@ export function ChatInput(args: ChatInputProps = {}) {
       catalog: loadingCatalog,
     });
 
+    const runtimeOptions = buildCommandCatalogRuntimeOptions({
+      activeProvider,
+      modelClaude,
+      claudePermissionMode,
+      claudeAllowDangerouslySkipPermissions,
+      claudeSandboxEnabled,
+      claudeAllowUnsandboxedCommands,
+      claudeEffort,
+      claudeThinkingMode,
+      claudeAgentProgressSummaries,
+    });
+
     void getCommandCatalog({
       providerId: activeProvider,
       cwd: workspaceCwd,
-      runtimeOptions: {
-        model: modelClaude,
-        claudePermissionMode,
-        claudeAllowDangerouslySkipPermissions,
-        claudeSandboxEnabled,
-        claudeAllowUnsandboxedCommands,
-        claudeEffort,
-        claudeThinkingMode,
-        claudeAgentProgressSummaries,
-      },
+      runtimeOptions,
     }).then((response) => {
       if (cancelled) {
         return;

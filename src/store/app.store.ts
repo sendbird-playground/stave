@@ -1,9 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
-import { sanitizeFileContextPayload } from "@/lib/file-context-sanitization";
 import { workspaceFsAdapter } from "@/lib/fs";
-import { getProviderAdapter } from "@/lib/providers";
 import {
   listWorkspaceSummaries,
   loadWorkspaceSnapshot,
@@ -19,7 +17,6 @@ import {
 import { getDefaultModelForProvider, listProviderIds } from "@/lib/providers/model-catalog";
 import {
   buildStaveAutoModelSettingsPatch,
-  buildStaveAutoProfileFromSettings,
   DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
 } from "@/lib/providers/stave-auto-profile";
 import { getCachedProviderCommandCatalog } from "@/lib/providers/provider-command-catalog";
@@ -30,26 +27,37 @@ import {
   reorderTasksWithinFilter,
   type TaskFilter,
 } from "@/lib/tasks";
-import {
-  replayProviderEventsToTaskState,
-} from "@/lib/session/provider-event-replay";
 import { resolveSkillSelections } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry, SkillCatalogRoot } from "@/lib/skills/types";
+import {
+  DEFAULT_PROVIDER_TIMEOUT_MS,
+  PROVIDER_TIMEOUT_OPTIONS,
+} from "@/lib/providers/runtime-option-contract";
 import {
   findLatestPendingApprovalPart,
   findLatestPendingUserInputPart,
   updateApprovalPartsByRequestId,
   updateUserInputPartsByRequestId,
 } from "@/store/provider-message.utils";
+import { buildProviderRuntimeOptions, normalizeCodexApprovalPolicy } from "@/store/provider-runtime-options";
+import {
+  buildLocalCommandResponseState,
+  buildMessageId,
+  buildPendingProviderTurnState,
+  buildRecentTimestamp,
+  createFileContextPart,
+  createUserTextPart,
+} from "@/store/chat-state-helpers";
+import { createProviderTurnEventController, runProviderTurn } from "@/store/provider-turn-runtime";
+import {
+  applyPendingProviderEventsToStoreState,
+  saveActiveWorkspaceRuntimeCache,
+} from "@/store/workspace-runtime-state";
 import type {
   Attachment,
   ChatMessage,
   EditorTab,
-  FileContextPart,
-  ImageContextPart,
-  MessagePart,
   Task,
-  TextPart,
 } from "@/types/chat";
 import {
   buildWorkspaceSessionState,
@@ -101,8 +109,7 @@ const APP_STORE_KEY = "stave-store";
 export const TASK_LIST_MIN_WIDTH = 290;
 export const MIN_EDITOR_PANEL_WIDTH = 600;
 export const DEFAULT_EDITOR_PANEL_WIDTH = 720;
-export const PROVIDER_TIMEOUT_OPTIONS = [1800000, 3600000, 7200000, 10800000] as const;
-export const DEFAULT_PROVIDER_TIMEOUT_MS = 3600000;
+export { DEFAULT_PROVIDER_TIMEOUT_MS, PROVIDER_TIMEOUT_OPTIONS } from "@/lib/providers/runtime-option-contract";
 const MAX_RECENT_PROJECTS = 12;
 
 export const THEME_TOKEN_NAMES = [
@@ -483,14 +490,6 @@ function createDefaultProviderAvailability() {
   ) as Record<ProviderId, boolean>;
 }
 
-function buildMessageId(args: { taskId: string; count: number }) {
-  return `${args.taskId}-m-${args.count + 1}`;
-}
-
-function buildRecentTimestamp() {
-  return new Date().toISOString();
-}
-
 function normalizeWorkspaceInitCommand(args: { value?: string | null }) {
   return args.value?.trim() ?? "";
 }
@@ -576,45 +575,6 @@ function resolveEditorDiffMode(args: {
   return isDiffEditorTab(activeTab);
 }
 
-function createWorkspaceSessionStateFromAppState(state: Pick<
-  AppState,
-  | "activeTaskId"
-  | "tasks"
-  | "messagesByTask"
-  | "promptDraftByTask"
-  | "editorTabs"
-  | "activeEditorTabId"
-  | "activeTurnIdsByTask"
-  | "providerConversationByTask"
-  | "nativeConversationReadyByTask"
->): WorkspaceSessionState {
-  return {
-    activeTaskId: state.activeTaskId,
-    tasks: state.tasks,
-    messagesByTask: state.messagesByTask,
-    promptDraftByTask: state.promptDraftByTask,
-    editorTabs: state.editorTabs,
-    activeEditorTabId: state.activeEditorTabId,
-    activeTurnIdsByTask: state.activeTurnIdsByTask,
-    providerConversationByTask: state.providerConversationByTask,
-    nativeConversationReadyByTask: state.nativeConversationReadyByTask,
-  };
-}
-
-function createActiveWorkspaceStatePatch(session: WorkspaceSessionState) {
-  return {
-    activeTaskId: session.activeTaskId,
-    tasks: session.tasks,
-    messagesByTask: session.messagesByTask,
-    promptDraftByTask: session.promptDraftByTask,
-    editorTabs: session.editorTabs,
-    activeEditorTabId: session.activeEditorTabId,
-    activeTurnIdsByTask: session.activeTurnIdsByTask,
-    providerConversationByTask: session.providerConversationByTask,
-    nativeConversationReadyByTask: session.nativeConversationReadyByTask,
-  };
-}
-
 function registerTaskWorkspaceOwnership(args: {
   taskWorkspaceIdById: Record<string, string>;
   workspaceId: string;
@@ -625,31 +585,6 @@ function registerTaskWorkspaceOwnership(args: {
     next[task.id] = args.workspaceId;
   }
   return next;
-}
-
-function saveActiveWorkspaceRuntimeCache(args: {
-  state: Pick<
-    AppState,
-    | "activeWorkspaceId"
-    | "workspaceRuntimeCacheById"
-    | "activeTaskId"
-    | "tasks"
-    | "messagesByTask"
-    | "promptDraftByTask"
-    | "editorTabs"
-    | "activeEditorTabId"
-    | "activeTurnIdsByTask"
-    | "providerConversationByTask"
-    | "nativeConversationReadyByTask"
-  >;
-}) {
-  if (!args.state.activeWorkspaceId) {
-    return args.state.workspaceRuntimeCacheById;
-  }
-  return {
-    ...args.state.workspaceRuntimeCacheById,
-    [args.state.activeWorkspaceId]: createWorkspaceSessionStateFromAppState(args.state),
-  };
 }
 
 function resolveWorkspaceName(args: {
@@ -823,28 +758,6 @@ function isImageFilePath(args: { filePath: string }) {
     || value.endsWith(".avif");
 }
 
-function createUserTextPart(args: { text: string }): TextPart {
-  return {
-    type: "text",
-    text: args.text,
-  };
-}
-
-function createFileContextPart(args: {
-  filePath: string;
-  content: string;
-  language: string;
-  instruction?: string;
-}): FileContextPart {
-  return sanitizeFileContextPayload({
-    type: "file_context",
-    filePath: args.filePath,
-    content: args.content,
-    language: args.language,
-    instruction: args.instruction,
-  });
-}
-
 function updateMessageById(args: {
   messages: ChatMessage[];
   messageId: string;
@@ -913,57 +826,6 @@ function applyUserInputState(args: {
       workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
     };
   });
-}
-
-function normalizeCodexApprovalPolicy(args: { value?: string }) {
-  if (
-    args.value === "never"
-    || args.value === "on-request"
-    || args.value === "on-failure"
-    || args.value === "untrusted"
-  ) {
-    return args.value;
-  }
-  return defaultSettings.codexApprovalPolicy;
-}
-
-function runProviderTurn(args: {
-  turnId?: string;
-  provider: ProviderId;
-  prompt: string;
-  conversation?: ProviderTurnRequest["conversation"];
-  taskId: string;
-  workspaceId?: string;
-  cwd?: string;
-  runtimeOptions?: ProviderTurnRequest["runtimeOptions"];
-  onEvent: (args: { event: NormalizedProviderEvent }) => void;
-}) {
-  const adapter = getProviderAdapter({ providerId: args.provider });
-
-  void (async () => {
-    try {
-      for await (const event of adapter.runTurn({
-        turnId: args.turnId,
-        prompt: args.prompt,
-        conversation: args.conversation,
-        taskId: args.taskId,
-        workspaceId: args.workspaceId,
-        cwd: args.cwd,
-        runtimeOptions: args.runtimeOptions,
-      })) {
-        args.onEvent({ event });
-      }
-    } catch (error) {
-      args.onEvent({
-        event: {
-          type: "system",
-          content: `Provider stream failed: ${String(error)}`,
-        },
-      });
-    } finally {
-      args.onEvent({ event: { type: "done" } });
-    }
-  })();
 }
 
 function applyThemeClass(args: { enabled: boolean }) {
@@ -2908,65 +2770,24 @@ export const useAppStore = create<AppState>()(
         if (commandResult.kind === "local-response") {
           const responseText = commandResult.response ?? "";
           const shouldClearProviderConversation = commandResult.action === "clear";
-          set((nextState) => {
-            const current = nextState.messagesByTask[resolvedTaskId] ?? [];
-            const userMessageId = buildMessageId({ taskId: resolvedTaskId, count: current.length });
-            const assistantMessageId = buildMessageId({ taskId: resolvedTaskId, count: current.length + 1 });
-
-            const userMessage: ChatMessage = {
-              id: userMessageId,
-              role: "user",
-              model: "user",
-              providerId: "user",
+          set((nextState) =>
+            buildLocalCommandResponseState({
+              tasks: nextState.tasks,
+              messagesByTask: nextState.messagesByTask,
+              activeTurnIdsByTask: nextState.activeTurnIdsByTask,
+              nativeConversationReadyByTask: nextState.nativeConversationReadyByTask,
+              providerConversationByTask: nextState.providerConversationByTask,
+              taskWorkspaceIdById: nextState.taskWorkspaceIdById,
+              workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
+              taskId: resolvedTaskId,
+              taskWorkspaceId,
+              provider,
+              activeModel,
               content,
-              parts: [createUserTextPart({ text: content })],
-            };
-
-            const assistantMessage: ChatMessage = {
-              id: assistantMessageId,
-              role: "assistant",
-              model: activeModel,
-              providerId: provider,
-              content: responseText,
-              isStreaming: false,
-              parts: responseText ? [createUserTextPart({ text: responseText })] : [],
-            };
-
-            // /clear wipes the task history; other commands append normally
-            const nextMessages = commandResult.action === "clear"
-              ? [userMessage, assistantMessage]
-              : [...current, userMessage, assistantMessage];
-
-            return {
-              tasks: nextState.tasks.map((taskItem) =>
-                taskItem.id === resolvedTaskId
-                  ? { ...taskItem, archivedAt: null, updatedAt: buildRecentTimestamp() }
-                  : taskItem
-              ),
-              messagesByTask: {
-                ...nextState.messagesByTask,
-                [resolvedTaskId]: nextMessages,
-              },
-              activeTurnIdsByTask: {
-                ...nextState.activeTurnIdsByTask,
-                [resolvedTaskId]: undefined,
-              },
-              nativeConversationReadyByTask: {
-                ...nextState.nativeConversationReadyByTask,
-                ...(shouldClearProviderConversation ? { [resolvedTaskId]: false } : {}),
-              },
-              providerConversationByTask: shouldClearProviderConversation
-                ? Object.fromEntries(
-                    Object.entries(nextState.providerConversationByTask).filter(([key]) => key !== resolvedTaskId)
-                  )
-                : nextState.providerConversationByTask,
-              taskWorkspaceIdById: {
-                ...nextState.taskWorkspaceIdById,
-                [resolvedTaskId]: taskWorkspaceId,
-              },
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-            };
-          });
+              responseText,
+              shouldClearProviderConversation,
+            })
+          );
           if (shouldClearProviderConversation) {
             void window.api?.provider?.cleanupTask?.({ taskId: resolvedTaskId });
           }
@@ -3089,301 +2910,64 @@ export const useAppStore = create<AppState>()(
         });
         const prompt = normalizedPrompt;
 
-        set((nextState) => {
-          const current = nextState.messagesByTask[resolvedTaskId] ?? [];
-          const userMessageId = buildMessageId({ taskId: resolvedTaskId, count: current.length });
-          const userParts: MessagePart[] = [];
-          if (fileContexts) {
-            for (const fc of fileContexts) {
-              userParts.push(createFileContextPart({
-                filePath: fc.filePath,
-                content: fc.content,
-                language: fc.language,
-                instruction: fc.instruction,
-              }));
-            }
-          }
-          if (imageContexts) {
-            for (const ic of imageContexts) {
-              userParts.push({
-                type: "image_context",
-                dataUrl: ic.dataUrl,
-                label: ic.label,
-                mimeType: ic.mimeType,
-              } satisfies ImageContextPart);
-            }
-          }
-          if (content.trim().length > 0) {
-            userParts.push(createUserTextPart({ text: content }));
-          }
-
-          const userMessage: ChatMessage = {
-            id: userMessageId,
-            role: "user",
-            model: "user",
-            providerId: "user",
+        set((nextState) =>
+          buildPendingProviderTurnState({
+            tasks: nextState.tasks,
+            messagesByTask: nextState.messagesByTask,
+            activeTurnIdsByTask: nextState.activeTurnIdsByTask,
+            taskWorkspaceIdById: nextState.taskWorkspaceIdById,
+            workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
+            taskId: resolvedTaskId,
+            taskWorkspaceId,
+            turnId,
+            provider,
+            activeModel,
             content,
-            parts: userParts.length > 0 ? userParts : [createUserTextPart({ text: content })],
-          };
+            fileContexts,
+            imageContexts,
+          })
+        );
 
-          const assistantMessageId = buildMessageId({ taskId: resolvedTaskId, count: current.length + 1 });
-          const assistantMessage: ChatMessage = {
-            id: assistantMessageId,
-            role: "assistant",
-            model: activeModel,
-            providerId: provider,
-            content: "",
-            isStreaming: true,
-            parts: [],
-          };
+        const providerTurnEventController = createProviderTurnEventController({
+          flushEvents: (pendingEvents) => {
+            let persistInactiveWorkspaceSession: { workspaceId: string; session: WorkspaceSessionState } | null = null;
 
-          return {
-            tasks: nextState.tasks.map((taskItem) =>
-              taskItem.id === resolvedTaskId
-                ? {
-                    ...taskItem,
-                    archivedAt: null,
-                    updatedAt: buildRecentTimestamp(),
-                  }
-                : taskItem
-            ),
-            messagesByTask: {
-              ...nextState.messagesByTask,
-              [resolvedTaskId]: [...current, userMessage, assistantMessage],
-            },
-            activeTurnIdsByTask: {
-              ...nextState.activeTurnIdsByTask,
-              [resolvedTaskId]: turnId,
-            },
-            taskWorkspaceIdById: {
-              ...nextState.taskWorkspaceIdById,
-              [resolvedTaskId]: taskWorkspaceId,
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-          };
-        });
-
-        const queuedEvents: NormalizedProviderEvent[] = [];
-        let flushHandle: number | null = null;
-
-        const scheduleFlush = () => {
-          if (flushHandle !== null) {
-            return;
-          }
-          if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-            flushHandle = window.requestAnimationFrame(() => {
-              flushHandle = null;
-              flushProviderEvents();
-            });
-            return;
-          }
-          flushHandle = window.setTimeout(() => {
-            flushHandle = null;
-            flushProviderEvents();
-          }, 16);
-        };
-
-        const cancelScheduledFlush = () => {
-          if (flushHandle === null) {
-            return;
-          }
-          if (typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
-            window.cancelAnimationFrame(flushHandle);
-          } else {
-            window.clearTimeout(flushHandle);
-          }
-          flushHandle = null;
-        };
-
-        const flushProviderEvents = () => {
-          if (queuedEvents.length === 0) {
-            return;
-          }
-
-          const pendingEvents = queuedEvents.splice(0, queuedEvents.length);
-          let persistInactiveWorkspaceSession: { workspaceId: string; session: WorkspaceSessionState } | null = null;
-
-          set((nextState) => {
-            const isActiveWorkspaceTarget = taskWorkspaceId === nextState.activeWorkspaceId;
-            if (isActiveWorkspaceTarget) {
-              const activeTurnId = nextState.activeTurnIdsByTask[resolvedTaskId];
-              if (activeTurnId !== turnId) {
-                console.warn("[provider-turn] dropped late events for inactive turn", {
-                  taskId: resolvedTaskId,
-                  workspaceId: taskWorkspaceId,
-                  expectedTurnId: turnId,
-                  activeTurnId: activeTurnId ?? null,
-                  eventTypes: pendingEvents.map((event) => event.type),
-                });
-                return {};
-              }
-
-              const replayed = replayProviderEventsToTaskState({
+            set((nextState) => {
+              const applied = applyPendingProviderEventsToStoreState({
+                state: nextState,
+                taskWorkspaceId,
                 taskId: resolvedTaskId,
-                messages: nextState.messagesByTask[resolvedTaskId] ?? [],
                 events: pendingEvents,
                 provider,
                 model: activeModel,
                 turnId,
-                nativeConversationReady: nextState.nativeConversationReadyByTask[resolvedTaskId],
-                providerConversation: nextState.providerConversationByTask[resolvedTaskId],
               });
-
-              const activeTurnMatches = nextState.activeTurnIdsByTask[resolvedTaskId] === replayed.activeTurnId;
-              const nativeConversationReadyMatches =
-                nextState.nativeConversationReadyByTask[resolvedTaskId] === replayed.nativeConversationReady;
-              const providerConversationMatches =
-                replayed.providerConversation === undefined
-                || nextState.providerConversationByTask[resolvedTaskId] === replayed.providerConversation;
-
-              if (
-                !replayed.changed
-                && activeTurnMatches
-                && nativeConversationReadyMatches
-                && providerConversationMatches
-              ) {
-                return {};
-              }
-
-              return {
-                messagesByTask: replayed.changed
-                  ? {
-                      ...nextState.messagesByTask,
-                      [resolvedTaskId]: replayed.messages,
-                    }
-                  : nextState.messagesByTask,
-                activeTurnIdsByTask: activeTurnMatches
-                  ? nextState.activeTurnIdsByTask
-                  : {
-                      ...nextState.activeTurnIdsByTask,
-                      [resolvedTaskId]: replayed.activeTurnId,
-                    },
-                nativeConversationReadyByTask: nativeConversationReadyMatches
-                  ? nextState.nativeConversationReadyByTask
-                  : {
-                      ...nextState.nativeConversationReadyByTask,
-                      [resolvedTaskId]: replayed.nativeConversationReady,
-                    },
-                providerConversationByTask: providerConversationMatches
-                  ? nextState.providerConversationByTask
-                  : {
-                      ...nextState.providerConversationByTask,
-                      [resolvedTaskId]: replayed.providerConversation!,
-                    },
-                workspaceSnapshotVersion: replayed.changed || !providerConversationMatches
-                  ? incrementWorkspaceSnapshotVersion(nextState)
-                  : nextState.workspaceSnapshotVersion,
-              };
-            }
-
-            const workspaceSession = nextState.workspaceRuntimeCacheById[taskWorkspaceId];
-            if (!workspaceSession) {
-              return {};
-            }
-
-            const activeTurnId = workspaceSession.activeTurnIdsByTask[resolvedTaskId];
-            if (activeTurnId !== turnId) {
-              console.warn("[provider-turn] dropped late events for inactive cached workspace turn", {
-                taskId: resolvedTaskId,
-                workspaceId: taskWorkspaceId,
-                expectedTurnId: turnId,
-                activeTurnId: activeTurnId ?? null,
-                eventTypes: pendingEvents.map((event) => event.type),
-              });
-              return {};
-            }
-
-            const replayed = replayProviderEventsToTaskState({
-              taskId: resolvedTaskId,
-              messages: workspaceSession.messagesByTask[resolvedTaskId] ?? [],
-              events: pendingEvents,
-              provider,
-              model: activeModel,
-              turnId,
-              nativeConversationReady: workspaceSession.nativeConversationReadyByTask[resolvedTaskId],
-              providerConversation: workspaceSession.providerConversationByTask[resolvedTaskId],
+              persistInactiveWorkspaceSession = applied.persistInactiveWorkspaceSession;
+              return applied.statePatch;
             });
-
-            const activeTurnMatches = workspaceSession.activeTurnIdsByTask[resolvedTaskId] === replayed.activeTurnId;
-            const nativeConversationReadyMatches =
-              workspaceSession.nativeConversationReadyByTask[resolvedTaskId] === replayed.nativeConversationReady;
-            const providerConversationMatches =
-              replayed.providerConversation === undefined
-              || workspaceSession.providerConversationByTask[resolvedTaskId] === replayed.providerConversation;
-
-            if (
-              !replayed.changed
-              && activeTurnMatches
-              && nativeConversationReadyMatches
-              && providerConversationMatches
-            ) {
-              return {};
-            }
-
-            const nextWorkspaceSession: WorkspaceSessionState = {
-              ...workspaceSession,
-              messagesByTask: replayed.changed
-                ? {
-                    ...workspaceSession.messagesByTask,
-                    [resolvedTaskId]: replayed.messages,
-                  }
-                : workspaceSession.messagesByTask,
-              activeTurnIdsByTask: activeTurnMatches
-                ? workspaceSession.activeTurnIdsByTask
-                : {
-                    ...workspaceSession.activeTurnIdsByTask,
-                    [resolvedTaskId]: replayed.activeTurnId,
-                  },
-              nativeConversationReadyByTask: nativeConversationReadyMatches
-                ? workspaceSession.nativeConversationReadyByTask
-                : {
-                    ...workspaceSession.nativeConversationReadyByTask,
-                    [resolvedTaskId]: replayed.nativeConversationReady,
-                  },
-              providerConversationByTask: providerConversationMatches
-                ? workspaceSession.providerConversationByTask
-                : {
-                    ...workspaceSession.providerConversationByTask,
-                    [resolvedTaskId]: replayed.providerConversation!,
-                  },
-            };
-
-            if (replayed.activeTurnId === undefined) {
-              persistInactiveWorkspaceSession = {
-                workspaceId: taskWorkspaceId,
-                session: nextWorkspaceSession,
-              };
-            }
-
-            return {
-              workspaceRuntimeCacheById: {
-                ...nextState.workspaceRuntimeCacheById,
-                [taskWorkspaceId]: nextWorkspaceSession,
-              },
-            };
-          });
-          const persistedInactiveWorkspaceSession = persistInactiveWorkspaceSession as {
-            workspaceId: string;
-            session: WorkspaceSessionState;
-          } | null;
-          if (persistedInactiveWorkspaceSession !== null) {
-            const latestState = get();
-            void persistWorkspaceSnapshot({
-              workspaceId: persistedInactiveWorkspaceSession.workspaceId,
-              workspaceName: resolveWorkspaceName({
-                state: latestState,
+            const persistedInactiveWorkspaceSession = persistInactiveWorkspaceSession as {
+              workspaceId: string;
+              session: WorkspaceSessionState;
+            } | null;
+            if (persistedInactiveWorkspaceSession !== null) {
+              const latestState = get();
+              void persistWorkspaceSnapshot({
                 workspaceId: persistedInactiveWorkspaceSession.workspaceId,
-              }),
-              activeTaskId: persistedInactiveWorkspaceSession.session.activeTaskId,
-              tasks: persistedInactiveWorkspaceSession.session.tasks,
-              messagesByTask: persistedInactiveWorkspaceSession.session.messagesByTask,
-              promptDraftByTask: persistedInactiveWorkspaceSession.session.promptDraftByTask,
-              editorTabs: persistedInactiveWorkspaceSession.session.editorTabs,
-              activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
-              providerConversationByTask: persistedInactiveWorkspaceSession.session.providerConversationByTask,
-            });
-          }
-        };
+                workspaceName: resolveWorkspaceName({
+                  state: latestState,
+                  workspaceId: persistedInactiveWorkspaceSession.workspaceId,
+                }),
+                activeTaskId: persistedInactiveWorkspaceSession.session.activeTaskId,
+                tasks: persistedInactiveWorkspaceSession.session.tasks,
+                messagesByTask: persistedInactiveWorkspaceSession.session.messagesByTask,
+                promptDraftByTask: persistedInactiveWorkspaceSession.session.promptDraftByTask,
+                editorTabs: persistedInactiveWorkspaceSession.session.editorTabs,
+                activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
+                providerConversationByTask: persistedInactiveWorkspaceSession.session.providerConversationByTask,
+              });
+            }
+          },
+        });
 
         runProviderTurn({
           turnId,
@@ -3393,62 +2977,13 @@ export const useAppStore = create<AppState>()(
           taskId: resolvedTaskId,
           workspaceId: taskWorkspaceId,
           cwd: workspaceCwd,
-          runtimeOptions: {
+          runtimeOptions: buildProviderRuntimeOptions({
+            provider,
             model: activeModel,
-            chatStreamingEnabled: get().settings.chatStreamingEnabled,
-            debug: get().settings.providerDebugStream,
-            providerTimeoutMs: get().settings.providerTimeoutMs,
-            claudePermissionMode: get().settings.claudePermissionMode,
-            claudeAllowDangerouslySkipPermissions: get().settings.claudeAllowDangerouslySkipPermissions,
-            claudeSandboxEnabled: get().settings.claudeSandboxEnabled,
-            claudeAllowUnsandboxedCommands: get().settings.claudeAllowUnsandboxedCommands,
-            claudeEffort: get().settings.claudeEffort,
-            claudeThinkingMode: get().settings.claudeThinkingMode,
-            claudeAgentProgressSummaries: get().settings.claudeAgentProgressSummaries,
-            claudeFastMode: get().settings.claudeFastMode,
-            // Resume IDs: for stave, forward both so the router can continue
-            // whichever underlying provider it routed to on the previous turn.
-            ...(provider === "stave"
-              ? {
-                  ...(providerConversation?.["claude-code"]?.trim()
-                    ? { claudeResumeSessionId: providerConversation["claude-code"] }
-                    : {}),
-                  ...(providerConversation?.codex?.trim()
-                    ? { codexResumeThreadId: providerConversation.codex }
-                    : {}),
-                }
-              : provider === "claude-code" && providerConversation?.["claude-code"]?.trim()
-                ? { claudeResumeSessionId: providerConversation["claude-code"] }
-                : {}),
-            codexSandboxMode: get().settings.codexSandboxMode,
-            codexSkipGitRepoCheck: get().settings.codexSkipGitRepoCheck,
-            codexNetworkAccessEnabled: get().settings.codexNetworkAccessEnabled,
-            codexApprovalPolicy: normalizeCodexApprovalPolicy({
-              value: get().settings.codexApprovalPolicy,
-            }),
-            codexPathOverride: get().settings.codexPathOverride || undefined,
-            codexModelReasoningEffort: get().settings.codexModelReasoningEffort,
-            codexWebSearchMode: get().settings.codexWebSearchMode,
-            codexShowRawAgentReasoning: get().settings.codexShowRawAgentReasoning,
-            codexReasoningSummary: get().settings.codexReasoningSummary,
-            codexSupportsReasoningSummaries: get().settings.codexSupportsReasoningSummaries,
-            codexFastMode: get().settings.codexFastMode,
-            ...(provider === "codex" && providerConversation?.codex?.trim()
-              ? { codexResumeThreadId: providerConversation.codex }
-              : {}),
-            staveAuto: buildStaveAutoProfileFromSettings({
-              settings: get().settings,
-            }),
-          },
-          onEvent: ({ event }) => {
-            queuedEvents.push(event);
-            if (event.type === "done") {
-              cancelScheduledFlush();
-              flushProviderEvents();
-              return;
-            }
-            scheduleFlush();
-          },
+            settings: get().settings,
+            providerConversation,
+          }),
+          onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
         });
       },
       abortTaskTurn: ({ taskId }) => {

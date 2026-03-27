@@ -197,6 +197,8 @@ Stable project documentation now lives under `docs/`.
 - [Conversation flow](docs/architecture/conversation-flow.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
 - [Future SDK backlog](docs/future/claude-sdk-candidates.md)
+- [Codebase simplification plan (2026-03-26)](docs/future/codebase-simplification-plan-2026-03-26.md)
+- [Codebase simplification report (2026-03-27)](docs/future/codebase-simplification-report-2026-03-27.md)
 - [Shared skill management plan (2026-03-13)](docs/future/shared-skill-management-plan-2026-03-13.md)
 - [Session Replay](docs/features/session-replay.md)
 - [Skill selector](docs/features/skill-selector.md)
