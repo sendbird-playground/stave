@@ -447,6 +447,10 @@ async function ensureWorkspaceSourceFilesLoaded(args: {
         monaco: args.monaco,
         files: nextFiles,
       }));
+      args.state.sourceFileDisposables.push(...addMonacoExtraLibs({
+        monaco: args.monaco,
+        files: nextFiles,
+      }));
     })
     .finally(() => {
       args.state.sourceFilesPromises.delete(contextKey);
