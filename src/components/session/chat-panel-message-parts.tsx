@@ -1,0 +1,275 @@
+import { useMemo, useState } from "react";
+import { Check, Clock3, Copy } from "lucide-react";
+import { Badge, Button, Card, TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
+import {
+  type ChainOfThoughtStep,
+  ConfirmationCompact,
+  MessageAction,
+  MessageResponse,
+  OrchestrationCard,
+  StaveProcessingCard,
+  SubagentCard,
+  TodoCard,
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+  UserInputCard,
+  parseSubagentToolInput,
+} from "@/components/ai-elements";
+import {
+  shouldAutoOpenToolPart,
+  shouldRenderInlineSystemEvent,
+  summarizeReplayOnlyToolParts,
+} from "@/components/session/chat-panel.utils";
+import { copyTextToClipboard } from "@/lib/clipboard";
+import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
+import { useAppStore } from "@/store/app.store";
+import type { MessagePart } from "@/types/chat";
+import { ChangedFilesBlock, ReferencedFilesBlock, ImageAttachmentBlock } from "./chat-panel-file-blocks";
+
+export function toProviderStartCase(args: { providerId: "claude-code" | "codex" | "stave" }) {
+  return args.providerId
+    .split("-")
+    .map((chunk) => `${chunk.slice(0, 1).toUpperCase()}${chunk.slice(1)}`)
+    .join(" ");
+}
+
+export function toProviderWaveToneClass(args: { providerId: "claude-code" | "codex" | "stave" | "user"; model?: string }) {
+  if (args.providerId === "user") {
+    return "text-primary";
+  }
+  return getProviderWaveToneClass({ providerId: args.providerId, model: args.model });
+}
+
+export function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <MessageAction
+      label="Copy"
+      tooltip="Copy message"
+      onClick={() => {
+        void copyTextToClipboard(text)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
+          .catch(() => {});
+      }}
+    >
+      {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+    </MessageAction>
+  );
+}
+
+export function isSubagentToolPart(args: { toolName: string }) {
+  return args.toolName.trim().toLowerCase() === "agent";
+}
+
+export function isTodoToolPart(args: { toolName: string }) {
+  return args.toolName.trim().toLowerCase() === "todowrite";
+}
+
+export function toToolDisplayName(toolName: string) {
+  return toolName
+    .trim()
+    .replace(/^tool[-_:]?/i, "")
+    .replaceAll(/[_-]+/g, " ")
+    || "Tool";
+}
+
+export function MessagePartRenderer(args: {
+  part: MessagePart;
+  taskId: string;
+  messageId: string;
+  isStreaming?: boolean;
+  isLastTextPart?: boolean;
+}) {
+  const { part, taskId, messageId, isStreaming, isLastTextPart } = args;
+  const resolveApproval = useAppStore((state) => state.resolveApproval);
+  const resolveUserInput = useAppStore((state) => state.resolveUserInput);
+
+  switch (part.type) {
+    case "tool_use":
+      if (isSubagentToolPart({ toolName: part.toolName })) {
+        return (
+          <SubagentCard
+            defaultOpen={false}
+            input={part.input}
+            output={part.output}
+            state={part.state}
+            progressMessages={part.progressMessages}
+          />
+        );
+      }
+      if (isTodoToolPart({ toolName: part.toolName })) {
+        return (
+          <TodoCard
+            defaultOpen={true}
+            input={part.input}
+            output={part.output}
+            state={part.state}
+          />
+        );
+      }
+      return (
+        <Tool
+          defaultOpen={shouldAutoOpenToolPart(part.state)}
+          openWhen={shouldAutoOpenToolPart(part.state)}
+        >
+          <ToolHeader type={part.toolName} state={part.state} elapsedSeconds={part.elapsedSeconds} />
+          <ToolContent>
+            <ToolInput input={part.input} />
+            {(part.state !== "input-streaming" || part.output?.trim()) && (
+              <ToolOutput
+                label={part.state === "input-streaming" ? "Live output" : undefined}
+                output={part.output ? <pre className="whitespace-pre-wrap text-sm">{part.output}</pre> : null}
+                errorText={part.state === "output-error" ? (part.output ?? "Tool failed.") : undefined}
+              />
+            )}
+          </ToolContent>
+        </Tool>
+      );
+    case "code_diff":
+      return <ChangedFilesBlock parts={[part]} taskId={taskId} messageId={messageId} startIndex={0} />;
+    case "file_context":
+      return <ReferencedFilesBlock parts={[part]} />;
+    case "image_context":
+      return <ImageAttachmentBlock parts={[part]} />;
+    case "approval":
+      return (
+        <ConfirmationCompact
+          toolName={part.toolName}
+          description={part.description}
+          state={part.state}
+          onApprove={() => resolveApproval({ taskId, messageId, approved: true })}
+          onReject={() => resolveApproval({ taskId, messageId, approved: false })}
+        />
+      );
+    case "user_input":
+      return (
+        <UserInputCard
+          toolName={part.toolName}
+          questions={part.questions}
+          answers={part.answers}
+          state={part.state}
+          onSubmit={(answers) => resolveUserInput({ taskId, messageId, answers })}
+          onDeny={() => resolveUserInput({ taskId, messageId, denied: true })}
+        />
+      );
+    case "system_event":
+      if (!shouldRenderInlineSystemEvent({ content: part.content })) {
+        return null;
+      }
+      return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm italic text-muted-foreground">{part.content}</p>;
+    case "orchestration_progress":
+      return <OrchestrationCard part={part} />;
+    case "stave_processing":
+      return <StaveProcessingCard part={part} />;
+    case "text":
+      if (!part.text?.trim()) return null;
+      return <MessageResponse isStreaming={isStreaming && isLastTextPart}>{part.text}</MessageResponse>;
+    case "thinking":
+      return null;
+  }
+}
+
+export function BackgroundActionsSummary(args: { parts: MessagePart[]; onOpenReplay?: () => void }) {
+  const summary = useMemo(() => summarizeReplayOnlyToolParts(args.parts), [args.parts]);
+
+  if (summary.totalActions === 0) {
+    return null;
+  }
+
+  const statusLabel = summary.activeActions > 0
+    ? `${summary.activeActions} running`
+    : summary.failedActions > 0
+    ? `${summary.failedActions} with issues`
+    : null;
+
+  return (
+    <Card className="border-dashed border-border/80 bg-muted/20 p-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {summary.byTool.slice(0, 5).map((item) => (
+          <Badge key={item.toolName} variant="outline">
+            {toToolDisplayName(item.toolName)} x{item.count}
+          </Badge>
+        ))}
+        {statusLabel ? (
+          <Badge variant="destructive">
+            {statusLabel}
+          </Badge>
+        ) : null}
+        {args.onOpenReplay ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  className="ml-auto"
+                  aria-label="Open Session Replay"
+                  onClick={args.onOpenReplay}
+                >
+                  <Clock3 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open Session Replay</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+export function isSubagentProgressSystemEvent(content: string): boolean {
+  return content.trimStart().startsWith("Subagent progress:");
+}
+
+export function buildChainOfThoughtSteps(parts: MessagePart[]): ChainOfThoughtStep[] {
+  const steps: ChainOfThoughtStep[] = [];
+  parts.forEach((part, index) => {
+    if (part.type === "tool_use") {
+      const isSubagent = isSubagentToolPart({ toolName: part.toolName });
+      if (!isSubagent) {
+        return;
+      }
+      const subagentInput = isSubagent ? parseSubagentToolInput({ input: part.input }) : null;
+      // Use the latest progress message as the CoT detail when the agent is active.
+      const latestProgress = part.progressMessages?.at(-1);
+      steps.push({
+        id: `tool-${index}`,
+        label: isSubagent
+          ? subagentInput?.description ?? subagentInput?.subagentType ?? "Subagent"
+          : part.toolName,
+        detail: latestProgress
+          ?? (isSubagent
+            ? (subagentInput?.prompt ?? part.input ?? part.output)
+            : part.input || part.output),
+        status: part.state === "input-streaming"
+          ? "active"
+          : part.state === "output-available"
+          ? "done"
+          : "pending",
+        kind: isSubagent ? "agent" : "tool",
+      });
+      return;
+    }
+    if (part.type === "system_event") {
+      // Skip subagent progress events — they are already shown inside the SubagentCard.
+      if (isSubagentProgressSystemEvent(part.content)) {
+        return;
+      }
+      steps.push({
+        id: `system-${index}`,
+        label: part.content,
+        status: "done",
+        kind: "system",
+      });
+    }
+  });
+  return steps;
+}
