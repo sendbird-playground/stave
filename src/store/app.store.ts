@@ -2578,9 +2578,14 @@ export const useAppStore = create<AppState>()(
           ? `git diff --name-status ${JSON.stringify(checkpoint)} --`
           : "git status --porcelain";
         const result = await runCommand({ cwd: workspaceCwd, command });
-        const output = result.ok
+        const rawOutput = result.ok
           ? (result.stdout.trim() || "No file changes for this task checkpoint.")
           : (result.stderr.trim() || "Failed to load task changes.");
+        const output = result.ok && rawOutput !== "No file changes for this task checkpoint."
+          ? `### Task Changes\n\n\`\`\`diff\n${rawOutput}\n\`\`\``
+          : result.ok
+            ? rawOutput
+            : `> **Failed to load task changes.** ${rawOutput}`;
 
         set((nextState) => {
           const current = nextState.messagesByTask[taskId] ?? [];
@@ -2589,10 +2594,10 @@ export const useAppStore = create<AppState>()(
             role: "assistant",
             model: "system",
             providerId: "user",
-            content: output,
+            content: rawOutput,
             parts: [{
-              type: "system_event",
-              content: `Task changes\n${output}`,
+              type: "text",
+              text: output,
             }],
           };
           return {
@@ -2618,9 +2623,12 @@ export const useAppStore = create<AppState>()(
           command: `git restore --source=${JSON.stringify(checkpoint)} --staged --worktree .`,
         });
 
-        const output = rollbackResult.ok
+        const rawOutput = rollbackResult.ok
           ? `Rollback complete to checkpoint ${checkpoint}.`
           : (rollbackResult.stderr.trim() || "Rollback failed.");
+        const output = rollbackResult.ok
+          ? `Rollback complete to checkpoint \`${checkpoint}\`.`
+          : `> **Rollback failed.** ${rollbackResult.stderr.trim() || "Unknown error."}`;
 
         const files = await workspaceFsAdapter.listFiles();
         set((nextState) => {
@@ -2630,10 +2638,10 @@ export const useAppStore = create<AppState>()(
             role: "assistant",
             model: "system",
             providerId: "user",
-            content: output,
+            content: rawOutput,
             parts: [{
-              type: "system_event",
-              content: output,
+              type: "text",
+              text: output,
             }],
           };
           return {
@@ -2952,16 +2960,16 @@ export const useAppStore = create<AppState>()(
             const syncAssistantMessageId = currentForSync[currentForSync.length - 1]?.id;
 
             void (async () => {
-              const lines: string[] = [];
+              const parts: string[] = [];
 
               // 1. git fetch --all --prune
               const fetchResult = await runCommand({ cwd: workspaceCwd, command: "git fetch --all --prune" });
               if (fetchResult.ok) {
-                lines.push("✓ git fetch --all --prune");
+                parts.push("- ✓ `git fetch --all --prune`");
               } else {
-                lines.push(`✗ git fetch failed (exit ${fetchResult.code})`);
+                parts.push(`- ✗ \`git fetch --all --prune\` (exit ${fetchResult.code})`);
                 if (fetchResult.stderr.trim()) {
-                  lines.push(fetchResult.stderr.trim());
+                  parts.push("", `> ${fetchResult.stderr.trim().replaceAll("\n", "\n> ")}`);
                 }
               }
 
@@ -2970,19 +2978,19 @@ export const useAppStore = create<AppState>()(
                 const pullResult = await runCommand({ cwd: workspaceCwd, command: "git pull --ff-only" });
                 if (pullResult.ok) {
                   const pullSummary = pullResult.stdout.trim() || "Already up to date.";
-                  lines.push(`✓ git pull --ff-only`);
-                  lines.push(pullSummary);
+                  parts.push("- ✓ `git pull --ff-only`");
+                  parts.push("", "```", pullSummary, "```");
                 } else {
-                  lines.push(`✗ git pull --ff-only failed (exit ${pullResult.code})`);
+                  parts.push(`- ✗ \`git pull --ff-only\` (exit ${pullResult.code})`);
                   if (pullResult.stderr.trim()) {
-                    lines.push(pullResult.stderr.trim());
+                    parts.push("", `> ${pullResult.stderr.trim().replaceAll("\n", "\n> ")}`);
                   }
-                  lines.push("Tip: If fast-forward is not possible, resolve manually with git merge or git rebase.");
+                  parts.push("", "> **Tip:** If fast-forward is not possible, resolve manually with `git merge` or `git rebase`.");
                 }
               }
 
               // 3. Update the assistant message with the final result
-              const resultText = lines.join("\n");
+              const resultText = parts.join("\n");
               if (syncAssistantMessageId) {
                 set((state) => ({
                   messagesByTask: {

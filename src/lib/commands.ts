@@ -69,6 +69,20 @@ function formatUsd(value: number) {
   return `$${value.toFixed(value >= 1 ? 2 : 4)}`;
 }
 
+function markdownTable(headers: string[], rows: string[][]): string {
+  const headerRow = `| ${headers.join(" | ")} |`;
+  const separator = `| ${headers.map(() => "---").join(" | ")} |`;
+  const dataRows = rows.map(row => `| ${row.map(cell => cell.replaceAll("|", "\\|")).join(" | ")} |`);
+  return [headerRow, separator, ...dataRows].join("\n");
+}
+
+function markdownKeyValueTable(entries: Array<{ key: string; value: string }>): string {
+  return markdownTable(
+    ["Property", "Value"],
+    entries.map(e => [`**${e.key}**`, e.value]),
+  );
+}
+
 function toStaveCommandKey(args: { cmd: string }) {
   const normalized = args.cmd.trim().toLowerCase();
   if (!normalized) {
@@ -169,14 +183,14 @@ function buildStatusResponse(ctx: CommandContext) {
   const assistantMessages = ctx.messages.filter((message) => message.role === "assistant").length;
   const taskLabel = ctx.taskTitle?.trim() || ctx.taskId;
 
-  return [
-    `Task: ${taskLabel}`,
-    `Provider: ${getProviderLabel({ providerId: ctx.provider })} (${ctx.model})`,
-    `Workspace: ${ctx.workspaceCwd ?? "Unknown"}`,
-    `Turn: ${ctx.isTurnActive ? "active" : "idle"}`,
-    `Messages: ${formatInteger(userMessages)} user, ${formatInteger(assistantMessages)} assistant`,
-    `Checkpoint: ${ctx.checkpoint ?? "Not captured yet"}`,
-  ].join("\n");
+  return markdownKeyValueTable([
+    { key: "Task", value: taskLabel },
+    { key: "Provider", value: `${getProviderLabel({ providerId: ctx.provider })} (${ctx.model})` },
+    { key: "Workspace", value: `\`${ctx.workspaceCwd ?? "Unknown"}\`` },
+    { key: "Turn", value: ctx.isTurnActive ? "active" : "idle" },
+    { key: "Messages", value: `${formatInteger(userMessages)} user, ${formatInteger(assistantMessages)} assistant` },
+    { key: "Checkpoint", value: ctx.checkpoint ? `\`${ctx.checkpoint}\`` : "Not captured yet" },
+  ]);
 }
 
 function buildUsageResponse(ctx: CommandContext) {
@@ -210,27 +224,27 @@ function buildUsageResponse(ctx: CommandContext) {
   });
 
   const lastUsage = [...usageMessages].reverse().find((message) => message.usage)?.usage;
-  const lines = [
-    `Provider: ${getProviderLabel({ providerId: ctx.provider })} (${ctx.model})`,
-    `Assistant turns with usage: ${formatInteger(usageMessages.length)}`,
-    `Input tokens: ${formatInteger(totals.inputTokens)}`,
-    `Output tokens: ${formatInteger(totals.outputTokens)}`,
+  const entries: Array<{ key: string; value: string }> = [
+    { key: "Provider", value: `${getProviderLabel({ providerId: ctx.provider })} (${ctx.model})` },
+    { key: "Assistant turns with usage", value: formatInteger(usageMessages.length) },
+    { key: "Input tokens", value: formatInteger(totals.inputTokens) },
+    { key: "Output tokens", value: formatInteger(totals.outputTokens) },
   ];
 
   if (totals.hasCacheRead) {
-    lines.push(`Cache read tokens: ${formatInteger(totals.cacheReadTokens)}`);
+    entries.push({ key: "Cache read tokens", value: formatInteger(totals.cacheReadTokens) });
   }
   if (totals.hasCacheCreation) {
-    lines.push(`Cache creation tokens: ${formatInteger(totals.cacheCreationTokens)}`);
+    entries.push({ key: "Cache creation tokens", value: formatInteger(totals.cacheCreationTokens) });
   }
   if (totals.hasCost) {
-    lines.push(`Total cost: ${formatUsd(totals.totalCostUsd)}`);
+    entries.push({ key: "Total cost", value: formatUsd(totals.totalCostUsd) });
   }
   if (lastUsage) {
-    lines.push(`Last response: in ${formatInteger(lastUsage.inputTokens)} / out ${formatInteger(lastUsage.outputTokens)}`);
+    entries.push({ key: "Last response", value: `in ${formatInteger(lastUsage.inputTokens)} / out ${formatInteger(lastUsage.outputTokens)}` });
   }
 
-  return lines.join("\n");
+  return markdownKeyValueTable(entries);
 }
 
 function buildProviderPassthroughNote(provider: ProviderId) {
@@ -312,21 +326,26 @@ function listCustomCommandKeys(args: { settings: Pick<AppSettings, "customComman
 
 function buildHelpResponse(ctx: CommandContext) {
   const providerLabel = getProviderLabel({ providerId: ctx.provider });
-  const builtins = staveBuiltinCommands.map((command) => `- ${command.command}: ${command.description}`);
   const customCommands = listCustomCommandKeys({ settings: ctx.settings });
-  const sections = [
-    "Stave local commands:",
-    ...builtins,
+  const sections: string[] = [
+    "### Stave Local Commands",
+    "",
+    markdownTable(
+      ["Command", "Description"],
+      staveBuiltinCommands.map((command) => [`\`${command.command}\``, command.description]),
+    ),
   ];
 
   if (customCommands.length > 0) {
     sections.push("");
-    sections.push("Custom Stave commands:");
-    customCommands.forEach((command) => sections.push(`- ${command}`));
+    sections.push("### Custom Stave Commands");
+    sections.push("");
+    customCommands.forEach((command) => sections.push(`- \`${command}\``));
   }
 
   sections.push("");
-  sections.push("Provider passthrough:");
+  sections.push("### Provider Passthrough");
+  sections.push("");
   sections.push(buildProviderPassthroughNote(ctx.provider));
 
   if (
@@ -334,8 +353,17 @@ function buildHelpResponse(ctx: CommandContext) {
     && ctx.providerCommandCatalog?.status === "ready"
   ) {
     sections.push("");
-    sections.push(`Available ${providerLabel} native commands:`);
-    ctx.providerCommandCatalog.commands.forEach((command) => sections.push(formatProviderCommandLine(command)));
+    sections.push(`### Available ${providerLabel} Native Commands`);
+    sections.push("");
+    sections.push(markdownTable(
+      ["Command", "Description"],
+      ctx.providerCommandCatalog.commands.map((command) => {
+        const name = command.argumentHint
+          ? `${command.command} ${command.argumentHint}`
+          : command.command;
+        return [`\`${name}\``, command.description];
+      }),
+    ));
   }
 
   return sections.join("\n");
@@ -343,13 +371,22 @@ function buildHelpResponse(ctx: CommandContext) {
 
 function buildUnknownProviderCommandResponse(ctx: CommandContext, command: string) {
   const providerLabel = getProviderLabel({ providerId: ctx.provider });
-  const sections = [`Unknown ${providerLabel} command for this workspace: ${command}`];
+  const sections = [`**Unknown ${providerLabel} command for this workspace:** \`${command}\``];
 
   if (ctx.providerCommandCatalog?.status === "ready") {
     if (ctx.providerCommandCatalog.commands.length > 0) {
       sections.push("");
-      sections.push(`Available ${providerLabel} native commands:`);
-      ctx.providerCommandCatalog.commands.forEach((item) => sections.push(formatProviderCommandLine(item)));
+      sections.push(`**Available ${providerLabel} native commands:**`);
+      sections.push("");
+      sections.push(markdownTable(
+        ["Command", "Description"],
+        ctx.providerCommandCatalog.commands.map((item) => {
+          const name = item.argumentHint
+            ? `${item.command} ${item.argumentHint}`
+            : item.command;
+          return [`\`${name}\``, item.description];
+        }),
+      ));
     } else if (ctx.providerCommandCatalog.detail) {
       sections.push("");
       sections.push(ctx.providerCommandCatalog.detail);
@@ -361,7 +398,7 @@ function buildUnknownProviderCommandResponse(ctx: CommandContext, command: strin
   const hasLocalEquivalent = staveBuiltinCommands.some((item) => item.command === localEquivalent) || customCommands.has(localEquivalent);
   if (hasLocalEquivalent) {
     sections.push("");
-    sections.push(`Try ${localEquivalent} for Stave's local command instead.`);
+    sections.push(`Try \`${localEquivalent}\` for Stave's local command instead.`);
   }
 
   return sections.join("\n");
@@ -589,7 +626,7 @@ export function resolveCommandInput(input: string, ctx: CommandContext): Command
     source: "stave_meta",
     command: cmd,
     response: [
-      `Unknown Stave command: ${cmd}`,
+      `**Unknown Stave command:** \`${cmd}\``,
       "",
       buildHelpResponse(ctx),
     ].join("\n"),
