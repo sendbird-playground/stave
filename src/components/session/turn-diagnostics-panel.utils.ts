@@ -98,6 +98,7 @@ export function getReplayEventFilterId(args: { item: ReplayedTurnEvent }): Exclu
     case "stave:subtask_started":
     case "stave:subtask_done":
     case "stave:synthesis_started":
+    case "subagent_progress":
     case "system":
     case "done":
       return "system";

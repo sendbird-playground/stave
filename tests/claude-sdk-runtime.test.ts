@@ -5,6 +5,7 @@ import {
   buildClaudeSystemPrompt,
   buildClaudeUserInputPermissionResult,
   mapClaudeMessageToEvents,
+  SubagentProgressTracker,
 } from "../electron/providers/claude-sdk-runtime";
 
 const workspaceRoot = "/workspace/stave";
@@ -224,5 +225,70 @@ describe("resolveClaudeAgentProgressSummaries", () => {
 
   test("returns undefined when no override is set", () => {
     expect(resolveClaudeAgentProgressSummaries(undefined)).toBeUndefined();
+  });
+});
+
+describe("SubagentProgressTracker", () => {
+  test("resolves toolUseId from tracked Agent tool events (positional fallback)", () => {
+    const tracker = new SubagentProgressTracker();
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_1", input: "{}", state: "input-streaming" });
+    expect(tracker.resolveToolUseId({})).toBe("toolu_1");
+  });
+
+  test("returns the most recent active Agent when multiple are pending", () => {
+    const tracker = new SubagentProgressTracker();
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_1", input: "{}", state: "input-streaming" });
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_2", input: "{}", state: "input-streaming" });
+    expect(tracker.resolveToolUseId({})).toBe("toolu_2");
+  });
+
+  test("removes completed agents from tracking", () => {
+    const tracker = new SubagentProgressTracker();
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_1", input: "{}", state: "input-streaming" });
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_2", input: "{}", state: "input-streaming" });
+    tracker.trackEvent({ type: "tool_result", tool_use_id: "toolu_2", output: "done" });
+    expect(tracker.resolveToolUseId({})).toBe("toolu_1");
+  });
+
+  test("ignores non-agent tool events", () => {
+    const tracker = new SubagentProgressTracker();
+    tracker.trackEvent({ type: "tool", toolName: "Bash", toolUseId: "toolu_bash", input: "ls", state: "input-streaming" });
+    expect(tracker.resolveToolUseId({})).toBeUndefined();
+  });
+
+  test("correlates via agent_id from hook metadata", () => {
+    const tracker = new SubagentProgressTracker();
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_1", input: "{}", state: "input-streaming" });
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_2", input: "{}", state: "input-streaming" });
+
+    // Hook message maps agent_id "A" to toolu_1
+    tracker.processRawMessage({
+      type: "hook_started",
+      input: { agent_id: "A", tool_use_id: "toolu_1" },
+    });
+    // Hook message maps agent_id "B" to toolu_2
+    tracker.processRawMessage({
+      type: "hook_started",
+      input: { agent_id: "B", tool_use_id: "toolu_2" },
+    });
+
+    // Progress from agent A resolves to toolu_1
+    expect(tracker.resolveToolUseId({ agent_id: "A" })).toBe("toolu_1");
+    // Progress from agent B resolves to toolu_2
+    expect(tracker.resolveToolUseId({ agent_id: "B" })).toBe("toolu_2");
+  });
+
+  test("uses direct tool_use_id on progress message when available", () => {
+    const tracker = new SubagentProgressTracker();
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_1", input: "{}", state: "input-streaming" });
+    tracker.trackEvent({ type: "tool", toolName: "agent", toolUseId: "toolu_2", input: "{}", state: "input-streaming" });
+
+    // Progress message carries its own tool_use_id
+    expect(tracker.resolveToolUseId({ tool_use_id: "toolu_1" })).toBe("toolu_1");
+  });
+
+  test("returns undefined when no agents have been tracked", () => {
+    const tracker = new SubagentProgressTracker();
+    expect(tracker.resolveToolUseId({})).toBeUndefined();
   });
 });

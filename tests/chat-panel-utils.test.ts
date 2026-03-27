@@ -7,6 +7,7 @@ import {
   groupMessageParts,
   hasVisibleMessagePartContent,
   isPendingDiffStatus,
+  isSubagentProgressSystemEvent,
   shouldRenderInlineToolPart,
   shouldRenderInlineSystemEvent,
   shouldAutoOpenToolGroup,
@@ -237,6 +238,28 @@ describe("system event visibility", () => {
       type: "system_event",
       content: "Response was cut off because the output limit was reached.",
     })).toBe(true);
+  });
+
+  test("hides subagent progress events from standalone inline rendering", () => {
+    expect(shouldRenderInlineSystemEvent({ content: "Subagent progress: Reading CONVENTIONS.md" })).toBe(false);
+    expect(shouldRenderInlineSystemEvent({ content: "Subagent progress: Compiling docs..." })).toBe(false);
+    expect(hasVisibleMessagePartContent({
+      type: "system_event",
+      content: "Subagent progress: Finding session data directories",
+    })).toBe(false);
+  });
+});
+
+describe("isSubagentProgressSystemEvent", () => {
+  test("identifies subagent progress content", () => {
+    expect(isSubagentProgressSystemEvent("Subagent progress: Reading files")).toBe(true);
+    expect(isSubagentProgressSystemEvent("  Subagent progress: leading space")).toBe(true);
+  });
+
+  test("rejects non-progress content", () => {
+    expect(isSubagentProgressSystemEvent("Context compacted (auto).")).toBe(false);
+    expect(isSubagentProgressSystemEvent("[Stave] General task")).toBe(false);
+    expect(isSubagentProgressSystemEvent("")).toBe(false);
   });
 });
 

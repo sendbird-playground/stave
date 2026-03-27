@@ -153,3 +153,88 @@ describe("appendProviderEventToAssistant", () => {
     });
   });
 });
+
+describe("subagent progress integration", () => {
+  test("appends progress to matching Agent tool_use by toolUseId", () => {
+    const message = createMessage({
+      parts: [
+        { type: "tool_use", toolUseId: "toolu_1", toolName: "agent", input: "{}", state: "input-streaming" },
+        { type: "tool_use", toolUseId: "toolu_2", toolName: "agent", input: "{}", state: "input-streaming" },
+      ],
+    });
+    const updated = appendProviderEventToAssistant({
+      message,
+      event: { type: "subagent_progress", toolUseId: "toolu_1", content: "Reading files" },
+    });
+    const part1 = updated.parts[0] as import("@/types/chat").ToolUsePart;
+    const part2 = updated.parts[1] as import("@/types/chat").ToolUsePart;
+    expect(part1.progressMessages).toEqual(["Reading files"]);
+    expect(part2.progressMessages).toBeUndefined();
+  });
+
+  test("appends to last active Agent when toolUseId is not provided", () => {
+    const message = createMessage({
+      parts: [
+        { type: "tool_use", toolUseId: "toolu_1", toolName: "agent", input: "{}", state: "output-available" },
+        { type: "tool_use", toolUseId: "toolu_2", toolName: "agent", input: "{}", state: "input-streaming" },
+      ],
+    });
+    const updated = appendProviderEventToAssistant({
+      message,
+      event: { type: "subagent_progress", content: "Compiling" },
+    });
+    const part1 = updated.parts[0] as import("@/types/chat").ToolUsePart;
+    const part2 = updated.parts[1] as import("@/types/chat").ToolUsePart;
+    expect(part1.progressMessages).toBeUndefined();
+    expect(part2.progressMessages).toEqual(["Compiling"]);
+  });
+
+  test("accumulates multiple progress messages on the same agent", () => {
+    let message = createMessage({
+      parts: [
+        { type: "tool_use", toolUseId: "toolu_1", toolName: "agent", input: "{}", state: "input-streaming" },
+      ],
+    });
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "subagent_progress", toolUseId: "toolu_1", content: "Step 1" },
+    });
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "subagent_progress", toolUseId: "toolu_1", content: "Step 2" },
+    });
+    const part = message.parts[0] as import("@/types/chat").ToolUsePart;
+    expect(part.progressMessages).toEqual(["Step 1", "Step 2"]);
+  });
+
+  test("degrades to system_event when no Agent tool_use exists", () => {
+    const message = createMessage({
+      parts: [
+        { type: "tool_use", toolUseId: "toolu_bash", toolName: "Bash", input: "ls", state: "input-streaming" },
+      ],
+    });
+    const updated = appendProviderEventToAssistant({
+      message,
+      event: { type: "subagent_progress", content: "Orphan progress" },
+    });
+    expect(updated.parts).toHaveLength(2);
+    expect(updated.parts[1]).toEqual({
+      type: "system_event",
+      content: "Subagent progress: Orphan progress",
+    });
+  });
+
+  test("migrates legacy 'Subagent progress:' system events into Agent tool parts", () => {
+    const message = createMessage({
+      parts: [
+        { type: "tool_use", toolUseId: "toolu_1", toolName: "agent", input: "{}", state: "input-streaming" },
+      ],
+    });
+    const updated = appendProviderEventToAssistant({
+      message,
+      event: { type: "system", content: "Subagent progress: Reading CONVENTIONS.md" },
+    });
+    const part = updated.parts[0] as import("@/types/chat").ToolUsePart;
+    expect(part.progressMessages).toEqual(["Reading CONVENTIONS.md"]);
+  });
+});

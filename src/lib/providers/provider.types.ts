@@ -100,6 +100,7 @@ export type NormalizedProviderEvent =
   | { type: "user_input"; toolName: string; requestId: string; questions: UserInputQuestion[] }
   | { type: "plan_ready"; planText: string }
   | { type: "system"; content: string }
+  | { type: "subagent_progress"; toolUseId?: string; content: string }
   | { type: "model_resolved"; resolvedProviderId: ProviderId; resolvedModel: string }
   | { type: "stave:execution_processing"; strategy: "direct" | "orchestrate"; model?: string; supervisorModel?: string; reason: string; fastModeRequested?: boolean; fastModeApplied?: boolean }
   | { type: "stave:orchestration_processing"; supervisorModel: string; subtasks: Array<{ id: string; title: string; model: string; dependsOn: string[] }> }

@@ -97,6 +97,73 @@ function createUserInputPart(args: {
   };
 }
 
+function isAgentToolPart(part: MessagePart): part is ToolUsePart {
+  return part.type === "tool_use" && part.toolName.trim().toLowerCase() === "agent";
+}
+
+/**
+ * Append a progress message to the matching Agent tool_use part.
+ *
+ * Resolution:
+ *  1. If `toolUseId` is provided, find the exact ToolUsePart.
+ *  2. Otherwise, find the last Agent tool_use that has not completed yet.
+ *  3. If no active Agent exists, fall back to the last Agent in the array.
+ */
+function appendSubagentProgressToPart(args: {
+  parts: MessagePart[];
+  toolUseId: string | undefined;
+  content: string;
+}): MessagePart[] {
+  const { parts, toolUseId, content } = args;
+
+  let targetIndex = -1;
+
+  // 1. Try exact match by toolUseId
+  if (toolUseId) {
+    targetIndex = parts.findIndex(
+      (p) => p.type === "tool_use" && p.toolUseId === toolUseId,
+    );
+  }
+
+  // 2. Fallback: last active (non-completed) Agent tool_use
+  if (targetIndex === -1) {
+    for (let i = parts.length - 1; i >= 0; i -= 1) {
+      const p = parts[i]!;
+      if (
+        isAgentToolPart(p)
+        && (p.state === "input-streaming" || p.state === "input-available")
+      ) {
+        targetIndex = i;
+        break;
+      }
+    }
+  }
+
+  // 3. Fallback: last Agent tool_use regardless of state
+  if (targetIndex === -1) {
+    for (let i = parts.length - 1; i >= 0; i -= 1) {
+      if (isAgentToolPart(parts[i]!)) {
+        targetIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (targetIndex === -1) {
+    // No Agent tool_use found — degrade to a standalone system_event part.
+    return [...parts, { type: "system_event" as const, content: `Subagent progress: ${content}` }];
+  }
+
+  const target = parts[targetIndex] as ToolUsePart;
+  const updatedPart: ToolUsePart = {
+    ...target,
+    progressMessages: [...(target.progressMessages ?? []), content],
+  };
+  const result = [...parts];
+  result[targetIndex] = updatedPart;
+  return result;
+}
+
 function parseJsonString(raw: string): unknown | null {
   const cleaned = raw
     .replace(/^```(?:json)?\s*/i, "")
@@ -235,6 +302,9 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
         type: "system_event",
         content: event.content,
       };
+    case "subagent_progress":
+      // Handled separately in appendProviderEventToAssistant — not a standalone part.
+      return null;
     case "error":
       return {
         type: "system_event",
@@ -363,6 +433,33 @@ export function appendProviderEventToAssistant(args: {
         parts: partsExcludingTrailingText,
         isStreaming: true,
       };
+    }
+  }
+
+  if (args.event.type === "subagent_progress") {
+    const { toolUseId, content } = args.event;
+    const updatedParts = appendSubagentProgressToPart({
+      parts: args.message.parts,
+      toolUseId,
+      content,
+    });
+    return { ...args.message, parts: updatedParts, isStreaming: true };
+  }
+
+  // Legacy: system events carrying "Subagent progress:" prefix from older stored
+  // events are back-compat migrated into the matching Agent tool part.
+  if (
+    args.event.type === "system"
+    && args.event.content.trimStart().startsWith("Subagent progress:")
+  ) {
+    const stripped = args.event.content.trimStart().slice("Subagent progress:".length).trim();
+    if (stripped) {
+      const updatedParts = appendSubagentProgressToPart({
+        parts: args.message.parts,
+        toolUseId: undefined,
+        content: stripped,
+      });
+      return { ...args.message, parts: updatedParts, isStreaming: true };
     }
   }
 
