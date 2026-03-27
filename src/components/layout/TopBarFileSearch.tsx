@@ -1,7 +1,7 @@
 import { LoaderCircle, Search } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Badge, Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, Kbd, KbdGroup, KbdSeparator } from "@/components/ui";
+import { Badge, Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui";
 import { useAppStore } from "@/store/app.store";
 import { rankFileSearchResults, splitFileSearchPath, type RankedFileSearchResult } from "./file-search-utils";
 
@@ -18,13 +18,6 @@ interface VisibleFileSection {
 const DEFAULT_FILE_RESULT_LIMIT = 120;
 const OPEN_EDITOR_LIMIT = 8;
 
-function getModifierLabel() {
-  if (typeof navigator === "undefined") {
-    return "Cmd";
-  }
-
-  return /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent) ? "Cmd" : "Ctrl";
-}
 
 function toDisplayResult(filePath: string): RankedFileSearchResult {
   const { fileName, directoryPath } = splitFileSearchPath({ filePath });
@@ -58,7 +51,6 @@ export function TopBarFileSearch({ noDragStyle }: TopBarFileSearchProps) {
   const [isMobileExpanded, setIsMobileExpanded] = useState(false);
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = deferredQuery.trim();
-  const modifierLabel = useMemo(() => getModifierLabel(), []);
 
   function getInputElement() {
     return wrapperRef.current?.querySelector<HTMLInputElement>("[data-slot='command-input']") ?? null;
@@ -270,17 +262,10 @@ export function TopBarFileSearch({ noDragStyle }: TopBarFileSearchProps) {
               placeholder="Go to file..."
               data-file-search-input
             />
-            <div className="pointer-events-none absolute inset-y-0 right-3 hidden items-center md:flex">
-              <KbdGroup aria-label={`Keyboard shortcut ${modifierLabel} P`}>
-                <Kbd>{modifierLabel}</Kbd>
-                <KbdSeparator>+</KbdSeparator>
-                <Kbd>P</Kbd>
-              </KbdGroup>
-            </div>
           </div>
           {isOpen ? (
             <div
-              className="absolute left-0 right-0 top-[calc(100%+2px)] z-50 overflow-hidden rounded-xl border border-border/80 bg-card/96 shadow-2xl supports-backdrop-filter:backdrop-blur-xl"
+              className="absolute left-1/2 top-[calc(100%+2px)] z-50 w-full min-w-[260px] -translate-x-1/2 overflow-hidden rounded-xl border border-border/80 bg-card/96 shadow-2xl supports-backdrop-filter:backdrop-blur-xl lg:min-w-[320px] xl:min-w-[380px]"
               style={noDragStyle}
             >
               <div className="flex items-center justify-between gap-3 border-b border-border/70 px-3 py-2.5">
