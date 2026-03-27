@@ -11,12 +11,14 @@ interface CreateWorkspaceDialogProps {
   defaultBranch: string;
   cwd?: string;
   defaultInitCommand?: string;
+  defaultUseRootNodeModulesSymlink?: boolean;
   onOpenChange: (open: boolean) => void;
   onCreateWorkspace: (args: {
     name: string;
     mode: "branch" | "clean";
     fromBranch?: string;
     initCommand?: string;
+    useRootNodeModulesSymlink?: boolean;
   }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
 }
 
@@ -26,6 +28,7 @@ export function CreateWorkspaceDialog({
   defaultBranch,
   cwd,
   defaultInitCommand = "",
+  defaultUseRootNodeModulesSymlink = false,
   onOpenChange,
   onCreateWorkspace,
 }: CreateWorkspaceDialogProps) {
@@ -35,6 +38,7 @@ export function CreateWorkspaceDialog({
   const [creationMode, setCreationMode] = useState<"branch" | "clean">("branch");
   const [fromBranch, setFromBranch] = useState("main");
   const [initCommand, setInitCommand] = useState(defaultInitCommand);
+  const [useRootNodeModulesSymlink, setUseRootNodeModulesSymlink] = useState(defaultUseRootNodeModulesSymlink);
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
   const [availableRemoteBranches, setAvailableRemoteBranches] = useState<string[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
@@ -53,6 +57,7 @@ export function CreateWorkspaceDialog({
 
     setFromBranch(fallbackBaseBranch);
     setInitCommand(defaultInitCommand);
+    setUseRootNodeModulesSymlink(defaultUseRootNodeModulesSymlink);
     setAvailableBranches([]);
     setAvailableRemoteBranches([]);
     const listBranches = window.api?.sourceControl?.listBranches;
@@ -85,7 +90,7 @@ export function CreateWorkspaceDialog({
     return () => {
       cancelled = true;
     };
-  }, [activeBranch, cwd, defaultBranch, defaultInitCommand, open]);
+  }, [activeBranch, cwd, defaultBranch, defaultInitCommand, defaultUseRootNodeModulesSymlink, open]);
 
   useEffect(() => {
     if (open) {
@@ -96,6 +101,7 @@ export function CreateWorkspaceDialog({
     setCreatingWorkspace(false);
     setCreationMode("branch");
     setInitCommand(defaultInitCommand);
+    setUseRootNodeModulesSymlink(defaultUseRootNodeModulesSymlink);
     setAvailableBranches([]);
     setAvailableRemoteBranches([]);
     setLoadingBranches(false);
@@ -105,7 +111,7 @@ export function CreateWorkspaceDialog({
       localBranches: [],
       remoteBranches: [],
     }));
-  }, [activeBranch, defaultBranch, defaultInitCommand, open]);
+  }, [activeBranch, defaultBranch, defaultInitCommand, defaultUseRootNodeModulesSymlink, open]);
 
   if (!open) {
     return null;
@@ -130,6 +136,7 @@ export function CreateWorkspaceDialog({
         mode: creationMode,
         fromBranch,
         initCommand,
+        useRootNodeModulesSymlink,
       });
       if (!result.ok) {
         setCreateWorkspaceError(result.message ?? "Failed to create workspace.");
@@ -279,6 +286,36 @@ export function CreateWorkspaceDialog({
               className="min-h-[110px] rounded-sm border-border/80 bg-background font-mono text-sm"
             />
             <p className="mt-2 text-xs text-muted-foreground">Shortcut: use {submitModifierLabel} to create while editing this field.</p>
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-medium">Dependency Reuse</p>
+            <button
+              type="button"
+              aria-pressed={useRootNodeModulesSymlink}
+              onClick={() => setUseRootNodeModulesSymlink((current) => !current)}
+              className={cn(
+                "w-full rounded-sm border px-4 py-3 text-left transition-colors",
+                useRootNodeModulesSymlink
+                  ? "border-primary bg-secondary/50"
+                  : "border-border/80 bg-background hover:border-border"
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Reuse root `node_modules` via symlink</p>
+                <span className={cn(
+                  "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                  useRootNodeModulesSymlink
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border/80 text-muted-foreground"
+                )}
+                >
+                  {useRootNodeModulesSymlink ? "On" : "Off"}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Creates `node_modules` in the new workspace as a symlink to the repository root install. This is fast, but later installs in that workspace will affect the shared dependency tree.
+              </p>
+            </button>
           </div>
           <div className="mt-5 flex justify-end gap-2">
             <Button
