@@ -18,7 +18,7 @@ export const SkillCatalogArgsSchema = z.object({
   workspacePath: z.string().max(4096).optional(),
 }).strict();
 
-const RuntimeOptionsSchema = z.object({
+export const RuntimeOptionsObjectSchema = z.object({
   model: z.string().max(200).optional(),
   chatStreamingEnabled: z.boolean().optional(),
   debug: z.boolean().optional(),
@@ -77,7 +77,9 @@ const RuntimeOptionsSchema = z.object({
     codexFastModeSupported: z.boolean().optional(),
     fastMode: z.boolean().optional(),
   }).strict().optional(),
-}).strict().optional();
+}).strict();
+
+export const RuntimeOptionsSchema = RuntimeOptionsObjectSchema.optional();
 
 export const CheckAvailabilityArgsSchema = z.object({
   providerId: ProviderIdSchema,

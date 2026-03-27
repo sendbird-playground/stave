@@ -14,16 +14,14 @@ import { runPreprocessor } from "./stave-preprocessor";
 import { getCachedAvailability, setCachedAvailability } from "./stave-availability";
 import { runOrchestrator } from "./stave-orchestrator";
 import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
-import { buildExecutableLookupEnv } from "./executable-path";
 import {
   DEFAULT_STAVE_AUTO_PROFILE,
   resolveStaveIntentModel,
   resolveStaveProviderForModel,
 } from "../../src/lib/providers/stave-auto-profile";
-import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
-import path from "node:path";
+import { buildRuntimeProcessEnv, probeExecutableVersion } from "./runtime-shared";
 
 const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000);
 type ActiveRuntimeSession = {
@@ -131,23 +129,20 @@ function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runt
     };
   }
 
-  const env = buildExecutableLookupEnv({
-    extraPaths: [
-      ...CODEX_LOOKUP_PATHS,
-      path.dirname(executablePath),
-    ],
-  });
-  const versionProbe = spawnSync(executablePath, ["--version"], {
-    encoding: "utf8",
-    env,
+  const versionProbe = probeExecutableVersion({
+    executablePath,
+    env: buildRuntimeProcessEnv({
+      executablePath,
+      extraPaths: CODEX_LOOKUP_PATHS,
+    }),
   });
   const available = versionProbe.status === 0;
   const detail = available
     ? `Resolved Codex executable: ${executablePath}`
     : [
         `Codex executable probe failed: ${executablePath}`,
-        (versionProbe.stderr ?? "").trim(),
-        versionProbe.error ? String(versionProbe.error) : "",
+        versionProbe.stderr,
+        versionProbe.error,
       ].filter(Boolean).join("\n");
   setCachedAvailability("codex", available);
   return { available, detail };
