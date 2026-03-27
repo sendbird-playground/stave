@@ -25,6 +25,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Attachments](features/attachments.md)
 - [Language intelligence](features/language-intelligence.md)
 - [Developer diagnostics](developer/diagnostics.md)
+- [VS Code inline completion analysis](developer/vscode-inline-completion-analysis.md)
 - [shadcn preset](ui/shadcn-preset.md)
 - [Project / workspace / task shell redesign](ui/project-workspace-task-shell.md)
 - [GitHub Pages landing page](ui/github-landing-page.md)

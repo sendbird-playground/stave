@@ -1275,7 +1275,7 @@ function EditorSection() {
 
         <SettingsCard
           title="AI Inline Completions"
-          description="Ghost-text code suggestions powered by Claude. Requires the ANTHROPIC_API_KEY environment variable to be set."
+          description="Ghost-text code suggestions powered by Claude. Uses the Claude SDK with your local Claude auth when available, or falls back to the Anthropic API (requires ANTHROPIC_API_KEY)."
         >
           <LabeledField
             title="Enable AI Completions"

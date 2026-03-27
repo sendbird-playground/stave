@@ -158,6 +158,9 @@ export function EditorMainPanel() {
     configureInlineCompletions({
       monaco,
       getSettings: () => inlineCompletionSettingsRef.current,
+      triggerInlineSuggestRefresh: () => {
+        editorRef.current?.trigger("inline-completion", "editor.action.inlineSuggest.trigger", {});
+      },
     });
     if (!editorOpenerDisposableRef.current) {
       editorOpenerDisposableRef.current = monaco.editor.registerEditorOpener({
@@ -517,6 +520,7 @@ export function EditorMainPanel() {
                   lineNumbers: editorLineNumbers,
                   tabSize: editorTabSize,
                   wordWrap: editorWordWrap ? "on" : "off",
+                  inlineSuggest: { enabled: editorAiCompletions, mode: "subword" },
                 }}
               />
             )
