@@ -17,7 +17,13 @@
 
 1. Detect repo root: `git rev-parse --show-toplevel`
 2. Read the current version from `package.json`.
-3. Run `git status --short` — working tree should be clean before starting a release.
+3. Run `git status --short` — working tree should be clean before starting a release. If unclean, create a temporary worktree:
+   ```bash
+   git stash push --include-untracked -m "worktree-pr:release-x.y.z:<timestamp>"
+   git worktree add -b release-x.y.z ../.worktrees/<repo>/release-x.y.z HEAD
+   # apply stash inside the new worktree, verify diff landed there
+   ```
+   Record the temporary worktree path for cleanup after PR creation.
 4. Verify `origin` exists: `git remote -v`
 5. Find the most recent semver tag: `git tag --list 'v*' --sort=-version:refname | head -5`
 6. Bump only the patch component in `package.json`.
@@ -49,6 +55,13 @@ git commit -m "chore: release x.y.z"
 ```bash
 git push origin <branch>
 gh pr create --base main --title "chore: release x.y.z" --body "..."
+```
+
+14. Clean up the temporary worktree (only if one was created in step 3):
+
+```bash
+git worktree remove ../.worktrees/<repo>/release-x.y.z
+git worktree prune
 ```
 
 ## Repair Rules
