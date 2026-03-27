@@ -59,11 +59,29 @@ export function buildClaudePromptFromConversation(args: {
   conversation: CanonicalConversationRequest;
   fallbackPrompt: string;
 }) {
-  return buildLegacyPromptFromCanonicalRequest({
+  // Collect skills and convert $token → /token for native Claude slash commands
+  const nativeSlashPrefixes: string[] = [];
+  for (const part of args.conversation.contextParts) {
+    if (part.type === "skill_context") {
+      for (const skill of part.skills) {
+        const token = skill.invocationToken;
+        nativeSlashPrefixes.push(token.startsWith("$") ? `/${token.slice(1)}` : `/${token}`);
+      }
+    }
+  }
+
+  // Build prompt without [Selected Skills] section; skills become native slash commands
+  const basePrompt = buildLegacyPromptFromCanonicalRequest({
     request: args.conversation,
     includeHistory: shouldIncludeHistory(args.conversation),
-    includeSkillContext: true,
+    includeSkillContext: false,
   }) || args.fallbackPrompt;
+
+  if (nativeSlashPrefixes.length === 0) {
+    return basePrompt;
+  }
+
+  return `${nativeSlashPrefixes.join(" ")}\n\n${basePrompt}`;
 }
 
 export function buildCodexPromptFromConversation(args: {
