@@ -39,7 +39,12 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
    - Run focused tests for changed areas (`bun test` or `bun run test:ci` when scope is broad).
    - Report any verification that could not run.
 
-6. Stage and commit directly on the current branch (or in a worktree if the working tree is unclean).
+6. Stage and commit directly on the current branch (or in a temporary worktree if the working tree is unclean).
+   - If the working tree is unclean, create a temporary worktree at `../.worktrees/<repo>/release-x.y.z`:
+     - `git stash push --include-untracked -m "worktree-pr:release-x.y.z:<timestamp>"`
+     - `git worktree add -b release-x.y.z ../.worktrees/<repo>/release-x.y.z HEAD`
+     - Apply the stash inside the new worktree and verify the diff landed there.
+     - Record the temporary worktree path for cleanup in step 8.
    - Stage: `git add -A`
    - Commit with a Conventional Commit: `chore: release x.y.z`
    - Do not amend a previously pushed release commit; always create a new commit.
@@ -51,11 +56,19 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
    - PR body must include: a bullet summary of shipped changes, the verification commands run and their results, and the `🤖 Generated with Claude Code` footer.
    - **Never push directly to `main`.** All releases land via PR.
 
-8. Report the outcome.
+8. Clean up the temporary worktree (only if one was created in step 6).
+   - Skip this step when the commit was made directly on the current branch.
+   - If push and PR creation in step 7 succeeded and the temporary worktree is clean, remove it:
+     `git worktree remove ../.worktrees/<repo>/release-x.y.z`
+   - Run `git worktree prune` to remove stale metadata.
+   - Never remove a dirty temporary worktree.
+
+9. Report the outcome.
    - State the new version.
    - State the release commit hash and message.
    - State the PR URL.
    - State which verification commands ran and their results.
+   - State whether a temporary worktree was created and, if so, whether it was removed or kept.
    - Note that GitHub Actions will build and publish release artifacts after the PR merges.
 
 ## Guardrails
@@ -68,3 +81,4 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
 - Do not silently skip changelog review or release-facing doc updates when shipped behavior changed.
 - Do not create a local semver tag before the PR is merged. Tag the merged `main` commit after merge.
 - If verification fails, stop and surface the failure unless the user explicitly accepts releasing anyway.
+- Do not leave a temporary release worktree behind after a successful PR creation; always remove it and run `git worktree prune`.
