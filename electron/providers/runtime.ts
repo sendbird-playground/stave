@@ -9,7 +9,7 @@ import {
   resolveCodexExecutablePath,
   streamCodexWithSdk,
 } from "./codex-sdk-runtime";
-import { buildStaveResolvedArgs } from "./stave-router";
+import { buildStaveResolvedArgs, resolveSkillFastPath, type StaveRouteTarget } from "./stave-router";
 import { runPreprocessor } from "./stave-preprocessor";
 import { getCachedAvailability, setCachedAvailability } from "./stave-availability";
 import { runOrchestrator } from "./stave-orchestrator";
@@ -203,6 +203,55 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     const historyLength = args.conversation?.history?.length ?? 0;
     const profile = args.runtimeOptions?.staveAuto ?? DEFAULT_STAVE_AUTO_PROFILE;
 
+    // ── Availability-aware fallback table (shared by skill fast-path and direct routing) ──
+    const MODEL_FALLBACK: Record<string, string> = {
+      "claude-opus-4-6": "gpt-5.4",
+      "claude-sonnet-4-6": "gpt-5.4",
+      "claude-haiku-4-5": "gpt-5.3-codex",
+      "gpt-5.4": "claude-opus-4-6",
+      "gpt-5.3-codex": "claude-haiku-4-5",
+      "opusplan": "claude-opus-4-6",
+    };
+
+    // ── Skill fast-path: bypass preprocessor when skill_context is present ──
+    // Skills carry an explicit provider preference — no classifier needed.
+    const skillTarget = resolveSkillFastPath({ contextParts, profile });
+    if (skillTarget != null) {
+      let chosenModel = skillTarget.model;
+      const skillProvider = resolveStaveProviderForModel({ model: chosenModel });
+      const skillProviderAvail = getCachedAvailability(skillProvider);
+      if (skillProviderAvail === false) {
+        const fallback = MODEL_FALLBACK[chosenModel];
+        if (fallback) {
+          chosenModel = fallback;
+        }
+      }
+
+      const resolvedTarget: StaveRouteTarget = {
+        providerId: resolveStaveProviderForModel({ model: chosenModel }),
+        model: chosenModel,
+        reason: skillTarget.reason,
+      };
+
+      const resolvedArgs = buildStaveResolvedArgs(args, resolvedTarget);
+
+      // Emit execution plan with skill fast-path indication.
+      args.onEvent?.({
+        type: "stave:execution_processing",
+        strategy: "direct",
+        model: chosenModel,
+        reason: skillTarget.reason,
+      });
+
+      args.onEvent?.({
+        type: "model_resolved",
+        resolvedProviderId: resolvedTarget.providerId,
+        resolvedModel: resolvedTarget.model,
+      });
+
+      return runProviderTurn(resolvedArgs);
+    }
+
     // Helper: run a provider turn in batch mode (collect all events, no streaming).
     // Injected into the Pre-processor so it can call any provider without a
     // circular module dependency.
@@ -235,14 +284,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       // ── Phase 2: Availability-aware fallback ────────────────────────────────
       // Fallback pairs: if the plan's provider is cached as unavailable, pick
       // an equivalent model from the other provider.
-      const MODEL_FALLBACK: Record<string, string> = {
-        "claude-opus-4-6": "gpt-5.4",
-        "claude-sonnet-4-6": "gpt-5.4",
-        "claude-haiku-4-5": "gpt-5.3-codex",
-        "gpt-5.4": "claude-opus-4-6",
-        "gpt-5.3-codex": "claude-haiku-4-5",
-        "opusplan": "claude-opus-4-6",
-      };
+      // (MODEL_FALLBACK is hoisted to the top of the stave block.)
 
       let chosenModel = resolveStaveIntentModel({
         profile,
