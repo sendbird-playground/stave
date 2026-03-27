@@ -12,6 +12,20 @@ Project policy entrypoint for this repository root, regardless of the local chec
 
 If no local overlay exists, load and prioritize user's `AGENTS.md` as the primary policy source.
 
+## PR Workflow
+
+Use `$stave-worktree-pr-flow` for any request that asks to create a pull request from current in-progress work.
+This includes prompts like "PR 만들어", "create a PR", "push and open a PR", "commit and PR", "worktree로 PR 올려줘", or any variation that ends in creating a GitHub PR.
+
+Both Codex and Claude should treat the literal token `$stave-worktree-pr-flow` as an explicit PR-flow trigger.
+The repository-local copy of this skill lives at `skills/stave-worktree-pr-flow/SKILL.md`.
+
+- Use `$stave-worktree-pr-flow`.
+- The PR title **must** follow Conventional Commits format (`type(scope): description`) and match the commit message type and scope. Do not use plain natural-language titles.
+- The subject of the title must be lowercase (not capitalised).
+
+Do not use `$stave-worktree-pr-flow` for plain `commit` or `push` requests that do not mention a PR.
+
 ## Release Workflow
 
 Use `$stave-patch-release` only for explicit Stave release requests. This includes requests to ship or publish a release, bump the app version, generate release notes or changelog entries for a release, create or move a semver release tag, or repair an already-created release.

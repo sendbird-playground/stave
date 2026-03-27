@@ -27,6 +27,7 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - recent-project switching that preserves each project's own workspace list and last active workspace
 - automatic import of existing branch-backed git worktrees when a project opens
 - optional repo-scoped post-create workspace bootstrap command for new git worktrees, such as `bun install` or `npm install`
+- optional repo-scoped reuse of the repository root `node_modules` via workspace-local symlink for faster worktree startup
 - SQLite-backed local persistence for workspaces, tasks, messages, and turns
 
 ## Stack

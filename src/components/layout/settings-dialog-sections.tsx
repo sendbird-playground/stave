@@ -148,10 +148,14 @@ function GeneralSection() {
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
   const setProjectWorkspaceInitCommand = useAppStore((state) => state.setProjectWorkspaceInitCommand);
+  const setProjectWorkspaceUseRootNodeModulesSymlink = useAppStore((state) => state.setProjectWorkspaceUseRootNodeModulesSymlink);
   const projectWorkspaceInitCommand = (projectPath
     ? recentProjects.find((project) => project.projectPath === projectPath)?.newWorkspaceInitCommand
     : ""
   ) ?? "";
+  const projectUseRootNodeModulesSymlink = projectPath
+    ? recentProjects.find((project) => project.projectPath === projectPath)?.newWorkspaceUseRootNodeModulesSymlink === true
+    : false;
   const repositoryLookupCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
   const [repositoryRefreshNonce, setRepositoryRefreshNonce] = useState(0);
   const [repositoryState, setRepositoryState] = useState<{
@@ -257,7 +261,7 @@ function GeneralSection() {
         </SettingsCard>
         <SettingsCard
           title="Repository Workspace Defaults"
-          description="Each repository can keep its own post-create bootstrap command for new worktree workspaces."
+          description="Each repository can keep its own post-create bootstrap command and dependency reuse defaults for new worktree workspaces."
         >
           <LabeledField
             title="Post-Create Command"
@@ -270,6 +274,43 @@ function GeneralSection() {
               placeholder="bun install"
               disabled={!projectPath}
             />
+          </LabeledField>
+          <LabeledField
+            title="Reuse Root node_modules"
+            description="Creates `node_modules` in each new worktree as a symlink to the repository root install. Faster startup, but later installs in that workspace will modify the shared dependency tree."
+          >
+            <button
+              type="button"
+              disabled={!projectPath}
+              aria-pressed={projectUseRootNodeModulesSymlink}
+              onClick={() => setProjectWorkspaceUseRootNodeModulesSymlink({
+                enabled: !projectUseRootNodeModulesSymlink,
+              })}
+              className={cn(
+                "flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors",
+                !projectPath
+                  ? "cursor-not-allowed border-border/60 bg-muted/40 text-muted-foreground opacity-70"
+                  : projectUseRootNodeModulesSymlink
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border/80 bg-background hover:border-border"
+              )}
+            >
+              <div>
+                <p className="text-sm font-medium text-foreground">Enable shared `node_modules` symlink</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The symlink exists only inside the created workspace, so deleting the workspace leaves the repository root untouched.
+                </p>
+              </div>
+              <span className={cn(
+                "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                projectUseRootNodeModulesSymlink
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border/80 text-muted-foreground"
+              )}
+              >
+                {projectUseRootNodeModulesSymlink ? "On" : "Off"}
+              </span>
+            </button>
           </LabeledField>
           {projectPath ? (
             <p className="text-xs text-muted-foreground">

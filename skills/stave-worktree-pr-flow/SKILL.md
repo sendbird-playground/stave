@@ -66,6 +66,7 @@ Repository-local skill for taking the full current working state and shipping it
 7. Create the PR.
    - Prefer `gh pr create --base <base> --head <branch> --title <title> --body <body>`.
    - Derive the base branch from the repo default branch unless the user requested another target.
+   - **PR title must follow Conventional Commits format**: `type(scope): description` using the same type and scope as the commit message. The subject (description part) must be lowercase — never capitalise the first letter. Examples: `fix(workspace): reuse root node_modules in worktrees`, `feat(ui): add dark mode toggle`. Do not use plain natural-language titles.
    - Keep the PR body concise and outcome-focused: summary, key changes, verification.
    - If `gh` is unavailable or unauthenticated, stop after push and tell the user exactly what blocked PR creation.
 
@@ -91,6 +92,7 @@ Repository-local skill for taking the full current working state and shipping it
 - Do not destroy or reset the user's original worktree state.
 - Do not drop untracked files when moving the dirty state.
 - Do not create a non-Conventional commit.
+- Do not use a plain natural-language PR title. The PR title must follow the same Conventional Commits format as the commit message (`type(scope): description`, lowercase subject).
 - Do not silently create the PR against the wrong base branch.
 - Do not use `git push --force`; use `--force-with-lease` when a rewrite is required.
 - Do not create a nested temporary worktree when already running in a workspace-linked worktree unless the user explicitly requests that.

@@ -103,6 +103,7 @@ interface RecentProjectState {
   workspacePathById: Record<string, string>;
   workspaceDefaultById: Record<string, boolean>;
   newWorkspaceInitCommand?: string;
+  newWorkspaceUseRootNodeModulesSymlink?: boolean;
 }
 
 const APP_STORE_KEY = "stave-store";
@@ -335,6 +336,7 @@ interface AppState {
     mode: "branch" | "clean";
     fromBranch?: string;
     initCommand?: string;
+    useRootNodeModulesSymlink?: boolean;
   }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
   deleteWorkspace: (args: { workspaceId: string }) => Promise<void>;
   switchWorkspace: (args: { workspaceId: string }) => Promise<void>;
@@ -344,6 +346,7 @@ interface AppState {
     direction: "up" | "down";
   }) => void;
   setProjectWorkspaceInitCommand: (args: { projectPath?: string; command: string }) => void;
+  setProjectWorkspaceUseRootNodeModulesSymlink: (args: { projectPath?: string; enabled: boolean }) => void;
   setDarkMode: (args: { enabled: boolean }) => void;
   updateSettings: (args: { patch: Partial<AppSettings> }) => void;
   selectTask: (args: { taskId: string }) => void;
@@ -498,6 +501,10 @@ function normalizeProjectWorkspaceInitCommand(args: { value?: string | null }) {
   return normalizeWorkspaceInitCommand({ value: args.value });
 }
 
+function normalizeProjectWorkspaceRootNodeModulesSymlinkPreference(args: { value?: boolean | null }) {
+  return args.value === true;
+}
+
 function resolveProjectWorkspaceInitCommand(args: {
   projectPath?: string | null;
   recentProjects: RecentProjectState[];
@@ -508,6 +515,20 @@ function resolveProjectWorkspaceInitCommand(args: {
   }
   const project = args.recentProjects.find((item) => item.projectPath === projectPath);
   return normalizeProjectWorkspaceInitCommand({ value: project?.newWorkspaceInitCommand });
+}
+
+function resolveProjectWorkspaceRootNodeModulesSymlinkPreference(args: {
+  projectPath?: string | null;
+  recentProjects: RecentProjectState[];
+}) {
+  const projectPath = args.projectPath?.trim();
+  if (!projectPath) {
+    return false;
+  }
+  const project = args.recentProjects.find((item) => item.projectPath === projectPath);
+  return normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+    value: project?.newWorkspaceUseRootNodeModulesSymlink,
+  });
 }
 
 function summarizeTerminalCommandDetail(args: { stdout?: string; stderr?: string; fallback: string }) {
@@ -526,6 +547,34 @@ function summarizeWorkspaceInitCommand(args: { command: string; maxLength?: numb
     return normalized;
   }
   return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+}
+
+function buildWorkspaceRootNodeModulesSymlinkCommand(args: { projectPath: string }) {
+  const sourcePath = `${args.projectPath}/node_modules`;
+  return [
+    "if [ -e node_modules ] || [ -L node_modules ]; then",
+    "  echo \"node_modules already exists; skipping shared root symlink.\"",
+    `elif [ ! -e ${JSON.stringify(sourcePath)} ] && [ ! -L ${JSON.stringify(sourcePath)} ]; then`,
+    "  echo \"Repository root is missing node_modules; cannot create shared symlink.\" >&2",
+    "  exit 1",
+    "else",
+    `  ln -s ${JSON.stringify(sourcePath)} node_modules`,
+    "fi",
+  ].join("\n");
+}
+
+function buildWorkspaceCreationNotice(args: {
+  notices: Array<{ level: "success" | "warning"; message: string }>;
+}): { noticeLevel: "success" | "warning"; message: string } | undefined {
+  if (args.notices.length === 0) {
+    return undefined;
+  }
+
+  const noticeLevel = args.notices.some((notice) => notice.level === "warning") ? "warning" : "success";
+  return {
+    noticeLevel,
+    message: `Workspace created${noticeLevel === "warning" ? ", with warnings" : ""}. ${args.notices.map((notice) => notice.message).join(" ")}`,
+  };
 }
 
 function incrementWorkspaceSnapshotVersion(state: Pick<AppState, "workspaceSnapshotVersion">) {
@@ -965,6 +1014,9 @@ function cloneRecentProjectState(project: RecentProjectState): RecentProjectStat
     newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
       value: project.newWorkspaceInitCommand,
     }),
+    newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+      value: project.newWorkspaceUseRootNodeModulesSymlink,
+    }),
   };
 }
 
@@ -1030,6 +1082,9 @@ function normalizeRecentProjectStates(args: { projects?: RecentProjectState[] | 
         newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
           value: project.newWorkspaceInitCommand,
         }),
+        newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+          value: project.newWorkspaceUseRootNodeModulesSymlink,
+        }),
       },
     });
   }
@@ -1074,6 +1129,10 @@ function captureCurrentProjectState(args: {
       workspacePathById: args.workspacePathById,
       workspaceDefaultById: args.workspaceDefaultById,
       newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
+        projectPath: args.projectPath,
+        recentProjects: args.recentProjects,
+      }),
+      newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
         projectPath: args.projectPath,
         recentProjects: args.recentProjects,
       }),
@@ -1124,6 +1183,10 @@ export const useAppStore = create<AppState>()(
                   workspacePathById: state.workspacePathById,
                   workspaceDefaultById: state.workspaceDefaultById,
                   newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
+                    projectPath: args.projectRootPath,
+                    recentProjects: rememberedProjects,
+                  }),
+                  newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
                     projectPath: args.projectRootPath,
                     recentProjects: rememberedProjects,
                   }),
@@ -1226,6 +1289,7 @@ export const useAppStore = create<AppState>()(
           workspacePathById: { [defaultWorkspaceId]: args.projectRootPath },
           workspaceDefaultById: { [defaultWorkspaceId]: true },
           newWorkspaceInitCommand: "",
+          newWorkspaceUseRootNodeModulesSymlink: false,
         } satisfies RecentProjectState;
 
         set(() => ({
@@ -1733,7 +1797,7 @@ export const useAppStore = create<AppState>()(
           return nextProjects === currentProjects ? state : { recentProjects: nextProjects };
         });
       },
-      createWorkspace: async ({ name, mode, fromBranch, initCommand }) => {
+      createWorkspace: async ({ name, mode, fromBranch, initCommand, useRootNodeModulesSymlink: requestedRootNodeModulesSymlink }) => {
         const trimmed = name.trim();
         if (!trimmed) {
           return { ok: false, message: "Workspace name is required." };
@@ -1754,9 +1818,16 @@ export const useAppStore = create<AppState>()(
           projectPath: current.projectPath,
           recentProjects: current.recentProjects,
         });
+        const projectUseRootNodeModulesSymlink = resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+          projectPath: current.projectPath,
+          recentProjects: current.recentProjects,
+        });
         const workspaceInitCommand = normalizeWorkspaceInitCommand({
           value: initCommand ?? projectWorkspaceInitCommand,
         });
+        const useRootNodeModulesSymlink = requestedRootNodeModulesSymlink === undefined
+          ? projectUseRootNodeModulesSymlink
+          : normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({ value: requestedRootNodeModulesSymlink });
         const baseBranch = fromBranch?.trim() || current.defaultBranch || "main";
         const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
         const runner = window.api?.terminal?.runCommand;
@@ -1806,7 +1877,7 @@ export const useAppStore = create<AppState>()(
         const workspaceState = buildWorkspaceSessionState({ snapshot });
 
         let files = current.projectFiles;
-        let initNotice: { message: string; noticeLevel: "success" | "warning" } | undefined;
+        const creationNotices: Array<{ level: "success" | "warning"; message: string }> = [];
         try {
           await workspaceFsAdapter.setRoot?.({
             rootPath: workspacePath,
@@ -1817,32 +1888,63 @@ export const useAppStore = create<AppState>()(
           // Keep workspace registration and use the existing file list as fallback.
         }
 
+        if (useRootNodeModulesSymlink) {
+          if (!runner) {
+            creationNotices.push({
+              level: "warning",
+              message: "The shared root `node_modules` symlink could not be created because the terminal bridge is unavailable.",
+            });
+          } else {
+            const linkResult = await runner({
+              cwd: workspacePath,
+              command: buildWorkspaceRootNodeModulesSymlinkCommand({
+                projectPath: current.projectPath,
+              }),
+            });
+            if (linkResult.ok) {
+              creationNotices.push({
+                level: "success",
+                message: "Linked `node_modules` from the repository root into the new workspace.",
+              });
+            } else {
+              creationNotices.push({
+                level: "warning",
+                message: `Linking the shared root \`node_modules\` failed. ${summarizeTerminalCommandDetail({
+                  stderr: linkResult.stderr,
+                  stdout: linkResult.stdout,
+                  fallback: "Command failed.",
+                })}`,
+              });
+            }
+          }
+        }
+
         if (workspaceInitCommand) {
           const summarizedCommand = summarizeWorkspaceInitCommand({ command: workspaceInitCommand });
           if (!runner) {
-            initNotice = {
-              noticeLevel: "warning",
-              message: `Workspace created, but the post-create command could not run because the terminal bridge is unavailable: ${summarizedCommand}`,
-            };
+            creationNotices.push({
+              level: "warning",
+              message: `The post-create command could not run because the terminal bridge is unavailable: ${summarizedCommand}`,
+            });
           } else {
             const initResult = await runner({
               cwd: workspacePath,
               command: workspaceInitCommand,
             });
             if (initResult.ok) {
-              initNotice = {
-                noticeLevel: "success",
-                message: `Workspace created and ran the post-create command: ${summarizedCommand}`,
-              };
+              creationNotices.push({
+                level: "success",
+                message: `Ran the post-create command: ${summarizedCommand}`,
+              });
             } else {
-              initNotice = {
-                noticeLevel: "warning",
-                message: `Workspace created, but the post-create command failed: ${summarizedCommand}. ${summarizeTerminalCommandDetail({
+              creationNotices.push({
+                level: "warning",
+                message: `The post-create command failed: ${summarizedCommand}. ${summarizeTerminalCommandDetail({
                   stderr: initResult.stderr,
                   stdout: initResult.stdout,
                   fallback: "Command failed.",
                 })}`,
-              };
+              });
             }
           }
         }
@@ -1880,8 +1982,11 @@ export const useAppStore = create<AppState>()(
           ...workspaceState,
           projectFiles: files,
         }));
-        return initNotice
-          ? { ok: true, ...initNotice }
+        const creationNotice = buildWorkspaceCreationNotice({
+          notices: creationNotices,
+        });
+        return creationNotice
+          ? { ok: true, ...creationNotice }
           : { ok: true };
       },
       deleteWorkspace: async ({ workspaceId }) => {
@@ -2051,6 +2156,10 @@ export const useAppStore = create<AppState>()(
                     projectPath: normalizedProjectPath,
                     recentProjects: state.recentProjects,
                   }),
+                  newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+                    projectPath: normalizedProjectPath,
+                    recentProjects: state.recentProjects,
+                  }),
                 },
               }),
             };
@@ -2117,6 +2226,48 @@ export const useAppStore = create<AppState>()(
               project: {
                 ...cloneRecentProjectState(existingProject),
                 newWorkspaceInitCommand: nextCommand,
+              },
+            }),
+          };
+        });
+      },
+      setProjectWorkspaceUseRootNodeModulesSymlink: ({ projectPath, enabled }) => {
+        set((state) => {
+          const normalizedProjectPath = (projectPath?.trim() || state.projectPath?.trim() || "");
+          if (!normalizedProjectPath) {
+            return state;
+          }
+
+          const currentProjects = captureCurrentProjectState({
+            recentProjects: state.recentProjects,
+            projectPath: state.projectPath,
+            workspaceRootName: state.workspaceRootName,
+            defaultBranch: state.defaultBranch,
+            workspaces: state.workspaces,
+            activeWorkspaceId: state.activeWorkspaceId,
+            workspaceBranchById: state.workspaceBranchById,
+            workspacePathById: state.workspacePathById,
+            workspaceDefaultById: state.workspaceDefaultById,
+          });
+          const existingProject = currentProjects.find((project) => project.projectPath === normalizedProjectPath);
+          if (!existingProject) {
+            return state;
+          }
+
+          const nextEnabled = normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({ value: enabled });
+          const currentEnabled = normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+            value: existingProject.newWorkspaceUseRootNodeModulesSymlink,
+          });
+          if (currentEnabled === nextEnabled) {
+            return state;
+          }
+
+          return {
+            recentProjects: upsertRecentProjectState({
+              projects: currentProjects,
+              project: {
+                ...cloneRecentProjectState(existingProject),
+                newWorkspaceUseRootNodeModulesSymlink: nextEnabled,
               },
             }),
           };

@@ -111,6 +111,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
     activeWorkspaceCwd,
     defaultBranch,
     projectWorkspaceInitCommand,
+    projectUseRootNodeModulesSymlink,
     createProject,
     openProjectFromPath,
     openProject,
@@ -140,6 +141,9 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
       ? state.recentProjects.find((project) => project.projectPath === state.projectPath)?.newWorkspaceInitCommand
       : ""
     ) ?? "",
+    state.projectPath
+      ? state.recentProjects.find((project) => project.projectPath === state.projectPath)?.newWorkspaceUseRootNodeModulesSymlink === true
+      : false,
     state.createProject,
     state.openProjectFromPath,
     state.openProject,
@@ -753,6 +757,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
         defaultBranch={defaultBranch}
         cwd={activeWorkspaceCwd}
         defaultInitCommand={projectWorkspaceInitCommand}
+        defaultUseRootNodeModulesSymlink={projectUseRootNodeModulesSymlink}
         onOpenChange={setCreateWorkspaceOpen}
         onCreateWorkspace={createWorkspace}
       />
