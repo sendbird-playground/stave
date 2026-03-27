@@ -39,7 +39,7 @@ export type CommandResult =
     source: "stave_builtin" | "stave_custom" | "stave_meta" | "provider_meta";
     command: string;
     response: string;
-    action?: "clear";
+    action?: "clear" | "sync";
   };
 
 interface ParsedCustomCommand {
@@ -387,6 +387,14 @@ const staveBuiltinCommands: StaveBuiltinCommand[] = [
     command: "/stave:usage",
     description: "Show locally recorded token usage for this task.",
     run: (ctx) => ({ response: buildUsageResponse(ctx) }),
+  },
+  {
+    command: "/stave:sync",
+    description: "Fetch and pull the latest changes for the current branch.",
+    run: (ctx) => ({
+      response: `Syncing branch in ${ctx.workspaceCwd ?? "unknown workspace"}…`,
+      action: "sync",
+    }),
   },
 ];
 
