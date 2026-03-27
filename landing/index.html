@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Stave is an agentic coding desktop that runs Claude and Codex in one workspace. Task-based sessions, approval flows, diff review, and session replay for repeatable AI-driven development."
+    />
+    <title>Stave — Agentic Coding Desktop</title>
+    <link rel="icon" href="./assets/stave-logo-light.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <!-- Background layers -->
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-glow bg-glow--top" aria-hidden="true"></div>
+    <div class="bg-glow bg-glow--bottom" aria-hidden="true"></div>
+
+    <!-- Header -->
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="#top" aria-label="Stave home">
+          <img
+            src="./assets/stave-logo-light.svg"
+            alt="Stave"
+            width="28"
+            height="28"
+          />
+          <span>Stave</span>
+        </a>
+        <nav class="site-nav" aria-label="Main navigation">
+          <a href="#overview">Overview</a>
+          <a href="#workflow">Workflow</a>
+          <a href="#features">Features</a>
+        </nav>
+        <div class="header-actions">
+          <a
+            class="btn btn--ghost"
+            href="https://github.com/sendbird-playground/stave"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+            GitHub
+          </a>
+          <a
+            class="btn btn--primary"
+            href="https://github.com/sendbird-playground/stave/blob/main/docs/install-guide.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Get Started
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14"/>
+              <path d="m12 5 7 7-7 7"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <main id="top">
+
+      <!-- Hero -->
+      <section class="hero">
+        <div class="hero__content" data-reveal>
+          <div class="badge">
+            <span class="badge__dot"></span>
+            <span class="mono">Agentic Coding Desktop</span>
+          </div>
+          <h1>Run Claude &amp; Codex<br/>in one workspace</h1>
+          <p class="hero__lead">
+            Task-based sessions, approval-gated execution, inline diff review,
+            and session replay &mdash; all in a single desktop app built for
+            repeatable AI-driven development.
+          </p>
+          <div class="hero__actions">
+            <a
+              class="btn btn--primary btn--lg"
+              href="https://github.com/sendbird-playground/stave/blob/main/docs/install-guide.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Install Guide
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+              </svg>
+            </a>
+            <a
+              class="btn btn--outline btn--lg"
+              href="https://github.com/sendbird-playground/stave"
+              target="_blank"
+              rel="noreferrer"
+            >
+              View on GitHub
+            </a>
+          </div>
+          <ul class="hero__meta">
+            <li><span class="mono">Desktop-first</span></li>
+            <li><span class="mono">Claude + Codex</span></li>
+            <li><span class="mono">Task-oriented</span></li>
+            <li><span class="mono">Local-first</span></li>
+          </ul>
+        </div>
+
+        <figure class="hero__screenshot" data-reveal data-reveal-delay="200">
+          <div class="screenshot-frame">
+            <div class="screenshot-bar">
+              <span></span><span></span><span></span>
+            </div>
+            <img
+              src="./assets/stave-app.png"
+              alt="Stave interface showing task tabs, chat panel, code editor, and terminal in a unified workspace"
+              loading="eager"
+            />
+          </div>
+          <div class="screenshot-glow" aria-hidden="true"></div>
+        </figure>
+      </section>
+
+      <!-- Overview -->
+      <section id="overview" class="section">
+        <div class="section__header" data-reveal>
+          <p class="label mono">What is Stave</p>
+          <h2>One loop for the entire AI coding cycle</h2>
+          <p class="section__desc">
+            Stave doesn't split your editor and your agent into separate windows.
+            Execution, approval, change review, and session replay all live in one
+            continuous loop.
+          </p>
+        </div>
+
+        <div class="bento" data-reveal data-reveal-delay="100">
+          <article class="bento__card bento__card--wide">
+            <div class="bento__icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </div>
+            <h3>Controlled agent execution</h3>
+            <p>
+              See approval requests, plan proposals, and tool traces inside each
+              session. Intervene only when you need to.
+            </p>
+          </article>
+          <article class="bento__card">
+            <div class="bento__icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 22h2a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="M14 2v5h5"/><circle cx="8" cy="16" r="6"/><path d="M9.5 17.5 8 16.25V14"/></svg>
+            </div>
+            <h3>Branch &amp; worktree isolation</h3>
+            <p>
+              Task tabs and worktree flows let you run experiments, implementations,
+              and reviews in parallel.
+            </p>
+          </article>
+          <article class="bento__card">
+            <div class="bento__icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </div>
+            <h3>Session replay</h3>
+            <p>
+              Replay request/response snapshots from recent turns to quickly trace
+              what went right or wrong.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Workflow -->
+      <section id="workflow" class="section">
+        <div class="section__header" data-reveal>
+          <p class="label mono">How it works</p>
+          <h2>Four steps, one loop</h2>
+        </div>
+
+        <ol class="steps" data-reveal data-reveal-delay="100">
+          <li class="step">
+            <div class="step__num mono">01</div>
+            <div class="step__body">
+              <h3>Create a task</h3>
+              <p>
+                Isolate each unit of work as a task. Attach files, images, or any
+                context the agent needs.
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step__num mono">02</div>
+            <div class="step__body">
+              <h3>Run Claude or Codex</h3>
+              <p>
+                Pick a model and permission policy, then execute. Track approval
+                requests and plan events in real time.
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step__num mono">03</div>
+            <div class="step__body">
+              <h3>Review diffs</h3>
+              <p>
+                Open changes inline in the built-in editor. Add follow-up
+                instructions to refine the output.
+              </p>
+            </div>
+          </li>
+          <li class="step">
+            <div class="step__num mono">04</div>
+            <div class="step__body">
+              <h3>Replay &amp; iterate</h3>
+              <p>
+                Re-watch turn snapshots to understand decisions, then kick off the
+                next task seamlessly.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Features -->
+      <section id="features" class="section">
+        <div class="section__header" data-reveal>
+          <p class="label mono">Core features</p>
+          <h2>Everything you need, nothing you don't</h2>
+        </div>
+
+        <div class="features-grid" data-reveal data-reveal-delay="100">
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>
+              Dual-provider runtime
+            </h3>
+            <p>Run Claude and Codex in the same project context. Switch models per task without losing state.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+              Approval &amp; plan events
+            </h3>
+            <p>Gate agent actions behind explicit approvals. Review execution plans before they run.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Session replay drawer
+            </h3>
+            <p>Step through recent turns to replay request/response pairs and trace issues fast.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m8.66-14.5-5.2 3m-6.92 4-5.2 3m14.84 0-5.2-3M3.34 7.5l5.2 3"/></svg>
+              Workspace + worktree
+            </h3>
+            <p>Isolate branches into separate workspaces. Run parallel implementations and compare side by side.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
+              Monaco + terminal
+            </h3>
+            <p>Chat, code, and run commands without switching windows. Everything docks into one layout.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+              Local persistence
+            </h3>
+            <p>SQLite-backed storage keeps session state and work history on your machine. No cloud dependency.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="section cta" data-reveal>
+        <div class="cta__inner">
+          <h2>Ready to try Stave?</h2>
+          <p>
+            Check out the install guide, browse releases, or read the source.
+          </p>
+          <div class="cta__actions">
+            <a
+              class="btn btn--primary btn--lg"
+              href="https://github.com/sendbird-playground/stave/blob/main/docs/install-guide.md"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open Install Guide
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+              </svg>
+            </a>
+            <a
+              class="btn btn--outline btn--lg"
+              href="https://github.com/sendbird-playground/stave/releases"
+              target="_blank"
+              rel="noreferrer"
+            >
+              View Releases
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <img src="./assets/stave-logo-light.svg" alt="" width="20" height="20" />
+          <span class="mono">Stave</span>
+        </div>
+        <p>&copy; <span id="year"></span> Stave. Agentic coding workspace for focused builders.</p>
+      </div>
+    </footer>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

@@ -23,6 +23,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Developer diagnostics](developer/diagnostics.md)
 - [shadcn preset](ui/shadcn-preset.md)
 - [Project / workspace / task shell redesign](ui/project-workspace-task-shell.md)
+- [GitHub Pages landing page](ui/github-landing-page.md)
 
 ## Conventions
 
