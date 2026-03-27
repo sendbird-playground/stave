@@ -144,6 +144,8 @@ export function formatTurnEventLabel(args: { event: ReplayedTurnEvent["event"] }
       return `Subtask ${args.event.subtaskId} ${args.event.success ? "completed" : "failed"}`;
     case "stave:synthesis_started":
       return "Stave synthesis started";
+    case "subagent_progress":
+      return `Subagent progress${args.event.toolUseId ? ` (${args.event.toolUseId})` : ""}`;
     case "system":
       return "System";
     case "error":

@@ -469,6 +469,99 @@ function buildClaudeTaskProgressEvents(message: SDKSystemMessage & {
   }];
 }
 
+// ── Subagent progress tracking ────────────────────────────────────────────────
+// Correlates task_progress SDK messages with their originating Agent tool_use_id
+// using hook metadata (agent_id) when available, falling back to the most recent
+// active Agent tool call.
+
+function extractStringField(
+  obj: Record<string, unknown> | null | undefined,
+  key: string,
+): string | undefined {
+  if (!obj || typeof obj !== "object") {
+    return undefined;
+  }
+  const val = obj[key];
+  return typeof val === "string" && val.trim().length > 0 ? val.trim() : undefined;
+}
+
+function isAgentToolName(name: string): boolean {
+  return name.trim().toLowerCase() === "agent";
+}
+
+export class SubagentProgressTracker {
+  /** agent_id (from SDK hooks) → toolUseId (from tool events). */
+  private readonly agentIdToToolUseId = new Map<string, string>();
+  /** Ordered list of Agent tool_use_ids that have not yet received a result. */
+  private readonly pendingAgentToolUseIds: string[] = [];
+
+  /**
+   * Call for every BridgeEvent that is about to be emitted so the tracker can
+   * record Agent tool starts and completions.
+   */
+  trackEvent(event: BridgeEvent): void {
+    if (event.type === "tool" && isAgentToolName(event.toolName) && event.toolUseId) {
+      this.pendingAgentToolUseIds.push(event.toolUseId);
+    }
+    if (event.type === "tool_result") {
+      const idx = this.pendingAgentToolUseIds.indexOf(event.tool_use_id);
+      if (idx !== -1) {
+        this.pendingAgentToolUseIds.splice(idx, 1);
+      }
+    }
+  }
+
+  /**
+   * Extract agent_id / tool_use_id from hook-related SDK messages and persist
+   * the mapping so future task_progress events can be resolved.
+   */
+  processRawMessage(message: Record<string, unknown>): void {
+    const type = message.type;
+    if (type !== "hook_started" && type !== "hook_response" && type !== "hook_progress") {
+      return;
+    }
+    const input = (typeof message.input === "object" && message.input !== null)
+      ? message.input as Record<string, unknown>
+      : null;
+
+    const agentId = extractStringField(message, "agent_id")
+      ?? extractStringField(input, "agent_id");
+    const toolUseId = extractStringField(message, "tool_use_id")
+      ?? extractStringField(input, "tool_use_id");
+
+    if (agentId && toolUseId) {
+      this.agentIdToToolUseId.set(agentId, toolUseId);
+    }
+  }
+
+  /**
+   * Given a raw task_progress SDK message, determine which Agent tool_use_id
+   * the progress belongs to.
+   *
+   * Resolution order:
+   *  1. Direct `tool_use_id` field on the progress message
+   *  2. `agent_id` field mapped through hook metadata
+   *  3. Most recently started active Agent (positional heuristic)
+   */
+  resolveToolUseId(progressMessage: Record<string, unknown>): string | undefined {
+    const directToolUseId = extractStringField(progressMessage, "tool_use_id");
+    if (directToolUseId && this.pendingAgentToolUseIds.includes(directToolUseId)) {
+      return directToolUseId;
+    }
+
+    const agentId = extractStringField(progressMessage, "agent_id");
+    if (agentId) {
+      const mapped = this.agentIdToToolUseId.get(agentId);
+      if (mapped) {
+        return mapped;
+      }
+    }
+
+    // Fallback: last pending Agent tool_use_id
+    return this.pendingAgentToolUseIds.at(-1);
+  }
+}
+
 function buildClaudeUsageEvent(resultMsg: SDKResultMessage): BridgeEvent {
   return {
     type: "usage",
@@ -1093,6 +1186,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     let hasStreamedThinking = false;
     let finalStopReason: string | undefined;
     const claudeDebugStream = args.runtimeOptions?.debug ?? process.env.STAVE_CLAUDE_DEBUG === "1";
+    const subagentTracker = new SubagentProgressTracker();
 
     for await (const message of stream) {
       if (message.type === "system" && (message as SDKSystemMessage).subtype === "init") {
@@ -1119,6 +1213,24 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         persistedEvents.forEach((event) => args.onEvent?.(event));
         continue;
       }
+
+      // Feed hook messages to the subagent tracker for agent_id ↔ toolUseId mapping.
+      subagentTracker.processRawMessage(message as Record<string, unknown>);
+
+      // Intercept task_progress messages to emit subagent_progress events with
+      // toolUseId correlation instead of generic system events.
+      const sysMsg = message as SDKSystemMessage & { subtype?: string; summary?: string };
+      if (sysMsg.type === "system" && sysMsg.subtype === "task_progress") {
+        const summary = sysMsg.summary?.trim();
+        if (summary) {
+          const toolUseId = subagentTracker.resolveToolUseId(message as Record<string, unknown>);
+          const progressEvent: BridgeEvent = { type: "subagent_progress", toolUseId, content: summary };
+          events.push(progressEvent);
+          args.onEvent?.(progressEvent);
+        }
+        continue;
+      }
+
       if (message.type === "stream_event") {
         const streamMsg = message as { type: "stream_event"; event: unknown };
         const streamEvent = streamMsg.event as { type?: string; delta?: { type?: string } };
@@ -1137,6 +1249,10 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       // full assistant message duplicates (they contain the same content assembled).
       if (message.type === "assistant" && (hasStreamedText || hasStreamedThinking)) {
         normalizedEvents = normalizedEvents.filter((event) => event.type !== "text" && event.type !== "thinking");
+      }
+      // Let the subagent tracker observe tool starts / completions.
+      for (const event of normalizedEvents) {
+        subagentTracker.trackEvent(event);
       }
       events.push(...normalizedEvents);
       for (const event of normalizedEvents) {

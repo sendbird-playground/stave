@@ -439,6 +439,7 @@ function MessagePartRenderer(args: { part: MessagePart; taskId: string; messageI
             input={part.input}
             output={part.output}
             state={part.state}
+            progressMessages={part.progressMessages}
           />
         );
       }
@@ -580,6 +581,10 @@ function BackgroundActionsSummary(args: { parts: MessagePart[]; onOpenReplay?: (
   );
 }
 
+function isSubagentProgressSystemEvent(content: string): boolean {
+  return content.trimStart().startsWith("Subagent progress:");
+}
+
 function buildChainOfThoughtSteps(parts: MessagePart[]): ChainOfThoughtStep[] {
   const steps: ChainOfThoughtStep[] = [];
   parts.forEach((part, index) => {
@@ -589,14 +594,17 @@ function buildChainOfThoughtSteps(parts: MessagePart[]): ChainOfThoughtStep[] {
         return;
       }
       const subagentInput = isSubagent ? parseSubagentToolInput({ input: part.input }) : null;
+      // Use the latest progress message as the CoT detail when the agent is active.
+      const latestProgress = part.progressMessages?.at(-1);
       steps.push({
         id: `tool-${index}`,
         label: isSubagent
           ? subagentInput?.description ?? subagentInput?.subagentType ?? "Subagent"
           : part.toolName,
-        detail: isSubagent
-          ? (subagentInput?.prompt ?? part.input ?? part.output)
-          : part.input || part.output,
+        detail: latestProgress
+          ?? (isSubagent
+            ? (subagentInput?.prompt ?? part.input ?? part.output)
+            : part.input || part.output),
         status: part.state === "input-streaming"
           ? "active"
           : part.state === "output-available"
@@ -607,6 +615,10 @@ function buildChainOfThoughtSteps(parts: MessagePart[]): ChainOfThoughtStep[] {
       return;
     }
     if (part.type === "system_event") {
+      // Skip subagent progress events — they are already shown inside the SubagentCard.
+      if (isSubagentProgressSystemEvent(part.content)) {
+        return;
+      }
       steps.push({
         id: `system-${index}`,
         label: part.content,

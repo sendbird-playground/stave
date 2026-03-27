@@ -181,7 +181,7 @@ function getMessagePartScrollFingerprint(part: MessagePart): string {
     case "thinking":
       return `thinking:${part.text.length}:${part.isStreaming ? 1 : 0}`;
     case "tool_use":
-      return `tool:${part.toolName}:${part.state}:${part.input.length}:${part.output?.length ?? 0}`;
+      return `tool:${part.toolName}:${part.state}:${part.input.length}:${part.output?.length ?? 0}:${part.progressMessages?.length ?? 0}`;
     case "code_diff":
       return `diff:${part.filePath}:${part.status}:${part.oldContent.length}:${part.newContent.length}`;
     case "file_context":
@@ -216,12 +216,20 @@ export function getMessageScrollFingerprint(message?: Pick<ChatMessage, "id" | "
   ].join(":");
 }
 
+export function isSubagentProgressSystemEvent(content: string): boolean {
+  return content.trimStart().startsWith("Subagent progress:");
+}
+
 export function shouldRenderInlineSystemEvent(args: { content: string }): boolean {
   const normalized = args.content.trim().toLowerCase();
   if (!normalized) {
     return false;
   }
   if (normalized.startsWith("[error]")) {
+    return false;
+  }
+  // Subagent progress events are rendered inside the SubagentCard, not inline.
+  if (isSubagentProgressSystemEvent(args.content)) {
     return false;
   }
   return !normalized.includes("failed");

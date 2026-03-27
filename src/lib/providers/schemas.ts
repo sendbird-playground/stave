@@ -167,6 +167,12 @@ const StaveSynthesisStartedEventSchema = z.object({
   type: z.literal("stave:synthesis_started"),
 });
 
+const SubagentProgressEventSchema = z.object({
+  type: z.literal("subagent_progress"),
+  toolUseId: z.string().optional(),
+  content: z.string(),
+});
+
 export const NormalizedProviderEventSchema = z.discriminatedUnion("type", [
   ThinkingEventSchema,
   TextEventSchema,
@@ -189,6 +195,7 @@ export const NormalizedProviderEventSchema = z.discriminatedUnion("type", [
   StaveSubtaskStartedEventSchema,
   StaveSubtaskDoneEventSchema,
   StaveSynthesisStartedEventSchema,
+  SubagentProgressEventSchema,
 ]);
 
 export type ParsedNormalizedProviderEvent = z.infer<typeof NormalizedProviderEventSchema>;

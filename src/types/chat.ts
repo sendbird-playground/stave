@@ -40,6 +40,8 @@ export interface ToolUsePart extends MessagePartBase {
   output?: string;
   state: "input-streaming" | "input-available" | "output-available" | "output-error";
   elapsedSeconds?: number;
+  /** Progress messages streamed from a running subagent (Agent tool only). */
+  progressMessages?: string[];
 }
 
 export interface CodeDiffPart extends MessagePartBase {
