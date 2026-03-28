@@ -542,10 +542,19 @@ export function ChatInput(args: ChatInputProps = {}) {
     if (!skillsEnabled) {
       return;
     }
-    void refreshSkillCatalog({
-      workspacePath: workspaceCwd ?? null,
-    });
-  }, [refreshSkillCatalog, skillsEnabled, workspaceCwd]);
+    const targetPath = workspaceCwd ?? null;
+    if (skillCatalog.status === "loading" && skillCatalog.workspacePath === targetPath) {
+      return;
+    }
+    if (skillCatalog.status === "ready" && skillCatalog.workspacePath === targetPath) {
+      const CATALOG_TTL_MS = 5 * 60 * 1000;
+      const fetchedAtMs = skillCatalog.fetchedAt ? Date.parse(skillCatalog.fetchedAt) : 0;
+      if (Date.now() - fetchedAtMs < CATALOG_TTL_MS) {
+        return;
+      }
+    }
+    void refreshSkillCatalog({ workspacePath: targetPath });
+  }, [refreshSkillCatalog, skillsEnabled, skillCatalog.status, skillCatalog.workspacePath, skillCatalog.fetchedAt, workspaceCwd]);
 
   return (
     <div

@@ -162,21 +162,30 @@ describe("resolveCommandInput", () => {
     });
   });
 
-  test("blocks unsupported Claude native commands with a local explanation", () => {
-    const result = resolveCommandInput("/usage", createContext({
+  test("passes unlisted Claude commands through instead of blocking them", () => {
+    // Skills (loop, schedule, update-config) and plugin commands (ralph-loop)
+    // are valid but not returned by supportedCommands(). They must pass through.
+    const result = resolveCommandInput("/loop", createContext({
       provider: "claude-code",
       providerCommandCatalog: claudeCommandCatalog,
     }));
 
-    expect(result.kind).toBe("local-response");
-    if (result.kind !== "local-response") {
-      return;
-    }
-    expect(result.source).toBe("provider_meta");
-    expect(result.response).toContain("Unknown Claude command for this workspace");
-    expect(result.response).toContain("/usage");
-    expect(result.response).toContain("/keybindings-help");
-    expect(result.response).toContain("/stave:usage");
+    expect(result).toEqual({
+      kind: "provider-passthrough",
+      command: "/loop",
+      rawArgs: "",
+    });
+  });
+
+  test("passes plugin commands through even when not in catalog", () => {
+    expect(resolveCommandInput("/ralph-loop", createContext({
+      provider: "claude-code",
+      providerCommandCatalog: claudeCommandCatalog,
+    }))).toEqual({
+      kind: "provider-passthrough",
+      command: "/ralph-loop",
+      rawArgs: "",
+    });
   });
 
   test("keeps provider-namespaced commands untouched for passthrough", () => {

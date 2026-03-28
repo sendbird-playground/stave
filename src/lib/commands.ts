@@ -302,21 +302,6 @@ function buildProviderPaletteNote(args: {
   };
 }
 
-function formatProviderCommandLine(command: ProviderSlashCommand) {
-  const name = command.argumentHint
-    ? `${command.command} ${command.argumentHint}`
-    : command.command;
-  return `- ${name}: ${command.description}`;
-}
-
-function findProviderCommand(args: {
-  command: string;
-  providerCommandCatalog?: ProviderCommandCatalogState;
-}) {
-  const candidate = args.command.trim().toLowerCase();
-  const commands = args.providerCommandCatalog?.commands ?? [];
-  return commands.find((command) => command.command.toLowerCase() === candidate || `/${command.name}`.toLowerCase() === candidate);
-}
 
 function listCustomCommandKeys(args: { settings: Pick<AppSettings, "customCommands"> }) {
   return Array.from(parseCustomCommandMap({ value: args.settings.customCommands ?? "" }).keys())
@@ -369,40 +354,6 @@ function buildHelpResponse(ctx: CommandContext) {
   return sections.join("\n");
 }
 
-function buildUnknownProviderCommandResponse(ctx: CommandContext, command: string) {
-  const providerLabel = getProviderLabel({ providerId: ctx.provider });
-  const sections = [`**Unknown ${providerLabel} command for this workspace:** \`${command}\``];
-
-  if (ctx.providerCommandCatalog?.status === "ready") {
-    if (ctx.providerCommandCatalog.commands.length > 0) {
-      sections.push("");
-      sections.push(`**Available ${providerLabel} native commands:**`);
-      sections.push("");
-      sections.push(markdownTable(
-        ["Command", "Description"],
-        ctx.providerCommandCatalog.commands.map((item) => {
-          const name = item.argumentHint
-            ? `${item.command} ${item.argumentHint}`
-            : item.command;
-          return [`\`${name}\``, item.description];
-        }),
-      ));
-    } else if (ctx.providerCommandCatalog.detail) {
-      sections.push("");
-      sections.push(ctx.providerCommandCatalog.detail);
-    }
-  }
-
-  const localEquivalent = toStaveCommandKey({ cmd: command });
-  const customCommands = parseCustomCommandMap({ value: ctx.settings.customCommands ?? "" });
-  const hasLocalEquivalent = staveBuiltinCommands.some((item) => item.command === localEquivalent) || customCommands.has(localEquivalent);
-  if (hasLocalEquivalent) {
-    sections.push("");
-    sections.push(`Try \`${localEquivalent}\` for Stave's local command instead.`);
-  }
-
-  return sections.join("\n");
-}
 
 const staveBuiltinCommands: StaveBuiltinCommand[] = [
   {
@@ -551,30 +502,11 @@ export function resolveCommandInput(input: string, ctx: CommandContext): Command
 
   const { cmd, rawArgs } = parsed;
   if (!cmd.startsWith(STAVE_NAMESPACE)) {
-    if (
-      providerSupportsNativeCommandCatalog({ providerId: ctx.provider })
-      && ctx.providerCommandCatalog?.status === "ready"
-    ) {
-      const matchedProviderCommand = findProviderCommand({
-        command: cmd,
-        providerCommandCatalog: ctx.providerCommandCatalog,
-      });
-      if (matchedProviderCommand) {
-        return {
-          kind: "provider-passthrough",
-          command: cmd,
-          rawArgs,
-        };
-      }
-
-      return {
-        kind: "local-response",
-        source: "provider_meta",
-        command: cmd,
-        response: buildUnknownProviderCommandResponse(ctx, cmd),
-      };
-    }
-
+    // Always pass non-Stave slash commands through to the provider.
+    // The supportedCommands() catalog only reports a subset of available
+    // commands — skills (loop, schedule, update-config) and plugin commands
+    // (ralph-loop, etc.) are valid but not listed in supportedCommands().
+    // Blocking unlisted commands prevents legitimate usage.
     return {
       kind: "provider-passthrough",
       command: cmd,
