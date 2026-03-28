@@ -164,6 +164,15 @@ export function PromptInput(args: PromptInputProps) {
   const showStandalonePermissionSelector = Boolean(
     permissionMode !== undefined && onPermissionModeChange && !hasRuntimePermissionControl
   );
+  const paletteValue = useMemo(() => {
+    if (activePalette === "skill" && selectedSkillIndex !== NO_COMMAND_SELECTION) {
+      return filteredSkillItems[selectedSkillIndex]?.slug ?? "";
+    }
+    if (activePalette === "command" && selectedCommandIndex !== NO_COMMAND_SELECTION) {
+      return filteredCommandItems[selectedCommandIndex]?.command ?? "";
+    }
+    return "";
+  }, [activePalette, selectedSkillIndex, selectedCommandIndex, filteredSkillItems, filteredCommandItems]);
   const hasControlsDrawerContent = Boolean(
     showStandalonePermissionSelector
     || (runtimeQuickControls?.length ?? 0) > 0
@@ -516,7 +525,7 @@ export function PromptInput(args: PromptInputProps) {
           }}
           className="w-[min(34rem,calc(100vw-2rem))] gap-0 rounded-xl border border-border/80 bg-popover p-1 shadow-lg"
         >
-          <Command shouldFilter={false} className="rounded-lg border border-border/60 bg-background/70 p-0">
+          <Command shouldFilter={false} value={paletteValue} onValueChange={() => {}} className="rounded-lg border border-border/60 bg-background/70 p-0">
             <CommandList ref={commandListRef} className="max-h-72">
               {activePalette === "skill" && filteredSkillItems.length === 0 ? (
                 <CommandEmpty>No matching skill.</CommandEmpty>
@@ -530,11 +539,7 @@ export function PromptInput(args: PromptInputProps) {
                         <CommandItem
                           key={item.id}
                           value={item.slug}
-                          data-selected={index === selectedSkillIndex ? "" : undefined}
-                          className={cn(
-                            "items-start gap-3 rounded-md px-3 py-2",
-                            index === selectedSkillIndex && "bg-muted text-foreground"
-                          )}
+                          className="items-start gap-3 rounded-md px-3 py-2"
                           onMouseEnter={() => setSelectedSkillIndex(index)}
                           onMouseDown={(event) => {
                             event.preventDefault();
@@ -563,11 +568,7 @@ export function PromptInput(args: PromptInputProps) {
                         <CommandItem
                           key={item.id}
                           value={item.slug}
-                          data-selected={index === selectedSkillIndex ? "" : undefined}
-                          className={cn(
-                            "items-start gap-3 rounded-md px-3 py-2",
-                            index === selectedSkillIndex && "bg-muted text-foreground"
-                          )}
+                          className="items-start gap-3 rounded-md px-3 py-2"
                           onMouseEnter={() => setSelectedSkillIndex(index)}
                           onMouseDown={(event) => {
                             event.preventDefault();
@@ -596,11 +597,7 @@ export function PromptInput(args: PromptInputProps) {
                         <CommandItem
                           key={item.id}
                           value={item.slug}
-                          data-selected={index === selectedSkillIndex ? "" : undefined}
-                          className={cn(
-                            "items-start gap-3 rounded-md px-3 py-2",
-                            index === selectedSkillIndex && "bg-muted text-foreground"
-                          )}
+                          className="items-start gap-3 rounded-md px-3 py-2"
                           onMouseEnter={() => setSelectedSkillIndex(index)}
                           onMouseDown={(event) => {
                             event.preventDefault();
@@ -629,11 +626,7 @@ export function PromptInput(args: PromptInputProps) {
                         <CommandItem
                           key={item.id}
                           value={item.command}
-                          data-selected={index === selectedCommandIndex ? "" : undefined}
-                          className={cn(
-                            "items-start gap-3 rounded-md px-3 py-2",
-                            index === selectedCommandIndex && "bg-muted text-foreground"
-                          )}
+                          className="items-start gap-3 rounded-md px-3 py-2"
                           onMouseEnter={() => setSelectedCommandIndex(index)}
                           onMouseDown={(event) => {
                             event.preventDefault();
@@ -659,11 +652,7 @@ export function PromptInput(args: PromptInputProps) {
                         <CommandItem
                           key={item.id}
                           value={item.command}
-                          data-selected={index === selectedCommandIndex ? "" : undefined}
-                          className={cn(
-                            "items-start gap-3 rounded-md px-3 py-2",
-                            index === selectedCommandIndex && "bg-muted text-foreground"
-                          )}
+                          className="items-start gap-3 rounded-md px-3 py-2"
                           onMouseEnter={() => setSelectedCommandIndex(index)}
                           onMouseDown={(event) => {
                             event.preventDefault();
