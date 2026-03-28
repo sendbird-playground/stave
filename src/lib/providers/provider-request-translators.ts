@@ -59,29 +59,15 @@ export function buildClaudePromptFromConversation(args: {
   conversation: CanonicalConversationRequest;
   fallbackPrompt: string;
 }) {
-  // Collect skills and convert $token → /token for native Claude slash commands
-  const nativeSlashPrefixes: string[] = [];
-  for (const part of args.conversation.contextParts) {
-    if (part.type === "skill_context") {
-      for (const skill of part.skills) {
-        const token = skill.invocationToken;
-        nativeSlashPrefixes.push(token.startsWith("$") ? `/${token.slice(1)}` : `/${token}`);
-      }
-    }
-  }
-
-  // Build prompt without [Selected Skills] section; skills become native slash commands
-  const basePrompt = buildLegacyPromptFromCanonicalRequest({
+  // Include full skill instructions in the prompt body so the LLM can
+  // execute them directly. Stave-managed skills are not registered in
+  // Claude Code's native skill registry, so converting $token → /token
+  // caused Claude Code to reject them as unknown slash commands.
+  return buildLegacyPromptFromCanonicalRequest({
     request: args.conversation,
     includeHistory: shouldIncludeHistory(args.conversation),
-    includeSkillContext: false,
+    includeSkillContext: true,
   }) || args.fallbackPrompt;
-
-  if (nativeSlashPrefixes.length === 0) {
-    return basePrompt;
-  }
-
-  return `${nativeSlashPrefixes.join(" ")}\n\n${basePrompt}`;
 }
 
 export function buildCodexPromptFromConversation(args: {

@@ -1,5 +1,6 @@
-import { memo, useEffect, useState, type ComponentPropsWithoutRef } from "react";
-import { Bot, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Wrench } from "lucide-react";
+import { memo, useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import { Bot, ChevronDown, ChevronRight, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Wrench } from "lucide-react";
+import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Button, Textarea } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -895,6 +896,29 @@ function SkillsSection() {
   const refreshSkillCatalog = useAppStore((state) => state.refreshSkillCatalog);
   const workspacePath = workspacePathById[activeWorkspaceId] ?? projectPath ?? null;
 
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+
+  const skillCountByRootPath = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const skill of skillCatalog.skills) {
+      counts.set(skill.sourceRootPath, (counts.get(skill.sourceRootPath) ?? 0) + 1);
+    }
+    return counts;
+  }, [skillCatalog.skills]);
+
+  const skillsByRoot = useMemo(() => {
+    const groups = new Map<string, { root: (typeof skillCatalog.roots)[number] | null; skills: typeof skillCatalog.skills }>();
+    for (const skill of skillCatalog.skills) {
+      const key = skill.sourceRootPath;
+      if (!groups.has(key)) {
+        const matchingRoot = skillCatalog.roots.find((r) => r.path === key) ?? null;
+        groups.set(key, { root: matchingRoot, skills: [] });
+      }
+      groups.get(key)!.skills.push(skill);
+    }
+    return groups;
+  }, [skillCatalog.skills, skillCatalog.roots]);
+
   useEffect(() => {
     if (!skillsEnabled) {
       return;
@@ -903,10 +927,14 @@ function SkillsSection() {
       return;
     }
     if (skillCatalog.status === "ready" && skillCatalog.workspacePath === workspacePath) {
-      return;
+      const CATALOG_TTL_MS = 5 * 60 * 1000;
+      const fetchedAtMs = skillCatalog.fetchedAt ? Date.parse(skillCatalog.fetchedAt) : 0;
+      if (Date.now() - fetchedAtMs < CATALOG_TTL_MS) {
+        return;
+      }
     }
     void refreshSkillCatalog({ workspacePath });
-  }, [refreshSkillCatalog, skillCatalog.status, skillCatalog.workspacePath, skillsEnabled, workspacePath]);
+  }, [refreshSkillCatalog, skillCatalog.status, skillCatalog.workspacePath, skillCatalog.fetchedAt, skillsEnabled, workspacePath]);
 
   return (
     <>
@@ -948,6 +976,11 @@ function SkillsSection() {
                   : `${skillCatalog.skills.length} skills across ${skillCatalog.roots.length} roots`}
               </p>
               <p className="text-sm text-muted-foreground">{skillCatalog.detail}</p>
+              {skillCatalog.fetchedAt ? (
+                <p className="text-xs text-muted-foreground">
+                  Last updated {formatTaskUpdatedAt({ value: skillCatalog.fetchedAt })}
+                </p>
+              ) : null}
             </div>
             <Button
               size="sm"
@@ -972,6 +1005,9 @@ function SkillsSection() {
                     <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
                       {root.provider}
                     </Badge>
+                    <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                      {skillCountByRootPath.get(root.path) ?? 0} skills
+                    </Badge>
                   </div>
                   {root.detail ? <p className="mt-1 text-xs text-muted-foreground">{root.detail}</p> : null}
                 </div>
@@ -981,28 +1017,67 @@ function SkillsSection() {
           <div className="space-y-2">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Catalog</p>
             {skillCatalog.skills.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No `SKILL.md` entries were found.</p>
+              skillCatalog.status === "loading" ? (
+                <p className="text-sm text-muted-foreground">Loading skills...</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No SKILL.md entries were found.</p>
+              )
             ) : (
-              skillCatalog.skills.slice(0, 18).map((skill) => (
-                <div key={skill.id} className="rounded-lg border border-border/70 bg-background/60 px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium">{skill.invocationToken}</span>
-                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
-                      {skill.scope}
-                    </Badge>
-                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
-                      {skill.provider}
-                    </Badge>
+              Array.from(skillsByRoot.entries()).map(([rootPath, group]) => {
+                const isCollapsed = collapsedGroups.includes(rootPath);
+                return (
+                  <div key={rootPath} className="rounded-lg border border-border/70 bg-background/40">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/30"
+                      onClick={() => {
+                        setCollapsedGroups((current) =>
+                          current.includes(rootPath)
+                            ? current.filter((v) => v !== rootPath)
+                            : [...current, rootPath],
+                        );
+                      }}
+                    >
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-medium">{rootPath}</span>
+                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                          {group.skills.length}
+                        </Badge>
+                        {group.root ? (
+                          <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                            {group.root.scope}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {isCollapsed ? (
+                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+                      )}
+                    </button>
+                    {!isCollapsed ? (
+                      <div className="space-y-2 border-t border-border/70 px-3 py-2">
+                        {group.skills.map((skill) => (
+                          <div key={skill.id} className="rounded-lg border border-border/70 bg-background/60 px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium">{skill.invocationToken}</span>
+                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                                {skill.scope}
+                              </Badge>
+                              <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                                {skill.provider}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">{skill.description}</p>
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground/70">{skill.path}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">{skill.description}</p>
-                </div>
-              ))
+                );
+              })
             )}
-            {skillCatalog.skills.length > 18 ? (
-              <p className="text-xs text-muted-foreground">
-                Showing the first 18 skills. Use the `$` selector in the composer to search the full catalog.
-              </p>
-            ) : null}
           </div>
         </SettingsCard>
       </SectionStack>

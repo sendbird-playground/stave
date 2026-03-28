@@ -221,7 +221,7 @@ describe("provider skill prompt serialization", () => {
     instructions: "Review the code for regressions and missing tests.",
   };
 
-  test("prefixes Claude prompts with native slash skill commands", () => {
+  test("includes full skill instructions in Claude prompts instead of native slash commands", () => {
     const conversation = buildCanonicalConversationRequest({
       providerId: "claude-code",
       history: [],
@@ -234,8 +234,12 @@ describe("provider skill prompt serialization", () => {
       fallbackPrompt: "Inspect the patch.",
     });
 
-    expect(prompt.startsWith("/reviewer")).toBeTrue();
-    expect(prompt.includes("[Selected Skills]")).toBeFalse();
+    // Skill instructions must be embedded in the prompt body so Claude Code
+    // can execute them directly — Stave skills are not in Claude's native
+    // skill registry, so /token prefixes caused "skill not found" errors.
+    expect(prompt.includes("[Selected Skills]")).toBeTrue();
+    expect(prompt.includes("Review the code for regressions and missing tests.")).toBeTrue();
+    expect(prompt.startsWith("/reviewer")).toBeFalse();
   });
 
   test("injects selected skill instructions into Codex prompts", () => {
