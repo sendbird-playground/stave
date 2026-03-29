@@ -473,6 +473,7 @@ export function TaskList() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Stave keeps its own stable task id, and each provider keeps its own native conversation id.
                   For <span className="font-medium text-foreground">{taskToViewSession.title}</span>, these ids can coexist because one task can switch between providers over time.
+                  Provider-native ids are what Stave uses for in-app resume. They may not be resumable from an external Claude or Codex terminal session.
                 </p>
               </div>
               <Badge variant="secondary" className="shrink-0">

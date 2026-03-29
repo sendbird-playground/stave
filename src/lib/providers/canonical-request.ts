@@ -15,37 +15,93 @@ import type {
 function cloneMessagePart(part: MessagePart): MessagePart {
   switch (part.type) {
     case "text":
-      return { ...part };
+      return {
+        type: "text",
+        text: part.text,
+      };
     case "thinking":
-      return { ...part };
+      return {
+        type: "thinking",
+        text: part.text,
+        isStreaming: part.isStreaming,
+      };
     case "tool_use":
-      return { ...part };
+      return {
+        // Strip renderer-only tool metadata such as elapsedSeconds and
+        // progressMessages. The provider IPC contract only accepts canonical
+        // history fields and rejects unknown keys.
+        type: "tool_use",
+        ...(part.toolUseId ? { toolUseId: part.toolUseId } : {}),
+        toolName: part.toolName,
+        input: part.input,
+        ...(part.output !== undefined ? { output: part.output } : {}),
+        state: part.state,
+      };
     case "code_diff":
-      return { ...part };
+      return {
+        type: "code_diff",
+        filePath: part.filePath,
+        oldContent: part.oldContent,
+        newContent: part.newContent,
+        status: part.status,
+      };
     case "file_context":
-      return { ...part };
+      return {
+        type: "file_context",
+        filePath: part.filePath,
+        content: part.content,
+        language: part.language,
+        ...(part.instruction !== undefined ? { instruction: part.instruction } : {}),
+      };
     case "image_context":
-      return { ...part };
+      return {
+        type: "image_context",
+        dataUrl: part.dataUrl,
+        label: part.label,
+        mimeType: part.mimeType,
+      };
     case "approval":
-      return { ...part };
+      return {
+        type: "approval",
+        toolName: part.toolName,
+        description: part.description,
+        requestId: part.requestId,
+        state: part.state,
+      };
     case "user_input":
       return {
-        ...part,
+        type: "user_input",
+        requestId: part.requestId,
+        toolName: part.toolName,
         questions: part.questions.map((question) => ({
           ...question,
           options: question.options.map((option) => ({ ...option })),
         })),
-        answers: part.answers ? { ...part.answers } : undefined,
+        ...(part.answers ? { answers: { ...part.answers } } : {}),
+        state: part.state,
       };
     case "system_event":
-      return { ...part };
+      return {
+        type: "system_event",
+        content: part.content,
+      };
     case "orchestration_progress":
       return {
-        ...part,
+        type: "orchestration_progress",
+        supervisorModel: part.supervisorModel,
         subtasks: part.subtasks.map((subtask) => ({ ...subtask })),
+        status: part.status,
       };
     case "stave_processing":
-      return { ...part };
+      return {
+        type: "stave_processing",
+        strategy: part.strategy,
+        ...(part.model !== undefined ? { model: part.model } : {}),
+        ...(part.supervisorModel !== undefined ? { supervisorModel: part.supervisorModel } : {}),
+        reason: part.reason,
+        ...(part.fastModeRequested !== undefined ? { fastModeRequested: part.fastModeRequested } : {}),
+        ...(part.fastModeApplied !== undefined ? { fastModeApplied: part.fastModeApplied } : {}),
+      };
   }
 }
 
