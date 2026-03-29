@@ -2,7 +2,7 @@
 
 ### Goal
 
-Replace the current `WorkspaceBar + TaskList` shell with a three-part layout:
+Replace the legacy workspace/task shell with a three-part layout:
 
 1. Left sidebar: `Projects > Workspaces`
 2. Center top strip: task tabs for the selected workspace
@@ -61,14 +61,11 @@ Replace the current `WorkspaceBar + TaskList` shell with a three-part layout:
   - uses stronger visual emphasis for the selected workspace while keeping project rows neutral
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
   - shows workspace shortcuts in the collapsed rail and includes the parent project name in the tooltip
-- `TaskList`
-  - preserves the persisted store order instead of auto-sorting by `updatedAt`
-  - supports drag-and-drop reordering from a dedicated handle in the expanded list
-  - reorders only the tasks visible in the current filter so hidden tasks keep their relative positions
 - `WorkspaceTaskTabs`
   - renders active tasks as horizontal tabs for the selected workspace
   - uses one shared leading slot for responding wave or model icon
-  - exposes archive close with confirmation, per-task overflow menu, and workspace-level `Task History`
+  - supports drag-and-drop reordering directly in the tab strip
+  - exposes the archive action with confirmation, per-task overflow menu, and workspace-level `Task History`
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
 - `EditorPanel`
@@ -95,8 +92,6 @@ Replace the current `WorkspaceBar + TaskList` shell with a three-part layout:
 - `src/components/layout/EditorPanel.tsx`
 - `src/components/session/ChatArea.tsx`
 - `src/components/layout/ProjectWorkspaceSidebar.tsx`
-- `src/components/layout/TaskList.tsx`
-- `src/components/layout/TaskItem.tsx`
 - `src/components/layout/WorkspaceTaskTabs.tsx`
 - `src/components/layout/RightRail.tsx`
 - `src/lib/tasks.ts`

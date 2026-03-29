@@ -93,8 +93,8 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [openPathDialogOpen, setOpenPathDialogOpen] = useState(false);
   const [projectToRemove, setProjectToRemove] = useState<{ projectPath: string; projectName: string } | null>(null);
-  const [workspaceToDelete, setWorkspaceToDelete] = useState<{ id: string; name: string } | null>(null);
-  const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
+  const [workspaceToClose, setWorkspaceToClose] = useState<{ id: string; name: string } | null>(null);
+  const [closingWorkspaceId, setClosingWorkspaceId] = useState<string | null>(null);
   const [
     currentProjectPath,
     currentProjectName,
@@ -120,11 +120,11 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
     switchWorkspace,
     moveWorkspaceInProjectList,
     createWorkspace,
-    deleteWorkspace,
+    closeWorkspace,
     setLayout,
   ] = useAppStore(useShallow((state) => [
     state.projectPath,
-    state.workspaceRootName,
+    state.projectName,
     state.workspaces,
     state.activeWorkspaceId,
     state.recentProjects,
@@ -152,7 +152,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
     state.switchWorkspace,
     state.moveWorkspaceInProjectList,
     state.createWorkspace,
-    state.deleteWorkspace,
+    state.closeWorkspace,
     state.setLayout,
   ] as const));
 
@@ -392,7 +392,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
                       variant="ghost"
                       size="sm"
                       className="h-10 w-10 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-                      onClick={() => setLayout({ patch: { taskListCollapsed: false } })}
+                      onClick={() => setLayout({ patch: { workspaceSidebarCollapsed: false } })}
                       aria-label="expand-project-list"
                     >
                       <PanelLeft className="size-4" />
@@ -410,7 +410,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
                       variant="ghost"
                       size="sm"
                       className="h-9 w-9 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-                      onClick={() => setLayout({ patch: { taskListCollapsed: true } })}
+                      onClick={() => setLayout({ patch: { workspaceSidebarCollapsed: true } })}
                       aria-label="collapse-project-list"
                     >
                       <PanelLeft className="size-4" />
@@ -639,7 +639,7 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
                                                 handleVisible={reorderMode}
                                               >
                                                 {({ dragHandle, isDragging }) => (
-                                                  <div className={cn("flex items-center gap-1", isDragging && "rounded-md bg-secondary/40")}>
+                                                  <div className={cn("group flex items-center gap-1", isDragging && "rounded-md bg-secondary/40")}>
                                                     {dragHandle}
                                                     <button
                                                       type="button"
@@ -671,29 +671,36 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
                                                       {workspaceBusy ? <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
                                                     </button>
                                                     {project.isCurrent && !workspace.isDefault ? (
-                                                      <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                          <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-8 w-8 rounded-md p-0 text-muted-foreground hover:text-destructive"
-                                                            disabled={deletingWorkspaceId === workspace.id}
-                                                            onClick={() => setWorkspaceToDelete({
-                                                              id: workspace.id,
-                                                              name: workspace.name,
-                                                            })}
-                                                            aria-label={`delete-workspace-${workspace.id}`}
-                                                          >
-                                                            {deletingWorkspaceId === workspace.id ? (
-                                                              <LoaderCircle className="size-3.5 animate-spin" />
-                                                            ) : (
-                                                              <X className="size-3.5" />
-                                                            )}
-                                                          </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent side="right">Close workspace</TooltipContent>
-                                                      </Tooltip>
+                                                      <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+                                                        <Tooltip>
+                                                          <TooltipTrigger asChild>
+                                                            <Button
+                                                              type="button"
+                                                              variant="ghost"
+                                                              size="sm"
+                                                              className={cn(
+                                                                "h-8 w-8 rounded-md p-0 text-muted-foreground transition-opacity hover:text-destructive focus-visible:text-destructive",
+                                                                closingWorkspaceId === workspace.id
+                                                                  ? "opacity-100"
+                                                                  : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                                                              )}
+                                                              disabled={closingWorkspaceId === workspace.id}
+                                                              onClick={() => setWorkspaceToClose({
+                                                                id: workspace.id,
+                                                                name: workspace.name,
+                                                              })}
+                                                              aria-label={`close-workspace-${workspace.id}`}
+                                                            >
+                                                              {closingWorkspaceId === workspace.id ? (
+                                                                <LoaderCircle className="size-3.5 animate-spin" />
+                                                              ) : (
+                                                                <X className="size-3.5" />
+                                                              )}
+                                                            </Button>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent side="right">Close workspace</TooltipContent>
+                                                        </Tooltip>
+                                                      </div>
                                                     ) : null}
                                                   </div>
                                                 )}
@@ -734,20 +741,20 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
         }}
       />
       <ConfirmDialog
-        open={Boolean(workspaceToDelete)}
+        open={Boolean(workspaceToClose)}
         title="Close Workspace"
-        description={workspaceToDelete ? `Close workspace "${workspaceToDelete.name}"? The associated git worktree will be permanently removed. Any uncommitted changes will be lost.` : ""}
+        description={workspaceToClose ? `Close workspace "${workspaceToClose.name}"? The associated git worktree will be permanently removed. Any uncommitted changes will be lost.` : ""}
         confirmLabel="Close Workspace"
-        loading={deletingWorkspaceId !== null}
-        onCancel={() => setWorkspaceToDelete(null)}
+        loading={closingWorkspaceId !== null}
+        onCancel={() => setWorkspaceToClose(null)}
         onConfirm={() => {
-          if (!workspaceToDelete) {
+          if (!workspaceToClose) {
             return;
           }
-          setDeletingWorkspaceId(workspaceToDelete.id);
-          void deleteWorkspace({ workspaceId: workspaceToDelete.id }).finally(() => {
-            setDeletingWorkspaceId(null);
-            setWorkspaceToDelete(null);
+          setClosingWorkspaceId(workspaceToClose.id);
+          void closeWorkspace({ workspaceId: workspaceToClose.id }).finally(() => {
+            setClosingWorkspaceId(null);
+            setWorkspaceToClose(null);
           });
         }}
       />

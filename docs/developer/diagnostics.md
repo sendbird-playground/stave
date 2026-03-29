@@ -4,7 +4,7 @@
 
 Stave includes an opt-in React render profiler around the main hot UI surfaces:
 
-- `TaskList`
+- `ProjectWorkspaceSidebar`
 - `ChatPanel`
 - `ChatInput`
 - `EditorPanel`

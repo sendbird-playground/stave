@@ -111,7 +111,7 @@ export function EditorPanel() {
   const [
     activeWorkspaceId,
     hasHydratedWorkspaces,
-    workspaceRootName,
+    projectName,
     sidebarOverlayVisible,
     sidebarOverlayTab,
     workspaceCwd,
@@ -122,7 +122,7 @@ export function EditorPanel() {
   ] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
     state.hasHydratedWorkspaces,
-    state.workspaceRootName,
+    state.projectName,
     state.layout.sidebarOverlayVisible,
     state.layout.sidebarOverlayTab,
     state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined,
@@ -151,7 +151,7 @@ export function EditorPanel() {
   const explorerTree = explorerRootState?.entries ?? [];
   const isExplorerLoading = explorerRootState?.status === "loading";
   const filteredScmItems = sourceItems;
-  const explorerProjectName = workspaceRootName?.trim() || "Project";
+  const explorerProjectName = projectName?.trim() || "Project";
   const rightTab = sidebarOverlayTab;
 
   function updateExplorerDirectoryState(

@@ -60,13 +60,13 @@ export function registerPersistenceHandlers() {
     }
   });
 
-  ipcMain.handle("persistence:delete-workspace", async (_event, args: unknown) => {
+  ipcMain.handle("persistence:close-workspace", async (_event, args: unknown) => {
     const parsedArgs = WorkspaceIdArgsSchema.safeParse(args);
     if (!parsedArgs.success) {
       return { ok: false };
     }
     const store = await ensurePersistenceReady();
-    store.deleteWorkspace({ workspaceId: parsedArgs.data.workspaceId });
+    store.closeWorkspace({ workspaceId: parsedArgs.data.workspaceId });
     return { ok: true };
   });
 

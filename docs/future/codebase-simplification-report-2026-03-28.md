@@ -77,7 +77,7 @@ The major decomposition targets are now addressed. The following items remain as
 
 The store is still the largest file. The zustand store body (lines ~450-3260) contains all action implementations inline. Potential next steps:
 
-- **Extract workspace lifecycle actions** (`createWorkspace`, `deleteWorkspace`, `switchWorkspace`, `hydrateWorkspaces`) into a `src/store/workspace-lifecycle.ts` module. These are the longest action bodies and involve complex async flows with IPC calls.
+- **Extract workspace lifecycle actions** (`createWorkspace`, `closeWorkspace`, `switchWorkspace`, `hydrateWorkspaces`) into a `src/store/workspace-lifecycle.ts` module. These are the longest action bodies and involve complex async flows with IPC calls.
 - **Extract project lifecycle actions** (`createProject`, `openProject`, `openProjectFromPath`, `activateProject`) into a `src/store/project-lifecycle.ts` module.
 - **Extract editor actions** (`openFileFromTree`, `saveActiveEditorTab`, `checkOpenTabConflicts`, `openDiffInEditor`) into a `src/store/editor-actions.ts` module.
 - **Extract task actions** (`createTask`, `archiveTask`, `duplicateTask`, `exportTask`, `viewTaskChanges`, `rollbackTask`) into a `src/store/task-actions.ts` module.

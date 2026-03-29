@@ -39,6 +39,7 @@ interface RequiredPersistenceApi {
     name: string;
     snapshot: WorkspaceSnapshot;
   }) => Promise<{ ok: boolean }>;
+  closeWorkspace: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
 }
 
 const fallbackStorageKey = "stave:workspace-fallback:v1";
@@ -132,14 +133,14 @@ export async function loadWorkspaceSnapshot(args: { workspaceId: string }): Prom
   };
 }
 
-export async function deleteWorkspacePersistence(args: { workspaceId: string }): Promise<void> {
+export async function closeWorkspacePersistence(args: { workspaceId: string }): Promise<void> {
   const persistence = getPersistenceApi();
   if (!persistence) {
     const rows = loadFallbackRows().filter((row) => row.id !== args.workspaceId);
     saveFallbackRows({ rows });
     return;
   }
-  await window.api?.persistence?.deleteWorkspace?.({ workspaceId: args.workspaceId });
+  await window.api?.persistence?.closeWorkspace?.({ workspaceId: args.workspaceId });
 }
 
 export async function upsertWorkspace(args: {

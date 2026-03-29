@@ -59,7 +59,7 @@ describe("new workspace init command", () => {
     useAppStore.setState({
       ...initialState,
       projectPath: "/tmp/stave-project",
-      workspaceRootName: "stave-project",
+      projectName: "stave-project",
       defaultBranch: "main",
       recentProjects: [{
         projectPath: "/tmp/stave-project",
@@ -129,7 +129,7 @@ describe("new workspace init command", () => {
     useAppStore.setState({
       ...initialState,
       projectPath: "/tmp/stave-project",
-      workspaceRootName: "stave-project",
+      projectName: "stave-project",
       defaultBranch: "main",
       recentProjects: [{
         projectPath: "/tmp/stave-project",
@@ -211,7 +211,7 @@ describe("new workspace init command", () => {
     useAppStore.setState({
       ...initialState,
       projectPath: "/tmp/stave-project",
-      workspaceRootName: "stave-project",
+      projectName: "stave-project",
       defaultBranch: "main",
       recentProjects: [{
         projectPath: "/tmp/stave-project",
@@ -283,7 +283,7 @@ describe("new workspace init command", () => {
     useAppStore.setState({
       ...initialState,
       projectPath: "/tmp/stave-project",
-      workspaceRootName: "stave-project",
+      projectName: "stave-project",
       defaultBranch: "main",
       recentProjects: [{
         projectPath: "/tmp/stave-project",

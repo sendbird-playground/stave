@@ -430,7 +430,7 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
     };
   }) => Promise<{ ok: boolean }>;
-  deleteWorkspace?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
+  closeWorkspace?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
   listTaskTurns?: (args: { workspaceId: string; taskId: string; limit?: number }) => Promise<{
     ok: boolean;
     turns: Array<{

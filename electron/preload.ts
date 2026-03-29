@@ -152,7 +152,7 @@ contextBridge.exposeInMainWorld("api", {
     loadWorkspace: (args: { workspaceId: string }) => ipcRenderer.invoke("persistence:load-workspace", args),
     upsertWorkspace: (args: { id: string; name: string; snapshot: unknown }) => ipcRenderer.invoke("persistence:upsert-workspace", args),
     upsertWorkspaceSync: (args: { id: string; name: string; snapshot: unknown }) => ipcRenderer.sendSync("persistence:upsert-workspace-sync", args),
-    deleteWorkspace: (args: { workspaceId: string }) => ipcRenderer.invoke("persistence:delete-workspace", args),
+    closeWorkspace: (args: { workspaceId: string }) => ipcRenderer.invoke("persistence:close-workspace", args),
     listTaskTurns: (args: { workspaceId: string; taskId: string; limit?: number }) => ipcRenderer.invoke("persistence:list-task-turns", args),
     listLatestWorkspaceTurns: (args: { workspaceId: string; limit?: number }) =>
       ipcRenderer.invoke("persistence:list-latest-workspace-turns", args),
