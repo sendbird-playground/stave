@@ -19,11 +19,11 @@ import {
   ToolGroup,
 } from "@/components/ai-elements";
 import {
+  getVisibleMessageParts,
   getMessageBodyFallbackState,
   getMessageScrollFingerprint,
   getRenderableMessageParts,
   groupMessageParts,
-  hasVisibleMessagePartContent,
   shouldRenderInlineToolPart,
   shouldAutoOpenToolGroup,
 } from "@/components/session/chat-panel.utils";
@@ -57,7 +57,7 @@ function MessageBody(args: {
   const reasoningParts = useMemo(() => renderableParts.filter((part) => part.type === "thinking"), [renderableParts]);
   const hasReasoning = reasoningParts.length > 0;
   const reasoningText = useMemo(() => reasoningParts.map((part) => part.text).join(""), [reasoningParts]);
-  const visibleParts = useMemo(() => renderableParts.filter(hasVisibleMessagePartContent), [renderableParts]);
+  const visibleParts = useMemo(() => getVisibleMessageParts(renderableParts), [renderableParts]);
   const chainOfThoughtSteps = useMemo(() => buildChainOfThoughtSteps(renderableParts), [renderableParts]);
   const hasChainOfThought = chainOfThoughtSteps.length > 0;
   const showChainOfThought = hasChainOfThought && !hasReasoning;

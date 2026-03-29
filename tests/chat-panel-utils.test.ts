@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getVisibleMessageParts,
   getLatestUserMessageId,
   getMessageBodyFallbackState,
   getMessageScrollFingerprint,
   getRenderableMessageParts,
   groupMessageParts,
   hasVisibleMessagePartContent,
+  isCodeDiffSummarySystemEvent,
   isPendingDiffStatus,
   isSubagentProgressSystemEvent,
   shouldRenderInlineToolPart,
@@ -37,6 +39,25 @@ describe("getRenderableMessageParts", () => {
       content: "Ignored content",
       parts: [{ type: "text", text: "Structured part" }],
     })).toEqual([{ type: "text", text: "Structured part" }]);
+  });
+});
+
+describe("getVisibleMessageParts", () => {
+  test("hides modifying system events when inline code diffs are present", () => {
+    expect(getVisibleMessageParts([
+      { type: "system_event", content: "Modifying: src/a.ts, src/b.ts" },
+      { type: "code_diff", filePath: "src/a.ts", oldContent: "a", newContent: "b", status: "accepted" },
+    ])).toEqual([
+      { type: "code_diff", filePath: "src/a.ts", oldContent: "a", newContent: "b", status: "accepted" },
+    ]);
+  });
+
+  test("keeps modifying system events visible when there is no inline diff", () => {
+    expect(getVisibleMessageParts([
+      { type: "system_event", content: "Modifying: src/a.ts" },
+    ])).toEqual([
+      { type: "system_event", content: "Modifying: src/a.ts" },
+    ]);
   });
 });
 
@@ -225,6 +246,12 @@ describe("getMessageBodyFallbackState", () => {
 });
 
 describe("system event visibility", () => {
+  test("identifies codex file-change summary notices", () => {
+    expect(isCodeDiffSummarySystemEvent("Modifying: src/a.ts")).toBe(true);
+    expect(isCodeDiffSummarySystemEvent("  modifying: src/a.ts, src/b.ts")).toBe(true);
+    expect(isCodeDiffSummarySystemEvent("Applied file change(s): src/a.ts")).toBe(false);
+  });
+
   test("hides inline error-like system events", () => {
     expect(shouldRenderInlineSystemEvent({ content: "[error] provider unavailable" })).toBe(false);
     expect(shouldRenderInlineSystemEvent({ content: "Approval delivery failed: timeout" })).toBe(false);
