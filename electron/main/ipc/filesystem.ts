@@ -4,6 +4,8 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  FilesystemCreateDirectoryArgsSchema,
+  FilesystemCreateFileArgsSchema,
   FilesystemDirectoryArgsSchema,
   FilesystemFileArgsSchema,
   FilesystemInspectArgsSchema,
@@ -13,9 +15,27 @@ import {
   OpenPathArgsSchema,
 } from "./schemas";
 import { openExternalWithFallback } from "../utils/external-url";
-import { listDirectoryEntries, listFilesRecursive, mimeTypeFromFilePath, resolveRootFilePath, revisionFromStat } from "../utils/filesystem";
+import {
+  listDirectoryEntries,
+  listFilesRecursive,
+  mimeTypeFromFilePath,
+  resolveRootDirectoryPath,
+  resolveRootFilePath,
+  revisionFromStat,
+} from "../utils/filesystem";
 import { readWorkspaceSourceFiles } from "./filesystem-source-files";
 import { readWorkspaceTypeDefinitionFiles } from "./filesystem-type-libs";
+
+async function statIfExists(targetPath: string) {
+  try {
+    return await fs.stat(targetPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
 
 export function registerFilesystemHandlers() {
   ipcMain.handle("fs:pick-root", async () => {
@@ -186,6 +206,68 @@ export function registerFilesystemHandlers() {
       return { ok: true, entries };
     } catch (error) {
       return { ok: false, entries: [], stderr: String(error) };
+    }
+  });
+
+  ipcMain.handle("fs:create-directory", async (_event, args: unknown) => {
+    const parsed = FilesystemCreateDirectoryArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid directory create request." };
+    }
+
+    const absolutePath = resolveRootDirectoryPath(parsed.data);
+    if (!absolutePath) {
+      return { ok: false, stderr: "Invalid directory path." };
+    }
+
+    try {
+      const existingStat = await statIfExists(absolutePath);
+      if (existingStat) {
+        return existingStat.isDirectory()
+          ? { ok: false, alreadyExists: true as const }
+          : { ok: false, stderr: "A file already exists at this path." };
+      }
+
+      await fs.mkdir(absolutePath, { recursive: true });
+      return { ok: true as const };
+    } catch (error) {
+      return { ok: false as const, stderr: String(error) };
+    }
+  });
+
+  ipcMain.handle("fs:create-file", async (_event, args: unknown) => {
+    const parsed = FilesystemCreateFileArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid file create request." };
+    }
+
+    const absolutePath = resolveRootFilePath(parsed.data);
+    if (!absolutePath) {
+      return { ok: false, stderr: "Invalid file path." };
+    }
+
+    try {
+      const existingStat = await statIfExists(absolutePath);
+      if (existingStat) {
+        if (!existingStat.isFile()) {
+          return { ok: false, stderr: "A folder already exists at this path." };
+        }
+        return {
+          ok: false as const,
+          alreadyExists: true as const,
+          revision: revisionFromStat({ size: existingStat.size, mtimeMs: existingStat.mtimeMs }),
+        };
+      }
+
+      await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+      await fs.writeFile(absolutePath, "", { encoding: "utf8", flag: "wx" });
+      const nextStat = await fs.stat(absolutePath);
+      return {
+        ok: true as const,
+        revision: revisionFromStat({ size: nextStat.size, mtimeMs: nextStat.mtimeMs }),
+      };
+    } catch (error) {
+      return { ok: false as const, stderr: String(error) };
     }
   });
 

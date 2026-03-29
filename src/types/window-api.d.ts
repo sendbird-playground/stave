@@ -130,6 +130,17 @@ interface WindowFsApi {
     conflict?: boolean;
     stderr?: string;
   }>;
+  createFile?: (args: { rootPath: string; filePath: string }) => Promise<{
+    ok: boolean;
+    revision?: string;
+    alreadyExists?: boolean;
+    stderr?: string;
+  }>;
+  createDirectory?: (args: { rootPath: string; directoryPath: string }) => Promise<{
+    ok: boolean;
+    alreadyExists?: boolean;
+    stderr?: string;
+  }>;
   readTypeDefs?: (args: { rootPath: string; entryFilePath?: string }) => Promise<{
     ok: boolean;
     libs: Array<{ content: string; filePath: string }>;

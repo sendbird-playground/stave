@@ -66,6 +66,20 @@ class DynamicWorkspaceFsAdapter implements WorkspaceFsAdapter {
     return delegate.writeFile(args);
   }
 
+  async createFile(args: Parameters<WorkspaceFsAdapter["createFile"]>[0]) {
+    const delegate = await this.prepareDelegate();
+    const result = await delegate.createFile(args);
+    if (result.ok || result.alreadyExists) {
+      this.rootState.files = delegate.getKnownFiles();
+    }
+    return result;
+  }
+
+  async createDirectory(args: Parameters<WorkspaceFsAdapter["createDirectory"]>[0]) {
+    const delegate = await this.prepareDelegate();
+    return delegate.createDirectory(args);
+  }
+
   getKnownFiles() {
     const delegateFiles = this.resolveDelegate().getKnownFiles();
     return delegateFiles.length > 0 ? delegateFiles : this.rootState.files;

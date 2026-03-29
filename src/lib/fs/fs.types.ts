@@ -26,6 +26,13 @@ export interface WorkspaceWriteResult {
   conflict?: boolean;
 }
 
+export interface WorkspaceCreateEntryResult {
+  ok: boolean;
+  revision?: string;
+  alreadyExists?: boolean;
+  stderr?: string;
+}
+
 export interface WorkspaceFsAdapter {
   isAvailable: () => boolean;
   pickRoot: () => Promise<WorkspaceRootInfo | null>;
@@ -34,6 +41,8 @@ export interface WorkspaceFsAdapter {
   readFile: (args: { filePath: string }) => Promise<WorkspaceFileData | null>;
   readFileDataUrl: (args: { filePath: string }) => Promise<WorkspaceImageData | null>;
   writeFile: (args: { filePath: string; content: string; expectedRevision?: string | null }) => Promise<WorkspaceWriteResult>;
+  createFile: (args: { filePath: string }) => Promise<WorkspaceCreateEntryResult>;
+  createDirectory: (args: { directoryPath: string }) => Promise<WorkspaceCreateEntryResult>;
   getKnownFiles: () => string[];
   setRoot?: (args: { rootPath: string; rootName: string; files?: string[] }) => Promise<void> | void;
   getRootPath?: () => string | null;
