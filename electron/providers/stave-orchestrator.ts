@@ -179,6 +179,7 @@ function parseSubtaskSpec(args: {
       }
 
       const subtasks: SubtaskSpec[] = [];
+      const seenIds = new Set<string>();
       let invalidCandidate = false;
       for (const item of parsed) {
         if (
@@ -192,10 +193,19 @@ function parseSubtaskSpec(args: {
           break;
         }
 
+        // Skip duplicate IDs — keep only the first occurrence.
+        if (seenIds.has(item.id)) {
+          continue;
+        }
+        seenIds.add(item.id);
+
         const role = normalizeRole(typeof item.role === "string" ? item.role : "general");
 
+        // Filter out self-references and non-string entries.
         const dependsOn = Array.isArray(item.dependsOn)
-          ? (item.dependsOn as unknown[]).filter((dep): dep is string => typeof dep === "string")
+          ? (item.dependsOn as unknown[]).filter(
+              (dep): dep is string => typeof dep === "string" && dep !== item.id,
+            )
           : [];
 
         subtasks.push({
@@ -230,9 +240,10 @@ function topologicalGroups(subtasks: SubtaskSpec[]): SubtaskSpec[][] {
     if (!task) {
       return 0;
     }
+    // Sentinel: assume level 0 to break circular / self-referencing deps.
+    idToLevel.set(id, 0);
     const validDeps = task.dependsOn.filter((dep) => allIds.has(dep));
     if (validDeps.length === 0) {
-      idToLevel.set(id, 0);
       return 0;
     }
     const level = Math.max(...validDeps.map(getLevel)) + 1;
@@ -319,6 +330,7 @@ export async function runOrchestrator(args: {
 }): Promise<void> {
   const supervisorModel = args.profile.supervisorModel;
   const supervisorProvider = resolveStaveProviderForModel({ model: supervisorModel });
+  const breakdownPrompt = buildSupervisorBreakdownPrompt({ profile: args.profile });
 
   let decompositionEvents: BridgeEvent[];
   try {
@@ -326,7 +338,7 @@ export async function runOrchestrator(args: {
       providerId: supervisorProvider,
       prompt: buildSingleTurnPrompt({
         providerId: supervisorProvider,
-        systemPrompt: buildSupervisorBreakdownPrompt({ profile: args.profile }),
+        systemPrompt: breakdownPrompt,
         prompt: args.userPrompt,
       }),
       cwd: args.baseArgs.cwd,
@@ -335,7 +347,7 @@ export async function runOrchestrator(args: {
       runtimeOptions: buildSingleTurnRuntimeOptions({
         providerId: supervisorProvider,
         model: supervisorModel,
-        systemPrompt: buildSupervisorBreakdownPrompt({ profile: args.profile }),
+        systemPrompt: breakdownPrompt,
         timeoutMs: 30_000,
       }),
     });
@@ -357,48 +369,59 @@ export async function runOrchestrator(args: {
     dependsOn: [],
   }];
 
+  // Pre-compute worker model for each subtask once (avoids 3× redundant resolution).
+  const workerModelMap = new Map<string, string>(
+    subtasks.map((subtask) => [
+      subtask.id,
+      resolveWorkerExecutionModel({ profile: args.profile, role: subtask.role, supervisorModel }),
+    ]),
+  );
+
   args.onEvent({
     type: "stave:orchestration_processing",
     supervisorModel,
     subtasks: subtasks.map((subtask) => ({
       id: subtask.id,
       title: subtask.title,
-      model: resolveWorkerExecutionModel({
-        profile: args.profile,
-        role: subtask.role,
-        supervisorModel,
-      }),
+      model: workerModelMap.get(subtask.id)!,
       dependsOn: subtask.dependsOn,
     })),
   });
 
   const results = new Map<string, string>();
   const groups = topologicalGroups(subtasks);
-  let subtaskCounter = 0;
+
+  // Pre-assign execution indices so they are deterministic regardless of async scheduling.
+  const subtaskIndexMap = new Map<string, number>();
+  let indexCounter = 0;
+  for (const group of groups) {
+    for (const subtask of group) {
+      indexCounter += 1;
+      subtaskIndexMap.set(subtask.id, indexCounter);
+    }
+  }
 
   for (const group of groups) {
     for (let index = 0; index < group.length; index += args.profile.maxParallelSubtasks) {
       const batch = group.slice(index, index + args.profile.maxParallelSubtasks);
       await Promise.all(batch.map(async (subtask) => {
-        subtaskCounter += 1;
-        const workerModel = resolveWorkerExecutionModel({
-          profile: args.profile,
-          role: subtask.role,
-          supervisorModel,
-        });
+        const workerModel = workerModelMap.get(subtask.id)!;
 
         args.onEvent({
           type: "stave:subtask_started",
           subtaskId: subtask.id,
-          index: subtaskCounter,
+          index: subtaskIndexMap.get(subtask.id)!,
           total: subtasks.length,
           title: subtask.title,
           model: workerModel,
         });
 
         let resolvedPrompt = subtask.prompt;
-        for (const [id, result] of results.entries()) {
-          resolvedPrompt = resolvedPrompt.replaceAll(`{${id}}`, result);
+        for (const depId of subtask.dependsOn) {
+          const depResult = results.get(depId);
+          if (depResult !== undefined) {
+            resolvedPrompt = resolvedPrompt.replaceAll(`{${depId}}`, depResult);
+          }
         }
 
         const workerProvider = resolveStaveProviderForModel({ model: workerModel });
@@ -437,11 +460,7 @@ export async function runOrchestrator(args: {
 
   const resultsContext = subtasks
     .map((subtask) => {
-      const workerModel = resolveWorkerExecutionModel({
-        profile: args.profile,
-        role: subtask.role,
-        supervisorModel,
-      });
+      const workerModel = workerModelMap.get(subtask.id)!;
       return `## ${subtask.title} (${subtask.role} / ${workerModel})\n${results.get(subtask.id) ?? "(no output)"}`;
     })
     .join("\n\n");
