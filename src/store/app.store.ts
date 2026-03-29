@@ -10,6 +10,7 @@ import {
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
 import type { CanonicalRetrievedContextPart, ClaudeSettingSource, NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
+import { getRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
 import { resolveCommandInput } from "@/lib/commands";
 import {
   buildCanonicalConversationRequest,
@@ -2467,19 +2468,17 @@ export const useAppStore = create<AppState>()(
         // On the first turn of a task, inject the pre-generated repo-map summary
         // as retrieved context so the AI immediately knows the codebase structure
         // (hotspots, entrypoints, read-first docs) without having to explore first.
-        // TopBar warms this cache asynchronously, and the first turn does a
-        // best-effort synchronous read from the main-process cache.
+        // TopBar pre-warms this module-level Map cache asynchronously; the read
+        // here is a plain Map.get — no IPC, no blocking, effectively free.
         const retrievedContextParts: CanonicalRetrievedContextPart[] = [];
         if (existingHistory.length === 0 && workspaceCwd) {
-          const repoMapContextResult = window.api?.fs?.getCachedRepoMapContextSync?.({
-            rootPath: workspaceCwd,
-          });
-          if (repoMapContextResult?.ok && repoMapContextResult.contextText) {
+          const repoMapText = getRepoMapContextCache(workspaceCwd);
+          if (repoMapText) {
             retrievedContextParts.push({
               type: "retrieved_context",
               sourceId: "stave:repo-map",
               title: "Codebase Map",
-              content: repoMapContextResult.contextText,
+              content: repoMapText,
             });
           }
         }

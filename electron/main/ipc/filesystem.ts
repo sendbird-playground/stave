@@ -9,7 +9,6 @@ import {
   FilesystemDirectoryArgsSchema,
   FilesystemFileArgsSchema,
   FilesystemInspectArgsSchema,
-  FilesystemRepoMapContextArgsSchema,
   FilesystemRepoMapArgsSchema,
   FilesystemRootArgsSchema,
   FilesystemWriteFileArgsSchema,
@@ -26,7 +25,6 @@ import {
   revisionFromStat,
 } from "../utils/filesystem";
 import { getOrCreateRepoMap } from "../utils/repo-map";
-import { ensureRepoMapContextCacheReady } from "../state";
 import { readWorkspaceSourceFiles } from "./filesystem-source-files";
 import { readWorkspaceTypeDefinitionFiles } from "./filesystem-type-libs";
 
@@ -214,38 +212,6 @@ export function registerFilesystemHandlers() {
         : String(error);
       console.error("[repo-map] generation failed:", message);
       return { ok: false, stderr: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
-  ipcMain.handle("fs:get-repo-map-context", async (_event, args: unknown) => {
-    const parsed = FilesystemRepoMapContextArgsSchema.safeParse(args);
-    if (!parsed.success) {
-      return { ok: false, stderr: "Invalid repo map context request." };
-    }
-    try {
-      const repoMapContextCache = ensureRepoMapContextCacheReady();
-      return await repoMapContextCache.getOrCreateContext({
-        rootPath: parsed.data.rootPath,
-        refresh: parsed.data.refresh,
-      });
-    } catch (error) {
-      return { ok: false, stderr: error instanceof Error ? error.message : String(error) };
-    }
-  });
-
-  ipcMain.on("fs:get-cached-repo-map-context-sync", (event, args: unknown) => {
-    const parsed = FilesystemRepoMapContextArgsSchema.safeParse(args);
-    if (!parsed.success) {
-      event.returnValue = { ok: false, stderr: "Invalid repo map context request." };
-      return;
-    }
-    try {
-      const repoMapContextCache = ensureRepoMapContextCacheReady();
-      event.returnValue = repoMapContextCache.getCachedContextSync({
-        rootPath: parsed.data.rootPath,
-      });
-    } catch (error) {
-      event.returnValue = { ok: false, stderr: error instanceof Error ? error.message : String(error) };
     }
   });
 

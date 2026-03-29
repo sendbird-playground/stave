@@ -8,6 +8,8 @@ import { TopBarFileSearch } from "@/components/layout/TopBarFileSearch";
 import { TopBarOpenPR } from "@/components/layout/TopBarOpenPR";
 import { TopBarUtilityActions } from "@/components/layout/TopBarUtilityActions";
 import { TopBarWindowControls } from "@/components/layout/TopBarWindowControls";
+import { getRepoMapContextCache, setRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
+import { formatRepoMapForContext } from "@/lib/fs/repo-map.types";
 
 const loadSettingsDialog = () =>
   import("@/components/layout/SettingsDialog").then((module) => ({
@@ -100,23 +102,38 @@ export function TopBar() {
     void loadSettingsDialog();
   }, []);
 
-  // Pre-warm the main-process repo-map context cache so the first AI turn in
-  // this workspace can synchronously retrieve it without a full generation.
+  // Pre-warm the module-level repo-map context cache so the first AI turn in
+  // this workspace can synchronously read it (a plain Map.get — no IPC).
   useEffect(() => {
     if (!hasProjectContext || !activeWorkspacePath) {
       return;
     }
-
-    const getRepoMapContext = window.api?.fs?.getRepoMapContext;
-    if (!getRepoMapContext) {
+    // Skip if already cached — avoids a redundant IPC round-trip.
+    if (getRepoMapContextCache(activeWorkspacePath)) {
       return;
     }
-
-    void getRepoMapContext({ rootPath: activeWorkspacePath })
+    const getRepoMap = window.api?.fs?.getRepoMap;
+    if (!getRepoMap) {
+      return;
+    }
+    void getRepoMap({ rootPath: activeWorkspacePath })
+      .then((result) => {
+        if (result.ok && result.repoMap) {
+          const snap = result.repoMap;
+          setRepoMapContextCache(activeWorkspacePath, {
+            text: formatRepoMapForContext(snap),
+            snapshotUpdatedAt: snap.updatedAt,
+            fileCount: snap.fileCount,
+            codeFileCount: snap.codeFileCount,
+            hotspotCount: snap.hotspots.length,
+            entrypointCount: snap.entrypoints.length,
+            docCount: snap.docs.length,
+          });
+        }
+      })
       .catch(() => {
         // Pre-warming failure is non-fatal; the first turn simply won't have
-        // the repo-map injected. Subsequent turns or workspace re-opens will
-        // retry automatically.
+        // the repo-map injected. Subsequent workspace switches will retry.
       });
   }, [activeWorkspacePath, hasProjectContext]);
 
