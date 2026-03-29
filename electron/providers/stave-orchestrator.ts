@@ -57,62 +57,175 @@ const SUPERVISOR_SYNTHESIS_PROMPT = `You are the Stave Auto synthesis supervisor
 Multiple workers completed focused subtasks. Produce one coherent final response.
 Be concise and avoid repeating every intermediate detail verbatim.`;
 
+const VALID_ROLES = new Set<StaveWorkerRole>(["plan", "analyze", "implement", "verify", "general"]);
+
+const ROLE_ALIASES: Record<string, StaveWorkerRole> = {
+  analyse: "analyze",
+  analysis: "analyze",
+  review: "verify",
+  validate: "verify",
+  validation: "verify",
+  check: "verify",
+  code: "implement",
+  write: "implement",
+  build: "implement",
+  refactor: "implement",
+  design: "plan",
+  planning: "plan",
+  strategy: "plan",
+};
+
+function normalizeRole(raw: string): StaveWorkerRole {
+  const lowered = raw.toLowerCase().trim();
+  if (VALID_ROLES.has(lowered as StaveWorkerRole)) {
+    return lowered as StaveWorkerRole;
+  }
+  return ROLE_ALIASES[lowered] ?? "general";
+}
+
+function extractBalancedJsonArray(raw: string): string | null {
+  let startIndex = -1;
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (!char) {
+      continue;
+    }
+
+    if (startIndex === -1) {
+      if (char === "[") {
+        startIndex = index;
+        depth = 1;
+      }
+      continue;
+    }
+
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if (inString) {
+      if (char === "\\") {
+        escaping = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === "[") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return raw.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractJsonArrayCandidates(raw: string): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const addCandidate = (candidate: string | null | undefined) => {
+    const normalized = candidate?.trim();
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[")) {
+    addCandidate(trimmed);
+  }
+  addCandidate(extractBalancedJsonArray(trimmed));
+
+  for (const match of raw.matchAll(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/gi)) {
+    const fenced = match[1]?.trim();
+    addCandidate(fenced);
+    addCandidate(extractBalancedJsonArray(fenced ?? ""));
+  }
+
+  addCandidate(extractBalancedJsonArray(raw));
+  return candidates;
+}
+
 function parseSubtaskSpec(args: {
   raw: string;
   maxSubtasks: number;
 }): SubtaskSpec[] | null {
-  const cleaned = args.raw
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return null;
-    }
-
-    const subtasks: SubtaskSpec[] = [];
-    for (const item of parsed) {
-      if (
-        typeof item !== "object"
-        || item === null
-        || typeof item.id !== "string"
-        || typeof item.title !== "string"
-        || typeof item.role !== "string"
-        || typeof item.prompt !== "string"
-      ) {
-        return null;
+  for (const jsonText of extractJsonArrayCandidates(args.raw)) {
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        continue;
       }
 
-      const role = item.role;
-      if (
-        role !== "plan"
-        && role !== "analyze"
-        && role !== "implement"
-        && role !== "verify"
-        && role !== "general"
-      ) {
-        return null;
+      const subtasks: SubtaskSpec[] = [];
+      const seenIds = new Set<string>();
+      let invalidCandidate = false;
+      for (const item of parsed) {
+        if (
+          typeof item !== "object"
+          || item === null
+          || typeof item.id !== "string"
+          || typeof item.title !== "string"
+          || typeof item.prompt !== "string"
+        ) {
+          invalidCandidate = true;
+          break;
+        }
+
+        // Skip duplicate IDs — keep only the first occurrence.
+        if (seenIds.has(item.id)) {
+          continue;
+        }
+        seenIds.add(item.id);
+
+        const role = normalizeRole(typeof item.role === "string" ? item.role : "general");
+
+        // Filter out self-references and non-string entries.
+        const dependsOn = Array.isArray(item.dependsOn)
+          ? (item.dependsOn as unknown[]).filter(
+              (dep): dep is string => typeof dep === "string" && dep !== item.id,
+            )
+          : [];
+
+        subtasks.push({
+          id: item.id,
+          title: item.title,
+          role,
+          prompt: item.prompt,
+          dependsOn,
+        });
       }
 
-      const dependsOn = Array.isArray(item.dependsOn)
-        ? (item.dependsOn as unknown[]).filter((dep): dep is string => typeof dep === "string")
-        : [];
-
-      subtasks.push({
-        id: item.id,
-        title: item.title,
-        role,
-        prompt: item.prompt,
-        dependsOn,
-      });
+      if (!invalidCandidate && subtasks.length > 0) {
+        return subtasks.slice(0, args.maxSubtasks);
+      }
+    } catch {
+      continue;
     }
-
-    return subtasks.slice(0, args.maxSubtasks);
-  } catch {
-    return null;
   }
+
+  return null;
 }
 
 function topologicalGroups(subtasks: SubtaskSpec[]): SubtaskSpec[][] {
@@ -127,9 +240,10 @@ function topologicalGroups(subtasks: SubtaskSpec[]): SubtaskSpec[][] {
     if (!task) {
       return 0;
     }
+    // Sentinel: assume level 0 to break circular / self-referencing deps.
+    idToLevel.set(id, 0);
     const validDeps = task.dependsOn.filter((dep) => allIds.has(dep));
     if (validDeps.length === 0) {
-      idToLevel.set(id, 0);
       return 0;
     }
     const level = Math.max(...validDeps.map(getLevel)) + 1;
@@ -216,6 +330,7 @@ export async function runOrchestrator(args: {
 }): Promise<void> {
   const supervisorModel = args.profile.supervisorModel;
   const supervisorProvider = resolveStaveProviderForModel({ model: supervisorModel });
+  const breakdownPrompt = buildSupervisorBreakdownPrompt({ profile: args.profile });
 
   let decompositionEvents: BridgeEvent[];
   try {
@@ -223,7 +338,7 @@ export async function runOrchestrator(args: {
       providerId: supervisorProvider,
       prompt: buildSingleTurnPrompt({
         providerId: supervisorProvider,
-        systemPrompt: buildSupervisorBreakdownPrompt({ profile: args.profile }),
+        systemPrompt: breakdownPrompt,
         prompt: args.userPrompt,
       }),
       cwd: args.baseArgs.cwd,
@@ -232,7 +347,7 @@ export async function runOrchestrator(args: {
       runtimeOptions: buildSingleTurnRuntimeOptions({
         providerId: supervisorProvider,
         model: supervisorModel,
-        systemPrompt: buildSupervisorBreakdownPrompt({ profile: args.profile }),
+        systemPrompt: breakdownPrompt,
         timeoutMs: 30_000,
       }),
     });
@@ -242,15 +357,25 @@ export async function runOrchestrator(args: {
     return;
   }
 
-  const subtasks = parseSubtaskSpec({
+  const parsedSubtasks = parseSubtaskSpec({
     raw: extractTextFromEvents(decompositionEvents),
     maxSubtasks: args.profile.maxSubtasks,
   });
-  if (!subtasks) {
-    args.onEvent({ type: "error", message: "Orchestrator: could not parse subtask breakdown.", recoverable: true });
-    args.onEvent({ type: "done" });
-    return;
-  }
+  const subtasks: SubtaskSpec[] = parsedSubtasks ?? [{
+    id: "st-fallback",
+    title: "Process request",
+    role: "general",
+    prompt: args.userPrompt,
+    dependsOn: [],
+  }];
+
+  // Pre-compute worker model for each subtask once (avoids 3× redundant resolution).
+  const workerModelMap = new Map<string, string>(
+    subtasks.map((subtask) => [
+      subtask.id,
+      resolveWorkerExecutionModel({ profile: args.profile, role: subtask.role, supervisorModel }),
+    ]),
+  );
 
   args.onEvent({
     type: "stave:orchestration_processing",
@@ -258,42 +383,45 @@ export async function runOrchestrator(args: {
     subtasks: subtasks.map((subtask) => ({
       id: subtask.id,
       title: subtask.title,
-      model: resolveWorkerExecutionModel({
-        profile: args.profile,
-        role: subtask.role,
-        supervisorModel,
-      }),
+      model: workerModelMap.get(subtask.id)!,
       dependsOn: subtask.dependsOn,
     })),
   });
 
   const results = new Map<string, string>();
   const groups = topologicalGroups(subtasks);
-  let subtaskCounter = 0;
+
+  // Pre-assign execution indices so they are deterministic regardless of async scheduling.
+  const subtaskIndexMap = new Map<string, number>();
+  let indexCounter = 0;
+  for (const group of groups) {
+    for (const subtask of group) {
+      indexCounter += 1;
+      subtaskIndexMap.set(subtask.id, indexCounter);
+    }
+  }
 
   for (const group of groups) {
     for (let index = 0; index < group.length; index += args.profile.maxParallelSubtasks) {
       const batch = group.slice(index, index + args.profile.maxParallelSubtasks);
       await Promise.all(batch.map(async (subtask) => {
-        subtaskCounter += 1;
-        const workerModel = resolveWorkerExecutionModel({
-          profile: args.profile,
-          role: subtask.role,
-          supervisorModel,
-        });
+        const workerModel = workerModelMap.get(subtask.id)!;
 
         args.onEvent({
           type: "stave:subtask_started",
           subtaskId: subtask.id,
-          index: subtaskCounter,
+          index: subtaskIndexMap.get(subtask.id)!,
           total: subtasks.length,
           title: subtask.title,
           model: workerModel,
         });
 
         let resolvedPrompt = subtask.prompt;
-        for (const [id, result] of results.entries()) {
-          resolvedPrompt = resolvedPrompt.replaceAll(`{${id}}`, result);
+        for (const depId of subtask.dependsOn) {
+          const depResult = results.get(depId);
+          if (depResult !== undefined) {
+            resolvedPrompt = resolvedPrompt.replaceAll(`{${depId}}`, depResult);
+          }
         }
 
         const workerProvider = resolveStaveProviderForModel({ model: workerModel });
@@ -332,11 +460,7 @@ export async function runOrchestrator(args: {
 
   const resultsContext = subtasks
     .map((subtask) => {
-      const workerModel = resolveWorkerExecutionModel({
-        profile: args.profile,
-        role: subtask.role,
-        supervisorModel,
-      });
+      const workerModel = workerModelMap.get(subtask.id)!;
       return `## ${subtask.title} (${subtask.role} / ${workerModel})\n${results.get(subtask.id) ?? "(no output)"}`;
     })
     .join("\n\n");
