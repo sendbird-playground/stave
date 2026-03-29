@@ -67,6 +67,7 @@ export function AppShell() {
   const resizeFrameRef = useRef<number | null>(null);
   const [zoomHudPercent, setZoomHudPercent] = useState<number | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [sidebarResizing, setSidebarResizing] = useState(false);
   const zoomHudTimerRef = useRef<number | null>(null);
   const handleFocusFileSearch = useCallback(() => {
     const input = document.querySelector<HTMLInputElement>("[data-file-search-input]");
@@ -282,13 +283,14 @@ export function AppShell() {
         }}
       />
       <RenderProfiler id="ProjectWorkspaceSidebar">
-        <ProjectWorkspaceSidebar width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)} collapsed={workspaceSidebarCollapsed} />
+        <ProjectWorkspaceSidebar width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)} collapsed={workspaceSidebarCollapsed} animate={!sidebarResizing} />
       </RenderProfiler>
       {!workspaceSidebarCollapsed ? (
         <div
-          className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
+          className="group relative hidden w-3 shrink-0 cursor-col-resize lg:block"
           onMouseDown={(event) => {
             event.preventDefault();
+            setSidebarResizing(true);
             const startX = event.clientX;
             const startWidth = Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH);
             const onMove = (moveEvent: MouseEvent) => {
@@ -299,6 +301,7 @@ export function AppShell() {
               scheduleLayoutResizePatch("workspaceSidebarWidth", next);
             };
             const onUp = () => {
+              setSidebarResizing(false);
               flushPendingLayoutPatch();
               window.removeEventListener("mousemove", onMove);
               window.removeEventListener("mouseup", onUp);
@@ -306,7 +309,9 @@ export function AppShell() {
             window.addEventListener("mousemove", onMove);
             window.addEventListener("mouseup", onUp);
           }}
-        />
+        >
+          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+        </div>
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
