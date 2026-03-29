@@ -55,11 +55,6 @@ Stave's near-term local data direction is:
 
 The intent is to keep storage simple and avoid over-engineering for small data volumes. Repo-map context is 2-4 KB per workspace; an in-memory Map is sufficient.
 
-Related design docs:
-
-- [Local data roadmap (2026-03-29)](docs/future/local-data-roadmap-2026-03-29.md)
-- [Docs staleness audit (2026-03-29)](docs/future/docs-staleness-audit-2026-03-29.md)
-
 ## Prerequisites
 
 - **Bun** — package manager and script runner
@@ -221,14 +216,6 @@ Stable project documentation now lives under `docs/`.
 - [Contracts](docs/architecture/contracts.md)
 - [Repo map spec](docs/architecture/repo-map-spec.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
-- [Agent exploration harness plan (2026-03-29)](docs/future/agent-exploration-harness-plan-2026-03-29.md)
-- [Local data roadmap (2026-03-29)](docs/future/local-data-roadmap-2026-03-29.md)
-- [Docs staleness audit (2026-03-29)](docs/future/docs-staleness-audit-2026-03-29.md)
-- [Future SDK backlog](docs/future/claude-sdk-candidates.md)
-- [Checkpoint restore roadmap (2026-03-29)](docs/future/checkpoint-restore-roadmap-2026-03-29.md)
-- [Codebase simplification plan (2026-03-26)](docs/future/codebase-simplification-plan-2026-03-26.md)
-- [Codebase simplification report (2026-03-27)](docs/future/codebase-simplification-report-2026-03-27.md)
-- [Shared skill management plan (2026-03-13)](docs/future/shared-skill-management-plan-2026-03-13.md)
 - [Session Replay](docs/features/session-replay.md)
 - [Skill selector](docs/features/skill-selector.md)
 - [Attachments](docs/features/attachments.md)
