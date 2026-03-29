@@ -1,3 +1,28 @@
+## [0.0.26](https://github.com/sendbird-playground/stave/compare/v0.0.25...v0.0.26) (2026-03-29)
+
+### Features
+
+* **commands:** format stave command outputs as Markdown for rich rendering ([#43](https://github.com/sendbird-playground/stave/issues/43)) ([ab23785](https://github.com/sendbird-playground/stave/commit/ab2378594b054e5936196bdfafb00f1733277b12))
+* **exploration:** add repo-map AI context injection and TypeScript LSP support ([#59](https://github.com/sendbird-playground/stave/issues/59)) ([4c4ac2b](https://github.com/sendbird-playground/stave/commit/4c4ac2bfe8aa75063cf5272fd8afd7fb7084d011))
+* **exploration:** add repo-map cache and docs ([#57](https://github.com/sendbird-playground/stave/issues/57)) ([f4f070c](https://github.com/sendbird-playground/stave/commit/f4f070c0e0dcdd1d2f720344c49a61156fd0c068))
+* **explorer:** add file and folder creation with extension icons ([#54](https://github.com/sendbird-playground/stave/issues/54)) ([745ff54](https://github.com/sendbird-playground/stave/commit/745ff54ae4f2f75e33d4e877aae9d27298756c40))
+* **providers:** add 1M context window model variants ([#63](https://github.com/sendbird-playground/stave/issues/63)) ([7f06b6d](https://github.com/sendbird-playground/stave/commit/7f06b6d))
+* **providers:** reflect claude and codex sdk upgrades ([#51](https://github.com/sendbird-playground/stave/issues/51)) ([2663580](https://github.com/sendbird-playground/stave/commit/26635806c4fae1f04d11685785e3a98fb9c351ad))
+* **ui:** add checkpoint UI for compact_boundary with git-based restore ([#53](https://github.com/sendbird-playground/stave/issues/53)) ([fa5e436](https://github.com/sendbird-playground/stave/commit/fa5e436b7b081239c67f9c57e481cb6f43536a3c))
+
+### Bug Fixes
+
+* **chat:** hide modifying notice when inline diff is shown ([#56](https://github.com/sendbird-playground/stave/issues/56)) ([920068a](https://github.com/sendbird-playground/stave/commit/920068a2886ce8f708fde1612c0ac00c0523a24e))
+* **chat:** prevent code block flickering during streaming ([#44](https://github.com/sendbird-playground/stave/issues/44)) ([5da9fb1](https://github.com/sendbird-playground/stave/commit/5da9fb1f04c3e84c4769a48606a516be5bb8f9c2))
+* **ipc:** strip renderer-only tool metadata from provider history ([#52](https://github.com/sendbird-playground/stave/issues/52)) ([baa4f3c](https://github.com/sendbird-playground/stave/commit/baa4f3cf94d7f278073047ca71f2078503642894))
+* **markdown:** add custom hr component to fix divider spacing ([#46](https://github.com/sendbird-playground/stave/issues/46)) ([5231365](https://github.com/sendbird-playground/stave/commit/5231365794af6ff2c5bea55d0b43696e4715b98a))
+* **skills:** embed skill instructions in prompt and stop blocking valid commands ([#49](https://github.com/sendbird-playground/stave/issues/49)) ([f3f4d07](https://github.com/sendbird-playground/stave/commit/f3f4d0721ee58c5307cc6b5984f212c5a0f49965))
+* **stave-auto:** harden subtask breakdown parsing ([#50](https://github.com/sendbird-playground/stave/issues/50)) ([2981f27](https://github.com/sendbird-playground/stave/commit/2981f27de3b59a36c8178a7600b4ab2b48302b41))
+* **stave-release:** clean up temporary release worktree ([#45](https://github.com/sendbird-playground/stave/issues/45)) ([df5090c](https://github.com/sendbird-playground/stave/commit/df5090c66ca077e2b1f8233f15456b7b61c3937d))
+* **ui:** prevent cmdk auto-selecting first item in selector palettes ([#48](https://github.com/sendbird-playground/stave/issues/48)) ([002d3df](https://github.com/sendbird-playground/stave/commit/002d3df76873af2769888805f99f35e65cd0f867))
+* **ui:** preserve leading-7 line-height from twMerge in message blocks ([#62](https://github.com/sendbird-playground/stave/issues/62)) ([a0728a3](https://github.com/sendbird-playground/stave/commit/a0728a3))
+* **ui:** widen sidebar resize handle and smooth collapse transition ([#58](https://github.com/sendbird-playground/stave/issues/58)) ([8fe409a](https://github.com/sendbird-playground/stave/commit/8fe409aa53fda8007f3106400407f23b56e2d701))
+* **workspace:** align shell naming and remove legacy ui ([#55](https://github.com/sendbird-playground/stave/issues/55)) ([23de43c](https://github.com/sendbird-playground/stave/commit/23de43c99e876ab83cb285f070cdf208f463aeac))
 ## [0.0.25](https://github.com/sendbird-playground/stave/compare/v0.0.24...v0.0.25) (2026-03-27)
 
 ### Features

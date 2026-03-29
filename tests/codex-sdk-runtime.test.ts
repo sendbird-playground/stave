@@ -125,8 +125,8 @@ describe("buildCodexConfigOverrides", () => {
 });
 
 describe("resolveApprovalPolicy", () => {
-  test("preserves the on-failure approval mode exposed by the Codex SDK", () => {
-    expect(resolveApprovalPolicy({ runtimeValue: "on-failure" })).toBe("on-failure");
-    expect(resolveApprovalPolicy({ envValue: "on-failure" })).toBe("on-failure");
+  test("returns undefined for unknown or deprecated approval modes", () => {
+    expect(resolveApprovalPolicy({ runtimeValue: undefined })).toBeUndefined();
+    expect(resolveApprovalPolicy({ envValue: "on-failure" })).toBeUndefined();
   });
 });
