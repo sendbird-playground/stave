@@ -24,8 +24,8 @@ import {
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
 
-const SUPPORTED_CODEX_SDK_VERSION = "0.116.0";
-const SUPPORTED_CODEX_CLI_VERSION = "0.116.0";
+const SUPPORTED_CODEX_SDK_VERSION = "0.117.0";
+const SUPPORTED_CODEX_CLI_VERSION = "0.117.0";
 const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
@@ -45,17 +45,19 @@ function resolveSandboxMode(args: {
 }
 
 export function resolveApprovalPolicy(args: {
-  runtimeValue?: "never" | "on-request" | "on-failure" | "untrusted";
+  runtimeValue?: "never" | "on-request" | "untrusted";
   envValue?: string;
-}): "never" | "on-request" | "on-failure" | "untrusted" | undefined {
+}): "never" | "on-request" | "untrusted" | undefined {
   const candidate = args.runtimeValue ?? args.envValue;
   if (
     candidate === "never"
     || candidate === "on-request"
-    || candidate === "on-failure"
     || candidate === "untrusted"
   ) {
     return candidate;
+  }
+  if (candidate === "on-failure") {
+    return "on-request";
   }
   return undefined;
 }

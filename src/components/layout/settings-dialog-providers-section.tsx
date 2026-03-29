@@ -9,6 +9,7 @@ import {
   BOOLEAN_TOGGLE_OPTIONS,
   CLAUDE_EFFORT_OPTIONS,
   CLAUDE_PERMISSION_MODE_OPTIONS,
+  CLAUDE_SETTING_SOURCE_OPTIONS,
   CLAUDE_THINKING_OPTIONS,
   CODEX_APPROVAL_POLICY_OPTIONS,
   CODEX_EFFORT_OPTIONS,
@@ -267,6 +268,8 @@ export function ProvidersSection() {
     claudeAllowDangerouslySkipPermissions,
     claudeSandboxEnabled,
     claudeAllowUnsandboxedCommands,
+    claudeTaskBudgetTokens,
+    claudeSettingSources,
     claudeEffort,
     claudeThinkingMode,
     claudeAgentProgressSummaries,
@@ -288,6 +291,8 @@ export function ProvidersSection() {
       state.settings.claudeAllowDangerouslySkipPermissions,
       state.settings.claudeSandboxEnabled,
       state.settings.claudeAllowUnsandboxedCommands,
+      state.settings.claudeTaskBudgetTokens,
+      state.settings.claudeSettingSources,
       state.settings.claudeEffort,
       state.settings.claudeThinkingMode,
       state.settings.claudeAgentProgressSummaries,
@@ -305,6 +310,15 @@ export function ProvidersSection() {
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const toggleClaudeSettingSource = (source: "user" | "project" | "local") => {
+    updateSettings({
+      patch: {
+        claudeSettingSources: claudeSettingSources.includes(source)
+          ? claudeSettingSources.filter((item) => item !== source)
+          : [...claudeSettingSources, source],
+      },
+    });
+  };
 
   return (
     <>
@@ -375,6 +389,37 @@ export function ProvidersSection() {
               value={claudeAllowUnsandboxedCommands ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { claudeAllowUnsandboxedCommands: value === "on" } })}
               options={[...BOOLEAN_TOGGLE_OPTIONS]}
+            />
+          </LabeledField>
+          <LabeledField
+            title="Setting Sources"
+            description="Controls which Claude filesystem setting layers are loaded. `project` is required for CLAUDE.md and project slash commands."
+          >
+            <div className="grid gap-2 sm:grid-cols-3">
+              {CLAUDE_SETTING_SOURCE_OPTIONS.map((option) => (
+                <Button
+                  key={option.value}
+                  className="h-9 rounded-md"
+                  variant={claudeSettingSources.includes(option.value) ? "default" : "outline"}
+                  onClick={() => toggleClaudeSettingSource(option.value)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </LabeledField>
+          <LabeledField
+            title="Task Budget (Tokens)"
+            description="Advisory token budget sent to Claude so it can pace tool use and wrap up earlier. Use `0` to disable."
+          >
+            <DraftInput
+              className="h-10 rounded-md border-border/80 bg-background"
+              value={String(claudeTaskBudgetTokens)}
+              onCommit={(value) => updateSettings({
+                patch: {
+                  claudeTaskBudgetTokens: Math.min(1_000_000, Math.max(0, readInt(value, claudeTaskBudgetTokens))),
+                },
+              })}
             />
           </LabeledField>
           <LabeledField title="Thinking Mode">
@@ -486,7 +531,7 @@ export function ProvidersSection() {
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexApprovalPolicy: value as "never" | "on-request" | "on-failure" | "untrusted",
+                    codexApprovalPolicy: value as "never" | "on-request" | "untrusted",
                   },
                 })
               }

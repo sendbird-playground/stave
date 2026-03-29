@@ -5,11 +5,21 @@ import {
   sanitizeTextField,
 } from "../../src/lib/file-context-sanitization";
 import type {
+  ClaudeContextUsageResponse,
+  ClaudeMcpServerStatusSnapshot,
+  ClaudePluginReloadResponse,
+} from "../../src/lib/providers/provider.types";
+import type {
+  CanUseTool,
+  McpServerStatus,
   Query,
   SDKMessage,
   SDKAssistantMessage,
+  SDKControlGetContextUsageResponse,
+  SDKControlReloadPluginsResponse,
   SDKSystemMessage,
   SDKResultMessage,
+  SettingSource,
   SlashCommand,
 } from "@anthropic-ai/claude-agent-sdk";
 import { toText } from "./utils";
@@ -408,6 +418,142 @@ function toClaudeThinkingConfig(thinkingMode?: "adaptive" | "enabled" | "disable
 
 export function resolveClaudeAgentProgressSummaries(value?: boolean) {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function resolveClaudeSettingSources(value?: NonNullable<StreamTurnArgs["runtimeOptions"]>["claudeSettingSources"]) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized: SettingSource[] = [];
+  value.forEach((source) => {
+    if ((source === "user" || source === "project" || source === "local") && !normalized.includes(source)) {
+      normalized.push(source);
+    }
+  });
+  return normalized;
+}
+
+function resolveClaudeTaskBudget(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return { total: Math.floor(value) };
+}
+
+function buildClaudeQueryOptions(args: {
+  cwd: string;
+  claudeExecutablePath: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  resume?: string;
+  systemPrompt?: string;
+  includePartialMessages?: boolean;
+  promptSuggestions?: boolean;
+  canUseTool?: CanUseTool;
+}) {
+  const permissionMode = resolveClaudePermissionMode({
+    runtimeValue: args.runtimeOptions?.claudePermissionMode,
+    envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
+    fallback: "acceptEdits",
+  });
+  const allowDangerouslySkipPermissions = args.runtimeOptions?.claudeAllowDangerouslySkipPermissions
+    ?? parseBooleanEnv({
+      value: process.env.STAVE_CLAUDE_ALLOW_DANGEROUSLY_SKIP_PERMISSIONS,
+      fallback: permissionMode === "bypassPermissions",
+    });
+  const claudeSandboxEnabled = args.runtimeOptions?.claudeSandboxEnabled
+    ?? parseBooleanEnv({
+      value: process.env.STAVE_CLAUDE_SANDBOX_ENABLED,
+      fallback: false,
+    });
+  const claudeAllowUnsandboxedCommands = args.runtimeOptions?.claudeAllowUnsandboxedCommands
+    ?? parseBooleanEnv({
+      value: process.env.STAVE_CLAUDE_ALLOW_UNSANDBOXED_COMMANDS,
+      fallback: true,
+    });
+  const thinking = toClaudeThinkingConfig(args.runtimeOptions?.claudeThinkingMode);
+  const agentProgressSummaries = resolveClaudeAgentProgressSummaries(args.runtimeOptions?.claudeAgentProgressSummaries);
+  const settingSources = resolveClaudeSettingSources(args.runtimeOptions?.claudeSettingSources);
+  const taskBudget = resolveClaudeTaskBudget(args.runtimeOptions?.claudeTaskBudgetTokens);
+
+  return {
+    permissionMode,
+    ...(permissionMode === "bypassPermissions" ? { allowDangerouslySkipPermissions } : {}),
+    ...(args.resume ? { resume: args.resume } : {}),
+    ...(args.includePartialMessages ? { includePartialMessages: true } : {}),
+    promptSuggestions: args.promptSuggestions ?? false,
+    cwd: args.cwd,
+    ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
+    ...(args.systemPrompt ? { systemPrompt: args.systemPrompt } : {}),
+    ...(typeof args.runtimeOptions?.claudeMaxTurns === "number" ? { maxTurns: args.runtimeOptions.claudeMaxTurns } : {}),
+    ...(typeof args.runtimeOptions?.claudeMaxBudgetUsd === "number" ? { maxBudgetUsd: args.runtimeOptions.claudeMaxBudgetUsd } : {}),
+    ...(taskBudget ? { taskBudget } : {}),
+    ...(args.runtimeOptions?.claudeEffort ? { effort: args.runtimeOptions.claudeEffort } : {}),
+    ...(thinking ? { thinking } : {}),
+    ...(agentProgressSummaries !== undefined ? { agentProgressSummaries } : {}),
+    ...(args.runtimeOptions?.claudeAllowedTools ? { allowedTools: args.runtimeOptions.claudeAllowedTools } : {}),
+    ...(args.runtimeOptions?.claudeDisallowedTools ? { disallowedTools: args.runtimeOptions.claudeDisallowedTools } : {}),
+    ...(settingSources !== undefined ? { settingSources } : {}),
+    ...(args.runtimeOptions?.claudeFastMode ? { settings: { fastMode: true } } : {}),
+    ...(args.canUseTool ? { canUseTool: args.canUseTool } : {}),
+    sandbox: {
+      enabled: claudeSandboxEnabled,
+      allowUnsandboxedCommands: claudeAllowUnsandboxedCommands,
+    },
+    env: buildClaudeEnv({ executablePath: args.claudeExecutablePath }),
+    ...(args.claudeExecutablePath.length > 0 ? { pathToClaudeCodeExecutable: args.claudeExecutablePath } : {}),
+  };
+}
+
+function toClaudeMcpServerStatusSnapshot(status: McpServerStatus): ClaudeMcpServerStatusSnapshot {
+  return {
+    name: status.name,
+    status: status.status,
+    ...(status.error ? { error: status.error } : {}),
+    ...(status.scope ? { scope: status.scope } : {}),
+    ...(Array.isArray(status.tools) ? { toolCount: status.tools.length } : {}),
+  };
+}
+
+function toClaudeContextUsageSnapshot(usage: SDKControlGetContextUsageResponse) {
+  return {
+    categories: usage.categories.map((category) => ({
+      name: category.name,
+      tokens: category.tokens,
+      color: category.color,
+      ...(category.isDeferred !== undefined ? { isDeferred: category.isDeferred } : {}),
+    })),
+    totalTokens: usage.totalTokens,
+    maxTokens: usage.maxTokens,
+    rawMaxTokens: usage.rawMaxTokens,
+    percentage: usage.percentage,
+    model: usage.model,
+    memoryFiles: usage.memoryFiles.map((file) => ({
+      path: file.path,
+      type: file.type,
+      tokens: file.tokens,
+    })),
+    mcpTools: usage.mcpTools.map((tool) => ({
+      name: tool.name,
+      serverName: tool.serverName,
+      tokens: tool.tokens,
+      ...(tool.isLoaded !== undefined ? { isLoaded: tool.isLoaded } : {}),
+    })),
+  };
+}
+
+function toClaudePluginReloadSnapshot(reload: SDKControlReloadPluginsResponse) {
+  return {
+    commandCount: reload.commands.length,
+    agentCount: reload.agents.length,
+    plugins: reload.plugins.map((plugin) => ({
+      name: plugin.name,
+      path: plugin.path,
+      ...(plugin.source ? { source: plugin.source } : {}),
+    })),
+    mcpServers: reload.mcpServers.map(toClaudeMcpServerStatusSnapshot),
+    errorCount: reload.error_count,
+  };
 }
 
 function buildClaudeTaskProgressEvents(message: SDKSystemMessage & {
@@ -847,51 +993,16 @@ export async function getClaudeCommandCatalog(args: {
     }
 
     const claudeExecutablePath = resolveClaudeExecutablePath();
-    const permissionMode = resolveClaudePermissionMode({
-      runtimeValue: args.runtimeOptions?.claudePermissionMode,
-      envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
-      fallback: "acceptEdits",
-    });
-    const allowDangerouslySkipPermissions = args.runtimeOptions?.claudeAllowDangerouslySkipPermissions
-      ?? parseBooleanEnv({
-        value: process.env.STAVE_CLAUDE_ALLOW_DANGEROUSLY_SKIP_PERMISSIONS,
-        fallback: permissionMode === "bypassPermissions",
-      });
-    const claudeSandboxEnabled = args.runtimeOptions?.claudeSandboxEnabled
-      ?? parseBooleanEnv({
-        value: process.env.STAVE_CLAUDE_SANDBOX_ENABLED,
-        fallback: false,
-      });
-    const claudeAllowUnsandboxedCommands = args.runtimeOptions?.claudeAllowUnsandboxedCommands
-      ?? parseBooleanEnv({
-        value: process.env.STAVE_CLAUDE_ALLOW_UNSANDBOXED_COMMANDS,
-        fallback: true,
-      });
-    const thinking = toClaudeThinkingConfig(args.runtimeOptions?.claudeThinkingMode);
-    const agentProgressSummaries = resolveClaudeAgentProgressSummaries(args.runtimeOptions?.claudeAgentProgressSummaries);
 
     stream = queryFn({
       prompt: "",
-      options: {
-        permissionMode,
-        ...(permissionMode === "bypassPermissions" ? { allowDangerouslySkipPermissions } : {}),
-        promptSuggestions: false,
+      options: buildClaudeQueryOptions({
         cwd: runtimeCwd,
-        ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
-        ...(args.runtimeOptions?.claudeSystemPrompt ? { systemPrompt: args.runtimeOptions.claudeSystemPrompt } : {}),
-        ...(args.runtimeOptions?.claudeEffort ? { effort: args.runtimeOptions.claudeEffort } : {}),
-        ...(thinking ? { thinking } : {}),
-        ...(agentProgressSummaries !== undefined ? { agentProgressSummaries } : {}),
-        ...(args.runtimeOptions?.claudeAllowedTools ? { allowedTools: args.runtimeOptions.claudeAllowedTools } : {}),
-        ...(args.runtimeOptions?.claudeDisallowedTools ? { disallowedTools: args.runtimeOptions.claudeDisallowedTools } : {}),
-        ...(args.runtimeOptions?.claudeFastMode ? { settings: { fastMode: true } } : {}),
-        sandbox: {
-          enabled: claudeSandboxEnabled,
-          allowUnsandboxedCommands: claudeAllowUnsandboxedCommands,
-        },
-        env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
-        ...(claudeExecutablePath.length > 0 ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
-      },
+        claudeExecutablePath,
+        runtimeOptions: args.runtimeOptions,
+        systemPrompt: args.runtimeOptions?.claudeSystemPrompt,
+        promptSuggestions: false,
+      }),
     }) as Query;
 
     const commands = await stream.supportedCommands();
@@ -909,6 +1020,96 @@ export async function getClaudeCommandCatalog(args: {
       supported: false,
       commands: [],
       detail: `Claude command catalog unavailable: ${toText(error)}`,
+    };
+  } finally {
+    stream?.close();
+  }
+}
+
+export async function getClaudeContextUsage(args: {
+  cwd?: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<ClaudeContextUsageResponse> {
+  let stream: Query | null = null;
+  try {
+    const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+
+    if (!queryFn) {
+      return {
+        ok: false,
+        detail: "Claude runtime failure: query() is unavailable from SDK import.",
+      };
+    }
+
+    const claudeExecutablePath = resolveClaudeExecutablePath();
+    stream = queryFn({
+      prompt: "",
+      options: buildClaudeQueryOptions({
+        cwd: runtimeCwd,
+        claudeExecutablePath,
+        runtimeOptions: args.runtimeOptions,
+        systemPrompt: args.runtimeOptions?.claudeSystemPrompt,
+        promptSuggestions: false,
+      }),
+    }) as Query;
+
+    const usage = await stream.getContextUsage();
+    return {
+      ok: true,
+      detail: `Loaded Claude context usage for ${runtimeCwd}.`,
+      usage: toClaudeContextUsageSnapshot(usage),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `Claude context usage unavailable: ${toText(error)}`,
+    };
+  } finally {
+    stream?.close();
+  }
+}
+
+export async function reloadClaudePlugins(args: {
+  cwd?: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<ClaudePluginReloadResponse> {
+  let stream: Query | null = null;
+  try {
+    const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+
+    if (!queryFn) {
+      return {
+        ok: false,
+        detail: "Claude runtime failure: query() is unavailable from SDK import.",
+      };
+    }
+
+    const claudeExecutablePath = resolveClaudeExecutablePath();
+    stream = queryFn({
+      prompt: "",
+      options: buildClaudeQueryOptions({
+        cwd: runtimeCwd,
+        claudeExecutablePath,
+        runtimeOptions: args.runtimeOptions,
+        systemPrompt: args.runtimeOptions?.claudeSystemPrompt,
+        promptSuggestions: false,
+      }),
+    }) as Query;
+
+    const reload = await stream.reloadPlugins();
+    return {
+      ok: true,
+      detail: `Reloaded Claude plugins for ${runtimeCwd}.`,
+      reload: toClaudePluginReloadSnapshot(reload),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `Claude plugin reload failed: ${toText(error)}`,
     };
   } finally {
     stream?.close();
@@ -1009,28 +1210,6 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         fallbackResumeId: args.runtimeOptions?.claudeResumeSessionId,
       }),
     });
-    const permissionMode = resolveClaudePermissionMode({
-      runtimeValue: args.runtimeOptions?.claudePermissionMode,
-      envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
-      fallback: "acceptEdits",
-    });
-    const allowDangerouslySkipPermissions = args.runtimeOptions?.claudeAllowDangerouslySkipPermissions
-      ?? parseBooleanEnv({
-        value: process.env.STAVE_CLAUDE_ALLOW_DANGEROUSLY_SKIP_PERMISSIONS,
-        fallback: permissionMode === "bypassPermissions",
-      });
-    const claudeSandboxEnabled = args.runtimeOptions?.claudeSandboxEnabled
-      ?? parseBooleanEnv({
-        value: process.env.STAVE_CLAUDE_SANDBOX_ENABLED,
-        fallback: false,
-      });
-    const claudeAllowUnsandboxedCommands = args.runtimeOptions?.claudeAllowUnsandboxedCommands
-      ?? parseBooleanEnv({
-        value: process.env.STAVE_CLAUDE_ALLOW_UNSANDBOXED_COMMANDS,
-        fallback: true,
-      });
-    const thinking = toClaudeThinkingConfig(args.runtimeOptions?.claudeThinkingMode);
-    const agentProgressSummaries = resolveClaudeAgentProgressSummaries(args.runtimeOptions?.claudeAgentProgressSummaries);
     const claudeSystemPrompt = buildClaudeSystemPrompt({
       cwd: runtimeCwd,
       baseSystemPrompt: args.runtimeOptions?.claudeSystemPrompt,
@@ -1042,23 +1221,14 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     });
     const stream = queryFn({
       prompt: providerPrompt,
-      options: {
-        permissionMode,
-        ...(permissionMode === "bypassPermissions" ? { allowDangerouslySkipPermissions } : {}),
-        ...(existingSessionId ? { resume: existingSessionId } : {}),
+      options: buildClaudeQueryOptions({
+        cwd: runtimeCwd,
+        claudeExecutablePath,
+        runtimeOptions: args.runtimeOptions,
+        resume: existingSessionId,
+        systemPrompt: claudeSystemPrompt,
         includePartialMessages: true,
         promptSuggestions: true,
-        cwd: runtimeCwd,
-        ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
-        ...(claudeSystemPrompt ? { systemPrompt: claudeSystemPrompt } : {}),
-        ...(typeof args.runtimeOptions?.claudeMaxTurns === "number" ? { maxTurns: args.runtimeOptions.claudeMaxTurns } : {}),
-        ...(typeof args.runtimeOptions?.claudeMaxBudgetUsd === "number" ? { maxBudgetUsd: args.runtimeOptions.claudeMaxBudgetUsd } : {}),
-        ...(args.runtimeOptions?.claudeEffort ? { effort: args.runtimeOptions.claudeEffort } : {}),
-        ...(thinking ? { thinking } : {}),
-        ...(agentProgressSummaries !== undefined ? { agentProgressSummaries } : {}),
-        ...(args.runtimeOptions?.claudeAllowedTools ? { allowedTools: args.runtimeOptions.claudeAllowedTools } : {}),
-        ...(args.runtimeOptions?.claudeDisallowedTools ? { disallowedTools: args.runtimeOptions.claudeDisallowedTools } : {}),
-        ...(args.runtimeOptions?.claudeFastMode ? { settings: { fastMode: true } } : {}),
         canUseTool: async (toolName, input, options) => {
           const normalizedInput = normalizeClaudeToolInput(input);
           const requestId = options.toolUseID;
@@ -1126,13 +1296,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
             denialMessage: `User denied permission for ${toolName}.`,
           });
         },
-        sandbox: {
-          enabled: claudeSandboxEnabled,
-          allowUnsandboxedCommands: claudeAllowUnsandboxedCommands,
-        },
-        env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
-        ...(claudeExecutablePath.length > 0 ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
-      },
+      }),
     }) as Query;
 
     // Register abort handler using the official Query.close() method

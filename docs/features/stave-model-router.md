@@ -99,7 +99,7 @@ Stave Auto now uses presets plus role-based settings under **Settings → Provid
 |---|---|
 | `Recommended` | Current mixed default. Uses Claude for classifier/planning/analysis, Codex for implementation, and `gpt-5.4` for verify. |
 | `Claude Only` | Keeps every role on Claude models only. |
-| `Codex Only` | Keeps every role on Codex models only. |
+| `Codex Only` | Keeps every role on Codex models only, using `gpt-5.4-mini` for lightweight classifier/general/quick-edit work and `gpt-5.3-codex` for implementation. |
 
 ### Role settings
 

@@ -1,4 +1,4 @@
-import type { NormalizedProviderEvent, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
+import type { ClaudeSettingSource, NormalizedProviderEvent, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 
 type SelectOption<T extends string> = {
   value: T;
@@ -37,10 +37,15 @@ export const CLAUDE_EFFORT_OPTIONS = [
   { value: "max", label: "Max" },
 ] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["claudeEffort"]>>[];
 
+export const CLAUDE_SETTING_SOURCE_OPTIONS = [
+  { value: "project", label: "Project" },
+  { value: "local", label: "Local" },
+  { value: "user", label: "User" },
+] as const satisfies readonly SelectOption<ClaudeSettingSource>[];
+
 export const CODEX_APPROVAL_POLICY_OPTIONS = [
   { value: "never", label: "never" },
   { value: "on-request", label: "on-request" },
-  { value: "on-failure", label: "on-failure" },
   { value: "untrusted", label: "untrusted" },
 ] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexApprovalPolicy"]>>[];
 
@@ -100,6 +105,8 @@ export const PROVIDER_RUNTIME_OPTION_KEYS = [
   "claudeSystemPrompt",
   "claudeMaxTurns",
   "claudeMaxBudgetUsd",
+  "claudeTaskBudgetTokens",
+  "claudeSettingSources",
   "claudeEffort",
   "claudeThinkingMode",
   "claudeAgentProgressSummaries",
@@ -197,4 +204,26 @@ export function formatShortRuntimePath(value: string) {
     return normalized;
   }
   return `.../${parts.slice(-2).join("/")}`;
+}
+
+export function formatClaudeSettingSources(value: ClaudeSettingSource[]) {
+  if (value.length === 0) {
+    return "None";
+  }
+  return value
+    .map((source) => findOptionLabel(CLAUDE_SETTING_SOURCE_OPTIONS, source))
+    .join(" + ");
+}
+
+export function formatTokenBudget(value: number) {
+  if (value <= 0) {
+    return "Off";
+  }
+  if (value >= 1000) {
+    const compact = value % 1000 === 0
+      ? String(value / 1000)
+      : (value / 1000).toFixed(1).replace(/\.0$/, "");
+    return `${compact}k`;
+  }
+  return String(value);
 }

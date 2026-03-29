@@ -9,7 +9,7 @@ import {
   type TaskProviderConversationState,
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
-import type { NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
+import type { ClaudeSettingSource, NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
 import { resolveCommandInput } from "@/lib/commands";
 import {
   buildCanonicalConversationRequest,
@@ -39,7 +39,12 @@ import {
   updateApprovalPartsByRequestId,
   updateUserInputPartsByRequestId,
 } from "@/store/provider-message.utils";
-import { buildProviderRuntimeOptions, normalizeCodexApprovalPolicy } from "@/store/provider-runtime-options";
+import {
+  buildProviderRuntimeOptions,
+  normalizeClaudeSettingSources,
+  normalizeClaudeTaskBudgetTokens,
+  normalizeCodexApprovalPolicy,
+} from "@/store/provider-runtime-options";
 import {
   buildLocalCommandResponseState,
   buildMessageId,
@@ -223,6 +228,8 @@ export interface AppSettings {
   claudeAllowDangerouslySkipPermissions: boolean;
   claudeSandboxEnabled: boolean;
   claudeAllowUnsandboxedCommands: boolean;
+  claudeTaskBudgetTokens: number;
+  claudeSettingSources: ClaudeSettingSource[];
   claudeEffort: "low" | "medium" | "high" | "max";
   claudeThinkingMode: "adaptive" | "enabled" | "disabled";
   claudeAgentProgressSummaries: boolean;
@@ -230,7 +237,7 @@ export interface AppSettings {
   codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
   codexSkipGitRepoCheck: boolean;
   codexNetworkAccessEnabled: boolean;
-  codexApprovalPolicy: "never" | "on-request" | "on-failure" | "untrusted";
+  codexApprovalPolicy: "never" | "on-request" | "untrusted";
   codexPathOverride: string;
   codexModelReasoningEffort: "minimal" | "low" | "medium" | "high" | "xhigh";
   codexWebSearchMode: "disabled" | "cached" | "live";
@@ -256,6 +263,7 @@ interface AppState {
   draftProvider: ProviderId;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
   promptFocusNonce: number;
+  providerCommandCatalogRefreshNonce: number;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   layout: LayoutState;
@@ -298,6 +306,7 @@ interface AppState {
   setProjectWorkspaceUseRootNodeModulesSymlink: (args: { projectPath?: string; enabled: boolean }) => void;
   setDarkMode: (args: { enabled: boolean }) => void;
   updateSettings: (args: { patch: Partial<AppSettings> }) => void;
+  refreshProviderCommandCatalog: () => void;
   selectTask: (args: { taskId: string }) => void;
   clearTaskSelection: () => void;
   updatePromptDraft: (args: { taskId: string; patch: Partial<{ text: string; attachedFilePaths: string[]; attachments: Attachment[] }> }) => void;
@@ -419,6 +428,8 @@ const defaultSettings: AppSettings = {
   claudeAllowDangerouslySkipPermissions: false,
   claudeSandboxEnabled: false,
   claudeAllowUnsandboxedCommands: true,
+  claudeTaskBudgetTokens: 0,
+  claudeSettingSources: ["project"],
   claudeEffort: "medium",
   claudeThinkingMode: "adaptive",
   claudeAgentProgressSummaries: false,
@@ -640,6 +651,7 @@ export const useAppStore = create<AppState>()(
       draftProvider: "claude-code",
       promptDraftByTask: {},
       promptFocusNonce: 0,
+      providerCommandCatalogRefreshNonce: 0,
       tasks: [],
       messagesByTask: {},
       layout: {
@@ -1596,12 +1608,28 @@ export const useAppStore = create<AppState>()(
         applyThemeClass({ enabled });
       },
       updateSettings: ({ patch }) => {
-        const normalizedPatch = patch.providerTimeoutMs === undefined
-          ? patch
-          : {
-              ...patch,
-              providerTimeoutMs: normalizeProviderTimeoutMs({ value: patch.providerTimeoutMs }),
-            };
+        const normalizedPatch: Partial<AppSettings> = {
+          ...patch,
+          ...(patch.providerTimeoutMs === undefined
+            ? {}
+            : {
+                providerTimeoutMs: normalizeProviderTimeoutMs({ value: patch.providerTimeoutMs }),
+              }),
+          ...(patch.claudeTaskBudgetTokens === undefined
+            ? {}
+            : {
+                claudeTaskBudgetTokens: normalizeClaudeTaskBudgetTokens({
+                  value: patch.claudeTaskBudgetTokens,
+                }),
+              }),
+          ...(patch.claudeSettingSources === undefined
+            ? {}
+            : {
+                claudeSettingSources: normalizeClaudeSettingSources({
+                  value: patch.claudeSettingSources,
+                }),
+              }),
+        };
 
         const nextThemeMode = normalizedPatch.themeMode;
         const nextIsDark = nextThemeMode
@@ -1645,6 +1673,11 @@ export const useAppStore = create<AppState>()(
             messageKoreanFontFamily: s.messageKoreanFontFamily,
           });
         }
+      },
+      refreshProviderCommandCatalog: () => {
+        set((state) => ({
+          providerCommandCatalogRefreshNonce: state.providerCommandCatalogRefreshNonce + 1,
+        }));
       },
       selectTask: ({ taskId }) => set((state) => {
         if (state.activeTaskId === taskId) {
@@ -3234,6 +3267,12 @@ export const useAppStore = create<AppState>()(
         delete raw.newWorkspaceInitCommand;
         state.settings.codexApprovalPolicy = normalizeCodexApprovalPolicy({
           value: state.settings.codexApprovalPolicy,
+        });
+        state.settings.claudeTaskBudgetTokens = normalizeClaudeTaskBudgetTokens({
+          value: state.settings.claudeTaskBudgetTokens,
+        });
+        state.settings.claudeSettingSources = normalizeClaudeSettingSources({
+          value: state.settings.claudeSettingSources,
         });
         state.settings.providerTimeoutMs = normalizeProviderTimeoutMs({
           value: state.settings.providerTimeoutMs,
