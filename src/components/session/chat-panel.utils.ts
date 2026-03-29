@@ -165,6 +165,30 @@ export function getRenderableMessageParts(message: Pick<ChatMessage, "content" |
   return [{ type: "text", text: message.content }];
 }
 
+export function isCodeDiffSummarySystemEvent(content: string): boolean {
+  return content.trimStart().toLowerCase().startsWith("modifying:");
+}
+
+export function getVisibleMessageParts(parts: MessagePart[]): MessagePart[] {
+  const hasCodeDiffParts = parts.some((part) => part.type === "code_diff");
+
+  return parts.filter((part) => {
+    if (!hasVisibleMessagePartContent(part)) {
+      return false;
+    }
+
+    if (
+      hasCodeDiffParts
+      && part.type === "system_event"
+      && isCodeDiffSummarySystemEvent(part.content)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 export function getLatestUserMessageId(messages: Pick<ChatMessage, "id" | "role">[]): string | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index]?.role === "user") {
