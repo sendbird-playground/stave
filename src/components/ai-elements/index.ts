@@ -47,3 +47,4 @@ export {
   ConversationVirtualList,
   messagesToMarkdown,
 } from "./conversation";
+export { CompactingIndicator, ContextCompactedCheckpoint } from "./checkpoint";

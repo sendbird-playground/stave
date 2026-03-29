@@ -68,6 +68,8 @@ Claude event mapping:
 - tool use -> `tool`
 - `ExitPlanMode` tool payload -> `plan_ready`
 - `task_progress.summary` -> `system` when Claude agent progress summaries are enabled
+- `compact_boundary` -> `system` with `compactBoundary.trigger` and `compactBoundary.gitRef` metadata
+- `status: compacting` -> `system` (`Compacting conversation context…`)
 - stream or runtime failures -> `error`
 
 Claude-specific runtime controls come from the UI and runtime options:
@@ -101,6 +103,13 @@ Claude path and approval handling:
 - workspace-root guidance is appended so relative paths stay rooted correctly
 - approval and user-input responses are validated before they are returned to the SDK
 
+Compaction checkpoint UI support:
+
+- Compact boundaries render as a dedicated checkpoint divider card in the chat timeline.
+- Stave captures `git rev-parse HEAD` at each Claude `compact_boundary` event and stores it on the matching system event.
+- The checkpoint card can run `git restore --source=<gitRef> --staged --worktree .` to restore the workspace to that boundary.
+- This restore only affects workspace files. It does not rewind provider-native session state.
+
 ## Codex runtime
 
 Codex turns are handled in `electron/providers/codex-sdk-runtime.ts`.
@@ -124,6 +133,11 @@ Codex event mapping:
 - todo list -> `tool`
 - file changes -> diff events
 - failures -> `error`
+
+Codex checkpoint support:
+
+- As of March 29, 2026, the Codex SDK stream does not emit checkpoint/compaction boundary events equivalent to Claude `compact_boundary`.
+- Stave therefore does not expose restore-to-checkpoint behavior for Codex turns yet.
 
 Codex-specific runtime controls come from the UI and runtime options:
 

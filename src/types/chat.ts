@@ -99,6 +99,10 @@ export interface ImageContextPart extends MessagePartBase {
 export interface SystemEventPart extends MessagePartBase {
   type: "system_event";
   content: string;
+  compactBoundary?: {
+    trigger?: string;
+    gitRef?: string;
+  };
 }
 
 export interface StaveProcessingPart extends MessagePartBase {

@@ -12,6 +12,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Provider runtimes](providers/provider-runtimes.md)
 - [Stave Model Router](features/stave-model-router.md)
 - [Future SDK backlog](future/claude-sdk-candidates.md)
+- [Checkpoint restore roadmap (2026-03-29)](future/checkpoint-restore-roadmap-2026-03-29.md)
 - [Codebase simplification plan (2026-03-26)](future/codebase-simplification-plan-2026-03-26.md)
 - [Codebase simplification report (2026-03-27)](future/codebase-simplification-report-2026-03-27.md)
 - [AI Elements v1.9.0 upgrade plan (2026-03-16)](future/ai-elements-v1.9.0-upgrade-plan-2026-03-16.md)

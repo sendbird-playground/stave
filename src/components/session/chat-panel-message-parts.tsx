@@ -3,7 +3,9 @@ import { Check, Clock3, Copy } from "lucide-react";
 import { Badge, Button, Card, TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import {
   type ChainOfThoughtStep,
+  CompactingIndicator,
   ConfirmationCompact,
+  ContextCompactedCheckpoint,
   MessageAction,
   MessageResponse,
   OrchestrationCard,
@@ -89,6 +91,8 @@ export function MessagePartRenderer(args: {
   const { part, taskId, messageId, isStreaming, isLastTextPart } = args;
   const resolveApproval = useAppStore((state) => state.resolveApproval);
   const resolveUserInput = useAppStore((state) => state.resolveUserInput);
+  const rollbackToCompactBoundary = useAppStore((state) => state.rollbackToCompactBoundary);
+  const [isRestoringCompactBoundary, setIsRestoringCompactBoundary] = useState(false);
 
   switch (part.type) {
     case "tool_use":
@@ -158,11 +162,55 @@ export function MessagePartRenderer(args: {
           onDeny={() => resolveUserInput({ taskId, messageId, denied: true })}
         />
       );
-    case "system_event":
+    case "system_event": {
       if (!shouldRenderInlineSystemEvent({ content: part.content })) {
         return null;
       }
+      const normalized = part.content.trim().toLowerCase();
+      // "Compacting conversation context…" — in-progress spinner
+      if (normalized.startsWith("compacting conversation context")) {
+        return <CompactingIndicator />;
+      }
+      // "Context compacted (auto)." / "Context compacted (manual)." — checkpoint divider
+      const compactedMatch = part.content.trim().match(/^Context compacted\s*\(([^)]+)\)\./i);
+      const compactBoundaryTrigger = part.compactBoundary?.trigger ?? compactedMatch?.[1];
+      const compactBoundaryGitRef = part.compactBoundary?.gitRef;
+      const handleRestoreCompactBoundary = () => {
+        if (!compactBoundaryGitRef || isRestoringCompactBoundary) {
+          return;
+        }
+        setIsRestoringCompactBoundary(true);
+        void rollbackToCompactBoundary({
+          taskId,
+          gitRef: compactBoundaryGitRef,
+          ...(compactBoundaryTrigger ? { trigger: compactBoundaryTrigger } : {}),
+        }).finally(() => {
+          setIsRestoringCompactBoundary(false);
+        });
+      };
+      if (compactedMatch) {
+        return (
+          <ContextCompactedCheckpoint
+            trigger={compactBoundaryTrigger}
+            onRestore={handleRestoreCompactBoundary}
+            restorePending={isRestoringCompactBoundary}
+            restoreDisabled={!compactBoundaryGitRef}
+          />
+        );
+      }
+      // Fallback: generic "Context compacted" without trigger info
+      if (normalized.startsWith("context compacted")) {
+        return (
+          <ContextCompactedCheckpoint
+            trigger={compactBoundaryTrigger}
+            onRestore={handleRestoreCompactBoundary}
+            restorePending={isRestoringCompactBoundary}
+            restoreDisabled={!compactBoundaryGitRef}
+          />
+        );
+      }
       return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm italic text-muted-foreground">{part.content}</p>;
+    }
     case "orchestration_progress":
       return <OrchestrationCard part={part} />;
     case "stave_processing":

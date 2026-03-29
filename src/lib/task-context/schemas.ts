@@ -84,6 +84,10 @@ const ImageContextPartSchema = z.object({
 const SystemEventPartSchema = z.object({
   type: z.literal("system_event"),
   content: z.string(),
+  compactBoundary: z.object({
+    trigger: z.string().optional(),
+    gitRef: z.string().optional(),
+  }).optional(),
 });
 
 const StaveProcessingPartSchema = z.object({

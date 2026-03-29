@@ -157,7 +157,14 @@ export type NormalizedProviderEvent =
   | { type: "approval"; toolName: string; requestId: string; description: string }
   | { type: "user_input"; toolName: string; requestId: string; questions: UserInputQuestion[] }
   | { type: "plan_ready"; planText: string }
-  | { type: "system"; content: string }
+  | {
+    type: "system";
+    content: string;
+    compactBoundary?: {
+      trigger?: string;
+      gitRef?: string;
+    };
+  }
   | { type: "subagent_progress"; toolUseId?: string; content: string }
   | { type: "model_resolved"; resolvedProviderId: ProviderId; resolvedModel: string }
   | { type: "stave:execution_processing"; strategy: "direct" | "orchestrate"; model?: string; supervisorModel?: string; reason: string; fastModeRequested?: boolean; fastModeApplied?: boolean }

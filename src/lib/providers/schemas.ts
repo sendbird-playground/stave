@@ -108,6 +108,10 @@ const PlanReadyEventSchema = z.object({
 const SystemEventSchema = z.object({
   type: z.literal("system"),
   content: z.string(),
+  compactBoundary: z.object({
+    trigger: z.string().optional(),
+    gitRef: z.string().optional(),
+  }).optional(),
 });
 
 const ErrorEventSchema = z.object({

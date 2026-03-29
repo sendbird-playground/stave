@@ -77,7 +77,11 @@ describe("mapClaudeMessageToEvents", () => {
     });
 
     expect(events).toEqual([
-      { type: "system", content: "Context compacted (manual)." },
+      {
+        type: "system",
+        content: "Context compacted (manual).",
+        compactBoundary: { trigger: "manual" },
+      },
     ]);
   });
 
@@ -93,7 +97,11 @@ describe("mapClaudeMessageToEvents", () => {
     });
 
     expect(events).toEqual([
-      { type: "system", content: "Context compacted (auto)." },
+      {
+        type: "system",
+        content: "Context compacted (auto).",
+        compactBoundary: { trigger: "auto" },
+      },
     ]);
   });
 
