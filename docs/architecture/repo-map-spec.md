@@ -67,9 +67,9 @@ Phase 2 is shipped with:
 - file analysis cap (5,000 most recently modified + all config hotspot files)
 - `pathPrefix: true` hotspot config for directory-level bonuses
 - single-source `REPO_MAP_MAX_AGE_MS` freshness window
-- main-process repo-map context cache with `L1 memory LRU -> L2 LMDB -> L3 filesystem artifacts`
-- TopBar pre-warming of the active workspace repo-map context through the main-process cache
-- first-turn retrieved-context injection from the warmed main-process cache via synchronous best-effort lookup
+- in-memory `Map` cache in the renderer for formatted repo-map context (one entry per workspace, ~2-4 KB each)
+- TopBar pre-warming of the active workspace repo-map context via async `getRepoMap` IPC on workspace load
+- first-turn retrieved-context injection from the warmed in-memory cache via synchronous `Map.get` (no IPC, no blocking)
 - Codex session-start hook awareness of the latest repo-map cache
 
 This phase does not yet add repo-map results to quick-open or Session Replay UI.

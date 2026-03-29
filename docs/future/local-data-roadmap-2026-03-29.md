@@ -16,16 +16,17 @@ Keep SQLite as the durable application state store:
 
 SQLite remains the source of truth for Stave state.
 
-### LMDB
+### In-Memory Map Caches
 
-Use LMDB as the hot local cache layer:
+Use plain `Map` caches in the renderer process for small, read-heavy data:
 
-- repo-map snapshots
-- formatted first-turn context text
-- workspace/worktree cache pointers
-- other read-heavy local caches where lookup latency matters more than relational querying
+- repo-map context text (~2-4 KB per workspace)
+- formatted first-turn injection content
+- other lightweight caches that are cheap to regenerate on app restart
 
-LMDB is the right sidecar for fast reuse across many projects, many worktrees, and many task windows.
+These caches are pre-warmed asynchronously on workspace load and read synchronously (`Map.get`) during message composition. No persistence is needed — the data is small enough to regenerate in milliseconds.
+
+> **Note:** An LMDB-backed multi-tier cache was previously implemented and reverted. The overhead of a native addon, `sendSync` IPC blocking the renderer, git shell-outs for cache keys, and 298 lines of infrastructure was not justified for caching a 2-4 KB string per workspace.
 
 ### LanceDB
 
@@ -51,29 +52,31 @@ DuckDB is not a cache replacement. It is the likely future engine for analytical
 ## Why Separate Them
 
 - SQLite is strong for durable relational state.
-- LMDB is strong for hot local key-value cache reuse.
+- In-memory caches are appropriate for small, regenerable, read-heavy data.
 - LanceDB is strong for embedding-backed retrieval.
 - DuckDB is strong for analytics and aggregate queries.
 
-Trying to force one engine to do all four jobs would make the codebase and runtime behavior worse.
+Trying to force one engine to do all jobs — or over-engineering a cache for small data — would make the codebase and runtime behavior worse.
 
 ## Rollout Order
 
 ### Phase 1
 
 - keep SQLite as-is
-- add LMDB-backed repo-map/context cache
-- remove renderer-only single-workspace cache assumptions
+- use in-memory `Map` caches for repo-map context (implemented)
+- pre-warm caches asynchronously on workspace load
+- add cache diagnostics viewer in Settings > Developer
 
 ### Phase 2
 
 - expose cache freshness/source metadata for debugging
 - decide whether repo-map context should be persisted deeper into task/session surfaces
+- if persistence across app restarts becomes necessary, use a simple JSON file per workspace (not a database)
 
 ### Phase 3
 
 - add LanceDB only if semantic retrieval becomes a real product need
-- keep this isolated from the repo-map hot-cache path
+- keep this isolated from the repo-map cache path
 
 ### Phase 4
 
@@ -83,6 +86,6 @@ Trying to force one engine to do all four jobs would make the codebase and runti
 ## Guardrails
 
 - Do not move durable workspace/task/message state out of SQLite.
-- Do not put repo-map hot-cache traffic into DuckDB.
+- Do not over-engineer caches for small data volumes (< 1 MB total across all workspaces).
 - Do not add LanceDB before there is a concrete retrieval feature that needs embeddings.
-- Do not treat DuckDB as a general-purpose replacement for either SQLite or LMDB.
+- Do not treat DuckDB as a general-purpose replacement for SQLite.

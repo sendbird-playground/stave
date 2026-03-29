@@ -18,7 +18,6 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Future SDK backlog](future/claude-sdk-candidates.md)
 - [Checkpoint restore roadmap (2026-03-29)](future/checkpoint-restore-roadmap-2026-03-29.md)
 - [Agent exploration harness plan (2026-03-29)](future/agent-exploration-harness-plan-2026-03-29.md)
-- [Repo map multilayer cache design (2026-03-29)](future/repo-map-multilayer-cache-design-2026-03-29.md)
 - [Local data roadmap (2026-03-29)](future/local-data-roadmap-2026-03-29.md)
 - [Docs staleness audit (2026-03-29)](future/docs-staleness-audit-2026-03-29.md)
 - [Codebase simplification plan (2026-03-26)](future/codebase-simplification-plan-2026-03-26.md)

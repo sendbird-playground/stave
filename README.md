@@ -42,7 +42,6 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - Tailwind CSS v4
 - Monaco Editor
 - SQLite via `better-sqlite3`
-- LMDB
 - Playwright
 
 ## Future Data Roadmap
@@ -50,15 +49,14 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 Stave's near-term local data direction is:
 
 - `SQLite` for durable application state such as workspaces, tasks, messages, and turns
-- `LMDB` as the hot local cache for repo-map snapshots, formatted first-turn context, and multi-workspace reuse
+- In-memory `Map` caches for repo-map context, formatted first-turn text, and other read-heavy renderer-side data (no persistence needed — caches are pre-warmed on workspace load)
 - `LanceDB` as a future semantic retrieval layer if embedding-backed code/doc search becomes necessary
 - `DuckDB` as a future local analytics engine for audit-log analysis, usage statistics, and heavier aggregate queries
 
-The intent is to keep these roles separate instead of forcing one storage engine to do every job.
+The intent is to keep storage simple and avoid over-engineering for small data volumes. Repo-map context is 2-4 KB per workspace; an in-memory Map is sufficient.
 
 Related design docs:
 
-- [Repo map multilayer cache design (2026-03-29)](docs/future/repo-map-multilayer-cache-design-2026-03-29.md)
 - [Local data roadmap (2026-03-29)](docs/future/local-data-roadmap-2026-03-29.md)
 - [Docs staleness audit (2026-03-29)](docs/future/docs-staleness-audit-2026-03-29.md)
 
@@ -224,7 +222,6 @@ Stable project documentation now lives under `docs/`.
 - [Repo map spec](docs/architecture/repo-map-spec.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
 - [Agent exploration harness plan (2026-03-29)](docs/future/agent-exploration-harness-plan-2026-03-29.md)
-- [Repo map multilayer cache design (2026-03-29)](docs/future/repo-map-multilayer-cache-design-2026-03-29.md)
 - [Local data roadmap (2026-03-29)](docs/future/local-data-roadmap-2026-03-29.md)
 - [Docs staleness audit (2026-03-29)](docs/future/docs-staleness-audit-2026-03-29.md)
 - [Future SDK backlog](docs/future/claude-sdk-candidates.md)

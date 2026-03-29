@@ -67,8 +67,8 @@ Do not hand-maintain:
 - dogfood the new skills from Stave's `$` selector
 - expand architecture docs only when a repeated exploration question appears
 - repo-map generation is implemented and cached
-- TopBar now pre-warms repo-map context for the active workspace through the main-process cache layer
-- the first task turn can inject the repo-map summary as retrieved context through a synchronous best-effort cache lookup
+- TopBar now pre-warms repo-map context for the active workspace via async `getRepoMap` IPC into an in-memory `Map` cache
+- the first task turn injects the repo-map summary as retrieved context via synchronous `Map.get` (no IPC, no blocking)
 
 ### Phase 2
 
