@@ -1,3 +1,4 @@
+import type { RepoMapSnapshot } from "@/lib/fs/repo-map.types";
 import type {
   WorkspaceCreateEntryResult,
   WorkspaceDirectoryEntry,
@@ -90,6 +91,10 @@ export class BrowserFsAdapter implements WorkspaceFsAdapter {
 
   async listFiles(): Promise<string[]> {
     return this.getKnownFiles();
+  }
+
+  async getRepoMap(_args: { refresh?: boolean } = {}): Promise<RepoMapSnapshot | null> {
+    return null;
   }
 
   async listDirectory(args: { directoryPath?: string }): Promise<WorkspaceDirectoryEntry[] | null> {

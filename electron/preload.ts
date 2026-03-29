@@ -6,6 +6,7 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "../src/lib/providers/provider.types";
+import type { RepoMapContextResponse, RepoMapResponse } from "../src/lib/fs/repo-map.types";
 import type { SkillCatalogResponse } from "../src/lib/skills/types";
 
 interface ProviderSlashCommand {
@@ -163,6 +164,12 @@ contextBridge.exposeInMainWorld("api", {
     pickRoot: () => ipcRenderer.invoke("fs:pick-root"),
     resolvePath: (args: { inputPath: string }) => ipcRenderer.invoke("fs:resolve-path", args),
     listFiles: (args: { rootPath: string }) => ipcRenderer.invoke("fs:list-files", args),
+    getRepoMap: (args: { rootPath: string; refresh?: boolean }) =>
+      ipcRenderer.invoke("fs:get-repo-map", args) as Promise<RepoMapResponse>,
+    getRepoMapContext: (args: { rootPath: string; refresh?: boolean }) =>
+      ipcRenderer.invoke("fs:get-repo-map-context", args) as Promise<RepoMapContextResponse>,
+    getCachedRepoMapContextSync: (args: { rootPath: string }) =>
+      ipcRenderer.sendSync("fs:get-cached-repo-map-context-sync", args) as RepoMapContextResponse,
     listDirectory: (args: { rootPath: string; directoryPath?: string }) => ipcRenderer.invoke("fs:list-directory", args),
     readFile: (args: { rootPath: string; filePath: string }) => ipcRenderer.invoke("fs:read-file", args),
     readFileDataUrl: (args: { rootPath: string; filePath: string }) => ipcRenderer.invoke("fs:read-file-data-url", args),

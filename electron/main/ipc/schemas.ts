@@ -366,6 +366,12 @@ export const FilesystemRootArgsSchema = z.object({
   rootPath: FilesystemRootPathSchema,
 }).strict();
 
+export const FilesystemRepoMapArgsSchema = FilesystemRootArgsSchema.extend({
+  refresh: z.boolean().optional(),
+}).strict();
+
+export const FilesystemRepoMapContextArgsSchema = FilesystemRepoMapArgsSchema;
+
 export const FilesystemInspectArgsSchema = FilesystemRootArgsSchema.extend({
   entryFilePath: z.string().max(4096).optional(),
 }).strict();
@@ -392,7 +398,7 @@ export const FilesystemWriteFileArgsSchema = FilesystemFileArgsSchema.extend({
   expectedRevision: z.string().max(4096).nullable().optional(),
 }).strict();
 
-const LspLanguageIdSchema = z.literal("python");
+const LspLanguageIdSchema = z.union([z.literal("python"), z.literal("typescript")]);
 
 const LspBaseRequestSchema = z.object({
   rootPath: z.string().min(1).max(4096),

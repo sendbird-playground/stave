@@ -1179,6 +1179,7 @@ function EditorSection() {
     editorLspEnabled,
     editorAiCompletions,
     pythonLspCommand,
+    typescriptLspCommand,
   ] = useAppStore(
     useShallow((state) => [
       state.settings.editorFontSize,
@@ -1190,6 +1191,7 @@ function EditorSection() {
       state.settings.editorLspEnabled,
       state.settings.editorAiCompletions,
       state.settings.pythonLspCommand,
+      state.settings.typescriptLspCommand,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -1292,7 +1294,7 @@ function EditorSection() {
 
         <SettingsCard
           title="Project Language Servers"
-          description="Optional LSP-backed intelligence for non-TypeScript languages. Python is supported first through a `pyright-langserver`-compatible server."
+          description="LSP-backed intelligence for TypeScript/JavaScript and Python. Uses Electron-managed stdio language-server sessions per active workspace."
         >
           <LabeledField
             title="Enable LSP Runtime"
@@ -1305,6 +1307,17 @@ function EditorSection() {
                 { value: "on", label: "On" },
                 { value: "off", label: "Off" },
               ]}
+            />
+          </LabeledField>
+          <LabeledField
+            title="TypeScript LSP Command"
+            description="Leave empty to auto-discover `typescript-language-server` from PATH. Install via `npm i -g typescript-language-server typescript`. Handles .ts, .tsx, .js, and .jsx files."
+          >
+            <DraftInput
+              className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
+              placeholder="typescript-language-server"
+              value={typescriptLspCommand}
+              onCommit={(nextValue) => updateSettings({ patch: { typescriptLspCommand: nextValue } })}
             />
           </LabeledField>
           <LabeledField

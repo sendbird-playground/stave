@@ -49,6 +49,7 @@ export function EditorMainPanel() {
     editorLspEnabled,
     editorAiCompletions,
     pythonLspCommand,
+    typescriptLspCommand,
     setLayout,
     updateSettings,
     setActiveEditorTab,
@@ -76,6 +77,7 @@ export function EditorMainPanel() {
     state.settings.editorLspEnabled,
     state.settings.editorAiCompletions,
     state.settings.pythonLspCommand,
+    state.settings.typescriptLspCommand,
     state.setLayout,
     state.updateSettings,
     state.setActiveEditorTab,
@@ -103,6 +105,7 @@ export function EditorMainPanel() {
   const languageIntelligenceSettingsRef = useRef<LanguageIntelligenceSettings>({
     enabled: editorLspEnabled,
     pythonLspCommand,
+    typescriptLspCommand,
   });
   const languageIntelligenceRuntimeRef = useRef<LanguageIntelligenceRuntime>({
     getWorkspaceRootPath: () => workspaceRootPathRef.current,
@@ -115,6 +118,7 @@ export function EditorMainPanel() {
     rootPath: string;
     enabled: boolean;
     pythonLspCommand: string;
+    typescriptLspCommand: string;
   } | null>(null);
 
   workspaceRootPathRef.current = workspaceRootPath;
@@ -124,6 +128,7 @@ export function EditorMainPanel() {
   languageIntelligenceSettingsRef.current = {
     enabled: editorLspEnabled,
     pythonLspCommand,
+    typescriptLspCommand,
   };
 
   const activeTab = editorTabs.find((tab) => tab.id === activeEditorTabId) ?? null;
@@ -224,6 +229,7 @@ export function EditorMainPanel() {
       rootPath: workspaceRootPath,
       enabled: editorLspEnabled,
       pythonLspCommand,
+      typescriptLspCommand,
     };
     const previousState = previousLanguageIntelligenceStateRef.current;
     previousLanguageIntelligenceStateRef.current = currentState;
@@ -239,12 +245,11 @@ export function EditorMainPanel() {
     if (!currentState.enabled && currentState.rootPath) {
       rootsToStop.add(currentState.rootPath);
     }
-    if (
-      currentState.enabled
-      && previousState
-      && previousState.pythonLspCommand !== currentState.pythonLspCommand
-      && currentState.rootPath
-    ) {
+    const commandChanged = previousState && (
+      previousState.pythonLspCommand !== currentState.pythonLspCommand
+      || previousState.typescriptLspCommand !== currentState.typescriptLspCommand
+    );
+    if (currentState.enabled && commandChanged && currentState.rootPath) {
       rootsToStop.add(currentState.rootPath);
     }
 
@@ -263,12 +268,13 @@ export function EditorMainPanel() {
     const shouldResync = !previousState
       || previousState.rootPath !== currentState.rootPath
       || previousState.enabled !== currentState.enabled
-      || previousState.pythonLspCommand !== currentState.pythonLspCommand;
+      || previousState.pythonLspCommand !== currentState.pythonLspCommand
+      || previousState.typescriptLspCommand !== currentState.typescriptLspCommand;
 
     if (shouldResync) {
       resyncLanguageIntelligenceModels(monaco);
     }
-  }, [editorLspEnabled, pythonLspCommand, workspaceRootPath]);
+  }, [editorLspEnabled, pythonLspCommand, typescriptLspCommand, workspaceRootPath]);
 
   useEffect(() => {
     return () => {

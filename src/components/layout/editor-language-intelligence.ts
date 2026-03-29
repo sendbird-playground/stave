@@ -11,6 +11,7 @@ import type {
 export interface LanguageIntelligenceSettings {
   enabled: boolean;
   pythonLspCommand: string;
+  typescriptLspCommand: string;
 }
 
 export interface LanguageIntelligenceRuntime {
@@ -19,10 +20,13 @@ export interface LanguageIntelligenceRuntime {
 }
 
 interface SupportedLanguage {
-  monacoLanguageId: "python";
-  lspLanguageId: "python";
+  monacoLanguageId: string;
+  lspLanguageId: LspLanguageId;
   getCommandOverride: (settings: LanguageIntelligenceSettings) => string | undefined;
 }
+
+// Keep in sync with LspLanguageId in src/types/window-api.d.ts
+type LspLanguageId = "python" | "typescript";
 
 interface LspRange {
   start: { line: number; character: number };
@@ -42,6 +46,18 @@ const supportedLanguages: SupportedLanguage[] = [
     monacoLanguageId: "python",
     lspLanguageId: "python",
     getCommandOverride: (settings) => settings.pythonLspCommand.trim() || undefined,
+  },
+  // TypeScript LSP handles both .ts/.tsx (Monaco: "typescript") and
+  // .js/.jsx (Monaco: "javascript") files using the same server session.
+  {
+    monacoLanguageId: "typescript",
+    lspLanguageId: "typescript",
+    getCommandOverride: (settings) => settings.typescriptLspCommand.trim() || undefined,
+  },
+  {
+    monacoLanguageId: "javascript",
+    lspLanguageId: "typescript",
+    getCommandOverride: (settings) => settings.typescriptLspCommand.trim() || undefined,
   },
 ];
 
