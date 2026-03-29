@@ -57,62 +57,165 @@ const SUPERVISOR_SYNTHESIS_PROMPT = `You are the Stave Auto synthesis supervisor
 Multiple workers completed focused subtasks. Produce one coherent final response.
 Be concise and avoid repeating every intermediate detail verbatim.`;
 
+const VALID_ROLES = new Set<StaveWorkerRole>(["plan", "analyze", "implement", "verify", "general"]);
+
+const ROLE_ALIASES: Record<string, StaveWorkerRole> = {
+  analyse: "analyze",
+  analysis: "analyze",
+  review: "verify",
+  validate: "verify",
+  validation: "verify",
+  check: "verify",
+  code: "implement",
+  write: "implement",
+  build: "implement",
+  refactor: "implement",
+  design: "plan",
+  planning: "plan",
+  strategy: "plan",
+};
+
+function normalizeRole(raw: string): StaveWorkerRole {
+  const lowered = raw.toLowerCase().trim();
+  if (VALID_ROLES.has(lowered as StaveWorkerRole)) {
+    return lowered as StaveWorkerRole;
+  }
+  return ROLE_ALIASES[lowered] ?? "general";
+}
+
+function extractBalancedJsonArray(raw: string): string | null {
+  let startIndex = -1;
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (!char) {
+      continue;
+    }
+
+    if (startIndex === -1) {
+      if (char === "[") {
+        startIndex = index;
+        depth = 1;
+      }
+      continue;
+    }
+
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if (inString) {
+      if (char === "\\") {
+        escaping = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === "[") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return raw.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractJsonArrayCandidates(raw: string): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const addCandidate = (candidate: string | null | undefined) => {
+    const normalized = candidate?.trim();
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("[")) {
+    addCandidate(trimmed);
+  }
+  addCandidate(extractBalancedJsonArray(trimmed));
+
+  for (const match of raw.matchAll(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/gi)) {
+    const fenced = match[1]?.trim();
+    addCandidate(fenced);
+    addCandidate(extractBalancedJsonArray(fenced ?? ""));
+  }
+
+  addCandidate(extractBalancedJsonArray(raw));
+  return candidates;
+}
+
 function parseSubtaskSpec(args: {
   raw: string;
   maxSubtasks: number;
 }): SubtaskSpec[] | null {
-  const cleaned = args.raw
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return null;
-    }
-
-    const subtasks: SubtaskSpec[] = [];
-    for (const item of parsed) {
-      if (
-        typeof item !== "object"
-        || item === null
-        || typeof item.id !== "string"
-        || typeof item.title !== "string"
-        || typeof item.role !== "string"
-        || typeof item.prompt !== "string"
-      ) {
-        return null;
+  for (const jsonText of extractJsonArrayCandidates(args.raw)) {
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        continue;
       }
 
-      const role = item.role;
-      if (
-        role !== "plan"
-        && role !== "analyze"
-        && role !== "implement"
-        && role !== "verify"
-        && role !== "general"
-      ) {
-        return null;
+      const subtasks: SubtaskSpec[] = [];
+      let invalidCandidate = false;
+      for (const item of parsed) {
+        if (
+          typeof item !== "object"
+          || item === null
+          || typeof item.id !== "string"
+          || typeof item.title !== "string"
+          || typeof item.prompt !== "string"
+        ) {
+          invalidCandidate = true;
+          break;
+        }
+
+        const role = normalizeRole(typeof item.role === "string" ? item.role : "general");
+
+        const dependsOn = Array.isArray(item.dependsOn)
+          ? (item.dependsOn as unknown[]).filter((dep): dep is string => typeof dep === "string")
+          : [];
+
+        subtasks.push({
+          id: item.id,
+          title: item.title,
+          role,
+          prompt: item.prompt,
+          dependsOn,
+        });
       }
 
-      const dependsOn = Array.isArray(item.dependsOn)
-        ? (item.dependsOn as unknown[]).filter((dep): dep is string => typeof dep === "string")
-        : [];
-
-      subtasks.push({
-        id: item.id,
-        title: item.title,
-        role,
-        prompt: item.prompt,
-        dependsOn,
-      });
+      if (!invalidCandidate && subtasks.length > 0) {
+        return subtasks.slice(0, args.maxSubtasks);
+      }
+    } catch {
+      continue;
     }
-
-    return subtasks.slice(0, args.maxSubtasks);
-  } catch {
-    return null;
   }
+
+  return null;
 }
 
 function topologicalGroups(subtasks: SubtaskSpec[]): SubtaskSpec[][] {
@@ -242,15 +345,17 @@ export async function runOrchestrator(args: {
     return;
   }
 
-  const subtasks = parseSubtaskSpec({
+  const parsedSubtasks = parseSubtaskSpec({
     raw: extractTextFromEvents(decompositionEvents),
     maxSubtasks: args.profile.maxSubtasks,
   });
-  if (!subtasks) {
-    args.onEvent({ type: "error", message: "Orchestrator: could not parse subtask breakdown.", recoverable: true });
-    args.onEvent({ type: "done" });
-    return;
-  }
+  const subtasks: SubtaskSpec[] = parsedSubtasks ?? [{
+    id: "st-fallback",
+    title: "Process request",
+    role: "general",
+    prompt: args.userPrompt,
+    dependsOn: [],
+  }];
 
   args.onEvent({
     type: "stave:orchestration_processing",
