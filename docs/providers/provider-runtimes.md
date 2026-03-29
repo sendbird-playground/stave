@@ -76,6 +76,8 @@ Claude-specific runtime controls come from the UI and runtime options:
 - dangerous skip permissions
 - sandbox enabled
 - allow unsandboxed commands
+- setting sources
+- task budget
 - agent progress summaries
 - provider timeout
 - debug stream logging
@@ -83,6 +85,15 @@ Claude-specific runtime controls come from the UI and runtime options:
 In the chat composer, Stave mirrors the active provider runtime in a status line under the prompt box so the current turn settings stay visible. Permission/approval plus the most-used provider controls can also be adjusted inline there.
 
 When Claude `agentProgressSummaries` is enabled, Stave forwards the SDK flag explicitly and renders incoming `task_progress.summary` updates as inline system events in the active assistant message.
+
+Stave now forwards Claude `settingSources` explicitly. The default Stave setting enables `project`, which allows `CLAUDE.md`, project settings, and project-native slash commands to participate in turns; `local` and `user` can be toggled from Settings.
+
+Stave also forwards Claude `taskBudget` when configured, and the Developer settings now expose two Claude SDK control helpers directly:
+
+- `getContextUsage()` for inspecting current workspace/session context pressure
+- `reloadPlugins()` for refreshing plugin-provided commands, agents, and MCP state
+
+After a plugin reload, Stave invalidates the Claude command-catalog view so the chat composer re-fetches the latest native slash commands.
 
 Claude path and approval handling:
 
@@ -134,8 +145,9 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 
 ## Supported Codex baseline
 
-- Codex SDK: `@openai/codex-sdk@0.116.0`
-- Codex CLI baseline: `0.116.0`
+- Codex SDK: `@openai/codex-sdk@0.117.0`
+- Codex CLI baseline: `0.117.0`
+- Current Stave-supported Codex model IDs: `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
 
 Stave prefers an explicit/user-installed Codex CLI when available, but can also fall back to the bundled SDK binary. A user-configured binary path still takes precedence over auto-discovery.
 

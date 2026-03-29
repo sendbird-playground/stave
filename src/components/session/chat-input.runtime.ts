@@ -8,9 +8,11 @@ import {
   CODEX_REASONING_SUMMARY_OPTIONS,
   CODEX_REASONING_SUPPORT_OPTIONS,
   CODEX_WEB_SEARCH_OPTIONS,
+  formatClaudeSettingSources,
   findOptionLabel,
   formatProviderTimeoutLabel,
   formatShortRuntimePath,
+  formatTokenBudget,
   formatTitleCaseRuntimeValue,
   STAVE_AUTO_MAX_SUBTASK_OPTIONS,
   STAVE_AUTO_ORCHESTRATION_OPTIONS,
@@ -27,6 +29,8 @@ interface ChatInputRuntimeArgs {
   claudeAllowDangerouslySkipPermissions: boolean;
   claudeSandboxEnabled: boolean;
   claudeAllowUnsandboxedCommands: boolean;
+  claudeTaskBudgetTokens: number;
+  claudeSettingSources: AppSettings["claudeSettingSources"];
   claudeEffort: AppSettings["claudeEffort"];
   claudeThinkingMode: AppSettings["claudeThinkingMode"];
   claudeAgentProgressSummaries: boolean;
@@ -57,6 +61,7 @@ type CommandCatalogRuntimeArgs = Pick<
   | "claudeAllowDangerouslySkipPermissions"
   | "claudeSandboxEnabled"
   | "claudeAllowUnsandboxedCommands"
+  | "claudeSettingSources"
   | "claudeEffort"
   | "claudeThinkingMode"
   | "claudeAgentProgressSummaries"
@@ -203,6 +208,17 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
         value: args.claudeAllowUnsandboxedCommands ? "On" : "Off",
       },
       {
+        id: "setting-sources",
+        label: "Settings",
+        value: formatClaudeSettingSources(args.claudeSettingSources),
+      },
+      {
+        id: "task-budget",
+        label: "Task Budget",
+        value: formatTokenBudget(args.claudeTaskBudgetTokens),
+        tone: args.claudeTaskBudgetTokens > 0 ? "warning" : "default",
+      },
+      {
         id: "dangerous-skip",
         label: "Dangerous Skip",
         value: args.claudeAllowDangerouslySkipPermissions ? "On" : "Off",
@@ -285,6 +301,7 @@ export function buildCommandCatalogRuntimeOptions(args: CommandCatalogRuntimeArg
     claudeAllowDangerouslySkipPermissions: args.claudeAllowDangerouslySkipPermissions,
     claudeSandboxEnabled: args.claudeSandboxEnabled,
     claudeAllowUnsandboxedCommands: args.claudeAllowUnsandboxedCommands,
+    claudeSettingSources: args.claudeSettingSources,
     claudeEffort: args.claudeEffort,
     claudeThinkingMode: args.claudeThinkingMode,
     claudeAgentProgressSummaries: args.claudeAgentProgressSummaries,

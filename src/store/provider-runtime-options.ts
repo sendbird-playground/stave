@@ -1,9 +1,11 @@
 import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
-import type { ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
+import type { ClaudeSettingSource, ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import { buildStaveAutoProfileFromSettings } from "@/lib/providers/stave-auto-profile";
 import type { AppSettings } from "@/store/app.store";
 
 const DEFAULT_CODEX_APPROVAL_POLICY = "on-request";
+const MAX_CLAUDE_TASK_BUDGET_TOKENS = 1_000_000;
+const CLAUDE_SETTING_SOURCE_ORDER = ["project", "local", "user"] as const satisfies readonly ClaudeSettingSource[];
 
 type RuntimeSettings = Pick<
   AppSettings,
@@ -14,6 +16,8 @@ type RuntimeSettings = Pick<
   | "claudeAllowDangerouslySkipPermissions"
   | "claudeSandboxEnabled"
   | "claudeAllowUnsandboxedCommands"
+  | "claudeTaskBudgetTokens"
+  | "claudeSettingSources"
   | "claudeEffort"
   | "claudeThinkingMode"
   | "claudeAgentProgressSummaries"
@@ -52,12 +56,36 @@ export function normalizeCodexApprovalPolicy(args: {
   if (
     args.value === "never"
     || args.value === "on-request"
-    || args.value === "on-failure"
     || args.value === "untrusted"
   ) {
     return args.value;
   }
   return DEFAULT_CODEX_APPROVAL_POLICY;
+}
+
+export function normalizeClaudeTaskBudgetTokens(args: {
+  value?: number | null;
+}) {
+  const candidate = typeof args.value === "number" ? args.value : 0;
+  if (!Number.isFinite(candidate) || candidate <= 0) {
+    return 0;
+  }
+  return Math.min(MAX_CLAUDE_TASK_BUDGET_TOKENS, Math.floor(candidate));
+}
+
+export function normalizeClaudeSettingSources(args: {
+  value?: readonly string[] | null;
+}): ClaudeSettingSource[] {
+  const rawSources = Array.isArray(args.value) ? args.value : [];
+  const normalizedSet = new Set<ClaudeSettingSource>();
+
+  rawSources.forEach((source) => {
+    if (source === "user" || source === "project" || source === "local") {
+      normalizedSet.add(source);
+    }
+  });
+
+  return CLAUDE_SETTING_SOURCE_ORDER.filter((source) => normalizedSet.has(source));
 }
 
 export function buildProviderRuntimeOptions(args: {
@@ -67,6 +95,9 @@ export function buildProviderRuntimeOptions(args: {
   providerConversation?: TaskProviderConversationState | null;
 }): ProviderRuntimeOptions {
   const { providerConversation, settings } = args;
+  const claudeTaskBudgetTokens = normalizeClaudeTaskBudgetTokens({
+    value: settings.claudeTaskBudgetTokens,
+  });
 
   return {
     model: args.model,
@@ -77,6 +108,14 @@ export function buildProviderRuntimeOptions(args: {
     claudeAllowDangerouslySkipPermissions: settings.claudeAllowDangerouslySkipPermissions,
     claudeSandboxEnabled: settings.claudeSandboxEnabled,
     claudeAllowUnsandboxedCommands: settings.claudeAllowUnsandboxedCommands,
+    claudeSettingSources: normalizeClaudeSettingSources({
+      value: settings.claudeSettingSources,
+    }),
+    ...(claudeTaskBudgetTokens > 0
+      ? {
+          claudeTaskBudgetTokens,
+        }
+      : {}),
     claudeEffort: settings.claudeEffort,
     claudeThinkingMode: settings.claudeThinkingMode,
     claudeAgentProgressSummaries: settings.claudeAgentProgressSummaries,

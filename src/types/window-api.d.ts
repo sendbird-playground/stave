@@ -1,4 +1,10 @@
-import type { CanonicalConversationRequest, ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
+import type {
+  CanonicalConversationRequest,
+  ClaudeContextUsageResponse,
+  ClaudePluginReloadResponse,
+  ProviderId,
+  ProviderRuntimeOptions,
+} from "@/lib/providers/provider.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
 
@@ -73,6 +79,14 @@ interface WindowProviderApi {
     commands: ProviderSlashCommand[];
     detail: string;
   }>;
+  getClaudeContextUsage?: (args: {
+    cwd?: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<ClaudeContextUsageResponse>;
+  reloadClaudePlugins?: (args: {
+    cwd?: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<ClaudePluginReloadResponse>;
   /** Generates a short task title from the given prompt and optional
    *  conversation history using a lightweight single-turn Claude query
    *  isolated from the main task conversation. */

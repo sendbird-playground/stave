@@ -1,10 +1,16 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { providerRuntime } from "../../providers/runtime";
-import { suggestClaudeTaskName, suggestClaudeCommitMessage } from "../../providers/claude-sdk-runtime";
+import {
+  getClaudeContextUsage,
+  reloadClaudePlugins,
+  suggestClaudeTaskName,
+  suggestClaudeCommitMessage,
+} from "../../providers/claude-sdk-runtime";
 import type { StreamTurnArgs } from "../../providers/types";
 import {
   ApprovalResponseArgsSchema,
+  ClaudeRuntimeActionArgsSchema,
   CheckAvailabilityArgsSchema,
   CleanupTaskArgsSchema,
   ProviderCommandCatalogArgsSchema,
@@ -263,6 +269,34 @@ export function registerProviderHandlers() {
     }
     return providerRuntime.getCommandCatalog({
       providerId: parsedArgs.data.providerId,
+      cwd: parsedArgs.data.cwd,
+      runtimeOptions: parsedArgs.data.runtimeOptions,
+    });
+  });
+
+  ipcMain.handle("provider:get-claude-context-usage", (_event, args: unknown) => {
+    const parsedArgs = ClaudeRuntimeActionArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Claude context usage request.",
+      };
+    }
+    return getClaudeContextUsage({
+      cwd: parsedArgs.data.cwd,
+      runtimeOptions: parsedArgs.data.runtimeOptions,
+    });
+  });
+
+  ipcMain.handle("provider:reload-claude-plugins", (_event, args: unknown) => {
+    const parsedArgs = ClaudeRuntimeActionArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Claude plugin reload request.",
+      };
+    }
+    return reloadClaudePlugins({
       cwd: parsedArgs.data.cwd,
       runtimeOptions: parsedArgs.data.runtimeOptions,
     });

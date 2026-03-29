@@ -38,6 +38,12 @@ export const RuntimeOptionsObjectSchema = z.object({
   claudeSystemPrompt: z.string().max(20_000).optional(),
   claudeMaxTurns: z.number().int().min(1).max(200).optional(),
   claudeMaxBudgetUsd: z.number().min(0).max(10_000).optional(),
+  claudeTaskBudgetTokens: z.number().int().min(1).max(1_000_000).optional(),
+  claudeSettingSources: z.array(z.union([
+    z.literal("user"),
+    z.literal("project"),
+    z.literal("local"),
+  ])).max(3).optional(),
   claudeEffort: z.union([z.literal("low"), z.literal("medium"), z.literal("high"), z.literal("max")]).optional(),
   claudeThinkingMode: z.union([z.literal("adaptive"), z.literal("enabled"), z.literal("disabled")]).optional(),
   claudeAgentProgressSummaries: z.boolean().optional(),
@@ -51,7 +57,6 @@ export const RuntimeOptionsObjectSchema = z.object({
   codexApprovalPolicy: z.union([
     z.literal("never"),
     z.literal("on-request"),
-    z.literal("on-failure"),
     z.literal("untrusted"),
   ]).optional(),
   codexPathOverride: z.string().max(4096).optional(),
@@ -284,6 +289,11 @@ export const StreamTurnArgsSchema = z.object({
 
 export const ProviderCommandCatalogArgsSchema = z.object({
   providerId: ProviderIdSchema,
+  cwd: z.string().max(4096).optional(),
+  runtimeOptions: RuntimeOptionsSchema,
+}).strict();
+
+export const ClaudeRuntimeActionArgsSchema = z.object({
   cwd: z.string().max(4096).optional(),
   runtimeOptions: RuntimeOptionsSchema,
 }).strict();

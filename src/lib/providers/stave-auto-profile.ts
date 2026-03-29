@@ -50,7 +50,7 @@ export const STAVE_AUTO_MODEL_PRESETS = [
   {
     id: "codex-only",
     label: "Codex Only",
-    description: "Keep every Stave Auto role on Codex models only.",
+    description: "Use GPT-5.4 Mini for lightweight Codex roles and keep heavy work on GPT-5.4 / GPT-5.3-Codex.",
   },
 ] as const satisfies ReadonlyArray<{
   id: StaveAutoModelPresetId;
@@ -80,13 +80,13 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAuto
     verifyModel: "claude-sonnet-4-6",
   },
   "codex-only": {
-    classifierModel: "gpt-5.4",
+    classifierModel: "gpt-5.4-mini",
     supervisorModel: "gpt-5.4",
     planModel: "gpt-5.4",
     analyzeModel: "gpt-5.4",
     implementModel: "gpt-5.3-codex",
-    quickEditModel: "gpt-5.3-codex",
-    generalModel: "gpt-5.4",
+    quickEditModel: "gpt-5.4-mini",
+    generalModel: "gpt-5.4-mini",
     verifyModel: "gpt-5.4",
   },
 };

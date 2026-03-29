@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { CanonicalConversationRequest, ProviderId, ProviderRuntimeOptions } from "../src/lib/providers/provider.types";
+import type {
+  CanonicalConversationRequest,
+  ClaudeContextUsageResponse,
+  ClaudePluginReloadResponse,
+  ProviderId,
+  ProviderRuntimeOptions,
+} from "../src/lib/providers/provider.types";
 import type { SkillCatalogResponse } from "../src/lib/skills/types";
 
 interface ProviderSlashCommand {
@@ -128,6 +134,14 @@ contextBridge.exposeInMainWorld("api", {
       commands: ProviderSlashCommand[];
       detail: string;
     }>,
+    getClaudeContextUsage: (args: {
+      cwd?: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) => ipcRenderer.invoke("provider:get-claude-context-usage", args) as Promise<ClaudeContextUsageResponse>,
+    reloadClaudePlugins: (args: {
+      cwd?: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) => ipcRenderer.invoke("provider:reload-claude-plugins", args) as Promise<ClaudePluginReloadResponse>,
     suggestTaskName: (args: { prompt: string; history?: Array<{ role: string; content: string }> }) =>
       ipcRenderer.invoke("provider:suggest-task-name", args) as Promise<{ ok: boolean; title?: string }>,
     suggestCommitMessage: (args: { cwd?: string }) =>
