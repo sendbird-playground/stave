@@ -380,6 +380,13 @@ export const FilesystemFileArgsSchema = z.object({
   filePath: FilesystemFilePathSchema,
 }).strict();
 
+export const FilesystemCreateDirectoryArgsSchema = z.object({
+  rootPath: FilesystemRootPathSchema,
+  directoryPath: FilesystemFilePathSchema,
+}).strict();
+
+export const FilesystemCreateFileArgsSchema = FilesystemFileArgsSchema;
+
 export const FilesystemWriteFileArgsSchema = FilesystemFileArgsSchema.extend({
   content: z.string(),
   expectedRevision: z.string().max(4096).nullable().optional(),

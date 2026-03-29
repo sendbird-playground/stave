@@ -4,9 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   FilePlus,
-  Folder,
   FolderPlus,
-  FolderOpen,
   FolderTree,
   GitBranch,
   LoaderCircle,
@@ -17,10 +15,11 @@ import { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { workspaceFsAdapter } from "@/lib/fs";
-import type { WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
+import type { WorkspaceCreateEntryResult, WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
 import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { ExplorerEntryIcon } from "./explorer-entry-icon";
 import { collectAncestorFolders, normalizeRelativeInputPath } from "./editor-panel.utils";
 
 interface SourceControlItem {
@@ -63,16 +62,13 @@ function ExplorerTreeRow(args: {
         style={{ paddingLeft: `${6 + depth * 14}px` }}
       >
         {isFolder ? (
-          <>
-            {isOpen ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
-            {isOpen ? <FolderOpen className="size-3.5 text-muted-foreground" /> : <Folder className="size-3.5 text-muted-foreground" />}
-          </>
+          isOpen
+            ? <ChevronDown className="size-3.5 text-muted-foreground" />
+            : <ChevronRight className="size-3.5 text-muted-foreground" />
         ) : (
-          <>
-            <span className="inline-block w-3.5" />
-            <span className="inline-block size-1.5 rounded-full bg-muted-foreground/70" />
-          </>
+          <span className="inline-block w-3.5" />
         )}
+        <ExplorerEntryIcon entry={entry} isOpen={isOpen} />
         <span className="min-w-0 flex-1 truncate">{entry.name}</span>
         {isFolder && directoryState?.status === "loading" ? <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
       </button>
@@ -378,25 +374,6 @@ export function EditorPanel() {
     }
   }
 
-  async function runExplorerCommand(args: { command: string; fallbackError: string }) {
-    const runCommand = window.api?.terminal?.runCommand;
-    if (!runCommand) {
-      setExplorerError("Terminal bridge unavailable.");
-      return false;
-    }
-    if (!workspaceCwd) {
-      setExplorerError("Workspace path unavailable.");
-      return false;
-    }
-    const result = await runCommand({ cwd: workspaceCwd, command: args.command });
-    if (!result.ok) {
-      setExplorerError(result.stderr || args.fallbackError);
-      return false;
-    }
-    setExplorerError("");
-    return true;
-  }
-
   function handleOpenExplorerFile(filePath: string) {
     void openFileFromTree({ filePath });
     setLayout({ patch: { editorVisible: true } });
@@ -445,6 +422,30 @@ export function EditorPanel() {
     setExpandedFolders(nextExpandedFolders);
   }
 
+  async function runExplorerCreateOperation(args: {
+    execute: () => Promise<WorkspaceCreateEntryResult>;
+    fallbackError: string;
+  }) {
+    let result = await args.execute();
+
+    if (!result.ok && !result.alreadyExists && workspaceCwd) {
+      await workspaceFsAdapter.setRoot?.({
+        rootPath: workspaceCwd,
+        rootName: explorerProjectName,
+        files: workspaceFsAdapter.getKnownFiles(),
+      });
+      result = await args.execute();
+    }
+
+    if (!result.ok && !result.alreadyExists) {
+      setExplorerError(result.stderr || args.fallbackError);
+      return null;
+    }
+
+    setExplorerError("");
+    return result;
+  }
+
   async function handleAddFolder() {
     const nextPath = window.prompt("New folder path (relative to project root)");
     if (nextPath === null) {
@@ -455,11 +456,12 @@ export function EditorPanel() {
       setExplorerError("Enter a valid relative folder path.");
       return;
     }
-    const ok = await runExplorerCommand({
-      command: `mkdir -p ${JSON.stringify(folderPath)}`,
+
+    const result = await runExplorerCreateOperation({
+      execute: () => workspaceFsAdapter.createDirectory({ directoryPath: folderPath }),
       fallbackError: "Failed to create folder.",
     });
-    if (!ok) {
+    if (!result) {
       return;
     }
 
@@ -486,14 +488,12 @@ export function EditorPanel() {
     }
     const segments = filePath.split("/");
     const parentPath = segments.slice(0, -1).join("/");
-    const command = parentPath
-      ? `mkdir -p ${JSON.stringify(parentPath)} && touch ${JSON.stringify(filePath)}`
-      : `touch ${JSON.stringify(filePath)}`;
-    const ok = await runExplorerCommand({
-      command,
+
+    const result = await runExplorerCreateOperation({
+      execute: () => workspaceFsAdapter.createFile({ filePath }),
       fallbackError: "Failed to create file.",
     });
-    if (!ok) {
+    if (!result) {
       return;
     }
 

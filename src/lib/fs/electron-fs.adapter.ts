@@ -1,4 +1,12 @@
-import type { WorkspaceDirectoryEntry, WorkspaceFileData, WorkspaceFsAdapter, WorkspaceImageData, WorkspaceRootInfo, WorkspaceWriteResult } from "@/lib/fs/fs.types";
+import type {
+  WorkspaceCreateEntryResult,
+  WorkspaceDirectoryEntry,
+  WorkspaceFileData,
+  WorkspaceFsAdapter,
+  WorkspaceImageData,
+  WorkspaceRootInfo,
+  WorkspaceWriteResult,
+} from "@/lib/fs/fs.types";
 
 export class ElectronFsAdapter implements WorkspaceFsAdapter {
   private rootPath: string | null = null;
@@ -125,6 +133,50 @@ export class ElectronFsAdapter implements WorkspaceFsAdapter {
     };
   }
 
+  async createFile(args: { filePath: string }): Promise<WorkspaceCreateEntryResult> {
+    if (!this.rootPath) {
+      return { ok: false, stderr: "Workspace root unavailable." };
+    }
+    const createFile = window.api?.fs?.createFile;
+    if (!createFile) {
+      return { ok: false, stderr: "Filesystem bridge unavailable." };
+    }
+
+    const result = await createFile({
+      rootPath: this.rootPath,
+      filePath: args.filePath,
+    });
+    if (result.ok || result.alreadyExists) {
+      this.rememberKnownFile(args.filePath);
+    }
+    return {
+      ok: result.ok,
+      revision: result.revision,
+      alreadyExists: result.alreadyExists,
+      stderr: result.stderr,
+    };
+  }
+
+  async createDirectory(args: { directoryPath: string }): Promise<WorkspaceCreateEntryResult> {
+    if (!this.rootPath) {
+      return { ok: false, stderr: "Workspace root unavailable." };
+    }
+    const createDirectory = window.api?.fs?.createDirectory;
+    if (!createDirectory) {
+      return { ok: false, stderr: "Filesystem bridge unavailable." };
+    }
+
+    const result = await createDirectory({
+      rootPath: this.rootPath,
+      directoryPath: args.directoryPath,
+    });
+    return {
+      ok: result.ok,
+      alreadyExists: result.alreadyExists,
+      stderr: result.stderr,
+    };
+  }
+
   getKnownFiles(): string[] {
     return this.knownFiles;
   }
@@ -136,5 +188,12 @@ export class ElectronFsAdapter implements WorkspaceFsAdapter {
 
   getRootPath() {
     return this.rootPath;
+  }
+
+  private rememberKnownFile(filePath: string) {
+    if (this.knownFiles.includes(filePath)) {
+      return;
+    }
+    this.knownFiles = [...this.knownFiles, filePath].sort();
   }
 }

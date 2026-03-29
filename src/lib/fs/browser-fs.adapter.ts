@@ -1,4 +1,12 @@
-import type { WorkspaceDirectoryEntry, WorkspaceFileData, WorkspaceFsAdapter, WorkspaceImageData, WorkspaceRootInfo, WorkspaceWriteResult } from "@/lib/fs/fs.types";
+import type {
+  WorkspaceCreateEntryResult,
+  WorkspaceDirectoryEntry,
+  WorkspaceFileData,
+  WorkspaceFsAdapter,
+  WorkspaceImageData,
+  WorkspaceRootInfo,
+  WorkspaceWriteResult,
+} from "@/lib/fs/fs.types";
 
 interface WindowWithPicker extends Window {
   showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle>;
@@ -16,6 +24,25 @@ const IGNORED_BROWSER_DIRECTORY_NAMES = new Set([
 
 function buildRevision(args: { size: number; lastModified: number }) {
   return `browser:${args.size}:${args.lastModified}`;
+}
+
+function normalizeHandlePath(args: { value?: string; allowEmpty?: boolean }) {
+  const normalized = (args.value ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!normalized) {
+    return args.allowEmpty ? "" : null;
+  }
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length === 0) {
+    return args.allowEmpty ? "" : null;
+  }
+  if (parts.some((segment) => segment === "." || segment === "..")) {
+    return null;
+  }
+  return parts.join("/");
+}
+
+function isDomException(error: unknown, name: string) {
+  return typeof error === "object" && error !== null && "name" in error && (error as { name?: string }).name === name;
 }
 
 function toBase64(args: { bytes: Uint8Array }) {
@@ -66,10 +93,11 @@ export class BrowserFsAdapter implements WorkspaceFsAdapter {
   }
 
   async listDirectory(args: { directoryPath?: string }): Promise<WorkspaceDirectoryEntry[] | null> {
-    const normalizedDirectoryPath = args.directoryPath?.trim() ?? "";
-    const directoryHandle = normalizedDirectoryPath.length === 0
-      ? this.rootHandle
-      : this.directoryHandleMap.get(normalizedDirectoryPath);
+    const normalizedDirectoryPath = normalizeHandlePath({ value: args.directoryPath, allowEmpty: true });
+    if (normalizedDirectoryPath === null) {
+      return null;
+    }
+    const directoryHandle = await this.resolveDirectoryHandle({ directoryPath: normalizedDirectoryPath });
     if (!directoryHandle) {
       return null;
     }
@@ -163,12 +191,137 @@ export class BrowserFsAdapter implements WorkspaceFsAdapter {
     };
   }
 
+  async createFile(args: { filePath: string }): Promise<WorkspaceCreateEntryResult> {
+    const normalizedFilePath = normalizeHandlePath({ value: args.filePath });
+    if (!normalizedFilePath || !this.rootHandle) {
+      return { ok: false, stderr: "Invalid file path." };
+    }
+
+    const pathSegments = normalizedFilePath.split("/");
+    const fileName = pathSegments[pathSegments.length - 1];
+    if (!fileName) {
+      return { ok: false, stderr: "Invalid file path." };
+    }
+
+    const parentPath = pathSegments.slice(0, -1).join("/");
+
+    try {
+      const parentHandle = await this.resolveDirectoryHandle({ directoryPath: parentPath, create: true });
+      if (!parentHandle) {
+        return { ok: false, stderr: "Failed to create parent folder." };
+      }
+
+      try {
+        const existingHandle = await parentHandle.getFileHandle(fileName);
+        this.fileHandleMap.set(normalizedFilePath, existingHandle);
+        return { ok: false, alreadyExists: true };
+      } catch (error) {
+        if (isDomException(error, "TypeMismatchError")) {
+          return { ok: false, stderr: "A folder already exists at this path." };
+        }
+        if (!isDomException(error, "NotFoundError")) {
+          return { ok: false, stderr: String(error) };
+        }
+      }
+
+      const fileHandle = await parentHandle.getFileHandle(fileName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.close();
+      this.fileHandleMap.set(normalizedFilePath, fileHandle);
+
+      const next = await this.readFile({ filePath: normalizedFilePath });
+      return {
+        ok: true,
+        revision: next?.revision,
+      };
+    } catch (error) {
+      return { ok: false, stderr: String(error) };
+    }
+  }
+
+  async createDirectory(args: { directoryPath: string }): Promise<WorkspaceCreateEntryResult> {
+    const normalizedDirectoryPath = normalizeHandlePath({ value: args.directoryPath });
+    if (!normalizedDirectoryPath || !this.rootHandle) {
+      return { ok: false, stderr: "Invalid folder path." };
+    }
+
+    const pathSegments = normalizedDirectoryPath.split("/");
+    const directoryName = pathSegments[pathSegments.length - 1];
+    if (!directoryName) {
+      return { ok: false, stderr: "Invalid folder path." };
+    }
+
+    const parentPath = pathSegments.slice(0, -1).join("/");
+
+    try {
+      const parentHandle = await this.resolveDirectoryHandle({ directoryPath: parentPath, create: true });
+      if (!parentHandle) {
+        return { ok: false, stderr: "Failed to create parent folder." };
+      }
+
+      try {
+        const existingHandle = await parentHandle.getDirectoryHandle(directoryName);
+        this.directoryHandleMap.set(normalizedDirectoryPath, existingHandle);
+        return { ok: false, alreadyExists: true };
+      } catch (error) {
+        if (isDomException(error, "TypeMismatchError")) {
+          return { ok: false, stderr: "A file already exists at this path." };
+        }
+        if (!isDomException(error, "NotFoundError")) {
+          return { ok: false, stderr: String(error) };
+        }
+      }
+
+      const directoryHandle = await parentHandle.getDirectoryHandle(directoryName, { create: true });
+      this.directoryHandleMap.set(normalizedDirectoryPath, directoryHandle);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, stderr: String(error) };
+    }
+  }
+
   getKnownFiles(): string[] {
     return [...this.fileHandleMap.keys()].sort();
   }
 
   getRootPath() {
     return null;
+  }
+
+  private async resolveDirectoryHandle(args: { directoryPath?: string; create?: boolean }) {
+    const normalizedDirectoryPath = normalizeHandlePath({ value: args.directoryPath, allowEmpty: true });
+    if (normalizedDirectoryPath === null || !this.rootHandle) {
+      return null;
+    }
+    if (!normalizedDirectoryPath) {
+      this.directoryHandleMap.set("", this.rootHandle);
+      return this.rootHandle;
+    }
+
+    const cachedHandle = this.directoryHandleMap.get(normalizedDirectoryPath);
+    if (cachedHandle) {
+      return cachedHandle;
+    }
+
+    let currentHandle = this.rootHandle;
+    let currentPath = "";
+
+    for (const segment of normalizedDirectoryPath.split("/")) {
+      currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+      const cachedChild = this.directoryHandleMap.get(currentPath);
+      if (cachedChild) {
+        currentHandle = cachedChild;
+        continue;
+      }
+
+      currentHandle = args.create
+        ? await currentHandle.getDirectoryHandle(segment, { create: true })
+        : await currentHandle.getDirectoryHandle(segment);
+
+      this.directoryHandleMap.set(currentPath, currentHandle);
+    }
+
+    return currentHandle;
   }
 
   private async walkDirectory(args: {

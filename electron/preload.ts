@@ -168,6 +168,8 @@ contextBridge.exposeInMainWorld("api", {
     readFileDataUrl: (args: { rootPath: string; filePath: string }) => ipcRenderer.invoke("fs:read-file-data-url", args),
     writeFile: (args: { rootPath: string; filePath: string; content: string; expectedRevision?: string | null }) =>
       ipcRenderer.invoke("fs:write-file", args),
+    createFile: (args: { rootPath: string; filePath: string }) => ipcRenderer.invoke("fs:create-file", args),
+    createDirectory: (args: { rootPath: string; directoryPath: string }) => ipcRenderer.invoke("fs:create-directory", args),
     readTypeDefs: (args: { rootPath: string; entryFilePath?: string }) => ipcRenderer.invoke("fs:read-type-defs", args),
     readSourceFiles: (args: { rootPath: string; entryFilePath?: string }) => ipcRenderer.invoke("fs:read-source-files", args),
   },

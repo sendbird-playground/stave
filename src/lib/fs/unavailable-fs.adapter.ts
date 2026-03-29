@@ -1,4 +1,12 @@
-import type { WorkspaceDirectoryEntry, WorkspaceFileData, WorkspaceFsAdapter, WorkspaceImageData, WorkspaceRootInfo, WorkspaceWriteResult } from "@/lib/fs/fs.types";
+import type {
+  WorkspaceCreateEntryResult,
+  WorkspaceDirectoryEntry,
+  WorkspaceFileData,
+  WorkspaceFsAdapter,
+  WorkspaceImageData,
+  WorkspaceRootInfo,
+  WorkspaceWriteResult,
+} from "@/lib/fs/fs.types";
 
 export class UnavailableFsAdapter implements WorkspaceFsAdapter {
   isAvailable() {
@@ -27,6 +35,14 @@ export class UnavailableFsAdapter implements WorkspaceFsAdapter {
 
   async writeFile(_args: { filePath: string; content: string; expectedRevision?: string | null }): Promise<WorkspaceWriteResult> {
     return { ok: false };
+  }
+
+  async createFile(_args: { filePath: string }): Promise<WorkspaceCreateEntryResult> {
+    return { ok: false, stderr: "Filesystem unavailable." };
+  }
+
+  async createDirectory(_args: { directoryPath: string }): Promise<WorkspaceCreateEntryResult> {
+    return { ok: false, stderr: "Filesystem unavailable." };
   }
 
   getKnownFiles(): string[] {
