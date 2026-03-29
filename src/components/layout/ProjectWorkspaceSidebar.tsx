@@ -85,7 +85,7 @@ function SortableSidebarItem(args: SortableSidebarItemProps) {
   );
 }
 
-export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolean }) {
+export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolean; animate?: boolean }) {
   const [collapsedByProjectPath, setCollapsedByProjectPath] = useState<Record<string, boolean>>({});
   const [busyProjectPath, setBusyProjectPath] = useState<string | null>(null);
   const [busyWorkspaceKey, setBusyWorkspaceKey] = useState<string | null>(null);
@@ -361,10 +361,11 @@ export function ProjectWorkspaceSidebar(args: { width: number; collapsed: boolea
     <>
       <aside
         data-testid="project-workspace-sidebar"
-        className="hidden h-full shrink-0 border-r border-border/70 bg-card/80 lg:flex lg:flex-col"
+        className="hidden h-full shrink-0 overflow-hidden border-r border-border/70 bg-card/80 lg:flex lg:flex-col"
         style={{
           width: `${args.collapsed ? COLLAPSED_PROJECT_SIDEBAR_WIDTH : args.width}px`,
           minWidth: `${args.collapsed ? COLLAPSED_PROJECT_SIDEBAR_WIDTH : args.width}px`,
+          transition: args.animate !== false ? "width 200ms ease, min-width 200ms ease" : undefined,
         }}
       >
         <div className={cn("border-b border-border/70", args.collapsed ? "px-2 py-3" : "flex h-12 items-center px-3")}>
