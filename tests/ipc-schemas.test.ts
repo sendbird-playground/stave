@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { FilesystemRepoMapArgsSchema, FilesystemRepoMapContextArgsSchema, StreamTurnArgsSchema } from "../electron/main/ipc/schemas";
+import { FilesystemRepoMapArgsSchema, StreamTurnArgsSchema } from "../electron/main/ipc/schemas";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 
 describe("provider IPC schemas", () => {
@@ -109,14 +109,4 @@ describe("provider IPC schemas", () => {
     }).success).toBe(false);
   });
 
-  test("accepts repo-map context requests with optional refresh", () => {
-    expect(FilesystemRepoMapContextArgsSchema.safeParse({
-      rootPath: "/tmp/project",
-      refresh: true,
-    }).success).toBe(true);
-    expect(FilesystemRepoMapContextArgsSchema.safeParse({
-      rootPath: "/tmp/project",
-      refresh: "yes",
-    }).success).toBe(false);
-  });
 });

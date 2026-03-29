@@ -43,17 +43,6 @@ export interface RepoMapResponse {
   stderr?: string;
 }
 
-export type RepoMapContextSource = "memory" | "lmdb" | "repo-map-cache" | "generated";
-
-export interface RepoMapContextResponse {
-  ok: boolean;
-  contextText?: string;
-  source?: RepoMapContextSource;
-  updatedAt?: string;
-  stale?: boolean;
-  stderr?: string;
-}
-
 /**
  * Formats a repo-map snapshot into a compact text block suitable for
  * injection as retrieved context at the start of an AI turn.

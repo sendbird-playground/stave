@@ -2,13 +2,10 @@ import { app } from "electron";
 import path from "node:path";
 import { disposeAllLspSessions } from "./lsp/session-manager";
 import { SqliteStore } from "../persistence/sqlite-store";
-import { RepoMapContextCache } from "./utils/repo-map-context-cache";
 import type { TerminalSession } from "./types";
 
 const terminalSessions = new Map<string, TerminalSession>();
 let sqliteStore: SqliteStore | null = null;
-let repoMapContextCache: RepoMapContextCache | null = null;
-
 export function getTerminalSession(sessionId: string) {
   return terminalSessions.get(sessionId);
 }
@@ -39,20 +36,7 @@ export function ensurePersistenceReadySync() {
   return sqliteStore;
 }
 
-export function ensureRepoMapContextCacheReady() {
-  if (repoMapContextCache) {
-    return repoMapContextCache;
-  }
-  const cacheDir = path.join(app.getPath("userData"), "repo-map-cache");
-  repoMapContextCache = new RepoMapContextCache({ cacheDir });
-  return repoMapContextCache;
-}
-
 export function resetMainProcessState() {
   void disposeAllLspSessions();
-  if (repoMapContextCache) {
-    void repoMapContextCache.close();
-    repoMapContextCache = null;
-  }
   sqliteStore = null;
 }
