@@ -17,7 +17,7 @@ test.fixme("shows no-workspace splash when project exists without selected works
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "missing-workspace-id",
         workspaceBranchById: { "ws-main": "main" },
@@ -70,7 +70,7 @@ test("new task button creates a visible task item", async ({ page }) => {
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },
@@ -108,7 +108,7 @@ test("prompt input is focused after creating a task", async ({ page }) => {
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },
@@ -145,7 +145,7 @@ test("shortcut creates a new task in the selected workspace", async ({ page }) =
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },
@@ -201,7 +201,7 @@ test("archiving the last active task returns the chat area to the splash state",
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },
@@ -258,7 +258,7 @@ test("shortcut archives the selected task", async ({ page }) => {
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },
@@ -323,7 +323,7 @@ test("stale streaming message does not show responding wave without an active tu
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },
@@ -383,7 +383,7 @@ test("streaming-off mode still shows responding wave during active turns", async
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },
@@ -465,7 +465,7 @@ test("workspace switch restores per-workspace task snapshot", async ({ page }) =
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [
           { id: "ws-alpha", name: "alpha", updatedAt: "2026-03-06T01:00:00.000Z" },
           { id: "ws-beta", name: "beta", updatedAt: "2026-03-06T00:00:00.000Z" },
@@ -505,7 +505,7 @@ test("source control actions update status and history surfaces", async ({ page 
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },
@@ -597,7 +597,7 @@ test("terminal sessions create and poll output lifecycle", async ({ page }) => {
     window.localStorage.setItem("stave-store", JSON.stringify({
       state: {
         projectPath: "/tmp/stave-project",
-        workspaceRootName: "stave-project",
+        projectName: "stave-project",
         workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
         activeWorkspaceId: "ws-main",
         workspaceBranchById: { "ws-main": "main" },

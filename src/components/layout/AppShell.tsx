@@ -9,7 +9,7 @@ import { Toaster } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { getNextProviderId } from "@/lib/providers/model-catalog";
 import { RenderProfiler } from "@/lib/render-profiler";
-import { MIN_EDITOR_PANEL_WIDTH, TASK_LIST_MIN_WIDTH, useAppStore } from "@/store/app.store";
+import { MIN_EDITOR_PANEL_WIDTH, WORKSPACE_SIDEBAR_MIN_WIDTH, useAppStore } from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
 
@@ -19,12 +19,12 @@ const EditorPanel = lazy(() =>
   }))
 );
 type ResizableLayoutKey =
-  | "taskListWidth"
+  | "workspaceSidebarWidth"
   | "editorPanelWidth"
   | "explorerPanelWidth"
   | "terminalDockHeight";
 
-const TASK_LIST_MAX_WIDTH = 340;
+const WORKSPACE_SIDEBAR_MAX_WIDTH = 340;
 
 function isEditableShortcutTarget(target: EventTarget | null) {
   return target instanceof HTMLElement
@@ -40,8 +40,8 @@ function isEditableShortcutTarget(target: EventTarget | null) {
 export function AppShell() {
   const [
     projectPath,
-    taskListWidth,
-    taskListCollapsed,
+    workspaceSidebarWidth,
+    workspaceSidebarCollapsed,
     editorVisible,
     editorPanelWidth,
     sidebarOverlayVisible,
@@ -51,8 +51,8 @@ export function AppShell() {
     setLayout,
   ] = useAppStore(useShallow((state) => [
     state.projectPath,
-    state.layout.taskListWidth,
-    state.layout.taskListCollapsed,
+    state.layout.workspaceSidebarWidth,
+    state.layout.workspaceSidebarCollapsed,
     state.layout.editorVisible,
     state.layout.editorPanelWidth,
     state.layout.sidebarOverlayVisible,
@@ -282,21 +282,21 @@ export function AppShell() {
         }}
       />
       <RenderProfiler id="ProjectWorkspaceSidebar">
-        <ProjectWorkspaceSidebar width={Math.max(taskListWidth, TASK_LIST_MIN_WIDTH)} collapsed={taskListCollapsed} />
+        <ProjectWorkspaceSidebar width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)} collapsed={workspaceSidebarCollapsed} />
       </RenderProfiler>
-      {!taskListCollapsed ? (
+      {!workspaceSidebarCollapsed ? (
         <div
           className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
           onMouseDown={(event) => {
             event.preventDefault();
             const startX = event.clientX;
-            const startWidth = Math.max(taskListWidth, TASK_LIST_MIN_WIDTH);
+            const startWidth = Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH);
             const onMove = (moveEvent: MouseEvent) => {
               const next = Math.max(
-                TASK_LIST_MIN_WIDTH,
-                Math.min(TASK_LIST_MAX_WIDTH, startWidth + (moveEvent.clientX - startX)),
+                WORKSPACE_SIDEBAR_MIN_WIDTH,
+                Math.min(WORKSPACE_SIDEBAR_MAX_WIDTH, startWidth + (moveEvent.clientX - startX)),
               );
-              scheduleLayoutResizePatch("taskListWidth", next);
+              scheduleLayoutResizePatch("workspaceSidebarWidth", next);
             };
             const onUp = () => {
               flushPendingLayoutPatch();

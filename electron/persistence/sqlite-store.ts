@@ -197,7 +197,7 @@ export class SqliteStore {
     tx();
   }
 
-  deleteWorkspace(args: { workspaceId: string }) {
+  closeWorkspace(args: { workspaceId: string }) {
     const tx = this.db.transaction(() => {
       this.db.prepare(`
         DELETE FROM turn_events

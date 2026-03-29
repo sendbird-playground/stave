@@ -339,7 +339,7 @@ export function upsertRecentProjectState(args: { projects: RecentProjectState[];
 export function captureCurrentProjectState(args: {
   recentProjects: RecentProjectState[];
   projectPath: string | null;
-  workspaceRootName: string | null;
+  projectName: string | null;
   defaultBranch: string;
   workspaces: WorkspaceSummary[];
   activeWorkspaceId: string;
@@ -354,7 +354,7 @@ export function captureCurrentProjectState(args: {
     projects: args.recentProjects,
     project: {
       projectPath: args.projectPath,
-      projectName: args.workspaceRootName ?? "project",
+      projectName: args.projectName ?? "project",
       lastOpenedAt: new Date().toISOString(),
       defaultBranch: args.defaultBranch,
       workspaces: args.workspaces,

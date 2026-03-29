@@ -187,7 +187,7 @@ describe("workspace persistence fallback", () => {
       workspaceBranchById: {},
       workspacePathById: {},
       workspaceDefaultById: {},
-      workspaceRootName: null,
+      projectName: null,
       projectFiles: [],
       hasHydratedWorkspaces: false,
     });
@@ -266,7 +266,7 @@ describe("workspace persistence fallback", () => {
     useAppStore.setState({
       ...initialState,
       projectPath: "/tmp/stave-project-a",
-      workspaceRootName: "project-a",
+      projectName: "project-a",
       defaultBranch: "main",
       workspaces: [{ id: "ws-a", name: "Default Workspace", updatedAt: "2026-03-20T00:00:00.000Z" }],
       activeWorkspaceId: "ws-a",
@@ -343,7 +343,7 @@ describe("workspace persistence fallback", () => {
       ...initialState,
       hasHydratedWorkspaces: true,
       projectPath: "/tmp/stave-project-a",
-      workspaceRootName: "project-a",
+      projectName: "project-a",
       defaultBranch: "main",
       workspaces: [
         { id: "ws-a", name: "Default Workspace", updatedAt: "2026-03-20T00:00:00.000Z" },
@@ -762,7 +762,7 @@ describe("workspace store hydration ordering", () => {
       workspaces: [{ id: "ws-main", name: "default", updatedAt: "2026-03-09T00:00:00.000Z" }],
       activeWorkspaceId: "ws-main",
       projectPath: "/tmp/stave-project",
-      workspaceRootName: "fixture",
+      projectName: "fixture",
       workspacePathById: { "ws-main": "/tmp/stave-project" },
       workspaceBranchById: { "ws-main": "main" },
       workspaceDefaultById: { "ws-main": true },

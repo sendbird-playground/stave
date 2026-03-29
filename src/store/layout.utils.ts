@@ -1,8 +1,8 @@
 import type { EditorTab } from "@/types/chat";
 
 export interface LayoutState {
-  taskListWidth: number;
-  taskListCollapsed: boolean;
+  workspaceSidebarWidth: number;
+  workspaceSidebarCollapsed: boolean;
   editorPanelWidth: number;
   explorerPanelWidth: number;
   terminalDockHeight: number;
@@ -13,7 +13,7 @@ export interface LayoutState {
   editorDiffMode: boolean;
 }
 
-export const TASK_LIST_MIN_WIDTH = 290;
+export const WORKSPACE_SIDEBAR_MIN_WIDTH = 290;
 export const MIN_EDITOR_PANEL_WIDTH = 600;
 export const DEFAULT_EDITOR_PANEL_WIDTH = 720;
 

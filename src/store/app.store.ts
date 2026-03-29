@@ -5,7 +5,7 @@ import { workspaceFsAdapter } from "@/lib/fs";
 import {
   listWorkspaceSummaries,
   loadWorkspaceSnapshot,
-  deleteWorkspacePersistence,
+  closeWorkspacePersistence,
   type TaskProviderConversationState,
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
@@ -76,7 +76,7 @@ import {
 import { normalizeComparablePath, parseGitWorktrees } from "@/lib/source-control-worktrees";
 import {
   type LayoutState,
-  TASK_LIST_MIN_WIDTH,
+  WORKSPACE_SIDEBAR_MIN_WIDTH,
   MIN_EDITOR_PANEL_WIDTH,
   DEFAULT_EDITOR_PANEL_WIDTH,
   mergeLayoutPatch,
@@ -134,7 +134,7 @@ import {
   applyUserInputState,
 } from "@/store/editor.utils";
 
-export { TASK_LIST_MIN_WIDTH, MIN_EDITOR_PANEL_WIDTH, DEFAULT_EDITOR_PANEL_WIDTH } from "@/store/layout.utils";
+export { WORKSPACE_SIDEBAR_MIN_WIDTH, MIN_EDITOR_PANEL_WIDTH, DEFAULT_EDITOR_PANEL_WIDTH } from "@/store/layout.utils";
 export type { LayoutState } from "@/store/layout.utils";
 export {
   THEME_TOKEN_NAMES,
@@ -271,7 +271,7 @@ interface AppState {
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   pendingCloseEditorTabId: string | null;
-  workspaceRootName: string | null;
+  projectName: string | null;
   projectFiles: string[];
   taskCheckpointById: Record<string, string>;
   providerAvailability: Record<ProviderId, boolean>;
@@ -295,7 +295,7 @@ interface AppState {
     initCommand?: string;
     useRootNodeModulesSymlink?: boolean;
   }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
-  deleteWorkspace: (args: { workspaceId: string }) => Promise<void>;
+  closeWorkspace: (args: { workspaceId: string }) => Promise<void>;
   switchWorkspace: (args: { workspaceId: string }) => Promise<void>;
   moveWorkspaceInProjectList: (args: {
     projectPath: string;
@@ -474,7 +474,7 @@ export const useAppStore = create<AppState>()(
         const rememberedProjects = captureCurrentProjectState({
           recentProjects: stateBeforeSwitch.recentProjects,
           projectPath: stateBeforeSwitch.projectPath,
-          workspaceRootName: stateBeforeSwitch.workspaceRootName,
+          projectName: stateBeforeSwitch.projectName,
           defaultBranch: stateBeforeSwitch.defaultBranch,
           workspaces: stateBeforeSwitch.workspaces,
           activeWorkspaceId: stateBeforeSwitch.activeWorkspaceId,
@@ -514,7 +514,7 @@ export const useAppStore = create<AppState>()(
               },
             }),
             defaultBranch: args.defaultBranch,
-            workspaceRootName: args.projectName,
+            projectName: args.projectName,
             projectFiles: args.files.length > 0 ? args.files : state.projectFiles,
             workspaceRuntimeCacheById: savedWorkspaceRuntimeCacheById,
           }));
@@ -549,7 +549,7 @@ export const useAppStore = create<AppState>()(
             workspaceBranchById: nextProject.workspaceBranchById,
             workspacePathById: nextProject.workspacePathById,
             workspaceDefaultById: nextProject.workspaceDefaultById,
-            workspaceRootName: args.projectName,
+            projectName: args.projectName,
             projectFiles: args.files,
             workspaceRuntimeCacheById: savedWorkspaceRuntimeCacheById,
             ...emptyWorkspaceState,
@@ -624,7 +624,7 @@ export const useAppStore = create<AppState>()(
           workspacePathById: nextProject.workspacePathById,
           workspaceDefaultById: nextProject.workspaceDefaultById,
           ...workspaceState,
-          workspaceRootName: args.projectName,
+          projectName: args.projectName,
           projectFiles: args.files,
           workspaceRuntimeCacheById: savedWorkspaceRuntimeCacheById,
           taskWorkspaceIdById: registerTaskWorkspaceOwnership({
@@ -655,8 +655,8 @@ export const useAppStore = create<AppState>()(
       tasks: [],
       messagesByTask: {},
       layout: {
-        taskListWidth: TASK_LIST_MIN_WIDTH,
-        taskListCollapsed: false,
+        workspaceSidebarWidth: WORKSPACE_SIDEBAR_MIN_WIDTH,
+        workspaceSidebarCollapsed: false,
         editorPanelWidth: DEFAULT_EDITOR_PANEL_WIDTH,
         explorerPanelWidth: 300,
         terminalDockHeight: 210,
@@ -670,7 +670,7 @@ export const useAppStore = create<AppState>()(
       editorTabs: [],
       activeEditorTabId: null,
       pendingCloseEditorTabId: null,
-      workspaceRootName: null,
+      projectName: null,
       projectFiles: workspaceFsAdapter.getKnownFiles(),
       taskCheckpointById: {},
       providerAvailability: createDefaultProviderAvailability(),
@@ -755,7 +755,7 @@ export const useAppStore = create<AppState>()(
               }
             }
             for (const id of staleIds) {
-              await deleteWorkspacePersistence({ workspaceId: id });
+              await closeWorkspacePersistence({ workspaceId: id });
             }
             if (staleIds.length > 0) {
               rows = rows.filter((row) => !staleIds.includes(row.id));
@@ -855,7 +855,7 @@ export const useAppStore = create<AppState>()(
         if (preferredWorkspacePath) {
           await workspaceFsAdapter.setRoot?.({
             rootPath: preferredWorkspacePath,
-            rootName: stateBeforeHydrate.workspaceRootName ?? "project",
+            rootName: stateBeforeHydrate.projectName ?? "project",
           });
           projectFiles = await workspaceFsAdapter.listFiles();
         }
@@ -1076,7 +1076,7 @@ export const useAppStore = create<AppState>()(
             workspaceBranchById: {},
             workspacePathById: {},
             workspaceDefaultById: {},
-            workspaceRootName: null,
+            projectName: null,
             projectFiles: [],
             taskCheckpointById: {},
             workspaceRuntimeCacheById: nextRuntimeCacheById,
@@ -1101,7 +1101,7 @@ export const useAppStore = create<AppState>()(
           const currentProjects = captureCurrentProjectState({
             recentProjects: state.recentProjects,
             projectPath: state.projectPath,
-            workspaceRootName: state.workspaceRootName,
+            projectName: state.projectName,
             defaultBranch: state.defaultBranch,
             workspaces: state.workspaces,
             activeWorkspaceId: state.activeWorkspaceId,
@@ -1307,7 +1307,7 @@ export const useAppStore = create<AppState>()(
           ? { ok: true, ...creationNotice }
           : { ok: true };
       },
-      deleteWorkspace: async ({ workspaceId }) => {
+      closeWorkspace: async ({ workspaceId }) => {
         const state = get();
         const workspace = state.workspaces.find((item) => item.id === workspaceId);
         const isProtectedDefault = state.workspaceDefaultById[workspaceId]
@@ -1336,7 +1336,7 @@ export const useAppStore = create<AppState>()(
             });
           }
         }
-        await deleteWorkspacePersistence({ workspaceId });
+        await closeWorkspacePersistence({ workspaceId });
         const nextWorkspace = state.workspaces.find((item) => state.workspaceDefaultById[item.id]) ?? state.workspaces[0];
         if (!nextWorkspace) {
           const workspaceState = buildWorkspaceSessionState({ snapshot: null });
@@ -1406,7 +1406,7 @@ export const useAppStore = create<AppState>()(
         if (workspacePath) {
           await workspaceFsAdapter.setRoot?.({
             rootPath: workspacePath,
-            rootName: current.workspaceRootName ?? "project",
+            rootName: current.projectName ?? "project",
           });
         }
         const files = await workspaceFsAdapter.listFiles();
@@ -1461,7 +1461,7 @@ export const useAppStore = create<AppState>()(
                 projects: state.recentProjects,
                 project: {
                   projectPath: normalizedProjectPath,
-                  projectName: state.workspaceRootName ?? "project",
+                  projectName: state.projectName ?? "project",
                   lastOpenedAt: state.recentProjects.find((project) => project.projectPath === normalizedProjectPath)?.lastOpenedAt
                     ?? new Date().toISOString(),
                   defaultBranch: state.defaultBranch,
@@ -1517,7 +1517,7 @@ export const useAppStore = create<AppState>()(
           const currentProjects = captureCurrentProjectState({
             recentProjects: state.recentProjects,
             projectPath: state.projectPath,
-            workspaceRootName: state.workspaceRootName,
+            projectName: state.projectName,
             defaultBranch: state.defaultBranch,
             workspaces: state.workspaces,
             activeWorkspaceId: state.activeWorkspaceId,
@@ -1559,7 +1559,7 @@ export const useAppStore = create<AppState>()(
           const currentProjects = captureCurrentProjectState({
             recentProjects: state.recentProjects,
             projectPath: state.projectPath,
-            workspaceRootName: state.workspaceRootName,
+            projectName: state.projectName,
             defaultBranch: state.defaultBranch,
             workspaces: state.workspaces,
             activeWorkspaceId: state.activeWorkspaceId,
@@ -2074,7 +2074,7 @@ export const useAppStore = create<AppState>()(
           return;
         }
         set((state) => ({
-          workspaceRootName: root.rootName,
+          projectName: root.rootName,
           projectFiles: root.files,
           layout: {
             ...state.layout,
@@ -2850,7 +2850,7 @@ export const useAppStore = create<AppState>()(
           if (workspaceRootPath) {
             await workspaceFsAdapter.setRoot?.({
               rootPath: workspaceRootPath,
-              rootName: state.workspaceRootName ?? "project",
+              rootName: state.projectName ?? "project",
             });
             fileData = isImageFile ? null : await workspaceFsAdapter.readFile({ filePath });
             imageData = isImageFile ? await workspaceFsAdapter.readFileDataUrl({ filePath }) : null;
@@ -3030,7 +3030,7 @@ export const useAppStore = create<AppState>()(
           if (workspaceRootPath) {
             await workspaceFsAdapter.setRoot?.({
               rootPath: workspaceRootPath,
-              rootName: state.workspaceRootName ?? "project",
+              rootName: state.projectName ?? "project",
             });
             result = await workspaceFsAdapter.writeFile({
               filePath: activeTab.filePath,
@@ -3188,7 +3188,7 @@ export const useAppStore = create<AppState>()(
         recentProjects: captureCurrentProjectState({
           recentProjects: state.recentProjects,
           projectPath: state.projectPath,
-          workspaceRootName: state.workspaceRootName,
+          projectName: state.projectName,
           defaultBranch: state.defaultBranch,
           workspaces: state.workspaces,
           activeWorkspaceId: state.activeWorkspaceId,
@@ -3205,7 +3205,7 @@ export const useAppStore = create<AppState>()(
         draftProvider: state.draftProvider,
         layout: state.layout,
         settings: state.settings,
-        workspaceRootName: state.workspaceRootName,
+        projectName: state.projectName,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) {
