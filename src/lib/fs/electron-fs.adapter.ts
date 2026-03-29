@@ -1,3 +1,4 @@
+import type { RepoMapSnapshot } from "@/lib/fs/repo-map.types";
 import type {
   WorkspaceCreateEntryResult,
   WorkspaceDirectoryEntry,
@@ -51,6 +52,22 @@ export class ElectronFsAdapter implements WorkspaceFsAdapter {
     }
     this.knownFiles = result.files;
     return result.files;
+  }
+
+  async getRepoMap(args: { refresh?: boolean } = {}): Promise<RepoMapSnapshot | null> {
+    if (!this.rootPath) {
+      return null;
+    }
+    const getRepoMap = window.api?.fs?.getRepoMap;
+    if (!getRepoMap) {
+      return null;
+    }
+
+    const result = await getRepoMap({ rootPath: this.rootPath, refresh: args.refresh });
+    if (!result.ok || !result.repoMap) {
+      return null;
+    }
+    return result.repoMap;
   }
 
   async listDirectory(args: { directoryPath?: string }): Promise<WorkspaceDirectoryEntry[] | null> {

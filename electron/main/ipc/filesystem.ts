@@ -9,6 +9,8 @@ import {
   FilesystemDirectoryArgsSchema,
   FilesystemFileArgsSchema,
   FilesystemInspectArgsSchema,
+  FilesystemRepoMapContextArgsSchema,
+  FilesystemRepoMapArgsSchema,
   FilesystemRootArgsSchema,
   FilesystemWriteFileArgsSchema,
   OpenExternalArgsSchema,
@@ -23,6 +25,8 @@ import {
   resolveRootFilePath,
   revisionFromStat,
 } from "../utils/filesystem";
+import { getOrCreateRepoMap } from "../utils/repo-map";
+import { ensureRepoMapContextCacheReady } from "../state";
 import { readWorkspaceSourceFiles } from "./filesystem-source-files";
 import { readWorkspaceTypeDefinitionFiles } from "./filesystem-type-libs";
 
@@ -190,6 +194,58 @@ export function registerFilesystemHandlers() {
       return { ok: true, files };
     } catch (error) {
       return { ok: false, files: [], stderr: String(error) };
+    }
+  });
+
+  ipcMain.handle("fs:get-repo-map", async (_event, args: unknown) => {
+    const parsed = FilesystemRepoMapArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid repo map request." };
+    }
+    try {
+      const result = await getOrCreateRepoMap({
+        rootPath: parsed.data.rootPath,
+        refresh: parsed.data.refresh,
+      });
+      return { ok: true, repoMap: result.repoMap, source: result.source };
+    } catch (error) {
+      const message = error instanceof Error
+        ? `${error.message}\n${error.stack ?? ""}`
+        : String(error);
+      console.error("[repo-map] generation failed:", message);
+      return { ok: false, stderr: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle("fs:get-repo-map-context", async (_event, args: unknown) => {
+    const parsed = FilesystemRepoMapContextArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid repo map context request." };
+    }
+    try {
+      const repoMapContextCache = ensureRepoMapContextCacheReady();
+      return await repoMapContextCache.getOrCreateContext({
+        rootPath: parsed.data.rootPath,
+        refresh: parsed.data.refresh,
+      });
+    } catch (error) {
+      return { ok: false, stderr: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.on("fs:get-cached-repo-map-context-sync", (event, args: unknown) => {
+    const parsed = FilesystemRepoMapContextArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      event.returnValue = { ok: false, stderr: "Invalid repo map context request." };
+      return;
+    }
+    try {
+      const repoMapContextCache = ensureRepoMapContextCacheReady();
+      event.returnValue = repoMapContextCache.getCachedContextSync({
+        rootPath: parsed.data.rootPath,
+      });
+    } catch (error) {
+      event.returnValue = { ok: false, stderr: error instanceof Error ? error.message : String(error) };
     }
   });
 

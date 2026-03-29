@@ -1,3 +1,4 @@
+import type { RepoMapSnapshot } from "@/lib/fs/repo-map.types";
 import type {
   WorkspaceCreateEntryResult,
   WorkspaceDirectoryEntry,
@@ -19,6 +20,10 @@ export class UnavailableFsAdapter implements WorkspaceFsAdapter {
 
   async listFiles(): Promise<string[]> {
     return [];
+  }
+
+  async getRepoMap(_args: { refresh?: boolean } = {}): Promise<RepoMapSnapshot | null> {
+    return null;
   }
 
   async listDirectory(_args: { directoryPath?: string }): Promise<WorkspaceDirectoryEntry[] | null> {

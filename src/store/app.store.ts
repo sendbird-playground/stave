@@ -9,7 +9,7 @@ import {
   type TaskProviderConversationState,
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
-import type { ClaudeSettingSource, NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
+import type { CanonicalRetrievedContextPart, ClaudeSettingSource, NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
 import { resolveCommandInput } from "@/lib/commands";
 import {
   buildCanonicalConversationRequest,
@@ -219,6 +219,7 @@ export interface AppSettings {
   editorLspEnabled: boolean;
   editorAiCompletions: boolean;
   pythonLspCommand: string;
+  typescriptLspCommand: string;
   diffViewMode: "unified" | "split";
   confirmBeforeClose: boolean;
   providerDebugStream: boolean;
@@ -420,6 +421,7 @@ const defaultSettings: AppSettings = {
   editorLspEnabled: false,
   editorAiCompletions: false,
   pythonLspCommand: "",
+  typescriptLspCommand: "",
   diffViewMode: "unified",
   confirmBeforeClose: true,
   providerDebugStream: false,
@@ -2460,6 +2462,29 @@ export const useAppStore = create<AppState>()(
         // ─────────────────────────────────────────────────────────────────────
 
         const providerConversation = state.providerConversationByTask[resolvedTaskId];
+
+        // ── Repo-map context injection ─────────────────────────────────────────
+        // On the first turn of a task, inject the pre-generated repo-map summary
+        // as retrieved context so the AI immediately knows the codebase structure
+        // (hotspots, entrypoints, read-first docs) without having to explore first.
+        // TopBar warms this cache asynchronously, and the first turn does a
+        // best-effort synchronous read from the main-process cache.
+        const retrievedContextParts: CanonicalRetrievedContextPart[] = [];
+        if (existingHistory.length === 0 && workspaceCwd) {
+          const repoMapContextResult = window.api?.fs?.getCachedRepoMapContextSync?.({
+            rootPath: workspaceCwd,
+          });
+          if (repoMapContextResult?.ok && repoMapContextResult.contextText) {
+            retrievedContextParts.push({
+              type: "retrieved_context",
+              sourceId: "stave:repo-map",
+              title: "Codebase Map",
+              content: repoMapContextResult.contextText,
+            });
+          }
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
         const conversation = buildCanonicalConversationRequest({
           turnId,
           taskId: resolvedTaskId,
@@ -2473,6 +2498,7 @@ export const useAppStore = create<AppState>()(
           imageContexts,
           skillContexts: skillSelection.selectedSkills,
           nativeConversationId: providerConversation?.[provider] ?? null,
+          retrievedContextParts,
         });
         const prompt = normalizedPrompt;
 

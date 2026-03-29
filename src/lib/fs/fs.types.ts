@@ -1,3 +1,5 @@
+import type { RepoMapSnapshot } from "@/lib/fs/repo-map.types";
+
 export interface WorkspaceRootInfo {
   rootName: string;
   rootPath?: string;
@@ -37,6 +39,7 @@ export interface WorkspaceFsAdapter {
   isAvailable: () => boolean;
   pickRoot: () => Promise<WorkspaceRootInfo | null>;
   listFiles: () => Promise<string[]>;
+  getRepoMap?: (args?: { refresh?: boolean }) => Promise<RepoMapSnapshot | null>;
   listDirectory: (args: { directoryPath?: string }) => Promise<WorkspaceDirectoryEntry[] | null>;
   readFile: (args: { filePath: string }) => Promise<WorkspaceFileData | null>;
   readFileDataUrl: (args: { filePath: string }) => Promise<WorkspaceImageData | null>;

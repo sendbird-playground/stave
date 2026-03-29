@@ -100,6 +100,26 @@ export function TopBar() {
     void loadSettingsDialog();
   }, []);
 
+  // Pre-warm the main-process repo-map context cache so the first AI turn in
+  // this workspace can synchronously retrieve it without a full generation.
+  useEffect(() => {
+    if (!hasProjectContext || !activeWorkspacePath) {
+      return;
+    }
+
+    const getRepoMapContext = window.api?.fs?.getRepoMapContext;
+    if (!getRepoMapContext) {
+      return;
+    }
+
+    void getRepoMapContext({ rootPath: activeWorkspacePath })
+      .catch(() => {
+        // Pre-warming failure is non-fatal; the first turn simply won't have
+        // the repo-map injected. Subsequent turns or workspace re-opens will
+        // retry automatically.
+      });
+  }, [activeWorkspacePath, hasProjectContext]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const hasMod = event.ctrlKey || event.metaKey;

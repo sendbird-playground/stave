@@ -16,18 +16,25 @@ That path powers:
 
 ## Project language servers
 
-Other languages can use an Electron-managed Language Server Protocol runtime.
+Stave also has an Electron-managed Language Server Protocol runtime for project-level intelligence that should follow the active workspace root.
 
 Current support:
 
+- TypeScript and JavaScript via `typescript-language-server`
 - Python via `pyright-langserver` or `basedpyright-langserver`
 
 The editor settings expose:
 
 - a toggle to enable the LSP runtime
-- a Python server command override
+- a TypeScript LSP command override
+- a Python LSP command override
 
 When enabled, Stave starts one stdio-backed language-server session per active workspace root and language, then forwards Monaco document sync, hover, completion, definition, and diagnostics through Electron IPC.
+
+Notes:
+
+- TypeScript and JavaScript still keep Monaco's built-in worker-based support. The LSP runtime is the optional project-level layer on top.
+- The TypeScript server handles `.ts`, `.tsx`, `.js`, and `.jsx` files through the same workspace session.
 
 ## macOS file-system permissions
 
@@ -46,6 +53,7 @@ Alternatively, keep your development workspace outside a protected folder (e.g. 
 
 ## Current limits
 
+- TypeScript/JavaScript LSP support depends on an installed external language server
 - Python support depends on an installed external language server
 - the active workspace root is the session boundary
 - nested per-package config discovery is not implemented yet

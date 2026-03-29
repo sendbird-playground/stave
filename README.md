@@ -23,8 +23,9 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - Session Replay drawer for recent-turn inspection and request snapshots
 - `$skill-name` composer selector that resolves installed Claude and Codex skills across global, user, and workspace scopes
 - file and image attachments in the composer, including screenshot capture and clipboard image paste with inline preview
-- Monaco editor with workspace-backed TypeScript IntelliSense, optional Python LSP support, docked terminal, and source-control actions
+- Monaco editor with workspace-backed TypeScript IntelliSense, optional LSP-backed TypeScript/JavaScript and Python support, docked terminal, and source-control actions
 - always-visible top-bar quick open for searching workspace files, with `Cmd/Ctrl+P` focusing it
+- generated repo-map cache with background pre-warming for first-turn codebase context injection
 - redesigned project, workspace, and task shell with a collapsible project sidebar, workspace task tabs, and a right-side activity rail
 - recent-project switching that preserves each project's own workspace list and last active workspace
 - automatic import of existing branch-backed git worktrees when a project opens
@@ -41,7 +42,25 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - Tailwind CSS v4
 - Monaco Editor
 - SQLite via `better-sqlite3`
+- LMDB
 - Playwright
+
+## Future Data Roadmap
+
+Stave's near-term local data direction is:
+
+- `SQLite` for durable application state such as workspaces, tasks, messages, and turns
+- `LMDB` as the hot local cache for repo-map snapshots, formatted first-turn context, and multi-workspace reuse
+- `LanceDB` as a future semantic retrieval layer if embedding-backed code/doc search becomes necessary
+- `DuckDB` as a future local analytics engine for audit-log analysis, usage statistics, and heavier aggregate queries
+
+The intent is to keep these roles separate instead of forcing one storage engine to do every job.
+
+Related design docs:
+
+- [Repo map multilayer cache design (2026-03-29)](docs/future/repo-map-multilayer-cache-design-2026-03-29.md)
+- [Local data roadmap (2026-03-29)](docs/future/local-data-roadmap-2026-03-29.md)
+- [Docs staleness audit (2026-03-29)](docs/future/docs-staleness-audit-2026-03-29.md)
 
 ## Prerequisites
 
@@ -54,6 +73,7 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
     - `choco install visualstudio2022buildtools python --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"`
 - a working `claude` CLI login if you want Claude support
 - a working `codex` CLI login if you want Codex support
+- `typescript-language-server` on your PATH if you want optional TypeScript/JavaScript LSP support in the editor
 - `pyright-langserver` or `basedpyright-langserver` on your PATH if you want Python LSP support in the editor
 
 Typical auth commands:
@@ -197,8 +217,16 @@ Stable project documentation now lives under `docs/`.
 - [Documentation index](docs/README.md)
 - [Install Guide](docs/install-guide.md)
 - [Runtime architecture](docs/architecture/runtime.md)
+- [Architecture map](docs/architecture/index.md)
 - [Conversation flow](docs/architecture/conversation-flow.md)
+- [Entrypoints](docs/architecture/entrypoints.md)
+- [Contracts](docs/architecture/contracts.md)
+- [Repo map spec](docs/architecture/repo-map-spec.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
+- [Agent exploration harness plan (2026-03-29)](docs/future/agent-exploration-harness-plan-2026-03-29.md)
+- [Repo map multilayer cache design (2026-03-29)](docs/future/repo-map-multilayer-cache-design-2026-03-29.md)
+- [Local data roadmap (2026-03-29)](docs/future/local-data-roadmap-2026-03-29.md)
+- [Docs staleness audit (2026-03-29)](docs/future/docs-staleness-audit-2026-03-29.md)
 - [Future SDK backlog](docs/future/claude-sdk-candidates.md)
 - [Checkpoint restore roadmap (2026-03-29)](docs/future/checkpoint-restore-roadmap-2026-03-29.md)
 - [Codebase simplification plan (2026-03-26)](docs/future/codebase-simplification-plan-2026-03-26.md)

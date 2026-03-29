@@ -5,6 +5,7 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "@/lib/providers/provider.types";
+import type { RepoMapContextResponse, RepoMapResponse } from "@/lib/fs/repo-map.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
 
@@ -103,6 +104,9 @@ interface WindowFsApi {
   pickRoot?: () => Promise<{ ok: boolean; rootPath?: string; rootName?: string; files: string[]; stderr?: string }>;
   resolvePath?: (args: { inputPath: string }) => Promise<{ ok: boolean; rootPath?: string; rootName?: string; files?: string[]; stderr?: string }>;
   listFiles?: (args: { rootPath: string }) => Promise<{ ok: boolean; files: string[]; stderr?: string }>;
+  getRepoMap?: (args: { rootPath: string; refresh?: boolean }) => Promise<RepoMapResponse>;
+  getRepoMapContext?: (args: { rootPath: string; refresh?: boolean }) => Promise<RepoMapContextResponse>;
+  getCachedRepoMapContextSync?: (args: { rootPath: string }) => RepoMapContextResponse;
   listDirectory?: (args: { rootPath: string; directoryPath?: string }) => Promise<{
     ok: boolean;
     entries: Array<{
@@ -157,7 +161,7 @@ interface WindowSkillsApi {
   getCatalog?: (args?: { workspacePath?: string }) => Promise<SkillCatalogResponse>;
 }
 
-type LspLanguageId = "python";
+type LspLanguageId = "python" | "typescript";
 
 interface WindowLspApi {
   syncDocument?: (args: {
