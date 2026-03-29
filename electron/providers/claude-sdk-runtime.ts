@@ -24,6 +24,7 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { toText } from "./utils";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
+import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
@@ -692,9 +693,27 @@ function toProviderSlashCommand(command: SlashCommand) {
   };
 }
 
+function resolveGitHeadRef(args: { cwd?: string }) {
+  if (!args.cwd) {
+    return undefined;
+  }
+  try {
+    const output = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: args.cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const gitRef = output.trim().split("\n")[0]?.trim();
+    return gitRef || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function mapClaudeMessageToEvents(args: {
   message: SDKMessage;
   claudeDebugStream: boolean;
+  cwd?: string;
 }): BridgeEvent[] {
   const { message, claudeDebugStream } = args;
 
@@ -713,7 +732,15 @@ export function mapClaudeMessageToEvents(args: {
     if (sysMsg.subtype === "compact_boundary") {
       const meta = (sysMsg as { compact_metadata?: { trigger?: string } }).compact_metadata;
       const trigger = meta?.trigger ?? "auto";
-      return [{ type: "system", content: `Context compacted (${trigger}).` }];
+      const gitRef = resolveGitHeadRef({ cwd: args.cwd });
+      return [{
+        type: "system",
+        content: `Context compacted (${trigger}).`,
+        compactBoundary: {
+          trigger,
+          ...(gitRef ? { gitRef } : {}),
+        },
+      }];
     }
     if (sysMsg.subtype === "status") {
       const status = (sysMsg as { status?: string | null }).status;
@@ -1366,7 +1393,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       if (message.type === "result") {
         finalStopReason = (message as SDKResultMessage).stop_reason ?? undefined;
       }
-      let normalizedEvents = mapClaudeMessageToEvents({ message, claudeDebugStream });
+      let normalizedEvents = mapClaudeMessageToEvents({ message, claudeDebugStream, cwd: runtimeCwd });
       // Deduplicate: if text/thinking already came through stream_event deltas, skip the
       // full assistant message duplicates (they contain the same content assembled).
       if (message.type === "assistant" && (hasStreamedText || hasStreamedThinking)) {

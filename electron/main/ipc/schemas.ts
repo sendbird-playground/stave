@@ -174,6 +174,10 @@ const CanonicalMessagePartSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("system_event"),
     content: z.string().max(500_000),
+    compactBoundary: z.object({
+      trigger: z.string().max(200).optional(),
+      gitRef: z.string().max(200).optional(),
+    }).strict().optional(),
   }).strict(),
   z.object({
     type: z.literal("stave_processing"),

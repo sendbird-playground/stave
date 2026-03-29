@@ -57,7 +57,14 @@ export type BridgeEvent =
   }
   | { type: "tool_progress"; toolUseId: string; toolName: string; elapsedSeconds: number }
   | { type: "plan_ready"; planText: string }
-  | { type: "system"; content: string }
+  | {
+    type: "system";
+    content: string;
+    compactBoundary?: {
+      trigger?: string;
+      gitRef?: string;
+    };
+  }
   | { type: "subagent_progress"; toolUseId?: string; content: string }
   | { type: "model_resolved"; resolvedProviderId: "claude-code" | "codex"; resolvedModel: string }
   | {

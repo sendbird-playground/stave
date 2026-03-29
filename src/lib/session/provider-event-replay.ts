@@ -302,6 +302,18 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
       return sanitizeMessagePartPayload({
         type: "system_event",
         content: event.content,
+        ...(event.compactBoundary
+          ? {
+              compactBoundary: {
+                ...(event.compactBoundary.trigger
+                  ? { trigger: event.compactBoundary.trigger }
+                  : {}),
+                ...(event.compactBoundary.gitRef
+                  ? { gitRef: event.compactBoundary.gitRef }
+                  : {}),
+              },
+            }
+          : {}),
       });
     case "subagent_progress":
       // Handled separately in appendProviderEventToAssistant — not a standalone part.

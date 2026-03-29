@@ -319,6 +319,7 @@ interface AppState {
   exportTask: (args: { taskId: string }) => void;
   viewTaskChanges: (args: { taskId: string }) => Promise<void>;
   rollbackTask: (args: { taskId: string }) => Promise<void>;
+  rollbackToCompactBoundary: (args: { taskId: string; gitRef: string; trigger?: string }) => Promise<void>;
   archiveTask: (args: { taskId: string }) => void;
   setTaskProvider: (args: { taskId: string; provider: ProviderId }) => void;
   setWorkspaceBranch: (args: { workspaceId: string; branch: string }) => void;
@@ -1991,6 +1992,73 @@ export const useAppStore = create<AppState>()(
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
           };
+        });
+      },
+      rollbackToCompactBoundary: async ({ taskId, gitRef, trigger }) => {
+        const state = get();
+        const resolvedGitRef = gitRef.trim();
+        if (!resolvedGitRef) {
+          return;
+        }
+        const taskWorkspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+        const workspaceCwd = state.workspacePathById[taskWorkspaceId] || state.projectPath || undefined;
+        const runCommand = window.api?.terminal?.runCommand;
+        if (!runCommand) {
+          return;
+        }
+
+        const compactBoundaryLabel = trigger?.trim()
+          ? `context compacted (${trigger.trim()})`
+          : "context compacted";
+
+        const appendResultMessage = (args: { rawOutput: string; output: string; files?: string[] }) => {
+          set((nextState) => {
+            const current = nextState.messagesByTask[taskId] ?? [];
+            const message: ChatMessage = {
+              id: buildMessageId({ taskId, count: current.length }),
+              role: "assistant",
+              model: "system",
+              providerId: "user",
+              content: args.rawOutput,
+              parts: [{
+                type: "text",
+                text: args.output,
+              }],
+            };
+            return {
+              ...(args.files ? { projectFiles: args.files } : {}),
+              messagesByTask: {
+                ...nextState.messagesByTask,
+                [taskId]: [...current, message],
+              },
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
+            };
+          });
+        };
+
+        if (state.activeTurnIdsByTask[taskId]) {
+          appendResultMessage({
+            rawOutput: "Restore is blocked while a turn is still running.",
+            output: "> **Restore blocked.** Wait for the active turn to complete, then retry.",
+          });
+          return;
+        }
+
+        const restoreResult = await runCommand({
+          cwd: workspaceCwd,
+          command: `git restore --source=${JSON.stringify(resolvedGitRef)} --staged --worktree .`,
+        });
+        const rawOutput = restoreResult.ok
+          ? `Restore complete to ${compactBoundaryLabel} checkpoint ${resolvedGitRef}.`
+          : (restoreResult.stderr.trim() || "Restore failed.");
+        const output = restoreResult.ok
+          ? `Restore complete to ${compactBoundaryLabel} checkpoint \`${resolvedGitRef}\`.`
+          : `> **Restore failed.** ${restoreResult.stderr.trim() || "Unknown error."}`;
+        const files = await workspaceFsAdapter.listFiles();
+        appendResultMessage({
+          rawOutput,
+          output,
+          files,
         });
       },
       archiveTask: ({ taskId }) => {
