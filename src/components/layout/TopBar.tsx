@@ -1,14 +1,41 @@
-import { FolderTree, LoaderCircle, Code2, SquareTerminal, FolderOpen, ChevronDown } from "lucide-react";
-import { Suspense, lazy, useCallback, useEffect, useState, type CSSProperties } from "react";
+import {
+  FolderTree,
+  LoaderCircle,
+  Code2,
+  SquareTerminal,
+  FolderOpen,
+  ChevronDown,
+} from "lucide-react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import {
+  Card,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui";
 import { useAppStore } from "@/store/app.store";
 import { TopBarBranchDropdown } from "@/components/layout/TopBarBranchDropdown";
 import { TopBarFileSearch } from "@/components/layout/TopBarFileSearch";
 import { TopBarOpenPR } from "@/components/layout/TopBarOpenPR";
 import { TopBarUtilityActions } from "@/components/layout/TopBarUtilityActions";
 import { TopBarWindowControls } from "@/components/layout/TopBarWindowControls";
-import { getRepoMapContextCache, setRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
+import {
+  getRepoMapContextCache,
+  setRepoMapContextCache,
+} from "@/lib/fs/repo-map-context-cache";
 import { formatRepoMapForContext } from "@/lib/fs/repo-map.types";
 
 const loadSettingsDialog = () =>
@@ -21,10 +48,14 @@ const loadKeyboardShortcutsDrawer = () =>
     default: module.KeyboardShortcutsDrawer,
   }));
 const KeyboardShortcutsDrawer = lazy(() => loadKeyboardShortcutsDrawer());
+const IS_MAC = window.api?.platform === "darwin";
 const TOP_BAR_DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
 const TOP_BAR_NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
-function formatWorkspacePathLabel(args: { workspacePath?: string; projectPath?: string | null }) {
+function formatWorkspacePathLabel(args: {
+  workspacePath?: string;
+  projectPath?: string | null;
+}) {
   const workspacePath = args.workspacePath?.trim();
   if (!workspacePath) {
     return "";
@@ -48,16 +79,23 @@ export function TopBar() {
     activeWorkspaceId,
     workspacePathById,
     projectPath,
-  ] = useAppStore(useShallow((state) => [
-    state.isDarkMode,
-    state.setDarkMode,
-    state.refreshProjectFiles,
-    state.activeWorkspaceId,
-    state.workspacePathById,
-    state.projectPath,
-  ] as const));
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.isDarkMode,
+          state.setDarkMode,
+          state.refreshProjectFiles,
+          state.activeWorkspaceId,
+          state.workspacePathById,
+          state.projectPath,
+        ] as const,
+    ),
+  );
   const hasProjectContext = Boolean(projectPath?.trim());
-  const activeWorkspacePath = hasProjectContext ? (workspacePathById[activeWorkspaceId] ?? projectPath ?? "") : "";
+  const activeWorkspacePath = hasProjectContext
+    ? (workspacePathById[activeWorkspaceId] ?? projectPath ?? "")
+    : "";
   const workspacePathLabel = formatWorkspacePathLabel({
     workspacePath: activeWorkspacePath,
     projectPath,
@@ -146,11 +184,13 @@ export function TopBar() {
 
       const target = event.target;
       if (
-        target instanceof HTMLElement
-        && (
-          target.isContentEditable
-          || Boolean(target.closest("input, textarea, select, [role='textbox'], [contenteditable='true']"))
-        )
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          Boolean(
+            target.closest(
+              "input, textarea, select, [role='textbox'], [contenteditable='true']",
+            ),
+          ))
       ) {
         return;
       }
@@ -167,22 +207,31 @@ export function TopBar() {
     <>
       <header
         data-testid="top-bar"
-        className="relative z-30 flex h-12 items-center justify-between gap-3 border-b border-border/70 bg-card px-3.5"
+        className={`relative z-30 flex h-12 items-center justify-between gap-3 border-b border-border/70 bg-card px-3.5${IS_MAC ? " pl-20" : ""}`}
         style={TOP_BAR_DRAG_STYLE}
       >
         <div className="flex min-w-0 shrink-0 items-center gap-2">
           <TooltipProvider>
-            {hasProjectContext ? <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
+            {hasProjectContext ? (
+              <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+            ) : null}
             {hasProjectContext && activeWorkspacePath ? (
-              <div className="flex min-w-0 items-center" style={TOP_BAR_NO_DRAG_STYLE}>
+              <div
+                className="flex min-w-0 items-center"
+                style={TOP_BAR_NO_DRAG_STYLE}
+              >
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="inline-flex max-w-[220px] items-center gap-2 rounded-l-md border border-r-0 border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
                       <FolderTree className="size-3.5 shrink-0" />
-                      <span className="truncate font-mono">{workspacePathLabel}</span>
+                      <span className="truncate font-mono">
+                        {workspacePathLabel}
+                      </span>
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">{activeWorkspacePath}</TooltipContent>
+                  <TooltipContent side="bottom">
+                    {activeWorkspacePath}
+                  </TooltipContent>
                 </Tooltip>
                 <DropdownMenu>
                   <Tooltip>
@@ -199,15 +248,33 @@ export function TopBar() {
                     <TooltipContent side="bottom">Open in…</TooltipContent>
                   </Tooltip>
                   <DropdownMenuContent align="start" className="min-w-[160px]">
-                    <DropdownMenuItem onClick={() => void window.api?.shell?.showInFinder?.({ path: activeWorkspacePath })}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        void window.api?.shell?.showInFinder?.({
+                          path: activeWorkspacePath,
+                        })
+                      }
+                    >
                       <FolderOpen className="size-4" />
                       Open in Finder
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => void window.api?.shell?.openInVSCode?.({ path: activeWorkspacePath })}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        void window.api?.shell?.openInVSCode?.({
+                          path: activeWorkspacePath,
+                        })
+                      }
+                    >
                       <Code2 className="size-4" />
                       Open in VS Code
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => void window.api?.shell?.openInTerminal?.({ path: activeWorkspacePath })}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        void window.api?.shell?.openInTerminal?.({
+                          path: activeWorkspacePath,
+                        })
+                      }
+                    >
                       <SquareTerminal className="size-4" />
                       Open in Terminal
                     </DropdownMenuItem>
@@ -215,15 +282,20 @@ export function TopBar() {
                 </DropdownMenu>
               </div>
             ) : null}
-            {hasProjectContext ? <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
+            {hasProjectContext ? (
+              <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+            ) : null}
           </TooltipProvider>
         </div>
-        <div
-          className="hidden min-w-0 flex-1 justify-center lg:flex"
-        >
-          {hasProjectContext ? <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} /> : null}
+        <div className="hidden min-w-0 flex-1 justify-center lg:flex">
+          {hasProjectContext ? (
+            <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+          ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5" style={TOP_BAR_NO_DRAG_STYLE}>
+        <div
+          className="flex shrink-0 items-center gap-1.5"
+          style={TOP_BAR_NO_DRAG_STYLE}
+        >
           <TopBarUtilityActions
             canRefreshProjectFiles={hasProjectContext}
             isDarkMode={isDarkMode}
@@ -235,17 +307,27 @@ export function TopBar() {
             onPreloadShortcuts={handlePreloadShortcuts}
             onPreloadSettings={handlePreloadSettings}
           />
-          <TopBarWindowControls noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+          {IS_MAC ? null : (
+            <TopBarWindowControls noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+          )}
         </div>
       </header>
       {shortcutsOpen ? (
-        <Suspense fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}>
-          <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <Suspense
+          fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}
+        >
+          <KeyboardShortcutsDrawer
+            open={shortcutsOpen}
+            onOpenChange={setShortcutsOpen}
+          />
         </Suspense>
       ) : null}
       {settingsOpen ? (
         <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
-          <SettingsDialog open={settingsOpen} onOpenChange={({ open }) => setSettingsOpen(open)} />
+          <SettingsDialog
+            open={settingsOpen}
+            onOpenChange={({ open }) => setSettingsOpen(open)}
+          />
         </Suspense>
       ) : null}
     </>
