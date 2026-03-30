@@ -382,9 +382,13 @@ export function ExplorerEntryIcon(args: { entry: WorkspaceDirectoryEntry; isOpen
     );
   }
 
+  return <WorkspaceFileIcon fileName={args.entry.name} />;
+}
+
+export function WorkspaceFileIcon(args: { fileName: string; className?: string }) {
   return (
-    <span className="flex h-4 w-[14px] shrink-0 items-center justify-center [&_svg]:block [&_svg]:h-full [&_svg]:w-full">
-      <FileIcon {...resolveFileIconProps(args.entry.name)} />
+    <span className={cn("flex h-4 w-[14px] shrink-0 items-center justify-center [&_svg]:block [&_svg]:h-full [&_svg]:w-full", args.className)}>
+      <FileIcon {...resolveFileIconProps(args.fileName)} />
     </span>
   );
 }
