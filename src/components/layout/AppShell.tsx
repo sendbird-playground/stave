@@ -289,6 +289,7 @@ export function AppShell() {
   const mobileOverlayMode = !isLargeViewport
     ? (editorVisible ? "editor" : (sidebarOverlayVisible ? "sidebar" : null))
     : null;
+  const showMobileRightPanel = mobileOverlayMode !== null;
 
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
@@ -345,131 +346,129 @@ export function AppShell() {
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
-        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/50">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {hasProject ? <WorkspaceTaskTabs /> : null}
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-2">
-                <div ref={panelRowRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden px-2 pt-2">
-                  <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
-                    <ChatArea />
-                  </div>
-                  {showDesktopEditor ? (
-                    <>
-                      <div
-                        className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          const startX = event.clientX;
-                          const startWidth = editorPanelWidth;
-                          const onMove = (moveEvent: MouseEvent) => {
-                            const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
-                            const explorerWidth = sidebarOverlayVisible ? explorerPanelWidth : 0;
-                            const separators = sidebarOverlayVisible ? 10 : 5;
-                            const chatMinWidth = 420;
-                            const maxEditor = Math.max(0, containerWidth - chatMinWidth - explorerWidth - separators);
-                            const minEditor = Math.min(MIN_EDITOR_PANEL_WIDTH, maxEditor);
-                            const delta = startX - moveEvent.clientX;
-                            const next = Math.max(minEditor, Math.min(maxEditor, startWidth + delta));
-                            scheduleLayoutResizePatch("editorPanelWidth", next);
-                          };
-                          const onUp = () => {
-                            flushPendingLayoutPatch();
-                            window.removeEventListener("mousemove", onMove);
-                            window.removeEventListener("mouseup", onUp);
-                          };
-                          window.addEventListener("mousemove", onMove);
-                          window.addEventListener("mouseup", onUp);
-                        }}
-                      />
-                      <div className="hidden h-full min-w-0 lg:block" style={{ width: `${editorPanelWidth}px` }}>
-                        <RenderProfiler id="EditorMainPanel" thresholdMs={10}>
-                          <EditorMainPanel />
-                        </RenderProfiler>
-                      </div>
-                    </>
-                  ) : null}
-                  {showDesktopSidebar ? (
-                    <>
-                      <div
-                        className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          const startX = event.clientX;
-                          const startWidth = explorerPanelWidth;
-                          const onMove = (moveEvent: MouseEvent) => {
-                            const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
-                            const editorWidth = editorVisible ? editorPanelWidth : 0;
-                            const separators = editorVisible ? 10 : 5;
-                            const chatMinWidth = 420;
-                            const maxExplorer = Math.max(200, containerWidth - chatMinWidth - editorWidth - separators);
-                            const delta = startX - moveEvent.clientX;
-                            const next = Math.max(200, Math.min(maxExplorer, startWidth + delta));
-                            scheduleLayoutResizePatch("explorerPanelWidth", next);
-                          };
-                          const onUp = () => {
-                            flushPendingLayoutPatch();
-                            window.removeEventListener("mousemove", onMove);
-                            window.removeEventListener("mouseup", onUp);
-                          };
-                          window.addEventListener("mousemove", onMove);
-                          window.addEventListener("mouseup", onUp);
-                        }}
-                      />
-                      <Suspense fallback={<aside className="rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm" style={{ width: `${explorerPanelWidth}px` }}>Loading panel...</aside>}>
-                        <div className="hidden h-full min-w-0 lg:block" style={{ width: `${explorerPanelWidth}px` }}>
-                          <RenderProfiler id="EditorPanel" thresholdMs={8}>
-                            <EditorPanel />
-                          </RenderProfiler>
-                        </div>
-                      </Suspense>
-                    </>
-                  ) : null}
-                  {mobileOverlayMode ? (
-                    <div className="absolute inset-0 z-20 px-2 pt-2 lg:hidden">
-                      <div className="flex h-full justify-end rounded-lg bg-overlay/20 backdrop-blur-[1px]">
-                        <div className="h-full w-full max-w-[min(32rem,100%)] min-w-0">
-                          {mobileOverlayMode === "editor" ? (
-                            <RenderProfiler id="EditorMainPanelMobile" thresholdMs={10}>
-                              <EditorMainPanel />
-                            </RenderProfiler>
-                          ) : (
-                            <Suspense fallback={<aside className="h-full rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm">Loading panel...</aside>}>
-                              <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
-                                <EditorPanel />
-                              </RenderProfiler>
-                            </Suspense>
-                          )}
-                        </div>
-                      </div>
+        <div ref={panelRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/50">
+          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              {hasProject ? <WorkspaceTaskTabs /> : null}
+              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-2">
+                  <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden px-2 pt-2">
+                    <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
+                      <ChatArea />
                     </div>
-                  ) : null}
-                </div>
-                <div className={terminalDocked ? undefined : "hidden"}>
-                    <div
-                      className="h-[5px] shrink-0 cursor-row-resize transition-colors hover:bg-border/50"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        const startY = event.clientY;
-                        const startHeight = terminalDockHeight;
-                        const onMove = (moveEvent: MouseEvent) => {
-                          const delta = startY - moveEvent.clientY;
-                          const next = Math.max(120, Math.min(420, startHeight + delta));
-                          scheduleLayoutResizePatch("terminalDockHeight", next);
-                        };
-                        const onUp = () => {
-                          flushPendingLayoutPatch();
-                          window.removeEventListener("mousemove", onMove);
-                          window.removeEventListener("mouseup", onUp);
-                        };
-                        window.addEventListener("mousemove", onMove);
-                        window.addEventListener("mouseup", onUp);
-                      }}
-                    />
-                    <TerminalDock />
+                  </div>
+                  <div className={terminalDocked ? undefined : "hidden"}>
+                      <div
+                        className="h-[5px] shrink-0 cursor-row-resize transition-colors hover:bg-border/50"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          const startY = event.clientY;
+                          const startHeight = terminalDockHeight;
+                          const onMove = (moveEvent: MouseEvent) => {
+                            const delta = startY - moveEvent.clientY;
+                            const next = Math.max(120, Math.min(420, startHeight + delta));
+                            scheduleLayoutResizePatch("terminalDockHeight", next);
+                          };
+                          const onUp = () => {
+                            flushPendingLayoutPatch();
+                            window.removeEventListener("mousemove", onMove);
+                            window.removeEventListener("mouseup", onUp);
+                          };
+                          window.addEventListener("mousemove", onMove);
+                          window.addEventListener("mouseup", onUp);
+                        }}
+                      />
+                      <TerminalDock />
+                  </div>
                 </div>
               </div>
             </div>
+            {showDesktopEditor ? (
+              <>
+                <div
+                  className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    const startX = event.clientX;
+                    const startWidth = editorPanelWidth;
+                    const onMove = (moveEvent: MouseEvent) => {
+                      const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
+                      const explorerWidth = showDesktopSidebar ? explorerPanelWidth : 0;
+                      const separators = showDesktopSidebar ? 10 : 5;
+                      const chatMinWidth = 420;
+                      const maxEditor = Math.max(0, containerWidth - chatMinWidth - explorerWidth - separators);
+                      const minEditor = Math.min(MIN_EDITOR_PANEL_WIDTH, maxEditor);
+                      const delta = startX - moveEvent.clientX;
+                      const next = Math.max(minEditor, Math.min(maxEditor, startWidth + delta));
+                      scheduleLayoutResizePatch("editorPanelWidth", next);
+                    };
+                    const onUp = () => {
+                      flushPendingLayoutPatch();
+                      window.removeEventListener("mousemove", onMove);
+                      window.removeEventListener("mouseup", onUp);
+                    };
+                    window.addEventListener("mousemove", onMove);
+                    window.addEventListener("mouseup", onUp);
+                  }}
+                />
+                <div className="hidden min-h-0 min-w-0 py-2 pr-2 lg:block" style={{ width: `${editorPanelWidth}px` }}>
+                  <RenderProfiler id="EditorMainPanel" thresholdMs={10}>
+                    <EditorMainPanel />
+                  </RenderProfiler>
+                </div>
+              </>
+            ) : null}
+            {showDesktopSidebar ? (
+              <>
+                <div
+                  className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    const startX = event.clientX;
+                    const startWidth = explorerPanelWidth;
+                    const onMove = (moveEvent: MouseEvent) => {
+                      const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
+                      const editorWidth = showDesktopEditor ? editorPanelWidth : 0;
+                      const separators = showDesktopEditor ? 10 : 5;
+                      const chatMinWidth = 420;
+                      const maxExplorer = Math.max(200, containerWidth - chatMinWidth - editorWidth - separators);
+                      const delta = startX - moveEvent.clientX;
+                      const next = Math.max(200, Math.min(maxExplorer, startWidth + delta));
+                      scheduleLayoutResizePatch("explorerPanelWidth", next);
+                    };
+                    const onUp = () => {
+                      flushPendingLayoutPatch();
+                      window.removeEventListener("mousemove", onMove);
+                      window.removeEventListener("mouseup", onUp);
+                    };
+                    window.addEventListener("mousemove", onMove);
+                    window.addEventListener("mouseup", onUp);
+                  }}
+                />
+                <Suspense fallback={<aside className="my-2 mr-2 rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm" style={{ width: `${explorerPanelWidth}px` }}>Loading panel...</aside>}>
+                  <div className="hidden min-h-0 min-w-0 py-2 pr-2 lg:block" style={{ width: `${explorerPanelWidth}px` }}>
+                    <RenderProfiler id="EditorPanel" thresholdMs={8}>
+                      <EditorPanel />
+                    </RenderProfiler>
+                  </div>
+                </Suspense>
+              </>
+            ) : null}
+            {showMobileRightPanel ? (
+              <div className="min-h-0 min-w-0 w-[min(22rem,56vw)] max-w-[22rem] py-2 pr-2 lg:hidden">
+                {mobileOverlayMode === "editor" ? (
+                  <RenderProfiler id="EditorMainPanelMobile" thresholdMs={10}>
+                    <EditorMainPanel />
+                  </RenderProfiler>
+                ) : (
+                  <Suspense fallback={<aside className="h-full rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm">Loading panel...</aside>}>
+                    <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
+                      <EditorPanel />
+                    </RenderProfiler>
+                  </Suspense>
+                )}
+              </div>
+            ) : null}
           </div>
           <RightRail />
         </div>
