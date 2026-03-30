@@ -32,7 +32,7 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - automatic import of existing branch-backed git worktrees when a project opens
 - optional repo-scoped post-create workspace bootstrap command for new git worktrees, such as `bun install` or `npm install`
 - optional repo-scoped reuse of the repository root `node_modules` via workspace-local symlink for faster worktree startup
-- SQLite-backed local persistence for workspaces, tasks, messages, turns, and notifications
+- SQLite-backed local persistence for projects, workspaces, tasks, messages, turns, and notifications
 
 ## Stack
 
@@ -49,7 +49,7 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 
 Stave's near-term local data direction is:
 
-- `SQLite` for durable application state such as workspaces, tasks, messages, and turns
+- `SQLite` for durable application state such as projects, workspaces, tasks, messages, and turns
 - In-memory `Map` caches for repo-map context, formatted first-turn text, and other read-heavy renderer-side data (no persistence needed — caches are pre-warmed on workspace load)
 - `LanceDB` as a future semantic retrieval layer if embedding-backed code/doc search becomes necessary
 - `DuckDB` as a future local analytics engine for audit-log analysis, usage statistics, and heavier aggregate queries

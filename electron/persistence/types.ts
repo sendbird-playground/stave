@@ -51,6 +51,24 @@ export interface PersistenceWorkspaceSummary {
   updatedAt: string;
 }
 
+export interface PersistenceProjectRegistryEntry {
+  projectPath: string;
+  projectName: string;
+  lastOpenedAt: string;
+  defaultBranch: string;
+  workspaces: Array<{
+    id: string;
+    name: string;
+    updatedAt: string;
+  }>;
+  activeWorkspaceId: string;
+  workspaceBranchById: Record<string, string>;
+  workspacePathById: Record<string, string>;
+  workspaceDefaultById: Record<string, boolean>;
+  newWorkspaceInitCommand?: string;
+  newWorkspaceUseRootNodeModulesSymlink?: boolean;
+}
+
 export interface PersistenceTurnEvent {
   id: string;
   turnId: string;

@@ -4,13 +4,33 @@ import { useAppStore } from "@/store/app.store";
 
 export default function App() {
   useEffect(() => {
-    void useAppStore.getState().hydrateWorkspaces();
-    void useAppStore.getState().hydrateNotifications();
-    void useAppStore.getState().refreshProviderAvailability();
+    let cancelled = false;
+    void (async () => {
+      await useAppStore.getState().hydrateProjectRegistry();
+      if (cancelled) {
+        return;
+      }
+      await useAppStore.getState().hydrateWorkspaces();
+      if (cancelled) {
+        return;
+      }
+      await useAppStore.getState().flushProjectRegistry();
+      if (cancelled) {
+        return;
+      }
+      void useAppStore.getState().hydrateNotifications();
+      if (cancelled) {
+        return;
+      }
+      void useAppStore.getState().refreshProviderAvailability();
+    })();
     const timer = window.setInterval(() => {
       void useAppStore.getState().refreshProviderAvailability();
     }, 10000);
-    return () => window.clearInterval(timer);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -53,9 +73,42 @@ export default function App() {
   useEffect(() => {
     const onBeforeUnload = () => {
       void useAppStore.getState().flushActiveWorkspaceSnapshot({ sync: true });
+      void useAppStore.getState().flushProjectRegistry();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    let timer: number | null = null;
+    const flush = () => {
+      timer = null;
+      void useAppStore.getState().flushProjectRegistry();
+    };
+    const unsubscribe = useAppStore.subscribe((state, prevState) => {
+      if (
+        state.projectPath === prevState.projectPath
+        && state.projectName === prevState.projectName
+        && state.activeWorkspaceId === prevState.activeWorkspaceId
+        && state.workspaces === prevState.workspaces
+        && state.recentProjects === prevState.recentProjects
+        && state.workspaceBranchById === prevState.workspaceBranchById
+        && state.workspacePathById === prevState.workspacePathById
+        && state.workspaceDefaultById === prevState.workspaceDefaultById
+      ) {
+        return;
+      }
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(flush, 300);
+    });
+    return () => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      unsubscribe();
+    };
   }, []);
 
   return (
