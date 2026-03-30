@@ -40,6 +40,7 @@ import { useShallow } from "zustand/react/shallow";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { CreateWorkspaceDialog } from "@/components/layout/CreateWorkspaceDialog";
 import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
+import { MemoryUsagePopover } from "@/components/layout/ResourcesPopover";
 import { StaveAppMenuButton } from "@/components/layout/StaveAppMenuButton";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import type { SectionId } from "@/components/layout/settings-dialog-sections";
@@ -621,9 +622,11 @@ export function ProjectWorkspaceSidebar(args: {
                   </TooltipTrigger>
                   <TooltipContent side="right">Open Project</TooltipContent>
                 </Tooltip>
+                <MemoryUsagePopover collapsed />
               </div>
             ) : (
               <div className="flex w-full items-center justify-end gap-2">
+                <MemoryUsagePopover />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
