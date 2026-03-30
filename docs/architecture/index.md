@@ -33,6 +33,9 @@ This file is the fast entrypoint for codebase orientation.
   - strict IPC validation boundary
 - `src/lib/session/provider-event-replay.ts`
   - normalized event replay into shared chat state
+- `src/lib/pr-status.ts`
+  - PR status enum, derivation, icon/color/action config
+  - see [Workspace PR Status](../features/workspace-pr-status.md)
 
 ## High-Risk Boundaries
 

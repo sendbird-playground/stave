@@ -41,6 +41,7 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { CreateWorkspaceDialog } from "@/components/layout/CreateWorkspaceDialog";
 import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
 import { StaveAppMenuButton } from "@/components/layout/StaveAppMenuButton";
+import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import type { SectionId } from "@/components/layout/settings-dialog-sections";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import {
@@ -210,6 +211,8 @@ export function ProjectWorkspaceSidebar(args: {
     createWorkspace,
     closeWorkspace,
     setLayout,
+    workspacePrInfoById,
+    fetchAllWorkspacePrStatuses,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -249,6 +252,8 @@ export function ProjectWorkspaceSidebar(args: {
           state.createWorkspace,
           state.closeWorkspace,
           state.setLayout,
+          state.workspacePrInfoById,
+          state.fetchAllWorkspacePrStatuses,
         ] as const,
     ),
   );
@@ -359,6 +364,15 @@ export function ProjectWorkspaceSidebar(args: {
       setReorderMode(false);
     }
   }, [args.collapsed, reorderMode]);
+
+  // Fetch PR status for all non-default workspaces on mount and every 5 min.
+  useEffect(() => {
+    void fetchAllWorkspacePrStatuses();
+    const interval = setInterval(() => {
+      void fetchAllWorkspacePrStatuses();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchAllWorkspacePrStatuses]);
 
   const handleOpenSettings = useCallback((options?: {
     projectPath?: string | null;
@@ -1012,6 +1026,10 @@ export function ProjectWorkspaceSidebar(args: {
                                                                   respondingToneClass,
                                                                 )}
                                                                 barClassName="h-3 w-0.5 rounded-[2px]"
+                                                              />
+                                                            ) : !workspace.isDefault && workspacePrInfoById[workspace.id] ? (
+                                                              <PrStatusIcon
+                                                                status={workspacePrInfoById[workspace.id]!.derived}
                                                               />
                                                             ) : (
                                                               <WorkspaceIdentityMark

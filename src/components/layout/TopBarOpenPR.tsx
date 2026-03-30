@@ -1,8 +1,21 @@
-import { useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { ChevronDown, ChevronRight, GitPullRequest, LoaderCircle } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  GitPullRequest,
+  LoaderCircle,
+  RefreshCw,
+} from "lucide-react";
 import {
   Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Input,
   Textarea,
   Tooltip,
@@ -19,7 +32,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { generateFallbackPullRequestDraft } from "@/lib/source-control-pr";
+import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import { useAppStore } from "@/store/app.store";
+import {
+  type WorkspacePrStatus,
+  PR_STATUS_VISUAL,
+  PR_STATUS_ACTIONS,
+  PR_COLOR_BADGE_CLASS,
+} from "@/lib/pr-status";
+import { cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface ScmStatusItem {
   path: string;
@@ -32,7 +57,12 @@ type Step =
   | "ready"         // dialog open with all fields populated
   | "committing"    // committing uncommitted changes
   | "pushing"       // pushing to remote
-  | "creating-pr";  // running gh pr create
+  | "creating-pr"   // running gh pr create
+  | "action";       // running a PR action (mark ready, merge, etc.)
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const [step, setStep] = useState<Step>("idle");
@@ -58,6 +88,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     workspacePathById,
     projectPath,
     defaultBranch,
+    workspacePrInfoById,
+    fetchWorkspacePrStatus,
   ] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
     state.workspaceDefaultById,
@@ -65,6 +97,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     state.workspacePathById,
     state.projectPath,
     state.defaultBranch,
+    state.workspacePrInfoById,
+    state.fetchWorkspacePrStatus,
   ] as const));
 
   const isDefaultWorkspace = Boolean(workspaceDefaultById[activeWorkspaceId]);
@@ -73,7 +107,36 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const currentBranch = workspaceBranchById[activeWorkspaceId];
   const baseBranch = defaultBranch.trim() || "main";
 
+  const prInfo = workspacePrInfoById[activeWorkspaceId];
+  const prStatus: WorkspacePrStatus = prInfo?.derived ?? "no_pr";
+  const visual = PR_STATUS_VISUAL[prStatus];
+  const actions = PR_STATUS_ACTIONS[prStatus];
+
+  // -------------------------------------------------------------------------
+  // Polling – fetch PR status for active workspace
+  // -------------------------------------------------------------------------
+
+  const fetchStatus = useCallback(() => {
+    if (activeWorkspaceId && !isDefaultWorkspace) {
+      void fetchWorkspacePrStatus({ workspaceId: activeWorkspaceId });
+    }
+  }, [activeWorkspaceId, isDefaultWorkspace, fetchWorkspacePrStatus]);
+
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchStatus]);
+
+  // -------------------------------------------------------------------------
+  // Hide on default workspace
+  // -------------------------------------------------------------------------
+
   if (!hasWorkspaceContext || isDefaultWorkspace) return null;
+
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
 
   function generateFallbackCommitMessage(files: ScmStatusItem[]) {
     const added = files.filter((f) => f.code === "?" || f.code === "A").length;
@@ -94,7 +157,11 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     });
   }
 
-  async function handleClick() {
+  // -------------------------------------------------------------------------
+  // PR Creation flow
+  // -------------------------------------------------------------------------
+
+  async function handleCreateClick() {
     const getStatus = window.api?.sourceControl?.getStatus;
     const suggestPRDescription = window.api?.provider?.suggestPRDescription;
     if (!getStatus) {
@@ -107,7 +174,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     prTitleEditedRef.current = false;
     prBodyEditedRef.current = false;
 
-    // Open dialog immediately in loading state
     setStep("loading");
     setDialogOpen(true);
     setIsGenerating(true);
@@ -117,7 +183,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     setChangedFiles([]);
     setChangesExpanded(true);
 
-    // Run status check and PR description generation in parallel
     const statusPromise = getStatus({ cwd: workspaceCwd });
     const descPromise = suggestPRDescription
       ? suggestPRDescription({
@@ -139,7 +204,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       return;
     }
 
-    // Populate state
     setChangedFiles(status.items);
     const fallbackDraft = generateFallbackPRDraft(status.items);
     setPrTitle(fallbackDraft.title);
@@ -190,7 +254,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
       let message = commitMessage.trim();
       if (!message) {
-        // Try AI-generated commit message, fall back to generated message
         const suggestCommitMessage = window.api?.provider?.suggestCommitMessage;
         if (suggestCommitMessage) {
           try {
@@ -249,14 +312,16 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       return;
     }
 
-    // Success
+    // Success – close dialog, refresh status
     setDialogOpen(false);
     setStep("idle");
 
     const label = options.draft ? "Draft PR created" : "PR created";
     toast.success(label, { description: prResult.prUrl ?? "Pull request created successfully." });
 
-    // Open in browser
+    // Refresh PR status to pick up the new PR
+    fetchStatus();
+
     if (prResult.prUrl && openExternal) {
       try {
         await openExternal({ url: prResult.prUrl });
@@ -272,6 +337,81 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     void handleSubmit({ draft: false });
   }
 
+  // -------------------------------------------------------------------------
+  // PR Action handlers
+  // -------------------------------------------------------------------------
+
+  async function handleMarkReady() {
+    const setPrReady = window.api?.sourceControl?.setPrReady;
+    if (!setPrReady) { toast.error("Bridge unavailable"); return; }
+
+    setStep("action");
+    const result = await setPrReady({ cwd: workspaceCwd });
+    setStep("idle");
+
+    if (!result.ok) {
+      toast.error("Failed to mark PR as ready", { description: result.stderr });
+      return;
+    }
+    toast.success("PR marked as ready for review");
+    fetchStatus();
+  }
+
+  async function handleMerge() {
+    const mergePr = window.api?.sourceControl?.mergePr;
+    if (!mergePr) { toast.error("Bridge unavailable"); return; }
+
+    setStep("action");
+    const result = await mergePr({ method: "squash", cwd: workspaceCwd });
+    setStep("idle");
+
+    if (!result.ok) {
+      toast.error("Merge failed", { description: result.stderr });
+      return;
+    }
+    toast.success("PR merged successfully");
+    fetchStatus();
+  }
+
+  async function handleUpdateBranch() {
+    const updatePrBranch = window.api?.sourceControl?.updatePrBranch;
+    if (!updatePrBranch) { toast.error("Bridge unavailable"); return; }
+
+    setStep("action");
+    const result = await updatePrBranch({ cwd: workspaceCwd });
+    setStep("idle");
+
+    if (!result.ok) {
+      toast.error("Branch update failed", { description: result.stderr });
+      return;
+    }
+    toast.success("Branch updated");
+    fetchStatus();
+  }
+
+  function handleOpenGitHub() {
+    const url = prInfo?.pr?.url;
+    if (url) {
+      void window.api?.shell?.openExternal?.({ url });
+    }
+  }
+
+  function handleAction(key: string) {
+    switch (key) {
+      case "create_pr":     void handleCreateClick(); break;
+      case "create_draft":  void handleCreateClick(); break;
+      case "mark_ready":    void handleMarkReady(); break;
+      case "merge":         void handleMerge(); break;
+      case "update_branch": void handleUpdateBranch(); break;
+      case "open_github":   handleOpenGitHub(); break;
+      case "refresh":       fetchStatus(); break;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Derived UI state
+  // -------------------------------------------------------------------------
+
   const isBusy = step !== "idle" && step !== "ready";
   const isDialogBusy = step === "committing" || step === "pushing" || step === "creating-pr";
   const statusLabel =
@@ -279,30 +419,116 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     step === "committing" ? "Committing..." :
     step === "pushing" ? "Pushing..." :
     step === "creating-pr" ? "Creating..." :
+    step === "action" ? "Working..." :
     null;
+
+  const badgeColorClass = PR_COLOR_BADGE_CLASS[visual.color];
+
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
 
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
-            style={props.noDragStyle}
-            onClick={() => void handleClick()}
-            disabled={isBusy}
-          >
-            {isBusy ? (
-              <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
-            ) : (
-              <GitPullRequest className="size-3.5 shrink-0" />
-            )}
-            {statusLabel ?? "Create PR"}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">Create a pull request on GitHub</TooltipContent>
-      </Tooltip>
+      {/* --- Trigger button: "Create PR" or PR status dropdown --- */}
+      {prStatus === "no_pr" ? (
+        /* No PR – show "Create PR" button */
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+              style={props.noDragStyle}
+              onClick={() => void handleCreateClick()}
+              disabled={isBusy}
+            >
+              {isBusy ? (
+                <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+              ) : (
+                <GitPullRequest className="size-3.5 shrink-0" />
+              )}
+              {statusLabel ?? "Create PR"}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Create a pull request on GitHub</TooltipContent>
+        </Tooltip>
+      ) : (
+        /* Has PR – show status dropdown */
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                    badgeColorClass,
+                  )}
+                  style={props.noDragStyle}
+                  disabled={isBusy}
+                >
+                  {isBusy ? (
+                    <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+                  ) : (
+                    <PrStatusIcon status={prStatus} className="size-3.5" />
+                  )}
+                  {statusLabel ?? visual.label}
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              PR #{prInfo?.pr?.number}: {visual.label}
+            </TooltipContent>
+          </Tooltip>
 
+          <DropdownMenuContent align="end" className="w-64">
+            {/* PR info header */}
+            <DropdownMenuLabel className="flex flex-col gap-0.5">
+              <span className="truncate text-xs font-medium">
+                #{prInfo?.pr?.number} {prInfo?.pr?.title}
+              </span>
+              <span className="text-[10px] font-normal text-muted-foreground">
+                {currentBranch} &rarr; {prInfo?.pr?.baseRefName ?? baseBranch}
+              </span>
+            </DropdownMenuLabel>
+
+            <DropdownMenuSeparator />
+
+            {/* Primary action */}
+            {actions.primary ? (
+              <DropdownMenuItem
+                className="font-medium"
+                onSelect={() => handleAction(actions.primary!.key)}
+              >
+                {actions.primary.label}
+              </DropdownMenuItem>
+            ) : null}
+
+            {/* Secondary actions */}
+            {actions.secondary.map((action) => (
+              <DropdownMenuItem
+                key={action.key}
+                onSelect={() => handleAction(action.key)}
+              >
+                {action.key === "open_github" || action.key === "refresh" ? (
+                  <span className="flex items-center gap-2">
+                    {action.key === "open_github" ? (
+                      <ExternalLink className="size-3.5 text-muted-foreground" />
+                    ) : (
+                      <RefreshCw className="size-3.5 text-muted-foreground" />
+                    )}
+                    {action.label}
+                  </span>
+                ) : (
+                  action.label
+                )}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {/* --- PR Creation Dialog --- */}
       <Dialog
         open={dialogOpen}
         onOpenChange={(open) => {
