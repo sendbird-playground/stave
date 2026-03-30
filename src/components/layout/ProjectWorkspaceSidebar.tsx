@@ -705,6 +705,13 @@ export function ProjectWorkspaceSidebar(args: {
                               className={cn("gap-px", respondingToneClass)}
                               barClassName="h-3 w-0.5 rounded-[2px]"
                             />
+                          ) : !entry.isDefault &&
+                            workspacePrInfoById[entry.workspaceId] ? (
+                            <PrStatusIcon
+                              status={
+                                workspacePrInfoById[entry.workspaceId]!.derived
+                              }
+                            />
                           ) : (
                             <WorkspaceIdentityMark
                               workspaceName={entry.workspaceName}
