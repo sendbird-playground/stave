@@ -95,6 +95,33 @@ export function findLatestPendingApprovalPart(args: {
   return undefined;
 }
 
+export function findPendingApprovalMessageByRequestId(args: {
+  messages: ChatMessage[];
+  requestId: string;
+}): { messageId: string; part: ApprovalPart } | null {
+  for (let messageIndex = args.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const message = args.messages[messageIndex];
+    if (!message) {
+      continue;
+    }
+    for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
+      const part = message.parts[partIndex];
+      if (
+        part?.type === "approval"
+        && part.requestId === args.requestId
+        && part.state === "approval-requested"
+      ) {
+        return {
+          messageId: message.id,
+          part,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 export function findLatestPendingUserInputPart(args: {
   message?: Pick<ChatMessage, "parts">;
 }): UserInputPart | undefined {

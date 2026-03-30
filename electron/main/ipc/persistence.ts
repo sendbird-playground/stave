@@ -1,9 +1,13 @@
 import { ipcMain } from "electron";
 import type { PersistenceWorkspaceSnapshot } from "../../persistence/types";
 import {
+  CreateNotificationArgsSchema,
   ListLatestWorkspaceTurnsArgsSchema,
+  ListNotificationsArgsSchema,
   ListTaskTurnsArgsSchema,
   ListTurnEventsArgsSchema,
+  MarkAllNotificationsReadArgsSchema,
+  MarkNotificationReadArgsSchema,
   PersistenceUpsertArgsSchema,
   WorkspaceIdArgsSchema,
 } from "./schemas";
@@ -68,6 +72,52 @@ export function registerPersistenceHandlers() {
     const store = await ensurePersistenceReady();
     store.closeWorkspace({ workspaceId: parsedArgs.data.workspaceId });
     return { ok: true };
+  });
+
+  ipcMain.handle("persistence:list-notifications", async (_event, args: unknown) => {
+    const parsedArgs = ListNotificationsArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, notifications: [] };
+    }
+    const store = await ensurePersistenceReady();
+    const notifications = store.listNotifications(parsedArgs.data);
+    return { ok: true, notifications };
+  });
+
+  ipcMain.handle("persistence:create-notification", async (_event, args: unknown) => {
+    const parsedArgs = CreateNotificationArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, inserted: false, notification: null };
+    }
+    const store = await ensurePersistenceReady();
+    const result = store.createNotification({
+      notification: parsedArgs.data.notification,
+    });
+    return {
+      ok: true,
+      inserted: result.inserted,
+      notification: result.notification,
+    };
+  });
+
+  ipcMain.handle("persistence:mark-notification-read", async (_event, args: unknown) => {
+    const parsedArgs = MarkNotificationReadArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, notification: null };
+    }
+    const store = await ensurePersistenceReady();
+    const notification = store.markNotificationRead(parsedArgs.data);
+    return { ok: true, notification };
+  });
+
+  ipcMain.handle("persistence:mark-all-notifications-read", async (_event, args: unknown) => {
+    const parsedArgs = MarkAllNotificationsReadArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, count: 0 };
+    }
+    const store = await ensurePersistenceReady();
+    const count = store.markAllNotificationsRead(parsedArgs.data);
+    return { ok: true, count };
   });
 
   ipcMain.handle("persistence:list-turn-events", async (_event, args: unknown) => {

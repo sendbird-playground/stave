@@ -6,6 +6,7 @@ import type {
   ProviderRuntimeOptions,
 } from "@/lib/providers/provider.types";
 import type { RepoMapResponse } from "@/lib/fs/repo-map.types";
+import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
 
@@ -594,6 +595,33 @@ interface WindowPersistenceApi {
     };
   }) => Promise<{ ok: boolean }>;
   closeWorkspace?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
+  listNotifications?: (args?: {
+    limit?: number;
+    unreadOnly?: boolean;
+  }) => Promise<{
+    ok: boolean;
+    notifications: AppNotification[];
+  }>;
+  createNotification?: (args: {
+    notification: AppNotificationCreateInput;
+  }) => Promise<{
+    ok: boolean;
+    inserted: boolean;
+    notification: AppNotification | null;
+  }>;
+  markNotificationRead?: (args: {
+    id: string;
+    readAt?: string;
+  }) => Promise<{
+    ok: boolean;
+    notification: AppNotification | null;
+  }>;
+  markAllNotificationsRead?: (args?: {
+    readAt?: string;
+  }) => Promise<{
+    ok: boolean;
+    count: number;
+  }>;
   listTaskTurns?: (args: {
     workspaceId: string;
     taskId: string;

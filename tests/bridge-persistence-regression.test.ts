@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createBridgeProviderSource } from "@/lib/providers/bridge.source";
 import { listWorkspaceSummaries, loadWorkspaceSnapshot, upsertWorkspace } from "@/lib/db/workspaces.db";
+import {
+  createNotification,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/lib/db/notifications.db";
 
 const originalWindow = globalThis.window;
 
@@ -132,6 +138,70 @@ describe("workspace persistence fallback", () => {
     expect(loaded?.tasks).toHaveLength(1);
     expect(loaded?.promptDraftByTask).toEqual({});
     expect(loaded?.providerConversationByTask).toEqual({});
+  });
+
+  test("supports notification history without electron persistence bridge", async () => {
+    const localStorage = createMemoryStorage();
+    setWindowContext({
+      localStorage,
+      api: {},
+    });
+
+    const first = await createNotification({
+      notification: {
+        id: "notification-1",
+        kind: "task.turn_completed",
+        title: "Refactor notifications",
+        body: "Latest run finished in feat/noti.",
+        projectPath: "/tmp/stave-project",
+        projectName: "stave",
+        workspaceId: "ws-1",
+        workspaceName: "feat/noti",
+        taskId: "task-1",
+        taskTitle: "Refactor notifications",
+        turnId: "turn-1",
+        providerId: "codex",
+        action: null,
+        payload: { stopReason: "end_turn" },
+        dedupeKey: "task.turn_completed:turn-1",
+        createdAt: "2026-03-06T01:10:00.000Z",
+      },
+    });
+    const duplicate = await createNotification({
+      notification: {
+        id: "notification-1-duplicate",
+        kind: "task.turn_completed",
+        title: "Refactor notifications",
+        body: "Latest run finished in feat/noti.",
+        projectPath: "/tmp/stave-project",
+        projectName: "stave",
+        workspaceId: "ws-1",
+        workspaceName: "feat/noti",
+        taskId: "task-1",
+        taskTitle: "Refactor notifications",
+        turnId: "turn-1",
+        providerId: "codex",
+        action: null,
+        payload: { stopReason: "end_turn" },
+        dedupeKey: "task.turn_completed:turn-1",
+        createdAt: "2026-03-06T01:10:01.000Z",
+      },
+    });
+
+    expect(first.inserted).toBe(true);
+    expect(duplicate.inserted).toBe(false);
+
+    let notifications = await listNotifications();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]?.id).toBe("notification-1");
+    expect(notifications[0]?.readAt).toBeNull();
+
+    await markNotificationRead({ id: "notification-1", readAt: "2026-03-06T01:12:00.000Z" });
+    notifications = await listNotifications();
+    expect(notifications[0]?.readAt).toBe("2026-03-06T01:12:00.000Z");
+
+    const changedCount = await markAllNotificationsRead({ readAt: "2026-03-06T01:13:00.000Z" });
+    expect(changedCount).toBe(0);
   });
 
   test("preserves each project's workspace list when switching projects", async () => {
