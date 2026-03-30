@@ -234,113 +234,107 @@ export function WorkspaceTaskTabs() {
         <div className="flex min-w-0 items-center gap-2">
           <div className="min-w-0 flex-1 overflow-x-auto">
             <div className="flex min-w-max items-center gap-2">
-              {visibleTasks.length === 0 ? (
-                <div className="rounded-md border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
-                  No active tasks
-                </div>
-              ) : (
-                visibleTasks.map((task, index) => {
-                  const isActive = task.id === activeTaskId;
-                  const isResponding = Boolean(activeTurnIdsByTask[task.id]);
-                  const respondingProviderId = getRespondingProviderId({
-                    fallbackProviderId: task.provider,
-                    messages: messagesByTask[task.id] ?? EMPTY_MESSAGES,
-                  });
-                  const respondingToneClass = getProviderWaveToneClass({ providerId: respondingProviderId });
-                  const shortcutLabel = getTaskShortcutLabel(index);
-                  const buttonVisibility = isActive
-                    ? "opacity-100"
-                    : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150";
+              {visibleTasks.map((task, index) => {
+                const isActive = task.id === activeTaskId;
+                const isResponding = Boolean(activeTurnIdsByTask[task.id]);
+                const respondingProviderId = getRespondingProviderId({
+                  fallbackProviderId: task.provider,
+                  messages: messagesByTask[task.id] ?? EMPTY_MESSAGES,
+                });
+                const respondingToneClass = getProviderWaveToneClass({ providerId: respondingProviderId });
+                const shortcutLabel = getTaskShortcutLabel(index);
+                const buttonVisibility = isActive
+                  ? "opacity-100"
+                  : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150";
 
-                  return (
-                    <div
-                      key={task.id}
-                      draggable
-                      onDragStart={(event) => handleTaskDragStart(event, task.id)}
-                      onDragEnd={() => {
-                        setDraggingTaskId(null);
-                        setDropTargetTaskId(null);
-                      }}
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        if (draggingTaskId && draggingTaskId !== task.id) {
-                          setDropTargetTaskId(task.id);
-                        }
-                      }}
-                      onDrop={(event) => handleTaskDrop(event, task.id)}
-                      className={cn(
-                        "group flex h-11 cursor-grab items-center gap-1 rounded-md border px-2",
-                        isActive
-                          ? "border-primary/50 bg-background shadow-sm"
-                          : "border-border/70 bg-background/70",
-                        draggingTaskId === task.id && "cursor-grabbing opacity-70",
-                        dropTargetTaskId === task.id && draggingTaskId && draggingTaskId !== task.id && "outline outline-1 outline-primary/60",
-                      )}
+                return (
+                  <div
+                    key={task.id}
+                    draggable
+                    onDragStart={(event) => handleTaskDragStart(event, task.id)}
+                    onDragEnd={() => {
+                      setDraggingTaskId(null);
+                      setDropTargetTaskId(null);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      if (draggingTaskId && draggingTaskId !== task.id) {
+                        setDropTargetTaskId(task.id);
+                      }
+                    }}
+                    onDrop={(event) => handleTaskDrop(event, task.id)}
+                    className={cn(
+                      "group flex h-11 cursor-grab items-center gap-1 rounded-md border px-2",
+                      isActive
+                        ? "border-primary/50 bg-background shadow-sm"
+                        : "border-border/70 bg-background/70",
+                      draggingTaskId === task.id && "cursor-grabbing opacity-70",
+                      dropTargetTaskId === task.id && draggingTaskId && draggingTaskId !== task.id && "outline outline-1 outline-primary/60",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      className="flex min-w-0 items-center gap-2"
+                      onClick={() => selectTask({ taskId: task.id })}
                     >
-                      <button
-                        type="button"
-                        className="flex min-w-0 items-center gap-2"
-                        onClick={() => selectTask({ taskId: task.id })}
-                      >
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                          {isResponding ? (
-                            <WaveIndicator className={cn("gap-px", respondingToneClass)} barClassName="h-3 w-0.5 rounded-[2px]" />
-                          ) : (
-                            <ModelIcon providerId={task.provider} className="size-4 text-muted-foreground" />
-                          )}
-                        </span>
-                        <span className="max-w-56 truncate text-sm font-medium">{task.title}</span>
-                        {shortcutLabel != null ? (
-                          <KbdGroup className="ml-1 shrink-0 opacity-60">
-                            <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutModifierSymbol}</Kbd>
-                            <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutLabel}</Kbd>
-                          </KbdGroup>
-                        ) : null}
-                      </button>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
-                              onClick={() => setTaskToArchive({ id: task.id, title: task.title })}
-                              aria-label={`archive-task-${task.id}`}
-                            >
-                              <X className="size-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom">Archive task</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button type="button" variant="ghost" size="sm" className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)} aria-label={`task-menu-${task.id}`}>
-                            <Ellipsis className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
-                          <DropdownMenuItem onSelect={() => setTaskToRename({ id: task.id, title: task.title })}>
-                            Rename
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onSelect={() => exportTask({ taskId: task.id })}>
-                            Export
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              setCopiedSessionIdKey(null);
-                              setTaskToViewSession({ id: task.id, title: task.title });
-                            }}
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                        {isResponding ? (
+                          <WaveIndicator className={cn("gap-px", respondingToneClass)} barClassName="h-3 w-0.5 rounded-[2px]" />
+                        ) : (
+                          <ModelIcon providerId={task.provider} className="size-4 text-muted-foreground" />
+                        )}
+                      </span>
+                      <span className="max-w-56 truncate text-sm font-medium">{task.title}</span>
+                      {shortcutLabel != null ? (
+                        <KbdGroup className="ml-1 shrink-0 opacity-60">
+                          <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutModifierSymbol}</Kbd>
+                          <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutLabel}</Kbd>
+                        </KbdGroup>
+                      ) : null}
+                    </button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
+                            onClick={() => setTaskToArchive({ id: task.id, title: task.title })}
+                            aria-label={`archive-task-${task.id}`}
                           >
-                            Conversation IDs
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  );
-                })
-              )}
+                            <X className="size-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">Archive task</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button type="button" variant="ghost" size="sm" className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)} aria-label={`task-menu-${task.id}`}>
+                          <Ellipsis className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onSelect={() => setTaskToRename({ id: task.id, title: task.title })}>
+                          Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => exportTask({ taskId: task.id })}>
+                          Export
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setCopiedSessionIdKey(null);
+                            setTaskToViewSession({ id: task.id, title: task.title });
+                          }}
+                        >
+                          Conversation IDs
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                );
+              })}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -353,7 +347,13 @@ export function WorkspaceTaskTabs() {
                       <Plus className="size-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">New Task</TooltipContent>
+                  <TooltipContent side="bottom">
+                    <span>New Task</span>
+                    <KbdGroup className="ml-1">
+                      <Kbd>{shortcutModifierSymbol}</Kbd>
+                      <Kbd>N</Kbd>
+                    </KbdGroup>
+                  </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
