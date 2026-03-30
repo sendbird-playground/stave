@@ -7,7 +7,6 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   "node_modules",
   "dist",
   "out",
-  "build",
   ".next",
   ".nuxt",
   // macOS system directories

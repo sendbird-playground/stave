@@ -18,7 +18,6 @@ const IGNORED_BROWSER_DIRECTORY_NAMES = new Set([
   "node_modules",
   "dist",
   "out",
-  "build",
   ".next",
   ".nuxt",
 ]);
