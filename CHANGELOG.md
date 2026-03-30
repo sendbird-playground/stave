@@ -1,3 +1,47 @@
+## [0.0.28](https://github.com/sendbird-playground/stave/compare/v0.0.27...v0.0.28) (2026-03-30)
+
+### Features
+
+* **create-pr:** normalize PR titles against commit history ([#92](https://github.com/sendbird-playground/stave/issues/92)) ([15c31bd](https://github.com/sendbird-playground/stave/commit/15c31bde89be1ea8d6ca4e478d4156ad8a49f405))
+* display PR status for non-default workspaces ([#101](https://github.com/sendbird-playground/stave/issues/101)) ([07dd5ca](https://github.com/sendbird-playground/stave/commit/07dd5ca9fed21f21867ea415547d730b9ff30f7a))
+* **editor:** display full file path between tab strip and code editor ([#82](https://github.com/sendbird-playground/stave/issues/82)) ([68a9a82](https://github.com/sendbird-playground/stave/commit/68a9a826338275cda1def28acf25a01007b89f3d))
+* **electron:** add Stave app icon ([#72](https://github.com/sendbird-playground/stave/issues/72)) ([622adaa](https://github.com/sendbird-playground/stave/commit/622adaa454bc668ff79e9a68eeea3bf43961b7cc))
+* **logo:** add stave-auto icon with orange/green/blue color mix ([#110](https://github.com/sendbird-playground/stave/issues/110)) ([c310c0a](https://github.com/sendbird-playground/stave/commit/c310c0a9493017322ddbd7078c91c08c7b7683b3))
+* **message:** support file links in markdown messages ([#103](https://github.com/sendbird-playground/stave/issues/103)) ([aae1b06](https://github.com/sendbird-playground/stave/commit/aae1b0660f4d0c73ca6a102be61665a34df47216))
+* **metrics:** add memory usage popover to sidebar ([#87](https://github.com/sendbird-playground/stave/issues/87)) ([e0f3707](https://github.com/sendbird-playground/stave/commit/e0f37077675f8d5d09d00d3ba2110da35d80bbb3))
+* notification system ([#93](https://github.com/sendbird-playground/stave/issues/93)) ([759f0b7](https://github.com/sendbird-playground/stave/commit/759f0b70c02f35fb375bdef9af3fed241741700b))
+* **notifications:** add history view and idle completion alerts ([#109](https://github.com/sendbird-playground/stave/issues/109)) ([10879ba](https://github.com/sendbird-playground/stave/commit/10879ba53c0a6fc7e0c5f74d1ab65b73d4f7890a))
+* **notifications:** add mark read and history view support ([#102](https://github.com/sendbird-playground/stave/issues/102)) ([b3bccef](https://github.com/sendbird-playground/stave/commit/b3bccef74c594cbd382615cdbdc2626b71b4be09))
+* **sidebar:** change workspace close to archive ([#78](https://github.com/sendbird-playground/stave/issues/78)) ([5144b3e](https://github.com/sendbird-playground/stave/commit/5144b3e4d7ef1e9ae7252071fd933c6be65ca4a4))
+* **sidebar:** swap task count with archive button on workspace hover ([#91](https://github.com/sendbird-playground/stave/issues/91)) ([6077a0a](https://github.com/sendbird-playground/stave/commit/6077a0af1bd7d741f51a775844e2fcb994dc80a2))
+* **topbar:** replace open PR with create PR dialog ([#75](https://github.com/sendbird-playground/stave/issues/75)) ([8fbe911](https://github.com/sendbird-playground/stave/commit/8fbe9116fad35c444d959e533b39bdfa963569d0))
+* **workspace:** add PR status tracking to sidebar and topbar ([#85](https://github.com/sendbird-playground/stave/issues/85)) ([d462a82](https://github.com/sendbird-playground/stave/commit/d462a82121837e4a5b880da51a52f0326d176847))
+
+### Bug Fixes
+
+* **branch-dropdown:** prevent branch detection race conditions ([#89](https://github.com/sendbird-playground/stave/issues/89)) ([05b9845](https://github.com/sendbird-playground/stave/commit/05b9845afbdd96547e03f07723ac3c93dabcba4b))
+* **chat:** deduplicate code_diff parts for the same file path ([#86](https://github.com/sendbird-playground/stave/issues/86)) ([f5c9c34](https://github.com/sendbird-playground/stave/commit/f5c9c34abc3e2be5c0d9eca0be26edfbf43c7149))
+* disable create PR button when tasks are responding ([#104](https://github.com/sendbird-playground/stave/issues/104)) ([7c86db9](https://github.com/sendbird-playground/stave/commit/7c86db911bebcc0e516090be3a39d7caca82cfa4))
+* **explorer:** show build folder in file tree ([734adb0](https://github.com/sendbird-playground/stave/commit/734adb0c3006c49d018d93264a8010b6d3fbf59f))
+* **logo:** enlarge icons and refine bar scaling ([#69](https://github.com/sendbird-playground/stave/issues/69)) ([8728b81](https://github.com/sendbird-playground/stave/commit/8728b81509b8f33cb22fdfd7c916f175a6b9207a))
+* **logo:** remove dark background from stave-logo.svg ([#70](https://github.com/sendbird-playground/stave/issues/70)) ([3550fda](https://github.com/sendbird-playground/stave/commit/3550fdae416e7e35ce7c0da8887818f73e7eb9f3))
+* **message:** preserve file reference locations in markdown links ([#107](https://github.com/sendbird-playground/stave/issues/107)) ([0db840c](https://github.com/sendbird-playground/stave/commit/0db840c64b277a03c4ba6e2edbb6d4b3dea7a831))
+* **message:** use explorer file icons in markdown links ([#105](https://github.com/sendbird-playground/stave/issues/105)) ([2293ab4](https://github.com/sendbird-playground/stave/commit/2293ab46730c8c985dd651fef553a7ca508a4882))
+* **projects:** move repository controls into settings ([#84](https://github.com/sendbird-playground/stave/issues/84)) ([1830c94](https://github.com/sendbird-playground/stave/commit/1830c947c5a073231cb732f3bd89a17af910fa18))
+* **shell:** align right panels with top bar ([#98](https://github.com/sendbird-playground/stave/issues/98)) ([154082e](https://github.com/sendbird-playground/stave/commit/154082e9822c935a396a8b6c5c0cf1f6bdbce47a))
+* **shell:** raise right rail beside task tabs ([#96](https://github.com/sendbird-playground/stave/issues/96)) ([7ee3380](https://github.com/sendbird-playground/stave/commit/7ee3380a11bad1ab1035b5dd7ab73504b8352ee4))
+* **sidebar:** account for macOS traffic lights in collapsed width ([#90](https://github.com/sendbird-playground/stave/issues/90)) ([e0bdb68](https://github.com/sendbird-playground/stave/commit/e0bdb680a849108331f78d416416f96db58a3817))
+* **sidebar:** account for macOS traffic lights in collapsed width ([#90](https://github.com/sendbird-playground/stave/issues/90)) ([#95](https://github.com/sendbird-playground/stave/issues/95)) ([45294c4](https://github.com/sendbird-playground/stave/commit/45294c4015fe45eb38ce29a1dc97d21424b6d310))
+* **sidebar:** move expand button to topbar and add traffic-light clearance ([#83](https://github.com/sendbird-playground/stave/issues/83)) ([34378c8](https://github.com/sendbird-playground/stave/commit/34378c8d500c53d3a83905f0d168db34133b37f9))
+* **topbar:** align file search to the right end ([#74](https://github.com/sendbird-playground/stave/issues/74)) ([07a49ff](https://github.com/sendbird-playground/stave/commit/07a49ff680f1e0bfd1106921709c743db2de808d))
+* **topbar:** remove unnecessary left padding on branch selector ([#76](https://github.com/sendbird-playground/stave/issues/76)) ([0fad597](https://github.com/sendbird-playground/stave/commit/0fad597d07cd6960d63076e2cf9757e4a660d3f6))
+* **topbar:** stabilize create pr flow ([#81](https://github.com/sendbird-playground/stave/issues/81)) ([30d5395](https://github.com/sendbird-playground/stave/commit/30d5395885c8032b869c54414f43f40115e8b109))
+* **topbar:** use native macOS traffic-light buttons and move utility actions to sidebar ([#73](https://github.com/sendbird-playground/stave/issues/73)) ([1199b28](https://github.com/sendbird-playground/stave/commit/1199b2897ab32bfc2e8596a275d5850932a77162))
+* **topbar:** use native macOS traffic-light buttons instead of custom controls ([#71](https://github.com/sendbird-playground/stave/issues/71)) ([87fcebd](https://github.com/sendbird-playground/stave/commit/87fcebd74f999e28a01377d2a6c8b4fe4b3d9d7d))
+* **ui:** add app-wide tooltip provider ([ba454f9](https://github.com/sendbird-playground/stave/commit/ba454f917a532eb5869440d2ab33da7a8fdbf793))
+* **ui:** widen chat area max-width from 5xl to 6xl ([#77](https://github.com/sendbird-playground/stave/issues/77)) ([4ff8e97](https://github.com/sendbird-playground/stave/commit/4ff8e97bf319c64251f80e3de8d99f08badb0ba7))
+* **workspacebar:** adjust tooltip positioning from right to top ([#88](https://github.com/sendbird-playground/stave/issues/88)) ([2817c5a](https://github.com/sendbird-playground/stave/commit/2817c5a6651c1b33f19795ac73be50a343a96169))
+* **workspace:** persist project registry and recover legacy workspaces ([#94](https://github.com/sendbird-playground/stave/issues/94)) ([9a99d2c](https://github.com/sendbird-playground/stave/commit/9a99d2ccae83dd5e23d8def2d590387765f83b47))
 ## [0.0.27](https://github.com/sendbird-playground/stave/compare/v0.0.26...v0.0.27) (2026-03-30)
 
 ### Features
