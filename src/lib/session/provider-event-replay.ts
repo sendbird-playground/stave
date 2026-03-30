@@ -655,6 +655,23 @@ export function appendProviderEventToAssistant(args: {
     } else {
       nextParts.push(part);
     }
+  } else if (part.type === "code_diff") {
+    // Replace an earlier code_diff for the same file path so the count
+    // reflects unique files rather than accumulating duplicates when a
+    // file is modified multiple times in a single turn.
+    let existingIdx = -1;
+    for (let index = nextParts.length - 1; index >= 0; index -= 1) {
+      const candidate = nextParts[index];
+      if (candidate?.type === "code_diff" && candidate.filePath === part.filePath) {
+        existingIdx = index;
+        break;
+      }
+    }
+    if (existingIdx !== -1) {
+      nextParts[existingIdx] = part;
+    } else {
+      nextParts.push(part);
+    }
   } else {
     // When the compact-boundary checkpoint arrives, remove the in-progress
     // "Compacting conversation context…" spinner — it is superseded by the
