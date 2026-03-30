@@ -23,6 +23,7 @@ import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifica
 import {
   isNotificationUnread,
   sortNotificationsNewestFirst,
+  workspaceHasActiveTurns,
 } from "@/lib/notifications/notification.types";
 import { resolveCommandInput } from "@/lib/commands";
 import {
@@ -465,6 +466,9 @@ function buildTaskTurnCompletedNotificationInput(args: {
 }): AppNotificationCreateInput | null {
   const doneEvent = [...args.events].reverse().find((event): event is Extract<NormalizedProviderEvent, { type: "done" }> => event.type === "done");
   if (!doneEvent) {
+    return null;
+  }
+  if (workspaceHasActiveTurns({ activeTurnIdsByTask: args.session.activeTurnIdsByTask })) {
     return null;
   }
 
