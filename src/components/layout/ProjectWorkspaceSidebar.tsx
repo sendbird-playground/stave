@@ -903,7 +903,7 @@ export function ProjectWorkspaceSidebar(args: {
                                                 <Plus className="size-3.5" />
                                               </Button>
                                             </TooltipTrigger>
-                                            <TooltipContent side="right">
+                                            <TooltipContent side="top">
                                               New workspace
                                             </TooltipContent>
                                           </Tooltip>
@@ -929,7 +929,7 @@ export function ProjectWorkspaceSidebar(args: {
                                                 <Settings className="size-3.5" />
                                               </Button>
                                             </TooltipTrigger>
-                                            <TooltipContent side="right">
+                                            <TooltipContent side="top">
                                               Project settings
                                             </TooltipContent>
                                           </Tooltip>
