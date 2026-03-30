@@ -5,6 +5,7 @@ const CODEX_COLOR_ICON_URL = `${import.meta.env.BASE_URL}codex-color.svg`;
 const STAVE_LOGO_DARK_ICON_URL = `${import.meta.env.BASE_URL}stave-logo-dark.svg`;
 const STAVE_LOGO_LIGHT_ICON_URL = `${import.meta.env.BASE_URL}stave-logo-light.svg`;
 export const STAVE_LOGO_URL = `${import.meta.env.BASE_URL}stave-logo.svg`;
+const STAVE_LOGO_AUTO_ICON_URL = `${import.meta.env.BASE_URL}stave-logo-auto.svg`;
 
 // Source: https://platform.claude.com/docs/en/about-claude/models/overview
 // Latest models comparison (as of 2026-03-06)
@@ -116,8 +117,11 @@ export function getProviderLabel(args: {
   return args.variant === "full" ? descriptor.label : descriptor.shortLabel;
 }
 
-export function getProviderIconUrl(args: { providerId: ProviderId; isDarkMode?: boolean }) {
+export function getProviderIconUrl(args: { providerId: ProviderId; model?: string; isDarkMode?: boolean }) {
   if (args.providerId === "stave") {
+    if (args.model === "stave-auto") {
+      return STAVE_LOGO_AUTO_ICON_URL;
+    }
     return args.isDarkMode ? STAVE_LOGO_LIGHT_ICON_URL : STAVE_LOGO_DARK_ICON_URL;
   }
   return getProviderDescriptor({ providerId: args.providerId }).iconUrl;
