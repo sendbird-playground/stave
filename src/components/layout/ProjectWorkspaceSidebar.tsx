@@ -594,7 +594,7 @@ export function ProjectWorkspaceSidebar(args: {
     <>
       <aside
         data-testid="project-workspace-sidebar"
-        className="hidden h-full shrink-0 overflow-hidden border-r border-border/70 bg-card/80 lg:flex lg:flex-col"
+        className={cn("hidden h-full shrink-0 overflow-hidden bg-card/80 lg:flex lg:flex-col", args.collapsed && "border-r border-border/70")}
         style={{
           width: `${args.collapsed ? COLLAPSED_PROJECT_SIDEBAR_WIDTH : args.width}px`,
           minWidth: `${args.collapsed ? COLLAPSED_PROJECT_SIDEBAR_WIDTH : args.width}px`,
