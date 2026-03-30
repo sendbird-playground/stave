@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MarkdownMessage } from "@/components/ai-elements/message-markdown";
-import { resolveWorkspaceFileLink } from "@/lib/message-file-links";
+import { formatFileLinkLocation, resolveWorkspaceFileLink } from "@/lib/message-file-links";
 
 describe("MarkdownMessage", () => {
   test("renders GFM tables as HTML table markup", () => {
@@ -38,8 +38,29 @@ describe("MarkdownMessage", () => {
     }));
 
     expect(html).toContain('data-message-file-link="true"');
-    expect(html).toContain('aria-label="Open src/components/session/ChatPanel.tsx"');
+    expect(html).toContain('aria-label="Open src/components/session/ChatPanel.tsx (reference L42)"');
     expect(html).toContain("ChatPanel.tsx");
+    expect(html).toContain("L42");
+  });
+
+  test("keeps repeated file references distinguishable with line labels", () => {
+    const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: [
+        "[first](/tmp/stave/src/components/session/ChatPanel.tsx:10)",
+        "[second](/tmp/stave/src/components/session/ChatPanel.tsx:24)",
+      ].join(" "),
+      messageFontSize: "base",
+      messageCodeFontSize: "base",
+      resolveFileLink: ({ href }) => resolveWorkspaceFileLink({
+        href,
+        workspaceCwd: "/tmp/stave",
+        knownFilePaths,
+      }),
+    }));
+
+    expect(html).toContain("L10");
+    expect(html).toContain("L24");
   });
 
   test("keeps external links as standard anchors", () => {
@@ -66,6 +87,31 @@ describe("resolveWorkspaceFileLink", () => {
     expect(resolved).toEqual({
       filePath: "src/App.tsx",
       fileName: "App.tsx",
+      line: 18,
+      column: 4,
     });
+  });
+
+  test("parses hash-style line references", () => {
+    const resolved = resolveWorkspaceFileLink({
+      href: "/tmp/stave/src/App.tsx#L27C3",
+      workspaceCwd: "/tmp/stave",
+      knownFilePaths: new Set(["src/App.tsx"]),
+    });
+
+    expect(resolved).toEqual({
+      filePath: "src/App.tsx",
+      fileName: "App.tsx",
+      line: 27,
+      column: 3,
+    });
+  });
+});
+
+describe("formatFileLinkLocation", () => {
+  test("formats line and column labels for file chips", () => {
+    expect(formatFileLinkLocation({ line: 42 })).toBe("L42");
+    expect(formatFileLinkLocation({ line: 42, column: 7 })).toBe("L42:C7");
+    expect(formatFileLinkLocation({})).toBeNull();
   });
 });

@@ -1,12 +1,42 @@
 export interface ResolvedWorkspaceFileLink {
   filePath: string;
   fileName: string;
+  line?: number;
+  column?: number;
 }
 
 function stripLineSuffix(href: string) {
   return href
     .replace(/#L\d+(?:C\d+)?$/i, "")
     .replace(/:\d+(?::\d+)?$/, "");
+}
+
+function parseFileLinkLocation(href: string) {
+  const hashMatch = href.match(/#L(\d+)(?:C(\d+))?$/i);
+  if (hashMatch) {
+    return {
+      line: Number(hashMatch[1]),
+      column: hashMatch[2] ? Number(hashMatch[2]) : undefined,
+    };
+  }
+
+  const colonMatch = href.match(/:(\d+)(?::(\d+))?$/);
+  if (colonMatch) {
+    return {
+      line: Number(colonMatch[1]),
+      column: colonMatch[2] ? Number(colonMatch[2]) : undefined,
+    };
+  }
+
+  return null;
+}
+
+export function formatFileLinkLocation(args: { line?: number; column?: number }) {
+  if (!args.line) {
+    return null;
+  }
+
+  return args.column ? `L${args.line}:C${args.column}` : `L${args.line}`;
 }
 
 export function toBaseName(filePath: string) {
@@ -35,6 +65,7 @@ export function resolveWorkspaceFileLink(args: {
   }
 
   const withoutQuery = decoded.split("?")[0] ?? decoded;
+  const location = parseFileLinkLocation(withoutQuery);
   const withoutFragment = withoutQuery.split("#")[0] ?? withoutQuery;
   const normalized = stripLineSuffix(withoutFragment)
     .replaceAll("\\", "/")
@@ -70,5 +101,6 @@ export function resolveWorkspaceFileLink(args: {
   return {
     filePath,
     fileName: toBaseName(filePath),
+    ...(location ?? {}),
   };
 }
