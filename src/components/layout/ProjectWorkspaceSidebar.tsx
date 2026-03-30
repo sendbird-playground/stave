@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Archive,
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
@@ -30,7 +31,6 @@ import {
   Settings,
   Sun,
   Trash2,
-  X,
 } from "lucide-react";
 import {
   Suspense,
@@ -970,18 +970,18 @@ export function ProjectWorkspaceSidebar(args: {
                                                     }) => (
                                                       <div
                                                         className={cn(
-                                                          "group flex items-center gap-1",
+                                                          "group flex items-center gap-1 rounded-md transition-colors hover:bg-secondary/70",
+                                                          isActive &&
+                                                            "bg-primary/10 text-foreground ring-1 ring-primary/30 shadow-sm",
                                                           isDragging &&
-                                                            "rounded-md bg-secondary/40",
+                                                            "bg-secondary/40",
                                                         )}
                                                       >
                                                         {dragHandle}
                                                         <button
                                                           type="button"
                                                           className={cn(
-                                                            "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-secondary/70",
-                                                            isActive &&
-                                                              "bg-primary/10 text-foreground ring-1 ring-primary/30 shadow-sm",
+                                                            "flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm",
                                                           )}
                                                           onClick={() =>
                                                             void handleProjectWorkspaceOpen(
@@ -1033,7 +1033,7 @@ export function ProjectWorkspaceSidebar(args: {
                                                         </button>
                                                         {project.isCurrent &&
                                                         !workspace.isDefault ? (
-                                                          <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+                                                          <div className="shrink-0 pr-1">
                                                             <Tooltip>
                                                               <TooltipTrigger
                                                                 asChild
@@ -1043,7 +1043,7 @@ export function ProjectWorkspaceSidebar(args: {
                                                                   variant="ghost"
                                                                   size="sm"
                                                                   className={cn(
-                                                                    "h-8 w-8 rounded-md p-0 text-muted-foreground transition-opacity hover:text-destructive focus-visible:text-destructive",
+                                                                    "h-7 w-7 rounded-md p-0 text-muted-foreground transition-opacity hover:text-destructive focus-visible:text-destructive",
                                                                     closingWorkspaceId ===
                                                                       workspace.id
                                                                       ? "opacity-100"
@@ -1061,18 +1061,18 @@ export function ProjectWorkspaceSidebar(args: {
                                                                       },
                                                                     )
                                                                   }
-                                                                  aria-label={`close-workspace-${workspace.id}`}
+                                                                  aria-label={`archive-workspace-${workspace.id}`}
                                                                 >
                                                                   {closingWorkspaceId ===
                                                                   workspace.id ? (
                                                                     <LoaderCircle className="size-3.5 animate-spin" />
                                                                   ) : (
-                                                                    <X className="size-3.5" />
+                                                                    <Archive className="size-3.5" />
                                                                   )}
                                                                 </Button>
                                                               </TooltipTrigger>
                                                               <TooltipContent side="right">
-                                                                Close workspace
+                                                                Archive
                                                               </TooltipContent>
                                                             </Tooltip>
                                                           </div>
@@ -1232,13 +1232,13 @@ export function ProjectWorkspaceSidebar(args: {
       />
       <ConfirmDialog
         open={Boolean(workspaceToClose)}
-        title="Close Workspace"
+        title="Archive Workspace"
         description={
           workspaceToClose
-            ? `Close workspace "${workspaceToClose.name}"? The associated git worktree will be permanently removed. Any uncommitted changes will be lost.`
+            ? `Archive workspace "${workspaceToClose.name}"? The associated git worktree will be permanently removed. Any uncommitted changes will be lost.`
             : ""
         }
-        confirmLabel="Close Workspace"
+        confirmLabel="Archive"
         loading={closingWorkspaceId !== null}
         onCancel={() => setWorkspaceToClose(null)}
         onConfirm={() => {
