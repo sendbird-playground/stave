@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
+import { TooltipProvider } from "@/components/ui";
 import { useAppStore } from "@/store/app.store";
 
 export default function App() {
@@ -112,8 +113,8 @@ export default function App() {
   }, []);
 
   return (
-    <>
+    <TooltipProvider>
       <AppShell />
-    </>
+    </TooltipProvider>
   );
 }
