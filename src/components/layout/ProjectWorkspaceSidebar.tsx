@@ -980,6 +980,9 @@ export function ProjectWorkspaceSidebar(args: {
                                                   projectBusy ||
                                                   workspaceBusy ||
                                                   project.workspaces.length < 2;
+                                                const canArchiveWorkspace =
+                                                  project.isCurrent &&
+                                                  !workspace.isDefault;
 
                                                 return (
                                                   <SortableSidebarItem
@@ -1051,61 +1054,69 @@ export function ProjectWorkspaceSidebar(args: {
                                                               workspace.branch,
                                                             )}
                                                           </span>
-                                                          {isResponding ? (
-                                                            <span className="shrink-0 rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary">
-                                                              {
-                                                                respondingTaskCount
-                                                              }
-                                                            </span>
-                                                          ) : null}
-                                                          {workspaceBusy ? (
-                                                            <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-                                                          ) : null}
                                                         </button>
-                                                        {project.isCurrent &&
-                                                        !workspace.isDefault ? (
-                                                          <div className="shrink-0 pr-1">
-                                                            <Tooltip>
-                                                              <TooltipTrigger
-                                                                asChild
+                                                        {workspaceBusy ? (
+                                                          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                                                        ) : null}
+                                                        {(isResponding ||
+                                                          canArchiveWorkspace) ? (
+                                                          <div className="relative flex h-7 min-w-7 shrink-0 items-center justify-end pr-1">
+                                                            {isResponding ? (
+                                                              <span
+                                                                className={cn(
+                                                                  "absolute right-0 inline-flex min-w-7 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary transition-opacity duration-150",
+                                                                  canArchiveWorkspace &&
+                                                                    "group-hover:opacity-0 group-focus-within:opacity-0",
+                                                                )}
                                                               >
-                                                                <Button
-                                                                  type="button"
-                                                                  variant="ghost"
-                                                                  size="sm"
-                                                                  className={cn(
-                                                                    "h-7 w-7 rounded-md p-0 text-muted-foreground transition-opacity hover:text-destructive focus-visible:text-destructive",
-                                                                    closingWorkspaceId ===
-                                                                      workspace.id
-                                                                      ? "opacity-100"
-                                                                      : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
-                                                                  )}
-                                                                  disabled={
-                                                                    closingWorkspaceId ===
-                                                                    workspace.id
-                                                                  }
-                                                                  onClick={() =>
-                                                                    setWorkspaceToClose(
-                                                                      {
-                                                                        id: workspace.id,
-                                                                        name: workspace.name,
-                                                                      },
-                                                                    )
-                                                                  }
-                                                                  aria-label={`archive-workspace-${workspace.id}`}
+                                                                {
+                                                                  respondingTaskCount
+                                                                }
+                                                              </span>
+                                                            ) : null}
+                                                            {canArchiveWorkspace ? (
+                                                              <Tooltip>
+                                                                <TooltipTrigger
+                                                                  asChild
                                                                 >
-                                                                  {closingWorkspaceId ===
-                                                                  workspace.id ? (
-                                                                    <LoaderCircle className="size-3.5 animate-spin" />
-                                                                  ) : (
-                                                                    <Archive className="size-3.5" />
-                                                                  )}
-                                                                </Button>
-                                                              </TooltipTrigger>
-                                                              <TooltipContent side="right">
-                                                                Archive
-                                                              </TooltipContent>
-                                                            </Tooltip>
+                                                                  <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className={cn(
+                                                                      "absolute right-0 h-7 w-7 rounded-md p-0 text-muted-foreground transition-opacity hover:text-destructive focus-visible:text-destructive",
+                                                                      closingWorkspaceId ===
+                                                                        workspace.id
+                                                                        ? "opacity-100"
+                                                                        : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                                                                    )}
+                                                                    disabled={
+                                                                      closingWorkspaceId ===
+                                                                      workspace.id
+                                                                    }
+                                                                    onClick={() =>
+                                                                      setWorkspaceToClose(
+                                                                        {
+                                                                          id: workspace.id,
+                                                                          name: workspace.name,
+                                                                        },
+                                                                      )
+                                                                    }
+                                                                    aria-label={`archive-workspace-${workspace.id}`}
+                                                                  >
+                                                                    {closingWorkspaceId ===
+                                                                    workspace.id ? (
+                                                                      <LoaderCircle className="size-3.5 animate-spin" />
+                                                                    ) : (
+                                                                      <Archive className="size-3.5" />
+                                                                    )}
+                                                                  </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent side="right">
+                                                                  Archive
+                                                                </TooltipContent>
+                                                              </Tooltip>
+                                                            ) : null}
                                                           </div>
                                                         ) : null}
                                                       </div>
