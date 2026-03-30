@@ -1,5 +1,6 @@
-import { Home, Keyboard, LoaderCircle, Settings } from "lucide-react";
+import { Home, Keyboard, LoaderCircle, Moon, RefreshCw, Settings, Sun } from "lucide-react";
 import { Suspense, lazy, useCallback, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui";
 import { STAVE_LOGO_URL } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
@@ -21,7 +22,23 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const clearTaskSelection = useAppStore((state) => state.clearTaskSelection);
+  const [clearTaskSelection, projectPath, isDarkMode, setDarkMode, refreshProjectFiles] = useAppStore(
+    useShallow((state) => [
+      state.clearTaskSelection,
+      state.projectPath,
+      state.isDarkMode,
+      state.setDarkMode,
+      state.refreshProjectFiles,
+    ] as const),
+  );
+
+  const handleRefreshProjectFiles = useCallback(() => {
+    void refreshProjectFiles();
+  }, [refreshProjectFiles]);
+
+  const handleToggleTheme = useCallback(() => {
+    setDarkMode({ enabled: !isDarkMode });
+  }, [isDarkMode, setDarkMode]);
 
   const handleOpenShortcuts = useCallback(() => {
     void loadKeyboardShortcutsDrawer();
@@ -77,6 +94,20 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
             Home
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          {projectPath ? (
+            <DropdownMenuItem className="gap-2" onSelect={handleRefreshProjectFiles}>
+              <RefreshCw className="size-4 text-muted-foreground" />
+              Refresh project files
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem className="gap-2" onSelect={handleToggleTheme}>
+            {isDarkMode ? (
+              <Sun className="size-4 text-muted-foreground" />
+            ) : (
+              <Moon className="size-4 text-muted-foreground" />
+            )}
+            {isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          </DropdownMenuItem>
           <DropdownMenuItem className="gap-2" onSelect={handleOpenShortcuts}>
             <Keyboard className="size-4 text-muted-foreground" />
             Keyboard shortcuts
