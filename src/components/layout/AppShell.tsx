@@ -68,6 +68,9 @@ export function AppShell() {
   const [zoomHudPercent, setZoomHudPercent] = useState<number | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [sidebarResizing, setSidebarResizing] = useState(false);
+  const [isLargeViewport, setIsLargeViewport] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches
+  );
   const zoomHudTimerRef = useRef<number | null>(null);
   const handleFocusFileSearch = useCallback(() => {
     const input = document.querySelector<HTMLInputElement>("[data-file-search-input]");
@@ -260,6 +263,33 @@ export function AppShell() {
     }
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsLargeViewport(event.matches);
+    };
+
+    setIsLargeViewport(mediaQuery.matches);
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isLargeViewport && editorVisible && sidebarOverlayVisible) {
+      setLayout({ patch: { sidebarOverlayVisible: false } });
+    }
+  }, [editorVisible, isLargeViewport, setLayout, sidebarOverlayVisible]);
+
+  const showDesktopEditor = isLargeViewport && editorVisible;
+  const showDesktopSidebar = isLargeViewport && sidebarOverlayVisible;
+  const mobileOverlayMode = !isLargeViewport
+    ? (editorVisible ? "editor" : (sidebarOverlayVisible ? "sidebar" : null))
+    : null;
+
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
       {zoomHudPercent !== null ? (
@@ -320,11 +350,11 @@ export function AppShell() {
             {hasProject ? <WorkspaceTaskTabs /> : null}
             <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-2">
-                <div ref={panelRowRef} className="flex min-h-0 flex-1 overflow-hidden px-2 pt-2">
-                  <div className="min-h-0 min-w-[420px] flex-1">
+                <div ref={panelRowRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden px-2 pt-2">
+                  <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
                     <ChatArea />
                   </div>
-                  {editorVisible ? (
+                  {showDesktopEditor ? (
                     <>
                       <div
                         className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
@@ -359,7 +389,7 @@ export function AppShell() {
                       </div>
                     </>
                   ) : null}
-                  {sidebarOverlayVisible ? (
+                  {showDesktopSidebar ? (
                     <>
                       <div
                         className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
@@ -395,6 +425,25 @@ export function AppShell() {
                       </Suspense>
                     </>
                   ) : null}
+                  {mobileOverlayMode ? (
+                    <div className="absolute inset-0 z-20 px-2 pt-2 lg:hidden">
+                      <div className="flex h-full justify-end rounded-lg bg-overlay/20 backdrop-blur-[1px]">
+                        <div className="h-full w-full max-w-[min(32rem,100%)] min-w-0">
+                          {mobileOverlayMode === "editor" ? (
+                            <RenderProfiler id="EditorMainPanelMobile" thresholdMs={10}>
+                              <EditorMainPanel />
+                            </RenderProfiler>
+                          ) : (
+                            <Suspense fallback={<aside className="h-full rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm">Loading panel...</aside>}>
+                              <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
+                                <EditorPanel />
+                              </RenderProfiler>
+                            </Suspense>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className={terminalDocked ? undefined : "hidden"}>
                     <div
@@ -420,9 +469,9 @@ export function AppShell() {
                     <TerminalDock />
                 </div>
               </div>
-              <RightRail />
             </div>
           </div>
+          <RightRail />
         </div>
       </div>
     </div>
