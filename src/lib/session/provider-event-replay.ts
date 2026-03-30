@@ -663,11 +663,17 @@ export function appendProviderEventToAssistant(args: {
       part.type === "system_event" &&
       part.compactBoundary != null
     ) {
-      const compactingIdx = nextParts.findLastIndex(
-        (p) =>
-          p.type === "system_event" &&
-          p.content.trim().toLowerCase().startsWith("compacting conversation context"),
-      );
+      let compactingIdx = -1;
+      for (let index = nextParts.length - 1; index >= 0; index -= 1) {
+        const candidate = nextParts[index];
+        if (
+          candidate?.type === "system_event" &&
+          candidate.content.trim().toLowerCase().startsWith("compacting conversation context")
+        ) {
+          compactingIdx = index;
+          break;
+        }
+      }
       if (compactingIdx !== -1) {
         nextParts.splice(compactingIdx, 1);
       }

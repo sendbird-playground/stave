@@ -1,3 +1,13 @@
+## [0.0.27](https://github.com/sendbird-playground/stave/compare/v0.0.26...v0.0.27) (2026-03-30)
+
+### Features
+
+* **branding:** refresh the A-1 Focused Lens logo across app and landing assets ([#64](https://github.com/sendbird-playground/stave/issues/64)) ([4902e6d](https://github.com/sendbird-playground/stave/commit/4902e6d12388ae7f3a2bc35b1d0449f1275113f2))
+
+### Bug Fixes
+
+* **compact:** remove compacting spinner once compact completes ([#66](https://github.com/sendbird-playground/stave/issues/66)) ([5f413d2](https://github.com/sendbird-playground/stave/commit/5f413d21de6f6277787e21a86ad5835f1d871a9f))
+* improve inline auto-complete behavior ([#65](https://github.com/sendbird-playground/stave/issues/65)) ([c3e4e74](https://github.com/sendbird-playground/stave/commit/c3e4e743193330c0551b8db2e500ee3bce2303cd))
 ## [0.0.26](https://github.com/sendbird-playground/stave/compare/v0.0.25...v0.0.26) (2026-03-29)
 
 ### Features
