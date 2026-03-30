@@ -19,16 +19,16 @@ function emitZoomChanged(window: BrowserWindow) {
 }
 
 export function createMainWindow() {
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? process.env.ELECTRON_RENDERER_URL;
-  const allowedOrigin = devServerUrl
-    ? new URL(devServerUrl).origin
-    : null;
-  const shouldHideMacWindowButtons = process.platform === "darwin";
+  const devServerUrl =
+    process.env.VITE_DEV_SERVER_URL ?? process.env.ELECTRON_RENDERER_URL;
+  const allowedOrigin = devServerUrl ? new URL(devServerUrl).origin : null;
+  const isMac = process.platform === "darwin";
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
     frame: false,
-    titleBarStyle: "hidden",
+    titleBarStyle: isMac ? "hiddenInset" : "hidden",
+    trafficLightPosition: isMac ? { x: 12, y: 16 } : undefined,
     title: "Stave",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
@@ -40,10 +40,6 @@ export function createMainWindow() {
     },
   });
   window.maximize();
-  if (shouldHideMacWindowButtons) {
-    // Keep the custom Stave top bar without the native macOS traffic-light buttons.
-    window.setWindowButtonVisibility(false);
-  }
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     void openExternalWithFallback({ url });
@@ -61,9 +57,11 @@ export function createMainWindow() {
     void openExternalWithFallback({ url });
   });
 
-  window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
-  });
+  window.webContents.session.setPermissionRequestHandler(
+    (_webContents, _permission, callback) => {
+      callback(false);
+    },
+  );
 
   if (devServerUrl) {
     void window.loadURL(devServerUrl);
@@ -73,33 +71,38 @@ export function createMainWindow() {
 
   window.webContents.on("before-input-event", (event, input) => {
     const hasMod = input.control || input.meta;
-    const isCmdW = input.type === "keyDown"
-      && hasMod
-      && !input.shift
-      && !input.alt
-      && input.key.toLowerCase() === "w";
+    const isCmdW =
+      input.type === "keyDown" &&
+      hasMod &&
+      !input.shift &&
+      !input.alt &&
+      input.key.toLowerCase() === "w";
     if (isCmdW) {
       event.preventDefault();
       window.webContents.send("shortcut:close-tab-or-task");
       return;
     }
     const isF12 = input.key === "F12" && input.type === "keyDown";
-    const isInspectorChord = input.type === "keyDown"
-      && input.key.toLowerCase() === "i"
-      && input.shift
-      && hasMod;
-    const isZoomIn = input.type === "keyDown"
-      && hasMod
-      && !input.alt
-      && (input.key === "+" || input.key === "=" || input.code === "NumpadAdd");
-    const isZoomOut = input.type === "keyDown"
-      && hasMod
-      && !input.alt
-      && (input.key === "-" || input.code === "NumpadSubtract");
-    const isZoomReset = input.type === "keyDown"
-      && hasMod
-      && !input.alt
-      && (input.key === "0" || input.code === "Numpad0");
+    const isInspectorChord =
+      input.type === "keyDown" &&
+      input.key.toLowerCase() === "i" &&
+      input.shift &&
+      hasMod;
+    const isZoomIn =
+      input.type === "keyDown" &&
+      hasMod &&
+      !input.alt &&
+      (input.key === "+" || input.key === "=" || input.code === "NumpadAdd");
+    const isZoomOut =
+      input.type === "keyDown" &&
+      hasMod &&
+      !input.alt &&
+      (input.key === "-" || input.code === "NumpadSubtract");
+    const isZoomReset =
+      input.type === "keyDown" &&
+      hasMod &&
+      !input.alt &&
+      (input.key === "0" || input.code === "Numpad0");
     if (!isF12 && !isInspectorChord) {
       if (!isZoomIn && !isZoomOut && !isZoomReset) {
         return;
