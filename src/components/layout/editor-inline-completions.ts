@@ -44,15 +44,21 @@ interface ReusedInlineCompletion {
 
 type InFlightLogKind = "exact" | "compatible";
 
-const MONACO_DEBOUNCE_MS = 10;
-const ADAPTIVE_DEBOUNCE_DEFAULT_MS = 24;
-const ADAPTIVE_DEBOUNCE_MIN_MS = 12;
-const ADAPTIVE_DEBOUNCE_MAX_MS = 90;
+const MONACO_DEBOUNCE_MS = 5;
+const ADAPTIVE_DEBOUNCE_DEFAULT_MS = 16;
+const ADAPTIVE_DEBOUNCE_MIN_MS = 8;
+const ADAPTIVE_DEBOUNCE_MAX_MS = 60;
 const ADAPTIVE_DEBOUNCE_SAMPLE_SIZE = 6;
 const ADAPTIVE_DEBOUNCE_BUCKET_LIMIT = 50;
-const MIN_PREFIX_LENGTH = 10;
+const MIN_PREFIX_LENGTH = 4;
+
+const PREFETCH_DEBOUNCE_MS = 80;
 
 let registeredDisposable: IDisposable | null = null;
+let prefetchDisposable: IDisposable | null = null;
+let prefetchTimer: ReturnType<typeof setTimeout> | null = null;
+let savedGetSettings: (() => InlineCompletionSettings) | null = null;
+let savedTriggerRefresh: (() => void) | null = null;
 let inFlightRequest: PendingInlineCompletionRequest | null = null;
 let cachedResolvedRequest:
   | {
@@ -155,11 +161,15 @@ function waitForAdaptiveDebounce(
 }
 
 function buildInlineCompletionItems(position: IPosition, text: string) {
+  // Trim trailing newlines to prevent blank ghost text lines
+  const trimmedText = text.replace(/\n+$/, "");
+  if (!trimmedText) {
+    return { items: [] };
+  }
   return {
     items: [
       {
-        insertText: text,
-        filterText: text,
+        insertText: trimmedText,
         range: {
           startLineNumber: position.lineNumber,
           startColumn: position.column,
@@ -194,7 +204,11 @@ function canReuseInlineCompletionSnapshot(
     return false;
   }
   if (snapshot.suffix !== args.suffix) {
-    return false;
+    // Allow reuse if one suffix is a prefix of the other
+    // (text added/removed at end of file, or minor formatting changes)
+    if (!snapshot.suffix.startsWith(args.suffix) && !args.suffix.startsWith(snapshot.suffix)) {
+      return false;
+    }
   }
   return args.prefix.startsWith(snapshot.prefix);
 }
@@ -358,6 +372,8 @@ export function configureInlineCompletions(args: {
   if (registeredDisposable) {
     return;
   }
+  savedGetSettings = args.getSettings;
+  savedTriggerRefresh = args.triggerInlineSuggestRefresh ?? null;
 
   if (!inlineCompletionChangeEmitter) {
     const EmitterCtor = (args.monaco as Monaco & {
@@ -494,12 +510,13 @@ export function configureInlineCompletions(args: {
             }
 
             if (inFlightRequest) {
-              try {
-                await inFlightRequest.promise;
-              } catch {
-                // Ignore upstream failures here; the next loop iteration will decide whether to retry.
+              // Abort incompatible in-flight request immediately (Copilot-style)
+              console.debug("[inline-comp] aborting incompatible in-flight request");
+              const abortFn = window.api?.inlineCompletion?.abort;
+              if (abortFn) {
+                abortFn().catch(() => {});
               }
-              continue;
+              inFlightRequest = null;
             }
 
             const adaptiveDebounceMs = getAdaptiveDebounceMs({ filePath, language });
@@ -634,11 +651,125 @@ export function configureInlineCompletions(args: {
       debounceDelayMs: MONACO_DEBOUNCE_MS,
     },
   );
+
+}
+
+// ---------------------------------------------------------------------------
+// Speculative prefetch: fire a background request when the cursor moves to a
+// new position (e.g. arrow keys, clicking). This way a completion is already
+// in-flight by the time the user starts typing, mimicking Copilot's prefetch.
+// Call this from the editor's onMount callback once the editor instance exists.
+// ---------------------------------------------------------------------------
+export function attachInlineCompletionPrefetch(editor: MonacoEditorApi.ICodeEditor) {
+  // Dispose previous listener if re-attached (e.g. editor remount)
+  prefetchDisposable?.dispose();
+  prefetchDisposable = null;
+
+  if (!inlineCompletionChangeEmitter) {
+    return;
+  }
+  const changeEmitter = inlineCompletionChangeEmitter;
+
+  prefetchDisposable = editor.onDidChangeCursorPosition((e: { reason: number }) => {
+    const getSettings = savedGetSettings;
+    if (!getSettings || !getSettings().enabled) {
+      return;
+    }
+    // Only prefetch on explicit cursor movements (keyboard/mouse), not programmatic changes
+    if (e.reason !== 3 /* CursorChangeReason.Explicit */) {
+      return;
+    }
+    const requestFn = window.api?.inlineCompletion?.request;
+    if (!requestFn) {
+      return;
+    }
+
+    if (prefetchTimer) {
+      clearTimeout(prefetchTimer);
+    }
+
+    prefetchTimer = setTimeout(() => {
+      prefetchTimer = null;
+      const model = editor.getModel();
+      if (!model) {
+        return;
+      }
+      const pos = editor.getPosition();
+      if (!pos) {
+        return;
+      }
+      const filePath = getWorkspaceFilePath(model.uri);
+      if (!filePath) {
+        return;
+      }
+      const fullText = model.getValue();
+      const offset = model.getOffsetAt(pos);
+      const prefix = fullText.slice(0, offset);
+      const suffix = fullText.slice(offset);
+      const language = model.getLanguageId();
+
+      if (prefix.trim().length < MIN_PREFIX_LENGTH) {
+        return;
+      }
+      // Skip if there's already a compatible in-flight request
+      if (inFlightRequest && canReuseInlineCompletionSnapshot(inFlightRequest, { filePath, language, prefix, suffix })) {
+        return;
+      }
+
+      // Abort any existing incompatible request before prefetching
+      if (inFlightRequest) {
+        window.api?.inlineCompletion?.abort?.().catch(() => {});
+        inFlightRequest = null;
+      }
+
+      const requestKey = buildInlineCompletionRequestKey({
+        filePath,
+        language,
+        versionId: model.getVersionId(),
+        offset,
+      });
+      console.debug("[inline-comp] prefetching completion at cursor position");
+      const startedAt = Date.now();
+      const promise = requestFn({ prefix, suffix, filePath, language });
+      inFlightRequest = {
+        key: requestKey,
+        filePath,
+        language,
+        prefix,
+        suffix,
+        startedAt,
+        promise,
+      };
+      // When the prefetch resolves, cache the result and trigger a refresh
+      promise.then((res) => {
+        if (inFlightRequest?.promise === promise) {
+          inFlightRequest = null;
+        }
+        if (res.ok && res.text.trim()) {
+          cachedResolvedRequest = { key: requestKey, result: res };
+          lastResolvedCompletion = { filePath, language, prefix, suffix, text: res.text };
+          recordAdaptiveDebounceSample({ filePath, language }, Math.max(1, Date.now() - startedAt));
+          changeEmitter.fire();
+          savedTriggerRefresh?.();
+        }
+      }).catch(() => {
+        if (inFlightRequest?.promise === promise) {
+          inFlightRequest = null;
+        }
+      });
+    }, PREFETCH_DEBOUNCE_MS);
+  });
 }
 
 export function disposeInlineCompletions() {
   registeredDisposable?.dispose();
   registeredDisposable = null;
+  prefetchDisposable?.dispose();
+  prefetchDisposable = null;
+  if (prefetchTimer) {
+    clearTimeout(prefetchTimer);
+    prefetchTimer = null;
+  }
   inFlightRequest = null;
   cachedResolvedRequest = null;
   lastResolvedCompletion = null;
@@ -647,4 +778,6 @@ export function disposeInlineCompletions() {
   inlineCompletionChangeEmitter = null;
   lastLoggedInFlightRequest = null;
   latestObservedRequest = null;
+  savedGetSettings = null;
+  savedTriggerRefresh = null;
 }

@@ -20,14 +20,14 @@ interface InlineCompletionResult {
 // Shared constants
 // ---------------------------------------------------------------------------
 
-const COMPLETION_MODEL = "claude-haiku-4-5-20251001";
+const COMPLETION_MODEL = "claude-haiku-4-5";
 const SDK_MODEL = "claude-haiku-4-5";
-const DEFAULT_MAX_TOKENS = 24;
-const MAX_PREFIX_CHARS = 320;
-const MAX_SUFFIX_CHARS = 48;
-const MAX_PREFIX_LINES = 8;
-const MAX_SUFFIX_LINES = 2;
-const SDK_EARLY_SETTLE_MS = 40;
+const DEFAULT_MAX_TOKENS = 256;
+const MAX_PREFIX_CHARS = 8000;
+const MAX_SUFFIX_CHARS = 4000;
+const MAX_PREFIX_LINES = 150;
+const MAX_SUFFIX_LINES = 100;
+const SDK_EARLY_SETTLE_MS = 20;
 
 // ---------------------------------------------------------------------------
 // Prompt builder (shared by both backends)
@@ -70,32 +70,66 @@ function buildCompletionPrompt(args: InlineCompletionRequest) {
 
   const lang = args.language || "plaintext";
   const fileName = args.filePath.split("/").pop() ?? "file";
+  const imports = extractImportContext(args.prefix);
+
+  // FIM-style prompt: show code with a hole, ask model to fill it.
+  // This structure makes the model continue code rather than explain.
+  const importsSection = imports ? `\nImports:\n${imports}\n` : "";
+  const user = [
+    `Fill in [HOLE] in this ${lang} file (${fileName}):`,
+    importsSection,
+    `${prefix}[HOLE]${suffix}`,
+    "",
+    "Reply with ONLY the code that replaces [HOLE]. No markdown, no backticks, no explanation.",
+  ].join("\n");
+
+  // Prefill: last line of prefix so API path continues code naturally
+  const lastPrefixLine = prefix.split("\n").pop() ?? "";
+  const prefill = lastPrefixLine.trimEnd();
 
   return {
     system: [
-      "Complete code at the cursor.",
-      "Return only inserted code.",
-      "No markdown. No explanation.",
-      "Keep it short and local.",
-      "Do not repeat surrounding text.",
-      "If unsure, return an empty string.",
+      "You are a code completion engine embedded in an IDE.",
+      "You receive a file snippet with a [HOLE] marker where the cursor is.",
+      "",
+      "Use ALL provided context to produce the best completion:",
+      "- Language & filename: match the file's idioms, naming conventions, and style.",
+      "- Imports: use only symbols that are already imported or available in scope. Do not invent new imports.",
+      "- Prefix (code before [HOLE]): continue the pattern, indentation, and logic established above the cursor.",
+      "- Suffix (code after [HOLE]): ensure the completion connects seamlessly to the code that follows. Do not repeat the suffix.",
+      "",
+      "Output ONLY the raw code that replaces [HOLE]. No markdown. No backticks. No explanation. No prose.",
     ].join("\n"),
-    user: [
-      `File: ${fileName} (${lang})`,
-      `<prefix>${prefix}</prefix>`,
-      `<suffix>${suffix}</suffix>`,
-      "Complete between <prefix> and <suffix>. Output only inserted code:",
-    ].join("\n"),
+    user,
+    prefill,
   };
 }
 
 function normalizeInlineCompletionText(text: string) {
-  const trimmed = text.trim();
-  const fencedBlockMatch = trimmed.match(/^```[^\r\n`]*\r?\n([\s\S]*?)\r?\n```$/);
+  console.debug("[inline-completion][normalize] raw input:", JSON.stringify(text));
+  let result = text.trim();
+
+  // Full fence: ```lang\n...\n```
+  const fencedBlockMatch = result.match(/^```[^\r\n`]*\r?\n([\s\S]*?)(\r?\n```\s*)?$/);
   if (fencedBlockMatch?.[1] !== undefined) {
-    return fencedBlockMatch[1];
+    result = fencedBlockMatch[1];
   }
-  return text;
+
+  // Strip leftover opening fence (model started with ```lang but no closing)
+  result = result.replace(/^```[^\r\n`]*\r?\n/, "");
+  // Strip leftover closing fence
+  result = result.replace(/\r?\n```\s*$/, "");
+  // Strip inline backtick wrapping: `code`
+  if (result.startsWith("`") && result.endsWith("`") && !result.includes("\n")) {
+    result = result.slice(1, -1);
+  }
+
+  // Strip bare language identifier on the first line (e.g. "typescript\ncode...")
+  const LANG_IDS = /^(typescript|javascript|tsx|jsx|python|rust|go|java|c|cpp|csharp|ruby|php|swift|kotlin|html|css|scss|json|yaml|toml|sql|bash|sh|zsh|shell|markdown|md|plaintext)\s*\r?\n/i;
+  result = result.replace(LANG_IDS, "");
+
+  console.debug("[inline-completion][normalize] output:", JSON.stringify(result));
+  return result;
 }
 
 function getInlineCompletionControlError(text: string): string | null {
@@ -118,6 +152,46 @@ function getInlineCompletionControlError(text: string): string | null {
     return "Claude rate limit reached. Retry in a moment.";
   }
   return null;
+}
+
+/**
+ * Remove trailing lines of completion that duplicate leading lines of suffix.
+ * Keeps at least one line of completion to avoid removing the entire result.
+ */
+function removeSuffixOverlap(completionText: string, suffix: string): string {
+  if (!completionText || !suffix) {
+    return completionText;
+  }
+
+  const completionLines = completionText.split("\n");
+  const suffixLines = suffix.split("\n");
+  const maxCheck = Math.min(completionLines.length - 1, suffixLines.length);
+
+  for (let n = maxCheck; n >= 1; n--) {
+    const completionTail = completionLines.slice(-n);
+    const suffixHead = suffixLines.slice(0, n);
+    if (completionTail.every((line, i) => line.trimEnd() === suffixHead[i].trimEnd())) {
+      return completionLines.slice(0, -n).join("\n");
+    }
+  }
+
+  return completionText;
+}
+
+/**
+ * Extract import/require/include lines from the full prefix so the model
+ * knows which symbols are available even after the prefix is trimmed.
+ */
+function extractImportContext(fullPrefix: string): string {
+  const lines = fullPrefix.split("\n");
+  const importLines: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^(import\b|from\b|require\s*\(|const\s+\w+\s*=\s*require|#include\b|using\b|use\b|package\b)/.test(trimmed)) {
+      importLines.push(trimmed);
+    }
+  }
+  return importLines.slice(0, 15).join("\n");
 }
 
 function mergeInlineCompletionText(previous: string, candidate: string) {
@@ -205,7 +279,7 @@ async function requestViaClaudeSdk(
       thinking: {
         type: "disabled",
       },
-      effort: "low",
+      effort: "max",
       tools: [],
       allowedTools: [],
       extraArgs: {
@@ -458,7 +532,10 @@ async function requestViaApi(
         model: COMPLETION_MODEL,
         max_tokens: args.maxTokens ?? DEFAULT_MAX_TOKENS,
         system: prompt.system,
-        messages: [{ role: "user", content: prompt.user }],
+        messages: [
+          { role: "user", content: prompt.user },
+          { role: "assistant", content: prompt.prefill },
+        ],
       },
       { signal: abortController.signal },
     );
@@ -504,13 +581,25 @@ export async function requestInlineCompletion(
   args: InlineCompletionRequest,
 ): Promise<InlineCompletionResult> {
   const traceId = `req-${++inlineCompletionRequestSequence}`;
-  const sdkResult = await requestViaClaudeSdk(args, traceId);
-  if (sdkResult.ok || sdkResult.error === "aborted" || !resolveApiKey()) {
-    return sdkResult;
+
+  // Prefer direct API when available (clean system prompt + assistant prefill).
+  // Fall back to SDK (uses Claude Code's system prompt, less controllable).
+  if (resolveApiKey()) {
+    const apiResult = await requestViaApi(args, traceId);
+    if (apiResult.ok) {
+      return { ...apiResult, text: removeSuffixOverlap(apiResult.text, args.suffix) };
+    }
+    if (apiResult.error === "aborted") {
+      return apiResult;
+    }
+    console.warn(`[inline-completion][${traceId}] API failed, falling back to SDK:`, apiResult.error ?? "unknown error");
   }
 
-  console.warn(`[inline-completion][${traceId}] SDK failed, falling back to API:`, sdkResult.error ?? "unknown error");
-  return requestViaApi(args, traceId);
+  const sdkResult = await requestViaClaudeSdk(args, traceId);
+  if (sdkResult.ok) {
+    return { ...sdkResult, text: removeSuffixOverlap(sdkResult.text, args.suffix) };
+  }
+  return sdkResult;
 }
 
 export function isInlineCompletionAvailable(): boolean {
