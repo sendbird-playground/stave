@@ -17,7 +17,7 @@ Replace the legacy workspace/task shell with a three-part layout:
 - Everything below the top bar is now a two-column region: a left workspace column and the right rail.
 - The left workspace column contains the selected workspace's task tab strip plus the main chat/editor surface.
 - The right rail spans the full region below the top bar, so the task tabs share row width with the rail.
-- Below `lg`, the rail remains visible in a compact form and editor or explorer/changes panels switch from inline splits to a single right-side overlay sheet inside the content area.
+- Below `lg`, the rail remains visible in a compact form and editor or explorer/changes still occupy a dedicated right-side panel column beneath the top bar, so the task tabs and main workspace shrink to make room.
 
 ### Confirmed UX Decisions
 
@@ -76,6 +76,7 @@ Replace the legacy workspace/task shell with a three-part layout:
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`
   - keeps terminal independent while making editor and explorer/changes mutually exclusive on small widths
+  - opens its right-side panels as full-height siblings under the top bar instead of placing them beneath the task-tabs row
 - `EditorPanel`
   - loads explorer folders on demand instead of materializing the full tree from `projectFiles`
   - caches loaded directory entries in memory for the active workspace until refresh, workspace switch, or add file/folder invalidation
@@ -111,5 +112,5 @@ Replace the legacy workspace/task shell with a three-part layout:
 - Task archive from tab close should preserve history.
 - Project removal should not touch filesystem data.
 - Explorer / editor / terminal actions should still work from the right rail.
-- On narrow widths, task tabs should stay visible while the compact rail remains pinned and right-side panels render as content-only overlays.
+- On narrow widths, task tabs should stay visible while the compact rail remains pinned and right-side panels reduce the remaining workspace width from the top of the shell.
 - Explorer refresh should invalidate cached folder entries and repopulate the currently expanded folders.
