@@ -56,9 +56,6 @@ export function resolveApprovalPolicy(args: {
   ) {
     return candidate;
   }
-  if (candidate === "on-failure") {
-    return "on-request";
-  }
   return undefined;
 }
 

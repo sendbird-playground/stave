@@ -72,7 +72,7 @@ describe("stave auto profile presets", () => {
       }),
     });
 
-    expect(profile.classifierModel).toBe("gpt-5.4");
+    expect(profile.classifierModel).toBe("gpt-5.4-mini");
     expect(profile.implementModel).toBe("gpt-5.3-codex");
     expect(profile.verifyModel).toBe("gpt-5.4");
     expect(profile.fastMode).toBe(true);
