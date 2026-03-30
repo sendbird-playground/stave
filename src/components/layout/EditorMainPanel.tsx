@@ -19,7 +19,7 @@ import {
   type LanguageIntelligenceRuntime,
   type LanguageIntelligenceSettings,
 } from "./editor-language-intelligence";
-import { configureInlineCompletions, type InlineCompletionSettings } from "./editor-inline-completions";
+import { configureInlineCompletions, attachInlineCompletionInteractionTracking, type InlineCompletionSettings } from "./editor-inline-completions";
 import {
   configureMonacoDefaults,
   syncWorkspaceMonacoSupport,
@@ -158,6 +158,9 @@ export function EditorMainPanel() {
     configureInlineCompletions({
       monaco,
       getSettings: () => inlineCompletionSettingsRef.current,
+      triggerInlineSuggestRefresh: () => {
+        editorRef.current?.trigger("inline-completion", "editor.action.inlineSuggest.trigger", {});
+      },
     });
     if (!editorOpenerDisposableRef.current) {
       editorOpenerDisposableRef.current = monaco.editor.registerEditorOpener({
@@ -501,6 +504,7 @@ export function EditorMainPanel() {
                 beforeMount={configureMonaco}
                 onMount={(editor) => {
                   editorRef.current = editor;
+                  attachInlineCompletionInteractionTracking(editor);
                 }}
                 onChange={(value) =>
                   updateEditorContent({
@@ -517,6 +521,7 @@ export function EditorMainPanel() {
                   lineNumbers: editorLineNumbers,
                   tabSize: editorTabSize,
                   wordWrap: editorWordWrap ? "on" : "off",
+                  inlineSuggest: { enabled: editorAiCompletions, mode: "subword" },
                 }}
               />
             )
