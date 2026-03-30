@@ -7,10 +7,14 @@ const STAVE_LOGO_LIGHT_ICON_URL = `${import.meta.env.BASE_URL}stave-logo-light.s
 
 // Source: https://platform.claude.com/docs/en/about-claude/models/overview
 // Latest models comparison (as of 2026-03-06)
+// The [1m] suffix activates the 1M-token context window; the Claude SDK
+// parses it and auto-injects the `context-1m-2025-08-07` beta header.
 export const CLAUDE_SDK_MODEL_OPTIONS = [
   "claude-opus-4-6",
+  "claude-opus-4-6[1m]",
   "opusplan",
   "claude-sonnet-4-6",
+  "claude-sonnet-4-6[1m]",
   "claude-haiku-4-5",
 ] as const;
 
@@ -190,8 +194,10 @@ export function normalizeModelSelection(args: { value: string; fallback: string 
 export function toHumanModelName(args: { model: string }) {
   const known: Record<string, string> = {
     "claude-opus-4-6": "Claude Opus 4.6",
+    "claude-opus-4-6[1m]": "Claude Opus 4.6 (1M)",
     "opusplan": "Claude Opus Plan",
     "claude-sonnet-4-6": "Claude Sonnet 4.6",
+    "claude-sonnet-4-6[1m]": "Claude Sonnet 4.6 (1M)",
     "claude-haiku-4-5": "Claude Haiku 4.5",
     "gpt-5.4": "GPT-5.4",
     "gpt-5.4-mini": "GPT-5.4 Mini",

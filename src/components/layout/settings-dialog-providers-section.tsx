@@ -101,7 +101,7 @@ function StaveAutoCard() {
         description="Applying a preset rewrites every Stave Auto role model at once."
       >
         <div className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {STAVE_AUTO_MODEL_PRESETS.map((preset) => (
               <Button
                 key={preset.id}

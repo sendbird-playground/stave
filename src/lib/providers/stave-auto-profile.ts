@@ -1,6 +1,6 @@
 import type { ProviderId, StaveAutoIntent, StaveAutoProfile, StaveWorkerRole } from "@/lib/providers/provider.types";
 
-export type StaveAutoModelPresetId = "recommended" | "claude-only" | "codex-only";
+export type StaveAutoModelPresetId = "recommended" | "recommended-1m" | "claude-only" | "codex-only";
 
 type StaveAutoModelProfile = {
   classifierModel: string;
@@ -43,6 +43,11 @@ export const STAVE_AUTO_MODEL_PRESETS = [
     description: "Balanced Claude + Codex mix. Verify uses GPT-5.4.",
   },
   {
+    id: "recommended-1m",
+    label: "Recommended (1M)",
+    description: "1M context for supervisor, analyze & general roles. Higher cost for longer sessions.",
+  },
+  {
     id: "claude-only",
     label: "Claude Only",
     description: "Keep every Stave Auto role on Claude models only.",
@@ -67,6 +72,16 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAuto
     implementModel: "gpt-5.3-codex",
     quickEditModel: "claude-haiku-4-5",
     generalModel: "claude-sonnet-4-6",
+    verifyModel: "gpt-5.4",
+  },
+  "recommended-1m": {
+    classifierModel: "claude-haiku-4-5",
+    supervisorModel: "claude-opus-4-6[1m]",
+    planModel: "opusplan",
+    analyzeModel: "claude-opus-4-6[1m]",
+    implementModel: "gpt-5.3-codex",
+    quickEditModel: "claude-haiku-4-5",
+    generalModel: "claude-sonnet-4-6[1m]",
     verifyModel: "gpt-5.4",
   },
   "claude-only": {
