@@ -71,7 +71,7 @@ export function ModelSelector(args: ModelSelectorProps) {
         onClick={() => setOpen((prev) => !prev)}
         disabled={disabled}
       >
-        <ModelIcon providerId={value.providerId} className="size-3.5" />
+        <ModelIcon providerId={value.providerId} model={value.model} className="size-3.5" />
         <span className="truncate">{value.label}</span>
         <ChevronDown className="size-3.5 text-muted-foreground" />
       </button>
@@ -108,7 +108,7 @@ export function ModelSelector(args: ModelSelectorProps) {
                     }}
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <ModelIcon providerId={option.providerId} className="size-3.5" />
+                      <ModelIcon providerId={option.providerId} model={option.model} className="size-3.5" />
                       <span className="truncate">{option.label}</span>
                     </span>
                     {option.key === value.key ? <Check className="size-3.5 text-primary" /> : null}
