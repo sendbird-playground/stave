@@ -441,6 +441,30 @@ interface WindowSourceControlApi {
     draft?: boolean;
     cwd?: string;
   }) => Promise<{ ok: boolean; prUrl?: string; stderr?: string }>;
+  getPrStatus?: (args: { cwd?: string }) => Promise<{
+    ok: boolean;
+    pr: {
+      number: number;
+      title: string;
+      state: "OPEN" | "CLOSED" | "MERGED";
+      isDraft: boolean;
+      url: string;
+      reviewDecision: string | null;
+      mergeable: string;
+      mergeStateStatus: string;
+      checksRollup: "SUCCESS" | "FAILURE" | "PENDING" | null;
+      mergedAt: string | null;
+      baseRefName: string;
+      headRefName: string;
+    } | null;
+    stderr?: string;
+  }>;
+  setPrReady?: (args: { cwd?: string }) => Promise<SourceControlCommandResult>;
+  mergePr?: (args: {
+    method?: "merge" | "squash" | "rebase";
+    cwd?: string;
+  }) => Promise<SourceControlCommandResult>;
+  updatePrBranch?: (args: { cwd?: string }) => Promise<SourceControlCommandResult>;
 }
 
 interface WindowPersistenceApi {

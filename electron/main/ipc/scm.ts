@@ -193,6 +193,132 @@ export function registerScmHandlers() {
     return runCommand({ command: `git cherry-pick "${quotePath({ value: commit })}"`, cwd: args.cwd });
   });
 
+  // -----------------------------------------------------------------------
+  // PR status & actions
+  // -----------------------------------------------------------------------
+
+  ipcMain.handle("scm:get-pr-status", async (_event, args: { cwd?: string }) => {
+    // Check gh CLI availability
+    const authResult = await runCommand({ command: "gh auth status", cwd: args.cwd });
+    if (!authResult.ok) {
+      return { ok: false, pr: null, stderr: "GitHub CLI is not authenticated." };
+    }
+
+    const jsonFields = [
+      "number", "title", "state", "isDraft", "url",
+      "reviewDecision", "mergeable", "mergeStateStatus",
+      "statusCheckRollup", "mergedAt", "baseRefName", "headRefName",
+    ].join(",");
+
+    const result = await runCommand({
+      command: `gh pr view --json ${jsonFields}`,
+      cwd: args.cwd,
+    });
+
+    if (!result.ok) {
+      // "no pull requests found" means branch has no associated PR
+      const noPr =
+        result.stderr.includes("no pull requests found") ||
+        result.stderr.includes("Could not resolve") ||
+        result.stderr.includes("no open pull requests");
+      if (noPr) {
+        return { ok: true, pr: null, stderr: "" };
+      }
+      return { ok: false, pr: null, stderr: result.stderr };
+    }
+
+    try {
+      const raw = JSON.parse(result.stdout);
+
+      // Derive a single checks rollup from the statusCheckRollup array
+      let checksRollup: "SUCCESS" | "FAILURE" | "PENDING" | null = null;
+      const checks: unknown[] = Array.isArray(raw.statusCheckRollup)
+        ? raw.statusCheckRollup
+        : [];
+      if (checks.length > 0) {
+        const hasFailure = checks.some((c: any) => {
+          if (c.__typename === "CheckRun") {
+            return c.conclusion === "FAILURE" || c.conclusion === "CANCELLED" || c.conclusion === "TIMED_OUT" || c.conclusion === "ACTION_REQUIRED";
+          }
+          if (c.__typename === "StatusContext") {
+            return c.state === "FAILURE" || c.state === "ERROR";
+          }
+          return false;
+        });
+        if (hasFailure) {
+          checksRollup = "FAILURE";
+        } else {
+          const hasPending = checks.some((c: any) => {
+            if (c.__typename === "CheckRun") return c.status !== "COMPLETED";
+            if (c.__typename === "StatusContext") return c.state === "PENDING" || c.state === "EXPECTED";
+            return false;
+          });
+          checksRollup = hasPending ? "PENDING" : "SUCCESS";
+        }
+      }
+
+      return {
+        ok: true,
+        pr: {
+          number: raw.number ?? 0,
+          title: raw.title ?? "",
+          state: raw.state ?? "OPEN",
+          isDraft: Boolean(raw.isDraft),
+          url: raw.url ?? "",
+          reviewDecision: raw.reviewDecision ?? null,
+          mergeable: raw.mergeable ?? "UNKNOWN",
+          mergeStateStatus: raw.mergeStateStatus ?? "UNKNOWN",
+          checksRollup,
+          mergedAt: raw.mergedAt ?? null,
+          baseRefName: raw.baseRefName ?? "",
+          headRefName: raw.headRefName ?? "",
+        },
+        stderr: "",
+      };
+    } catch {
+      return { ok: false, pr: null, stderr: "Failed to parse PR status JSON." };
+    }
+  });
+
+  ipcMain.handle("scm:set-pr-ready", async (_event, args: { cwd?: string }) => {
+    const authResult = await runCommand({ command: "gh auth status", cwd: args.cwd });
+    if (!authResult.ok) {
+      return { ok: false, stderr: "GitHub CLI is not authenticated." };
+    }
+    return runCommand({ command: "gh pr ready", cwd: args.cwd });
+  });
+
+  ipcMain.handle("scm:merge-pr", async (_event, args: { method?: "merge" | "squash" | "rebase"; cwd?: string }) => {
+    const authResult = await runCommand({ command: "gh auth status", cwd: args.cwd });
+    if (!authResult.ok) {
+      return { ok: false, stderr: "GitHub CLI is not authenticated." };
+    }
+    const method = args.method ?? "squash";
+    return runCommand({ command: `gh pr merge --${method} --delete-branch`, cwd: args.cwd });
+  });
+
+  ipcMain.handle("scm:update-pr-branch", async (_event, args: { cwd?: string }) => {
+    const authResult = await runCommand({ command: "gh auth status", cwd: args.cwd });
+    if (!authResult.ok) {
+      return { ok: false, code: -1, stdout: "", stderr: "GitHub CLI is not authenticated." };
+    }
+
+    // Determine the base branch from the PR
+    const baseResult = await runCommand({
+      command: "gh pr view --json baseRefName -q .baseRefName",
+      cwd: args.cwd,
+    });
+    const baseBranch = baseResult.ok ? baseResult.stdout.trim() : "main";
+
+    // Fetch and rebase onto the base branch
+    const fetchResult = await runCommand({ command: "git fetch origin", cwd: args.cwd });
+    if (!fetchResult.ok) {
+      return { ok: false, code: fetchResult.code, stdout: fetchResult.stdout, stderr: fetchResult.stderr || "git fetch failed." };
+    }
+
+    return runCommand({ command: `git rebase "origin/${baseBranch}"`, cwd: args.cwd });
+  });
+
   ipcMain.handle("scm:create-pr", async (_event, args: unknown) => {
     const parsed = CreatePRArgsSchema.safeParse(args);
     if (!parsed.success) {

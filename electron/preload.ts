@@ -364,6 +364,46 @@ contextBridge.exposeInMainWorld("api", {
         prUrl?: string;
         stderr?: string;
       }>,
+    getPrStatus: (args: { cwd?: string }) =>
+      ipcRenderer.invoke("scm:get-pr-status", args) as Promise<{
+        ok: boolean;
+        pr: {
+          number: number;
+          title: string;
+          state: "OPEN" | "CLOSED" | "MERGED";
+          isDraft: boolean;
+          url: string;
+          reviewDecision: string | null;
+          mergeable: string;
+          mergeStateStatus: string;
+          checksRollup: "SUCCESS" | "FAILURE" | "PENDING" | null;
+          mergedAt: string | null;
+          baseRefName: string;
+          headRefName: string;
+        } | null;
+        stderr?: string;
+      }>,
+    setPrReady: (args: { cwd?: string }) =>
+      ipcRenderer.invoke("scm:set-pr-ready", args) as Promise<{
+        ok: boolean;
+        code?: number;
+        stdout?: string;
+        stderr?: string;
+      }>,
+    mergePr: (args: { method?: "merge" | "squash" | "rebase"; cwd?: string }) =>
+      ipcRenderer.invoke("scm:merge-pr", args) as Promise<{
+        ok: boolean;
+        code?: number;
+        stdout?: string;
+        stderr?: string;
+      }>,
+    updatePrBranch: (args: { cwd?: string }) =>
+      ipcRenderer.invoke("scm:update-pr-branch", args) as Promise<{
+        ok: boolean;
+        code?: number;
+        stdout?: string;
+        stderr?: string;
+      }>,
   },
   window: {
     minimize: () => ipcRenderer.invoke("window:minimize"),

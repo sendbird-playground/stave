@@ -127,6 +127,11 @@ import {
   captureCurrentProjectState,
 } from "@/store/project.utils";
 import {
+  type WorkspacePrInfo,
+  type GitHubPrPayload,
+  derivePrStatus,
+} from "@/lib/pr-status";
+import {
   resolveLanguage,
   normalizeProviderTimeoutMs,
   isImageFilePath,
@@ -260,6 +265,8 @@ interface AppState {
   workspaceBranchById: Record<string, string>;
   workspacePathById: Record<string, string>;
   workspaceDefaultById: Record<string, boolean>;
+  /** PR info cache per workspace – transient, not persisted across sessions. */
+  workspacePrInfoById: Record<string, WorkspacePrInfo>;
   isDarkMode: boolean;
   activeTaskId: string;
   draftProvider: ProviderId;
@@ -325,6 +332,10 @@ interface AppState {
   archiveTask: (args: { taskId: string }) => void;
   setTaskProvider: (args: { taskId: string; provider: ProviderId }) => void;
   setWorkspaceBranch: (args: { workspaceId: string; branch: string }) => void;
+  /** Fetch PR status for a single workspace from GitHub. */
+  fetchWorkspacePrStatus: (args: { workspaceId: string }) => Promise<void>;
+  /** Fetch PR status for all non-default workspaces. */
+  fetchAllWorkspacePrStatuses: () => Promise<void>;
   setLayout: (args: { patch: Partial<LayoutState> }) => void;
   toggleEditorDiffMode: () => void;
   openWorkspacePicker: () => Promise<void>;
@@ -650,6 +661,7 @@ export const useAppStore = create<AppState>()(
       workspaceBranchById: {},
       workspacePathById: {},
       workspaceDefaultById: {},
+      workspacePrInfoById: {},
       isDarkMode: true,
       activeTaskId: "",
       draftProvider: "claude-code",
@@ -2125,6 +2137,66 @@ export const useAppStore = create<AppState>()(
             [workspaceId]: branch,
           },
         })),
+      fetchWorkspacePrStatus: async ({ workspaceId }) => {
+        const state = get();
+        const cwd = state.workspacePathById[workspaceId];
+        if (!cwd) return;
+        if (state.workspaceDefaultById[workspaceId]) return;
+
+        const getPrStatus = window.api?.sourceControl?.getPrStatus;
+        if (!getPrStatus) return;
+
+        try {
+          const result = await getPrStatus({ cwd });
+          if (!result.ok) return;
+
+          const pr = result.pr as GitHubPrPayload | null;
+          const derived = pr ? derivePrStatus(pr) : "no_pr" as const;
+          const info: WorkspacePrInfo = { pr, derived, lastFetched: Date.now() };
+
+          set((s) => ({
+            workspacePrInfoById: {
+              ...s.workspacePrInfoById,
+              [workspaceId]: info,
+            },
+          }));
+        } catch {
+          // Silently ignore – PR status is best-effort.
+        }
+      },
+      fetchAllWorkspacePrStatuses: async () => {
+        const state = get();
+        const getPrStatus = window.api?.sourceControl?.getPrStatus;
+        if (!getPrStatus) return;
+
+        const nonDefaultIds = state.workspaces
+          .filter((ws) => !state.workspaceDefaultById[ws.id])
+          .map((ws) => ws.id);
+
+        // Fetch sequentially to avoid hammering GitHub API.
+        for (const wsId of nonDefaultIds) {
+          const cwd = state.workspacePathById[wsId];
+          if (!cwd) continue;
+
+          try {
+            const result = await getPrStatus({ cwd });
+            if (!result.ok) continue;
+
+            const pr = result.pr as GitHubPrPayload | null;
+            const derived = pr ? derivePrStatus(pr) : "no_pr" as const;
+            const info: WorkspacePrInfo = { pr, derived, lastFetched: Date.now() };
+
+            set((s) => ({
+              workspacePrInfoById: {
+                ...s.workspacePrInfoById,
+                [wsId]: info,
+              },
+            }));
+          } catch {
+            // ignore
+          }
+        }
+      },
       setLayout: ({ patch }) => set((state) => {
         const nextLayout = mergeLayoutPatch({
           layout: state.layout,

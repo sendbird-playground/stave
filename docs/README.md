@@ -20,6 +20,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Agent exploration harness plan (2026-03-29)](future/agent-exploration-harness-plan-2026-03-29.md)
 - [Local data roadmap (2026-03-29)](future/local-data-roadmap-2026-03-29.md)
 - [Shared skill management plan (2026-03-13)](future/shared-skill-management-plan-2026-03-13.md)
+- [Workspace PR Status](features/workspace-pr-status.md)
 - [Session Replay](features/session-replay.md)
 - [Skill selector](features/skill-selector.md)
 - [Attachments](features/attachments.md)

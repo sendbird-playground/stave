@@ -59,6 +59,21 @@ When changing local skill discovery:
 - `src/lib/skills/catalog.ts`
 - settings and prompt input consumers
 
+## PR Status Contract
+
+When changing PR status fetching, derivation, or UI rendering:
+
+- `src/lib/pr-status.ts` — status enum, derivation logic, visual/action config
+- `electron/main/ipc/scm.ts` — `scm:get-pr-status`, `scm:set-pr-ready`, `scm:merge-pr`, `scm:update-pr-branch`
+- `electron/preload.ts` — `getPrStatus`, `setPrReady`, `mergePr`, `updatePrBranch`
+- `src/types/window-api.d.ts` — type definitions for the 4 methods
+- `src/store/app.store.ts` — `workspacePrInfoById`, `fetchWorkspacePrStatus`, `fetchAllWorkspacePrStatuses`
+- `src/components/layout/PrStatusIcon.tsx` — icon lookup and color mapping
+- `src/components/layout/TopBarOpenPR.tsx` — PR hub trigger, dropdown, creation dialog
+- `src/components/layout/ProjectWorkspaceSidebar.tsx` — sidebar icon rendering
+
+See `docs/features/workspace-pr-status.md` for the full architecture reference.
+
 ## Minimum Verification
 
 - run `bun run typecheck` after provider or IPC contract changes
