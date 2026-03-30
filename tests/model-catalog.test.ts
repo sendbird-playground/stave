@@ -49,6 +49,23 @@ describe("model catalog", () => {
     expect(inferProviderIdFromModel({ model: "stave-auto" })).toBe("stave");
   });
 
+  // ── 1M context model variants ─────────────────────────────────────────────
+
+  test("formats [1m] model variants with human-readable labels", () => {
+    expect(toHumanModelName({ model: "claude-opus-4-6[1m]" })).toBe("Claude Opus 4.6 (1M)");
+    expect(toHumanModelName({ model: "claude-sonnet-4-6[1m]" })).toBe("Claude Sonnet 4.6 (1M)");
+  });
+
+  test("infers claude-code provider for [1m] model variants", () => {
+    expect(inferProviderIdFromModel({ model: "claude-opus-4-6[1m]" })).toBe("claude-code");
+    expect(inferProviderIdFromModel({ model: "claude-sonnet-4-6[1m]" })).toBe("claude-code");
+  });
+
+  test("wave tone class resolves correctly for [1m] variants via stave", () => {
+    expect(getProviderWaveToneClass({ providerId: "stave", model: "claude-opus-4-6[1m]" })).toBe("text-provider-claude");
+    expect(getProviderWaveToneClass({ providerId: "stave", model: "claude-sonnet-4-6[1m]" })).toBe("text-provider-claude");
+  });
+
   test("cycles provider order from the descriptor registry", () => {
     expect(getNextProviderId({ providerId: "claude-code" })).toBe("codex");
   });

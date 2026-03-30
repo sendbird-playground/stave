@@ -33,6 +33,9 @@ describe("stave auto profile presets", () => {
       settings: buildStaveAutoModelSettingsPatch({ presetId: "recommended" }),
     })).toBe("recommended");
     expect(detectStaveAutoModelPreset({
+      settings: buildStaveAutoModelSettingsPatch({ presetId: "recommended-1m" }),
+    })).toBe("recommended-1m");
+    expect(detectStaveAutoModelPreset({
       settings: buildStaveAutoModelSettingsPatch({ presetId: "claude-only" }),
     })).toBe("claude-only");
     expect(detectStaveAutoModelPreset({
@@ -45,6 +48,20 @@ describe("stave auto profile presets", () => {
     custom.staveAutoImplementModel = "claude-sonnet-4-6";
 
     expect(detectStaveAutoModelPreset({ settings: custom })).toBeNull();
+  });
+
+  test("recommended-1m preset uses [1m] models for supervisor, analyze and general", () => {
+    const patch = buildStaveAutoModelSettingsPatch({ presetId: "recommended-1m" });
+
+    expect(patch.staveAutoSupervisorModel).toBe("claude-opus-4-6[1m]");
+    expect(patch.staveAutoAnalyzeModel).toBe("claude-opus-4-6[1m]");
+    expect(patch.staveAutoGeneralModel).toBe("claude-sonnet-4-6[1m]");
+
+    // Lightweight roles stay on standard-context models
+    expect(patch.staveAutoClassifierModel).toBe("claude-haiku-4-5");
+    expect(patch.staveAutoQuickEditModel).toBe("claude-haiku-4-5");
+    expect(patch.staveAutoImplementModel).toBe("gpt-5.3-codex");
+    expect(patch.staveAutoVerifyModel).toBe("gpt-5.4");
   });
 
   test("builds the runtime profile from preset-backed settings", () => {
