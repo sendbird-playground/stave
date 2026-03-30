@@ -144,7 +144,7 @@ export function resolveClaudeExecutablePath() {
   return available[0]?.path ?? "";
 }
 
-function buildClaudeEnv(args: { executablePath: string }) {
+export function buildClaudeEnv(args: { executablePath: string }) {
   return buildRuntimeProcessEnv({
     executablePath: args.executablePath,
     extraPaths: CLAUDE_LOOKUP_PATHS,
