@@ -1,8 +1,8 @@
 import type { HTMLAttributes, MouseEvent, ReactNode } from "react";
 import { useMemo, useRef } from "react";
-import { FileCode2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { WorkspaceFileIcon } from "@/components/layout/explorer-entry-icon";
 import type { ResolvedWorkspaceFileLink } from "@/lib/message-file-links";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -53,7 +53,7 @@ function MessageFileLink({ href, filePath, fileName, onClick }: MessageFileLinkP
       )}
       onClick={onClick}
     >
-      <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" />
+      <WorkspaceFileIcon fileName={fileName} />
       <span aria-hidden="true" className="shrink-0 text-border">|</span>
       <span className="min-w-0 max-w-64 truncate">{fileName}</span>
     </a>
