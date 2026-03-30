@@ -21,14 +21,10 @@ import {
   Folder,
   FolderOpen,
   GripVertical,
-  Keyboard,
   LoaderCircle,
-  Moon,
   PanelLeft,
   Plus,
-  RefreshCw,
   Settings,
-  Sun,
   Trash2,
   X,
 } from "lucide-react";
@@ -201,7 +197,6 @@ export function ProjectWorkspaceSidebar(args: {
     defaultBranch,
     projectWorkspaceInitCommand,
     projectUseRootNodeModulesSymlink,
-    isDarkMode,
     createProject,
     openProjectFromPath,
     openProject,
@@ -212,8 +207,6 @@ export function ProjectWorkspaceSidebar(args: {
     createWorkspace,
     closeWorkspace,
     setLayout,
-    setDarkMode,
-    refreshProjectFiles,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -244,7 +237,6 @@ export function ProjectWorkspaceSidebar(args: {
                 (project) => project.projectPath === state.projectPath,
               )?.newWorkspaceUseRootNodeModulesSymlink === true
             : false,
-          state.isDarkMode,
           state.createProject,
           state.openProjectFromPath,
           state.openProject,
@@ -255,8 +247,6 @@ export function ProjectWorkspaceSidebar(args: {
           state.createWorkspace,
           state.closeWorkspace,
           state.setLayout,
-          state.setDarkMode,
-          state.refreshProjectFiles,
         ] as const,
     ),
   );
@@ -368,26 +358,9 @@ export function ProjectWorkspaceSidebar(args: {
     }
   }, [args.collapsed, reorderMode]);
 
-  const handleRefreshProjectFiles = useCallback(() => {
-    void refreshProjectFiles();
-  }, [refreshProjectFiles]);
-
-  const handleToggleTheme = useCallback(() => {
-    setDarkMode({ enabled: !isDarkMode });
-  }, [isDarkMode, setDarkMode]);
-
-  const handleOpenShortcuts = useCallback(() => {
-    void loadKeyboardShortcutsDrawer();
-    setShortcutsOpen(true);
-  }, []);
-
   const handleOpenSettings = useCallback(() => {
     void loadSettingsDialog();
     setSettingsOpen(true);
-  }, []);
-
-  const handlePreloadShortcuts = useCallback(() => {
-    void loadKeyboardShortcutsDrawer();
   }, []);
 
   const handlePreloadSettings = useCallback(() => {
@@ -1130,81 +1103,22 @@ export function ProjectWorkspaceSidebar(args: {
             ) : (
               <div className="flex items-center justify-between">
                 <StaveAppMenuButton compact />
-                <div className="flex items-center gap-1">
-                  {currentProjectPath ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 rounded-md p-0"
-                          onClick={handleRefreshProjectFiles}
-                        >
-                          <RefreshCw className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        Refresh project files
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-md p-0"
-                        onClick={handleToggleTheme}
-                        aria-label="toggle theme"
-                      >
-                        {isDarkMode ? (
-                          <Sun className="size-3.5" />
-                        ) : (
-                          <Moon className="size-3.5" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {isDarkMode
-                        ? "Switch to light mode"
-                        : "Switch to dark mode"}
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-md p-0"
-                        aria-label="open-shortcuts"
-                        onMouseEnter={handlePreloadShortcuts}
-                        onFocus={handlePreloadShortcuts}
-                        onClick={handleOpenShortcuts}
-                      >
-                        <Keyboard className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      Keyboard shortcuts
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-md p-0"
-                        aria-label="open-settings"
-                        onMouseEnter={handlePreloadSettings}
-                        onFocus={handlePreloadSettings}
-                        onClick={handleOpenSettings}
-                      >
-                        <Settings className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Settings</TooltipContent>
-                  </Tooltip>
-                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 rounded-md p-0"
+                      aria-label="open-settings"
+                      onMouseEnter={handlePreloadSettings}
+                      onFocus={handlePreloadSettings}
+                      onClick={handleOpenSettings}
+                    >
+                      <Settings className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Settings</TooltipContent>
+                </Tooltip>
               </div>
             )}
           </TooltipProvider>
