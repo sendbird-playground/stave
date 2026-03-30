@@ -3,7 +3,7 @@ import { useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WorkspaceFileIcon } from "@/components/layout/explorer-entry-icon";
-import type { ResolvedWorkspaceFileLink } from "@/lib/message-file-links";
+import { formatFileLinkLocation, type ResolvedWorkspaceFileLink } from "@/lib/message-file-links";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -39,15 +39,19 @@ interface MessageFileLinkProps {
   href?: string;
   filePath: string;
   fileName: string;
+  line?: number;
+  column?: number;
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }
 
-function MessageFileLink({ href, filePath, fileName, onClick }: MessageFileLinkProps) {
+function MessageFileLink({ href, filePath, fileName, line, column, onClick }: MessageFileLinkProps) {
+  const locationLabel = formatFileLinkLocation({ line, column });
+  const tooltipLabel = locationLabel ? `Open ${filePath} (reference ${locationLabel})` : `Open ${filePath}`;
   const link = (
     <a
       href={href}
       data-message-file-link="true"
-      aria-label={`Open ${filePath}`}
+      aria-label={tooltipLabel}
       className={cn(
         "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/35 px-2 py-0.5 align-middle text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
       )}
@@ -56,6 +60,11 @@ function MessageFileLink({ href, filePath, fileName, onClick }: MessageFileLinkP
       <WorkspaceFileIcon fileName={fileName} />
       <span aria-hidden="true" className="shrink-0 text-border">|</span>
       <span className="min-w-0 max-w-64 truncate">{fileName}</span>
+      {locationLabel ? (
+        <span className="shrink-0 rounded-sm border border-border/60 bg-background/70 px-1 py-0 text-[10px] leading-4 text-muted-foreground">
+          {locationLabel}
+        </span>
+      ) : null}
     </a>
   );
 
@@ -63,7 +72,7 @@ function MessageFileLink({ href, filePath, fileName, onClick }: MessageFileLinkP
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="top">{`Open ${filePath}`}</TooltipContent>
+        <TooltipContent side="top">{tooltipLabel}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
@@ -149,6 +158,8 @@ export function MarkdownMessage({
             href={href}
             filePath={resolvedFileLink.filePath}
             fileName={resolvedFileLink.fileName}
+            line={resolvedFileLink.line}
+            column={resolvedFileLink.column}
             onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href })}
           />
         );
