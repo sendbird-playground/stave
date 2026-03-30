@@ -347,6 +347,10 @@ export const PersistenceUpsertArgsSchema = z.object({
   snapshot: z.record(z.string(), z.unknown()),
 }).strict();
 
+export const SaveProjectRegistryArgsSchema = z.object({
+  projects: z.array(z.record(z.string(), z.unknown())).max(100),
+}).strict();
+
 export const ListTurnEventsArgsSchema = z.object({
   turnId: z.string().min(1).max(200),
   afterSequence: z.number().int().min(0).optional(),

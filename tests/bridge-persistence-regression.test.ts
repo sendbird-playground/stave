@@ -1193,4 +1193,110 @@ describe("workspace store hydration ordering", () => {
     expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual(["src/alpha.ts"]);
     expect(nextState.activeEditorTabId).toBe("file:src/alpha.ts");
   });
+
+  test("hydrateWorkspaces only prunes stale worktrees for the active project", async () => {
+    const localStorage = createMemoryStorage();
+    const closedWorkspaceIds: string[] = [];
+    setWindowContext({
+      localStorage,
+      api: {
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [
+              { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
+              { id: "ws-alpha-feature", name: "feature-a", updatedAt: "2026-03-10T00:01:00.000Z" },
+              { id: "ws-beta", name: "Default Workspace", updatedAt: "2026-03-10T00:02:00.000Z" },
+              { id: "ws-beta-feature", name: "feature-b", updatedAt: "2026-03-10T00:03:00.000Z" },
+            ],
+          }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          loadProjectRegistry: async () => ({
+            ok: true,
+            projects: [{
+              projectPath: "/tmp/project-alpha",
+              projectName: "project-alpha",
+              lastOpenedAt: "2026-03-10T00:00:00.000Z",
+              defaultBranch: "main",
+              workspaces: [
+                { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
+                { id: "ws-alpha-feature", name: "feature-a", updatedAt: "2026-03-10T00:01:00.000Z" },
+              ],
+              activeWorkspaceId: "ws-alpha",
+              workspaceBranchById: { "ws-alpha": "main", "ws-alpha-feature": "feature-a" },
+              workspacePathById: {
+                "ws-alpha": "/tmp/project-alpha",
+                "ws-alpha-feature": "/tmp/project-alpha/.stave/workspaces/feature-a",
+              },
+              workspaceDefaultById: { "ws-alpha": true },
+            }],
+          }),
+          saveProjectRegistry: async () => ({ ok: true }),
+          listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
+          closeWorkspace: async ({ workspaceId }: { workspaceId: string }) => {
+            closedWorkspaceIds.push(workspaceId);
+            return { ok: true };
+          },
+        },
+        terminal: {
+          runCommand: async ({ command }: { cwd?: string; command: string }) => {
+            if (command === "git worktree prune") {
+              return { ok: true, code: 0, stdout: "", stderr: "" };
+            }
+            if (command === "git worktree list --porcelain") {
+              return {
+                ok: true,
+                code: 0,
+                stdout: [
+                  "worktree /tmp/project-alpha",
+                  "HEAD abc123",
+                  "branch refs/heads/main",
+                  "",
+                  "worktree /tmp/project-alpha/.stave/workspaces/feature-a",
+                  "HEAD def456",
+                  "branch refs/heads/feature-a",
+                ].join("\n"),
+                stderr: "",
+              };
+            }
+            return { ok: false, code: 1, stdout: "", stderr: `Unexpected command: ${command}` };
+          },
+        },
+        fs: {
+          listFiles: async () => ({ ok: true, files: ["package.json"] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      projectPath: "/tmp/project-alpha",
+      projectName: "project-alpha",
+      workspaces: [
+        { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
+        { id: "ws-alpha-feature", name: "feature-a", updatedAt: "2026-03-10T00:01:00.000Z" },
+      ],
+      activeWorkspaceId: "ws-alpha",
+      workspaceBranchById: { "ws-alpha": "main", "ws-alpha-feature": "feature-a" },
+      workspacePathById: {
+        "ws-alpha": "/tmp/project-alpha",
+        "ws-alpha-feature": "/tmp/project-alpha/.stave/workspaces/feature-a",
+      },
+      workspaceDefaultById: { "ws-alpha": true },
+      recentProjects: [],
+      hasHydratedWorkspaces: false,
+    });
+
+    await useAppStore.getState().hydrateWorkspaces();
+
+    expect(closedWorkspaceIds).toEqual([]);
+    expect(useAppStore.getState().workspaces.map((workspace) => workspace.id)).toEqual([
+      "ws-alpha",
+      "ws-alpha-feature",
+    ]);
+  });
 });

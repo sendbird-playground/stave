@@ -6,6 +6,8 @@ import {
   listWorkspaceSummaries,
   loadWorkspaceSnapshot,
   closeWorkspacePersistence,
+  loadProjectRegistrySnapshot,
+  saveProjectRegistrySnapshot,
   type TaskProviderConversationState,
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
@@ -116,6 +118,7 @@ import {
   sanitizeBranchName,
   toWorkspaceFolderName,
   resolveProjectNameFromPath,
+  normalizeProjectDisplayName,
   hashProjectPath,
   buildProjectDefaultWorkspaceId,
   buildImportedWorktreeWorkspaceId,
@@ -290,6 +293,8 @@ interface AppState {
   providerConversationByTask: Record<string, TaskProviderConversationState>;
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
   taskWorkspaceIdById: Record<string, string>;
+  hydrateProjectRegistry: () => Promise<void>;
+  flushProjectRegistry: () => Promise<void>;
   hydrateWorkspaces: () => Promise<void>;
   flushActiveWorkspaceSnapshot: (args?: { sync?: boolean }) => Promise<void>;
   createProject: (args: { name?: string }) => Promise<void>;
@@ -470,6 +475,31 @@ function createDefaultProviderAvailability() {
 
 function incrementWorkspaceSnapshotVersion(state: Pick<AppState, "workspaceSnapshotVersion">) {
   return state.workspaceSnapshotVersion + 1;
+}
+
+function mergeRecentProjectsByPath(args: {
+  persistedProjects: RecentProjectState[];
+  stateProjects: RecentProjectState[];
+}) {
+  let merged = normalizeRecentProjectStates({ projects: args.persistedProjects });
+  for (const project of normalizeRecentProjectStates({ projects: args.stateProjects })) {
+    const existing = merged.find((item) => item.projectPath === project.projectPath);
+    if (!existing || project.lastOpenedAt >= existing.lastOpenedAt) {
+      merged = upsertRecentProjectState({
+        projects: merged,
+        project,
+      });
+    }
+  }
+  return merged;
+}
+
+function summarizeWorkspaceSnapshot(snapshot: Awaited<ReturnType<typeof loadWorkspaceSnapshot>>) {
+  if (!snapshot) {
+    return 0;
+  }
+  return snapshot.tasks.length
+    + Object.values(snapshot.messagesByTask).reduce((sum, messages) => sum + messages.length, 0);
 }
 
 export const useAppStore = create<AppState>()(
@@ -703,17 +733,73 @@ export const useAppStore = create<AppState>()(
       providerConversationByTask: {},
       workspaceRuntimeCacheById: {},
       taskWorkspaceIdById: {},
+      hydrateProjectRegistry: async () => {
+        const persistedProjects = normalizeRecentProjectStates({
+          projects: (await loadProjectRegistrySnapshot()) as RecentProjectState[],
+        });
+        if (persistedProjects.length === 0) {
+          return;
+        }
+        set((state) => {
+          const mergedProjects = mergeRecentProjectsByPath({
+            persistedProjects,
+            stateProjects: state.recentProjects,
+          });
+          const currentProject = state.projectPath
+            ? mergedProjects.find((project) => project.projectPath === state.projectPath) ?? null
+            : null;
+          if (!currentProject && mergedProjects.length === state.recentProjects.length) {
+            return state;
+          }
+          return {
+            recentProjects: mergedProjects,
+            ...(currentProject ? {
+              projectName: normalizeProjectDisplayName({
+                projectPath: currentProject.projectPath,
+                projectName: state.projectName?.trim() || currentProject.projectName,
+              }),
+              defaultBranch: state.defaultBranch || currentProject.defaultBranch,
+            } : {}),
+          };
+        });
+      },
+      flushProjectRegistry: async () => {
+        const state = get();
+          const projects = captureCurrentProjectState({
+            recentProjects: state.recentProjects,
+            projectPath: state.projectPath,
+            projectName: state.projectPath
+              ? normalizeProjectDisplayName({
+                  projectPath: state.projectPath,
+                  projectName: state.projectName,
+                })
+              : null,
+            defaultBranch: state.defaultBranch,
+            workspaces: state.workspaces,
+            activeWorkspaceId: state.activeWorkspaceId,
+          workspaceBranchById: state.workspaceBranchById,
+          workspacePathById: state.workspacePathById,
+          workspaceDefaultById: state.workspaceDefaultById,
+        });
+        await saveProjectRegistrySnapshot({
+          projects,
+        });
+      },
       hydrateWorkspaces: async () => {
+        await get().hydrateProjectRegistry();
         let initialRows = await listWorkspaceSummaries();
         const stateBeforeHydrate = get();
+        const currentProject = stateBeforeHydrate.projectPath
+          ? stateBeforeHydrate.recentProjects.find((project) => project.projectPath === stateBeforeHydrate.projectPath) ?? null
+          : null;
         const rememberedWorkspaceIds = new Set([
-          ...stateBeforeHydrate.workspaces.map((workspace) => workspace.id),
-          ...Object.keys(stateBeforeHydrate.workspacePathById),
+          ...(currentProject?.workspaces.map((workspace) => workspace.id) ?? stateBeforeHydrate.workspaces.map((workspace) => workspace.id)),
+          ...Object.keys(currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById),
         ]);
         const currentProjectDefaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
           projectPath: stateBeforeHydrate.projectPath,
-          workspaces: stateBeforeHydrate.workspaces,
-          workspaceDefaultById: stateBeforeHydrate.workspaceDefaultById,
+          workspaces: currentProject?.workspaces ?? stateBeforeHydrate.workspaces,
+          workspaceDefaultById: currentProject?.workspaceDefaultById ?? stateBeforeHydrate.workspaceDefaultById,
         });
         if (initialRows.length === 0 && stateBeforeHydrate.projectPath) {
           await persistWorkspaceSnapshot({
@@ -730,8 +816,9 @@ export const useAppStore = create<AppState>()(
           initialRows = await listWorkspaceSummaries();
         }
         const persistedRowsById = new Map(initialRows.map((workspace) => [workspace.id, workspace] as const));
+        const rememberedRows = currentProject?.workspaces ?? stateBeforeHydrate.workspaces;
         let rows = rememberedWorkspaceIds.size > 0
-          ? stateBeforeHydrate.workspaces.map((workspace) => persistedRowsById.get(workspace.id) ?? workspace)
+          ? rememberedRows.map((workspace) => persistedRowsById.get(workspace.id) ?? workspace)
           : initialRows;
         if (rows.length === 0 && stateBeforeHydrate.projectPath) {
           rows = [{
@@ -743,10 +830,14 @@ export const useAppStore = create<AppState>()(
         const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
           projectPath: stateBeforeHydrate.projectPath,
           workspaces: rows,
-          workspaceDefaultById: stateBeforeHydrate.workspaceDefaultById,
+          workspaceDefaultById: currentProject?.workspaceDefaultById ?? stateBeforeHydrate.workspaceDefaultById,
         });
-        const branchById: Record<string, string> = { ...stateBeforeHydrate.workspaceBranchById };
-        const pathById: Record<string, string> = { ...stateBeforeHydrate.workspacePathById };
+        const branchById: Record<string, string> = {
+          ...(currentProject?.workspaceBranchById ?? stateBeforeHydrate.workspaceBranchById),
+        };
+        const pathById: Record<string, string> = {
+          ...(currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById),
+        };
 
         // Worktree cleanup: remove DB workspaces whose git worktrees no longer exist
         const runner = window.api?.terminal?.runCommand;
@@ -756,6 +847,54 @@ export const useAppStore = create<AppState>()(
           const listResult = await runner({ cwd: projectPath, command: "git worktree list --porcelain" });
           if (listResult.ok) {
             const discoveredWorktrees = parseGitWorktrees({ stdout: listResult.stdout });
+            const rowPathEntries = await Promise.all(rows.map(async (row) => {
+              const comparablePath = normalizeComparablePath(
+                pathById[row.id]
+                ?? (row.id === defaultWorkspaceId
+                  ? projectPath
+                  : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`)
+              );
+              const snapshotScore = row.id === defaultWorkspaceId
+                ? Number.MAX_SAFE_INTEGER
+                : summarizeWorkspaceSnapshot(await loadWorkspaceSnapshot({ workspaceId: row.id }));
+              return {
+                row,
+                comparablePath,
+                snapshotScore,
+              };
+            }));
+            const bestRowByPath = new Map<string, { row: WorkspaceSummary; snapshotScore: number }>();
+            for (const entry of rowPathEntries) {
+              if (!entry.comparablePath) {
+                continue;
+              }
+              const existing = bestRowByPath.get(entry.comparablePath);
+              if (
+                !existing
+                || entry.snapshotScore > existing.snapshotScore
+                || (
+                  entry.snapshotScore === existing.snapshotScore
+                  && entry.row.updatedAt > existing.row.updatedAt
+                )
+              ) {
+                bestRowByPath.set(entry.comparablePath, {
+                  row: entry.row,
+                  snapshotScore: entry.snapshotScore,
+                });
+              }
+            }
+            rows = rows.filter((row) => {
+              const comparablePath = normalizeComparablePath(
+                pathById[row.id]
+                ?? (row.id === defaultWorkspaceId
+                  ? projectPath
+                  : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`)
+              );
+              if (!comparablePath) {
+                return true;
+              }
+              return bestRowByPath.get(comparablePath)?.row.id === row.id;
+            });
             const registeredPaths = new Set(
               discoveredWorktrees
                 .map((entry) => normalizeComparablePath(entry.path))
@@ -790,8 +929,13 @@ export const useAppStore = create<AppState>()(
             }
 
             const knownPaths = new Set(
-              Object.values(pathById)
-                .map((value) => normalizeComparablePath(value))
+              rows
+                .map((row) => normalizeComparablePath(
+                  pathById[row.id]
+                  ?? (row.id === defaultWorkspaceId
+                    ? projectPath
+                    : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`)
+                ))
                 .filter(Boolean),
             );
             const currentProjectPath = normalizeComparablePath(projectPath);
@@ -802,15 +946,51 @@ export const useAppStore = create<AppState>()(
                 continue;
               }
 
-              const workspaceId = buildImportedWorktreeWorkspaceId({
-                projectPath,
-                worktreePath: worktree.path,
-              });
               const workspaceName = resolveImportedWorktreeName({
                 branch: worktree.branch,
                 worktreePath: worktree.path,
               });
-              const persistedWorkspace = rows.find((row) => row.id === workspaceId) ?? persistedRowsById.get(workspaceId);
+              let matchedWorkspace = rows.find((row) => {
+                const comparablePath = normalizeComparablePath(
+                  pathById[row.id]
+                  ?? (row.id === defaultWorkspaceId
+                    ? projectPath
+                    : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`)
+                );
+                return comparablePath === normalizedWorktreePath;
+              }) ?? null;
+
+              if (!matchedWorkspace) {
+                const candidateRows = initialRows.filter((row) => {
+                  if (row.id === defaultWorkspaceId) {
+                    return false;
+                  }
+                  const comparablePath = normalizeComparablePath(
+                    pathById[row.id]
+                    ?? `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`
+                  );
+                  return comparablePath === normalizedWorktreePath || row.name === workspaceName;
+                });
+                if (candidateRows.length > 0) {
+                  const scoredCandidates = await Promise.all(candidateRows.map(async (row) => ({
+                    row,
+                    score: summarizeWorkspaceSnapshot(await loadWorkspaceSnapshot({ workspaceId: row.id })),
+                  })));
+                  scoredCandidates.sort((left, right) => (
+                    right.score - left.score
+                    || right.row.updatedAt.localeCompare(left.row.updatedAt)
+                  ));
+                  matchedWorkspace = scoredCandidates[0]?.row ?? null;
+                }
+              }
+
+              const workspaceId = matchedWorkspace?.id ?? buildImportedWorktreeWorkspaceId({
+                projectPath,
+                worktreePath: worktree.path,
+              });
+              const persistedWorkspace = matchedWorkspace
+                ?? rows.find((row) => row.id === workspaceId)
+                ?? persistedRowsById.get(workspaceId);
 
               if (!persistedWorkspace) {
                 await persistWorkspaceSnapshot({
@@ -871,7 +1051,12 @@ export const useAppStore = create<AppState>()(
         if (preferredWorkspacePath) {
           await workspaceFsAdapter.setRoot?.({
             rootPath: preferredWorkspacePath,
-            rootName: stateBeforeHydrate.projectName ?? "project",
+            rootName: stateBeforeHydrate.projectPath
+              ? normalizeProjectDisplayName({
+                  projectPath: stateBeforeHydrate.projectPath,
+                  projectName: stateBeforeHydrate.projectName,
+                })
+              : "project",
           });
           projectFiles = await workspaceFsAdapter.listFiles();
         }
@@ -889,6 +1074,33 @@ export const useAppStore = create<AppState>()(
             workspaceSnapshotVersion: 0,
             workspaces: rows,
             activeWorkspaceId: preferredWorkspaceId,
+            recentProjects: state.projectPath
+              ? upsertRecentProjectState({
+                  projects: state.recentProjects,
+                  project: {
+                    projectPath: state.projectPath,
+                    projectName: normalizeProjectDisplayName({
+                      projectPath: state.projectPath,
+                      projectName: state.projectName,
+                    }),
+                    lastOpenedAt: new Date().toISOString(),
+                    defaultBranch: state.defaultBranch,
+                    workspaces: rows,
+                    activeWorkspaceId: preferredWorkspaceId,
+                    workspaceBranchById: branchById,
+                    workspacePathById: pathById,
+                    workspaceDefaultById: defaultWorkspaceId ? { [defaultWorkspaceId]: true } : {},
+                    newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
+                      projectPath: state.projectPath,
+                      recentProjects: state.recentProjects,
+                    }),
+                    newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+                      projectPath: state.projectPath,
+                      recentProjects: state.recentProjects,
+                    }),
+                  },
+                })
+              : state.recentProjects,
             workspaceDefaultById: defaultWorkspaceId ? { [defaultWorkspaceId]: true } : {},
             workspaceBranchById: branchById,
             workspacePathById: pathById,
@@ -3346,7 +3558,7 @@ export const useAppStore = create<AppState>()(
       name: APP_STORE_KEY,
       partialize: (state) => ({
         // Keep localStorage limited to lightweight UI/session state.
-        // Workspace/task/message history is persisted via the workspace snapshot DB.
+        // Project/workspace history is mirrored into SQLite so this cache is not the only durable source.
         workspaces: state.workspaces,
         activeWorkspaceId: state.activeWorkspaceId,
         projectPath: state.projectPath,

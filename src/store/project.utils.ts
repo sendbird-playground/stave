@@ -201,6 +201,18 @@ export function resolveProjectNameFromPath(args: { projectPath: string }) {
     .at(-1) ?? "project";
 }
 
+export function normalizeProjectDisplayName(args: { projectPath: string; projectName?: string | null }) {
+  const fallbackName = resolveProjectNameFromPath({ projectPath: args.projectPath });
+  const normalized = args.projectName?.trim();
+  if (!normalized) {
+    return fallbackName;
+  }
+  if (normalized.toLowerCase() === "project" && fallbackName.toLowerCase() !== "project") {
+    return fallbackName;
+  }
+  return normalized;
+}
+
 export function hashProjectPath(value: string) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -302,7 +314,10 @@ export function normalizeRecentProjectStates(args: { projects?: RecentProjectSta
       projects: normalizedProjects,
       project: {
         projectPath,
-        projectName: project.projectName?.trim() || resolveProjectNameFromPath({ projectPath }),
+        projectName: normalizeProjectDisplayName({
+          projectPath,
+          projectName: project.projectName,
+        }),
         lastOpenedAt,
         defaultBranch,
         workspaces,
@@ -354,7 +369,10 @@ export function captureCurrentProjectState(args: {
     projects: args.recentProjects,
     project: {
       projectPath: args.projectPath,
-      projectName: args.projectName ?? "project",
+      projectName: normalizeProjectDisplayName({
+        projectPath: args.projectPath,
+        projectName: args.projectName,
+      }),
       lastOpenedAt: new Date().toISOString(),
       defaultBranch: args.defaultBranch,
       workspaces: args.workspaces,

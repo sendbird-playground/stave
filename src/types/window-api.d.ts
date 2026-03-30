@@ -532,6 +532,10 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
     } | null;
   }>;
+  loadProjectRegistry?: () => Promise<{
+    ok: boolean;
+    projects: unknown[];
+  }>;
   upsertWorkspace?: (args: {
     id: string;
     name: string;
@@ -592,6 +596,9 @@ interface WindowPersistenceApi {
       }>;
       activeEditorTabId?: string | null;
     };
+  }) => Promise<{ ok: boolean }>;
+  saveProjectRegistry?: (args: {
+    projects: unknown[];
   }) => Promise<{ ok: boolean }>;
   closeWorkspace?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
   listTaskTurns?: (args: {

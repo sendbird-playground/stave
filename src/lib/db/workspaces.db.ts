@@ -39,6 +39,13 @@ interface RequiredPersistenceApi {
     name: string;
     snapshot: WorkspaceSnapshot;
   }) => Promise<{ ok: boolean }>;
+  loadProjectRegistry: () => Promise<{
+    ok: boolean;
+    projects: unknown[];
+  }>;
+  saveProjectRegistry: (args: {
+    projects: unknown[];
+  }) => Promise<{ ok: boolean }>;
   closeWorkspace: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
 }
 
@@ -141,6 +148,29 @@ export async function closeWorkspacePersistence(args: { workspaceId: string }): 
     return;
   }
   await window.api?.persistence?.closeWorkspace?.({ workspaceId: args.workspaceId });
+}
+
+export async function loadProjectRegistrySnapshot(): Promise<unknown[]> {
+  const persistence = getPersistenceApi();
+  if (!persistence?.loadProjectRegistry) {
+    return [];
+  }
+  const response = await persistence.loadProjectRegistry();
+  if (!response.ok) {
+    throw new Error("Failed to load project registry from persistence bridge.");
+  }
+  return Array.isArray(response.projects) ? response.projects : [];
+}
+
+export async function saveProjectRegistrySnapshot(args: { projects: unknown[] }): Promise<void> {
+  const persistence = getPersistenceApi();
+  if (!persistence?.saveProjectRegistry) {
+    return;
+  }
+  const response = await persistence.saveProjectRegistry({ projects: args.projects });
+  if (!response.ok) {
+    throw new Error("Failed to save project registry via persistence bridge.");
+  }
 }
 
 export async function upsertWorkspace(args: {

@@ -5,6 +5,7 @@ import {
   ListTaskTurnsArgsSchema,
   ListTurnEventsArgsSchema,
   PersistenceUpsertArgsSchema,
+  SaveProjectRegistryArgsSchema,
   WorkspaceIdArgsSchema,
 } from "./schemas";
 import { ensurePersistenceReady, ensurePersistenceReadySync } from "../state";
@@ -26,6 +27,12 @@ export function registerPersistenceHandlers() {
     return { ok: true, snapshot };
   });
 
+  ipcMain.handle("persistence:load-project-registry", async () => {
+    const store = await ensurePersistenceReady();
+    const projects = store.loadProjectRegistry();
+    return { ok: true, projects };
+  });
+
   ipcMain.handle("persistence:upsert-workspace", async (_event, args: unknown) => {
     const parsedArgs = PersistenceUpsertArgsSchema.safeParse(args);
     if (!parsedArgs.success) {
@@ -36,6 +43,18 @@ export function registerPersistenceHandlers() {
       id: parsedArgs.data.id,
       name: parsedArgs.data.name,
       snapshot: parsedArgs.data.snapshot as PersistenceWorkspaceSnapshot,
+    });
+    return { ok: true };
+  });
+
+  ipcMain.handle("persistence:save-project-registry", async (_event, args: unknown) => {
+    const parsedArgs = SaveProjectRegistryArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false };
+    }
+    const store = await ensurePersistenceReady();
+    store.saveProjectRegistry({
+      projects: parsedArgs.data.projects as never[],
     });
     return { ok: true };
   });

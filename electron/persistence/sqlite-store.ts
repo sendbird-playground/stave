@@ -2,6 +2,7 @@ import path from "node:path";
 import { mkdirSync } from "node:fs";
 import Database from "better-sqlite3";
 import type {
+  PersistenceProjectRegistryEntry,
   PersistenceTurnEvent,
   PersistenceTurnSummary,
   PersistenceWorkspaceSnapshot,
@@ -16,6 +17,10 @@ interface WorkspaceMetaRow {
 
 interface WorkspaceSnapshotRow {
   snapshot_json: string;
+}
+
+interface JsonValueRow {
+  value_json: string;
 }
 
 interface TurnSummaryRow {
@@ -106,6 +111,12 @@ export class SqliteStore {
 
       CREATE UNIQUE INDEX IF NOT EXISTS idx_turn_events_turn_sequence
         ON turn_events (turn_id, sequence);
+
+      CREATE TABLE IF NOT EXISTS app_state (
+        key TEXT PRIMARY KEY,
+        value_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
 
   }
@@ -125,6 +136,27 @@ export class SqliteStore {
       return null;
     }
     return JSON.parse(row.snapshot_json) as PersistenceWorkspaceSnapshot;
+  }
+
+  loadProjectRegistry(): PersistenceProjectRegistryEntry[] {
+    const row = this.db
+      .prepare("SELECT value_json FROM app_state WHERE key = ?")
+      .get("project_registry") as JsonValueRow | undefined;
+    if (!row) {
+      return [];
+    }
+    return JSON.parse(row.value_json) as PersistenceProjectRegistryEntry[];
+  }
+
+  saveProjectRegistry(args: { projects: PersistenceProjectRegistryEntry[] }) {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      INSERT INTO app_state (key, value_json, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET
+        value_json = excluded.value_json,
+        updated_at = excluded.updated_at
+    `).run("project_registry", JSON.stringify(args.projects), now);
   }
 
   upsertWorkspace(args: {
