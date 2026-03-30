@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ChevronDown, GitBranch } from "lucide-react";
 import {
@@ -35,9 +35,13 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
   const [newBranchName, setNewBranchName] = useState("");
   const [branches, setBranches] = useState<string[]>([]);
   const [worktreePathByBranch, setWorktreePathByBranch] = useState<Record<string, string>>({});
-  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+  const [detectedCurrentBranch, setDetectedCurrentBranch] = useState<{
+    workspaceId: string;
+    branch: string | null;
+  }>({ workspaceId: "", branch: null });
   const [branchError, setBranchError] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const branchRequestIdRef = useRef(0);
 
   const [
     activeWorkspaceId,
@@ -59,30 +63,48 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
   const activeWorkspaceBranch = workspaceBranchById[activeWorkspaceId];
   const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
   const hasWorkspaceContext = Boolean(activeWorkspaceId && workspaceCwd);
+  const currentBranch = activeWorkspaceBranch
+    ?? (detectedCurrentBranch.workspaceId === activeWorkspaceId ? detectedCurrentBranch.branch : null);
 
-  // Load current branch on mount and when workspace changes
   useEffect(() => {
+    branchRequestIdRef.current += 1;
+    const requestId = branchRequestIdRef.current;
+
     if (!hasWorkspaceContext) {
-      setCurrentBranch(null);
+      setDetectedCurrentBranch({ workspaceId: "", branch: null });
+      setBranches([]);
+      setWorktreePathByBranch({});
+      setBranchError("");
+      setIsBusy(false);
       return;
     }
+
+    setDetectedCurrentBranch((previous) =>
+      previous.workspaceId === activeWorkspaceId
+        ? previous
+        : { workspaceId: activeWorkspaceId, branch: null },
+    );
+    setBranches([]);
+    setWorktreePathByBranch({});
+    setBranchError("");
+    setIsBusy(false);
 
     async function detectBranch() {
       const listBranches = window.api?.sourceControl?.listBranches;
       if (!listBranches) return;
       const result = await listBranches({ cwd: workspaceCwd });
       if (result.ok && result.current) {
-        setCurrentBranch(result.current);
+        if (branchRequestIdRef.current !== requestId) {
+          return;
+        }
+        setDetectedCurrentBranch({
+          workspaceId: activeWorkspaceId,
+          branch: result.current,
+        });
       }
     }
     void detectBranch();
   }, [activeWorkspaceId, hasWorkspaceContext, workspaceCwd]);
-
-  useEffect(() => {
-    if (activeWorkspaceBranch) {
-      setCurrentBranch(activeWorkspaceBranch);
-    }
-  }, [activeWorkspaceBranch]);
 
   async function loadBranches() {
     if (!hasWorkspaceContext) {
@@ -96,14 +118,22 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
       return;
     }
 
+    branchRequestIdRef.current += 1;
+    const requestId = branchRequestIdRef.current;
     setIsBusy(true);
     const result = await listBranches({ cwd: workspaceCwd });
+    if (branchRequestIdRef.current !== requestId) {
+      return;
+    }
     if (!result.ok) {
       setBranchError(result.stderr || "Failed to load branches.");
       setIsBusy(false);
       return;
     }
-    setCurrentBranch(result.current || workspaceBranchById[activeWorkspaceId] || "main");
+    setDetectedCurrentBranch({
+      workspaceId: activeWorkspaceId,
+      branch: result.current || workspaceBranchById[activeWorkspaceId] || null,
+    });
     setBranches(result.branches);
     setWorktreePathByBranch(result.worktreePathByBranch ?? {});
     setBranchError("");
@@ -191,7 +221,10 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
       return false;
     }
     setWorkspaceBranch({ workspaceId: activeWorkspaceId, branch: args.name });
-    setCurrentBranch(args.name);
+    setDetectedCurrentBranch({
+      workspaceId: activeWorkspaceId,
+      branch: args.name,
+    });
     await loadBranches();
     setIsBusy(false);
     return true;

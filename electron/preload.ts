@@ -7,6 +7,7 @@ import type {
   ProviderRuntimeOptions,
 } from "../src/lib/providers/provider.types";
 import type { RepoMapResponse } from "../src/lib/fs/repo-map.types";
+import type { AppNotification, AppNotificationCreateInput } from "../src/lib/notifications/notification.types";
 import type { SkillCatalogResponse } from "../src/lib/skills/types";
 
 interface ProviderSlashCommand {
@@ -210,6 +211,24 @@ contextBridge.exposeInMainWorld("api", {
     }) => ipcRenderer.sendSync("persistence:upsert-workspace-sync", args),
     closeWorkspace: (args: { workspaceId: string }) =>
       ipcRenderer.invoke("persistence:close-workspace", args),
+    listNotifications: (args?: { limit?: number; unreadOnly?: boolean }) =>
+      ipcRenderer.invoke("persistence:list-notifications", args ?? {}),
+    createNotification: (args: { notification: AppNotificationCreateInput }) =>
+      ipcRenderer.invoke("persistence:create-notification", args) as Promise<{
+        ok: boolean;
+        inserted: boolean;
+        notification: AppNotification | null;
+      }>,
+    markNotificationRead: (args: { id: string; readAt?: string }) =>
+      ipcRenderer.invoke("persistence:mark-notification-read", args) as Promise<{
+        ok: boolean;
+        notification: AppNotification | null;
+      }>,
+    markAllNotificationsRead: (args?: { readAt?: string }) =>
+      ipcRenderer.invoke("persistence:mark-all-notifications-read", args ?? {}) as Promise<{
+        ok: boolean;
+        count: number;
+      }>,
     listTaskTurns: (args: {
       workspaceId: string;
       taskId: string;

@@ -18,6 +18,10 @@ export default function App() {
       if (cancelled) {
         return;
       }
+      void useAppStore.getState().hydrateNotifications();
+      if (cancelled) {
+        return;
+      }
       void useAppStore.getState().refreshProviderAvailability();
     })();
     const timer = window.setInterval(() => {

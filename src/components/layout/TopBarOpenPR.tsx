@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ExternalLink,
   GitPullRequest,
+  Info,
   LoaderCircle,
   RefreshCw,
+  TriangleAlert,
 } from "lucide-react";
 import {
   Button,
@@ -31,14 +34,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { generateFallbackPullRequestDraft } from "@/lib/source-control-pr";
+import {
+  generateFallbackPullRequestDraft,
+  isReasonablePullRequestTitle,
+  resolvePullRequestTitle,
+} from "@/lib/source-control-pr";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import { useAppStore } from "@/store/app.store";
 import {
   type WorkspacePrStatus,
   PR_STATUS_VISUAL,
   PR_STATUS_ACTIONS,
-  PR_COLOR_BADGE_CLASS,
+  PR_CREATE_BUTTON_CLASS,
+  PR_TONE_BADGE_CLASS,
 } from "@/lib/pr-status";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +59,14 @@ interface ScmStatusItem {
   code: string;
 }
 
+type InlineNoticeTone = "info" | "success" | "warning" | "error";
+
+interface InlineNotice {
+  tone: InlineNoticeTone;
+  title: string;
+  description?: string;
+}
+
 type Step =
   | "idle"
   | "loading"       // checking status + generating PR description
@@ -59,6 +75,72 @@ type Step =
   | "pushing"       // pushing to remote
   | "creating-pr"   // running gh pr create
   | "action";       // running a PR action (mark ready, merge, etc.)
+
+function InlineNoticeBanner(props: { notice: InlineNotice }) {
+  const toneClassName =
+    props.notice.tone === "success"
+      ? "border-success/30 bg-success/10 text-success-foreground"
+      : props.notice.tone === "warning"
+        ? "border-warning/40 bg-warning/10 text-warning-foreground"
+        : props.notice.tone === "error"
+          ? "border-destructive/40 bg-destructive/10 text-destructive"
+          : "border-border/70 bg-muted/30 text-foreground";
+
+  const Icon =
+    props.notice.tone === "success"
+      ? CheckCircle2
+      : props.notice.tone === "warning" || props.notice.tone === "error"
+        ? TriangleAlert
+        : Info;
+
+  return (
+    <div className={cn("flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm", toneClassName)} role="status" aria-live="polite">
+      <Icon className="mt-0.5 size-4 shrink-0" />
+      <div className="min-w-0 space-y-1">
+        <p className="font-medium">{props.notice.title}</p>
+        {props.notice.description ? (
+          <p className="text-xs leading-5 opacity-80">{props.notice.description}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CreatePrLoadingSplash(props: { currentBranch?: string; baseBranch: string }) {
+  return (
+    <div className="space-y-4" role="status" aria-live="polite">
+      <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/80">
+            <LoaderCircle className="size-4 animate-spin text-primary" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium">Preparing a PR draft</p>
+            <p className="text-sm text-muted-foreground">
+              Reviewing {props.currentBranch ?? "HEAD"} against {props.baseBranch}, recent commits, and workspace PR guidance.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-border/70 bg-background/80 p-4">
+        <div className="space-y-2">
+          <div className="h-3.5 w-14 animate-pulse rounded-full bg-muted" />
+          <div className="h-9 w-full animate-pulse rounded-md bg-muted/80" />
+        </div>
+
+        <div className="space-y-2">
+          <div className="h-3.5 w-24 animate-pulse rounded-full bg-muted" />
+          <div className="space-y-2 rounded-md border border-border/60 bg-muted/25 p-3">
+            <div className="h-3 w-11/12 animate-pulse rounded-full bg-muted/80" />
+            <div className="h-3 w-4/5 animate-pulse rounded-full bg-muted/70" />
+            <div className="h-3 w-3/5 animate-pulse rounded-full bg-muted/60" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -71,7 +153,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   // PR fields
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [inlineNotice, setInlineNotice] = useState<InlineNotice | null>(null);
 
   // Uncommitted changes section
   const [changedFiles, setChangedFiles] = useState<ScmStatusItem[]>([]);
@@ -79,7 +161,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const [changesExpanded, setChangesExpanded] = useState(true);
   const suggestionRequestIdRef = useRef(0);
   const prTitleEditedRef = useRef(false);
-  const prBodyEditedRef = useRef(false);
 
   const [
     activeWorkspaceId,
@@ -172,16 +253,19 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     const requestId = suggestionRequestIdRef.current + 1;
     suggestionRequestIdRef.current = requestId;
     prTitleEditedRef.current = false;
-    prBodyEditedRef.current = false;
 
     setStep("loading");
     setDialogOpen(true);
-    setIsGenerating(true);
     setPrTitle("");
     setPrBody("");
     setCommitMessage("");
     setChangedFiles([]);
     setChangesExpanded(true);
+    setInlineNotice({
+      tone: "info",
+      title: "Preparing PR draft",
+      description: "Reviewing the branch diff, recent commits, and workspace PR guidance.",
+    });
 
     const statusPromise = getStatus({ cwd: workspaceCwd });
     const descPromise = suggestPRDescription
@@ -191,7 +275,10 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       }).catch(() => undefined)
       : undefined;
 
-    const status = await statusPromise;
+    const [status, descResult] = await Promise.all([
+      statusPromise,
+      descPromise ?? Promise.resolve(undefined),
+    ]);
     if (suggestionRequestIdRef.current !== requestId) {
       return;
     }
@@ -200,31 +287,31 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       toast.error("Unable to check status", { description: status.stderr || "git status failed." });
       setStep("idle");
       setDialogOpen(false);
-      setIsGenerating(false);
+      setInlineNotice(null);
       return;
     }
 
     setChangedFiles(status.items);
     const fallbackDraft = generateFallbackPRDraft(status.items);
-    setPrTitle(fallbackDraft.title);
-    setPrBody(fallbackDraft.body);
+    const nextTitle = descResult?.ok && descResult.title?.trim()
+      ? descResult.title.trim()
+      : fallbackDraft.title;
+    const nextBody = descResult?.ok && descResult.body?.trim()
+      ? descResult.body.trim()
+      : fallbackDraft.body;
+
+    setPrTitle(nextTitle);
+    setPrBody(nextBody);
     setStep("ready");
-
-    const descResult = await (descPromise ?? Promise.resolve(undefined));
-    if (suggestionRequestIdRef.current !== requestId) {
-      return;
-    }
-
-    if (descResult?.ok) {
-      if (!prTitleEditedRef.current && descResult.title?.trim()) {
-        setPrTitle(descResult.title.trim());
-      }
-      if (!prBodyEditedRef.current && descResult.body?.trim()) {
-        setPrBody(descResult.body.trim());
-      }
-    }
-
-    setIsGenerating(false);
+    setInlineNotice(
+      suggestPRDescription && !descResult?.ok
+        ? {
+          tone: "warning",
+          title: "Using fallback PR draft",
+          description: "Could not generate a tailored title and description. Review the suggested draft before creating the PR.",
+        }
+        : null,
+    );
   }
 
   async function handleSubmit(options: { draft: boolean }) {
@@ -233,28 +320,47 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     const openExternal = window.api?.shell?.openExternal;
 
     if (!runCommand || !createPR) {
-      toast.error("Unable to create PR", { description: "Bridge unavailable." });
+      setInlineNotice({
+        tone: "error",
+        title: "Unable to create PR",
+        description: "The source control bridge is unavailable in this workspace.",
+      });
       setStep("ready");
       return;
     }
 
-    const title = prTitle.trim() || generateFallbackPRDraft(changedFiles).title;
+    const fallbackDraft = generateFallbackPRDraft(changedFiles);
+    let title = prTitle.trim() || fallbackDraft.title;
 
     // Step 1: Commit uncommitted changes if any
     if (changedFiles.length > 0) {
       const stageAll = window.api?.sourceControl?.stageAll;
       const commit = window.api?.sourceControl?.commit;
       if (!stageAll || !commit) {
-        toast.error("Commit failed", { description: "Source Control bridge unavailable." });
+        setInlineNotice({
+          tone: "error",
+          title: "Automatic commit is unavailable",
+          description: "The source control bridge cannot stage and commit the pending files.",
+        });
         setStep("ready");
         return;
       }
 
       setStep("committing");
+      setInlineNotice({
+        tone: "info",
+        title: "Preparing automatic commit",
+        description: "Uncommitted workspace changes will be staged and committed before the PR is created.",
+      });
 
       let message = commitMessage.trim();
       if (!message) {
         const suggestCommitMessage = window.api?.provider?.suggestCommitMessage;
+        setInlineNotice({
+          tone: "info",
+          title: "Generating commit message",
+          description: "Creating a Conventional Commit message from the current diff.",
+        });
         if (suggestCommitMessage) {
           try {
             const result = await suggestCommitMessage({ cwd: workspaceCwd });
@@ -269,35 +375,82 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           message = generateFallbackCommitMessage(changedFiles);
         }
       }
+      setCommitMessage(message);
 
+      setInlineNotice({
+        tone: "info",
+        title: "Staging changes",
+        description: `Adding ${changedFiles.length} pending file${changedFiles.length !== 1 ? "s" : ""} to the automatic commit.`,
+      });
       const stageResult = await stageAll({ cwd: workspaceCwd });
       if (!stageResult.ok) {
-        toast.error("Stage failed", { description: stageResult.stderr || "git add failed." });
+        setInlineNotice({
+          tone: "error",
+          title: "Staging failed",
+          description: stageResult.stderr || "git add failed.",
+        });
         setStep("ready");
         return;
       }
 
+      setInlineNotice({
+        tone: "info",
+        title: "Creating commit",
+        description: message,
+      });
       const commitResult = await commit({ message, cwd: workspaceCwd });
       if (!commitResult.ok) {
-        toast.error("Commit failed", { description: commitResult.stderr || "git commit failed." });
+        setInlineNotice({
+          tone: "error",
+          title: "Commit failed",
+          description: commitResult.stderr || "git commit failed.",
+        });
         setStep("ready");
         return;
       }
 
-      toast.success("Committed", { description: message });
+      if (!prTitleEditedRef.current) {
+        title = resolvePullRequestTitle({
+          currentTitle: title,
+          commitLog: message,
+          headBranch: currentBranch,
+        });
+        setPrTitle(title);
+      }
+      setChangedFiles([]);
+      setChangesExpanded(false);
+      setInlineNotice({
+        tone: "success",
+        title: "Changes committed automatically",
+        description: message,
+      });
     }
 
     // Step 2: Push
     setStep("pushing");
+    setInlineNotice({
+      tone: "info",
+      title: "Pushing branch",
+      description: `Updating ${currentBranch ?? "HEAD"} on origin before creating the pull request.`,
+    });
     const pushResult = await runCommand({ command: "git push -u origin HEAD", cwd: workspaceCwd });
     if (!pushResult.ok) {
-      toast.error("Push failed", { description: pushResult.stderr || "git push failed." });
+      setInlineNotice({
+        tone: "error",
+        title: "Push failed",
+        description: pushResult.stderr || "git push failed.",
+      });
       setStep("ready");
       return;
     }
 
     // Step 3: Create PR
     setStep("creating-pr");
+    setInlineNotice({
+      tone: "info",
+      title: options.draft ? "Creating draft PR" : "Creating pull request",
+      description: "Submitting the prepared title and description to GitHub.",
+    });
     const prResult = await createPR({
       title,
       body: prBody.trim() || undefined,
@@ -307,7 +460,11 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     });
 
     if (!prResult.ok) {
-      toast.error("PR creation failed", { description: prResult.stderr || "gh pr create failed." });
+      setInlineNotice({
+        tone: "error",
+        title: "PR creation failed",
+        description: prResult.stderr || "gh pr create failed.",
+      });
       setStep("ready");
       return;
     }
@@ -315,6 +472,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     // Success – close dialog, refresh status
     setDialogOpen(false);
     setStep("idle");
+    setInlineNotice(null);
 
     const label = options.draft ? "Draft PR created" : "PR created";
     toast.success(label, { description: prResult.prUrl ?? "Pull request created successfully." });
@@ -414,6 +572,10 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
   const isBusy = step !== "idle" && step !== "ready";
   const isDialogBusy = step === "committing" || step === "pushing" || step === "creating-pr";
+  const effectiveTitle = prTitle.trim() || generateFallbackPRDraft(changedFiles).title;
+  const titleValidationMessage = prTitle.trim() && !isReasonablePullRequestTitle(prTitle)
+    ? "Use Conventional Commits format like `fix(topbar): add create pr loading splash`."
+    : null;
   const statusLabel =
     step === "loading" ? "Loading..." :
     step === "committing" ? "Committing..." :
@@ -422,7 +584,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     step === "action" ? "Working..." :
     null;
 
-  const badgeColorClass = PR_COLOR_BADGE_CLASS[visual.color];
+  const badgeColorClass = PR_TONE_BADGE_CLASS[visual.tone];
 
   // -------------------------------------------------------------------------
   // Render
@@ -437,7 +599,10 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                PR_CREATE_BUTTON_CLASS,
+              )}
               style={props.noDragStyle}
               onClick={() => void handleCreateClick()}
               disabled={isBusy}
@@ -537,7 +702,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           }
           if (!open) {
             suggestionRequestIdRef.current += 1;
-            setIsGenerating(false);
+            setInlineNotice(null);
             setStep("idle");
           }
         }}
@@ -549,116 +714,125 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               <span className="block">
                 {currentBranch ?? "HEAD"} &rarr; {baseBranch}
               </span>
-              {isGenerating ? (
+              {step === "loading" ? (
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <LoaderCircle className="size-3.5 animate-spin" />
-                  Refreshing the suggested title and description...
+                  Waiting for the suggested title and description...
                 </span>
               ) : null}
             </DialogDescription>
           </DialogHeader>
 
-          <form className="space-y-4" onSubmit={handleFormSubmit}>
-            {/* PR Title */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="pr-title-input">
-                Title
-              </label>
-              <Input
-                autoFocus
-                id="pr-title-input"
-                className="h-9 text-sm"
-                placeholder="PR title"
-                value={prTitle}
-                onChange={(e) => {
-                  prTitleEditedRef.current = true;
-                  setPrTitle(e.target.value);
-                }}
-                disabled={isDialogBusy || step === "loading"}
-              />
-            </div>
+          {step === "loading" ? (
+            <CreatePrLoadingSplash currentBranch={currentBranch} baseBranch={baseBranch} />
+          ) : (
+            <form className="space-y-4" onSubmit={handleFormSubmit}>
+              {inlineNotice ? <InlineNoticeBanner notice={inlineNotice} /> : null}
 
-            {/* PR Description */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="pr-body-input">
-                Description
-              </label>
-              <Textarea
-                id="pr-body-input"
-                className="min-h-24 resize-y text-sm"
-                rows={6}
-                placeholder="Describe your changes..."
-                value={prBody}
-                onChange={(e) => {
-                  prBodyEditedRef.current = true;
-                  setPrBody(e.target.value);
-                }}
-                disabled={isDialogBusy || step === "loading"}
-              />
-            </div>
-
-            {/* Uncommitted Changes */}
-            {changedFiles.length > 0 && (
+              {/* PR Title */}
               <div className="space-y-2">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-1 text-sm font-medium text-amber-500"
-                  onClick={() => setChangesExpanded((v) => !v)}
-                >
-                  {changesExpanded ? (
-                    <ChevronDown className="size-3.5" />
-                  ) : (
-                    <ChevronRight className="size-3.5" />
-                  )}
-                  {changedFiles.length} uncommitted file{changedFiles.length !== 1 ? "s" : ""}
-                  <span className="ml-1 text-xs font-normal text-muted-foreground">
-                    (will be committed before creating PR)
-                  </span>
-                </button>
-
-                {changesExpanded && (
-                  <>
-                    <div className="max-h-32 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 text-xs">
-                      {changedFiles.map((file) => (
-                        <div key={file.path} className="flex items-center gap-2 py-0.5">
-                          <span className="w-5 shrink-0 text-center font-mono font-medium text-muted-foreground">{file.code}</span>
-                          <span className="truncate font-mono">{file.path}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <Input
-                      id="commit-message-input"
-                      className="h-9 text-sm"
-                      placeholder={generateFallbackCommitMessage(changedFiles)}
-                      value={commitMessage}
-                      onChange={(e) => setCommitMessage(e.target.value)}
-                      disabled={isDialogBusy}
-                    />
-                  </>
-                )}
+                <label className="text-sm font-medium" htmlFor="pr-title-input">
+                  Title
+                </label>
+                <Input
+                  autoFocus
+                  id="pr-title-input"
+                  className="h-9 text-sm"
+                  placeholder="PR title"
+                  value={prTitle}
+                  onChange={(e) => {
+                    prTitleEditedRef.current = true;
+                    setPrTitle(e.target.value);
+                  }}
+                  aria-invalid={titleValidationMessage ? true : undefined}
+                  disabled={isDialogBusy}
+                />
+                {titleValidationMessage ? (
+                  <p className="text-xs text-warning-foreground">{titleValidationMessage}</p>
+                ) : null}
               </div>
-            )}
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={step !== "ready" || isDialogBusy}
-                onClick={() => void handleSubmit({ draft: true })}
-              >
-                {step === "creating-pr" ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                Create Draft
-              </Button>
-              <Button
-                type="submit"
-                disabled={step !== "ready" || isDialogBusy}
-              >
-                {isDialogBusy && step !== "creating-pr" ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                Create PR
-              </Button>
-            </DialogFooter>
-          </form>
+              {/* PR Description */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium" htmlFor="pr-body-input">
+                  Description
+                </label>
+                <Textarea
+                  id="pr-body-input"
+                  className="min-h-24 resize-y text-sm"
+                  rows={6}
+                  placeholder="Describe your changes..."
+                  value={prBody}
+                  onChange={(e) => {
+                    setPrBody(e.target.value);
+                  }}
+                  disabled={isDialogBusy}
+                />
+              </div>
+
+              {/* Uncommitted Changes */}
+              {changedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-1 text-sm font-medium text-amber-500"
+                    onClick={() => setChangesExpanded((v) => !v)}
+                  >
+                    {changesExpanded ? (
+                      <ChevronDown className="size-3.5" />
+                    ) : (
+                      <ChevronRight className="size-3.5" />
+                    )}
+                    {changedFiles.length} uncommitted file{changedFiles.length !== 1 ? "s" : ""}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      (will be committed before creating PR)
+                    </span>
+                  </button>
+
+                  {changesExpanded && (
+                    <>
+                      <div className="max-h-32 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 text-xs">
+                        {changedFiles.map((file) => (
+                          <div key={file.path} className="flex items-center gap-2 py-0.5">
+                            <span className="w-5 shrink-0 text-center font-mono font-medium text-muted-foreground">{file.code}</span>
+                            <span className="truncate font-mono">{file.path}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <Input
+                        id="commit-message-input"
+                        className="h-9 text-sm"
+                        placeholder={generateFallbackCommitMessage(changedFiles)}
+                        value={commitMessage}
+                        onChange={(e) => setCommitMessage(e.target.value)}
+                        disabled={isDialogBusy}
+                      />
+                    </>
+                  )}
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={step !== "ready" || isDialogBusy || !isReasonablePullRequestTitle(effectiveTitle)}
+                  onClick={() => void handleSubmit({ draft: true })}
+                >
+                  {step === "creating-pr" ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                  Create Draft
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={step !== "ready" || isDialogBusy || !isReasonablePullRequestTitle(effectiveTitle)}
+                >
+                  {isDialogBusy && step !== "creating-pr" ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                  Create PR
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </>

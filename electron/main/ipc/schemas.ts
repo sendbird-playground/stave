@@ -341,6 +341,63 @@ export const WorkspaceIdArgsSchema = z.object({
   workspaceId: z.string().min(1).max(200),
 }).strict();
 
+const NotificationActionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("approval"),
+    requestId: z.string().min(1).max(200),
+    messageId: z.string().min(1).max(200).nullable().optional(),
+  }).strict(),
+]);
+
+const NotificationPayloadSchema = z.record(z.string(), z.unknown());
+
+export const NotificationRecordSchema = z.object({
+  id: z.string().min(1).max(200),
+  kind: z.union([
+    z.literal("task.turn_completed"),
+    z.literal("task.approval_requested"),
+  ]),
+  title: z.string().min(1).max(500),
+  body: z.string().max(5000),
+  projectPath: z.string().max(4096).nullable().optional(),
+  projectName: z.string().max(500).nullable().optional(),
+  workspaceId: z.string().max(200).nullable().optional(),
+  workspaceName: z.string().max(500).nullable().optional(),
+  taskId: z.string().max(200).nullable().optional(),
+  taskTitle: z.string().max(500).nullable().optional(),
+  turnId: z.string().max(200).nullable().optional(),
+  providerId: ProviderIdSchema.nullable().optional(),
+  action: NotificationActionSchema.nullable().optional(),
+  payload: NotificationPayloadSchema.optional(),
+  createdAt: z.string().max(100),
+  readAt: z.string().max(100).nullable().optional(),
+}).strict();
+
+export const CreateNotificationArgsSchema = z.object({
+  notification: NotificationRecordSchema.omit({
+    createdAt: true,
+    readAt: true,
+  }).extend({
+    createdAt: z.string().max(100).optional(),
+    readAt: z.string().max(100).nullable().optional(),
+    dedupeKey: z.string().max(500).nullable().optional(),
+  }).strict(),
+}).strict();
+
+export const ListNotificationsArgsSchema = z.object({
+  limit: z.number().int().min(1).max(500).optional(),
+  unreadOnly: z.boolean().optional(),
+}).strict().optional();
+
+export const MarkNotificationReadArgsSchema = z.object({
+  id: z.string().min(1).max(200),
+  readAt: z.string().max(100).optional(),
+}).strict();
+
+export const MarkAllNotificationsReadArgsSchema = z.object({
+  readAt: z.string().max(100).optional(),
+}).strict().optional();
+
 export const PersistenceUpsertArgsSchema = z.object({
   id: z.string().min(1).max(200),
   name: z.string().min(1).max(200),

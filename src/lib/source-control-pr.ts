@@ -1,5 +1,6 @@
-const CONVENTIONAL_PR_TITLE_PATTERN = /^(feat|fix|refactor|style|docs|test|build|ci|chore|perf)(\([^)]+\))?: [a-z0-9].+/i;
-const BRANCH_TITLE_TYPES = new Set(["feat", "fix", "refactor", "style", "docs", "test", "build", "ci", "chore", "perf"]);
+const CONVENTIONAL_TITLE_TYPES = ["feat", "fix", "refactor", "style", "docs", "test", "build", "ci", "chore", "perf", "revert"] as const;
+const CONVENTIONAL_PR_TITLE_PATTERN = new RegExp(`^(${CONVENTIONAL_TITLE_TYPES.join("|")})(\\(([^)]+)\\))?: (.+)$`);
+const BRANCH_TITLE_TYPES = new Set<string>(CONVENTIONAL_TITLE_TYPES);
 const GENERIC_PR_TITLE_PATTERNS = [
   /^pull request\b/i,
   /^create pr\b/i,
@@ -7,6 +8,31 @@ const GENERIC_PR_TITLE_PATTERNS = [
   /^update branch\b/i,
   /^pr\b/i,
 ];
+
+function parseConventionalPullRequestTitle(title?: string) {
+  const normalized = title?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const match = normalized.match(CONVENTIONAL_PR_TITLE_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const [, type, , scope, rawSubject = ""] = match;
+  const subject = rawSubject.trim();
+  if (!/^[a-z0-9]/.test(subject)) {
+    return null;
+  }
+
+  return {
+    raw: normalized,
+    type,
+    scope: scope?.trim() || undefined,
+    subject,
+  };
+}
 
 function parseCommitSubjects(commitLog?: string) {
   return (commitLog ?? "")
@@ -78,7 +104,7 @@ export function isReasonablePullRequestTitle(title?: string) {
   if (!normalized || normalized.length < 8 || normalized.length > 72) {
     return false;
   }
-  if (!CONVENTIONAL_PR_TITLE_PATTERN.test(normalized)) {
+  if (!parseConventionalPullRequestTitle(normalized)) {
     return false;
   }
   return !GENERIC_PR_TITLE_PATTERNS.some((pattern) => pattern.test(normalized));
@@ -130,6 +156,34 @@ export function generateFallbackPullRequestDraft(args: {
       ...changeLines,
     ].join("\n"),
   };
+}
+
+export function resolvePullRequestTitle(args: {
+  currentTitle?: string;
+  commitLog?: string;
+  headBranch?: string;
+}) {
+  const currentTitle = parseConventionalPullRequestTitle(args.currentTitle);
+  const referenceTitle = parseCommitSubjects(args.commitLog)
+    .map((subject) => parseConventionalPullRequestTitle(subject))
+    .find((subject) => Boolean(subject));
+
+  if (currentTitle && referenceTitle) {
+    if (currentTitle.type === referenceTitle.type && currentTitle.scope === referenceTitle.scope) {
+      return currentTitle.raw;
+    }
+    return referenceTitle.raw;
+  }
+
+  if (currentTitle) {
+    return currentTitle.raw;
+  }
+
+  if (referenceTitle) {
+    return referenceTitle.raw;
+  }
+
+  return buildFallbackTitleFromBranch(args.headBranch);
 }
 
 function stripCodeFences(text: string) {

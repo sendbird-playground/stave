@@ -132,6 +132,37 @@ export function resolveWorkspaceName(args: {
   return defaultWorkspaceName;
 }
 
+export function resolveProjectForWorkspaceId(args: {
+  state: Pick<{
+    projectPath: string | null;
+    projectName: string | null;
+    workspaces: WorkspaceSummary[];
+    recentProjects: RecentProjectState[];
+  }, "projectPath" | "projectName" | "workspaces" | "recentProjects">;
+  workspaceId: string;
+}) {
+  if (
+    args.state.projectPath
+    && args.state.workspaces.some((workspace) => workspace.id === args.workspaceId)
+  ) {
+    return {
+      projectPath: args.state.projectPath,
+      projectName: args.state.projectName ?? resolveProjectNameFromPath({ projectPath: args.state.projectPath }),
+    };
+  }
+
+  for (const project of args.state.recentProjects) {
+    if (project.workspaces.some((workspace) => workspace.id === args.workspaceId)) {
+      return {
+        projectPath: project.projectPath,
+        projectName: project.projectName,
+      };
+    }
+  }
+
+  return null;
+}
+
 export function removeWorkspaceRuntimeCacheEntries(args: {
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
   workspaceIds: string[];

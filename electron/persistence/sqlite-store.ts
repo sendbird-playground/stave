@@ -3,6 +3,8 @@ import { mkdirSync } from "node:fs";
 import Database from "better-sqlite3";
 import type {
   PersistenceProjectRegistryEntry,
+  PersistenceNotificationCreateInput,
+  PersistenceNotificationRecord,
   PersistenceTurnEvent,
   PersistenceTurnSummary,
   PersistenceWorkspaceSnapshot,
@@ -31,6 +33,25 @@ interface TurnSummaryRow {
   created_at: string;
   completed_at: string | null;
   event_count: number;
+}
+
+interface NotificationRow {
+  id: string;
+  kind: "task.turn_completed" | "task.approval_requested";
+  title: string;
+  body: string;
+  project_path: string | null;
+  project_name: string | null;
+  workspace_id: string | null;
+  workspace_name: string | null;
+  task_id: string | null;
+  task_title: string | null;
+  turn_id: string | null;
+  provider_id: "claude-code" | "codex" | "stave" | null;
+  action_json: string | null;
+  payload_json: string;
+  created_at: string;
+  read_at: string | null;
 }
 
 export class SqliteStore {
@@ -117,8 +138,110 @@ export class SqliteStore {
         value_json TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        project_path TEXT,
+        project_name TEXT,
+        workspace_id TEXT,
+        workspace_name TEXT,
+        task_id TEXT,
+        task_title TEXT,
+        turn_id TEXT,
+        provider_id TEXT,
+        action_json TEXT,
+        payload_json TEXT NOT NULL,
+        source_dedupe_key TEXT,
+        created_at TEXT NOT NULL,
+        read_at TEXT
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_source_dedupe
+        ON notifications (source_dedupe_key)
+        WHERE source_dedupe_key IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_created
+        ON notifications (created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_unread_created
+        ON notifications (read_at, created_at DESC);
     `);
 
+  }
+
+  private mapNotificationRow(row: NotificationRow): PersistenceNotificationRecord {
+    return {
+      id: row.id,
+      kind: row.kind,
+      title: row.title,
+      body: row.body,
+      projectPath: row.project_path,
+      projectName: row.project_name,
+      workspaceId: row.workspace_id,
+      workspaceName: row.workspace_name,
+      taskId: row.task_id,
+      taskTitle: row.task_title,
+      turnId: row.turn_id,
+      providerId: row.provider_id,
+      action: row.action_json ? JSON.parse(row.action_json) : null,
+      payload: JSON.parse(row.payload_json) as Record<string, unknown>,
+      createdAt: row.created_at,
+      readAt: row.read_at,
+    };
+  }
+
+  private getNotificationById(id: string): PersistenceNotificationRecord | null {
+    const row = this.db.prepare(`
+      SELECT
+        id,
+        kind,
+        title,
+        body,
+        project_path,
+        project_name,
+        workspace_id,
+        workspace_name,
+        task_id,
+        task_title,
+        turn_id,
+        provider_id,
+        action_json,
+        payload_json,
+        created_at,
+        read_at
+      FROM notifications
+      WHERE id = ?
+    `).get(id) as NotificationRow | undefined;
+    return row ? this.mapNotificationRow(row) : null;
+  }
+
+  private getNotificationByDedupeKey(dedupeKey: string): PersistenceNotificationRecord | null {
+    const row = this.db.prepare(`
+      SELECT
+        id,
+        kind,
+        title,
+        body,
+        project_path,
+        project_name,
+        workspace_id,
+        workspace_name,
+        task_id,
+        task_title,
+        turn_id,
+        provider_id,
+        action_json,
+        payload_json,
+        created_at,
+        read_at
+      FROM notifications
+      WHERE source_dedupe_key = ?
+      LIMIT 1
+    `).get(dedupeKey) as NotificationRow | undefined;
+    return row ? this.mapNotificationRow(row) : null;
   }
 
   listWorkspaceSummaries(): PersistenceWorkspaceSummary[] {
@@ -126,6 +249,135 @@ export class SqliteStore {
       .prepare("SELECT id, name, updated_at FROM workspace_meta ORDER BY updated_at DESC")
       .all() as WorkspaceMetaRow[];
     return rows.map((row) => ({ id: row.id, name: row.name, updatedAt: row.updated_at }));
+  }
+
+  createNotification(args: {
+    notification: PersistenceNotificationCreateInput;
+  }): { inserted: boolean; notification: PersistenceNotificationRecord | null } {
+    const notification = args.notification;
+    const createdAt = notification.createdAt ?? new Date().toISOString();
+    const readAt = notification.readAt ?? null;
+    const actionJson = notification.action ? JSON.stringify(notification.action) : null;
+    const payloadJson = JSON.stringify(notification.payload ?? {});
+    const dedupeKey = notification.dedupeKey ?? null;
+
+    const result = this.db.prepare(`
+      INSERT OR IGNORE INTO notifications (
+        id,
+        kind,
+        title,
+        body,
+        project_path,
+        project_name,
+        workspace_id,
+        workspace_name,
+        task_id,
+        task_title,
+        turn_id,
+        provider_id,
+        action_json,
+        payload_json,
+        source_dedupe_key,
+        created_at,
+        read_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      notification.id,
+      notification.kind,
+      notification.title,
+      notification.body,
+      notification.projectPath ?? null,
+      notification.projectName ?? null,
+      notification.workspaceId ?? null,
+      notification.workspaceName ?? null,
+      notification.taskId ?? null,
+      notification.taskTitle ?? null,
+      notification.turnId ?? null,
+      notification.providerId ?? null,
+      actionJson,
+      payloadJson,
+      dedupeKey,
+      createdAt,
+      readAt,
+    );
+
+    if (result.changes > 0) {
+      return {
+        inserted: true,
+        notification: this.getNotificationById(notification.id),
+      };
+    }
+
+    if (dedupeKey) {
+      return {
+        inserted: false,
+        notification: this.getNotificationByDedupeKey(dedupeKey),
+      };
+    }
+
+    return {
+      inserted: false,
+      notification: this.getNotificationById(notification.id),
+    };
+  }
+
+  listNotifications(args?: {
+    limit?: number;
+    unreadOnly?: boolean;
+  }): PersistenceNotificationRecord[] {
+    const limit = Math.max(1, Math.min(500, args?.limit ?? 100));
+    const unreadOnly = args?.unreadOnly === true;
+    const rows = this.db.prepare(`
+      SELECT
+        id,
+        kind,
+        title,
+        body,
+        project_path,
+        project_name,
+        workspace_id,
+        workspace_name,
+        task_id,
+        task_title,
+        turn_id,
+        provider_id,
+        action_json,
+        payload_json,
+        created_at,
+        read_at
+      FROM notifications
+      ${unreadOnly ? "WHERE read_at IS NULL" : ""}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(limit) as NotificationRow[];
+
+    return rows.map((row) => this.mapNotificationRow(row));
+  }
+
+  markNotificationRead(args: {
+    id: string;
+    readAt?: string;
+  }): PersistenceNotificationRecord | null {
+    const readAt = args.readAt ?? new Date().toISOString();
+    this.db.prepare(`
+      UPDATE notifications
+      SET read_at = COALESCE(read_at, ?)
+      WHERE id = ?
+    `).run(readAt, args.id);
+    return this.getNotificationById(args.id);
+  }
+
+  markAllNotificationsRead(args?: {
+    readAt?: string;
+  }): number {
+    const readAt = args?.readAt ?? new Date().toISOString();
+    const result = this.db.prepare(`
+      UPDATE notifications
+      SET read_at = ?
+      WHERE read_at IS NULL
+    `).run(readAt);
+    return result.changes;
   }
 
   loadWorkspaceSnapshot(args: { workspaceId: string }): PersistenceWorkspaceSnapshot | null {
