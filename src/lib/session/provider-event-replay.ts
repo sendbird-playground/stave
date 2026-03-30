@@ -656,6 +656,22 @@ export function appendProviderEventToAssistant(args: {
       nextParts.push(part);
     }
   } else {
+    // When the compact-boundary checkpoint arrives, remove the in-progress
+    // "Compacting conversation context…" spinner — it is superseded by the
+    // completed checkpoint and should no longer render a loading indicator.
+    if (
+      part.type === "system_event" &&
+      part.compactBoundary != null
+    ) {
+      const compactingIdx = nextParts.findLastIndex(
+        (p) =>
+          p.type === "system_event" &&
+          p.content.trim().toLowerCase().startsWith("compacting conversation context"),
+      );
+      if (compactingIdx !== -1) {
+        nextParts.splice(compactingIdx, 1);
+      }
+    }
     nextParts.push(part);
   }
 
