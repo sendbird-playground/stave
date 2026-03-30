@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  GitBranch,
   GitPullRequest,
   Info,
   LoaderCircle,
@@ -12,6 +13,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import {
+  Badge,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -137,6 +139,47 @@ function CreatePrLoadingSplash(props: { currentBranch?: string; baseBranch: stri
             <div className="h-3 w-3/5 animate-pulse rounded-full bg-muted/60" />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PullRequestBranchRoute(props: { currentBranch?: string; baseBranch: string }) {
+  const headBranch = props.currentBranch?.trim() || "HEAD";
+
+  return (
+    <div
+      className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2"
+      aria-label={`Pull request from ${headBranch} to ${props.baseBranch}`}
+    >
+      <div className="min-w-0 space-y-1">
+        <p className="pl-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          From Branch
+        </p>
+        <Badge
+          variant="outline"
+          className="h-7 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal"
+        >
+          <GitBranch className="size-3.5 text-muted-foreground" />
+          <span className="truncate">{headBranch}</span>
+        </Badge>
+      </div>
+
+      <div className="flex h-7 items-center justify-center pb-px text-muted-foreground">
+        <ChevronRight className="size-4" />
+      </div>
+
+      <div className="min-w-0 space-y-1">
+        <p className="pl-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          Target Branch
+        </p>
+        <Badge
+          variant="secondary"
+          className="h-7 max-w-full justify-start gap-1 rounded-md border border-border/60 bg-secondary/70 px-2 font-normal"
+        >
+          <GitBranch className="size-3.5 text-muted-foreground" />
+          <span className="truncate">{props.baseBranch}</span>
+        </Badge>
       </div>
     </div>
   );
@@ -710,16 +753,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Pull Request</DialogTitle>
-            <DialogDescription className="space-y-1">
-              <span className="block">
-                {currentBranch ?? "HEAD"} &rarr; {baseBranch}
-              </span>
-              {step === "loading" ? (
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                  Waiting for the suggested title and description...
-                </span>
-              ) : null}
+            <DialogDescription>
+              <PullRequestBranchRoute currentBranch={currentBranch} baseBranch={baseBranch} />
             </DialogDescription>
           </DialogHeader>
 
