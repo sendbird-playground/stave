@@ -139,9 +139,6 @@ export function TopBar() {
               </TooltipContent>
             </Tooltip>
           ) : null}
-          {hasProjectContext ? (
-            <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
-          ) : null}
           {hasProjectContext && activeWorkspacePath ? (
             <div
               className="flex min-w-0 items-center"
@@ -208,6 +205,9 @@ export function TopBar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+          ) : null}
+          {hasProjectContext ? (
+            <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
           ) : null}
           {hasProjectContext ? (
             <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
