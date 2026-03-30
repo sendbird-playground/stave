@@ -107,7 +107,7 @@ export function TopBar() {
   return (
     <header
       data-testid="top-bar"
-      className={`relative z-30 flex h-12 items-center justify-between gap-3 border-b border-border/70 bg-card px-3.5${IS_MAC ? " pl-20" : ""}`}
+      className="relative z-30 flex h-12 items-center justify-between gap-3 border-b border-border/70 bg-card px-3.5"
       style={TOP_BAR_DRAG_STYLE}
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2">
