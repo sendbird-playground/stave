@@ -580,7 +580,7 @@ export function ChatInput(args: ChatInputProps = {}) {
         isEmpty && !args.compact && "pb-6",
       )}
     >
-      <div className={cn("mx-auto max-w-5xl")}>
+      <div className={cn("mx-auto max-w-6xl")}>
         <ChatInputSuggestions
           activeTaskId={activeTaskId}
           isTurnActive={isTurnActive}
