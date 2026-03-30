@@ -514,7 +514,7 @@ export function EditorPanel() {
       data-testid="editor-panel"
       className="h-full min-w-0 w-full overflow-hidden"
     >
-      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
+      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card">
         <div className="flex h-10 items-center justify-between border-b border-border/80 px-3">
           <TooltipProvider>
             <div className="flex items-center gap-1.5">

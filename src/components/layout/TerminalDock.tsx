@@ -453,8 +453,8 @@ export function TerminalDock() {
   }
 
   return (
-    <div data-testid="terminal-dock" className="pb-2 transition-[height] duration-200" style={{ height: `${terminalDockHeight}px` }}>
-      <div className="grid h-full min-h-0 grid-cols-[1fr_156px] gap-1 overflow-hidden rounded-lg border border-border/80 bg-card">
+    <div data-testid="terminal-dock" className="transition-[height] duration-200" style={{ height: `${terminalDockHeight}px` }}>
+      <div className="grid h-full min-h-0 grid-cols-[1fr_156px] gap-1 overflow-hidden bg-card">
         <section className="min-h-0 overflow-hidden">
           <div className="flex h-9 items-center justify-between border-b border-border/80 px-3 text-sm">
             <span className="inline-flex items-center gap-2 font-medium text-foreground">
