@@ -97,6 +97,9 @@ function formatWorkspaceName(name: string, branch?: string) {
   return name;
 }
 
+const IS_MAC = window.api?.platform === "darwin";
+/** Height reserved at the top of the collapsed sidebar for macOS traffic-light buttons. */
+const MAC_TRAFFIC_LIGHT_CLEARANCE = 40;
 const COLLAPSED_PROJECT_SIDEBAR_WIDTH = 64;
 
 interface SortableSidebarItemProps {
@@ -577,12 +580,19 @@ export function ProjectWorkspaceSidebar(args: {
         <div
           className={cn(
             "border-b border-border/70",
-            args.collapsed ? "px-2 py-3" : "flex h-12 items-center px-3",
+            args.collapsed ? "px-2 pb-3" : "flex h-12 items-center px-3",
           )}
+          style={
+            args.collapsed && IS_MAC
+              ? { paddingTop: MAC_TRAFFIC_LIGHT_CLEARANCE }
+              : args.collapsed
+                ? { paddingTop: 12 }
+                : undefined
+          }
         >
           <TooltipProvider>
             {args.collapsed ? (
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -596,26 +606,6 @@ export function ProjectWorkspaceSidebar(args: {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right">Open Project</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-10 w-10 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-                      onClick={() =>
-                        setLayout({
-                          patch: { workspaceSidebarCollapsed: false },
-                        })
-                      }
-                      aria-label="expand-project-list"
-                    >
-                      <PanelLeft className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">
-                    Expand Project List
-                  </TooltipContent>
                 </Tooltip>
               </div>
             ) : (
