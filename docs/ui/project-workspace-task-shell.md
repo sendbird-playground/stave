@@ -24,7 +24,7 @@ Replace the legacy workspace/task shell with a three-part layout:
 - Task tab close should confirm before archiving.
 - Project delete removes the project from Stave's list only.
 - Workspace rows show a responding indicator if any child task is actively running, including inactive workspaces.
-- Workspace rows should show the responding-task count alongside the live indicator.
+- Workspace rows should show the responding-task count in the trailing action slot, and swap that slot to `Archive` on row hover.
 - Default workspace icons should use a neutral gray chip, while non-default worktree icons should use deterministic name-hashed blue accents.
 - Project and workspace order should stay stable while navigating.
 - Project and workspace order can be adjusted manually from a dedicated sidebar edit mode.
@@ -58,7 +58,7 @@ Replace the legacy workspace/task shell with a three-part layout:
   - provides `Open Project`, hover-revealed per-project workspace creation, and direct project-settings entry points
   - keeps project order stable instead of re-sorting by recent selection
   - exposes dedicated drag handles for project and workspace reordering only while reorder mode is enabled
-  - shows a wave indicator plus the count of responding tasks when any task in that workspace is responding
+  - shows a wave indicator plus the count of responding tasks when any task in that workspace is responding, then swaps that trailing slot to `Archive` on hover for archivable workspaces
   - uses stronger visual emphasis for the selected workspace while keeping project rows neutral
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
   - shows workspace shortcuts in the collapsed rail and includes the parent project name in the tooltip
