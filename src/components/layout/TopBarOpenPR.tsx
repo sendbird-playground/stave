@@ -212,6 +212,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     workspacePathById,
     projectPath,
     defaultBranch,
+    tasks,
+    activeTurnIdsByTask,
     workspacePrInfoById,
     fetchWorkspacePrStatus,
   ] = useAppStore(useShallow((state) => [
@@ -221,6 +223,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     state.workspacePathById,
     state.projectPath,
     state.defaultBranch,
+    state.tasks,
+    state.activeTurnIdsByTask,
     state.workspacePrInfoById,
     state.fetchWorkspacePrStatus,
   ] as const));
@@ -626,6 +630,11 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     step === "creating-pr" ? "Creating..." :
     step === "action" ? "Working..." :
     null;
+  const hasRespondingTask = tasks.some((task) => Boolean(activeTurnIdsByTask[task.id]));
+  const isCreateDisabled = isBusy || hasRespondingTask;
+  const createPrTooltip = hasRespondingTask
+    ? "Pause or finish the running task before creating a pull request"
+    : "Create a pull request on GitHub";
 
   const badgeColorClass = PR_TONE_BADGE_CLASS[visual.tone];
 
@@ -648,7 +657,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               )}
               style={props.noDragStyle}
               onClick={() => void handleCreateClick()}
-              disabled={isBusy}
+              disabled={isCreateDisabled}
             >
               {isBusy ? (
                 <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
@@ -658,7 +667,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               {statusLabel ?? "Create PR"}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Create a pull request on GitHub</TooltipContent>
+          <TooltipContent side="bottom">{createPrTooltip}</TooltipContent>
         </Tooltip>
       ) : (
         /* Has PR – show status dropdown */

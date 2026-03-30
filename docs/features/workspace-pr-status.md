@@ -163,7 +163,7 @@ The top bar button changes based on status:
 
 | Status | Button Appearance | Click Behavior |
 |--------|-------------------|----------------|
-| `no_pr` | `[GitPullRequest] Create PR` (primary badge) | Opens PR creation dialog |
+| `no_pr` | `[GitPullRequest] Create PR` (primary badge) | Opens PR creation dialog *(disabled while any task in the active workspace is responding)* |
 | Any other | `[StatusIcon] Status Label` (status-colored badge) | Opens dropdown menu |
 
 ### Dropdown Actions by Status
