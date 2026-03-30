@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent } from "react";
+import { useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ChevronDown, ChevronRight, GitPullRequest, LoaderCircle } from "lucide-react";
 import {
@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { generateFallbackPullRequestDraft } from "@/lib/source-control-pr";
 import { useAppStore } from "@/store/app.store";
 
 interface ScmStatusItem {
@@ -46,6 +47,9 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const [changedFiles, setChangedFiles] = useState<ScmStatusItem[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
   const [changesExpanded, setChangesExpanded] = useState(true);
+  const suggestionRequestIdRef = useRef(0);
+  const prTitleEditedRef = useRef(false);
+  const prBodyEditedRef = useRef(false);
 
   const [
     activeWorkspaceId,
@@ -82,22 +86,26 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     return `chore: update ${parts.join(", ") || `${files.length} changes`}`;
   }
 
-  function generateFallbackPRTitle() {
-    const branch = currentBranch ?? "HEAD";
-    // Try to derive a readable title from the branch name
-    const cleaned = branch
-      .replace(/^(feat|fix|chore|refactor|docs|test|ci|build|perf|style)[/\\-]/, "$1: ")
-      .replaceAll(/[/_-]+/g, " ")
-      .trim();
-    return cleaned || `PR from ${branch}`;
+  function generateFallbackPRDraft(files: ScmStatusItem[]) {
+    return generateFallbackPullRequestDraft({
+      baseBranch,
+      headBranch: currentBranch,
+      fileList: files.map((file) => `${file.code} ${file.path}`).join("\n"),
+    });
   }
 
   async function handleClick() {
     const getStatus = window.api?.sourceControl?.getStatus;
+    const suggestPRDescription = window.api?.provider?.suggestPRDescription;
     if (!getStatus) {
       toast.error("Unable to create PR", { description: "Source Control bridge unavailable." });
       return;
     }
+
+    const requestId = suggestionRequestIdRef.current + 1;
+    suggestionRequestIdRef.current = requestId;
+    prTitleEditedRef.current = false;
+    prBodyEditedRef.current = false;
 
     // Open dialog immediately in loading state
     setStep("loading");
@@ -111,15 +119,17 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
     // Run status check and PR description generation in parallel
     const statusPromise = getStatus({ cwd: workspaceCwd });
-    const descPromise = window.api?.provider?.suggestPRDescription?.({
-      cwd: workspaceCwd,
-      baseBranch,
-    });
+    const descPromise = suggestPRDescription
+      ? suggestPRDescription({
+        cwd: workspaceCwd,
+        baseBranch,
+      }).catch(() => undefined)
+      : undefined;
 
-    const [status, descResult] = await Promise.all([
-      statusPromise,
-      descPromise ?? Promise.resolve(undefined),
-    ]);
+    const status = await statusPromise;
+    if (suggestionRequestIdRef.current !== requestId) {
+      return;
+    }
 
     if (!status.ok) {
       toast.error("Unable to check status", { description: status.stderr || "git status failed." });
@@ -131,17 +141,26 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
     // Populate state
     setChangedFiles(status.items);
+    const fallbackDraft = generateFallbackPRDraft(status.items);
+    setPrTitle(fallbackDraft.title);
+    setPrBody(fallbackDraft.body);
+    setStep("ready");
 
-    if (descResult?.ok && descResult.title) {
-      setPrTitle(descResult.title);
-      setPrBody(descResult.body ?? "");
-    } else {
-      setPrTitle(generateFallbackPRTitle());
-      setPrBody("");
+    const descResult = await (descPromise ?? Promise.resolve(undefined));
+    if (suggestionRequestIdRef.current !== requestId) {
+      return;
+    }
+
+    if (descResult?.ok) {
+      if (!prTitleEditedRef.current && descResult.title?.trim()) {
+        setPrTitle(descResult.title.trim());
+      }
+      if (!prBodyEditedRef.current && descResult.body?.trim()) {
+        setPrBody(descResult.body.trim());
+      }
     }
 
     setIsGenerating(false);
-    setStep("ready");
   }
 
   async function handleSubmit(options: { draft: boolean }) {
@@ -155,7 +174,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       return;
     }
 
-    const title = prTitle.trim() || generateFallbackPRTitle();
+    const title = prTitle.trim() || generateFallbackPRDraft(changedFiles).title;
 
     // Step 1: Commit uncommitted changes if any
     if (changedFiles.length > 0) {
@@ -284,12 +303,32 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         <TooltipContent side="bottom">Create a pull request on GitHub</TooltipContent>
       </Tooltip>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!isDialogBusy) setDialogOpen(open); if (!open) setStep("idle"); }}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!isDialogBusy) {
+            setDialogOpen(open);
+          }
+          if (!open) {
+            suggestionRequestIdRef.current += 1;
+            setIsGenerating(false);
+            setStep("idle");
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Pull Request</DialogTitle>
-            <DialogDescription>
-              {currentBranch ?? "HEAD"} &rarr; {baseBranch}
+            <DialogDescription className="space-y-1">
+              <span className="block">
+                {currentBranch ?? "HEAD"} &rarr; {baseBranch}
+              </span>
+              {isGenerating ? (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                  Refreshing the suggested title and description...
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
 
@@ -299,22 +338,18 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               <label className="text-sm font-medium" htmlFor="pr-title-input">
                 Title
               </label>
-              {isGenerating ? (
-                <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                  Generating...
-                </div>
-              ) : (
-                <Input
-                  autoFocus
-                  id="pr-title-input"
-                  className="h-9 text-sm"
-                  placeholder="PR title"
-                  value={prTitle}
-                  onChange={(e) => setPrTitle(e.target.value)}
-                  disabled={isDialogBusy}
-                />
-              )}
+              <Input
+                autoFocus
+                id="pr-title-input"
+                className="h-9 text-sm"
+                placeholder="PR title"
+                value={prTitle}
+                onChange={(e) => {
+                  prTitleEditedRef.current = true;
+                  setPrTitle(e.target.value);
+                }}
+                disabled={isDialogBusy || step === "loading"}
+              />
             </div>
 
             {/* PR Description */}
@@ -322,21 +357,18 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               <label className="text-sm font-medium" htmlFor="pr-body-input">
                 Description
               </label>
-              {isGenerating ? (
-                <div className="flex h-24 items-center justify-center rounded-md border border-border bg-muted/30 text-sm text-muted-foreground">
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                </div>
-              ) : (
-                <Textarea
-                  id="pr-body-input"
-                  className="min-h-24 resize-y text-sm"
-                  rows={6}
-                  placeholder="Describe your changes..."
-                  value={prBody}
-                  onChange={(e) => setPrBody(e.target.value)}
-                  disabled={isDialogBusy}
-                />
-              )}
+              <Textarea
+                id="pr-body-input"
+                className="min-h-24 resize-y text-sm"
+                rows={6}
+                placeholder="Describe your changes..."
+                value={prBody}
+                onChange={(e) => {
+                  prBodyEditedRef.current = true;
+                  setPrBody(e.target.value);
+                }}
+                disabled={isDialogBusy || step === "loading"}
+              />
             </div>
 
             {/* Uncommitted Changes */}
@@ -386,7 +418,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={isDialogBusy || isGenerating}
+                disabled={step !== "ready" || isDialogBusy}
                 onClick={() => void handleSubmit({ draft: true })}
               >
                 {step === "creating-pr" ? <LoaderCircle className="size-4 animate-spin" /> : null}
@@ -394,7 +426,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               </Button>
               <Button
                 type="submit"
-                disabled={isDialogBusy || isGenerating}
+                disabled={step !== "ready" || isDialogBusy}
               >
                 {isDialogBusy && step !== "creating-pr" ? <LoaderCircle className="size-4 animate-spin" /> : null}
                 Create PR

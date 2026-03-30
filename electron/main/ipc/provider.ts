@@ -1,5 +1,6 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
+import { generateFallbackPullRequestDraft, mergePullRequestDraft } from "../../../src/lib/source-control-pr";
 import { providerRuntime } from "../../providers/runtime";
 import {
   getClaudeContextUsage,
@@ -24,7 +25,7 @@ import {
 } from "./schemas";
 import { ensurePersistenceReady } from "../state";
 import { isDoneEvent, toEventType } from "../utils/provider-events";
-import { runCommand } from "../utils/command";
+import { quotePath, runCommand } from "../utils/command";
 
 function formatSchemaIssuePath(path: PropertyKey[]) {
   if (path.length === 0) {
@@ -344,22 +345,52 @@ export function registerProviderHandlers() {
 
     const cwd = parsed.data.cwd;
     const baseBranch = parsed.data.baseBranch || "main";
+    const safeBaseBranch = quotePath({ value: baseBranch });
 
-    const [diffResult, logResult, statResult, guideResult] = await Promise.all([
-      runCommand({ command: `git diff ${baseBranch}...HEAD`, cwd }),
-      runCommand({ command: `git log ${baseBranch}..HEAD --pretty=format:"%h %s" --no-merges`, cwd }),
-      runCommand({ command: `git diff ${baseBranch}...HEAD --stat`, cwd }),
+    const [diffResult, workingTreeDiffResult, logResult, statResult, statusResult, guideResult] = await Promise.all([
+      runCommand({ command: `git diff "${safeBaseBranch}"...HEAD`, cwd }),
+      runCommand({ command: "git diff HEAD", cwd }),
+      runCommand({ command: `git log "${safeBaseBranch}"..HEAD --pretty=format:"%h %s" --no-merges`, cwd }),
+      runCommand({ command: `git diff "${safeBaseBranch}"...HEAD --stat`, cwd }),
+      runCommand({ command: "git status --porcelain", cwd }),
       runCommand({ command: "cat AGENTS.md 2>/dev/null || cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true", cwd }),
     ]);
 
     const branchResult = await runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd });
 
     const diff = diffResult.ok ? diffResult.stdout.trim() : "";
+    const workingTreeDiff = workingTreeDiffResult.ok ? workingTreeDiffResult.stdout.trim() : "";
     const commitLog = logResult.ok ? logResult.stdout.trim() : "";
-    const fileList = statResult.ok ? statResult.stdout.trim() : "";
+    const fileList = [
+      statResult.ok ? statResult.stdout.trim() : "",
+      statusResult.ok ? statusResult.stdout.trim() : "",
+    ].filter(Boolean).join("\n");
     const guideContent = guideResult.ok ? guideResult.stdout.trim() : undefined;
     const headBranch = branchResult.ok ? branchResult.stdout.trim() : "HEAD";
+    const fallbackDraft = generateFallbackPullRequestDraft({
+      baseBranch,
+      headBranch,
+      commitLog,
+      fileList,
+    });
 
-    return suggestClaudePRDescription({ diff, commitLog, fileList, baseBranch, headBranch, guideContent });
+    const suggestion = await suggestClaudePRDescription({
+      cwd,
+      diff,
+      workingTreeDiff,
+      commitLog,
+      fileList,
+      baseBranch,
+      headBranch,
+      guideContent,
+    });
+    const mergedDraft = mergePullRequestDraft({
+      fallbackTitle: fallbackDraft.title,
+      fallbackBody: fallbackDraft.body,
+      generatedTitle: suggestion.title,
+      generatedBody: suggestion.body,
+    });
+
+    return { ok: true, title: mergedDraft.title, body: mergedDraft.body };
   });
 }

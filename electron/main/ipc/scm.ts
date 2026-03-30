@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import { promises as fs } from "node:fs";
 import { parseWorktreePathByBranch } from "../../../src/lib/source-control-worktrees";
 import { buildSourceControlDiffPreview, resolveSourceControlDiffPaths } from "../../../src/lib/source-control-diff";
-import { hasConflictItems, parseStatusLines, quotePath, resolveCommandCwd, runCommand } from "../utils/command";
+import { hasConflictItems, parseStatusLines, quotePath, resolveCommandCwd, runCommand, runCommandArgs } from "../utils/command";
 import { resolveRootFilePath } from "../utils/filesystem";
 import { CreatePRArgsSchema } from "./schemas";
 
@@ -200,37 +200,31 @@ export function registerScmHandlers() {
     }
 
     const { title, body, baseBranch, draft, cwd } = parsed.data;
-
-    // Check gh CLI availability
-    const authResult = await runCommand({ command: "gh auth status", cwd });
-    if (!authResult.ok) {
-      return {
-        ok: false,
-        stderr: "GitHub CLI is not authenticated. Run `gh auth login` first.",
-      };
-    }
-
-    // Build gh pr create command
-    const escapedTitle = title.replaceAll('"', '\\"');
-    const parts = ["gh pr create", `--title "${escapedTitle}"`];
+    const commandArgs = ["pr", "create", "--title", title];
 
     if (body) {
-      const escapedBody = body.replaceAll('"', '\\"').replaceAll('`', '\\`');
-      parts.push(`--body "${escapedBody}"`);
+      commandArgs.push("--body", body);
     }
 
     if (baseBranch) {
-      parts.push(`--base "${baseBranch}"`);
+      commandArgs.push("--base", baseBranch);
     }
 
     if (draft) {
-      parts.push("--draft");
+      commandArgs.push("--draft");
     }
 
-    const result = await runCommand({ command: parts.join(" "), cwd });
+    const result = await runCommandArgs({ command: "gh", commandArgs, cwd });
 
     if (!result.ok) {
-      return { ok: false, stderr: result.stderr || "Failed to create pull request." };
+      const stderr = `${result.stderr}\n${result.stdout}`.trim();
+      if (/spawn gh ENOENT|command not found|not recognized/i.test(stderr)) {
+        return { ok: false, stderr: "GitHub CLI is not installed. Install `gh` first." };
+      }
+      if (/authentication failed|not logged into|gh auth login/i.test(stderr)) {
+        return { ok: false, stderr: "GitHub CLI is not authenticated. Run `gh auth login` first." };
+      }
+      return { ok: false, stderr: stderr || "Failed to create pull request." };
     }
 
     // gh pr create outputs the PR URL on success
