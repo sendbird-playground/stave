@@ -61,7 +61,7 @@ export function MarkdownMessage({
   onFileLinkClickRef.current = onFileLinkClick;
 
   const components = useMemo(() => ({
-    hr: () => <hr className="my-4 border-t border-border first:mt-0 last:mb-0" />,
+    hr: () => <hr className="my-4 h-px border-0 bg-border first:mt-0 last:mb-0" />,
     p: ({ children }: { children?: ReactNode }) => <p className="my-2 whitespace-pre-wrap first:mt-0 last:mb-0">{children}</p>,
     ul: ({ children }: { children?: ReactNode }) => (
       <ul className="my-2 ml-5 list-disc pl-1 marker:text-muted-foreground [&_ol]:my-1 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:my-1 [&_ul]:ml-5 [&_ul]:list-disc">
@@ -135,8 +135,8 @@ export function MarkdownMessage({
   return (
     <div
       className={cn(
-        "leading-7",
         resolveMessageSizeClass(messageFontSize),
+        "leading-7",
         className,
       )}
       data-streaming={isStreaming ? "true" : undefined}
