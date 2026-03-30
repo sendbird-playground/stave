@@ -1,22 +1,13 @@
 import {
   FolderTree,
-  LoaderCircle,
   Code2,
   SquareTerminal,
   FolderOpen,
   ChevronDown,
 } from "lucide-react";
-import {
-  Suspense,
-  lazy,
-  useCallback,
-  useEffect,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
-  Card,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -30,7 +21,6 @@ import { useAppStore } from "@/store/app.store";
 import { TopBarBranchDropdown } from "@/components/layout/TopBarBranchDropdown";
 import { TopBarFileSearch } from "@/components/layout/TopBarFileSearch";
 import { TopBarOpenPR } from "@/components/layout/TopBarOpenPR";
-import { TopBarUtilityActions } from "@/components/layout/TopBarUtilityActions";
 import { TopBarWindowControls } from "@/components/layout/TopBarWindowControls";
 import {
   getRepoMapContextCache,
@@ -38,16 +28,6 @@ import {
 } from "@/lib/fs/repo-map-context-cache";
 import { formatRepoMapForContext } from "@/lib/fs/repo-map.types";
 
-const loadSettingsDialog = () =>
-  import("@/components/layout/SettingsDialog").then((module) => ({
-    default: module.SettingsDialog,
-  }));
-const SettingsDialog = lazy(() => loadSettingsDialog());
-const loadKeyboardShortcutsDrawer = () =>
-  import("@/components/layout/KeyboardShortcutsDrawer").then((module) => ({
-    default: module.KeyboardShortcutsDrawer,
-  }));
-const KeyboardShortcutsDrawer = lazy(() => loadKeyboardShortcutsDrawer());
 const IS_MAC = window.api?.platform === "darwin";
 const TOP_BAR_DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
 const TOP_BAR_NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
@@ -70,22 +50,10 @@ function formatWorkspacePathLabel(args: {
 }
 
 export function TopBar() {
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [
-    isDarkMode,
-    setDarkMode,
-    refreshProjectFiles,
-    activeWorkspaceId,
-    workspacePathById,
-    projectPath,
-  ] = useAppStore(
+  const [activeWorkspaceId, workspacePathById, projectPath] = useAppStore(
     useShallow(
       (state) =>
         [
-          state.isDarkMode,
-          state.setDarkMode,
-          state.refreshProjectFiles,
           state.activeWorkspaceId,
           state.workspacePathById,
           state.projectPath,
@@ -100,45 +68,6 @@ export function TopBar() {
     workspacePath: activeWorkspacePath,
     projectPath,
   });
-
-  function OverlayLoadingFallback(args: { title: string }) {
-    return (
-      <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]">
-        <Card className="w-full max-w-md border-border/80 bg-background/95 p-6 shadow-2xl">
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Loading {args.title.toLowerCase()}...
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  const handleRefreshProjectFiles = useCallback(() => {
-    void refreshProjectFiles();
-  }, [refreshProjectFiles]);
-
-  const handleToggleTheme = useCallback(() => {
-    setDarkMode({ enabled: !isDarkMode });
-  }, [isDarkMode, setDarkMode]);
-
-  const handleOpenShortcuts = useCallback(() => {
-    void loadKeyboardShortcutsDrawer();
-    setShortcutsOpen(true);
-  }, []);
-
-  const handleOpenSettings = useCallback(() => {
-    void loadSettingsDialog();
-    setSettingsOpen(true);
-  }, []);
-
-  const handlePreloadShortcuts = useCallback(() => {
-    void loadKeyboardShortcutsDrawer();
-  }, []);
-
-  const handlePreloadSettings = useCallback(() => {
-    void loadSettingsDialog();
-  }, []);
 
   // Pre-warm the module-level repo-map context cache so the first AI turn in
   // this workspace can synchronously read it (a plain Map.get — no IPC).
@@ -175,161 +104,102 @@ export function TopBar() {
       });
   }, [activeWorkspacePath, hasProjectContext]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const hasMod = event.ctrlKey || event.metaKey;
-      if (!hasMod || event.altKey || event.shiftKey || event.code !== "Slash") {
-        return;
-      }
-
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          Boolean(
-            target.closest(
-              "input, textarea, select, [role='textbox'], [contenteditable='true']",
-            ),
-          ))
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      setShortcutsOpen(true);
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   return (
-    <>
-      <header
-        data-testid="top-bar"
-        className={`relative z-30 flex h-12 items-center justify-between gap-3 border-b border-border/70 bg-card px-3.5${IS_MAC ? " pl-20" : ""}`}
-        style={TOP_BAR_DRAG_STYLE}
-      >
-        <div className="flex min-w-0 shrink-0 items-center gap-2">
-          <TooltipProvider>
-            {hasProjectContext ? (
-              <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
-            ) : null}
-            {hasProjectContext && activeWorkspacePath ? (
-              <div
-                className="flex min-w-0 items-center"
-                style={TOP_BAR_NO_DRAG_STYLE}
-              >
+    <header
+      data-testid="top-bar"
+      className={`relative z-30 flex h-12 items-center justify-between gap-3 border-b border-border/70 bg-card px-3.5${IS_MAC ? " pl-20" : ""}`}
+      style={TOP_BAR_DRAG_STYLE}
+    >
+      <div className="flex min-w-0 shrink-0 items-center gap-2">
+        <TooltipProvider>
+          {hasProjectContext ? (
+            <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+          ) : null}
+          {hasProjectContext && activeWorkspacePath ? (
+            <div
+              className="flex min-w-0 items-center"
+              style={TOP_BAR_NO_DRAG_STYLE}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="inline-flex max-w-[220px] items-center gap-2 rounded-l-md border border-r-0 border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
+                    <FolderTree className="size-3.5 shrink-0" />
+                    <span className="truncate font-mono">
+                      {workspacePathLabel}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {activeWorkspacePath}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenu>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="inline-flex max-w-[220px] items-center gap-2 rounded-l-md border border-r-0 border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
-                      <FolderTree className="size-3.5 shrink-0" />
-                      <span className="truncate font-mono">
-                        {workspacePathLabel}
-                      </span>
-                    </div>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center justify-center rounded-r-md border border-border/60 bg-background/60 px-1 py-1 text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
+                      >
+                        <ChevronDown className="size-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    {activeWorkspacePath}
-                  </TooltipContent>
+                  <TooltipContent side="bottom">Open in…</TooltipContent>
                 </Tooltip>
-                <DropdownMenu>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex items-center justify-center rounded-r-md border border-border/60 bg-background/60 px-1 py-1 text-muted-foreground/60 hover:bg-accent hover:text-foreground transition-colors"
-                        >
-                          <ChevronDown className="size-3.5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Open in…</TooltipContent>
-                  </Tooltip>
-                  <DropdownMenuContent align="start" className="min-w-[160px]">
-                    <DropdownMenuItem
-                      onClick={() =>
-                        void window.api?.shell?.showInFinder?.({
-                          path: activeWorkspacePath,
-                        })
-                      }
-                    >
-                      <FolderOpen className="size-4" />
-                      Open in Finder
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        void window.api?.shell?.openInVSCode?.({
-                          path: activeWorkspacePath,
-                        })
-                      }
-                    >
-                      <Code2 className="size-4" />
-                      Open in VS Code
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        void window.api?.shell?.openInTerminal?.({
-                          path: activeWorkspacePath,
-                        })
-                      }
-                    >
-                      <SquareTerminal className="size-4" />
-                      Open in Terminal
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ) : null}
-            {hasProjectContext ? (
-              <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
-            ) : null}
-          </TooltipProvider>
-        </div>
-        <div className="hidden min-w-0 flex-1 justify-center lg:flex">
-          {hasProjectContext ? (
-            <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+                <DropdownMenuContent align="start" className="min-w-[160px]">
+                  <DropdownMenuItem
+                    onClick={() =>
+                      void window.api?.shell?.showInFinder?.({
+                        path: activeWorkspacePath,
+                      })
+                    }
+                  >
+                    <FolderOpen className="size-4" />
+                    Open in Finder
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      void window.api?.shell?.openInVSCode?.({
+                        path: activeWorkspacePath,
+                      })
+                    }
+                  >
+                    <Code2 className="size-4" />
+                    Open in VS Code
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      void window.api?.shell?.openInTerminal?.({
+                        path: activeWorkspacePath,
+                      })
+                    }
+                  >
+                    <SquareTerminal className="size-4" />
+                    Open in Terminal
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           ) : null}
-        </div>
+          {hasProjectContext ? (
+            <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+          ) : null}
+        </TooltipProvider>
+      </div>
+      <div className="hidden min-w-0 flex-1 justify-center lg:flex">
+        {hasProjectContext ? (
+          <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+        ) : null}
+      </div>
+      {IS_MAC ? null : (
         <div
           className="flex shrink-0 items-center gap-1.5"
           style={TOP_BAR_NO_DRAG_STYLE}
         >
-          <TopBarUtilityActions
-            canRefreshProjectFiles={hasProjectContext}
-            isDarkMode={isDarkMode}
-            noDragStyle={TOP_BAR_NO_DRAG_STYLE}
-            onRefresh={handleRefreshProjectFiles}
-            onToggleTheme={handleToggleTheme}
-            onOpenShortcuts={handleOpenShortcuts}
-            onOpenSettings={handleOpenSettings}
-            onPreloadShortcuts={handlePreloadShortcuts}
-            onPreloadSettings={handlePreloadSettings}
-          />
-          {IS_MAC ? null : (
-            <TopBarWindowControls noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
-          )}
+          <TopBarWindowControls noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
         </div>
-      </header>
-      {shortcutsOpen ? (
-        <Suspense
-          fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}
-        >
-          <KeyboardShortcutsDrawer
-            open={shortcutsOpen}
-            onOpenChange={setShortcutsOpen}
-          />
-        </Suspense>
-      ) : null}
-      {settingsOpen ? (
-        <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
-          <SettingsDialog
-            open={settingsOpen}
-            onOpenChange={({ open }) => setSettingsOpen(open)}
-          />
-        </Suspense>
-      ) : null}
-    </>
+      )}
+    </header>
   );
 }
