@@ -42,8 +42,8 @@ This keeps notification history durable without coupling it to the mutable works
 ## Current event sources
 
 - `task.turn_completed`
-  - emitted when a provider turn reaches its `done` event
-  - this is currently the best available completion signal in Stave, since tasks do not yet have a separate terminal "done" state
+  - emitted after the finishing turn has fully cleared the workspace's responding state
+  - in practice this matches the point where the workspace sidebar wave indicator disappears
 - `task.approval_requested`
   - emitted when a provider requests approval during an active turn
 

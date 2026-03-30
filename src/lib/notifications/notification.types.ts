@@ -41,6 +41,12 @@ export function isNotificationUnread(notification: Pick<AppNotification, "readAt
   return !notification.readAt;
 }
 
+export function workspaceHasActiveTurns(args: {
+  activeTurnIdsByTask: Record<string, string | undefined>;
+}) {
+  return Object.values(args.activeTurnIdsByTask).some((turnId) => Boolean(turnId));
+}
+
 export function sortNotificationsNewestFirst<T extends Pick<AppNotification, "createdAt" | "id">>(notifications: T[]) {
   return [...notifications].sort((left, right) => {
     if (left.createdAt === right.createdAt) {
