@@ -4,10 +4,12 @@ import {
   SquareTerminal,
   FolderOpen,
   ChevronDown,
+  PanelLeft,
 } from "lucide-react";
 import { useEffect, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -50,13 +52,15 @@ function formatWorkspacePathLabel(args: {
 }
 
 export function TopBar() {
-  const [activeWorkspaceId, workspacePathById, projectPath] = useAppStore(
+  const [activeWorkspaceId, workspacePathById, projectPath, workspaceSidebarCollapsed, setLayout] = useAppStore(
     useShallow(
       (state) =>
         [
           state.activeWorkspaceId,
           state.workspacePathById,
           state.projectPath,
+          state.layout.workspaceSidebarCollapsed,
+          state.setLayout,
         ] as const,
     ),
   );
@@ -112,6 +116,29 @@ export function TopBar() {
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2">
         <TooltipProvider>
+          {workspaceSidebarCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+                  style={TOP_BAR_NO_DRAG_STYLE}
+                  onClick={() =>
+                    setLayout({
+                      patch: { workspaceSidebarCollapsed: false },
+                    })
+                  }
+                  aria-label="expand-project-list"
+                >
+                  <PanelLeft className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Expand Project List
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           {hasProjectContext ? (
             <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
           ) : null}
