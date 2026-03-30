@@ -260,6 +260,12 @@ export function buildLegacyPromptFromCanonicalRequest(args: {
   includeSkillContext?: boolean;
 }) {
   const maxHistoryChars = 12000;
+  const hasVisibleSkillContext = args.request.contextParts.some(
+    (part) =>
+      part.type === "skill_context"
+      && part.skills.length > 0
+      && args.includeSkillContext !== false,
+  );
   const sections = [
     ...(args.includeHistory !== false
       ? [
@@ -319,10 +325,17 @@ export function buildLegacyPromptFromCanonicalRequest(args: {
     );
   });
 
+  const trimmedInput = args.request.input.content.trim();
   sections.push(
     "[Current User Input]",
-    args.request.input.content,
+    trimmedInput.length > 0 ? args.request.input.content : "(none)",
   );
+  if (trimmedInput.length === 0 && hasVisibleSkillContext) {
+    sections.push(
+      "[Skill Invocation]",
+      "The user intentionally invoked the selected skill without additional text. Follow the selected skill instructions.",
+    );
+  }
 
   return sections.join("\n\n");
 }
