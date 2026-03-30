@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   filterReplayEvents,
+  formatRequestSnapshotPromptPreview,
   groupReplayEvents,
   getReplayEventFilterId,
   summarizeSessionOverview,
@@ -244,6 +245,69 @@ describe("turn diagnostics panel utils", () => {
       { id: "system", ids: ["event-5"] },
       { id: "errors", ids: ["event-6"] },
     ]);
+  });
+
+  test("shows selected skills when the fallback prompt is empty", () => {
+    expect(formatRequestSnapshotPromptPreview({
+      requestSnapshot: {
+        type: "request_snapshot",
+        prompt: "",
+        conversation: {
+          target: {
+            providerId: "codex",
+            model: "gpt-5.4",
+          },
+          mode: "chat",
+          history: [],
+          input: {
+            role: "user",
+            providerId: "user",
+            model: "user",
+            content: "",
+            parts: [],
+          },
+          contextParts: [{
+            type: "skill_context",
+            skills: [{
+              id: "local:shared:reviewer",
+              slug: "reviewer",
+              name: "reviewer",
+              description: "Review code with a strict checklist.",
+              scope: "local",
+              provider: "shared",
+              path: "/tmp/reviewer/SKILL.md",
+              invocationToken: "$reviewer",
+              instructions: "Review the code for regressions and missing tests.",
+            }],
+          }],
+        },
+      },
+    })).toBe("(skill-only input; selected skills: $reviewer)");
+  });
+
+  test("keeps the empty fallback label when no skill context exists", () => {
+    expect(formatRequestSnapshotPromptPreview({
+      requestSnapshot: {
+        type: "request_snapshot",
+        prompt: "",
+        conversation: {
+          target: {
+            providerId: "codex",
+            model: "gpt-5.4",
+          },
+          mode: "chat",
+          history: [],
+          input: {
+            role: "user",
+            providerId: "user",
+            model: "user",
+            content: "",
+            parts: [],
+          },
+          contextParts: [],
+        },
+      },
+    })).toBe("(empty fallback prompt; provider runtime used canonical request)");
   });
 
   test("summarizes recent-session overview across turn bundles", () => {

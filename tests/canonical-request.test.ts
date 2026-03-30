@@ -30,6 +30,18 @@ const history: ChatMessage[] = [
   },
 ];
 
+const skillContext = {
+  id: "local:shared:stave-release",
+  slug: "stave-release",
+  name: "stave-release",
+  description: "Prepare a release PR.",
+  scope: "local" as const,
+  provider: "shared" as const,
+  path: "/tmp/stave-release/SKILL.md",
+  invocationToken: "$stave-release",
+  instructions: "Use this skill to create a versioned release PR for the Stave repository.",
+};
+
 describe("canonical request builder", () => {
   test("builds a provider-agnostic request snapshot from task history and current input", () => {
     const request = buildCanonicalConversationRequest({
@@ -88,6 +100,27 @@ describe("canonical request builder", () => {
     expect(prompt).toContain("assistant: 1. Check git status");
     expect(prompt).toContain("[Current User Input]");
     expect(prompt).toContain("Add a migration plan.");
+  });
+
+  test("marks skill-only invocations explicitly instead of serializing an empty current input", () => {
+    const request = buildCanonicalConversationRequest({
+      providerId: "claude-code",
+      model: "claude-sonnet-4-6",
+      history,
+      userInput: "",
+      mode: "chat",
+      skillContexts: [skillContext],
+    });
+
+    const prompt = buildLegacyPromptFromCanonicalRequest({
+      request,
+    });
+
+    expect(prompt).toContain("[Selected Skills]");
+    expect(prompt).toContain("[Current User Input]");
+    expect(prompt).toContain("(none)");
+    expect(prompt).toContain("[Skill Invocation]");
+    expect(prompt).toContain("The user intentionally invoked the selected skill without additional text.");
   });
 
   test("sanitizes oversized historical and current file context payloads", () => {

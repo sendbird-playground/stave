@@ -47,6 +47,50 @@ describe("provider request translators", () => {
     expect(prompt).toContain("Continue with the runtime refactor.");
   });
 
+  test("marks skill-only invocations explicitly in provider prompts", () => {
+    const prompt = buildProviderTurnPrompt({
+      providerId: "claude-code",
+      prompt: "",
+      conversation: createConversation({
+        target: {
+          providerId: "claude-code",
+          model: "claude-sonnet-4-6",
+        },
+        input: {
+          role: "user",
+          providerId: "user",
+          model: "user",
+          content: "",
+          parts: [],
+        },
+        contextParts: [
+          {
+            type: "skill_context",
+            skills: [
+              {
+                id: "local:shared:stave-release",
+                slug: "stave-release",
+                name: "stave-release",
+                description: "Prepare a release PR.",
+                scope: "local",
+                provider: "shared",
+                path: "/tmp/stave-release/SKILL.md",
+                invocationToken: "$stave-release",
+                instructions: "Use this skill to create a versioned release PR for the Stave repository.",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    expect(prompt).toContain("[Selected Skills]");
+    expect(prompt).toContain("[Current User Input]");
+    expect(prompt).toContain("(none)");
+    expect(prompt).toContain("[Skill Invocation]");
+    expect(prompt).toContain("Follow the selected skill instructions.");
+  });
+
   test("omits replayed history when the canonical request carries a resume conversation id", () => {
     const prompt = buildProviderTurnPrompt({
       providerId: "claude-code",
