@@ -36,8 +36,9 @@ export function MessageContent(props: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "w-full rounded-md border border-border/80 bg-card px-3 py-2 leading-7 shadow-sm",
+        "w-full rounded-md border border-border/80 bg-card px-3 py-2 shadow-sm",
         resolveMessageSizeClass(messageFontSize),
+        "leading-7",
         "group-[.is-user]:border-primary/40 group-[.is-user]:bg-primary/15"
       )}
       {...props}

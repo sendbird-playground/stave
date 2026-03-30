@@ -135,8 +135,8 @@ export function MarkdownMessage({
   return (
     <div
       className={cn(
-        "leading-7",
         resolveMessageSizeClass(messageFontSize),
+        "leading-7",
         className,
       )}
       data-streaming={isStreaming ? "true" : undefined}
