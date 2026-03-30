@@ -155,6 +155,52 @@ describe("appendProviderEventToAssistant", () => {
       text: "{\"strategy\":\"direct\",\"model\":\"gpt-5.4\",\"reason\":\"return as data\"}",
     });
   });
+
+  test("deduplicates code_diff parts for the same file path", () => {
+    let message = createMessage();
+
+    // First diff for file1
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "diff", filePath: "src/a.ts", oldContent: "old-a", newContent: "new-a-v1", status: "accepted" },
+    });
+    // Diff for file2
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "diff", filePath: "src/b.ts", oldContent: "old-b", newContent: "new-b", status: "accepted" },
+    });
+    // Second diff for file1 (same file modified again)
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "diff", filePath: "src/a.ts", oldContent: "old-a", newContent: "new-a-v2", status: "accepted" },
+    });
+
+    // Should have exactly 2 code_diff parts (one per unique file), not 3
+    const diffParts = message.parts.filter((p) => p.type === "code_diff");
+    expect(diffParts).toHaveLength(2);
+    expect(diffParts[0]).toMatchObject({ filePath: "src/a.ts", newContent: "new-a-v2" });
+    expect(diffParts[1]).toMatchObject({ filePath: "src/b.ts", newContent: "new-b" });
+  });
+
+  test("keeps code_diff parts for different file paths separate", () => {
+    let message = createMessage();
+
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "diff", filePath: "src/a.ts", oldContent: "", newContent: "a", status: "accepted" },
+    });
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "diff", filePath: "src/b.ts", oldContent: "", newContent: "b", status: "accepted" },
+    });
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "diff", filePath: "src/c.ts", oldContent: "", newContent: "c", status: "accepted" },
+    });
+
+    const diffParts = message.parts.filter((p) => p.type === "code_diff");
+    expect(diffParts).toHaveLength(3);
+  });
 });
 
 describe("plan response replay", () => {
