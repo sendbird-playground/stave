@@ -30,7 +30,7 @@ export function ChatArea() {
 
   if (!projectPath) {
     return (
-      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/80 bg-surface shadow-sm">
+      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
         <Empty data-testid="splash-no-project">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -52,7 +52,7 @@ export function ChatArea() {
 
   if (hasAnyWorkspace && !hasSelectedWorkspace) {
     return (
-      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/80 bg-surface shadow-sm">
+      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
         <Empty data-testid="splash-no-workspace">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -68,7 +68,7 @@ export function ChatArea() {
 
   if (!hasSelectedTask) {
     return (
-      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/80 bg-surface shadow-sm">
+      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
         <EmptySplash onCreateTask={() => createTask({ title: "" })} showCreateTaskAction />
       </div>
     );
@@ -101,7 +101,7 @@ export function ChatArea() {
       );
 
   return (
-    <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border/80 bg-surface shadow-sm">
+    <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
       {content}
     </div>
   );

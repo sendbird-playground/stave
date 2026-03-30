@@ -318,7 +318,7 @@ export function AppShell() {
       </RenderProfiler>
       {!workspaceSidebarCollapsed ? (
         <div
-          className="group relative hidden w-3 shrink-0 cursor-col-resize lg:block"
+          className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
           onMouseDown={(event) => {
             event.preventDefault();
             setSidebarResizing(true);
@@ -351,15 +351,15 @@ export function AppShell() {
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {hasProject ? <WorkspaceTaskTabs /> : null}
               <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-2">
-                  <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden px-2 pt-2">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                  <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                     <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
                       <ChatArea />
                     </div>
                   </div>
                   <div className={terminalDocked ? undefined : "hidden"}>
                       <div
-                        className="h-[5px] shrink-0 cursor-row-resize transition-colors hover:bg-border/50"
+                        className="group relative z-10 h-[9px] -my-[4px] shrink-0 cursor-row-resize"
                         onMouseDown={(event) => {
                           event.preventDefault();
                           const startY = event.clientY;
@@ -377,7 +377,9 @@ export function AppShell() {
                           window.addEventListener("mousemove", onMove);
                           window.addEventListener("mouseup", onUp);
                         }}
-                      />
+                      >
+                        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+                      </div>
                       <TerminalDock />
                   </div>
                 </div>
@@ -386,7 +388,7 @@ export function AppShell() {
             {showDesktopEditor ? (
               <>
                 <div
-                  className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
+                  className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
                   onMouseDown={(event) => {
                     event.preventDefault();
                     const startX = event.clientX;
@@ -394,7 +396,7 @@ export function AppShell() {
                     const onMove = (moveEvent: MouseEvent) => {
                       const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
                       const explorerWidth = showDesktopSidebar ? explorerPanelWidth : 0;
-                      const separators = showDesktopSidebar ? 10 : 5;
+                      const separators = showDesktopSidebar ? 2 : 1;
                       const chatMinWidth = 420;
                       const maxEditor = Math.max(0, containerWidth - chatMinWidth - explorerWidth - separators);
                       const minEditor = Math.min(MIN_EDITOR_PANEL_WIDTH, maxEditor);
@@ -410,8 +412,10 @@ export function AppShell() {
                     window.addEventListener("mousemove", onMove);
                     window.addEventListener("mouseup", onUp);
                   }}
-                />
-                <div className="hidden min-h-0 min-w-0 py-2 pr-2 lg:block" style={{ width: `${editorPanelWidth}px` }}>
+                >
+                  <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+                </div>
+                <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${editorPanelWidth}px` }}>
                   <RenderProfiler id="EditorMainPanel" thresholdMs={10}>
                     <EditorMainPanel />
                   </RenderProfiler>
@@ -421,7 +425,7 @@ export function AppShell() {
             {showDesktopSidebar ? (
               <>
                 <div
-                  className="hidden w-[5px] shrink-0 cursor-col-resize transition-colors hover:bg-border/50 lg:block"
+                  className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
                   onMouseDown={(event) => {
                     event.preventDefault();
                     const startX = event.clientX;
@@ -429,7 +433,7 @@ export function AppShell() {
                     const onMove = (moveEvent: MouseEvent) => {
                       const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
                       const editorWidth = showDesktopEditor ? editorPanelWidth : 0;
-                      const separators = showDesktopEditor ? 10 : 5;
+                      const separators = showDesktopEditor ? 2 : 1;
                       const chatMinWidth = 420;
                       const maxExplorer = Math.max(200, containerWidth - chatMinWidth - editorWidth - separators);
                       const delta = startX - moveEvent.clientX;
@@ -444,9 +448,11 @@ export function AppShell() {
                     window.addEventListener("mousemove", onMove);
                     window.addEventListener("mouseup", onUp);
                   }}
-                />
-                <Suspense fallback={<aside className="my-2 mr-2 rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm" style={{ width: `${explorerPanelWidth}px` }}>Loading panel...</aside>}>
-                  <div className="hidden min-h-0 min-w-0 py-2 pr-2 lg:block" style={{ width: `${explorerPanelWidth}px` }}>
+                >
+                  <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+                </div>
+                <Suspense fallback={<aside className="bg-card p-3 text-sm text-muted-foreground" style={{ width: `${explorerPanelWidth}px` }}>Loading panel...</aside>}>
+                  <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${explorerPanelWidth}px` }}>
                     <RenderProfiler id="EditorPanel" thresholdMs={8}>
                       <EditorPanel />
                     </RenderProfiler>
@@ -455,13 +461,13 @@ export function AppShell() {
               </>
             ) : null}
             {showMobileRightPanel ? (
-              <div className="min-h-0 min-w-0 w-[min(22rem,56vw)] max-w-[22rem] py-2 pr-2 lg:hidden">
+              <div className="min-h-0 min-w-0 w-[min(22rem,56vw)] max-w-[22rem] border-l border-border/40 lg:hidden">
                 {mobileOverlayMode === "editor" ? (
                   <RenderProfiler id="EditorMainPanelMobile" thresholdMs={10}>
                     <EditorMainPanel />
                   </RenderProfiler>
                 ) : (
-                  <Suspense fallback={<aside className="h-full rounded-lg border border-border/80 bg-card p-3 text-sm text-muted-foreground shadow-sm">Loading panel...</aside>}>
+                  <Suspense fallback={<aside className="h-full bg-card p-3 text-sm text-muted-foreground">Loading panel...</aside>}>
                     <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
                       <EditorPanel />
                     </RenderProfiler>

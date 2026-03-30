@@ -403,7 +403,7 @@ export function EditorMainPanel() {
   }
 
   return (
-    <section data-testid="editor-main" className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col rounded-lg border border-border/80 bg-card shadow-sm">
+    <section data-testid="editor-main" className="flex h-full min-h-0 min-w-0 w-full flex-1 flex-col bg-card">
       <EditorMainToolbar
         activeTab={activeTab}
         activeTabIsImage={activeTabIsImage}
