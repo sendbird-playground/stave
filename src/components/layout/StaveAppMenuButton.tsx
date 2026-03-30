@@ -1,7 +1,7 @@
 import { Home, Keyboard, LoaderCircle, Settings } from "lucide-react";
 import { Suspense, lazy, useCallback, useState } from "react";
 import { Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui";
-import { getProviderIconUrl } from "@/lib/providers/model-catalog";
+import { STAVE_LOGO_URL } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
@@ -21,7 +21,6 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const isDarkMode = useAppStore((state) => state.isDarkMode);
   const clearTaskSelection = useAppStore((state) => state.clearTaskSelection);
 
   const handleOpenShortcuts = useCallback(() => {
@@ -64,9 +63,9 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
             )}
           >
             <img
-              src={getProviderIconUrl({ providerId: "stave", isDarkMode })}
+              src={STAVE_LOGO_URL}
               alt="Stave"
-              className="h-4 w-auto"
+              className="size-4 rounded-sm"
               draggable={false}
             />
           </Button>
