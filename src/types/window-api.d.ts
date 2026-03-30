@@ -703,6 +703,32 @@ interface WindowPersistenceApi {
   }>;
 }
 
+interface AppMetricsResult {
+  processes: Array<{
+    pid: number;
+    type: string;
+    memory: {
+      workingSetSizeKB: number;
+      peakWorkingSetSizeKB: number;
+    };
+    cpu: {
+      percentCPUUsage: number;
+    };
+  }>;
+  mainProcess: {
+    rss: number;
+    heapTotal: number;
+    heapUsed: number;
+    external: number;
+    arrayBuffers: number;
+  };
+  uptimeSeconds: number;
+}
+
+interface WindowMetricsApi {
+  getAppMetrics?: () => Promise<AppMetricsResult>;
+}
+
 interface WindowCaptureApi {
   screenshot: () => Promise<{ ok: boolean; dataUrl: string }>;
 }
@@ -728,6 +754,7 @@ interface WindowApi {
   lsp?: WindowLspApi;
   terminal?: WindowTerminalApi;
   sourceControl?: WindowSourceControlApi;
+  metrics?: WindowMetricsApi;
   capture?: WindowCaptureApi;
   inlineCompletion?: WindowInlineCompletionApi;
   window?: {

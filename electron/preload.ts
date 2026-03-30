@@ -440,6 +440,30 @@ contextBridge.exposeInMainWorld("api", {
     openInTerminal: (args: { path: string }) =>
       ipcRenderer.invoke("shell:open-in-terminal", args),
   },
+  metrics: {
+    getAppMetrics: () =>
+      ipcRenderer.invoke("metrics:get-app-metrics") as Promise<{
+        processes: Array<{
+          pid: number;
+          type: string;
+          memory: {
+            workingSetSizeKB: number;
+            peakWorkingSetSizeKB: number;
+          };
+          cpu: {
+            percentCPUUsage: number;
+          };
+        }>;
+        mainProcess: {
+          rss: number;
+          heapTotal: number;
+          heapUsed: number;
+          external: number;
+          arrayBuffers: number;
+        };
+        uptimeSeconds: number;
+      }>,
+  },
   capture: {
     screenshot: () =>
       ipcRenderer.invoke("screenshot:capture") as Promise<{
