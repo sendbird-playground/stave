@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   type WorkspacePrStatus,
   PR_STATUS_VISUAL,
-  PR_COLOR_CLASS,
+  PR_TONE_ICON_CLASS,
 } from "@/lib/pr-status";
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ export function PrStatusIcon(props: {
 }) {
   const visual = PR_STATUS_VISUAL[props.status];
   const Icon = ICON_MAP[visual.icon] ?? GitPullRequest;
-  const colorClass = PR_COLOR_CLASS[visual.color];
+  const colorClass = PR_TONE_ICON_CLASS[visual.tone];
 
   return <Icon className={cn("size-3.5 shrink-0", colorClass, props.className)} />;
 }
