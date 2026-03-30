@@ -4,6 +4,7 @@ import { parseWorktreePathByBranch } from "../../../src/lib/source-control-workt
 import { buildSourceControlDiffPreview, resolveSourceControlDiffPaths } from "../../../src/lib/source-control-diff";
 import { hasConflictItems, parseStatusLines, quotePath, resolveCommandCwd, runCommand } from "../utils/command";
 import { resolveRootFilePath } from "../utils/filesystem";
+import { CreatePRArgsSchema } from "./schemas";
 
 function toGitPathspecArg(paths: string[]) {
   return paths.map((filePath) => `"${quotePath({ value: filePath })}"`).join(" ");
@@ -190,5 +191,50 @@ export function registerScmHandlers() {
       return { ok: false, code: -1, stdout: "", stderr: "Commit hash is required." };
     }
     return runCommand({ command: `git cherry-pick "${quotePath({ value: commit })}"`, cwd: args.cwd });
+  });
+
+  ipcMain.handle("scm:create-pr", async (_event, args: unknown) => {
+    const parsed = CreatePRArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid create PR request." };
+    }
+
+    const { title, body, baseBranch, draft, cwd } = parsed.data;
+
+    // Check gh CLI availability
+    const authResult = await runCommand({ command: "gh auth status", cwd });
+    if (!authResult.ok) {
+      return {
+        ok: false,
+        stderr: "GitHub CLI is not authenticated. Run `gh auth login` first.",
+      };
+    }
+
+    // Build gh pr create command
+    const escapedTitle = title.replaceAll('"', '\\"');
+    const parts = ["gh pr create", `--title "${escapedTitle}"`];
+
+    if (body) {
+      const escapedBody = body.replaceAll('"', '\\"').replaceAll('`', '\\`');
+      parts.push(`--body "${escapedBody}"`);
+    }
+
+    if (baseBranch) {
+      parts.push(`--base "${baseBranch}"`);
+    }
+
+    if (draft) {
+      parts.push("--draft");
+    }
+
+    const result = await runCommand({ command: parts.join(" "), cwd });
+
+    if (!result.ok) {
+      return { ok: false, stderr: result.stderr || "Failed to create pull request." };
+    }
+
+    // gh pr create outputs the PR URL on success
+    const prUrl = result.stdout.trim().split("\n").pop()?.trim();
+    return { ok: true, prUrl, stderr: "" };
   });
 }

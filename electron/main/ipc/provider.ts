@@ -6,6 +6,7 @@ import {
   reloadClaudePlugins,
   suggestClaudeTaskName,
   suggestClaudeCommitMessage,
+  suggestClaudePRDescription,
 } from "../../providers/claude-sdk-runtime";
 import type { StreamTurnArgs } from "../../providers/types";
 import {
@@ -17,6 +18,7 @@ import {
   StreamReadArgsSchema,
   StreamTurnArgsSchema,
   SuggestCommitMessageArgsSchema,
+  SuggestPRDescriptionArgsSchema,
   SuggestTaskNameArgsSchema,
   UserInputResponseArgsSchema,
 } from "./schemas";
@@ -330,5 +332,34 @@ export function registerProviderHandlers() {
     const fileList = statusResult.ok ? statusResult.stdout.trim() : "";
 
     return suggestClaudeCommitMessage({ diff, fileList });
+  });
+
+  // Lightweight, single-turn query that generates a PR title and description
+  // from the branch diff and commit log.
+  ipcMain.handle("provider:suggest-pr-description", async (_event, args: unknown) => {
+    const parsed = SuggestPRDescriptionArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false };
+    }
+
+    const cwd = parsed.data.cwd;
+    const baseBranch = parsed.data.baseBranch || "main";
+
+    const [diffResult, logResult, statResult, guideResult] = await Promise.all([
+      runCommand({ command: `git diff ${baseBranch}...HEAD`, cwd }),
+      runCommand({ command: `git log ${baseBranch}..HEAD --pretty=format:"%h %s" --no-merges`, cwd }),
+      runCommand({ command: `git diff ${baseBranch}...HEAD --stat`, cwd }),
+      runCommand({ command: "cat AGENTS.md 2>/dev/null || cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true", cwd }),
+    ]);
+
+    const branchResult = await runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd });
+
+    const diff = diffResult.ok ? diffResult.stdout.trim() : "";
+    const commitLog = logResult.ok ? logResult.stdout.trim() : "";
+    const fileList = statResult.ok ? statResult.stdout.trim() : "";
+    const guideContent = guideResult.ok ? guideResult.stdout.trim() : undefined;
+    const headBranch = branchResult.ok ? branchResult.stdout.trim() : "HEAD";
+
+    return suggestClaudePRDescription({ diff, commitLog, fileList, baseBranch, headBranch, guideContent });
   });
 }
