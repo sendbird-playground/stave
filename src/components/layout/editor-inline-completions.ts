@@ -30,6 +30,7 @@ interface PendingInlineCompletionRequest {
 }
 
 interface InlineCompletionRequestSnapshot {
+  requestId: number;
   key: string;
   filePath: string;
   language: string;
@@ -42,21 +43,22 @@ interface ReusedInlineCompletion {
   kind: "exact" | "tail" | "transformed";
 }
 
-type InFlightLogKind = "exact" | "compatible";
+interface InlineCompletionInteractionState {
+  filePath: string;
+  shouldRequest: boolean;
+  versionId: number;
+}
 
-const MONACO_DEBOUNCE_MS = 5;
-const ADAPTIVE_DEBOUNCE_DEFAULT_MS = 16;
-const ADAPTIVE_DEBOUNCE_MIN_MS = 8;
-const ADAPTIVE_DEBOUNCE_MAX_MS = 60;
+const MONACO_DEBOUNCE_MS = 10;
+const ADAPTIVE_DEBOUNCE_DEFAULT_MS = 120;
+const ADAPTIVE_DEBOUNCE_MIN_MS = 90;
+const ADAPTIVE_DEBOUNCE_MAX_MS = 220;
 const ADAPTIVE_DEBOUNCE_SAMPLE_SIZE = 6;
 const ADAPTIVE_DEBOUNCE_BUCKET_LIMIT = 50;
 const MIN_PREFIX_LENGTH = 4;
 
-const PREFETCH_DEBOUNCE_MS = 80;
-
 let registeredDisposable: IDisposable | null = null;
-let prefetchDisposable: IDisposable | null = null;
-let prefetchTimer: ReturnType<typeof setTimeout> | null = null;
+let editorInteractionDisposable: IDisposable | null = null;
 let savedGetSettings: (() => InlineCompletionSettings) | null = null;
 let savedTriggerRefresh: (() => void) | null = null;
 let inFlightRequest: PendingInlineCompletionRequest | null = null;
@@ -78,10 +80,11 @@ let inlineCompletionChangeEmitter:
 let lastLoggedInFlightRequest:
   | {
       promise: Promise<InlineCompletionResponse>;
-      kind: InFlightLogKind;
     }
   | null = null;
 let latestObservedRequest: InlineCompletionRequestSnapshot | null = null;
+let inlineCompletionRequestObservationSequence = 0;
+let latestInteractionState: InlineCompletionInteractionState | null = null;
 
 function getWorkspaceFilePath(uri: { scheme: string; path: string; query?: string }): string | null {
   if (uri.scheme !== "file" || uri.query) {
@@ -98,6 +101,16 @@ function buildInlineCompletionRequestKey(args: {
   offset: number;
 }) {
   return `${args.filePath}::${args.language}::${args.versionId}::${args.offset}`;
+}
+
+function isLatestObservedInlineCompletionRequest(requestId: number) {
+  return latestObservedRequest?.requestId === requestId;
+}
+
+function shouldRequestInlineCompletion(args: { filePath: string; versionId: number }) {
+  return latestInteractionState?.shouldRequest === true
+    && latestInteractionState.filePath === args.filePath
+    && latestInteractionState.versionId === args.versionId;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -117,7 +130,7 @@ function getAdaptiveDebounceMs(args: { filePath: string; language: string }) {
 
   const averageLatencyMs = samples.reduce((sum, value) => sum + value, 0) / samples.length;
   return clamp(
-    Math.round(averageLatencyMs * 0.15),
+    Math.round(averageLatencyMs * 0.3),
     ADAPTIVE_DEBOUNCE_MIN_MS,
     ADAPTIVE_DEBOUNCE_MAX_MS,
   );
@@ -323,45 +336,56 @@ function scheduleInlineCompletionRefresh(args: {
   }, 0);
 }
 
-function logInFlightReuse(request: PendingInlineCompletionRequest, kind: InFlightLogKind) {
-  if (
-    lastLoggedInFlightRequest?.promise === request.promise
-    && lastLoggedInFlightRequest.kind === kind
-  ) {
+function logInFlightReuse(request: PendingInlineCompletionRequest) {
+  if (lastLoggedInFlightRequest?.promise === request.promise) {
     return;
   }
 
   lastLoggedInFlightRequest = {
     promise: request.promise,
-    kind,
   };
-  console.debug(
-    kind === "exact"
-      ? "[inline-comp] reusing in-flight request"
-      : "[inline-comp] waiting for compatible in-flight request",
-  );
+  console.debug("[inline-comp] reusing in-flight request");
 }
 
-function projectResolvedSnapshotToLatestRequest(
-  snapshot: ResolvedInlineCompletionSnapshot | null,
-  settledRequestKey: string,
+function updateInlineCompletionInteractionState(
+  model: MonacoEditorApi.ITextModel | null,
+  shouldRequest: boolean,
 ) {
-  if (!snapshot || !latestObservedRequest || latestObservedRequest.key === settledRequestKey) {
-    return null;
+  if (!model) {
+    latestInteractionState = null;
+    return;
   }
 
-  const reusedCompletion = deriveInlineCompletionFromSnapshot(snapshot, latestObservedRequest);
-  if (!reusedCompletion?.text.trim()) {
-    return null;
+  const filePath = getWorkspaceFilePath(model.uri);
+  if (!filePath) {
+    latestInteractionState = null;
+    return;
   }
 
-  return {
-    key: latestObservedRequest.key,
-    result: {
-      ok: true,
-      text: reusedCompletion.text,
-    } satisfies InlineCompletionResponse,
+  latestInteractionState = {
+    filePath,
+    shouldRequest,
+    versionId: model.getVersionId(),
   };
+}
+
+function cancelInFlightInlineCompletionRequest() {
+  if (!inFlightRequest) {
+    return;
+  }
+  window.api?.inlineCompletion?.abort?.().catch(() => {});
+  inFlightRequest = null;
+}
+
+function clearInlineCompletionSnapshots() {
+  cachedResolvedRequest = null;
+  lastResolvedCompletion = null;
+}
+
+function didWriteText(
+  event: MonacoEditorApi.IModelContentChangedEvent,
+) {
+  return event.changes.some((change) => change.text.length > 0);
 }
 
 export function configureInlineCompletions(args: {
@@ -424,7 +448,9 @@ export function configureInlineCompletions(args: {
           versionId: model.getVersionId(),
           offset,
         });
+        const requestId = ++inlineCompletionRequestObservationSequence;
         latestObservedRequest = {
+          requestId,
           key: requestKey,
           filePath,
           language,
@@ -433,6 +459,15 @@ export function configureInlineCompletions(args: {
         };
 
         if (prefix.trim().length < MIN_PREFIX_LENGTH) {
+          return { items: [] };
+        }
+
+        const shouldRequest = shouldRequestInlineCompletion({
+          filePath,
+          versionId: model.getVersionId(),
+        });
+
+        if (!shouldRequest) {
           return { items: [] };
         }
 
@@ -485,33 +520,21 @@ export function configureInlineCompletions(args: {
             if (token.isCancellationRequested) {
               return { items: [] };
             }
+            if (!isLatestObservedInlineCompletionRequest(requestId)) {
+              return { items: [] };
+            }
 
             if (inFlightRequest?.key === requestKey) {
-              logInFlightReuse(inFlightRequest, "exact");
+              logInFlightReuse(inFlightRequest);
               awaitedRequest = inFlightRequest;
               exactRequestMatch = true;
               result = await inFlightRequest.promise;
               break;
             }
 
-            if (
-              inFlightRequest
-              && canReuseInlineCompletionSnapshot(inFlightRequest, {
-                filePath,
-                language,
-                prefix,
-                suffix,
-              })
-            ) {
-              logInFlightReuse(inFlightRequest, "compatible");
-              awaitedRequest = inFlightRequest;
-              result = await inFlightRequest.promise;
-              break;
-            }
-
             if (inFlightRequest) {
-              // Abort incompatible in-flight request immediately (Copilot-style)
-              console.debug("[inline-comp] aborting incompatible in-flight request");
+              // Prioritize the newest exact request over prefix-compatible reuse.
+              console.debug("[inline-comp] aborting superseded in-flight request");
               const abortFn = window.api?.inlineCompletion?.abort;
               if (abortFn) {
                 abortFn().catch(() => {});
@@ -522,6 +545,9 @@ export function configureInlineCompletions(args: {
             const adaptiveDebounceMs = getAdaptiveDebounceMs({ filePath, language });
             const shouldContinue = await waitForAdaptiveDebounce(adaptiveDebounceMs, token);
             if (!shouldContinue) {
+              return { items: [] };
+            }
+            if (!isLatestObservedInlineCompletionRequest(requestId)) {
               return { items: [] };
             }
 
@@ -572,23 +598,6 @@ export function configureInlineCompletions(args: {
               text: result.text,
             }
           : null;
-        cachedResolvedRequest = exactRequestMatch && resolvedSnapshot
-          ? {
-              key: requestKey,
-              result,
-            }
-          : exactRequestMatch
-            ? null
-            : cachedResolvedRequest;
-        lastResolvedCompletion = resolvedSnapshot ?? lastResolvedCompletion;
-
-        const projectedLatestRequestResult = projectResolvedSnapshotToLatestRequest(resolvedSnapshot, requestKey);
-        if (projectedLatestRequestResult) {
-          cachedResolvedRequest = projectedLatestRequestResult;
-        }
-
-        console.debug("[inline-comp] settled:", result.ok, result.error ?? "", result.text.slice(0, 80));
-
         if (settledActiveRequest && awaitedRequest) {
           recordAdaptiveDebounceSample(
             {
@@ -599,6 +608,20 @@ export function configureInlineCompletions(args: {
           );
         }
 
+        if (!isLatestObservedInlineCompletionRequest(requestId)) {
+          return { items: [] };
+        }
+
+        cachedResolvedRequest = exactRequestMatch && resolvedSnapshot
+          ? {
+              key: requestKey,
+              result,
+            }
+          : exactRequestMatch
+            ? null
+            : cachedResolvedRequest;
+        lastResolvedCompletion = resolvedSnapshot ?? lastResolvedCompletion;
+
         if (token.isCancellationRequested) {
           if (resolvedSnapshot) {
             scheduleRefresh("[inline-comp] late result arrived, scheduling async refresh");
@@ -606,15 +629,13 @@ export function configureInlineCompletions(args: {
           return { items: [] };
         }
 
-        if (projectedLatestRequestResult) {
-          scheduleRefresh("[inline-comp] projected settled result to latest request");
-          return { items: [] };
-        }
-
         if (result.error === "aborted") {
           return { items: [] };
         }
 
+        if (exactRequestMatch) {
+          console.debug("[inline-comp] settled:", result.ok, result.error ?? "", result.text.slice(0, 80));
+        }
         console.debug("[inline-comp] result:", result.ok, result.error ?? "", result.text.slice(0, 80));
 
         if (!result.ok || !result.text.trim()) {
@@ -654,122 +675,58 @@ export function configureInlineCompletions(args: {
 
 }
 
-// ---------------------------------------------------------------------------
-// Speculative prefetch: fire a background request when the cursor moves to a
-// new position (e.g. arrow keys, clicking). This way a completion is already
-// in-flight by the time the user starts typing, mimicking Copilot's prefetch.
-// Call this from the editor's onMount callback once the editor instance exists.
-// ---------------------------------------------------------------------------
-export function attachInlineCompletionPrefetch(editor: MonacoEditorApi.ICodeEditor) {
-  // Dispose previous listener if re-attached (e.g. editor remount)
-  prefetchDisposable?.dispose();
-  prefetchDisposable = null;
+export function attachInlineCompletionInteractionTracking(editor: MonacoEditorApi.ICodeEditor) {
+  editorInteractionDisposable?.dispose();
+  editorInteractionDisposable = null;
 
-  if (!inlineCompletionChangeEmitter) {
-    return;
-  }
-  const changeEmitter = inlineCompletionChangeEmitter;
+  updateInlineCompletionInteractionState(editor.getModel(), false);
 
-  prefetchDisposable = editor.onDidChangeCursorPosition((e: { reason: number }) => {
-    const getSettings = savedGetSettings;
-    if (!getSettings || !getSettings().enabled) {
+  const disposables: IDisposable[] = [];
+
+  disposables.push(editor.onDidChangeModel(() => {
+    updateInlineCompletionInteractionState(editor.getModel(), false);
+    cancelInFlightInlineCompletionRequest();
+    clearInlineCompletionSnapshots();
+  }));
+
+  disposables.push(editor.onDidChangeModelContent((event) => {
+    const model = editor.getModel();
+    if (!model) {
+      latestInteractionState = null;
       return;
     }
-    // Only prefetch on explicit cursor movements (keyboard/mouse), not programmatic changes
+
+    const wroteText = didWriteText(event);
+    updateInlineCompletionInteractionState(model, wroteText);
+    if (!wroteText) {
+      cancelInFlightInlineCompletionRequest();
+      clearInlineCompletionSnapshots();
+    }
+  }));
+
+  disposables.push(editor.onDidChangeCursorPosition((e: { reason: number }) => {
     if (e.reason !== 3 /* CursorChangeReason.Explicit */) {
       return;
     }
-    const requestFn = window.api?.inlineCompletion?.request;
-    if (!requestFn) {
-      return;
-    }
+    updateInlineCompletionInteractionState(editor.getModel(), false);
+    cancelInFlightInlineCompletionRequest();
+    clearInlineCompletionSnapshots();
+  }));
 
-    if (prefetchTimer) {
-      clearTimeout(prefetchTimer);
-    }
-
-    prefetchTimer = setTimeout(() => {
-      prefetchTimer = null;
-      const model = editor.getModel();
-      if (!model) {
-        return;
+  editorInteractionDisposable = {
+    dispose() {
+      for (const disposable of disposables) {
+        disposable.dispose();
       }
-      const pos = editor.getPosition();
-      if (!pos) {
-        return;
-      }
-      const filePath = getWorkspaceFilePath(model.uri);
-      if (!filePath) {
-        return;
-      }
-      const fullText = model.getValue();
-      const offset = model.getOffsetAt(pos);
-      const prefix = fullText.slice(0, offset);
-      const suffix = fullText.slice(offset);
-      const language = model.getLanguageId();
-
-      if (prefix.trim().length < MIN_PREFIX_LENGTH) {
-        return;
-      }
-      // Skip if there's already a compatible in-flight request
-      if (inFlightRequest && canReuseInlineCompletionSnapshot(inFlightRequest, { filePath, language, prefix, suffix })) {
-        return;
-      }
-
-      // Abort any existing incompatible request before prefetching
-      if (inFlightRequest) {
-        window.api?.inlineCompletion?.abort?.().catch(() => {});
-        inFlightRequest = null;
-      }
-
-      const requestKey = buildInlineCompletionRequestKey({
-        filePath,
-        language,
-        versionId: model.getVersionId(),
-        offset,
-      });
-      console.debug("[inline-comp] prefetching completion at cursor position");
-      const startedAt = Date.now();
-      const promise = requestFn({ prefix, suffix, filePath, language });
-      inFlightRequest = {
-        key: requestKey,
-        filePath,
-        language,
-        prefix,
-        suffix,
-        startedAt,
-        promise,
-      };
-      // When the prefetch resolves, cache the result and trigger a refresh
-      promise.then((res) => {
-        if (inFlightRequest?.promise === promise) {
-          inFlightRequest = null;
-        }
-        if (res.ok && res.text.trim()) {
-          cachedResolvedRequest = { key: requestKey, result: res };
-          lastResolvedCompletion = { filePath, language, prefix, suffix, text: res.text };
-          recordAdaptiveDebounceSample({ filePath, language }, Math.max(1, Date.now() - startedAt));
-          changeEmitter.fire();
-          savedTriggerRefresh?.();
-        }
-      }).catch(() => {
-        if (inFlightRequest?.promise === promise) {
-          inFlightRequest = null;
-        }
-      });
-    }, PREFETCH_DEBOUNCE_MS);
-  });
+    },
+  };
 }
 
 export function disposeInlineCompletions() {
   registeredDisposable?.dispose();
   registeredDisposable = null;
-  prefetchDisposable?.dispose();
-  prefetchDisposable = null;
-  if (prefetchTimer) {
-    clearTimeout(prefetchTimer);
-    prefetchTimer = null;
-  }
+  editorInteractionDisposable?.dispose();
+  editorInteractionDisposable = null;
   inFlightRequest = null;
   cachedResolvedRequest = null;
   lastResolvedCompletion = null;
@@ -778,6 +735,7 @@ export function disposeInlineCompletions() {
   inlineCompletionChangeEmitter = null;
   lastLoggedInFlightRequest = null;
   latestObservedRequest = null;
+  latestInteractionState = null;
   savedGetSettings = null;
   savedTriggerRefresh = null;
 }

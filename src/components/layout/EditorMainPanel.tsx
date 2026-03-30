@@ -19,7 +19,7 @@ import {
   type LanguageIntelligenceRuntime,
   type LanguageIntelligenceSettings,
 } from "./editor-language-intelligence";
-import { configureInlineCompletions, attachInlineCompletionPrefetch, type InlineCompletionSettings } from "./editor-inline-completions";
+import { configureInlineCompletions, attachInlineCompletionInteractionTracking, type InlineCompletionSettings } from "./editor-inline-completions";
 import {
   configureMonacoDefaults,
   syncWorkspaceMonacoSupport,
@@ -30,7 +30,6 @@ import {
   type MonacoDisposable,
   type PendingEditorNavigation,
 } from "./editor-monaco-workspace-support";
-
 
 export function EditorMainPanel() {
   const [
@@ -505,7 +504,7 @@ export function EditorMainPanel() {
                 beforeMount={configureMonaco}
                 onMount={(editor) => {
                   editorRef.current = editor;
-                  attachInlineCompletionPrefetch(editor);
+                  attachInlineCompletionInteractionTracking(editor);
                 }}
                 onChange={(value) =>
                   updateEditorContent({
