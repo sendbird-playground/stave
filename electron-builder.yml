@@ -1,5 +1,6 @@
 appId: com.astyfx.stave
 productName: Stave
+icon: build/icon
 files:
   - out/**
   - package.json
