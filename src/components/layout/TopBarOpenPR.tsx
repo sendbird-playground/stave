@@ -45,7 +45,8 @@ import {
   type WorkspacePrStatus,
   PR_STATUS_VISUAL,
   PR_STATUS_ACTIONS,
-  PR_COLOR_BADGE_CLASS,
+  PR_CREATE_BUTTON_CLASS,
+  PR_TONE_BADGE_CLASS,
 } from "@/lib/pr-status";
 import { cn } from "@/lib/utils";
 
@@ -583,7 +584,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     step === "action" ? "Working..." :
     null;
 
-  const badgeColorClass = PR_COLOR_BADGE_CLASS[visual.color];
+  const badgeColorClass = PR_TONE_BADGE_CLASS[visual.tone];
 
   // -------------------------------------------------------------------------
   // Render
@@ -598,7 +599,10 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                PR_CREATE_BUTTON_CLASS,
+              )}
               style={props.noDragStyle}
               onClick={() => void handleCreateClick()}
               disabled={isBusy}
