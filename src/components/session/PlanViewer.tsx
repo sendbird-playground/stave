@@ -72,7 +72,7 @@ export function PlanViewer() {
     >
       <div
         className={[
-          "mx-auto flex max-w-5xl flex-col rounded-xl border border-border/80 bg-card shadow-lg",
+          "mx-auto flex max-w-6xl flex-col rounded-xl border border-border/80 bg-card shadow-lg",
           isExpanded ? "h-full" : "",
         ].join(" ")}
       >
