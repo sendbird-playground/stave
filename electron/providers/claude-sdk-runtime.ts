@@ -4,6 +4,7 @@ import {
   MAX_PROVIDER_APPROVAL_DESCRIPTION_CHARS,
   sanitizeTextField,
 } from "../../src/lib/file-context-sanitization";
+import { parsePullRequestSuggestionResponse } from "../../src/lib/source-control-pr";
 import type {
   ClaudeContextUsageResponse,
   ClaudeMcpServerStatusSnapshot,
@@ -1582,7 +1583,9 @@ export async function suggestClaudeCommitMessage(args: {
 // conversation.
 
 export async function suggestClaudePRDescription(args: {
+  cwd?: string;
   diff: string;
+  workingTreeDiff: string;
   commitLog: string;
   fileList: string;
   baseBranch: string;
@@ -1626,8 +1629,13 @@ export async function suggestClaudePRDescription(args: {
       args.fileList || "(no file list available)",
       ...(args.diff.length > 0 ? [
         "",
-        "Diff (may be truncated):",
-        args.diff.slice(0, 8000),
+        "Branch diff against the base branch (may be truncated):",
+        args.diff.slice(0, 6000),
+      ] : []),
+      ...(args.workingTreeDiff.length > 0 ? [
+        "",
+        "Uncommitted working tree diff (may be truncated):",
+        args.workingTreeDiff.slice(0, 4000),
       ] : []),
       ...(args.guideContent ? [
         "",
@@ -1641,7 +1649,7 @@ export async function suggestClaudePRDescription(args: {
       options: {
         permissionMode: "default",
         maxTurns: 1,
-        cwd: process.cwd(),
+        cwd: args.cwd || process.cwd(),
         model: "claude-haiku-4-5",
         ...(claudeExecutablePath ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
         env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
@@ -1664,15 +1672,9 @@ export async function suggestClaudePRDescription(args: {
     }
 
     const fullText = textParts.join("").trim();
+    const { title, body } = parsePullRequestSuggestionResponse(fullText);
 
-    // Parse TITLE: and BODY: sections
-    const titleMatch = fullText.match(/^TITLE:\s*(.+)/m);
-    const bodyMatch = fullText.match(/BODY:\s*\n([\s\S]*)/m);
-
-    const title = titleMatch?.[1]?.trim();
-    const body = bodyMatch?.[1]?.trim();
-
-    return title ? { ok: true, title, body: body ?? "" } : { ok: false };
+    return title || body ? { ok: true, title, body } : { ok: false };
   } catch {
     return { ok: false };
   }

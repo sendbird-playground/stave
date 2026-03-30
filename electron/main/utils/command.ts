@@ -43,6 +43,40 @@ export function runCommand(args: { command: string; cwd?: string }): Promise<Com
   });
 }
 
+export function runCommandArgs(args: { command: string; commandArgs?: string[]; cwd?: string }): Promise<CommandResult> {
+  return new Promise<CommandResult>((resolve) => {
+    const child = spawn(args.command, args.commandArgs ?? [], {
+      shell: false,
+      cwd: resolveCommandCwd({ cwd: args.cwd }),
+    });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      resolve({
+        ok: false,
+        code: -1,
+        stdout,
+        stderr: `${stderr}\n${String(error)}`.trim(),
+      });
+    });
+    child.on("close", (code) => {
+      resolve({
+        ok: code === 0,
+        code: code ?? -1,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
 export function parseStatusLines(args: { stdout: string }): SourceControlStatusItem[] {
   return args.stdout
     .split("\n")
