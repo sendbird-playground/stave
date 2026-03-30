@@ -27,11 +27,12 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - always-visible top-bar quick open for searching workspace files, with `Cmd/Ctrl+P` focusing it
 - generated repo-map cache with background pre-warming for first-turn codebase context injection
 - redesigned project, workspace, and task shell with a collapsible project sidebar, workspace task tabs, and a right-side activity rail
+- top-bar notification center with durable read/unread history for task completions and approval requests
 - recent-project switching that preserves each project's own workspace list and last active workspace
 - automatic import of existing branch-backed git worktrees when a project opens
 - optional repo-scoped post-create workspace bootstrap command for new git worktrees, such as `bun install` or `npm install`
 - optional repo-scoped reuse of the repository root `node_modules` via workspace-local symlink for faster worktree startup
-- SQLite-backed local persistence for workspaces, tasks, messages, and turns
+- SQLite-backed local persistence for workspaces, tasks, messages, turns, and notifications
 
 ## Stack
 
@@ -216,6 +217,7 @@ Stable project documentation now lives under `docs/`.
 - [Contracts](docs/architecture/contracts.md)
 - [Repo map spec](docs/architecture/repo-map-spec.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
+- [Notifications](docs/features/notifications.md)
 - [Session Replay](docs/features/session-replay.md)
 - [Skill selector](docs/features/skill-selector.md)
 - [Attachments](docs/features/attachments.md)

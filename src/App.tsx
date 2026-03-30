@@ -5,6 +5,7 @@ import { useAppStore } from "@/store/app.store";
 export default function App() {
   useEffect(() => {
     void useAppStore.getState().hydrateWorkspaces();
+    void useAppStore.getState().hydrateNotifications();
     void useAppStore.getState().refreshProviderAvailability();
     const timer = window.setInterval(() => {
       void useAppStore.getState().refreshProviderAvailability();

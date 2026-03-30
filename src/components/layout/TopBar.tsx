@@ -22,6 +22,7 @@ import {
 import { useAppStore } from "@/store/app.store";
 import { TopBarBranchDropdown } from "@/components/layout/TopBarBranchDropdown";
 import { TopBarFileSearch } from "@/components/layout/TopBarFileSearch";
+import { TopBarNotifications } from "@/components/layout/TopBarNotifications";
 import { TopBarOpenPR } from "@/components/layout/TopBarOpenPR";
 import { TopBarWindowControls } from "@/components/layout/TopBarWindowControls";
 import {
@@ -214,19 +215,24 @@ export function TopBar() {
           ) : null}
         </TooltipProvider>
       </div>
-      <div className="hidden min-w-0 flex-1 justify-end lg:flex">
-        {hasProjectContext ? (
-          <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
-        ) : null}
-      </div>
-      {IS_MAC ? null : (
-        <div
-          className="flex shrink-0 items-center gap-1.5"
-          style={TOP_BAR_NO_DRAG_STYLE}
-        >
-          <TopBarWindowControls noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+        <div className="hidden min-w-0 flex-1 justify-end lg:flex">
+          {hasProjectContext ? (
+            <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+          ) : null}
         </div>
-      )}
+        {hasProjectContext ? (
+          <TopBarNotifications noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+        ) : null}
+        {IS_MAC ? null : (
+          <div
+            className="flex shrink-0 items-center gap-1.5"
+            style={TOP_BAR_NO_DRAG_STYLE}
+          >
+            <TopBarWindowControls noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+          </div>
+        )}
+      </div>
     </header>
   );
 }

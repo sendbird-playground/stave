@@ -70,6 +70,42 @@ export interface PersistenceTurnSummary {
   eventCount: number;
 }
 
+export type PersistenceNotificationKind =
+  | "task.turn_completed"
+  | "task.approval_requested";
+
+export type PersistenceNotificationAction =
+  | {
+      type: "approval";
+      requestId: string;
+      messageId?: string | null;
+    };
+
+export interface PersistenceNotificationRecord {
+  id: string;
+  kind: PersistenceNotificationKind;
+  title: string;
+  body: string;
+  projectPath: string | null;
+  projectName: string | null;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  taskId: string | null;
+  taskTitle: string | null;
+  turnId: string | null;
+  providerId: "claude-code" | "codex" | "stave" | null;
+  action: PersistenceNotificationAction | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface PersistenceNotificationCreateInput extends Omit<PersistenceNotificationRecord, "createdAt" | "readAt"> {
+  createdAt?: string;
+  readAt?: string | null;
+  dedupeKey?: string | null;
+}
+
 export interface PersistenceRpcRequest {
   id: string;
   method: string;

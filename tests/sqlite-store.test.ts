@@ -253,4 +253,107 @@ describe("SqliteStore", () => {
 
     store.close();
   });
+
+  nativeSqliteTest("stores notification history with dedupe and read state", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+
+    const first = store.createNotification({
+      notification: {
+        id: "notification-task-complete",
+        kind: "task.turn_completed",
+        title: "Refactor notifications",
+        body: "Latest run finished in feat/noti.",
+        projectPath: "/tmp/stave-project",
+        projectName: "stave",
+        workspaceId: "ws-1",
+        workspaceName: "feat/noti",
+        taskId: "task-1",
+        taskTitle: "Refactor notifications",
+        turnId: "turn-1",
+        providerId: "codex",
+        action: null,
+        payload: { stopReason: "end_turn" },
+        dedupeKey: "task.turn_completed:turn-1",
+        createdAt: "2026-03-06T01:10:00.000Z",
+      },
+    });
+    const duplicate = store.createNotification({
+      notification: {
+        id: "notification-task-complete-duplicate",
+        kind: "task.turn_completed",
+        title: "Refactor notifications",
+        body: "Latest run finished in feat/noti.",
+        projectPath: "/tmp/stave-project",
+        projectName: "stave",
+        workspaceId: "ws-1",
+        workspaceName: "feat/noti",
+        taskId: "task-1",
+        taskTitle: "Refactor notifications",
+        turnId: "turn-1",
+        providerId: "codex",
+        action: null,
+        payload: { stopReason: "end_turn" },
+        dedupeKey: "task.turn_completed:turn-1",
+        createdAt: "2026-03-06T01:10:05.000Z",
+      },
+    });
+    const approval = store.createNotification({
+      notification: {
+        id: "notification-approval",
+        kind: "task.approval_requested",
+        title: "Refactor notifications",
+        body: "Bash: Allow command",
+        projectPath: "/tmp/stave-project",
+        projectName: "stave",
+        workspaceId: "ws-1",
+        workspaceName: "feat/noti",
+        taskId: "task-1",
+        taskTitle: "Refactor notifications",
+        turnId: "turn-1",
+        providerId: "codex",
+        action: {
+          type: "approval",
+          requestId: "approval-1",
+          messageId: "task-1-m-2",
+        },
+        payload: {
+          toolName: "Bash",
+          description: "Allow command",
+        },
+        dedupeKey: "task.approval_requested:turn-1:approval-1",
+        createdAt: "2026-03-06T01:11:00.000Z",
+      },
+    });
+
+    expect(first.inserted).toBe(true);
+    expect(duplicate.inserted).toBe(false);
+    expect(duplicate.notification?.id).toBe("notification-task-complete");
+    expect(approval.inserted).toBe(true);
+
+    const allNotifications = store.listNotifications();
+    expect(allNotifications.map((notification) => notification.id)).toEqual([
+      "notification-approval",
+      "notification-task-complete",
+    ]);
+
+    const markedApproval = store.markNotificationRead({
+      id: "notification-approval",
+      readAt: "2026-03-06T01:12:00.000Z",
+    });
+    expect(markedApproval?.readAt).toBe("2026-03-06T01:12:00.000Z");
+
+    const unreadNotifications = store.listNotifications({ unreadOnly: true });
+    expect(unreadNotifications.map((notification) => notification.id)).toEqual([
+      "notification-task-complete",
+    ]);
+
+    const changedCount = store.markAllNotificationsRead({
+      readAt: "2026-03-06T01:13:00.000Z",
+    });
+    expect(changedCount).toBe(1);
+    expect(store.listNotifications({ unreadOnly: true })).toEqual([]);
+
+    store.close();
+  });
 });

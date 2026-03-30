@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
+import {
+  createNotification as createPersistedNotification,
+  listNotifications as listPersistedNotifications,
+  markAllNotificationsRead as markAllPersistedNotificationsRead,
+  markNotificationRead as markPersistedNotificationRead,
+} from "@/lib/db/notifications.db";
 import { workspaceFsAdapter } from "@/lib/fs";
 import {
   listWorkspaceSummaries,
@@ -11,6 +17,11 @@ import {
 } from "@/lib/db/workspaces.db";
 import type { CanonicalRetrievedContextPart, ClaudeSettingSource, NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
 import { getRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
+import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
+import {
+  isNotificationUnread,
+  sortNotificationsNewestFirst,
+} from "@/lib/notifications/notification.types";
 import { resolveCommandInput } from "@/lib/commands";
 import {
   buildCanonicalConversationRequest,
@@ -36,6 +47,7 @@ import {
 } from "@/lib/providers/runtime-option-contract";
 import {
   findLatestPendingApprovalPart,
+  findPendingApprovalMessageByRequestId,
   findLatestPendingUserInputPart,
   updateApprovalPartsByRequestId,
   updateUserInputPartsByRequestId,
@@ -125,6 +137,7 @@ import {
   normalizeRecentProjectStates,
   upsertRecentProjectState,
   captureCurrentProjectState,
+  resolveProjectForWorkspaceId,
 } from "@/store/project.utils";
 import {
   type WorkspacePrInfo,
@@ -285,12 +298,14 @@ interface AppState {
   taskCheckpointById: Record<string, string>;
   providerAvailability: Record<ProviderId, boolean>;
   skillCatalog: SkillCatalogState;
+  notifications: AppNotification[];
   activeTurnIdsByTask: Record<string, string | undefined>;
   nativeConversationReadyByTask: Record<string, boolean>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
   taskWorkspaceIdById: Record<string, string>;
   hydrateWorkspaces: () => Promise<void>;
+  hydrateNotifications: () => Promise<void>;
   flushActiveWorkspaceSnapshot: (args?: { sync?: boolean }) => Promise<void>;
   createProject: (args: { name?: string }) => Promise<void>;
   openProjectFromPath: (args: { inputPath: string }) => Promise<{ ok: boolean; stderr?: string }>;
@@ -342,6 +357,10 @@ interface AppState {
   refreshProjectFiles: () => Promise<void>;
   refreshProviderAvailability: () => Promise<void>;
   refreshSkillCatalog: (args?: { workspacePath?: string | null }) => Promise<void>;
+  markNotificationRead: (args: { id: string }) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  openNotificationContext: (args: { notificationId: string }) => Promise<void>;
+  resolveNotificationApproval: (args: { notificationId: string; approved: boolean }) => Promise<void>;
   sendUserMessage: (args: {
     taskId: string;
     content: string;
@@ -377,6 +396,181 @@ interface AppState {
   saveActiveEditorTab: () => Promise<{ ok: boolean; conflict?: boolean }>;
   checkOpenTabConflicts: () => Promise<void>;
   sendEditorContextToChat: (args: { taskId: string; instruction?: string }) => void;
+}
+
+function mergeNotificationIntoList(args: {
+  notifications: AppNotification[];
+  notification: AppNotification;
+}) {
+  return sortNotificationsNewestFirst([
+    args.notification,
+    ...args.notifications.filter((item) => item.id !== args.notification.id),
+  ]);
+}
+
+function markNotificationReadInList(args: {
+  notifications: AppNotification[];
+  id: string;
+  readAt: string;
+}) {
+  return args.notifications.map((notification) => {
+    if (notification.id !== args.id || notification.readAt) {
+      return notification;
+    }
+    return {
+      ...notification,
+      readAt: args.readAt,
+    };
+  });
+}
+
+function markAllNotificationsReadInList(args: {
+  notifications: AppNotification[];
+  readAt: string;
+}) {
+  let changed = false;
+  const nextNotifications = args.notifications.map((notification) => {
+    if (notification.readAt) {
+      return notification;
+    }
+    changed = true;
+    return {
+      ...notification,
+      readAt: args.readAt,
+    };
+  });
+  return changed ? nextNotifications : args.notifications;
+}
+
+function resolveTaskTitleFromSession(args: {
+  session: WorkspaceSessionState;
+  taskId: string;
+}) {
+  return args.session.tasks.find((task) => task.id === args.taskId)?.title.trim() || "Untitled Task";
+}
+
+function buildTaskTurnCompletedNotificationInput(args: {
+  state: Pick<AppState, "projectPath" | "projectName" | "workspaces" | "recentProjects">;
+  session: WorkspaceSessionState;
+  workspaceId: string;
+  taskId: string;
+  turnId: string;
+  provider: ProviderId;
+  events: NormalizedProviderEvent[];
+}): AppNotificationCreateInput | null {
+  const doneEvent = [...args.events].reverse().find((event): event is Extract<NormalizedProviderEvent, { type: "done" }> => event.type === "done");
+  if (!doneEvent) {
+    return null;
+  }
+
+  const project = resolveProjectForWorkspaceId({
+    state: {
+      projectPath: args.state.projectPath,
+      projectName: args.state.projectName,
+      workspaces: args.state.workspaces,
+      recentProjects: args.state.recentProjects,
+    },
+    workspaceId: args.workspaceId,
+  });
+  const workspaceName = resolveWorkspaceName({
+    state: {
+      workspaces: args.state.workspaces,
+      recentProjects: args.state.recentProjects,
+    },
+    workspaceId: args.workspaceId,
+  });
+  const taskTitle = resolveTaskTitleFromSession({
+    session: args.session,
+    taskId: args.taskId,
+  });
+
+  return {
+    id: crypto.randomUUID(),
+    kind: "task.turn_completed",
+    title: taskTitle,
+    body: `Latest run finished in ${workspaceName}.`,
+    projectPath: project?.projectPath ?? null,
+    projectName: project?.projectName ?? null,
+    workspaceId: args.workspaceId,
+    workspaceName,
+    taskId: args.taskId,
+    taskTitle,
+    turnId: args.turnId,
+    providerId: args.provider,
+    action: null,
+    payload: {
+      stopReason: doneEvent.stop_reason ?? null,
+    },
+    dedupeKey: `task.turn_completed:${args.turnId}`,
+  };
+}
+
+function buildApprovalNotificationInputs(args: {
+  state: Pick<AppState, "projectPath" | "projectName" | "workspaces" | "recentProjects">;
+  session: WorkspaceSessionState;
+  workspaceId: string;
+  taskId: string;
+  turnId: string;
+  provider: ProviderId;
+  events: NormalizedProviderEvent[];
+}): AppNotificationCreateInput[] {
+  const approvalEvents = args.events.filter((event): event is Extract<NormalizedProviderEvent, { type: "approval" }> => event.type === "approval");
+  if (approvalEvents.length === 0) {
+    return [];
+  }
+
+  const project = resolveProjectForWorkspaceId({
+    state: {
+      projectPath: args.state.projectPath,
+      projectName: args.state.projectName,
+      workspaces: args.state.workspaces,
+      recentProjects: args.state.recentProjects,
+    },
+    workspaceId: args.workspaceId,
+  });
+  const workspaceName = resolveWorkspaceName({
+    state: {
+      workspaces: args.state.workspaces,
+      recentProjects: args.state.recentProjects,
+    },
+    workspaceId: args.workspaceId,
+  });
+  const taskTitle = resolveTaskTitleFromSession({
+    session: args.session,
+    taskId: args.taskId,
+  });
+  const taskMessages = args.session.messagesByTask[args.taskId] ?? [];
+
+  return approvalEvents.map((event) => {
+    const location = findPendingApprovalMessageByRequestId({
+      messages: taskMessages,
+      requestId: event.requestId,
+    });
+    return {
+      id: crypto.randomUUID(),
+      kind: "task.approval_requested",
+      title: taskTitle,
+      body: `${event.toolName}: ${event.description}`,
+      projectPath: project?.projectPath ?? null,
+      projectName: project?.projectName ?? null,
+      workspaceId: args.workspaceId,
+      workspaceName,
+      taskId: args.taskId,
+      taskTitle,
+      turnId: args.turnId,
+      providerId: args.provider,
+      action: {
+        type: "approval",
+        requestId: event.requestId,
+        messageId: location?.messageId ?? null,
+      },
+      payload: {
+        toolName: event.toolName,
+        description: event.description,
+      },
+      dedupeKey: `task.approval_requested:${args.turnId}:${event.requestId}`,
+    } satisfies AppNotificationCreateInput;
+  });
 }
 
 const defaultSettings: AppSettings = {
@@ -650,6 +844,53 @@ export const useAppStore = create<AppState>()(
         }));
       };
 
+      const persistNotification = async (notification: AppNotificationCreateInput) => {
+        try {
+          const result = await createPersistedNotification({ notification });
+          if (!result.notification) {
+            return null;
+          }
+          set((state) => ({
+            notifications: mergeNotificationIntoList({
+              notifications: state.notifications,
+              notification: result.notification!,
+            }),
+          }));
+          return result.notification;
+        } catch (error) {
+          console.error("[notifications] failed to persist notification", error);
+          return null;
+        }
+      };
+
+      const persistNotifications = async (notifications: AppNotificationCreateInput[]) => {
+        for (const notification of notifications) {
+          await persistNotification(notification);
+        }
+      };
+
+      const openNotificationContextInternal = async (notification: AppNotification) => {
+        const projectPath = notification.projectPath?.trim();
+        if (projectPath && projectPath !== get().projectPath) {
+          await get().openProject({ projectPath });
+        }
+
+        const afterProjectOpen = get();
+        const workspaceId = notification.workspaceId?.trim();
+        if (workspaceId && afterProjectOpen.activeWorkspaceId !== workspaceId) {
+          const workspaceExists = afterProjectOpen.workspaces.some((workspace) => workspace.id === workspaceId);
+          if (workspaceExists) {
+            await afterProjectOpen.switchWorkspace({ workspaceId });
+          }
+        }
+
+        const afterWorkspaceOpen = get();
+        const taskId = notification.taskId?.trim();
+        if (taskId && afterWorkspaceOpen.tasks.some((task) => task.id === taskId)) {
+          afterWorkspaceOpen.selectTask({ taskId });
+        }
+      };
+
       return ({
       hasHydratedWorkspaces: false,
       workspaceSnapshotVersion: 0,
@@ -698,6 +939,7 @@ export const useAppStore = create<AppState>()(
         roots: [],
         detail: "Skill catalog has not been loaded yet.",
       },
+      notifications: [],
       activeTurnIdsByTask: {},
       nativeConversationReadyByTask: {},
       providerConversationByTask: {},
@@ -901,6 +1143,19 @@ export const useAppStore = create<AppState>()(
             ...workspaceState,
           };
         });
+      },
+      hydrateNotifications: async () => {
+        try {
+          const notifications = await listPersistedNotifications({ limit: 200 });
+          set(() => ({
+            notifications,
+          }));
+        } catch (error) {
+          console.error("[notifications] failed to hydrate notifications", error);
+          set(() => ({
+            notifications: [],
+          }));
+        }
       },
       flushActiveWorkspaceSnapshot: async ({ sync } = {}) => {
         const state = get();
@@ -2315,6 +2570,89 @@ export const useAppStore = create<AppState>()(
           }));
         }
       },
+      markNotificationRead: async ({ id }) => {
+        const readAt = new Date().toISOString();
+        set((state) => ({
+          notifications: markNotificationReadInList({
+            notifications: state.notifications,
+            id,
+            readAt,
+          }),
+        }));
+        try {
+          const persisted = await markPersistedNotificationRead({ id, readAt });
+          if (!persisted) {
+            return;
+          }
+          set((state) => ({
+            notifications: mergeNotificationIntoList({
+              notifications: state.notifications,
+              notification: persisted,
+            }),
+          }));
+        } catch (error) {
+          console.error("[notifications] failed to mark notification as read", error);
+        }
+      },
+      markAllNotificationsRead: async () => {
+        const readAt = new Date().toISOString();
+        set((state) => ({
+          notifications: markAllNotificationsReadInList({
+            notifications: state.notifications,
+            readAt,
+          }),
+        }));
+        try {
+          await markAllPersistedNotificationsRead({ readAt });
+        } catch (error) {
+          console.error("[notifications] failed to mark all notifications as read", error);
+        }
+      },
+      openNotificationContext: async ({ notificationId }) => {
+        const notification = get().notifications.find((item) => item.id === notificationId);
+        if (!notification) {
+          return;
+        }
+        await openNotificationContextInternal(notification);
+        if (isNotificationUnread(notification)) {
+          await get().markNotificationRead({ id: notification.id });
+        }
+      },
+      resolveNotificationApproval: async ({ notificationId, approved }) => {
+        const notification = get().notifications.find((item) => item.id === notificationId);
+        if (!notification || notification.action?.type !== "approval") {
+          return;
+        }
+
+        await openNotificationContextInternal(notification);
+        const latestState = get();
+        const taskId = notification.taskId?.trim();
+        if (!taskId) {
+          if (isNotificationUnread(notification)) {
+            await latestState.markNotificationRead({ id: notification.id });
+          }
+          return;
+        }
+
+        const locatedApproval = findPendingApprovalMessageByRequestId({
+          messages: latestState.messagesByTask[taskId] ?? [],
+          requestId: notification.action.requestId,
+        });
+
+        if (!locatedApproval) {
+          if (isNotificationUnread(notification)) {
+            await latestState.markNotificationRead({ id: notification.id });
+          }
+          return;
+        }
+
+        latestState.resolveApproval({
+          taskId,
+          messageId: notification.action.messageId ?? locatedApproval.messageId,
+          approved,
+        });
+        await latestState.markNotificationRead({ id: notification.id });
+      },
       sendUserMessage: ({ taskId, content, fileContexts, imageContexts }) => {
         const turnId = crypto.randomUUID();
         let state = get();
@@ -2594,6 +2932,7 @@ export const useAppStore = create<AppState>()(
         const providerTurnEventController = createProviderTurnEventController({
           flushEvents: (pendingEvents) => {
             let persistInactiveWorkspaceSession: { workspaceId: string; session: WorkspaceSessionState } | null = null;
+            let updatedSession: WorkspaceSessionState | null = null;
 
             set((nextState) => {
               const applied = applyPendingProviderEventsToStoreState({
@@ -2606,14 +2945,15 @@ export const useAppStore = create<AppState>()(
                 turnId,
               });
               persistInactiveWorkspaceSession = applied.persistInactiveWorkspaceSession;
+              updatedSession = applied.updatedSession;
               return applied.statePatch;
             });
             const persistedInactiveWorkspaceSession = persistInactiveWorkspaceSession as {
               workspaceId: string;
               session: WorkspaceSessionState;
             } | null;
+            const latestState = get();
             if (persistedInactiveWorkspaceSession !== null) {
-              const latestState = get();
               void persistWorkspaceSnapshot({
                 workspaceId: persistedInactiveWorkspaceSession.workspaceId,
                 workspaceName: resolveWorkspaceName({
@@ -2628,6 +2968,33 @@ export const useAppStore = create<AppState>()(
                 activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
                 providerConversationByTask: persistedInactiveWorkspaceSession.session.providerConversationByTask,
               });
+            }
+            const notificationSession = updatedSession as WorkspaceSessionState | null;
+            if (notificationSession) {
+              const notificationsToPersist = buildApprovalNotificationInputs({
+                state: latestState,
+                session: notificationSession,
+                workspaceId: taskWorkspaceId,
+                taskId: resolvedTaskId,
+                turnId,
+                provider,
+                events: pendingEvents,
+              });
+              const completionNotification = buildTaskTurnCompletedNotificationInput({
+                state: latestState,
+                session: notificationSession,
+                workspaceId: taskWorkspaceId,
+                taskId: resolvedTaskId,
+                turnId,
+                provider,
+                events: pendingEvents,
+              });
+              if (completionNotification) {
+                notificationsToPersist.push(completionNotification);
+              }
+              if (notificationsToPersist.length > 0) {
+                void persistNotifications(notificationsToPersist);
+              }
             }
           },
         });
