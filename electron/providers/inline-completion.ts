@@ -106,7 +106,6 @@ function buildCompletionPrompt(args: InlineCompletionRequest) {
 }
 
 function normalizeInlineCompletionText(text: string) {
-  console.debug("[inline-completion][normalize] raw input:", JSON.stringify(text));
   let result = text.trim();
 
   // Full fence: ```lang\n...\n```
@@ -128,7 +127,6 @@ function normalizeInlineCompletionText(text: string) {
   const LANG_IDS = /^(typescript|javascript|tsx|jsx|python|rust|go|java|c|cpp|csharp|ruby|php|swift|kotlin|html|css|scss|json|yaml|toml|sql|bash|sh|zsh|shell|markdown|md|plaintext)\s*\r?\n/i;
   result = result.replace(LANG_IDS, "");
 
-  console.debug("[inline-completion][normalize] output:", JSON.stringify(result));
   return result;
 }
 
@@ -215,7 +213,6 @@ function mergeInlineCompletionText(previous: string, candidate: string) {
 // ---------------------------------------------------------------------------
 
 let cachedClaudeExecutablePath: string | null | undefined;
-let inlineCompletionRequestSequence = 0;
 
 interface ActiveSdkRequest {
   stream: Query;
@@ -247,13 +244,8 @@ function abortSdkRequest() {
 
 async function requestViaClaudeSdk(
   args: InlineCompletionRequest,
-  traceId: string,
 ): Promise<InlineCompletionResult> {
   const prompt = buildCompletionPrompt(args);
-  const startedAt = Date.now();
-  console.debug(
-    `[inline-completion][${traceId}][sdk] start prefix=${args.prefix.length} suffix=${args.suffix.length} prompt=${prompt.user.length}`,
-  );
   const mod = await import("@anthropic-ai/claude-agent-sdk");
   const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
   if (!queryFn) {
@@ -301,7 +293,6 @@ async function requestViaClaudeSdk(
   let assistantText = "";
   let earlySettleTimer: ReturnType<typeof setTimeout> | null = null;
   let settled = false;
-  let firstAssistantTextAt: number | null = null;
   let terminalError: string | null = null;
   const clearEarlySettleTimer = () => {
     if (earlySettleTimer) {
@@ -325,9 +316,6 @@ async function requestViaClaudeSdk(
         // Ignore close errors while finishing the SDK stream early.
         }
       }
-      console.debug(
-        `[inline-completion][${traceId}][sdk] finish ok=${result.ok} error=${result.error ?? ""} first_text_ms=${firstAssistantTextAt === null ? -1 : firstAssistantTextAt - startedAt} total_ms=${Date.now() - startedAt} text_len=${result.text.length}`,
-      );
       return result;
     };
 
@@ -368,12 +356,6 @@ async function requestViaClaudeSdk(
         const streamEvent = streamMsg.event;
         if (streamEvent?.type === "content_block_delta" && streamEvent.delta?.type === "text_delta" && streamEvent.delta.text) {
           assistantText = mergeInlineCompletionText(assistantText, streamEvent.delta.text);
-          if (firstAssistantTextAt === null && assistantText.trim()) {
-            firstAssistantTextAt = Date.now();
-            console.debug(
-              `[inline-completion][${traceId}][sdk] first-text ms=${firstAssistantTextAt - startedAt} len=${assistantText.length}`,
-            );
-          }
           clearEarlySettleTimer();
           earlySettleTimer = setTimeout(() => {
             const normalized = normalizeInlineCompletionText(assistantText);
@@ -414,12 +396,6 @@ async function requestViaClaudeSdk(
             terminalError = controlError;
             return finish({ ok: false, text: "", error: terminalError }, { closeStream: true });
           }
-          if (firstAssistantTextAt === null && assistantText.trim()) {
-            firstAssistantTextAt = Date.now();
-            console.debug(
-              `[inline-completion][${traceId}][sdk] first-text ms=${firstAssistantTextAt - startedAt} len=${assistantText.length}`,
-            );
-          }
         }
       }
       clearEarlySettleTimer();
@@ -455,10 +431,6 @@ async function requestViaClaudeSdk(
       return { ok: true, text: normalized };
     }
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(
-      `[inline-completion][${traceId}][sdk] request failed after ${Date.now() - startedAt}ms:`,
-      message,
-    );
     return { ok: false, text: "", error: message };
   } finally {
     cachedClaudeExecutablePath = claudeExecutablePath || cachedClaudeExecutablePath;
@@ -514,9 +486,7 @@ function abortApiRequest() {
 
 async function requestViaApi(
   args: InlineCompletionRequest,
-  traceId = `req-${++inlineCompletionRequestSequence}`,
 ): Promise<InlineCompletionResult> {
-  const startedAt = Date.now();
   const client = getClient();
   if (!client) {
     return { ok: false, text: "", error: "ANTHROPIC_API_KEY not set" };
@@ -550,16 +520,12 @@ async function requestViaApi(
       .join("");
 
     const normalized = normalizeInlineCompletionText(text);
-    console.debug(
-      `[inline-completion][${traceId}][api] finish ok=true total_ms=${Date.now() - startedAt} text_len=${normalized.length}`,
-    );
     return { ok: true, text: normalized };
   } catch (error) {
     if (abortController.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
       return { ok: false, text: "", error: "aborted" };
     }
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[inline-completion][${traceId}][api] request failed after ${Date.now() - startedAt}ms:`, message);
     return { ok: false, text: "", error: message };
   } finally {
     if (activeAbortController === abortController) {
@@ -580,22 +546,19 @@ export function abortActiveInlineCompletion() {
 export async function requestInlineCompletion(
   args: InlineCompletionRequest,
 ): Promise<InlineCompletionResult> {
-  const traceId = `req-${++inlineCompletionRequestSequence}`;
-
   // Prefer direct API when available (clean system prompt + assistant prefill).
   // Fall back to SDK (uses Claude Code's system prompt, less controllable).
   if (resolveApiKey()) {
-    const apiResult = await requestViaApi(args, traceId);
+    const apiResult = await requestViaApi(args);
     if (apiResult.ok) {
       return { ...apiResult, text: removeSuffixOverlap(apiResult.text, args.suffix) };
     }
     if (apiResult.error === "aborted") {
       return apiResult;
     }
-    console.warn(`[inline-completion][${traceId}] API failed, falling back to SDK:`, apiResult.error ?? "unknown error");
   }
 
-  const sdkResult = await requestViaClaudeSdk(args, traceId);
+  const sdkResult = await requestViaClaudeSdk(args);
   if (sdkResult.ok) {
     return { ...sdkResult, text: removeSuffixOverlap(sdkResult.text, args.suffix) };
   }
