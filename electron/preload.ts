@@ -187,6 +187,12 @@ contextBridge.exposeInMainWorld("api", {
         ok: boolean;
         message?: string;
       }>,
+    suggestPRDescription: (args: { cwd?: string; baseBranch?: string }) =>
+      ipcRenderer.invoke("provider:suggest-pr-description", args) as Promise<{
+        ok: boolean;
+        title?: string;
+        body?: string;
+      }>,
   },
   persistence: {
     listWorkspaces: () => ipcRenderer.invoke("persistence:list-workspaces"),
@@ -346,6 +352,18 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("scm:rebase-branch", args),
     cherryPick: (args: { commit: string; cwd?: string }) =>
       ipcRenderer.invoke("scm:cherry-pick", args),
+    createPR: (args: {
+      title: string;
+      body?: string;
+      baseBranch?: string;
+      draft?: boolean;
+      cwd?: string;
+    }) =>
+      ipcRenderer.invoke("scm:create-pr", args) as Promise<{
+        ok: boolean;
+        prUrl?: string;
+        stderr?: string;
+      }>,
   },
   window: {
     minimize: () => ipcRenderer.invoke("window:minimize"),

@@ -16,6 +16,19 @@ export const SuggestCommitMessageArgsSchema = z.object({
   cwd: z.string().max(4096).optional(),
 }).strict();
 
+export const SuggestPRDescriptionArgsSchema = z.object({
+  cwd: z.string().max(4096).optional(),
+  baseBranch: z.string().max(200).optional(),
+}).strict();
+
+export const CreatePRArgsSchema = z.object({
+  cwd: z.string().max(4096).optional(),
+  title: z.string().min(1).max(500),
+  body: z.string().max(50_000).optional(),
+  baseBranch: z.string().max(200).optional(),
+  draft: z.boolean().optional(),
+}).strict();
+
 export const SkillCatalogArgsSchema = z.object({
   workspacePath: z.string().max(4096).optional(),
 }).strict();

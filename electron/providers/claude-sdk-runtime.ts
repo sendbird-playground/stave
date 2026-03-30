@@ -1574,3 +1574,106 @@ export async function suggestClaudeCommitMessage(args: {
     return { ok: false };
   }
 }
+
+// ── Auto PR description suggestion ──────────────────────────────────────────
+// Runs a lightweight, single-turn Claude query to produce a pull request title
+// and description based on the branch diff and commit log.  Intentionally
+// isolated from the main task session so the query never appears in the user's
+// conversation.
+
+export async function suggestClaudePRDescription(args: {
+  diff: string;
+  commitLog: string;
+  fileList: string;
+  baseBranch: string;
+  headBranch: string;
+  guideContent?: string;
+}): Promise<{ ok: boolean; title?: string; body?: string }> {
+  try {
+    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    if (!queryFn) {
+      return { ok: false };
+    }
+
+    const claudeExecutablePath = resolveClaudeExecutablePath();
+
+    const prPrompt = [
+      "You are a pull request description generator. Generate a PR title and body for a GitHub pull request.",
+      "",
+      "Output format — return EXACTLY this structure with no extra commentary:",
+      "TITLE: <one-line PR title, 70 chars or fewer, imperative mood>",
+      "BODY:",
+      "## Summary",
+      "<1-3 concise bullet points describing what this PR does>",
+      "",
+      "## Changes",
+      "<bulleted list of key changes>",
+      "",
+      "Rules:",
+      "- PR title should follow Conventional Commits style: <type>(<optional scope>): <short description>",
+      "- Allowed types: feat, fix, refactor, style, docs, test, build, ci, chore, perf",
+      "- Keep the summary focused on the 'why', changes on the 'what'",
+      "- Use imperative mood",
+      "",
+      `Base branch: ${args.baseBranch}`,
+      `Head branch: ${args.headBranch}`,
+      "",
+      "Commit log:",
+      args.commitLog || "(no commits)",
+      "",
+      "Changed files:",
+      args.fileList || "(no file list available)",
+      ...(args.diff.length > 0 ? [
+        "",
+        "Diff (may be truncated):",
+        args.diff.slice(0, 8000),
+      ] : []),
+      ...(args.guideContent ? [
+        "",
+        "Project guidelines (follow these conventions):",
+        args.guideContent.slice(0, 2000),
+      ] : []),
+    ].join("\n");
+
+    const stream = queryFn({
+      prompt: prPrompt,
+      options: {
+        permissionMode: "default",
+        maxTurns: 1,
+        cwd: process.cwd(),
+        model: "claude-haiku-4-5",
+        ...(claudeExecutablePath ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
+        env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
+      },
+    }) as Query;
+
+    const textParts: string[] = [];
+    for await (const message of stream) {
+      if (message.type === "assistant") {
+        const assistantMsg = message as SDKAssistantMessage;
+        const contentBlocks = assistantMsg.message?.content;
+        if (!Array.isArray(contentBlocks)) continue;
+        for (const block of contentBlocks) {
+          const b = block as { type?: string; text?: string };
+          if (b.type === "text" && b.text) {
+            textParts.push(b.text);
+          }
+        }
+      }
+    }
+
+    const fullText = textParts.join("").trim();
+
+    // Parse TITLE: and BODY: sections
+    const titleMatch = fullText.match(/^TITLE:\s*(.+)/m);
+    const bodyMatch = fullText.match(/BODY:\s*\n([\s\S]*)/m);
+
+    const title = titleMatch?.[1]?.trim();
+    const body = bodyMatch?.[1]?.trim();
+
+    return title ? { ok: true, title, body: body ?? "" } : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}

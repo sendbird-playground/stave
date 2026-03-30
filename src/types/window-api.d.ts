@@ -119,6 +119,12 @@ interface WindowProviderApi {
   suggestCommitMessage?: (args: {
     cwd?: string;
   }) => Promise<{ ok: boolean; message?: string }>;
+  /** Generates a PR title and description from the branch diff and commit log
+   *  using a lightweight single-turn Claude query. */
+  suggestPRDescription?: (args: {
+    cwd?: string;
+    baseBranch?: string;
+  }) => Promise<{ ok: boolean; title?: string; body?: string }>;
 }
 
 interface WindowFsApi {
@@ -428,6 +434,13 @@ interface WindowSourceControlApi {
     commit: string;
     cwd?: string;
   }) => Promise<SourceControlCommandResult>;
+  createPR?: (args: {
+    title: string;
+    body?: string;
+    baseBranch?: string;
+    draft?: boolean;
+    cwd?: string;
+  }) => Promise<{ ok: boolean; prUrl?: string; stderr?: string }>;
 }
 
 interface WindowPersistenceApi {
