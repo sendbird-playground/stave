@@ -187,7 +187,7 @@ export function TopBar() {
           ) : null}
         </TooltipProvider>
       </div>
-      <div className="hidden min-w-0 flex-1 justify-center lg:flex">
+      <div className="hidden min-w-0 flex-1 justify-end lg:flex">
         {hasProjectContext ? (
           <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
         ) : null}
