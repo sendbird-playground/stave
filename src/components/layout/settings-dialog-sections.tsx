@@ -1,5 +1,6 @@
-import { memo, useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
-import { Bot, ChevronDown, ChevronRight, Code2, Cog, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Wrench } from "lucide-react";
+import { memo, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
+import { Bot, ChevronDown, ChevronRight, Code2, Cog, Folder, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Trash2, Wrench } from "lucide-react";
+import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Button, Textarea } from "@/components/ui";
@@ -19,6 +20,12 @@ import {
   type ThemeTokenName,
   useAppStore,
 } from "@/store/app.store";
+import {
+  captureCurrentProjectState,
+  normalizeProjectWorkspaceInitCommand,
+  normalizeProjectWorkspaceRootNodeModulesSymlinkPreference,
+  type RecentProjectState,
+} from "@/store/project.utils";
 import { DeveloperSection } from "./settings-dialog-developer-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
 import {
@@ -34,6 +41,7 @@ import {
 
 export const settingsSections = [
   { id: "general", label: "General", icon: Cog },
+  { id: "projects", label: "Projects", icon: Folder },
   { id: "theme", label: "Design", icon: Palette },
   { id: "chat", label: "Chat", icon: Bot },
   { id: "providers", label: "Providers", icon: Wrench },
@@ -48,7 +56,7 @@ export const settingsSections = [
 export type SectionId = (typeof settingsSections)[number]["id"];
 
 export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
-  { label: "Workspace", ids: ["general", "theme", "editor", "terminal"] },
+  { label: "Workspace", ids: ["general", "projects", "theme", "editor", "terminal"] },
   { label: "Agents", ids: ["chat", "providers"] },
   { label: "Automation", ids: ["subagents", "skills", "commands", "developer"] },
 ];
@@ -136,28 +144,25 @@ const DraftTextarea = memo(function DraftTextarea(args: DraftTextareaProps) {
   );
 });
 
-function GeneralSection() {
-  const [language, confirmBeforeClose, projectPath, recentProjects, activeWorkspaceId, workspacePathById] = useAppStore(
-    useShallow((state) => [
-      state.settings.language,
-      state.settings.confirmBeforeClose,
-      state.projectPath,
-      state.recentProjects,
-      state.activeWorkspaceId,
-      state.workspacePathById,
-    ] as const),
+function ProjectSettingsCard(args: {
+  project: RecentProjectState;
+  isCurrent: boolean;
+  highlighted: boolean;
+  onRequestRemove: (args: { projectPath: string; projectName: string }) => void;
+}) {
+  const setProjectWorkspaceInitCommand = useAppStore(
+    (state) => state.setProjectWorkspaceInitCommand,
   );
-  const updateSettings = useAppStore((state) => state.updateSettings);
-  const setProjectWorkspaceInitCommand = useAppStore((state) => state.setProjectWorkspaceInitCommand);
-  const setProjectWorkspaceUseRootNodeModulesSymlink = useAppStore((state) => state.setProjectWorkspaceUseRootNodeModulesSymlink);
-  const projectWorkspaceInitCommand = (projectPath
-    ? recentProjects.find((project) => project.projectPath === projectPath)?.newWorkspaceInitCommand
-    : ""
-  ) ?? "";
-  const projectUseRootNodeModulesSymlink = projectPath
-    ? recentProjects.find((project) => project.projectPath === projectPath)?.newWorkspaceUseRootNodeModulesSymlink === true
-    : false;
-  const repositoryLookupCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? undefined;
+  const setProjectWorkspaceUseRootNodeModulesSymlink = useAppStore(
+    (state) => state.setProjectWorkspaceUseRootNodeModulesSymlink,
+  );
+  const projectWorkspaceInitCommand = normalizeProjectWorkspaceInitCommand({
+    value: args.project.newWorkspaceInitCommand,
+  });
+  const projectUseRootNodeModulesSymlink =
+    normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+      value: args.project.newWorkspaceUseRootNodeModulesSymlink,
+    });
   const [repositoryRefreshNonce, setRepositoryRefreshNonce] = useState(0);
   const [repositoryState, setRepositoryState] = useState<{
     status: "idle" | "loading" | "ready" | "error";
@@ -168,22 +173,12 @@ function GeneralSection() {
     status: "idle",
     rootPath: null,
     remotes: [],
-    detail: "Open a project to inspect repository details.",
+    detail: "Refreshing repository metadata...",
   });
 
   useEffect(() => {
-    if (!projectPath) {
-      setRepositoryState({
-        status: "idle",
-        rootPath: null,
-        remotes: [],
-        detail: "Open a project to inspect repository details.",
-      });
-      return;
-    }
-
     const runCommand = window.api?.terminal?.runCommand;
-    if (!runCommand || !repositoryLookupCwd) {
+    if (!runCommand) {
       setRepositoryState({
         status: "error",
         rootPath: null,
@@ -203,11 +198,11 @@ function GeneralSection() {
     void (async () => {
       const [rootResult, remoteResult] = await Promise.all([
         runCommand({
-          cwd: repositoryLookupCwd,
+          cwd: args.project.projectPath,
           command: "git rev-parse --show-toplevel",
         }),
         runCommand({
-          cwd: repositoryLookupCwd,
+          cwd: args.project.projectPath,
           command: "git remote -v",
         }),
       ]);
@@ -220,7 +215,9 @@ function GeneralSection() {
           status: "error",
           rootPath: null,
           remotes: [],
-          detail: rootResult.stderr?.trim() || "Current project is not a git repository.",
+          detail:
+            rootResult.stderr?.trim()
+            || "This project is unavailable or is not a git repository.",
         });
         return;
       }
@@ -228,8 +225,10 @@ function GeneralSection() {
       const rootPath = rootResult.stdout
         .split("\n")
         .map((line) => line.trim())
-        .find(Boolean) ?? projectPath;
-      const remotes = remoteResult.ok ? parseGitRemotes({ stdout: remoteResult.stdout }) : [];
+        .find(Boolean) ?? args.project.projectPath;
+      const remotes = remoteResult.ok
+        ? parseGitRemotes({ stdout: remoteResult.stdout })
+        : [];
       const detail = remoteResult.ok
         ? (remotes.length > 0
             ? `${remotes.length} remote${remotes.length === 1 ? "" : "s"} configured.`
@@ -247,11 +246,329 @@ function GeneralSection() {
     return () => {
       cancelled = true;
     };
-  }, [projectPath, repositoryLookupCwd, repositoryRefreshNonce]);
+  }, [args.project.projectPath, repositoryRefreshNonce]);
+
+  return (
+    <SettingsCard
+      title={args.project.projectName}
+      description="Repository-specific defaults, git metadata, and list management for this project."
+      className={cn("scroll-mt-6", args.highlighted && "ring-1 ring-primary/35")}
+    >
+      <div
+        className={cn(
+          "flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/70 bg-muted/30 p-3",
+          args.highlighted && "border-primary/30 bg-primary/5",
+        )}
+      >
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {args.isCurrent ? <Badge>Current</Badge> : null}
+            <Badge variant="secondary">
+              {args.project.workspaces.length} workspace
+              {args.project.workspaces.length === 1 ? "" : "s"}
+            </Badge>
+            <Badge variant="secondary">
+              default: {args.project.defaultBranch}
+            </Badge>
+          </div>
+          <p className="font-mono text-xs text-muted-foreground break-all">
+            {args.project.projectPath}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={repositoryState.status === "loading"}
+          onClick={() => setRepositoryRefreshNonce((value) => value + 1)}
+        >
+          <RefreshCcw
+            className={cn(
+              "size-3.5",
+              repositoryState.status === "loading" && "animate-spin",
+            )}
+          />
+          Refresh
+        </Button>
+      </div>
+
+      <LabeledField
+        title="Post-Create Command"
+        description="Runs once in the new workspace root after creation. Useful for `bun install`, `npm install`, or multi-line bootstrap commands."
+      >
+        <DraftTextarea
+          className="min-h-[120px] rounded-md border-border/80 bg-background font-mono text-sm"
+          value={projectWorkspaceInitCommand}
+          onCommit={(nextValue) =>
+            setProjectWorkspaceInitCommand({
+              projectPath: args.project.projectPath,
+              command: nextValue,
+            })}
+          placeholder="bun install"
+        />
+      </LabeledField>
+
+      <LabeledField
+        title="Reuse Root node_modules"
+        description="Creates `node_modules` in each new worktree as a symlink to the repository root install. Faster startup, but later installs in that workspace will modify the shared dependency tree."
+      >
+        <button
+          type="button"
+          aria-pressed={projectUseRootNodeModulesSymlink}
+          onClick={() =>
+            setProjectWorkspaceUseRootNodeModulesSymlink({
+              projectPath: args.project.projectPath,
+              enabled: !projectUseRootNodeModulesSymlink,
+            })}
+          className={cn(
+            "flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors",
+            projectUseRootNodeModulesSymlink
+              ? "border-primary/50 bg-primary/5"
+              : "border-border/80 bg-background hover:border-border",
+          )}
+        >
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Enable shared `node_modules` symlink
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The symlink exists only inside the created workspace, so deleting
+              the workspace leaves the repository root untouched.
+            </p>
+          </div>
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
+              projectUseRootNodeModulesSymlink
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-border/80 text-muted-foreground",
+            )}
+          >
+            {projectUseRootNodeModulesSymlink ? "On" : "Off"}
+          </span>
+        </button>
+      </LabeledField>
+
+      <LabeledField title="Repository Root Path">
+        <div className="rounded-md border border-border/80 bg-background px-3 py-2.5 font-mono text-xs break-all">
+          {repositoryState.rootPath ?? "Not detected"}
+        </div>
+      </LabeledField>
+
+      <LabeledField
+        title="Remote Status"
+        description={repositoryState.detail}
+      >
+        {repositoryState.status === "error" ? (
+          <p className="text-sm text-destructive">{repositoryState.detail}</p>
+        ) : repositoryState.remotes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No remotes configured.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {repositoryState.remotes.map((remote) => (
+              <div
+                key={remote.name}
+                className="rounded-md border border-border/80 bg-background px-3 py-2.5"
+              >
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">{remote.name}</p>
+                  <Badge
+                    variant="secondary"
+                    className="h-5 px-1.5 text-[10px] uppercase tracking-wide"
+                  >
+                    configured
+                  </Badge>
+                </div>
+                <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
+                  fetch: {remote.fetchUrl ?? "-"}
+                </p>
+                <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
+                  push: {remote.pushUrl ?? remote.fetchUrl ?? "-"}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </LabeledField>
+
+      <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-destructive">
+              Remove project
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Removes this project from Stave&apos;s registered project list
+              without deleting files on disk.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            onClick={() =>
+              args.onRequestRemove({
+                projectPath: args.project.projectPath,
+                projectName: args.project.projectName,
+              })}
+          >
+            <Trash2 className="size-4" />
+            Remove project
+          </Button>
+        </div>
+      </div>
+    </SettingsCard>
+  );
+}
+
+function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
+  const [
+    projectPath,
+    projectName,
+    recentProjects,
+    defaultBranch,
+    workspaces,
+    activeWorkspaceId,
+    workspaceBranchById,
+    workspacePathById,
+    workspaceDefaultById,
+  ] = useAppStore(
+    useShallow((state) => [
+      state.projectPath,
+      state.projectName,
+      state.recentProjects,
+      state.defaultBranch,
+      state.workspaces,
+      state.activeWorkspaceId,
+      state.workspaceBranchById,
+      state.workspacePathById,
+      state.workspaceDefaultById,
+    ] as const),
+  );
+  const removeProjectFromList = useAppStore((state) => state.removeProjectFromList);
+  const projectCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [projectToRemove, setProjectToRemove] = useState<{
+    projectPath: string;
+    projectName: string;
+  } | null>(null);
+  const projects = useMemo(
+    () =>
+      captureCurrentProjectState({
+        recentProjects,
+        projectPath,
+        projectName,
+        defaultBranch,
+        workspaces,
+        activeWorkspaceId,
+        workspaceBranchById,
+        workspacePathById,
+        workspaceDefaultById,
+      }),
+    [
+      activeWorkspaceId,
+      defaultBranch,
+      projectName,
+      projectPath,
+      recentProjects,
+      workspaceBranchById,
+      workspaceDefaultById,
+      workspacePathById,
+      workspaces,
+    ],
+  );
+
+  useEffect(() => {
+    const highlightedProjectPath = args.highlightedProjectPath?.trim();
+    if (!highlightedProjectPath) {
+      return;
+    }
+
+    const node = projectCardRefs.current[highlightedProjectPath];
+    if (!node) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      node.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [args.highlightedProjectPath, projects.length]);
 
   return (
     <>
-      <SectionHeading title="General" description="Global preferences plus per-repository workspace defaults." />
+      <SectionHeading
+        title="Projects"
+        description="Review repository-specific workspace defaults, git metadata, and removal actions for every registered project."
+      />
+      <SectionStack>
+        {projects.length === 0 ? (
+          <SettingsCard
+            title="No Projects Yet"
+            description="Open a project from the sidebar to register it here."
+          >
+            <p className="text-sm text-muted-foreground">
+              Registered projects will show their repository defaults and
+              metadata in this section.
+            </p>
+          </SettingsCard>
+        ) : (
+          projects.map((project) => (
+            <div
+              key={project.projectPath}
+              ref={(node) => {
+                projectCardRefs.current[project.projectPath] = node;
+              }}
+            >
+              <ProjectSettingsCard
+                project={project}
+                isCurrent={project.projectPath === projectPath}
+                highlighted={args.highlightedProjectPath === project.projectPath}
+                onRequestRemove={setProjectToRemove}
+              />
+            </div>
+          ))
+        )}
+      </SectionStack>
+      <ConfirmDialog
+        open={Boolean(projectToRemove)}
+        title="Remove Project"
+        description={
+          projectToRemove
+            ? `Remove "${projectToRemove.projectName}" from Stave's project list? This does not delete files on disk.`
+            : ""
+        }
+        confirmLabel="Remove Project"
+        onCancel={() => setProjectToRemove(null)}
+        onConfirm={() => {
+          if (!projectToRemove) {
+            return;
+          }
+          void removeProjectFromList({
+            projectPath: projectToRemove.projectPath,
+          });
+          setProjectToRemove(null);
+        }}
+      />
+    </>
+  );
+}
+
+function GeneralSection() {
+  const [language, confirmBeforeClose] = useAppStore(
+    useShallow((state) => [
+      state.settings.language,
+      state.settings.confirmBeforeClose,
+    ] as const),
+  );
+  const updateSettings = useAppStore((state) => state.updateSettings);
+  return (
+    <>
+      <SectionHeading
+        title="General"
+        description="Global preferences for the app window and reserved future defaults."
+      />
       <SectionStack>
         <SettingsCard title="Language" description="Reserved for future localization support.">
           <DraftInput
@@ -259,113 +576,6 @@ function GeneralSection() {
             value={language}
             onCommit={(nextValue) => updateSettings({ patch: { language: nextValue } })}
           />
-        </SettingsCard>
-        <SettingsCard
-          title="Repository Workspace Defaults"
-          description="Each repository can keep its own post-create bootstrap command and dependency reuse defaults for new worktree workspaces."
-        >
-          <LabeledField
-            title="Post-Create Command"
-            description="Runs once in the new workspace root after creation. Useful for `bun install`, `npm install`, or multi-line bootstrap commands."
-          >
-            <DraftTextarea
-              className="min-h-[120px] rounded-md border-border/80 bg-background font-mono text-sm"
-              value={projectWorkspaceInitCommand}
-              onCommit={(nextValue) => setProjectWorkspaceInitCommand({ command: nextValue })}
-              placeholder="bun install"
-              disabled={!projectPath}
-            />
-          </LabeledField>
-          <LabeledField
-            title="Reuse Root node_modules"
-            description="Creates `node_modules` in each new worktree as a symlink to the repository root install. Faster startup, but later installs in that workspace will modify the shared dependency tree."
-          >
-            <button
-              type="button"
-              disabled={!projectPath}
-              aria-pressed={projectUseRootNodeModulesSymlink}
-              onClick={() => setProjectWorkspaceUseRootNodeModulesSymlink({
-                enabled: !projectUseRootNodeModulesSymlink,
-              })}
-              className={cn(
-                "flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors",
-                !projectPath
-                  ? "cursor-not-allowed border-border/60 bg-muted/40 text-muted-foreground opacity-70"
-                  : projectUseRootNodeModulesSymlink
-                    ? "border-primary/50 bg-primary/5"
-                    : "border-border/80 bg-background hover:border-border"
-              )}
-            >
-              <div>
-                <p className="text-sm font-medium text-foreground">Enable shared `node_modules` symlink</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  The symlink exists only inside the created workspace, so deleting the workspace leaves the repository root untouched.
-                </p>
-              </div>
-              <span className={cn(
-                "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
-                projectUseRootNodeModulesSymlink
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border/80 text-muted-foreground"
-              )}
-              >
-                {projectUseRootNodeModulesSymlink ? "On" : "Off"}
-              </span>
-            </button>
-          </LabeledField>
-          {projectPath ? (
-            <p className="text-xs text-muted-foreground">
-              Current repository: <span className="font-mono">{projectPath}</span>
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">Open a project to configure this value.</p>
-          )}
-        </SettingsCard>
-        <SettingsCard
-          title="Repository Metadata"
-          description="Quick inspection of the active repository root path and remote configuration."
-        >
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">{repositoryState.detail}</p>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!projectPath || repositoryState.status === "loading"}
-              onClick={() => setRepositoryRefreshNonce((value) => value + 1)}
-            >
-              <RefreshCcw className={cn("size-3.5", repositoryState.status === "loading" ? "animate-spin" : "")} />
-              Refresh
-            </Button>
-          </div>
-          <LabeledField title="Repository Root Path">
-            <div className="rounded-md border border-border/80 bg-background px-3 py-2.5 font-mono text-xs break-all">
-              {repositoryState.rootPath ?? "Not detected"}
-            </div>
-          </LabeledField>
-          <LabeledField title="Remote Status">
-            {repositoryState.status === "error" ? (
-              <p className="text-sm text-destructive">{repositoryState.detail}</p>
-            ) : repositoryState.remotes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No remotes configured.</p>
-            ) : (
-              <div className="space-y-2">
-                {repositoryState.remotes.map((remote) => (
-                  <div key={remote.name} className="rounded-md border border-border/80 bg-background px-3 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">{remote.name}</p>
-                      <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">configured</Badge>
-                    </div>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
-                      fetch: {remote.fetchUrl ?? "-"}
-                    </p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
-                      push: {remote.pushUrl ?? remote.fetchUrl ?? "-"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </LabeledField>
         </SettingsCard>
         <SettingsCard
           title="Window Behavior"
@@ -1337,10 +1547,17 @@ function EditorSection() {
   );
 }
 
-export function SettingsDialogSectionContent(args: { sectionId: SectionId }) {
+export function SettingsDialogSectionContent(args: {
+  sectionId: SectionId;
+  highlightedProjectPath?: string | null;
+}) {
   switch (args.sectionId) {
     case "general":
       return <GeneralSection />;
+    case "projects":
+      return (
+        <ProjectsSection highlightedProjectPath={args.highlightedProjectPath} />
+      );
     case "theme":
       return <ThemeSection />;
     case "terminal":
