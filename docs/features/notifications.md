@@ -15,6 +15,9 @@ Stave now includes an in-app notification center for background task activity.
 
 - the notification center lives in the top bar behind the bell button
 - unread notifications show a badge count
+- each notification can be marked as read individually
+- unread notifications stay in the main inbox list
+- read notifications move out of the inbox and remain visible in a separate history view
 - notifications stay readable after the underlying task or workspace is no longer active
 
 ## Persistence model

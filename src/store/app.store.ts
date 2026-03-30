@@ -1358,7 +1358,7 @@ export const useAppStore = create<AppState>()(
       },
       hydrateNotifications: async () => {
         try {
-          const notifications = await listPersistedNotifications({ limit: 200 });
+          const notifications = await listPersistedNotifications({ limit: 500 });
           set(() => ({
             notifications,
           }));
