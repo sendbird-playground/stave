@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   generateFallbackPullRequestDraft,
+  isReasonablePullRequestTitle,
   mergePullRequestDraft,
   parsePullRequestSuggestionResponse,
+  resolvePullRequestTitle,
 } from "../src/lib/source-control-pr";
 
 describe("generateFallbackPullRequestDraft", () => {
@@ -61,5 +63,33 @@ describe("mergePullRequestDraft", () => {
       title: "fix(topbar): stabilize create pr flow",
       body: "## Summary\n- Keep the fallback body.\n\n## Changes\n- Preserve the existing content.",
     });
+  });
+});
+
+describe("isReasonablePullRequestTitle", () => {
+  test("rejects titles with a capitalized subject", () => {
+    expect(isReasonablePullRequestTitle("fix(topbar): Stabilize create pr flow")).toBe(false);
+    expect(isReasonablePullRequestTitle("fix(topbar): stabilize create pr flow")).toBe(true);
+  });
+});
+
+describe("resolvePullRequestTitle", () => {
+  test("reuses the latest commit type and scope when the generated title diverges", () => {
+    const title = resolvePullRequestTitle({
+      currentTitle: "feat(ui): add loading splash to create pr dialog",
+      commitLog: "abc123 fix(topbar): stabilize create pr flow",
+      headBranch: "fix/topbar/create-pr-flow",
+    });
+
+    expect(title).toBe("fix(topbar): stabilize create pr flow");
+  });
+
+  test("keeps the current title when it already matches the latest commit type and scope", () => {
+    const title = resolvePullRequestTitle({
+      currentTitle: "fix(topbar): show a loading splash before the draft is ready",
+      commitLog: "abc123 fix(topbar): stabilize create pr flow",
+    });
+
+    expect(title).toBe("fix(topbar): show a loading splash before the draft is ready");
   });
 });

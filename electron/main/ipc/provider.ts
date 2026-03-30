@@ -1,6 +1,10 @@
 import { ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
-import { generateFallbackPullRequestDraft, mergePullRequestDraft } from "../../../src/lib/source-control-pr";
+import {
+  generateFallbackPullRequestDraft,
+  mergePullRequestDraft,
+  resolvePullRequestTitle,
+} from "../../../src/lib/source-control-pr";
 import { providerRuntime } from "../../providers/runtime";
 import {
   getClaudeContextUsage,
@@ -390,7 +394,12 @@ export function registerProviderHandlers() {
       generatedTitle: suggestion.title,
       generatedBody: suggestion.body,
     });
+    const resolvedTitle = resolvePullRequestTitle({
+      currentTitle: mergedDraft.title,
+      commitLog,
+      headBranch,
+    });
 
-    return { ok: true, title: mergedDraft.title, body: mergedDraft.body };
+    return { ok: true, title: resolvedTitle, body: mergedDraft.body };
   });
 }

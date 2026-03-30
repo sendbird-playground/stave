@@ -181,6 +181,13 @@ The top bar button changes based on status:
 | `merged` | — | View on GitHub |
 | `closed_unmerged` | — | View on GitHub |
 
+### PR Creation Dialog
+
+- The dialog opens in a loading splash state until the suggested PR title and description are ready. Stave no longer shows a provisional fallback draft first and then replaces it in place.
+- Suggested PR titles are normalized against the branch's latest conventional commit subject so the type and scope stay aligned with the workspace PR flow guidance.
+- The title field validates Conventional Commits format and expects a lowercase subject, for example `fix(topbar): add create pr loading splash`.
+- When uncommitted files are auto-committed during PR creation, progress, success, and failure messages are shown inline inside the dialog instead of as transient toast notifications.
+
 ## Store Shape
 
 ```ts
