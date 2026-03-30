@@ -13,6 +13,7 @@ import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import {
   filterReplayEvents,
+  formatRequestSnapshotPromptPreview,
   groupReplayEvents,
   getTurnPreviewStatus,
   pickSelectedReplayTurnId,
@@ -316,9 +317,9 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
   const snapshotTargetProviderLabel = snapshotConversation
     ? getProviderLabel({ providerId: snapshotConversation.target.providerId })
     : null;
-  const snapshotPromptPreview = state.requestSnapshot
-    ? state.requestSnapshot.prompt.trim() || "(empty fallback prompt; provider runtime used canonical request)"
-    : null;
+  const snapshotPromptPreview = formatRequestSnapshotPromptPreview({
+    requestSnapshot: state.requestSnapshot,
+  });
 
   useEffect(() => {
     const currentTurnIds = new Set(state.turns.map((turn) => turn.id));
@@ -655,7 +656,7 @@ export function TurnDiagnosticsPanel(args: TurnDiagnosticsPanelProps) {
               </div>
             </div>
             <div className="mt-2 rounded-md border border-border/70 bg-card/50 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Fallback prompt</p>
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Prompt preview</p>
               <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{snapshotPromptPreview}</p>
             </div>
           </>

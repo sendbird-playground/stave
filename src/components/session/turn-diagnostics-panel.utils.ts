@@ -165,6 +165,32 @@ export function groupReplayEvents(args: {
     .filter((group) => group.events.length > 0);
 }
 
+export function formatRequestSnapshotPromptPreview(args: {
+  requestSnapshot: PersistedTurnRequestSnapshot | null | undefined;
+}) {
+  const requestSnapshot = args.requestSnapshot;
+  if (!requestSnapshot) {
+    return null;
+  }
+
+  const prompt = requestSnapshot.prompt.trim();
+  if (prompt) {
+    return prompt;
+  }
+
+  const skillPart = requestSnapshot.conversation?.contextParts.find(
+    (part): part is Extract<NonNullable<PersistedTurnRequestSnapshot["conversation"]>["contextParts"][number], { type: "skill_context" }> =>
+      part.type === "skill_context",
+  );
+
+  if (skillPart && skillPart.skills.length > 0) {
+    const skillLabels = skillPart.skills.map((skill) => skill.invocationToken || `$${skill.slug}`);
+    return `(skill-only input; selected skills: ${skillLabels.join(", ")})`;
+  }
+
+  return "(empty fallback prompt; provider runtime used canonical request)";
+}
+
 export function summarizeSessionOverview(args: {
   turns: SessionOverviewTurnBundle[];
   activeTurnId?: string;
