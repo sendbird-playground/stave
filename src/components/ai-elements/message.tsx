@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes, MouseEvent, ReactNode } from
 import { createContext, useContext, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Paperclip, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { resolveWorkspaceFileLink } from "@/lib/message-file-links";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { useAppStore } from "@/store/app.store";
 import {
@@ -50,67 +51,35 @@ interface MessageResponseProps extends HTMLAttributes<HTMLDivElement> {
   isStreaming?: boolean;
 }
 
-function stripLineSuffix(args: { href: string }) {
-  // Support links like /abs/path/file.ts:42:5 and /abs/path/file.ts#L42C5
-  return args.href
-    .replace(/#L\d+(?:C\d+)?$/i, "")
-    .replace(/:\d+(?::\d+)?$/, "");
-}
-
 export function MessageResponse({ isStreaming, ...props }: MessageResponseProps) {
   const openFileFromTree = useAppStore((state) => state.openFileFromTree);
   const setLayout = useAppStore((state) => state.setLayout);
   const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
   const workspacePathById = useAppStore((state) => state.workspacePathById);
   const projectPath = useAppStore((state) => state.projectPath);
+  const projectFiles = useAppStore((state) => state.projectFiles);
   const messageFontSize = useAppStore((state) => state.settings.messageFontSize);
   const messageCodeFontSize = useAppStore((state) => state.settings.messageCodeFontSize);
 
   const content = typeof props.children === "string" ? props.children : "";
   const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
+  const knownFilePaths = useMemo(() => new Set(projectFiles), [projectFiles]);
 
-  function toWorkspaceRelativePath(args: { href: string }) {
-    const raw = args.href.trim();
-    if (!raw || raw.startsWith("http://") || raw.startsWith("https://")) {
-      return null;
-    }
-
-    let decoded = raw.replace(/^file:\/\//, "");
-    try {
-      decoded = decodeURIComponent(decoded);
-    } catch {
-      // Ignore decoding issues and keep the original href.
-    }
-
-    const normalized = stripLineSuffix({ href: decoded.split("?")[0] ?? decoded });
-    if (!normalized) {
-      return null;
-    }
-
-    if (normalized.startsWith("/")) {
-      if (!workspaceCwd) {
-        return null;
-      }
-      const prefix = `${workspaceCwd}/`;
-      if (!normalized.startsWith(prefix)) {
-        return null;
-      }
-      return normalized.slice(prefix.length);
-    }
-
-    return normalized.replace(/^\.\/+/, "");
+  function resolveFileLink(args: { href?: string }) {
+    return resolveWorkspaceFileLink({
+      href: args.href,
+      workspaceCwd,
+      knownFilePaths,
+    });
   }
 
   async function handleFileLinkClick(args: { event: MouseEvent<HTMLAnchorElement>; href?: string }) {
-    if (!args.href) {
-      return;
-    }
-    const filePath = toWorkspaceRelativePath({ href: args.href });
-    if (!filePath) {
+    const resolved = resolveFileLink({ href: args.href });
+    if (!resolved) {
       return;
     }
     args.event.preventDefault();
-    await openFileFromTree({ filePath });
+    await openFileFromTree({ filePath: resolved.filePath });
     setLayout({ patch: { editorVisible: true } });
   }
 
@@ -120,6 +89,7 @@ export function MessageResponse({ isStreaming, ...props }: MessageResponseProps)
       isStreaming={isStreaming}
       messageFontSize={messageFontSize}
       messageCodeFontSize={messageCodeFontSize}
+      resolveFileLink={resolveFileLink}
       onFileLinkClick={handleFileLinkClick}
       renderBlockCode={({ code, language }) => (
         <CodeBlock code={code} language={language}>

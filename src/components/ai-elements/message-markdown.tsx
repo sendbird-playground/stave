@@ -1,8 +1,11 @@
 import type { HTMLAttributes, MouseEvent, ReactNode } from "react";
 import { useMemo, useRef } from "react";
+import { FileCode2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { ResolvedWorkspaceFileLink } from "@/lib/message-file-links";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -27,8 +30,43 @@ export interface MarkdownMessageProps extends HTMLAttributes<HTMLDivElement> {
   isStreaming?: boolean;
   messageFontSize: "base" | "lg" | "xl";
   messageCodeFontSize: "base" | "lg" | "xl";
+  resolveFileLink?: (args: { href?: string }) => ResolvedWorkspaceFileLink | null;
   onFileLinkClick?: (args: { event: MouseEvent<HTMLAnchorElement>; href?: string }) => void | Promise<void>;
   renderBlockCode?: (args: { code: string; language?: string }) => ReactNode;
+}
+
+interface MessageFileLinkProps {
+  href?: string;
+  filePath: string;
+  fileName: string;
+  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+}
+
+function MessageFileLink({ href, filePath, fileName, onClick }: MessageFileLinkProps) {
+  const link = (
+    <a
+      href={href}
+      data-message-file-link="true"
+      aria-label={`Open ${filePath}`}
+      className={cn(
+        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/35 px-2 py-0.5 align-middle text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+      )}
+      onClick={onClick}
+    >
+      <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" />
+      <span aria-hidden="true" className="shrink-0 text-border">|</span>
+      <span className="min-w-0 max-w-64 truncate">{fileName}</span>
+    </a>
+  );
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent side="top">{`Open ${filePath}`}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 export function MarkdownMessage({
@@ -36,6 +74,7 @@ export function MarkdownMessage({
   isStreaming,
   messageFontSize,
   messageCodeFontSize,
+  resolveFileLink,
   onFileLinkClick,
   renderBlockCode,
   className,
@@ -57,6 +96,8 @@ export function MarkdownMessage({
   renderBlockCodeRef.current = renderBlockCode;
   const messageCodeFontSizeRef = useRef(messageCodeFontSize);
   messageCodeFontSizeRef.current = messageCodeFontSize;
+  const resolveFileLinkRef = useRef(resolveFileLink);
+  resolveFileLinkRef.current = resolveFileLink;
   const onFileLinkClickRef = useRef(onFileLinkClick);
   onFileLinkClickRef.current = onFileLinkClick;
 
@@ -100,17 +141,31 @@ export function MarkdownMessage({
       );
     },
     pre: ({ children }: { children?: ReactNode }) => <>{children}</>,
-    a: ({ href, children }: { href?: string; children?: ReactNode }) => (
-      <a
-        href={href}
-        className="text-primary underline underline-offset-2"
-        target="_blank"
-        rel="noreferrer"
-        onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href })}
-      >
-        {children}
-      </a>
-    ),
+    a: ({ href, children }: { href?: string; children?: ReactNode }) => {
+      const resolvedFileLink = resolveFileLinkRef.current?.({ href });
+      if (resolvedFileLink) {
+        return (
+          <MessageFileLink
+            href={href}
+            filePath={resolvedFileLink.filePath}
+            fileName={resolvedFileLink.fileName}
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href })}
+          />
+        );
+      }
+
+      return (
+        <a
+          href={href}
+          className="text-primary underline underline-offset-2"
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href })}
+        >
+          {children}
+        </a>
+      );
+    },
     table: ({ children }: { children?: ReactNode }) => (
       <Table className="my-3 w-full table-fixed border-separate border-spacing-0 rounded-md border border-border/70 bg-card text-sm">
         {children}
