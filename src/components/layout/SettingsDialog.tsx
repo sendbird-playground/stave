@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button, Card } from "@/components/ui";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,13 +8,22 @@ import { SettingsDialogSectionContent, settingsSectionGroups, settingsSections, 
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (args: { open: boolean }) => void;
+  initialSection?: SectionId;
+  initialProjectPath?: string | null;
 }
 
 const sectionsById = Object.fromEntries(settingsSections.map((section) => [section.id, section])) as Record<SectionId, (typeof settingsSections)[number]>;
 
 export function SettingsDialog(args: SettingsDialogProps) {
-  const { open, onOpenChange } = args;
+  const { initialProjectPath, initialSection, open, onOpenChange } = args;
   const [activeSection, setActiveSection] = useState<SectionId>("general");
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setActiveSection(initialSection ?? "general");
+  }, [initialSection, open]);
 
   if (!open) {
     return null;
@@ -70,7 +79,10 @@ export function SettingsDialog(args: SettingsDialogProps) {
 
           <main className="min-h-0 overflow-auto px-5 py-4">
             <div className="mx-auto max-w-4xl">
-              <SettingsDialogSectionContent sectionId={activeSection} />
+              <SettingsDialogSectionContent
+                sectionId={activeSection}
+                highlightedProjectPath={activeSection === "projects" ? initialProjectPath : null}
+              />
             </div>
           </main>
         </CardContent>

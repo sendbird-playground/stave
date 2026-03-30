@@ -26,7 +26,6 @@ import {
   PanelLeft,
   Plus,
   Settings,
-  Trash2,
 } from "lucide-react";
 import {
   Suspense,
@@ -42,6 +41,7 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { CreateWorkspaceDialog } from "@/components/layout/CreateWorkspaceDialog";
 import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
 import { StaveAppMenuButton } from "@/components/layout/StaveAppMenuButton";
+import type { SectionId } from "@/components/layout/settings-dialog-sections";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import {
   Button,
@@ -167,10 +167,6 @@ export function ProjectWorkspaceSidebar(args: {
   const [reorderMode, setReorderMode] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [openPathDialogOpen, setOpenPathDialogOpen] = useState(false);
-  const [projectToRemove, setProjectToRemove] = useState<{
-    projectPath: string;
-    projectName: string;
-  } | null>(null);
   const [workspaceToClose, setWorkspaceToClose] = useState<{
     id: string;
     name: string;
@@ -179,6 +175,11 @@ export function ProjectWorkspaceSidebar(args: {
     null,
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] =
+    useState<SectionId>("general");
+  const [settingsInitialProjectPath, setSettingsInitialProjectPath] = useState<
+    string | null
+  >(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [
     currentProjectPath,
@@ -200,7 +201,6 @@ export function ProjectWorkspaceSidebar(args: {
     createProject,
     openProjectFromPath,
     openProject,
-    removeProjectFromList,
     moveProjectInList,
     switchWorkspace,
     moveWorkspaceInProjectList,
@@ -240,7 +240,6 @@ export function ProjectWorkspaceSidebar(args: {
           state.createProject,
           state.openProjectFromPath,
           state.openProject,
-          state.removeProjectFromList,
           state.moveProjectInList,
           state.switchWorkspace,
           state.moveWorkspaceInProjectList,
@@ -358,13 +357,26 @@ export function ProjectWorkspaceSidebar(args: {
     }
   }, [args.collapsed, reorderMode]);
 
-  const handleOpenSettings = useCallback(() => {
+  const handleOpenSettings = useCallback((options?: {
+    projectPath?: string | null;
+    section?: SectionId;
+  }) => {
     void loadSettingsDialog();
+    setSettingsInitialSection(options?.section ?? "general");
+    setSettingsInitialProjectPath(options?.projectPath ?? null);
     setSettingsOpen(true);
   }, []);
 
   const handlePreloadSettings = useCallback(() => {
     void loadSettingsDialog();
+  }, []);
+
+  const handleSettingsOpenChange = useCallback((options: { open: boolean }) => {
+    setSettingsOpen(options.open);
+    if (!options.open) {
+      setSettingsInitialSection("general");
+      setSettingsInitialProjectPath(null);
+    }
   }, []);
 
   function OverlayLoadingFallback(overlayArgs: { title: string }) {
@@ -795,93 +807,128 @@ export function ProjectWorkspaceSidebar(args: {
                                     {dragHandle}
                                     <div
                                       className={cn(
-                                        "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/70",
+                                        "group/project-row flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/70 focus-within:bg-secondary/70",
                                       )}
                                     >
-                                      <Folder className="size-4 shrink-0 text-muted-foreground" />
-                                      <span className="truncate font-medium">
-                                        {project.projectName}
-                                      </span>
-                                      {projectBusy ? (
-                                        <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-                                      ) : null}
-                                    </div>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 rounded-md p-0"
-                                          disabled={projectBusy}
-                                          onClick={() =>
-                                            void handleCreateWorkspaceRequest(
-                                              project.projectPath,
-                                            )
-                                          }
-                                          aria-label={`new-workspace-${project.projectPath}`}
-                                        >
-                                          <Plus className="size-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="right">
-                                        New workspace
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 rounded-md p-0 text-muted-foreground hover:text-destructive"
-                                          disabled={projectBusy}
-                                          onClick={() =>
-                                            setProjectToRemove({
-                                              projectPath: project.projectPath,
-                                              projectName: project.projectName,
-                                            })
-                                          }
-                                          aria-label={`remove-project-${project.projectPath}`}
-                                        >
-                                          <Trash2 className="size-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="right">
-                                        Remove from Stave
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 rounded-md p-0"
-                                          onClick={() => {
-                                            setCollapsedByProjectPath(
-                                              (current) => ({
-                                                ...current,
-                                                [project.projectPath]:
-                                                  !collapsed,
-                                              }),
-                                            );
-                                          }}
-                                          aria-label={`toggle-project-${project.projectPath}`}
-                                        >
-                                          {collapsed ? (
-                                            <ChevronRight className="size-4" />
-                                          ) : (
-                                            <ChevronDown className="size-4" />
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="relative h-8 w-8 shrink-0 rounded-md p-0 text-muted-foreground"
+                                            onClick={() => {
+                                              setCollapsedByProjectPath(
+                                                (current) => ({
+                                                  ...current,
+                                                  [project.projectPath]:
+                                                    !collapsed,
+                                                }),
+                                              );
+                                            }}
+                                            aria-label={`toggle-project-${project.projectPath}`}
+                                            aria-expanded={!collapsed}
+                                          >
+                                            <Folder
+                                              className={cn(
+                                                "size-4 transition-all duration-200",
+                                                "group-hover/project-row:scale-75 group-hover/project-row:opacity-0",
+                                                "group-focus-within/project-row:scale-75 group-focus-within/project-row:opacity-0",
+                                              )}
+                                            />
+                                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                              {collapsed ? (
+                                                <ChevronRight
+                                                  className={cn(
+                                                    "size-4 scale-75 opacity-0 transition-all duration-200",
+                                                    "group-hover/project-row:scale-100 group-hover/project-row:opacity-100",
+                                                    "group-focus-within/project-row:scale-100 group-focus-within/project-row:opacity-100",
+                                                  )}
+                                                />
+                                              ) : (
+                                                <ChevronDown
+                                                  className={cn(
+                                                    "size-4 scale-75 opacity-0 transition-all duration-200",
+                                                    "group-hover/project-row:scale-100 group-hover/project-row:opacity-100",
+                                                    "group-focus-within/project-row:scale-100 group-focus-within/project-row:opacity-100",
+                                                  )}
+                                                />
+                                              )}
+                                            </span>
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right">
+                                          {collapsed
+                                            ? "Expand project"
+                                            : "Collapse project"}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                                        <span className="min-w-0 flex-1 truncate font-medium">
+                                          {project.projectName}
+                                        </span>
+                                        {projectBusy ? (
+                                          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                                        ) : null}
+                                        <div
+                                          className={cn(
+                                            "flex shrink-0 items-center gap-0.5 transition-all duration-200",
+                                            "pointer-events-none translate-x-1 opacity-0",
+                                            "group-hover/project-row:pointer-events-auto group-hover/project-row:translate-x-0 group-hover/project-row:opacity-100",
+                                            "group-focus-within/project-row:pointer-events-auto group-focus-within/project-row:translate-x-0 group-focus-within/project-row:opacity-100",
                                           )}
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="right">
-                                        {collapsed
-                                          ? "Expand project"
-                                          : "Collapse project"}
-                                      </TooltipContent>
-                                    </Tooltip>
+                                        >
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 w-7 rounded-md p-0"
+                                                disabled={projectBusy}
+                                                onClick={() =>
+                                                  void handleCreateWorkspaceRequest(
+                                                    project.projectPath,
+                                                  )
+                                                }
+                                                aria-label={`new-workspace-${project.projectPath}`}
+                                              >
+                                                <Plus className="size-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="right">
+                                              New workspace
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 w-7 rounded-md p-0"
+                                                disabled={projectBusy}
+                                                onMouseEnter={handlePreloadSettings}
+                                                onFocus={handlePreloadSettings}
+                                                onClick={() =>
+                                                  handleOpenSettings({
+                                                    section: "projects",
+                                                    projectPath:
+                                                      project.projectPath,
+                                                  })
+                                                }
+                                                aria-label={`project-settings-${project.projectPath}`}
+                                              >
+                                                <Settings className="size-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="right">
+                                              Project settings
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </div>
+                                      </div>
+                                    </div>
                                   </div>
                                   {!collapsed ? (
                                     <div className="border-t border-border/60 px-1.5 py-1.5">
@@ -1092,7 +1139,7 @@ export function ProjectWorkspaceSidebar(args: {
                       aria-label="open-settings"
                       onMouseEnter={handlePreloadSettings}
                       onFocus={handlePreloadSettings}
-                      onClick={handleOpenSettings}
+                      onClick={() => handleOpenSettings()}
                     >
                       <Settings className="size-4" />
                     </Button>
@@ -1112,7 +1159,7 @@ export function ProjectWorkspaceSidebar(args: {
                       aria-label="open-settings"
                       onMouseEnter={handlePreloadSettings}
                       onFocus={handlePreloadSettings}
-                      onClick={handleOpenSettings}
+                      onClick={() => handleOpenSettings()}
                     >
                       <Settings className="size-3.5" />
                     </Button>
@@ -1124,26 +1171,6 @@ export function ProjectWorkspaceSidebar(args: {
           </TooltipProvider>
         </div>
       </aside>
-      <ConfirmDialog
-        open={Boolean(projectToRemove)}
-        title="Remove Project"
-        description={
-          projectToRemove
-            ? `Remove "${projectToRemove.projectName}" from Stave's project list? This does not delete files on disk.`
-            : ""
-        }
-        confirmLabel="Remove Project"
-        onCancel={() => setProjectToRemove(null)}
-        onConfirm={() => {
-          if (!projectToRemove) {
-            return;
-          }
-          void removeProjectFromList({
-            projectPath: projectToRemove.projectPath,
-          });
-          setProjectToRemove(null);
-        }}
-      />
       <ConfirmDialog
         open={Boolean(workspaceToClose)}
         title="Archive Workspace"
@@ -1200,7 +1227,9 @@ export function ProjectWorkspaceSidebar(args: {
         <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
           <SettingsDialog
             open={settingsOpen}
-            onOpenChange={({ open }) => setSettingsOpen(open)}
+            initialSection={settingsInitialSection}
+            initialProjectPath={settingsInitialProjectPath}
+            onOpenChange={handleSettingsOpenChange}
           />
         </Suspense>
       ) : null}

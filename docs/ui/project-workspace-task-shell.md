@@ -36,7 +36,8 @@ Replace the legacy workspace/task shell with a three-part layout:
 - The full project list sidebar should be collapsible.
 - The top-left sidebar header should match the main top bar height.
 - Project rows should show a dedicated project icon on the far left.
-- Project accordion collapse controls should sit on the far right of the row.
+- Project accordion chevrons should stay hidden until project-row hover and appear over the project icon to indicate expand/collapse state.
+- Project-row hover actions should reveal `New workspace` and `Project settings`, while project removal lives under Settings > Projects.
 
 ### State Model Change
 
@@ -54,13 +55,16 @@ Replace the legacy workspace/task shell with a three-part layout:
   - can collapse into a narrow rail
   - keeps the top-left header aligned to the same height as the main top bar
   - shows a compact `Projects` header with `Open Project` and reorder controls in expanded mode
-  - provides `Open Project`, project removal, and per-project workspace creation
+  - provides `Open Project`, hover-revealed per-project workspace creation, and direct project-settings entry points
   - keeps project order stable instead of re-sorting by recent selection
   - exposes dedicated drag handles for project and workspace reordering only while reorder mode is enabled
   - shows a wave indicator plus the count of responding tasks when any task in that workspace is responding
   - uses stronger visual emphasis for the selected workspace while keeping project rows neutral
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
   - shows workspace shortcuts in the collapsed rail and includes the parent project name in the tooltip
+- `SettingsDialog`
+  - includes a `Projects` section that renders repository workspace defaults and git metadata per registered project
+  - keeps project removal inside each project card instead of the sidebar row
 - `WorkspaceTaskTabs`
   - renders active tasks as horizontal tabs for the selected workspace
   - uses one shared leading slot for responding wave or model icon
