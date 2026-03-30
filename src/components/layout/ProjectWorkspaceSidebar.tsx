@@ -100,9 +100,21 @@ function formatWorkspaceName(name: string, branch?: string) {
 }
 
 const IS_MAC = window.api?.platform === "darwin";
+const DEFAULT_COLLAPSED_PROJECT_SIDEBAR_WIDTH = 64;
 /** Height reserved at the top of the collapsed sidebar for macOS traffic-light buttons. */
 const MAC_TRAFFIC_LIGHT_CLEARANCE = 40;
-const COLLAPSED_PROJECT_SIDEBAR_WIDTH = 64;
+/** Keep this aligned with the native traffic-light placement in `electron/main/window.ts`. */
+const MAC_TRAFFIC_LIGHT_LEFT_INSET = 12;
+const MAC_TRAFFIC_LIGHT_CLUSTER_WIDTH = 58;
+const MAC_TRAFFIC_LIGHT_RIGHT_GUTTER = 10;
+const COLLAPSED_PROJECT_SIDEBAR_WIDTH = IS_MAC
+  ? Math.max(
+      DEFAULT_COLLAPSED_PROJECT_SIDEBAR_WIDTH,
+      MAC_TRAFFIC_LIGHT_LEFT_INSET +
+        MAC_TRAFFIC_LIGHT_CLUSTER_WIDTH +
+        MAC_TRAFFIC_LIGHT_RIGHT_GUTTER,
+    )
+  : DEFAULT_COLLAPSED_PROJECT_SIDEBAR_WIDTH;
 
 interface SortableSidebarItemProps {
   id: string;
