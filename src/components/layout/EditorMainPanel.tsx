@@ -435,6 +435,17 @@ export function EditorMainPanel() {
           onCopyBreadcrumbs={(filePath) => void copyText(filePath.split("/").filter(Boolean).join(" > "))}
         />
 
+        {activeTab ? (
+          <div className="flex min-w-0 items-center gap-1 border-b border-border/60 bg-editor px-3 py-1">
+            <span
+              className="truncate text-xs text-muted-foreground"
+              title={resolveAbsolutePath(activeTab.filePath)}
+            >
+              {resolveAbsolutePath(activeTab.filePath)}
+            </span>
+          </div>
+        ) : null}
+
         <div className="min-h-0 flex-1 overflow-hidden">
           {activeTab ? (
             activeTabIsImage ? (
