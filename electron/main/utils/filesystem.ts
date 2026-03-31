@@ -167,8 +167,8 @@ export async function listDirectoryEntries(args: { rootPath?: string | null; dir
   }
   const rootRealPath = await fs.realpath(path.resolve(rootPath));
   const directoryRealPath = await resolveRealPath(absolutePath);
-  if (!directoryRealPath || !isPathInsideRoot({ rootRealPath, candidateRealPath: directoryRealPath })) {
-    throw new Error("Directory path resolves outside workspace root.");
+  if (!directoryRealPath) {
+    throw new Error("Directory path cannot be resolved.");
   }
 
   const relativeDirectoryPath = toSafeRelativePath(args.directoryPath);
@@ -178,8 +178,8 @@ export async function listDirectoryEntries(args: { rootPath?: string | null; dir
     for (const segment of relativeDirectoryPath.split("/").filter(Boolean)) {
       currentPath = path.join(currentPath, segment);
       const currentRealPath = await resolveRealPath(currentPath);
-      if (!currentRealPath || !isPathInsideRoot({ rootRealPath, candidateRealPath: currentRealPath })) {
-        throw new Error("Directory path resolves outside workspace root.");
+      if (!currentRealPath) {
+        throw new Error("Directory path cannot be resolved.");
       }
       ancestorRealPaths.add(currentRealPath);
     }
@@ -212,7 +212,7 @@ export async function listDirectoryEntries(args: { rootPath?: string | null; dir
 
     const fullPath = path.join(absolutePath, entry.name);
     const entryRealPath = await resolveRealPath(fullPath);
-    if (!entryRealPath || !isPathInsideRoot({ rootRealPath, candidateRealPath: entryRealPath })) {
+    if (!entryRealPath) {
       return null;
     }
 
