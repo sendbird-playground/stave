@@ -1,6 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+SILENT=false
+for arg in "$@"; do
+  case "$arg" in
+    --silent) SILENT=true ;;
+  esac
+done
+
 APP_NAME="${STAVE_APP_NAME:-Stave}"
 REPO="${STAVE_REPO:-sendbird-playground/stave}"
 ASSET_NAME="${STAVE_RELEASE_ASSET:-Stave-macOS.zip}"
@@ -92,8 +99,12 @@ ditto "$SOURCE_APP" "$TARGET_APP"
 info "Removing quarantine attribute..."
 xattr -dr com.apple.quarantine "$TARGET_APP" 2>/dev/null || true
 
-info "Opening ${APP_NAME}..."
-open "$TARGET_APP"
+if [ "$SILENT" = false ]; then
+  info "Opening ${APP_NAME}..."
+  open "$TARGET_APP"
+fi
 
 info "${APP_NAME} ${TAG_NAME} installed successfully."
-printf "Open later with: open %s\n" "$(printf '%q' "$TARGET_APP")"
+if [ "$SILENT" = false ]; then
+  printf "Open later with: open %s\n" "$(printf '%q' "$TARGET_APP")"
+fi
