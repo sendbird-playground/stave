@@ -7,6 +7,8 @@ export interface PersistenceTaskRow {
   updatedAt: string;
   unread: boolean;
   archivedAt?: string | null;
+  controlMode?: "interactive" | "managed";
+  controlOwner?: "stave" | "external";
 }
 
 export interface PersistenceChatMessageRow {

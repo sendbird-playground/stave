@@ -43,6 +43,21 @@ export const ListLocalMcpRequestLogsArgsSchema = z.object({
   limit: z.number().int().min(1).max(500).optional(),
 }).strict();
 
+export const LocalMcpApprovalResponseArgsSchema = z.object({
+  workspaceId: z.string().min(1).max(200),
+  taskId: z.string().min(1).max(200),
+  requestId: z.string().min(1).max(200),
+  approved: z.boolean(),
+}).strict();
+
+export const LocalMcpUserInputResponseArgsSchema = z.object({
+  workspaceId: z.string().min(1).max(200),
+  taskId: z.string().min(1).max(200),
+  requestId: z.string().min(1).max(200),
+  answers: z.record(z.string(), z.string()).optional(),
+  denied: z.boolean().optional(),
+}).strict();
+
 export const RuntimeOptionsObjectSchema = z.object({
   model: z.string().max(200).optional(),
   chatStreamingEnabled: z.boolean().optional(),

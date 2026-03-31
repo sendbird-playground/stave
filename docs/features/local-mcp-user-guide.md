@@ -83,6 +83,17 @@ The manifest includes the URL and token a local client needs.
 }
 ```
 
+## Managed Monitoring In Stave
+
+When a task is started through Local MCP, Stave marks it as a `Managed` task.
+
+- while the external turn is active, Stave polls the latest persisted task state
+- the desktop UI becomes monitor-only for that task
+- chat input, approval responses, user-input responses, and other task mutations stay disabled until you explicitly take over
+- once the external turn finishes, you can use `Take Over` in the task header to convert the task back into a normal interactive Stave task
+
+This keeps one clear control owner at a time and avoids mixed local/external edits during the same run.
+
 ## Approval And User Input
 
 If the running task asks for confirmation or structured answers:
@@ -90,6 +101,7 @@ If the running task asks for confirmation or structured answers:
 - poll task state with `stave_get_task`
 - inspect turn events with `stave_list_turn_events`
 - answer using `stave_respond_approval` or `stave_respond_user_input`
+- Stave shows these requests for visibility, but managed tasks expect the originating client to answer them
 
 Use `Local MCP Request Log` in Developer settings when you need transport-level request visibility that stays separate from task replay data.
 
@@ -123,4 +135,4 @@ The token is wrong or stale. Copy the token again from Settings or rotate it and
 
 ### The UI and bot seem out of sync
 
-The first pass prioritizes durable snapshot persistence. If an already-open workspace view looks stale, refresh or switch workspaces once to reload the latest persisted state.
+Managed tasks poll persisted state while the external turn is active. If a finished task still looks read-only, use `Take Over` in the task header.

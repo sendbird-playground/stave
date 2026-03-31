@@ -9,6 +9,8 @@ interface UserInputCardProps {
   answers?: Record<string, string>;
   onSubmit?: (answers: Record<string, string>) => void;
   onDeny?: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 function parseAnswerValue(args: { value?: string; multiSelect?: boolean; optionLabels: string[] }) {
@@ -23,7 +25,7 @@ function parseAnswerValue(args: { value?: string; multiSelect?: boolean; optionL
 }
 
 export function UserInputCard(args: UserInputCardProps) {
-  const { toolName, questions, state, answers, onSubmit, onDeny } = args;
+  const { toolName, questions, state, answers, onSubmit, onDeny, disabled, disabledReason } = args;
   const initialSelectionByQuestion = useMemo(() => Object.fromEntries(
     questions.map((question) => {
       const parsed = parseAnswerValue({
@@ -74,6 +76,7 @@ export function UserInputCard(args: UserInputCardProps) {
                           key={option.label}
                           size="sm"
                           variant={isSelected ? "default" : "outline"}
+                          disabled={disabled}
                           onClick={() => {
                             setSelectionByQuestion((current) => {
                               const prev = current[question.question] ?? { selected: [], custom: "" };
@@ -103,6 +106,7 @@ export function UserInputCard(args: UserInputCardProps) {
                   </p>
                   <Input
                     value={selection.custom}
+                    disabled={disabled}
                     onChange={(event) => {
                       const value = event.target.value;
                       setSelectionByQuestion((current) => ({
@@ -120,13 +124,16 @@ export function UserInputCard(args: UserInputCardProps) {
             })}
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <Button size="sm" disabled={!isReady} onClick={() => onSubmit?.(compiledAnswers)}>
+            <Button size="sm" disabled={disabled || !isReady} onClick={() => onSubmit?.(compiledAnswers)}>
               Submit answers
             </Button>
-            <Button size="sm" variant="outline" onClick={onDeny}>
+            <Button size="sm" variant="outline" disabled={disabled} onClick={onDeny}>
               Decline
             </Button>
           </div>
+          {disabledReason ? (
+            <p className="mt-2 text-xs text-muted-foreground">{disabledReason}</p>
+          ) : null}
         </>
       ) : state === "input-denied" ? (
         <p className="mt-2 text-muted-foreground">Decision: user declined to answer.</p>

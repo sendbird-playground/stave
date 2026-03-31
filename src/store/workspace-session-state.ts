@@ -1,5 +1,6 @@
 import { type PersistedTurnSummary } from "@/lib/db/turns.db";
 import { type TaskProviderConversationState, type WorkspaceSnapshot, upsertWorkspace } from "@/lib/db/workspaces.db";
+import { normalizeTaskControl } from "@/lib/tasks";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
 
@@ -182,7 +183,7 @@ export function buildWorkspaceSessionState(args: {
   appendInterruptedNotices?: boolean;
 }): WorkspaceSessionState {
   const empty = createEmptyWorkspaceState();
-  const tasks = args.snapshot?.tasks ?? empty.tasks;
+  const tasks = (args.snapshot?.tasks ?? empty.tasks).map(normalizeTaskControl);
   const providerConversationByTask = args.snapshot?.providerConversationByTask ?? empty.providerConversationByTask;
   const messagesByTask = args.appendInterruptedNotices
     ? appendInterruptedTurnNotices({
@@ -195,6 +196,11 @@ export function buildWorkspaceSessionState(args: {
   const activeEditorTabId = editorTabs.some((tab) => tab.id === requestedActiveEditorTabId)
     ? requestedActiveEditorTabId
     : (editorTabs[0]?.id ?? null);
+  const activeTurnIdsByTask = Object.fromEntries(
+    (args.latestTurns ?? [])
+      .filter((turn) => !turn.completedAt)
+      .map((turn) => [turn.taskId, turn.id] as const)
+  ) as Record<string, string | undefined>;
 
   return {
     activeTaskId: args.snapshot?.activeTaskId ?? empty.activeTaskId,
@@ -203,7 +209,7 @@ export function buildWorkspaceSessionState(args: {
     promptDraftByTask: args.snapshot?.promptDraftByTask ?? empty.promptDraftByTask,
     editorTabs,
     activeEditorTabId,
-    activeTurnIdsByTask: {},
+    activeTurnIdsByTask,
     providerConversationByTask,
     nativeConversationReadyByTask: buildNativeConversationReadyByTask({
       tasks,

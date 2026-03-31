@@ -3,11 +3,11 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
-import { Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, KbdSeparator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
+import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, KbdSeparator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getProviderConversationLabel, listProviderConversations } from "@/lib/providers/provider-conversations";
-import { filterTasksByName, getRespondingProviderId, isTaskArchived } from "@/lib/tasks";
+import { filterTasksByName, getRespondingProviderId, isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage } from "@/types/chat";
@@ -238,6 +238,7 @@ export function WorkspaceTaskTabs() {
               {visibleTasks.map((task, index) => {
                 const isActive = task.id === activeTaskId;
                 const isResponding = Boolean(activeTurnIdsByTask[task.id]);
+                const isManaged = isTaskManaged(task);
                 const respondingProviderId = getRespondingProviderId({
                   fallbackProviderId: task.provider,
                   messages: messagesByTask[task.id] ?? EMPTY_MESSAGES,
@@ -251,25 +252,39 @@ export function WorkspaceTaskTabs() {
                 return (
                   <div
                     key={task.id}
-                    draggable
-                    onDragStart={(event) => handleTaskDragStart(event, task.id)}
+                    draggable={!isManaged}
+                    onDragStart={(event) => {
+                      if (isManaged) {
+                        return;
+                      }
+                      handleTaskDragStart(event, task.id);
+                    }}
                     onDragEnd={() => {
                       setDraggingTaskId(null);
                       setDropTargetTaskId(null);
                     }}
                     onDragOver={(event) => {
+                      if (isManaged) {
+                        return;
+                      }
                       event.preventDefault();
                       if (draggingTaskId && draggingTaskId !== task.id) {
                         setDropTargetTaskId(task.id);
                       }
                     }}
-                    onDrop={(event) => handleTaskDrop(event, task.id)}
+                    onDrop={(event) => {
+                      if (isManaged) {
+                        return;
+                      }
+                      handleTaskDrop(event, task.id);
+                    }}
                     className={cn(
-                      "group flex cursor-grab items-center gap-1 border-b-[2.5px] px-3 transition-colors",
+                      "group flex items-center gap-1 border-b-[2.5px] px-3 transition-colors",
+                      isManaged ? "cursor-default" : "cursor-grab",
                       isActive
                         ? "border-b-primary bg-background shadow-[1px_0_3px_-1px_rgba(0,0,0,0.1),-1px_0_3px_-1px_rgba(0,0,0,0.1)]"
                         : "border-b-transparent hover:bg-background/60",
-                      draggingTaskId === task.id && "cursor-grabbing opacity-70",
+                      draggingTaskId === task.id && !isManaged && "cursor-grabbing opacity-70",
                       dropTargetTaskId === task.id && draggingTaskId && draggingTaskId !== task.id && "bg-primary/5",
                     )}
                   >
@@ -286,6 +301,11 @@ export function WorkspaceTaskTabs() {
                         )}
                       </span>
                       <span className="max-w-56 truncate text-sm font-medium">{task.title}</span>
+                      {isManaged ? (
+                        <Badge variant="secondary" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
+                          Managed
+                        </Badge>
+                      ) : null}
                       {shortcutLabel != null ? (
                         <KbdGroup className="ml-1 shrink-0 opacity-60">
                           <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutModifierSymbol}</Kbd>
@@ -301,13 +321,14 @@ export function WorkspaceTaskTabs() {
                             variant="ghost"
                             size="sm"
                             className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
+                            disabled={isManaged}
                             onClick={() => setTaskToArchive({ id: task.id, title: task.title })}
                             aria-label={`archive-task-${task.id}`}
                           >
                             <X className="size-3.5" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent side="bottom">Archive task</TooltipContent>
+                        <TooltipContent side="bottom">{isManaged ? "Take over this task before archiving." : "Archive task"}</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                     <DropdownMenu>
@@ -317,7 +338,7 @@ export function WorkspaceTaskTabs() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onSelect={() => setTaskToRename({ id: task.id, title: task.title })}>
+                        <DropdownMenuItem disabled={isManaged} onSelect={() => setTaskToRename({ id: task.id, title: task.title })}>
                           Rename
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => exportTask({ taskId: task.id })}>

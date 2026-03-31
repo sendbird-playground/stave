@@ -167,6 +167,9 @@ export interface ChatMessage {
   parts: MessagePart[];
 }
 
+export type TaskControlMode = "interactive" | "managed";
+export type TaskControlOwner = "stave" | "external";
+
 export interface Task {
   id: string;
   title: string;
@@ -174,6 +177,8 @@ export interface Task {
   updatedAt: string;
   unread: boolean;
   archivedAt?: string | null;
+  controlMode: TaskControlMode;
+  controlOwner: TaskControlOwner;
   /** Relative paths to persisted plan files (.stave/plans/*.md) */
   planFilePaths?: string[];
 }

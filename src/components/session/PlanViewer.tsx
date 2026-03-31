@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRightCircle, ClipboardCheck, Copy, Minus, Maximize2 } from "lucide-react";
 import { Button, Textarea, WaveIndicator } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
+import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
 import { APPROVE_PLAN_MESSAGE } from "@/lib/providers/plan-response";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { useAppStore } from "@/store/app.store";
@@ -34,10 +35,11 @@ export function PlanViewer() {
   const [copied, setCopied] = useState(false);
   const persistedPlanRef = useRef<string | null>(null);
 
-  const [activeTaskId, activeProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, planAutoApprove, sendUserMessage, createTask, updatePromptDraft, updateSettings, registerPlanFile, projectPath] = useAppStore(
+  const [activeTaskId, activeTask, draftProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, planAutoApprove, sendUserMessage, createTask, updatePromptDraft, updateSettings, registerPlanFile, projectPath] = useAppStore(
     useShallow((state) => [
       state.activeTaskId,
-      state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? state.draftProvider,
+      state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
+      state.draftProvider,
       state.settings.claudePermissionMode,
       state.settings.claudePermissionModeBeforePlan,
       state.settings.codexExperimentalPlanMode,
@@ -50,6 +52,11 @@ export function PlanViewer() {
       state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? null,
     ] as const),
   );
+  const activeProvider = activeTask?.provider ?? draftProvider;
+  const isManagedTask = isTaskManaged(activeTask);
+  const managedNotice = isManagedTask
+    ? `Plan responses are managed by ${getTaskControlOwner(activeTask) === "external" ? "an external controller" : "Stave"}. Take over to reply here.`
+    : null;
 
   // Find the latest plan message in the task (not just the last message).
   // This ensures the plan viewer can show plans even if newer non-plan messages exist.
@@ -105,6 +112,9 @@ export function PlanViewer() {
   }, [isPlanPending, planText, projectPath, activeTaskId, registerPlanFile]);
 
   const handleApprove = useCallback(() => {
+    if (isManagedTask) {
+      return;
+    }
     // Restore the permission mode that was active before plan mode
     if ((activeProvider === "claude-code" || activeProvider === "stave") && claudePermissionMode === "plan") {
       transitionClaudePermissionMode({
@@ -119,16 +129,19 @@ export function PlanViewer() {
     sendUserMessage({ taskId: activeTaskId, content: APPROVE_PLAN_MESSAGE });
     setRevising(false);
     setRevisionText("");
-  }, [activeProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, updateSettings, sendUserMessage, activeTaskId]);
+  }, [activeProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, updateSettings, sendUserMessage, activeTaskId, isManagedTask]);
 
   // Auto-approve: when planAutoApprove is enabled and a plan is pending, approve it automatically.
   const autoApprovedPlanRef = useRef<string | null>(null);
   useEffect(() => {
+    if (isManagedTask) {
+      return;
+    }
     if (planAutoApprove && isPlanPending && planText && planText !== autoApprovedPlanRef.current) {
       autoApprovedPlanRef.current = planText;
       handleApprove();
     }
-  }, [planAutoApprove, isPlanPending, planText, handleApprove]);
+  }, [planAutoApprove, isPlanPending, planText, handleApprove, isManagedTask]);
 
   if (!isPlanPreparing && !isPlanPending) {
     return null;
@@ -143,6 +156,9 @@ export function PlanViewer() {
   }
 
   function handleHandoff() {
+    if (isManagedTask) {
+      return;
+    }
     createTask({ title: "Plan handoff" });
     // createTask synchronously sets activeTaskId to the new task.
     const newTaskId = useAppStore.getState().activeTaskId;
@@ -152,7 +168,7 @@ export function PlanViewer() {
   }
 
   function handleRevise() {
-    if (!revisionText.trim()) return;
+    if (isManagedTask || !revisionText.trim()) return;
     sendUserMessage({ taskId: activeTaskId, content: revisionText.trim() });
     setRevising(false);
     setRevisionText("");
@@ -244,17 +260,20 @@ export function PlanViewer() {
                   <Copy className="size-3.5" />
                   {copied ? "Copied!" : "Copy"}
                 </Button>
-                <Button size="sm" variant="outline" onClick={handleHandoff} disabled={!planText}>
+                <Button size="sm" variant="outline" onClick={handleHandoff} disabled={isManagedTask || !planText}>
                   <ArrowRightCircle className="size-3.5" />
                   Handoff
                 </Button>
-                <Button size="sm" onClick={handleApprove}>
+                <Button size="sm" disabled={isManagedTask} onClick={handleApprove}>
                   <ClipboardCheck className="size-3.5" />
                   Approve
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setRevising(true)}>
+                <Button size="sm" variant="outline" disabled={isManagedTask} onClick={() => setRevising(true)}>
                   Revise
                 </Button>
+                {managedNotice ? (
+                  <p className="text-xs text-muted-foreground">{managedNotice}</p>
+                ) : null}
               </div>
             )}
           </>

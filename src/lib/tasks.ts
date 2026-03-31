@@ -1,6 +1,6 @@
 import type { ProviderId } from "@/lib/providers/provider.types";
 import { resolveProviderDisplayId } from "@/lib/providers/model-catalog";
-import type { ChatMessage, Task } from "@/types/chat";
+import type { ChatMessage, Task, TaskControlMode, TaskControlOwner } from "@/types/chat";
 
 export type TaskFilter = "active" | "archived" | "all";
 
@@ -18,6 +18,33 @@ const AUTO_TASK_TITLE_DISALLOWED_PATTERNS = [
 
 export function isTaskArchived(task: Pick<Task, "archivedAt">) {
   return Boolean(task.archivedAt);
+}
+
+export function getTaskControlMode(task: Pick<Task, "controlMode"> | null | undefined): TaskControlMode {
+  return task?.controlMode ?? "interactive";
+}
+
+export function getTaskControlOwner(task: Pick<Task, "controlOwner"> | null | undefined): TaskControlOwner {
+  return task?.controlOwner ?? "stave";
+}
+
+export function normalizeTaskControl(task: Task): Task {
+  return {
+    ...task,
+    controlMode: getTaskControlMode(task),
+    controlOwner: getTaskControlOwner(task),
+  };
+}
+
+export function isTaskManaged(task: Pick<Task, "controlMode"> | null | undefined) {
+  return getTaskControlMode(task) === "managed";
+}
+
+export function canTakeOverTask(args: {
+  task: Pick<Task, "controlMode"> | null | undefined;
+  activeTurnId?: string | null;
+}) {
+  return isTaskManaged(args.task) && !args.activeTurnId;
 }
 
 function matchesTaskFilter(args: { task: Pick<Task, "archivedAt">; filter: TaskFilter }) {

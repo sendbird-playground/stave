@@ -6,7 +6,16 @@ import {
   rotateStaveMcpToken,
   updateStaveMcpServerConfig,
 } from "../stave-mcp-server";
-import { ListLocalMcpRequestLogsArgsSchema, LocalMcpConfigUpdateArgsSchema } from "./schemas";
+import {
+  respondApproval,
+  respondUserInput,
+} from "../stave-mcp-service";
+import {
+  ListLocalMcpRequestLogsArgsSchema,
+  LocalMcpApprovalResponseArgsSchema,
+  LocalMcpConfigUpdateArgsSchema,
+  LocalMcpUserInputResponseArgsSchema,
+} from "./schemas";
 
 export function registerLocalMcpHandlers() {
   ipcMain.handle("local-mcp:get-status", async () => {
@@ -71,6 +80,22 @@ export function registerLocalMcpHandlers() {
     }
   });
 
+  ipcMain.handle("local-mcp:respond-approval", async (_event, args: unknown) => {
+    const parsedArgs = LocalMcpApprovalResponseArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, message: "Invalid local MCP approval response." };
+    }
+    try {
+      const result = await respondApproval(parsedArgs.data);
+      return { ok: true, result };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Failed to deliver local MCP approval response.",
+      };
+    }
+  });
+
   ipcMain.handle("local-mcp:clear-request-logs", async () => {
     try {
       const cleared = await clearStaveMcpRequestLogs();
@@ -80,6 +105,22 @@ export function registerLocalMcpHandlers() {
         ok: false,
         cleared: 0,
         message: error instanceof Error ? error.message : "Failed to clear local MCP request logs.",
+      };
+    }
+  });
+
+  ipcMain.handle("local-mcp:respond-user-input", async (_event, args: unknown) => {
+    const parsedArgs = LocalMcpUserInputResponseArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, message: "Invalid local MCP user input response." };
+    }
+    try {
+      const result = await respondUserInput(parsedArgs.data);
+      return { ok: true, result };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Failed to deliver local MCP user input response.",
       };
     }
   });

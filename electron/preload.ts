@@ -311,6 +311,40 @@ contextBridge.exposeInMainWorld("api", {
       cleared: number;
       message?: string;
     }>,
+    respondApproval: (args: {
+      workspaceId: string;
+      taskId: string;
+      requestId: string;
+      approved: boolean;
+    }) => ipcRenderer.invoke("local-mcp:respond-approval", args) as Promise<{
+      ok: boolean;
+      message?: string;
+      result?: {
+        ok: boolean;
+        workspaceId: string;
+        taskId: string;
+        requestId: string;
+        approved: boolean;
+      };
+    }>,
+    respondUserInput: (args: {
+      workspaceId: string;
+      taskId: string;
+      requestId: string;
+      answers?: Record<string, string>;
+      denied?: boolean;
+    }) => ipcRenderer.invoke("local-mcp:respond-user-input", args) as Promise<{
+      ok: boolean;
+      message?: string;
+      result?: {
+        ok: boolean;
+        workspaceId: string;
+        taskId: string;
+        requestId: string;
+        answers?: Record<string, string>;
+        denied?: boolean;
+      };
+    }>,
   },
   lsp: {
     syncDocument: (args: {

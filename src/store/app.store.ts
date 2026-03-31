@@ -49,8 +49,10 @@ import {
 } from "@/lib/providers/stave-auto-profile";
 import { getCachedProviderCommandCatalog } from "@/lib/providers/provider-command-catalog";
 import {
+  canTakeOverTask,
   getArchiveFallbackTaskId,
   isTaskArchived,
+  isTaskManaged,
   normalizeSuggestedTaskTitle,
   reorderTasksWithinFilter,
   type TaskFilter,
@@ -363,6 +365,7 @@ interface AppState {
   refreshWorkspaces: () => Promise<void>;
   hydrateNotifications: () => Promise<void>;
   flushActiveWorkspaceSnapshot: (args?: { sync?: boolean }) => Promise<void>;
+  refreshActiveManagedTask: () => Promise<void>;
   createProject: (args: { name?: string }) => Promise<void>;
   openProjectFromPath: (args: { inputPath: string }) => Promise<{ ok: boolean; stderr?: string }>;
   openProject: (args: { projectPath: string }) => Promise<void>;
@@ -416,6 +419,7 @@ interface AppState {
   refreshProjectFiles: () => Promise<void>;
   refreshProviderAvailability: () => Promise<void>;
   refreshSkillCatalog: (args?: { workspacePath?: string | null }) => Promise<void>;
+  takeOverTask: (args: { taskId: string }) => void;
   markNotificationRead: (args: { id: string }) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
   openNotificationContext: (args: { notificationId: string }) => Promise<void>;
@@ -739,6 +743,17 @@ function createDefaultProviderAvailability() {
 
 function incrementWorkspaceSnapshotVersion(state: Pick<AppState, "workspaceSnapshotVersion">) {
   return state.workspaceSnapshotVersion + 1;
+}
+
+function findTaskById(state: Pick<AppState, "tasks">, taskId: string) {
+  return state.tasks.find((task) => task.id === taskId) ?? null;
+}
+
+function isManagedTaskReadOnly(args: {
+  state: Pick<AppState, "tasks">;
+  taskId: string;
+}) {
+  return isTaskManaged(findTaskById(args.state, args.taskId));
 }
 
 function mergeRecentProjectsByPath(args: {
@@ -1695,6 +1710,57 @@ export const useAppStore = create<AppState>()(
           providerConversationByTask: state.providerConversationByTask,
         });
       },
+      refreshActiveManagedTask: async () => {
+        const stateBefore = get();
+        const workspaceId = stateBefore.activeWorkspaceId;
+        const activeTask = findTaskById(stateBefore, stateBefore.activeTaskId);
+        if (!workspaceId || !activeTask || !isTaskManaged(activeTask)) {
+          return;
+        }
+
+        const [snapshot, latestTurns] = await Promise.all([
+          loadWorkspaceSnapshot({ workspaceId }),
+          listLatestWorkspaceTurns({ workspaceId }),
+        ]);
+        if (!snapshot) {
+          return;
+        }
+
+        const nextSession = buildWorkspaceSessionState({
+          snapshot,
+          latestTurns,
+        });
+        const preferredActiveTaskId = nextSession.tasks.some((task) => task.id === stateBefore.activeTaskId)
+          ? stateBefore.activeTaskId
+          : nextSession.activeTaskId;
+        const refreshedSession: WorkspaceSessionState = {
+          ...nextSession,
+          activeTaskId: preferredActiveTaskId,
+        };
+
+        set((state) => {
+          if (state.activeWorkspaceId !== workspaceId) {
+            return state;
+          }
+          return {
+            tasks: refreshedSession.tasks,
+            messagesByTask: refreshedSession.messagesByTask,
+            activeTaskId: refreshedSession.activeTaskId,
+            activeTurnIdsByTask: refreshedSession.activeTurnIdsByTask,
+            providerConversationByTask: refreshedSession.providerConversationByTask,
+            nativeConversationReadyByTask: refreshedSession.nativeConversationReadyByTask,
+            workspaceRuntimeCacheById: {
+              ...state.workspaceRuntimeCacheById,
+              [workspaceId]: refreshedSession,
+            },
+            taskWorkspaceIdById: registerTaskWorkspaceOwnership({
+              taskWorkspaceIdById: state.taskWorkspaceIdById,
+              workspaceId,
+              tasks: refreshedSession.tasks,
+            }),
+          };
+        });
+      },
       createProject: async ({ name }) => {
         const root = await workspaceFsAdapter.pickRoot();
         if (!root || !root.rootPath) {
@@ -2163,9 +2229,12 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        const nextSnapshot = current.workspaceRuntimeCacheById[workspaceId]
-          ? null
-          : await loadWorkspaceSnapshot({ workspaceId });
+        const [nextSnapshot, latestWorkspaceTurns] = current.workspaceRuntimeCacheById[workspaceId]
+          ? [null, []]
+          : await Promise.all([
+              loadWorkspaceSnapshot({ workspaceId }),
+              listLatestWorkspaceTurns({ workspaceId }),
+            ]);
         const workspacePath = current.workspacePathById[workspaceId];
         if (workspacePath) {
           await workspaceFsAdapter.setRoot?.({
@@ -2176,7 +2245,7 @@ export const useAppStore = create<AppState>()(
         const files = await workspaceFsAdapter.listFiles();
         const nextWorkspaces = current.workspaces;
         const workspaceState = current.workspaceRuntimeCacheById[workspaceId]
-          ?? buildWorkspaceSessionState({ snapshot: nextSnapshot });
+          ?? buildWorkspaceSessionState({ snapshot: nextSnapshot, latestTurns: latestWorkspaceTurns });
         const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({ state: current });
 
         set((state) => {
@@ -2602,6 +2671,8 @@ export const useAppStore = create<AppState>()(
             updatedAt: buildRecentTimestamp(),
             unread: false,
             archivedAt: null,
+            controlMode: "interactive",
+            controlOwner: "stave",
           };
           return {
             tasks: [nextTask, ...state.tasks],
@@ -2642,18 +2713,23 @@ export const useAppStore = create<AppState>()(
         if (!nextTitle) {
           return;
         }
-        set((state) => ({
-          tasks: state.tasks.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  title: nextTitle,
-                  updatedAt: buildRecentTimestamp(),
-                }
-              : task
-          ),
-          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-        }));
+        set((state) => {
+          if (isManagedTaskReadOnly({ state, taskId })) {
+            return state;
+          }
+          return {
+            tasks: state.tasks.map((task) =>
+              task.id === taskId
+                ? {
+                    ...task,
+                    title: nextTitle,
+                    updatedAt: buildRecentTimestamp(),
+                  }
+                : task
+            ),
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
       },
       restoreTask: ({ taskId }) => {
         set((state) => {
@@ -2696,6 +2772,8 @@ export const useAppStore = create<AppState>()(
             updatedAt: buildRecentTimestamp(),
             unread: false,
             archivedAt: null,
+            controlMode: "interactive",
+            controlOwner: "stave",
           };
           return {
             tasks: [duplicatedTask, ...state.tasks],
@@ -2925,7 +3003,7 @@ export const useAppStore = create<AppState>()(
       archiveTask: ({ taskId }) => {
         set((state) => {
           const targetTask = state.tasks.find((task) => task.id === taskId);
-          if (!targetTask || isTaskArchived(targetTask)) {
+          if (!targetTask || isTaskArchived(targetTask) || isManagedTaskReadOnly({ state, taskId })) {
             return {};
           }
           const nextTasks = state.tasks.map((task) =>
@@ -2952,6 +3030,9 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           const hasTask = state.tasks.some((task) => task.id === taskId);
           if (!hasTask) {
+            return { draftProvider: provider };
+          }
+          if (isManagedTaskReadOnly({ state, taskId })) {
             return { draftProvider: provider };
           }
           return {
@@ -3161,6 +3242,27 @@ export const useAppStore = create<AppState>()(
           }));
         }
       },
+      takeOverTask: ({ taskId }) => {
+        set((state) => {
+          const task = findTaskById(state, taskId);
+          if (!task || !canTakeOverTask({ task, activeTurnId: state.activeTurnIdsByTask[taskId] })) {
+            return state;
+          }
+          return {
+            tasks: state.tasks.map((item) =>
+              item.id === taskId
+                ? {
+                    ...item,
+                    controlMode: "interactive",
+                    controlOwner: "stave",
+                    updatedAt: buildRecentTimestamp(),
+                  }
+                : item
+            ),
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
+      },
       markNotificationRead: async ({ id }) => {
         const readAt = new Date().toISOString();
         set((state) => ({
@@ -3230,6 +3332,10 @@ export const useAppStore = create<AppState>()(
           requestId: notification.action.requestId,
         });
 
+        if (isManagedTaskReadOnly({ state: latestState, taskId })) {
+          return;
+        }
+
         if (!locatedApproval) {
           if (isNotificationUnread(notification)) {
             await latestState.markNotificationRead({ id: notification.id });
@@ -3265,6 +3371,8 @@ export const useAppStore = create<AppState>()(
             updatedAt: buildRecentTimestamp(),
             unread: false,
             archivedAt: null,
+            controlMode: "interactive",
+            controlOwner: "stave",
           };
           set((nextState) => ({
             tasks: [seededTask, ...nextState.tasks],
@@ -3290,6 +3398,9 @@ export const useAppStore = create<AppState>()(
           state = get();
           resolvedTaskId = seededTaskId;
           task = seededTask;
+        }
+        if (task && isManagedTaskReadOnly({ state, taskId: resolvedTaskId })) {
+          return;
         }
         const provider = task?.provider ?? state.draftProvider ?? "claude-code";
         const taskWorkspaceId = state.taskWorkspaceIdById[resolvedTaskId] ?? state.activeWorkspaceId;
@@ -3617,6 +3728,9 @@ export const useAppStore = create<AppState>()(
       },
       abortTaskTurn: ({ taskId }) => {
         const stateBefore = get();
+        if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
+          return;
+        }
         const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
         if (activeTurnId) {
           const abortTurn = window.api?.provider?.abortTurn;
@@ -3661,80 +3775,17 @@ export const useAppStore = create<AppState>()(
       },
       resolveApproval: ({ taskId, messageId, approved }) => {
         const stateBefore = get();
+        if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
+          return;
+        }
+        const workspaceId = stateBefore.activeWorkspaceId;
         const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
         const message = (stateBefore.messagesByTask[taskId] ?? []).find((item) => item.id === messageId);
         const approvalPart = findLatestPendingApprovalPart({ message });
-        if (activeTurnId && approvalPart) {
-          const respondApproval = window.api?.provider?.respondApproval;
-          if (respondApproval) {
-            void respondApproval({
-              turnId: activeTurnId,
-              requestId: approvalPart.requestId,
-              approved,
-            }).then((result) => {
-              if (!result.ok) {
-                set((state) => {
-                  const current = state.messagesByTask[taskId] ?? [];
-                  const systemMessage: ChatMessage = {
-                    id: buildMessageId({ taskId, count: current.length }),
-                    role: "assistant",
-                    model: "system",
-                    providerId: "user",
-                    content: `Approval delivery failed: ${result.message ?? "unknown"}`,
-                    parts: [{
-                      type: "system_event",
-                      content: `Approval delivery failed: ${result.message ?? "unknown"}`,
-                    }],
-                  };
-                  return {
-                    messagesByTask: {
-                      ...state.messagesByTask,
-                      [taskId]: [...current, systemMessage],
-                    },
-                    workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-                  };
-                });
-                return;
-              }
-              set((state) => applyApprovalState({
-                messagesByTask: state.messagesByTask,
-                workspaceSnapshotVersion: state.workspaceSnapshotVersion,
-                taskId,
-                messageId,
-                requestId: approvalPart.requestId,
-                approved,
-              }));
-            }).catch((error) => {
-              set((state) => {
-                const current = state.messagesByTask[taskId] ?? [];
-                const failureText = `Approval delivery failed: ${String(error)}`;
-                const systemMessage: ChatMessage = {
-                  id: buildMessageId({ taskId, count: current.length }),
-                  role: "assistant",
-                  model: "system",
-                  providerId: "user",
-                  content: failureText,
-                  parts: [{
-                    type: "system_event",
-                    content: failureText,
-                  }],
-                };
-                return {
-                  messagesByTask: {
-                    ...state.messagesByTask,
-                    [taskId]: [...current, systemMessage],
-                  },
-                  workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-                };
-              });
-            });
-            return;
-          }
-        }
-        if (!activeTurnId && approvalPart && window.api?.provider?.respondApproval) {
+
+        const appendApprovalFailure = (failureText: string) => {
           set((state) => {
             const current = state.messagesByTask[taskId] ?? [];
-            const failureText = "Approval delivery failed: no active turn found for this task.";
             const systemMessage: ChatMessage = {
               id: buildMessageId({ taskId, count: current.length }),
               role: "assistant",
@@ -3754,25 +3805,112 @@ export const useAppStore = create<AppState>()(
               workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
             };
           });
-          return;
-        }
-        if (approvalPart) {
+        };
+
+        const applyApprovalResponse = (requestId: string) => {
           set((state) => applyApprovalState({
             messagesByTask: state.messagesByTask,
             workspaceSnapshotVersion: state.workspaceSnapshotVersion,
             taskId,
             messageId,
-            requestId: approvalPart.requestId,
+            requestId,
             approved,
           }));
+        };
+
+        if (activeTurnId && approvalPart) {
+          const respondApproval = window.api?.provider?.respondApproval;
+          if (respondApproval) {
+            void respondApproval({
+              turnId: activeTurnId,
+              requestId: approvalPart.requestId,
+              approved,
+            }).then((result) => {
+              if (!result.ok) {
+                appendApprovalFailure(`Approval delivery failed: ${result.message ?? "unknown"}`);
+                return;
+              }
+              applyApprovalResponse(approvalPart.requestId);
+            }).catch((error) => {
+              appendApprovalFailure(`Approval delivery failed: ${String(error)}`);
+            });
+            return;
+          }
+        }
+
+        if (!activeTurnId && approvalPart && workspaceId && window.api?.localMcp?.respondApproval) {
+          void window.api.localMcp.respondApproval({
+            workspaceId,
+            taskId,
+            requestId: approvalPart.requestId,
+            approved,
+          }).then((result) => {
+            if (!result.ok) {
+              appendApprovalFailure(`Approval delivery failed: ${result.message ?? "unknown"}`);
+              return;
+            }
+            applyApprovalResponse(approvalPart.requestId);
+          }).catch((error) => {
+            appendApprovalFailure(`Approval delivery failed: ${String(error)}`);
+          });
+          return;
+        }
+
+        if (!activeTurnId && approvalPart && window.api?.provider?.respondApproval) {
+          appendApprovalFailure("Approval delivery failed: no active turn found for this task.");
+          return;
+        }
+        if (approvalPart) {
+          applyApprovalResponse(approvalPart.requestId);
           return;
         }
       },
       resolveUserInput: ({ taskId, messageId, answers, denied }) => {
         const stateBefore = get();
+        if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
+          return;
+        }
+        const workspaceId = stateBefore.activeWorkspaceId;
         const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
         const message = (stateBefore.messagesByTask[taskId] ?? []).find((item) => item.id === messageId);
         const userInputPart = findLatestPendingUserInputPart({ message });
+
+        const appendUserInputFailure = (failureText: string) => {
+          set((state) => {
+            const current = state.messagesByTask[taskId] ?? [];
+            const systemMessage: ChatMessage = {
+              id: buildMessageId({ taskId, count: current.length }),
+              role: "assistant",
+              model: "system",
+              providerId: "user",
+              content: failureText,
+              parts: [{
+                type: "system_event",
+                content: failureText,
+              }],
+            };
+            return {
+              messagesByTask: {
+                ...state.messagesByTask,
+                [taskId]: [...current, systemMessage],
+              },
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        };
+
+        const applyUserInputResponse = (requestId: string) => {
+          set((state) => applyUserInputState({
+            messagesByTask: state.messagesByTask,
+            workspaceSnapshotVersion: state.workspaceSnapshotVersion,
+            taskId,
+            messageId,
+            requestId,
+            answers,
+            denied,
+          }));
+        };
+
         if (activeTurnId && userInputPart) {
           const respondUserInput = window.api?.provider?.respondUserInput;
           if (respondUserInput) {
@@ -3783,101 +3921,42 @@ export const useAppStore = create<AppState>()(
               denied,
             }).then((result) => {
               if (!result.ok) {
-                set((state) => {
-                  const current = state.messagesByTask[taskId] ?? [];
-                  const failureText = `User input delivery failed: ${result.message ?? "unknown"}`;
-                  const systemMessage: ChatMessage = {
-                    id: buildMessageId({ taskId, count: current.length }),
-                    role: "assistant",
-                    model: "system",
-                    providerId: "user",
-                    content: failureText,
-                    parts: [{
-                      type: "system_event",
-                      content: failureText,
-                    }],
-                  };
-                  return {
-                    messagesByTask: {
-                      ...state.messagesByTask,
-                      [taskId]: [...current, systemMessage],
-                    },
-                    workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-                  };
-                });
+                appendUserInputFailure(`User input delivery failed: ${result.message ?? "unknown"}`);
                 return;
               }
-              set((state) => applyUserInputState({
-                messagesByTask: state.messagesByTask,
-                workspaceSnapshotVersion: state.workspaceSnapshotVersion,
-                taskId,
-                messageId,
-                requestId: userInputPart.requestId,
-                answers,
-                denied,
-              }));
+              applyUserInputResponse(userInputPart.requestId);
             }).catch((error) => {
-              set((state) => {
-                const current = state.messagesByTask[taskId] ?? [];
-                const failureText = `User input delivery failed: ${String(error)}`;
-                const systemMessage: ChatMessage = {
-                  id: buildMessageId({ taskId, count: current.length }),
-                  role: "assistant",
-                  model: "system",
-                  providerId: "user",
-                  content: failureText,
-                  parts: [{
-                    type: "system_event",
-                    content: failureText,
-                  }],
-                };
-                return {
-                  messagesByTask: {
-                    ...state.messagesByTask,
-                    [taskId]: [...current, systemMessage],
-                  },
-                  workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-                };
-              });
+              appendUserInputFailure(`User input delivery failed: ${String(error)}`);
             });
             return;
           }
         }
-        if (!activeTurnId && userInputPart && window.api?.provider?.respondUserInput) {
-          set((state) => {
-            const current = state.messagesByTask[taskId] ?? [];
-            const failureText = "User input delivery failed: no active turn found for this task.";
-            const systemMessage: ChatMessage = {
-              id: buildMessageId({ taskId, count: current.length }),
-              role: "assistant",
-              model: "system",
-              providerId: "user",
-              content: failureText,
-              parts: [{
-                type: "system_event",
-                content: failureText,
-              }],
-            };
-            return {
-              messagesByTask: {
-                ...state.messagesByTask,
-                [taskId]: [...current, systemMessage],
-              },
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-            };
-          });
-          return;
-        }
-        if (userInputPart) {
-          set((state) => applyUserInputState({
-            messagesByTask: state.messagesByTask,
-            workspaceSnapshotVersion: state.workspaceSnapshotVersion,
+
+        if (!activeTurnId && userInputPart && workspaceId && window.api?.localMcp?.respondUserInput) {
+          void window.api.localMcp.respondUserInput({
+            workspaceId,
             taskId,
-            messageId,
             requestId: userInputPart.requestId,
             answers,
             denied,
-          }));
+          }).then((result) => {
+            if (!result.ok) {
+              appendUserInputFailure(`User input delivery failed: ${result.message ?? "unknown"}`);
+              return;
+            }
+            applyUserInputResponse(userInputPart.requestId);
+          }).catch((error) => {
+            appendUserInputFailure(`User input delivery failed: ${String(error)}`);
+          });
+          return;
+        }
+
+        if (!activeTurnId && userInputPart && window.api?.provider?.respondUserInput) {
+          appendUserInputFailure("User input delivery failed: no active turn found for this task.");
+          return;
+        }
+        if (userInputPart) {
+          applyUserInputResponse(userInputPart.requestId);
         }
       },
       resolveDiff: ({ taskId, messageId, accepted, partIndex }) => {

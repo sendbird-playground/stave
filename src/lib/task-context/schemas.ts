@@ -171,6 +171,8 @@ const TaskSchema = z.object({
   updatedAt: z.string(),
   unread: z.boolean(),
   archivedAt: z.string().nullable().optional().transform((value) => value ?? null),
+  controlMode: z.union([z.literal("interactive"), z.literal("managed")]).optional().default("interactive"),
+  controlOwner: z.union([z.literal("stave"), z.literal("external")]).optional().default("stave"),
   planFilePaths: z.array(z.string()).optional().default([]),
 });
 

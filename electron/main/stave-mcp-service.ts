@@ -342,8 +342,10 @@ async function loadWorkspaceSession(workspaceId: string) {
   if (!snapshot) {
     throw new Error(`Workspace not found: ${workspaceId}`);
   }
+  const latestTurns = store.listLatestTurnsForWorkspace({ workspaceId, limit: 200 });
   const session = buildWorkspaceSessionState({
     snapshot: snapshot as never,
+    latestTurns: latestTurns as never,
   });
   workspaceSessionCacheById.set(workspaceId, session);
   return session;
@@ -783,6 +785,8 @@ export async function runTask(args: {
       updatedAt: buildRecentTimestamp(),
       unread: false,
       archivedAt: null,
+      controlMode: "managed",
+      controlOwner: "external",
     } satisfies Task;
     session = cacheWorkspaceSession(args.workspaceId, {
       ...session,
@@ -796,6 +800,17 @@ export async function runTask(args: {
         ...session.nativeConversationReadyByTask,
         [task.id]: false,
       },
+    });
+  } else if (task.controlMode !== "managed" || task.controlOwner !== "external") {
+    task = {
+      ...task,
+      controlMode: "managed",
+      controlOwner: "external",
+      updatedAt: buildRecentTimestamp(),
+    } satisfies Task;
+    session = cacheWorkspaceSession(args.workspaceId, {
+      ...session,
+      tasks: session.tasks.map((item) => item.id === task!.id ? task! : item),
     });
   }
 
@@ -832,6 +847,7 @@ export async function runTask(args: {
   });
   session = cacheWorkspaceSession(args.workspaceId, {
     ...session,
+    activeTaskId: task.id,
     tasks: pendingState.tasks,
     messagesByTask: pendingState.messagesByTask,
     activeTurnIdsByTask: pendingState.activeTurnIdsByTask,
