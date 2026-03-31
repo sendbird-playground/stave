@@ -20,6 +20,7 @@ import {
   toHumanModelName,
 } from "@/lib/providers/model-catalog";
 import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
+import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { findLatestPendingUserInputPart } from "@/store/provider-message.utils";
@@ -112,9 +113,9 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.refreshSkillCatalog,
     state.resolveUserInput,
   ] as const));
-  const activeProvider = useAppStore((state) => (
-    state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? state.draftProvider
-  ));
+  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId) ?? null);
+  const draftProvider = useAppStore((state) => state.draftProvider);
+  const activeProvider = activeTask?.provider ?? draftProvider;
   const promptDraft = useAppStore((state) => state.promptDraftByTask[activeTaskId || "draft:session"] ?? EMPTY_PROMPT_DRAFT);
   const promptFocusNonce = useAppStore((state) => state.promptFocusNonce);
   useEffect(() => {
@@ -124,6 +125,8 @@ export function ChatInput(args: ChatInputProps = {}) {
   const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
   const activeMessageCount = useAppStore((state) => (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length);
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
+  const isManagedTask = isTaskManaged(activeTask);
+  const isPromptLocked = isTurnActive || isManagedTask;
   const pendingUserInput = useAppStore((state) => {
     const messages = state.messagesByTask[state.activeTaskId] ?? [];
     const lastMessage = messages.at(-1);
@@ -132,6 +135,9 @@ export function ChatInput(args: ChatInputProps = {}) {
     if (!part) return null;
     return { messageId: lastMessage.id, part };
   });
+  const managedNotice = isManagedTask
+    ? `This task is managed by ${getTaskControlOwner(activeTask) === "external" ? "an external controller" : "Stave"}. Take over to continue here.`
+    : null;
   const [
     modelClaude,
     modelCodex,

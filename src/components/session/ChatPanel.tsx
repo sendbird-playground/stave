@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
 import { Clock3, MessageSquareIcon } from "lucide-react";
-import { Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
+import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import {
   ChainOfThought,
   Conversation,
@@ -27,7 +27,7 @@ import {
   shouldRenderInlineToolPart,
   shouldAutoOpenToolGroup,
 } from "@/components/session/chat-panel.utils";
-import { formatTaskUpdatedAt } from "@/lib/tasks";
+import { canTakeOverTask, getTaskControlOwner, isTaskManaged, formatTaskUpdatedAt } from "@/lib/tasks";
 import { toHumanModelName } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -254,21 +254,32 @@ function ChatPanelHeader(args: {
   const [
     activeTaskId,
     activeWorkspaceId,
+    activeTask,
     activeTaskTitle,
     activeTaskUpdatedAt,
+    activeTurnId,
+    takeOverTask,
     turnDiagnosticsVisible,
   ] = useAppStore(useShallow((state) => {
     const activeTask = state.tasks.find((task) => task.id === state.activeTaskId);
     return [
       state.activeTaskId,
       state.activeWorkspaceId,
+      activeTask ?? null,
       activeTask?.title ?? "Untitled Task",
       activeTask?.updatedAt,
+      state.activeTurnIdsByTask[state.activeTaskId],
+      state.takeOverTask,
       state.settings.turnDiagnosticsVisible,
     ] as const;
   }));
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
   const canOpenSessionReplay = Boolean(activeWorkspaceId && activeTaskId);
+  const isManagedTask = isTaskManaged(activeTask);
+  const canTakeOver = canTakeOverTask({ task: activeTask, activeTurnId });
+  const managedLabel = isManagedTask
+    ? `Managed by ${getTaskControlOwner(activeTask) === "external" ? "external controller" : "Stave"}`
+    : null;
 
   useEffect(() => {
     const handle = window.setInterval(() => {
@@ -283,13 +294,35 @@ function ChatPanelHeader(args: {
         <div className="flex min-w-0 items-center gap-2">
           <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate font-medium text-foreground">{activeTaskTitle}</span>
+          {managedLabel ? (
+            <Badge variant="secondary" className="shrink-0 rounded-sm text-[10px] uppercase tracking-[0.14em]">
+              Managed
+            </Badge>
+          ) : null}
           {activeTaskUpdatedAt ? (
             <span className="shrink-0 text-xs text-muted-foreground">
               {formatTaskUpdatedAt({ value: activeTaskUpdatedAt, now: timeAnchor })}
             </span>
           ) : null}
+          {managedLabel ? (
+            <span className="truncate text-xs text-muted-foreground">
+              {activeTurnId ? managedLabel : `${managedLabel}. Take over to continue here.`}
+            </span>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {isManagedTask ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!canTakeOver}
+              className="h-7 rounded-sm px-2 text-xs shadow-none"
+              onClick={() => takeOverTask({ taskId: activeTaskId })}
+            >
+              Take Over
+            </Button>
+          ) : null}
           {turnDiagnosticsVisible ? (
             <TooltipProvider>
               <Tooltip>

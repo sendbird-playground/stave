@@ -18,7 +18,7 @@ import {
   type NotificationView,
   shouldShowNotificationApprovalActions,
 } from "@/components/layout/top-bar-notifications.utils";
-import { formatTaskUpdatedAt } from "@/lib/tasks";
+import { formatTaskUpdatedAt, isTaskManaged } from "@/lib/tasks";
 import { isNotificationUnread } from "@/lib/notifications/notification.types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -44,9 +44,10 @@ function buildLocationLabel(args: {
 export function TopBarNotifications(props: {
   noDragStyle: CSSProperties;
 }) {
-  const [notifications, markNotificationRead, markAllNotificationsRead, openNotificationContext, resolveNotificationApproval] = useAppStore(
+  const [notifications, tasks, markNotificationRead, markAllNotificationsRead, openNotificationContext, resolveNotificationApproval] = useAppStore(
     useShallow((state) => [
       state.notifications,
+      state.tasks,
       state.markNotificationRead,
       state.markAllNotificationsRead,
       state.openNotificationContext,
@@ -259,6 +260,11 @@ export function TopBarNotifications(props: {
                 unread,
                 action: notification.action,
               });
+              const approvalAction = notification.action?.type === "approval";
+              const approvalTask = notification.taskId
+                ? tasks.find((task) => task.id === notification.taskId) ?? null
+                : null;
+              const approvalHandledExternally = approvalAction && isTaskManaged(approvalTask);
               const createdLabel = formatTaskUpdatedAt({ value: notification.createdAt });
               const readLabel = notification.readAt ? formatTaskUpdatedAt({ value: notification.readAt }) : null;
               const notificationBusy = pendingActionId === "mark-all" || isNotificationActionPending(notification.id);
@@ -340,25 +346,33 @@ export function TopBarNotifications(props: {
                     </div>
                     {showApprovalActions ? (
                       <div className="mt-3 flex items-center justify-end gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8"
-                          disabled={notificationBusy}
-                          onClick={() => void handleResolveApproval(notification.id, false)}
-                        >
-                          Deny
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="h-8"
-                          disabled={notificationBusy}
-                          onClick={() => void handleResolveApproval(notification.id, true)}
-                        >
-                          Approve
-                        </Button>
+                        {approvalHandledExternally ? (
+                          <p className="text-xs text-muted-foreground">
+                            This approval is managed externally. Open the task to monitor it or answer from the originating client.
+                          </p>
+                        ) : (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              disabled={notificationBusy}
+                              onClick={() => void handleResolveApproval(notification.id, false)}
+                            >
+                              Deny
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8"
+                              disabled={notificationBusy}
+                              onClick={() => void handleResolveApproval(notification.id, true)}
+                            >
+                              Approve
+                            </Button>
+                          </>
+                        )}
                       </div>
                     ) : null}
                   </div>

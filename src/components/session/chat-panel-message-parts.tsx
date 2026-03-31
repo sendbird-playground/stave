@@ -26,6 +26,7 @@ import {
   summarizeReplayOnlyToolParts,
 } from "@/components/session/chat-panel.utils";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { useAppStore } from "@/store/app.store";
 import type { MessagePart } from "@/types/chat";
@@ -92,7 +93,12 @@ export function MessagePartRenderer(args: {
   const resolveApproval = useAppStore((state) => state.resolveApproval);
   const resolveUserInput = useAppStore((state) => state.resolveUserInput);
   const rollbackToCompactBoundary = useAppStore((state) => state.rollbackToCompactBoundary);
+  const task = useAppStore((state) => state.tasks.find((item) => item.id === taskId) ?? null);
   const [isRestoringCompactBoundary, setIsRestoringCompactBoundary] = useState(false);
+  const isManaged = isTaskManaged(task);
+  const managedReason = isManaged
+    ? `This request is managed by ${getTaskControlOwner(task) === "external" ? "an external controller" : "Stave"}. Respond from the originating client or take over after the run ends.`
+    : undefined;
 
   switch (part.type) {
     case "tool_use":
@@ -147,6 +153,8 @@ export function MessagePartRenderer(args: {
           toolName={part.toolName}
           description={part.description}
           state={part.state}
+          disabled={isManaged}
+          disabledReason={managedReason}
           onApprove={() => resolveApproval({ taskId, messageId, approved: true })}
           onReject={() => resolveApproval({ taskId, messageId, approved: false })}
         />
@@ -158,6 +166,8 @@ export function MessagePartRenderer(args: {
           questions={part.questions}
           answers={part.answers}
           state={part.state}
+          disabled={isManaged}
+          disabledReason={managedReason}
           onSubmit={(answers) => resolveUserInput({ taskId, messageId, answers })}
           onDeny={() => resolveUserInput({ taskId, messageId, denied: true })}
         />

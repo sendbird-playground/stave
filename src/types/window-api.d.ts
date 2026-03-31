@@ -258,6 +258,40 @@ interface WindowLocalMcpApi {
     cleared: number;
     message?: string;
   }>;
+  respondApproval?: (args: {
+    workspaceId: string;
+    taskId: string;
+    requestId: string;
+    approved: boolean;
+  }) => Promise<{
+    ok: boolean;
+    message?: string;
+    result?: {
+      ok: boolean;
+      workspaceId: string;
+      taskId: string;
+      requestId: string;
+      approved: boolean;
+    };
+  }>;
+  respondUserInput?: (args: {
+    workspaceId: string;
+    taskId: string;
+    requestId: string;
+    answers?: Record<string, string>;
+    denied?: boolean;
+  }) => Promise<{
+    ok: boolean;
+    message?: string;
+    result?: {
+      ok: boolean;
+      workspaceId: string;
+      taskId: string;
+      requestId: string;
+      answers?: Record<string, string>;
+      denied?: boolean;
+    };
+  }>;
 }
 
 type LspLanguageId = "python" | "typescript";

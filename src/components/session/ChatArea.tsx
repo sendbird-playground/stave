@@ -1,9 +1,11 @@
 import { FolderOpen, Layers } from "lucide-react";
+import { useEffect } from "react";
 import { ChatInput } from "@/components/session/ChatInput";
 import { ChatPanel } from "@/components/session/ChatPanel";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { PlanViewer } from "@/components/session/PlanViewer";
 import { Button, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
+import { isTaskManaged } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
 import { useAppStore } from "@/store/app.store";
 import { useShallow } from "zustand/react/shallow";
@@ -15,6 +17,9 @@ export function ChatArea() {
     hasSelectedWorkspace,
     hasSelectedTask,
     activeTaskMessageCount,
+    activeTask,
+    activeTurnId,
+    refreshActiveManagedTask,
     createProject,
     createTask,
   ] = useAppStore(useShallow((state) => [
@@ -23,10 +28,25 @@ export function ChatArea() {
     state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId),
     state.tasks.some((task) => task.id === state.activeTaskId),
     (state.messagesByTask[state.activeTaskId] ?? []).length,
+    state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
+    state.activeTurnIdsByTask[state.activeTaskId],
+    state.refreshActiveManagedTask,
     state.createProject,
     state.createTask,
   ] as const));
   const isEmpty = activeTaskMessageCount === 0;
+  const shouldPollManagedTask = isTaskManaged(activeTask) && Boolean(activeTurnId);
+
+  useEffect(() => {
+    if (!shouldPollManagedTask) {
+      return;
+    }
+    void refreshActiveManagedTask();
+    const handle = window.setInterval(() => {
+      void refreshActiveManagedTask();
+    }, 3000);
+    return () => window.clearInterval(handle);
+  }, [refreshActiveManagedTask, shouldPollManagedTask]);
 
   if (!projectPath) {
     return (
