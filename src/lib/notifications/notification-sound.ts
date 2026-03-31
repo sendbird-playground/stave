@@ -8,10 +8,25 @@ export const NOTIFICATION_SOUND_PRESETS = [
 export type NotificationSoundPreset =
   (typeof NOTIFICATION_SOUND_PRESETS)[number];
 
+export const NOTIFICATION_SOUND_MODES = ["preset", "custom"] as const;
+export type NotificationSoundMode = (typeof NOTIFICATION_SOUND_MODES)[number];
+
+export const DEFAULT_NOTIFICATION_SOUND_MODE: NotificationSoundMode = "preset";
 export const DEFAULT_NOTIFICATION_SOUND_PRESET: NotificationSoundPreset =
   "chime";
 export const DEFAULT_NOTIFICATION_SOUND_VOLUME = 0.5;
 export const NOTIFICATION_SOUND_COOLDOWN_MS = 500;
+
+/** Maximum custom audio file size in bytes (500 KB). */
+export const CUSTOM_AUDIO_MAX_SIZE_BYTES = 500 * 1024;
+/** Accepted MIME types for custom audio uploads. */
+export const CUSTOM_AUDIO_ACCEPTED_TYPES = [
+  "audio/mpeg",
+  "audio/wav",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/webm",
+] as const;
 
 interface NotificationAudioParamLike {
   setValueAtTime(value: number, startTime: number): unknown;
@@ -187,6 +202,21 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+export function isNotificationSoundMode(
+  value: unknown
+): value is NotificationSoundMode {
+  return (
+    typeof value === "string" &&
+    NOTIFICATION_SOUND_MODES.includes(value as NotificationSoundMode)
+  );
+}
+
+export function normalizeNotificationSoundMode(
+  value: unknown
+): NotificationSoundMode {
+  return isNotificationSoundMode(value) ? value : DEFAULT_NOTIFICATION_SOUND_MODE;
+}
+
 export function isNotificationSoundPreset(
   value: unknown
 ): value is NotificationSoundPreset {
@@ -302,3 +332,119 @@ export function createNotificationSoundPlayer(args?: {
 }
 
 export const playNotificationSound = createNotificationSoundPlayer();
+
+// ---------------------------------------------------------------------------
+// Custom audio file playback
+// ---------------------------------------------------------------------------
+
+/** Short fade-in to eliminate click/pop artifacts at the start of playback. */
+const CUSTOM_AUDIO_FADE_IN_MS = 10;
+
+let cachedCustomBuffer: { dataUrl: string; buffer: AudioBuffer } | null = null;
+
+async function decodeCustomAudioBuffer(
+  ctx: AudioContext,
+  dataUrl: string,
+): Promise<AudioBuffer> {
+  if (cachedCustomBuffer && cachedCustomBuffer.dataUrl === dataUrl) {
+    return cachedCustomBuffer.buffer;
+  }
+  const res = await fetch(dataUrl);
+  const arrayBuffer = await res.arrayBuffer();
+  const buffer = await ctx.decodeAudioData(arrayBuffer);
+  cachedCustomBuffer = { dataUrl, buffer };
+  return buffer;
+}
+
+export function createCustomNotificationSoundPlayer(args?: {
+  getNow?: () => number;
+}) {
+  let lastPlayedAt = -Infinity;
+  const getNow = args?.getNow ?? (() => Date.now());
+
+  return (options: { dataUrl: string; volume: number }) => {
+    const volume = normalizeNotificationSoundVolume(options.volume);
+    if (volume <= 0 || !options.dataUrl) {
+      return false;
+    }
+
+    const now = getNow();
+    if (now - lastPlayedAt < NOTIFICATION_SOUND_COOLDOWN_MS) {
+      return false;
+    }
+
+    // The shared context is a real AudioContext under the hood; cast to access
+    // decodeAudioData / createBufferSource which NotificationAudioContextLike omits.
+    const audioContext = getSharedAudioContext() as unknown as AudioContext | null;
+    if (!audioContext || typeof audioContext.decodeAudioData !== "function") {
+      return false;
+    }
+
+    lastPlayedAt = now;
+
+    void (async () => {
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
+      const buffer = await decodeCustomAudioBuffer(audioContext, options.dataUrl);
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+
+      const gainNode = audioContext.createGain();
+      // Zero the gain *immediately* so the default value (1.0) never leaks
+      // through if the source start and the automation land in the same
+      // render quantum (~128 samples).
+      gainNode.gain.value = 0;
+
+      const startTime = audioContext.currentTime + 0.02;
+      const fadeInEnd = startTime + CUSTOM_AUDIO_FADE_IN_MS / 1000;
+
+      gainNode.gain.setValueAtTime(0.0001, startTime);
+      gainNode.gain.linearRampToValueAtTime(volume, fadeInEnd);
+
+      source.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      source.start(startTime);
+    })().catch(() => {
+      // Silently ignore resume/decode/playback failures.
+    });
+
+    return true;
+  };
+}
+
+export const playCustomNotificationSound = createCustomNotificationSoundPlayer();
+
+/**
+ * Validate a File for custom notification sound upload.
+ * Returns an error message string if invalid, or `null` if valid.
+ */
+export function validateCustomAudioFile(file: File): string | null {
+  if (!CUSTOM_AUDIO_ACCEPTED_TYPES.includes(file.type as (typeof CUSTOM_AUDIO_ACCEPTED_TYPES)[number])) {
+    return `Unsupported file type: ${file.type || "unknown"}. Accepted: MP3, WAV, OGG, M4A, WebM.`;
+  }
+  if (file.size > CUSTOM_AUDIO_MAX_SIZE_BYTES) {
+    const sizeKB = Math.round(file.size / 1024);
+    return `File is too large (${sizeKB} KB). Maximum allowed size is ${CUSTOM_AUDIO_MAX_SIZE_BYTES / 1024} KB.`;
+  }
+  return null;
+}
+
+/**
+ * Read a File as a data URL string (base64).
+ */
+export function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Failed to read file as data URL."));
+      }
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}

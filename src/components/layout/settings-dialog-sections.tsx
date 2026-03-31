@@ -1,12 +1,17 @@
 import { memo, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
-import { Bot, ChevronDown, ChevronRight, Code2, Cog, Folder, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Trash2, Wrench, X } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Code2, Cog, FileAudio, Folder, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Trash2, Upload, Wrench, X } from "lucide-react";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Button, Slider, Textarea } from "@/components/ui";
 import {
+  CUSTOM_AUDIO_ACCEPTED_TYPES,
+  CUSTOM_AUDIO_MAX_SIZE_BYTES,
   NOTIFICATION_SOUND_PRESETS,
+  playCustomNotificationSound,
   playNotificationSound,
+  readFileAsDataUrl,
+  validateCustomAudioFile,
   type NotificationSoundPreset,
 } from "@/lib/notifications/notification-sound";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -702,6 +707,9 @@ function GeneralSection() {
     notificationSoundEnabled,
     notificationSoundPreset,
     notificationSoundVolume,
+    notificationSoundMode,
+    notificationSoundCustomAudioData,
+    notificationSoundCustomAudioName,
   ] = useAppStore(
     useShallow((state) => [
       state.settings.language,
@@ -709,10 +717,61 @@ function GeneralSection() {
       state.settings.notificationSoundEnabled,
       state.settings.notificationSoundPreset,
       state.settings.notificationSoundVolume,
+      state.settings.notificationSoundMode,
+      state.settings.notificationSoundCustomAudioData,
+      state.settings.notificationSoundCustomAudioName,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
   const notificationSoundVolumePercent = Math.round(notificationSoundVolume * 100);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleCustomAudioUpload = async (file: File) => {
+    setUploadError(null);
+    const error = validateCustomAudioFile(file);
+    if (error) {
+      setUploadError(error);
+      return;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      updateSettings({
+        patch: {
+          notificationSoundMode: "custom",
+          notificationSoundCustomAudioData: dataUrl,
+          notificationSoundCustomAudioName: file.name,
+        },
+      });
+    } catch {
+      setUploadError("Failed to read the audio file.");
+    }
+  };
+
+  const handleRemoveCustomAudio = () => {
+    setUploadError(null);
+    updateSettings({
+      patch: {
+        notificationSoundMode: "preset",
+        notificationSoundCustomAudioData: null,
+        notificationSoundCustomAudioName: null,
+      },
+    });
+  };
+
+  const handleTestSound = () => {
+    if (notificationSoundMode === "custom" && notificationSoundCustomAudioData) {
+      playCustomNotificationSound({
+        dataUrl: notificationSoundCustomAudioData,
+        volume: notificationSoundVolume,
+      });
+    } else {
+      playNotificationSound({
+        preset: notificationSoundPreset,
+        volume: notificationSoundVolume,
+      });
+    }
+  };
 
   return (
     <>
@@ -748,11 +807,11 @@ function GeneralSection() {
         </SettingsCard>
         <SettingsCard
           title="Notification Sound"
-          description="Play a short synthesized alert when a task finishes or an approval request arrives."
+          description="Customize the success sound played when a task turn finishes."
         >
           <LabeledField
             title="Sound"
-            description="Enable or mute notification sounds across the app."
+            description="Enable or mute the task completion sound."
           >
             <ChoiceButtons
               value={notificationSoundEnabled ? "on" : "off"}
@@ -766,18 +825,91 @@ function GeneralSection() {
           {notificationSoundEnabled ? (
             <>
               <LabeledField
-                title="Preset"
-                description="Choose the synthesized alert tone to use for notifications."
+                title="Source"
+                description="Use a built-in preset or upload your own audio file."
               >
                 <ChoiceButtons
-                  value={notificationSoundPreset}
-                  onChange={(value) => updateSettings({ patch: { notificationSoundPreset: value } })}
-                  options={NOTIFICATION_SOUND_PRESET_OPTIONS}
+                  value={notificationSoundMode}
+                  onChange={(value) => updateSettings({ patch: { notificationSoundMode: value as "preset" | "custom" } })}
+                  options={[
+                    { value: "preset", label: "Preset" },
+                    { value: "custom", label: "Custom" },
+                  ]}
                 />
               </LabeledField>
+              {notificationSoundMode === "preset" ? (
+                <LabeledField
+                  title="Preset"
+                  description="Choose the synthesized tone used for task completion."
+                >
+                  <ChoiceButtons
+                    value={notificationSoundPreset}
+                    onChange={(value) => updateSettings({ patch: { notificationSoundPreset: value } })}
+                    options={NOTIFICATION_SOUND_PRESET_OPTIONS}
+                  />
+                </LabeledField>
+              ) : (
+                <LabeledField
+                  title="Custom Audio"
+                  description={`Upload an audio file (MP3, WAV, OGG, M4A, WebM). Max ${CUSTOM_AUDIO_MAX_SIZE_BYTES / 1024} KB.`}
+                >
+                  <div className="flex flex-col gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept={CUSTOM_AUDIO_ACCEPTED_TYPES.join(",")}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          void handleCustomAudioUpload(file);
+                        }
+                        // Reset so the same file can be re-selected
+                        e.target.value = "";
+                      }}
+                    />
+                    {notificationSoundCustomAudioName ? (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 rounded-md border border-border/80 bg-muted/50 px-3 py-2 text-sm flex-1 min-w-0">
+                          <FileAudio className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{notificationSoundCustomAudioName}</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Upload className="h-3.5 w-3.5 mr-1" />
+                          Replace
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleRemoveCustomAudio}
+                        >
+                          <X className="h-3.5 w-3.5 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Upload className="h-3.5 w-3.5 mr-1" />
+                        Upload Audio File
+                      </Button>
+                    )}
+                    {uploadError ? (
+                      <p className="text-sm text-destructive">{uploadError}</p>
+                    ) : null}
+                  </div>
+                </LabeledField>
+              )}
               <LabeledField
                 title="Volume"
-                description="Adjust the playback level for notification sounds."
+                description="Adjust playback level for the task completion sound."
               >
                 <div className="flex items-center gap-3">
                   <Slider
@@ -802,15 +934,15 @@ function GeneralSection() {
               </LabeledField>
               <LabeledField
                 title="Preview"
-                description="Play the current preset once with the current volume."
+                description={notificationSoundMode === "custom"
+                  ? "Play the uploaded audio once with the current volume."
+                  : "Play the current preset once with the current volume."}
               >
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => playNotificationSound({
-                    preset: notificationSoundPreset,
-                    volume: notificationSoundVolume,
-                  })}
+                  onClick={handleTestSound}
+                  disabled={notificationSoundMode === "custom" && !notificationSoundCustomAudioData}
                 >
                   Test Sound
                 </Button>

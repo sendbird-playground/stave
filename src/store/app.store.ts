@@ -27,10 +27,14 @@ import {
 } from "@/lib/notifications/notification.types";
 import {
   DEFAULT_NOTIFICATION_SOUND_PRESET,
+  DEFAULT_NOTIFICATION_SOUND_MODE,
   DEFAULT_NOTIFICATION_SOUND_VOLUME,
+  normalizeNotificationSoundMode,
   normalizeNotificationSoundPreset,
   normalizeNotificationSoundVolume,
+  playCustomNotificationSound,
   playNotificationSound,
+  type NotificationSoundMode,
   type NotificationSoundPreset,
 } from "@/lib/notifications/notification-sound";
 import { resolveCommandInput } from "@/lib/commands";
@@ -257,6 +261,11 @@ export interface AppSettings {
   notificationSoundEnabled: boolean;
   notificationSoundVolume: number;
   notificationSoundPreset: NotificationSoundPreset;
+  notificationSoundMode: NotificationSoundMode;
+  /** Base64 data URL of the user-uploaded custom audio file. */
+  notificationSoundCustomAudioData: string | null;
+  /** Original file name of the uploaded custom audio, for display purposes. */
+  notificationSoundCustomAudioName: string | null;
   providerDebugStream: boolean;
   turnDiagnosticsVisible: boolean;
   providerTimeoutMs: number;
@@ -660,6 +669,9 @@ const defaultSettings: AppSettings = {
   notificationSoundEnabled: true,
   notificationSoundVolume: DEFAULT_NOTIFICATION_SOUND_VOLUME,
   notificationSoundPreset: DEFAULT_NOTIFICATION_SOUND_PRESET,
+  notificationSoundMode: DEFAULT_NOTIFICATION_SOUND_MODE,
+  notificationSoundCustomAudioData: null,
+  notificationSoundCustomAudioName: null,
   providerDebugStream: false,
   turnDiagnosticsVisible: true,
   providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
@@ -917,12 +929,21 @@ export const useAppStore = create<AppState>()(
             notificationSoundEnabled,
             notificationSoundVolume,
             notificationSoundPreset,
+            notificationSoundMode,
+            notificationSoundCustomAudioData,
           } = get().settings;
-          if (notificationSoundEnabled) {
-            playNotificationSound({
-              preset: notificationSoundPreset,
-              volume: notificationSoundVolume,
-            });
+          if (notificationSoundEnabled && result.notification.kind === "task.turn_completed") {
+            if (notificationSoundMode === "custom" && notificationSoundCustomAudioData) {
+              playCustomNotificationSound({
+                dataUrl: notificationSoundCustomAudioData,
+                volume: notificationSoundVolume,
+              });
+            } else {
+              playNotificationSound({
+                preset: notificationSoundPreset,
+                volume: notificationSoundVolume,
+              });
+            }
           }
           return result.notification;
         } catch (error) {
@@ -2353,6 +2374,13 @@ export const useAppStore = create<AppState>()(
             : {
                 notificationSoundPreset: normalizeNotificationSoundPreset(
                   patch.notificationSoundPreset,
+                ),
+              }),
+          ...(patch.notificationSoundMode === undefined
+            ? {}
+            : {
+                notificationSoundMode: normalizeNotificationSoundMode(
+                  patch.notificationSoundMode,
                 ),
               }),
         };
@@ -4234,6 +4262,9 @@ export const useAppStore = create<AppState>()(
         );
         state.settings.notificationSoundPreset = normalizeNotificationSoundPreset(
           raw.notificationSoundPreset,
+        );
+        state.settings.notificationSoundMode = normalizeNotificationSoundMode(
+          raw.notificationSoundMode,
         );
         if (typeof raw.staveModelPlanner === "string" && typeof raw.staveAutoPlanModel !== "string") {
           raw.staveAutoPlanModel = raw.staveModelPlanner;
