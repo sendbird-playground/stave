@@ -7,6 +7,7 @@ import type { EditorTab } from "@/types/chat";
 export function EditorMainToolbar(args: {
   activeTab: EditorTab | null;
   activeTabIsImage: boolean;
+  sendToAgentDisabled: boolean;
   editorDiffMode: boolean;
   diffViewMode: "unified" | "split";
   showDiffDisplayControls: boolean;
@@ -101,7 +102,7 @@ export function EditorMainToolbar(args: {
                   size="sm"
                   variant="ghost"
                   className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                  disabled={!args.activeTab}
+                  disabled={args.sendToAgentDisabled}
                   onClick={args.onSendToAgent}
                 >
                   <Send className="size-4" />

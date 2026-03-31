@@ -160,6 +160,7 @@ import {
   resolveLanguage,
   normalizeProviderTimeoutMs,
   isImageFilePath,
+  canSendEditorContextToTask,
   updateMessageById,
   applyApprovalState,
   applyUserInputState,
@@ -3961,7 +3962,11 @@ export const useAppStore = create<AppState>()(
         const state = get();
         const tabId = state.activeEditorTabId;
         const activeTab = state.editorTabs.find((tab) => tab.id === tabId);
-        if (!activeTab) {
+        if (!canSendEditorContextToTask({
+          taskId,
+          hasActiveEditorTab: Boolean(activeTab),
+          isTaskResponding: Boolean(taskId && state.activeTurnIdsByTask[taskId]),
+        }) || !activeTab) {
           return;
         }
 
