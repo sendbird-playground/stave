@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRightCircle, ClipboardCheck, Copy, Minus, Maximize2 } from "lucide-react";
 import { Button, Textarea, WaveIndicator } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
@@ -34,13 +34,14 @@ export function PlanViewer() {
   const [copied, setCopied] = useState(false);
   const persistedPlanRef = useRef<string | null>(null);
 
-  const [activeTaskId, activeProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, sendUserMessage, createTask, updatePromptDraft, updateSettings, registerPlanFile, projectPath] = useAppStore(
+  const [activeTaskId, activeProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, planAutoApprove, sendUserMessage, createTask, updatePromptDraft, updateSettings, registerPlanFile, projectPath] = useAppStore(
     useShallow((state) => [
       state.activeTaskId,
       state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? state.draftProvider,
       state.settings.claudePermissionMode,
       state.settings.claudePermissionModeBeforePlan,
       state.settings.codexExperimentalPlanMode,
+      state.settings.planAutoApprove,
       state.sendUserMessage,
       state.createTask,
       state.updatePromptDraft,
@@ -103,6 +104,32 @@ export function PlanViewer() {
     }
   }, [isPlanPending, planText, projectPath, activeTaskId, registerPlanFile]);
 
+  const handleApprove = useCallback(() => {
+    // Restore the permission mode that was active before plan mode
+    if ((activeProvider === "claude-code" || activeProvider === "stave") && claudePermissionMode === "plan") {
+      transitionClaudePermissionMode({
+        nextMode: claudePermissionModeBeforePlan ?? "acceptEdits",
+        currentMode: claudePermissionMode,
+        beforePlan: claudePermissionModeBeforePlan,
+        updateSettings,
+      });
+    } else if (activeProvider === "codex" && codexExperimentalPlanMode) {
+      updateSettings({ patch: { codexExperimentalPlanMode: false } });
+    }
+    sendUserMessage({ taskId: activeTaskId, content: APPROVE_PLAN_MESSAGE });
+    setRevising(false);
+    setRevisionText("");
+  }, [activeProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, updateSettings, sendUserMessage, activeTaskId]);
+
+  // Auto-approve: when planAutoApprove is enabled and a plan is pending, approve it automatically.
+  const autoApprovedPlanRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (planAutoApprove && isPlanPending && planText && planText !== autoApprovedPlanRef.current) {
+      autoApprovedPlanRef.current = planText;
+      handleApprove();
+    }
+  }, [planAutoApprove, isPlanPending, planText, handleApprove]);
+
   if (!isPlanPreparing && !isPlanPending) {
     return null;
   }
@@ -122,23 +149,6 @@ export function PlanViewer() {
     if (newTaskId && newTaskId !== activeTaskId) {
       updatePromptDraft({ taskId: newTaskId, patch: { text: planText } });
     }
-  }
-
-  function handleApprove() {
-    // Restore the permission mode that was active before plan mode
-    if ((activeProvider === "claude-code" || activeProvider === "stave") && claudePermissionMode === "plan") {
-      transitionClaudePermissionMode({
-        nextMode: claudePermissionModeBeforePlan ?? "acceptEdits",
-        currentMode: claudePermissionMode,
-        beforePlan: claudePermissionModeBeforePlan,
-        updateSettings,
-      });
-    } else if (activeProvider === "codex" && codexExperimentalPlanMode) {
-      updateSettings({ patch: { codexExperimentalPlanMode: false } });
-    }
-    sendUserMessage({ taskId: activeTaskId, content: APPROVE_PLAN_MESSAGE });
-    setRevising(false);
-    setRevisionText("");
   }
 
   function handleRevise() {
