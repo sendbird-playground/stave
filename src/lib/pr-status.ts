@@ -135,7 +135,7 @@ export const PR_TONE_BADGE_CLASS: Record<PrStatusTone, string> = {
 
 /** Styling for the create-PR trigger when the branch has no linked PR yet. */
 export const PR_CREATE_BUTTON_CLASS =
-  "border-[#1a7f37]/25 bg-[#dafbe1] text-[#1a7f37] hover:bg-[#c4f1cf] dark:border-[#2ea04366] dark:bg-[#2ea04326] dark:text-[#3fb950] dark:hover:bg-[#2ea04333]";
+  "border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15 shadow-sm";
 
 // ---------------------------------------------------------------------------
 // Action config – primary + secondary actions per status

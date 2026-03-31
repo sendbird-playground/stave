@@ -1,7 +1,7 @@
-import { Brain, Camera, Check, ClipboardCheck, FilePlus2, FolderOpen, Globe2, LoaderCircle, OctagonX, Plus, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
+import { Brain, Camera, Check, ClipboardCheck, FilePlus2, FolderOpen, Globe2, OctagonX, Plus, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
 import type { Attachment, UserInputPart } from "@/types/chat";
 import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Popover, PopoverAnchor, PopoverContent, Textarea } from "@/components/ui";
+import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
 import { PlanHistoryPopover } from "@/components/session/PlanHistoryPopover";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
@@ -814,76 +814,95 @@ export function PromptInput(args: PromptInputProps) {
             onSelect={({ selection }) => onModelSelect({ selection })}
           />
           {onFastModeChange ? (
-            <button
-              type="button"
-              disabled={interactionsDisabled}
-              onClick={() => onFastModeChange(!fastMode)}
-              title={fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
-              className={cn(
-                "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
-                fastMode
-                  ? "border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
-                  : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
-                interactionsDisabled && "cursor-not-allowed opacity-60",
-              )}
-            >
-              <Zap className={cn("size-3.5", fastMode && "fill-amber-400")} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  disabled={interactionsDisabled}
+                  onClick={() => onFastModeChange(!fastMode)}
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+                    fastMode
+                      ? "border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
+                      : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
+                    interactionsDisabled && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <Zap className={cn("size-3.5", fastMode && "fill-amber-400")} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
+              </TooltipContent>
+            </Tooltip>
           ) : null}
           {onPlanModeChange ? (
-            <button
-              type="button"
-              disabled={interactionsDisabled}
-              onClick={() => onPlanModeChange(!planMode)}
-              title={planMode ? "Plan mode ON" : "Plan mode OFF"}
-              className={cn(
-                "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
-                planMode
-                  ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
-                  : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
-                interactionsDisabled && "cursor-not-allowed opacity-60",
-              )}
-            >
-              <ClipboardCheck className="size-3.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  disabled={interactionsDisabled}
+                  onClick={() => onPlanModeChange(!planMode)}
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+                    planMode
+                      ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
+                      : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
+                    interactionsDisabled && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <ClipboardCheck className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{planMode ? "Plan mode ON" : "Plan mode OFF"}</TooltipContent>
+            </Tooltip>
           ) : null}
           <PlanHistoryPopover variant="icon" />
           {onThinkingModeChange ? (
-            <button
-              type="button"
-              disabled={interactionsDisabled}
-              onClick={() => {
-                const cycle = { adaptive: "enabled", enabled: "disabled", disabled: "adaptive" } as const;
-                onThinkingModeChange(cycle[thinkingMode ?? "adaptive"]);
-              }}
-              title={`Thinking: ${thinkingMode ?? "adaptive"}`}
-              className={cn(
-                "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
-                thinkingMode === "enabled"
-                  ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
-                  : thinkingMode === "disabled"
-                    ? "border-border/70 bg-secondary text-muted-foreground/50 hover:bg-secondary/60"
-                    : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
-                interactionsDisabled && "cursor-not-allowed opacity-60",
-              )}
-            >
-              <Brain className="size-3.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  disabled={interactionsDisabled}
+                  onClick={() => {
+                    const cycle = { adaptive: "enabled", enabled: "disabled", disabled: "adaptive" } as const;
+                    onThinkingModeChange(cycle[thinkingMode ?? "adaptive"]);
+                  }}
+                  className={cn(
+                    "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+                    thinkingMode === "enabled"
+                      ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
+                      : thinkingMode === "disabled"
+                        ? "border-border/70 bg-secondary text-muted-foreground/50 hover:bg-secondary/60"
+                        : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
+                    interactionsDisabled && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <Brain className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{`Thinking: ${thinkingMode ?? "adaptive"}`}</TooltipContent>
+            </Tooltip>
           ) : null}
           {hasControlsDrawerContent ? (
             <Drawer direction="bottom">
-              <DrawerTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={interactionsDisabled}
-                  className="h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60"
-                  aria-label="Open controls drawer"
-                >
-                  <SlidersHorizontal className="size-3.5" />
-                </Button>
-              </DrawerTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DrawerTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={interactionsDisabled}
+                      className="h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60"
+                      aria-label="Controls & Runtime"
+                    >
+                      <SlidersHorizontal className="size-3.5" />
+                    </Button>
+                  </DrawerTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top">Controls & Runtime</TooltipContent>
+              </Tooltip>
               <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
                 <DrawerHeader className="gap-2 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
                   <DrawerTitle className="text-lg font-semibold">Controls & Runtime</DrawerTitle>
@@ -918,60 +937,75 @@ export function PromptInput(args: PromptInputProps) {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          {isTurnActive ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-9 rounded-md px-3.5 text-sm"
-              onClick={() => onAbort?.()}
-            >
-              <OctagonX className="size-3.5" />
-              Abort
-            </Button>
-          ) : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={interactionsDisabled}
-                className={cn(
-                  "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
-                  attachOpen && "bg-secondary/90 text-foreground",
-                )}
-                aria-label="Attach file or capture screenshot"
-              >
-                <Plus className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="end">
-              <DropdownMenuItem onClick={() => setAttachOpen((prev) => !prev)}>
-                <FilePlus2 className="mr-2 size-3.5" />
-                Attach file
-              </DropdownMenuItem>
-              {screenshotAvailable ? (
-                <DropdownMenuItem onClick={() => onCaptureScreenshot?.()}>
-                  <Camera className="mr-2 size-3.5" />
-                  Screenshot
+          <Tooltip>
+            <DropdownMenu>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={interactionsDisabled}
+                    className={cn(
+                      "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
+                      attachOpen && "bg-secondary/90 text-foreground",
+                    )}
+                    aria-label="Attach file or capture screenshot"
+                  >
+                    <Plus className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="top">Attach file or screenshot</TooltipContent>
+              <DropdownMenuContent side="top" align="end">
+                <DropdownMenuItem onClick={() => setAttachOpen((prev) => !prev)}>
+                  <FilePlus2 className="mr-2 size-3.5" />
+                  Attach file
                 </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button type="submit" size="sm" className="h-9 rounded-md px-3.5 text-sm" disabled={interactionsDisabled}>
-            {isTurnActive ? (
-              <>
-                <LoaderCircle className="size-3.5 animate-spin" />
-                Responding...
-              </>
-            ) : (
-              <>
-                <Send className="size-3.5" />
-                Send
-              </>
-            )}
-          </Button>
+                {screenshotAvailable ? (
+                  <DropdownMenuItem onClick={() => onCaptureScreenshot?.()}>
+                    <Camera className="mr-2 size-3.5" />
+                    Screenshot
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </Tooltip>
+          {isTurnActive ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-md px-3.5 text-sm"
+                  onClick={() => onAbort?.()}
+                >
+                  <OctagonX className="size-3.5" />
+                  Abort
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <span>Stop responding</span>
+                <Kbd>Esc</Kbd>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="submit" size="sm" className="h-9 rounded-md px-3.5 text-sm" disabled={disabled}>
+                  <Send className="size-3.5" />
+                  Send
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <span>Send message</span>
+                <KbdGroup>
+                  <Kbd>↵</Kbd>
+                </KbdGroup>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </div>
     </form>

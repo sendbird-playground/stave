@@ -231,10 +231,10 @@ export function WorkspaceTaskTabs() {
 
   return (
     <>
-      <div className={cn("flex min-w-0 items-center border-b border-border/70 bg-background px-3", PANEL_BAR_HEIGHT_CLASS)}>
-        <div className="flex min-w-0 w-full items-center gap-2">
+      <div className={cn("flex min-w-0 items-stretch border-b border-border/70 bg-muted/30", PANEL_BAR_HEIGHT_CLASS)}>
+        <div className="flex min-w-0 w-full items-stretch">
           <div className="min-w-0 flex-1 overflow-x-auto">
-            <div className="flex min-w-max items-center gap-2">
+            <div className="flex w-full min-w-max items-stretch">
               {visibleTasks.map((task, index) => {
                 const isActive = task.id === activeTaskId;
                 const isResponding = Boolean(activeTurnIdsByTask[task.id]);
@@ -265,12 +265,12 @@ export function WorkspaceTaskTabs() {
                     }}
                     onDrop={(event) => handleTaskDrop(event, task.id)}
                     className={cn(
-                      "group flex h-11 cursor-grab items-center gap-1 rounded-md border px-2",
+                      "group flex flex-1 cursor-grab items-center gap-1 border-b-[2.5px] px-3 transition-colors",
                       isActive
-                        ? "border-primary/50 bg-background shadow-sm"
-                        : "border-border/70 bg-background/70",
+                        ? "border-b-primary bg-background shadow-[1px_0_3px_-1px_rgba(0,0,0,0.1),-1px_0_3px_-1px_rgba(0,0,0,0.1)]"
+                        : "border-b-transparent hover:bg-background/60",
                       draggingTaskId === task.id && "cursor-grabbing opacity-70",
-                      dropTargetTaskId === task.id && draggingTaskId && draggingTaskId !== task.id && "outline outline-1 outline-primary/60",
+                      dropTargetTaskId === task.id && draggingTaskId && draggingTaskId !== task.id && "bg-primary/5",
                     )}
                   >
                     <button
@@ -340,9 +340,9 @@ export function WorkspaceTaskTabs() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      className="h-11 w-11 shrink-0 rounded-md p-0"
+                      className="self-center h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground"
                       onClick={() => createTask({ title: "" })}
                     >
                       <Plus className="size-4" />
@@ -361,7 +361,7 @@ export function WorkspaceTaskTabs() {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 shrink-0">
+              <Button variant="ghost" size="sm" className="h-9 shrink-0 self-center ml-2">
                 <Ellipsis className="size-4" />
               </Button>
             </DropdownMenuTrigger>
