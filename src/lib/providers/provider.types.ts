@@ -217,6 +217,7 @@ export interface ProviderRuntimeOptions {
   codexReasoningSummary?: "auto" | "concise" | "detailed" | "none";
   codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
   codexFastMode?: boolean;
+  codexExperimentalPlanMode?: boolean;
   codexResumeThreadId?: string;
   /** Stave Auto profile used by the meta-provider for direct routing and orchestration. */
   staveAuto?: StaveAutoProfile;

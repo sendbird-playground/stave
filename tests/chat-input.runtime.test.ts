@@ -12,6 +12,7 @@ const baseArgs = {
   permissionMode: "on-request" as const,
   providerTimeoutMs: 3600000,
   claudePermissionMode: "acceptEdits" as const,
+  claudePermissionModeBeforePlan: null,
   claudeAllowDangerouslySkipPermissions: false,
   claudeSandboxEnabled: true,
   claudeAllowUnsandboxedCommands: true,
@@ -29,6 +30,7 @@ const baseArgs = {
   codexReasoningSummary: "detailed" as const,
   codexSupportsReasoningSummaries: "enabled" as const,
   codexFastMode: true,
+  codexExperimentalPlanMode: true,
   codexPathOverride: "/opt/homebrew/bin/codex",
   staveAutoFastMode: false,
   staveAutoOrchestrationMode: "auto" as const,
@@ -55,6 +57,7 @@ describe("chat-input runtime helpers", () => {
     const items = buildChatInputRuntimeStatusItems(baseArgs);
 
     expect(items.find((item) => item.id === "timeout")?.value).toBe("1 hour");
+    expect(items.find((item) => item.id === "plan-mode")?.value).toBe("Experimental");
     expect(items.find((item) => item.id === "summary")?.value).toBe("Detailed");
     expect(items.find((item) => item.id === "codex-binary")?.value).toBe(".../bin/codex");
   });

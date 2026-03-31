@@ -56,6 +56,13 @@ Stave's near-term local data direction is:
 
 The intent is to keep storage simple and avoid over-engineering for small data volumes. Repo-map context is 2-4 KB per workspace; an in-memory Map is sufficient.
 
+## Roadmap
+
+- Native Codex plan-mode parity: Stave currently ships an experimental Codex
+  plan toggle on top of the TypeScript SDK exec stream. Promote this to
+  first-class support when the SDK or transport exposes stable plan items and
+  plan deltas. See [docs/future/codex-native-plan-mode-roadmap-2026-03-31.md](docs/future/codex-native-plan-mode-roadmap-2026-03-31.md).
+
 ## Prerequisites
 
 - **Bun** — package manager and script runner
@@ -218,6 +225,7 @@ Stable project documentation now lives under `docs/`.
 - [Repo map spec](docs/architecture/repo-map-spec.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
 - [Notifications](docs/features/notifications.md)
+- [Codex native plan roadmap](docs/future/codex-native-plan-mode-roadmap-2026-03-31.md)
 - [Session Replay](docs/features/session-replay.md)
 - [Skill selector](docs/features/skill-selector.md)
 - [Attachments](docs/features/attachments.md)

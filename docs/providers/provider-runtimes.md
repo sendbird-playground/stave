@@ -134,6 +134,17 @@ Codex event mapping:
 - file changes -> diff events
 - failures -> `error`
 
+Experimental Codex plan mode:
+
+- When `codexExperimentalPlanMode` is enabled, Stave forwards
+  `collaboration_mode_kind = "plan"` and `plan_mode_reasoning_effort`.
+- The current TypeScript SDK exec stream still exposes plan-mode progress as
+  `todo_list` items plus a final `agent_message`, not as a first-class `plan`
+  item.
+- Stave therefore keeps experimental plan threads separate from normal Codex
+  turns and promotes the final plan-mode agent message into a Stave
+  `plan_ready` response, with a todo-list markdown fallback.
+
 Codex checkpoint support:
 
 - As of March 29, 2026, the Codex SDK stream does not emit checkpoint/compaction boundary events equivalent to Claude `compact_boundary`.
@@ -147,6 +158,7 @@ Codex-specific runtime controls come from the UI and runtime options:
 - approval policy
 - reasoning effort
 - reasoning summary and raw reasoning toggles
+- experimental plan mode
 - binary path override
 - provider timeout
 - debug stream logging
@@ -159,8 +171,8 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 
 ## Supported Codex baseline
 
-- Codex SDK: `@openai/codex-sdk@0.117.0`
-- Codex CLI baseline: `0.117.0`
+- Codex SDK: `@openai/codex-sdk@0.118.0-alpha.3`
+- Codex CLI baseline: `0.118.0-alpha.3`
 - Current Stave-supported Codex model IDs: `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
 
 Stave prefers an explicit/user-installed Codex CLI when available, but can also fall back to the bundled SDK binary. A user-configured binary path still takes precedence over auto-discovery.
