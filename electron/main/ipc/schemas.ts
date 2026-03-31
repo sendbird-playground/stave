@@ -510,3 +510,9 @@ export const LspRequestArgsSchema = LspBaseRequestSchema.extend({
 export const LspStopSessionsArgsSchema = z.object({
   rootPath: z.string().max(4096).optional(),
 }).strict();
+
+export const EslintRequestArgsSchema = z.object({
+  rootPath: z.string().min(1).max(4096),
+  filePath: z.string().min(1).max(4096),
+  text: z.string().max(2_000_000),
+}).strict();

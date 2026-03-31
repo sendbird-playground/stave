@@ -12,6 +12,7 @@ export interface LanguageIntelligenceSettings {
   enabled: boolean;
   pythonLspCommand: string;
   typescriptLspCommand: string;
+  eslintEnabled: boolean;
 }
 
 export interface LanguageIntelligenceRuntime {
@@ -246,9 +247,8 @@ async function closeModel(model: MonacoEditorApi.ITextModel) {
 }
 
 function trackModel(monaco: Monaco, model: MonacoEditorApi.ITextModel) {
-  const supportedLanguage = getSupportedLanguage(model.getLanguageId());
   const filePath = toWorkspaceFilePath(model.uri);
-  if (!supportedLanguage || !filePath) {
+  if (!filePath) {
     return;
   }
 
@@ -257,12 +257,26 @@ function trackModel(monaco: Monaco, model: MonacoEditorApi.ITextModel) {
     return;
   }
 
+  const supportedLanguage = getSupportedLanguage(model.getLanguageId());
+  const eslintSupported = isEslintSupported(model.getLanguageId());
+
   const disposable = model.onDidChangeContent(() => {
-    void syncModel(monaco, model);
+    if (supportedLanguage) {
+      void syncModel(monaco, model);
+    }
+    if (eslintSupported) {
+      scheduleLintWithEslint(monaco, model);
+    }
   });
   modelDisposables.set(key, disposable);
-  applyStoredDiagnosticsToModel(monaco, model);
-  void syncModel(monaco, model);
+
+  if (supportedLanguage) {
+    applyStoredDiagnosticsToModel(monaco, model);
+    void syncModel(monaco, model);
+  }
+  if (eslintSupported) {
+    void lintModelWithEslint(monaco, model);
+  }
 }
 
 function untrackModel(model: MonacoEditorApi.ITextModel) {
@@ -411,6 +425,109 @@ function registerProviders(monaco: Monaco) {
   }
 }
 
+// ESLint-supported file extensions
+const eslintLanguageIds = new Set([
+  "typescript", "javascript", "typescriptreact", "javascriptreact",
+  "json", "jsonc", "vue", "svelte", "html", "css", "scss", "less",
+]);
+
+function isEslintSupported(languageId: string) {
+  return eslintLanguageIds.has(languageId);
+}
+
+interface EslintDiagnostic {
+  ruleId: string | null;
+  severity: number;
+  message: string;
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+}
+
+function applyEslintDiagnosticsToModel(monaco: Monaco, model: MonacoEditorApi.ITextModel, diagnostics: EslintDiagnostic[]) {
+  monaco.editor.setModelMarkers(
+    model,
+    "eslint",
+    diagnostics.map((d) => ({
+      severity: d.severity === 2 ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+      message: d.ruleId ? `${d.message} (${d.ruleId})` : d.message,
+      source: "eslint",
+      startLineNumber: d.line,
+      startColumn: d.column,
+      endLineNumber: d.endLine ?? d.line,
+      endColumn: d.endColumn ?? d.column + 1,
+    })),
+  );
+}
+
+let eslintLintTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function lintModelWithEslint(monaco: Monaco, model: MonacoEditorApi.ITextModel) {
+  const runtime = runtimeRef.current;
+  const eslintApi = window.api?.eslint;
+  const settings = runtime?.getSettings();
+  const rootPath = runtime?.getWorkspaceRootPath() ?? "";
+  const filePath = toWorkspaceFilePath(model.uri);
+
+  if (!eslintApi?.lint || !settings?.eslintEnabled || !filePath || !rootPath) {
+    console.log("[eslint] skip lint:", { hasApi: !!eslintApi?.lint, enabled: settings?.eslintEnabled, filePath, rootPath: !!rootPath });
+    return;
+  }
+
+  if (!isEslintSupported(model.getLanguageId())) {
+    return;
+  }
+
+  const result = await eslintApi.lint({ rootPath, filePath, text: model.getValue() });
+  console.log("[eslint] lint result:", { ok: result.ok, detail: result.detail, diagnosticCount: result.diagnostics?.length });
+  if (result.ok && result.diagnostics) {
+    applyEslintDiagnosticsToModel(monaco, model, result.diagnostics);
+  }
+}
+
+function scheduleLintWithEslint(monaco: Monaco, model: MonacoEditorApi.ITextModel) {
+  if (eslintLintTimer) {
+    clearTimeout(eslintLintTimer);
+  }
+  eslintLintTimer = setTimeout(() => {
+    eslintLintTimer = null;
+    void lintModelWithEslint(monaco, model);
+  }, 500);
+}
+
+function registerEslintProviders(monaco: Monaco) {
+  // Register formatting provider for all ESLint-supported languages
+  for (const languageId of eslintLanguageIds) {
+    monaco.languages.registerDocumentFormattingEditProvider(languageId, {
+      displayName: "ESLint",
+      provideDocumentFormattingEdits: async (model: MonacoEditorApi.ITextModel) => {
+        const runtime = runtimeRef.current;
+        const eslintApi = window.api?.eslint;
+        const settings = runtime?.getSettings();
+        const rootPath = runtime?.getWorkspaceRootPath() ?? "";
+        const filePath = toWorkspaceFilePath(model.uri);
+
+        if (!eslintApi?.fix || !settings?.eslintEnabled || !filePath || !rootPath) {
+          return [];
+        }
+
+        const result = await eslintApi.fix({ rootPath, filePath, text: model.getValue() });
+        if (!result.ok || !result.output) {
+          return [];
+        }
+
+        // Replace entire document with fixed output
+        const fullRange = model.getFullModelRange();
+        return [{
+          range: fullRange,
+          text: result.output,
+        }];
+      },
+    });
+  }
+}
+
 function registerModelSync(monaco: Monaco) {
   monaco.editor.getModels().forEach((model: MonacoEditorApi.ITextModel) => trackModel(monaco, model));
   monaco.editor.onDidCreateModel((model: MonacoEditorApi.ITextModel) => {
@@ -464,6 +581,7 @@ export function configureMonacoLanguageIntelligence(args: {
   }
 
   registerProviders(args.monaco);
+  registerEslintProviders(args.monaco);
   registerModelSync(args.monaco);
   registerDiagnosticsSubscription(args.monaco);
   languageIntelligenceConfigured = true;
@@ -483,12 +601,32 @@ export function resyncLanguageIntelligenceModels(monaco: Monaco) {
   }
 }
 
+export async function formatWithEslint(args: {
+  rootPath: string;
+  filePath: string;
+  text: string;
+}): Promise<string | null> {
+  const eslintApi = window.api?.eslint;
+  if (!eslintApi?.fix) return null;
+
+  const result = await eslintApi.fix(args);
+  if (!result.ok) {
+    return null;
+  }
+  return result.output ?? null;
+}
+
 export function clearLanguageIntelligenceMarkers(monaco: Monaco) {
   for (const model of monaco.editor.getModels()) {
+    const filePath = toWorkspaceFilePath(model.uri);
+    if (!filePath) continue;
+
     const supportedLanguage = getSupportedLanguage(model.getLanguageId());
-    if (!supportedLanguage || !toWorkspaceFilePath(model.uri)) {
-      continue;
+    if (supportedLanguage) {
+      monaco.editor.setModelMarkers(model, `lsp:${supportedLanguage.lspLanguageId}`, []);
     }
-    monaco.editor.setModelMarkers(model, `lsp:${supportedLanguage.lspLanguageId}`, []);
+    if (isEslintSupported(model.getLanguageId())) {
+      monaco.editor.setModelMarkers(model, "eslint", []);
+    }
   }
 }
