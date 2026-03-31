@@ -38,6 +38,7 @@ import {
 } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
+import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import { CreateWorkspaceDialog } from "@/components/layout/CreateWorkspaceDialog";
 import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
 import { MemoryUsagePopover } from "@/components/layout/ResourcesPopover";
@@ -743,7 +744,7 @@ export function ProjectWorkspaceSidebar(args: {
         {!args.collapsed ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
             <TooltipProvider>
-              <div className="mb-3 flex items-center justify-between rounded-md border border-border/60 bg-card/70 px-3 py-2">
+              <div className={cn("mb-3 flex items-center justify-between rounded-md border border-border/60 bg-card/70 px-3", PANEL_BAR_HEIGHT_CLASS)}>
                 <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Projects
                 </span>

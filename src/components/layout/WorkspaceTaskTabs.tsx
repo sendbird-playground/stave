@@ -2,6 +2,7 @@ import { Check, Copy, Ellipsis, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
+import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import { Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, KbdSeparator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
@@ -230,8 +231,8 @@ export function WorkspaceTaskTabs() {
 
   return (
     <>
-      <div className="min-w-0 border-b border-border/70 bg-background px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className={cn("flex min-w-0 items-center border-b border-border/70 bg-background px-3", PANEL_BAR_HEIGHT_CLASS)}>
+        <div className="flex min-w-0 w-full items-center gap-2">
           <div className="min-w-0 flex-1 overflow-x-auto">
             <div className="flex min-w-max items-center gap-2">
               {visibleTasks.map((task, index) => {
