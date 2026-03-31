@@ -1,27 +1,25 @@
 // ---------------------------------------------------------------------------
-// Thin re-export layer
-//
-// All theme logic now lives in @/lib/themes/*.  This file keeps the original
-// import path (`@/store/theme.utils`) working so existing consumers don't
-// need to change.
+// @/lib/themes  --  public API for the Stave custom theme system
 // ---------------------------------------------------------------------------
 
+// Types
 export {
-  // Types
   THEME_TOKEN_NAMES,
   type ThemeTokenName,
   type ThemeModeName,
   type ThemeTokenValues,
   type ThemeOverrideValues,
   type CustomThemeDefinition,
+} from "./types";
 
-  // Presets
-  PRESET_THEME_TOKENS,
+// Base light / dark preset values
+export { PRESET_THEME_TOKENS } from "./presets";
 
-  // Built-in custom themes
-  BUILTIN_CUSTOM_THEMES,
+// Built-in custom theme definitions
+export { BUILTIN_CUSTOM_THEMES } from "./builtin-themes";
 
-  // DOM application
+// DOM application functions
+export {
   applyThemeClass,
   applyThemeOverrides,
   applyCustomTheme,
@@ -31,8 +29,10 @@ export {
   resolveDarkModeForTheme,
   findCustomThemeById,
   listAllCustomThemes,
+} from "./apply";
 
-  // Validation
+// Validation & serialisation for user-installable themes
+export {
   MAX_USER_THEMES,
   MAX_THEME_FILE_SIZE,
   CustomThemeJsonSchema,
@@ -41,4 +41,4 @@ export {
   validateCustomThemeJson,
   parseCustomThemeFile,
   exportCustomThemeJson,
-} from "@/lib/themes";
+} from "./validate";

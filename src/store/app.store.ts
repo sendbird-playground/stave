@@ -118,13 +118,19 @@ import {
   type ThemeModeName,
   type ThemeTokenValues,
   type ThemeOverrideValues,
+  type CustomThemeDefinition,
   THEME_TOKEN_NAMES,
   PRESET_THEME_TOKENS,
+  BUILTIN_CUSTOM_THEMES,
   applyThemeClass,
   applyThemeOverrides,
+  applyCustomTheme,
   applyFontOverrides,
   resolveDarkModeForTheme,
-} from "@/store/theme.utils";
+  findCustomThemeById,
+  listAllCustomThemes,
+  MAX_USER_THEMES,
+} from "@/lib/themes";
 import {
   type RecentProjectState,
   normalizeWorkspaceInitCommand,
@@ -176,13 +182,22 @@ export type { LayoutState } from "@/store/layout.utils";
 export {
   THEME_TOKEN_NAMES,
   PRESET_THEME_TOKENS,
-} from "@/store/theme.utils";
+  BUILTIN_CUSTOM_THEMES,
+  MAX_USER_THEMES,
+} from "@/lib/themes";
+export {
+  parseCustomThemeFile,
+  exportCustomThemeJson,
+  listAllCustomThemes,
+} from "@/lib/themes";
 export type {
   ThemeTokenName,
   ThemeModeName,
   ThemeTokenValues,
   ThemeOverrideValues,
-} from "@/store/theme.utils";
+  CustomThemeDefinition,
+  ThemeValidationResult,
+} from "@/lib/themes";
 export type { RecentProjectState } from "@/store/project.utils";
 
 interface SkillCatalogState {
@@ -199,6 +214,10 @@ export { DEFAULT_PROVIDER_TIMEOUT_MS, PROVIDER_TIMEOUT_OPTIONS } from "@/lib/pro
 
 export interface AppSettings {
   themeMode: "light" | "dark" | "system";
+  /** ID of the active custom theme preset, or `null` for the default. */
+  customThemeId: string | null;
+  /** User-installed custom theme definitions (persisted in localStorage). */
+  userCustomThemes: CustomThemeDefinition[];
   themeOverrides: Record<ThemeModeName, ThemeOverrideValues>;
   language: string;
   updateMode: "auto" | "manual";
@@ -366,6 +385,8 @@ interface AppState {
   setProjectWorkspaceInitCommand: (args: { projectPath?: string; command: string }) => void;
   setProjectWorkspaceUseRootNodeModulesSymlink: (args: { projectPath?: string; enabled: boolean }) => void;
   setDarkMode: (args: { enabled: boolean }) => void;
+  installCustomTheme: (args: { theme: CustomThemeDefinition }) => { ok: boolean; error?: string };
+  removeCustomTheme: (args: { themeId: string }) => void;
   updateSettings: (args: { patch: Partial<AppSettings> }) => void;
   refreshProviderCommandCatalog: () => void;
   selectTask: (args: { taskId: string }) => void;
@@ -616,6 +637,8 @@ function buildApprovalNotificationInputs(args: {
 
 const defaultSettings: AppSettings = {
   themeMode: "dark",
+  customThemeId: null,
+  userCustomThemes: [],
   themeOverrides: {
     light: {},
     dark: {},
@@ -2334,8 +2357,9 @@ export const useAppStore = create<AppState>()(
       },
       setDarkMode: ({ enabled }) => {
         const nextThemeMode: AppSettings["themeMode"] = enabled ? "dark" : "light";
+        const hadCustomTheme = Boolean(get().settings.customThemeId);
         set((state) => {
-          if (state.isDarkMode === enabled && state.settings.themeMode === nextThemeMode) {
+          if (state.isDarkMode === enabled && state.settings.themeMode === nextThemeMode && !state.settings.customThemeId) {
             return state;
           }
           return {
@@ -2343,11 +2367,53 @@ export const useAppStore = create<AppState>()(
             settings: {
               ...state.settings,
               themeMode: nextThemeMode,
+              customThemeId: null,
             },
           };
         });
+        if (hadCustomTheme) {
+          applyCustomTheme({ theme: null });
+        }
         applyThemeClass({ enabled });
       },
+
+      installCustomTheme: ({ theme }) => {
+        const state = get();
+        const existing = state.settings.userCustomThemes;
+        if (existing.length >= MAX_USER_THEMES) {
+          return { ok: false, error: `Maximum of ${MAX_USER_THEMES} user themes reached.` };
+        }
+        const allIds = new Set([
+          ...BUILTIN_CUSTOM_THEMES.map((t) => t.id),
+          ...existing.map((t) => t.id),
+        ]);
+        if (allIds.has(theme.id)) {
+          return { ok: false, error: `Theme id "${theme.id}" already exists.` };
+        }
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            userCustomThemes: [...s.settings.userCustomThemes, theme],
+          },
+        }));
+        return { ok: true };
+      },
+
+      removeCustomTheme: ({ themeId }) => {
+        const state = get();
+        const wasActive = state.settings.customThemeId === themeId;
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            userCustomThemes: s.settings.userCustomThemes.filter((t) => t.id !== themeId),
+            customThemeId: wasActive ? null : s.settings.customThemeId,
+          },
+        }));
+        if (wasActive) {
+          applyCustomTheme({ theme: null });
+        }
+      },
+
       updateSettings: ({ patch }) => {
         const normalizedPatch: Partial<AppSettings> = {
           ...patch,
@@ -2393,6 +2459,18 @@ export const useAppStore = create<AppState>()(
               }),
         };
 
+        // ── resolve custom-theme side-effects ───────────────────────
+        // When a custom theme is selected, automatically align themeMode
+        // to the theme's base mode so the correct CSS selector activates.
+        const customThemeIdChanged = normalizedPatch.customThemeId !== undefined;
+        if (customThemeIdChanged && normalizedPatch.customThemeId) {
+          const userThemes = get().settings.userCustomThemes;
+          const theme = findCustomThemeById({ themeId: normalizedPatch.customThemeId, userThemes });
+          if (theme && normalizedPatch.themeMode === undefined) {
+            normalizedPatch.themeMode = theme.baseMode;
+          }
+        }
+
         const nextThemeMode = normalizedPatch.themeMode;
         const nextIsDark = nextThemeMode
           ? resolveDarkModeForTheme({ themeMode: nextThemeMode })
@@ -2416,6 +2494,15 @@ export const useAppStore = create<AppState>()(
             ...nextState,
           };
         });
+
+        // ── apply custom theme ────────────────────────────────────────
+        if (customThemeIdChanged) {
+          const s = get().settings;
+          const theme = s.customThemeId
+            ? findCustomThemeById({ themeId: s.customThemeId, userThemes: s.userCustomThemes })
+            : null;
+          applyCustomTheme({ theme });
+        }
 
         if (normalizedPatch.themeOverrides) {
           applyThemeOverrides({ themeOverrides: normalizedPatch.themeOverrides });
@@ -4375,6 +4462,15 @@ export const useAppStore = create<AppState>()(
         });
         state.isDarkMode = isDark;
         applyThemeClass({ enabled: isDark });
+        // Apply persisted custom theme before user overrides so cascade order
+        // is correct: base → custom-theme → manual overrides.
+        if (state.settings.customThemeId) {
+          const theme = findCustomThemeById({
+            themeId: state.settings.customThemeId,
+            userThemes: state.settings.userCustomThemes,
+          });
+          applyCustomTheme({ theme });
+        }
         applyThemeOverrides({ themeOverrides: state.settings.themeOverrides });
         applyFontOverrides({
           messageFontFamily: state.settings.messageFontFamily,

@@ -8,6 +8,7 @@ See [AGENTS.md](./AGENTS.md) for the authoritative project policy.
 - When modifying provider runtimes, always check **both** `claude-sdk-runtime.ts` and `codex-sdk-runtime.ts` for symmetry.
 - Run `bun test` after code changes to verify nothing is broken.
 - Prefer the `Agent` tool with `subagent_type: "Explore"` for open-ended codebase searches rather than manual glob/grep chains.
+- **Theme system**: Any UI work — layout, components, colours, surfaces, shadcn presets — must verify and update `src/lib/themes/` (types, presets, built-in themes) and `src/globals.css`. This applies to the base light/dark system **and** custom themes equally. See the "Theme System" section in `AGENTS.md` for the full checklist.
 
 ## Release and Push Requests
 
