@@ -2,7 +2,9 @@ import { useEffect, useReducer, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import type { ClaudeContextUsageSnapshot, ClaudePluginReloadSnapshot } from "@/lib/providers/provider.types";
+import type { StaveLocalMcpStatus } from "@/lib/local-mcp";
 import { formatClaudeSettingSources, formatTokenBudget } from "@/lib/providers/runtime-option-contract";
 import { getRepoMapCacheSnapshot, clearRepoMapContextCache, type RepoMapCacheEntry } from "@/lib/fs/repo-map-context-cache";
 import { useAppStore } from "@/store/app.store";
@@ -10,6 +12,8 @@ import { buildProviderRuntimeOptions } from "@/store/provider-runtime-options";
 import {
   ChoiceButtons,
   DraftInput,
+  LabeledField,
+  readInt,
   SectionHeading,
   SectionStack,
   SettingsCard,
@@ -18,6 +22,13 @@ import {
 interface GpuStatusSnapshot {
   hardwareAccelerationEnabled: boolean;
   featureStatus: Record<string, string>;
+}
+
+interface LocalMcpViewState {
+  status: "loading" | "ready" | "error";
+  snapshot: StaveLocalMcpStatus | null;
+  detail: string;
+  busy: boolean;
 }
 
 export function DeveloperSection() {
@@ -164,6 +175,8 @@ export function DeveloperSection() {
             </p>
           </div>
         </SettingsCard>
+
+        <LocalMcpServerCard />
 
         <SettingsCard
           title="Claude Runtime Tools"
@@ -345,6 +358,338 @@ export function DeveloperSection() {
         <RepoMapCacheCard />
       </SectionStack>
     </>
+  );
+}
+
+function LocalMcpServerCard() {
+  const [state, setState] = useState<LocalMcpViewState>({
+    status: "loading",
+    snapshot: null,
+    detail: "Loading local MCP server status...",
+    busy: false,
+  });
+
+  async function refreshStatus() {
+    const getStatus = window.api?.localMcp?.getStatus;
+    if (!getStatus) {
+      setState({
+        status: "error",
+        snapshot: null,
+        detail: "Local MCP settings API unavailable.",
+        busy: false,
+      });
+      return;
+    }
+
+    setState((current) => ({
+      ...current,
+      status: current.snapshot ? current.status : "loading",
+      detail: current.snapshot ? current.detail : "Loading local MCP server status...",
+    }));
+
+    try {
+      const result = await getStatus();
+      if (!result.ok || !result.status) {
+        setState({
+          status: "error",
+          snapshot: null,
+          detail: result.message || "Failed to load local MCP status.",
+          busy: false,
+        });
+        return;
+      }
+      setState({
+        status: "ready",
+        snapshot: result.status,
+        detail: result.status.running
+          ? "Local MCP server is running."
+          : (result.status.config.enabled
+              ? "Local MCP server is configured but not currently running."
+              : "Local MCP server is disabled."),
+        busy: false,
+      });
+    } catch (error) {
+      setState({
+        status: "error",
+        snapshot: null,
+        detail: error instanceof Error ? error.message : "Failed to load local MCP status.",
+        busy: false,
+      });
+    }
+  }
+
+  useEffect(() => {
+    void refreshStatus();
+  }, []);
+
+  async function applyConfigPatch(patch: {
+    enabled?: boolean;
+    port?: number;
+    token?: string;
+  }) {
+    const updateConfig = window.api?.localMcp?.updateConfig;
+    if (!updateConfig) {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        detail: "Local MCP settings API unavailable.",
+        busy: false,
+      }));
+      return;
+    }
+
+    setState((current) => ({
+      ...current,
+      busy: true,
+      detail: "Restarting local MCP server...",
+    }));
+
+    try {
+      const result = await updateConfig(patch);
+      if (!result.ok || !result.status) {
+        setState((current) => ({
+          ...current,
+          status: "error",
+          detail: result.message || "Failed to update local MCP settings.",
+          busy: false,
+        }));
+        return;
+      }
+      setState({
+        status: "ready",
+        snapshot: result.status,
+        detail: result.status.running
+          ? "Local MCP settings saved and server restarted."
+          : (result.status.config.enabled
+              ? "Local MCP settings saved."
+              : "Local MCP server disabled."),
+        busy: false,
+      });
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        detail: error instanceof Error ? error.message : "Failed to update local MCP settings.",
+        busy: false,
+      }));
+    }
+  }
+
+  async function handleRotateToken() {
+    const rotateToken = window.api?.localMcp?.rotateToken;
+    if (!rotateToken) {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        detail: "Local MCP settings API unavailable.",
+        busy: false,
+      }));
+      return;
+    }
+
+    setState((current) => ({
+      ...current,
+      busy: true,
+      detail: "Generating a new local MCP token and restarting the server...",
+    }));
+
+    try {
+      const result = await rotateToken();
+      if (!result.ok || !result.status) {
+        setState((current) => ({
+          ...current,
+          status: "error",
+          detail: result.message || "Failed to rotate local MCP token.",
+          busy: false,
+        }));
+        return;
+      }
+      setState({
+        status: "ready",
+        snapshot: result.status,
+        detail: "Generated a new local MCP token and restarted the server.",
+        busy: false,
+      });
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        detail: error instanceof Error ? error.message : "Failed to rotate local MCP token.",
+        busy: false,
+      }));
+    }
+  }
+
+  async function handleCopy(value: string, label: string) {
+    try {
+      await copyTextToClipboard(value);
+      setState((current) => ({
+        ...current,
+        detail: `${label} copied to clipboard.`,
+      }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        detail: error instanceof Error ? error.message : `Failed to copy ${label.toLowerCase()}.`,
+      }));
+    }
+  }
+
+  if (state.status === "loading" && !state.snapshot) {
+    return (
+      <SettingsCard
+        title="Local MCP Server"
+        description="Manage the packaged-app loopback MCP endpoint used by same-machine bots and helpers."
+      >
+        <p className="text-sm text-muted-foreground">Loading local MCP server status...</p>
+      </SettingsCard>
+    );
+  }
+
+  const snapshot = state.snapshot;
+  const config = snapshot?.config;
+  const manifest = snapshot?.manifest;
+
+  return (
+    <SettingsCard
+      title="Local MCP Server"
+      description="Manage the packaged-app loopback MCP endpoint used by same-machine bots and helpers."
+    >
+      {snapshot && config ? (
+        <>
+          <LabeledField
+            title="Server"
+            description="Enable or disable the localhost MCP surface exposed by the desktop app."
+          >
+            <ChoiceButtons
+              value={config.enabled ? "on" : "off"}
+              onChange={(value) => void applyConfigPatch({ enabled: value === "on" })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
+
+          <LabeledField
+            title="Port"
+            description="Use `0` to let Stave choose any available localhost port when the server starts."
+          >
+            <DraftInput
+              className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
+              inputMode="numeric"
+              placeholder="0"
+              value={String(config.port)}
+              onCommit={(nextValue) => void applyConfigPatch({
+                port: Math.max(0, Math.min(65_535, readInt(nextValue.trim(), 0))),
+              })}
+            />
+          </LabeledField>
+
+          <LabeledField
+            title="Token"
+            description="Bearer token required by local clients. Rotate it to immediately revoke previous access."
+          >
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <DraftInput
+                className="h-10 flex-1 rounded-md border-border/80 bg-background font-mono text-sm"
+                spellCheck={false}
+                value={config.token}
+                onCommit={(nextValue) => void applyConfigPatch({ token: nextValue.trim() })}
+              />
+              <div className="flex gap-2">
+                <Button
+                  className="h-10"
+                  variant="outline"
+                  disabled={state.busy}
+                  onClick={() => void handleCopy(config.token, "Token")}
+                >
+                  Copy
+                </Button>
+                <Button
+                  className="h-10"
+                  variant="outline"
+                  disabled={state.busy}
+                  onClick={() => void handleRotateToken()}
+                >
+                  Rotate
+                </Button>
+              </div>
+            </div>
+          </LabeledField>
+
+          <div className="space-y-2 rounded-md border border-border/80 bg-background px-3 py-2">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Status</span>
+              <span className="font-mono text-foreground">
+                {snapshot.running ? "running" : (config.enabled ? "stopped" : "disabled")}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Config file</span>
+              <span className="font-mono text-foreground">{snapshot.configPath}</span>
+            </div>
+            {manifest ? (
+              <>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">MCP URL</span>
+                  <span className="font-mono text-foreground">{manifest.url}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">Health URL</span>
+                  <span className="font-mono text-foreground">{manifest.healthUrl}</span>
+                </div>
+              </>
+            ) : null}
+            {snapshot.manifestPaths.map((manifestPath) => (
+              <div key={manifestPath} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-muted-foreground">Manifest</span>
+                <span className="font-mono text-foreground">{manifestPath}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="h-9"
+              size="sm"
+              variant="outline"
+              disabled={state.busy}
+              onClick={() => void refreshStatus()}
+            >
+              Refresh Status
+            </Button>
+            {manifest?.url ? (
+              <Button
+                className="h-9"
+                size="sm"
+                variant="outline"
+                disabled={state.busy}
+                onClick={() => void handleCopy(manifest.url, "MCP URL")}
+              >
+                Copy URL
+              </Button>
+            ) : null}
+            <Button
+              className="h-9"
+              size="sm"
+              variant="outline"
+              disabled={state.busy}
+              onClick={() => void handleCopy(snapshot.configPath, "Config path")}
+            >
+              Copy Config Path
+            </Button>
+          </div>
+        </>
+      ) : null}
+
+      {state.detail ? (
+        <p className="rounded-md border border-border/80 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+          {state.detail}
+        </p>
+      ) : null}
+    </SettingsCard>
   );
 }
 

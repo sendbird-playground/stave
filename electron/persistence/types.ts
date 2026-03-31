@@ -1,7 +1,9 @@
+import type { Attachment } from "../../src/types/chat";
+
 export interface PersistenceTaskRow {
   id: string;
   title: string;
-  provider: "claude-code" | "codex";
+  provider: "claude-code" | "codex" | "stave";
   updatedAt: string;
   unread: boolean;
   archivedAt?: string | null;
@@ -29,7 +31,16 @@ export interface PersistenceWorkspaceSnapshot {
   activeTaskId: string;
   tasks: PersistenceTaskRow[];
   messagesByTask: Record<string, PersistenceChatMessageRow[]>;
-  promptDraftByTask?: Record<string, { text: string; attachedFilePaths: string[] }>;
+  promptDraftByTask?: Record<string, {
+    text: string;
+    attachedFilePaths: string[];
+    attachments?: Attachment[];
+  }>;
+  providerConversationByTask?: Record<string, {
+    "claude-code"?: string;
+    codex?: string;
+    stave?: string;
+  }>;
   editorTabs?: Array<{
     id: string;
     filePath: string;

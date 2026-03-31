@@ -6,6 +6,7 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "../src/lib/providers/provider.types";
+import type { StaveLocalMcpStatus } from "../src/lib/local-mcp";
 import type { RepoMapResponse } from "../src/lib/fs/repo-map.types";
 import type { AppNotification, AppNotificationCreateInput } from "../src/lib/notifications/notification.types";
 import type { SkillCatalogResponse } from "../src/lib/skills/types";
@@ -277,6 +278,27 @@ contextBridge.exposeInMainWorld("api", {
         "skills:get-catalog",
         args ?? {},
       ) as Promise<SkillCatalogResponse>,
+  },
+  localMcp: {
+    getStatus: () => ipcRenderer.invoke("local-mcp:get-status") as Promise<{
+      ok: boolean;
+      status: StaveLocalMcpStatus | null;
+      message?: string;
+    }>,
+    updateConfig: (args: {
+      enabled?: boolean;
+      port?: number;
+      token?: string;
+    }) => ipcRenderer.invoke("local-mcp:update-config", args) as Promise<{
+      ok: boolean;
+      status: StaveLocalMcpStatus | null;
+      message?: string;
+    }>,
+    rotateToken: () => ipcRenderer.invoke("local-mcp:rotate-token") as Promise<{
+      ok: boolean;
+      status: StaveLocalMcpStatus | null;
+      message?: string;
+    }>,
   },
   lsp: {
     syncDocument: (args: {

@@ -5,6 +5,7 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "@/lib/providers/provider.types";
+import type { StaveLocalMcpStatus } from "@/lib/local-mcp";
 import type { RepoMapResponse } from "@/lib/fs/repo-map.types";
 import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
@@ -223,6 +224,28 @@ interface WindowSkillsApi {
   getCatalog?: (args?: {
     workspacePath?: string;
   }) => Promise<SkillCatalogResponse>;
+}
+
+interface WindowLocalMcpApi {
+  getStatus?: () => Promise<{
+    ok: boolean;
+    status: StaveLocalMcpStatus | null;
+    message?: string;
+  }>;
+  updateConfig?: (args: {
+    enabled?: boolean;
+    port?: number;
+    token?: string;
+  }) => Promise<{
+    ok: boolean;
+    status: StaveLocalMcpStatus | null;
+    message?: string;
+  }>;
+  rotateToken?: () => Promise<{
+    ok: boolean;
+    status: StaveLocalMcpStatus | null;
+    message?: string;
+  }>;
 }
 
 type LspLanguageId = "python" | "typescript";
@@ -786,6 +809,7 @@ interface WindowApi {
   persistence?: WindowPersistenceApi;
   fs?: WindowFsApi;
   skills?: WindowSkillsApi;
+  localMcp?: WindowLocalMcpApi;
   lsp?: WindowLspApi;
   terminal?: WindowTerminalApi;
   sourceControl?: WindowSourceControlApi;

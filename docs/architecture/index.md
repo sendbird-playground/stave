@@ -6,15 +6,17 @@ This file is the fast entrypoint for codebase orientation.
 
 1. `AGENTS.md` for repo policy, boundaries, and contract guardrails
 2. `docs/architecture/runtime.md` for runtime topology
-3. `docs/architecture/conversation-flow.md` for turn lifecycle
-4. `docs/providers/provider-runtimes.md` for provider-specific paths
-5. `docs/architecture/entrypoints.md` for task-to-file routing
-6. `docs/architecture/contracts.md` for multi-file contract checklists
+3. `docs/architecture/local-mcp-embedded-plan.md` for packaged-app automation architecture
+4. `docs/architecture/conversation-flow.md` for turn lifecycle
+5. `docs/providers/provider-runtimes.md` for provider-specific paths
+6. `docs/architecture/entrypoints.md` for task-to-file routing
+7. `docs/architecture/contracts.md` for multi-file contract checklists
 
 ## Top-Level Layout
 
 - `src/` renderer, state, session UI, editor UI
 - `electron/` main process, preload bridge, provider runtimes, persistence
+- `electron/main/stave-*` packaged-app local automation / MCP surface
 - `server/` browser-only dev bridge
 - `docs/` stable product and architecture reference
 - `skills/` repo-local reusable workflows
