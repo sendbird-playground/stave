@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   BUILTIN_CUSTOM_THEMES,
+  BUILTIN_THEME_TOKEN_NAMES,
   buildCustomThemeCss,
   exportCustomThemeJson,
   findCustomThemeById,
@@ -209,14 +210,30 @@ describe("BUILTIN_CUSTOM_THEMES", () => {
     expect(theme!.tokens.foreground).toBe("#FFFFFF");
   });
 
+  it("includes the new VS Code-inspired presets", () => {
+    const ids = BUILTIN_CUSTOM_THEMES.map((theme) => theme.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "github-light-default",
+        "github-dark-default",
+        "one-dark-pro",
+        "dracula",
+        "ayu-mirage",
+        "night-owl",
+        "tokyo-night",
+      ]),
+    );
+  });
+
   it("all built-in themes have unique ids", () => {
     const ids = BUILTIN_CUSTOM_THEMES.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("all built-in themes have at least 10 tokens", () => {
+  it("all built-in themes define every required token", () => {
     for (const theme of BUILTIN_CUSTOM_THEMES) {
-      expect(Object.keys(theme.tokens).length).toBeGreaterThanOrEqual(10);
+      const missingTokens = BUILTIN_THEME_TOKEN_NAMES.filter((token) => !(token in theme.tokens));
+      expect(missingTokens).toEqual([]);
     }
   });
 });

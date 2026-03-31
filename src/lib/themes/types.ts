@@ -22,6 +22,7 @@ export const THEME_TOKEN_NAMES = [
   "accent",
   "accent-foreground",
   "destructive",
+  "destructive-foreground",
   "border",
   "input",
   "ring",
@@ -35,10 +36,49 @@ export const THEME_TOKEN_NAMES = [
   "sidebar-ring",
 ] as const;
 
+/**
+ * Extended theme tokens used by Stave-specific surfaces outside the shadcn core.
+ * Built-in themes must define these as well so theme application stays complete.
+ */
+export const EXTENDED_THEME_TOKEN_NAMES = [
+  "success",
+  "success-foreground",
+  "warning",
+  "warning-foreground",
+  "overlay",
+  "surface",
+  "editor",
+  "editor-foreground",
+  "editor-muted",
+  "editor-tab",
+  "editor-tab-active",
+  "terminal",
+  "terminal-foreground",
+  "diff-added",
+  "diff-added-foreground",
+  "diff-removed",
+  "diff-removed-foreground",
+  "chart-1",
+  "chart-2",
+  "chart-3",
+  "chart-4",
+  "chart-5",
+  "provider-codex",
+  "provider-claude",
+] as const;
+
+export const BUILTIN_THEME_TOKEN_NAMES = [
+  ...THEME_TOKEN_NAMES,
+  ...EXTENDED_THEME_TOKEN_NAMES,
+] as const;
+
 export type ThemeTokenName = (typeof THEME_TOKEN_NAMES)[number];
+export type ExtendedThemeTokenName = (typeof EXTENDED_THEME_TOKEN_NAMES)[number];
+export type BuiltinThemeTokenName = (typeof BUILTIN_THEME_TOKEN_NAMES)[number];
 export type ThemeModeName = "light" | "dark";
 export type ThemeTokenValues = Record<ThemeTokenName, string>;
 export type ThemeOverrideValues = Partial<Record<ThemeTokenName, string>>;
+export type BuiltinThemeTokenValues = Record<BuiltinThemeTokenName, string>;
 
 /**
  * A named, self-contained theme preset.
