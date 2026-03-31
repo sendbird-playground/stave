@@ -1,3 +1,34 @@
+## [0.0.29](https://github.com/sendbird-playground/stave/compare/v0.0.28...v0.0.29) (2026-03-31)
+
+### Features
+
+* add ESLint formatter and format-on-save shortcut ([#133](https://github.com/sendbird-playground/stave/issues/133)) ([487072b](https://github.com/sendbird-playground/stave/commit/487072b06f7dce9e28c4fe7676def7fc580c35f4))
+* add local packaged-app MCP automation surface ([#123](https://github.com/sendbird-playground/stave/issues/123)) ([e6b5c39](https://github.com/sendbird-playground/stave/commit/e6b5c39fe50645384c8e49b5e7dc4ad0f3f5ebbc))
+* add stave-design-system skill and workflow documentation ([#126](https://github.com/sendbird-playground/stave/issues/126)) ([c5f2f99](https://github.com/sendbird-playground/stave/commit/c5f2f998d68001b29e7891c64b539c0190a25b05))
+* add workspace refresh feature ([#132](https://github.com/sendbird-playground/stave/issues/132)) ([2ec6ae8](https://github.com/sendbird-playground/stave/commit/2ec6ae85f0c2c3c943fa713f7b997e39fc0f3947))
+* **auto-update:** add automatic daily updates ([#136](https://github.com/sendbird-playground/stave/issues/136)) ([5d92355](https://github.com/sendbird-playground/stave/commit/5d9235528ad312c739a92331c8ea58e9b5cdf03b))
+* **filesystem:** show external symlinks in explorer ([#143](https://github.com/sendbird-playground/stave/issues/143)) ([c349f41](https://github.com/sendbird-playground/stave/commit/c349f41715b50147423569d59bd1d4de172883a0))
+* implement Codex native plan-mode support ([#116](https://github.com/sendbird-playground/stave/issues/116)) ([ac27d1d](https://github.com/sendbird-playground/stave/commit/ac27d1d4931c4d78324c12e896308db17e9bacbf))
+* **local-mcp:** add inbound request log viewer ([#128](https://github.com/sendbird-playground/stave/issues/128)) ([5501ede](https://github.com/sendbird-playground/stave/commit/5501ede86d8e09d26723c9cf8ae4fbf7d97e525d))
+* **notifications:** add configurable notification sounds ([#113](https://github.com/sendbird-playground/stave/issues/113)) ([db5844e](https://github.com/sendbird-playground/stave/commit/db5844e84dfb8c908eaa954c7557e0c2eea0c968))
+* **notifications:** add custom audio file upload for notification sound ([e48c361](https://github.com/sendbird-playground/stave/commit/e48c36149ab2b95824b70fac1ddfc20c97b1cc14))
+* **notifications:** add harvest notification preset ([#127](https://github.com/sendbird-playground/stave/issues/127)) ([dd878d8](https://github.com/sendbird-playground/stave/commit/dd878d8c0f4f61a687d886a8eb6cc52cc65a1d85))
+* **plan:** add auto-approve setting for plan mode ([#135](https://github.com/sendbird-playground/stave/issues/135)) ([78c90ae](https://github.com/sendbird-playground/stave/commit/78c90ae7607063aa67a1cf7d114e31d658956a6b))
+* **theme:** implement comprehensive theme system ([#139](https://github.com/sendbird-playground/stave/issues/139)) ([608869e](https://github.com/sendbird-playground/stave/commit/608869e6ae2963086fb42fc2ff98d6ba87dbced4))
+
+### Bug Fixes
+
+* **DFE-2508:** fix infinite re-render loop when creating new task tab ([#124](https://github.com/sendbird-playground/stave/issues/124)) ([4b3a2ce](https://github.com/sendbird-playground/stave/commit/4b3a2cecc2373bcfed33d88f8c34bb61062ec8ca))
+* **editor:** increase tab strip vertical padding ([#130](https://github.com/sendbird-playground/stave/issues/130)) ([7e45b1d](https://github.com/sendbird-playground/stave/commit/7e45b1d9b927e8d17949c89264b0a69ab7d58000))
+* **filesystem:** handle symlinks with cycle and boundary checks ([#115](https://github.com/sendbird-playground/stave/issues/115)) ([61bff08](https://github.com/sendbird-playground/stave/commit/61bff089b1c23be14cc329671149892ec32d1349))
+* **layout:** prevent task tabs from stretching to full width ([#129](https://github.com/sendbird-playground/stave/issues/129)) ([e5adf7a](https://github.com/sendbird-playground/stave/commit/e5adf7a21b18079dd9dd755e02e4db89e746397a))
+* **mcp:** handle managed tasks in the desktop ui ([#142](https://github.com/sendbird-playground/stave/issues/142)) ([d79dca4](https://github.com/sendbird-playground/stave/commit/d79dca4c3d45527f233e58b16954b36274de1217))
+* **scm:** deduplicate check runs by name to avoid stale failures ([#141](https://github.com/sendbird-playground/stave/issues/141)) ([9069fff](https://github.com/sendbird-playground/stave/commit/9069fffa37860790854264b6b272e59388d28479))
+* **TopBar:** add key prop to TopBarOpenPR for workspace changes ([#119](https://github.com/sendbird-playground/stave/issues/119)) ([f059efe](https://github.com/sendbird-playground/stave/commit/f059efef86bc2fa6d06b08b35341f863e4243f6d))
+* **ui:** prevent tooltip overflow ([#145](https://github.com/sendbird-playground/stave/issues/145)) ([388d7f3](https://github.com/sendbird-playground/stave/commit/388d7f347307e1b067966b9a09c7faf4d8703a41))
+* use createPortal for modals and fixed positioning ([#137](https://github.com/sendbird-playground/stave/issues/137)) ([6ebcaf1](https://github.com/sendbird-playground/stave/commit/6ebcaf1bed154dca4de16d67664626f3222d1b74))
+* **workspace:** harden project integrity boundaries ([#144](https://github.com/sendbird-playground/stave/issues/144)) ([208bafd](https://github.com/sendbird-playground/stave/commit/208bafd1a4655d7d182fe59818524033ee84807c))
+
 ## [0.0.28](https://github.com/sendbird-playground/stave/compare/v0.0.27...v0.0.28) (2026-03-30)
 
 ### Features
