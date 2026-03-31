@@ -1079,17 +1079,19 @@ export function ProjectWorkspaceSidebar(args: {
                                                         ) : null}
                                                         {(isResponding ||
                                                           canArchiveWorkspace) ? (
-                                                          <div
-                                                            className={cn(
-                                                              "flex h-7 shrink-0 items-center justify-end gap-1 pr-1",
-                                                              isResponding &&
-                                                                canArchiveWorkspace
-                                                                ? "min-w-[4.5rem]"
-                                                                : "min-w-7",
-                                                            )}
-                                                          >
+                                                          <div className="relative flex h-7 min-w-7 shrink-0 items-center justify-center pr-1">
                                                             {isResponding ? (
-                                                              <span className="inline-flex min-w-7 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary">
+                                                              <span
+                                                                className={cn(
+                                                                  "inline-flex min-w-7 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary transition-opacity",
+                                                                  canArchiveWorkspace
+                                                                    ? closingWorkspaceId ===
+                                                                        workspace.id
+                                                                      ? "opacity-0"
+                                                                      : "group-hover:opacity-0"
+                                                                    : "",
+                                                                )}
+                                                              >
                                                                 {
                                                                   respondingTaskCount
                                                                 }
@@ -1106,6 +1108,9 @@ export function ProjectWorkspaceSidebar(args: {
                                                                     size="sm"
                                                                     className={cn(
                                                                       "h-7 w-7 rounded-md p-0 text-muted-foreground transition-opacity hover:text-destructive focus-visible:text-destructive",
+                                                                      isResponding
+                                                                        ? "absolute inset-0 m-auto"
+                                                                        : "",
                                                                       closingWorkspaceId ===
                                                                         workspace.id
                                                                         ? "opacity-100"
