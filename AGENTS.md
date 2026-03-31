@@ -56,6 +56,19 @@ After generating shadcn components or copying UI code from external sources, ver
 
 When applying or reapplying a shadcn preset, do not stop at `shadcn init`. Update the preset reference in user-facing copy and documentation in the same piece of work, and review the related files that encode the preset shape in this repo: `components.json`, `src/globals.css`, `src/components/layout/settings-dialog-sections.tsx`, and `docs/ui/shadcn-preset.md`.
 
+## Design Workflow
+
+Use `$stave-design-system` for any request that changes Stave UI, layout, theme, component styling, dialogs, sidebars, empty states, prompt input, or other visual UX.
+
+Both Codex and Claude should treat the literal token `$stave-design-system` as the default design-system trigger for Stave frontend work.
+The repository-local copy of this skill lives at `skills/stave-design-system/SKILL.md`.
+
+- Use `$stave-design-system`.
+- Start from the existing token and shadcn architecture instead of importing a generic external design language wholesale.
+- Treat glassmorphism as a restrained accent that supports depth, not as the default treatment for every surface.
+- Keep desktop density, accessibility, and light/dark consistency ahead of visual novelty.
+- If a UI change alters shared design-system behavior or preset-facing copy, update the related docs in the same change.
+
 ## Quick Reference
 
 - Runtime: **Bun**
