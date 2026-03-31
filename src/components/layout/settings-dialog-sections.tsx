@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
-import { Bot, ChevronDown, ChevronRight, Code2, Cog, Folder, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Trash2, Wrench } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Code2, Cog, Folder, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Trash2, Wrench, X } from "lucide-react";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { useShallow } from "zustand/react/shallow";
@@ -158,11 +158,12 @@ const DraftTextarea = memo(function DraftTextarea(args: DraftTextareaProps) {
   );
 });
 
-function ProjectSettingsCard(args: {
+function ProjectSettingsPanel(args: {
   project: RecentProjectState;
   isCurrent: boolean;
   highlighted: boolean;
   onRequestRemove: (args: { projectPath: string; projectName: string }) => void;
+  onClose: () => void;
 }) {
   const setProjectWorkspaceInitCommand = useAppStore(
     (state) => state.setProjectWorkspaceInitCommand,
@@ -263,19 +264,16 @@ function ProjectSettingsCard(args: {
   }, [args.project.projectPath, repositoryRefreshNonce]);
 
   return (
-    <SettingsCard
-      title={args.project.projectName}
-      description="Repository-specific defaults, git metadata, and list management for this project."
-      className={cn("scroll-mt-6", args.highlighted && "ring-1 ring-primary/35")}
-    >
+    <div className={cn("space-y-4", args.highlighted && "scroll-mt-6")}>
       <div
         className={cn(
-          "flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border/70 bg-muted/30 p-3",
-          args.highlighted && "border-primary/30 bg-primary/5",
+          "flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/80 bg-card/95 px-4 py-3 shadow-xs",
+          args.highlighted && "border-primary/35 ring-1 ring-primary/20",
         )}
       >
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">Project Settings</Badge>
             {args.isCurrent ? <Badge>Current</Badge> : null}
             <Badge variant="secondary">
               {args.project.workspaces.length} workspace
@@ -285,154 +283,180 @@ function ProjectSettingsCard(args: {
               default: {args.project.defaultBranch}
             </Badge>
           </div>
+          <div className="space-y-1">
+            <h4 className="text-lg font-semibold tracking-tight">
+              {args.project.projectName}
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Review repository-specific workspace defaults, git metadata, and
+              removal actions for this project.
+            </p>
+          </div>
           <p className="font-mono text-xs text-muted-foreground break-all">
             {args.project.projectPath}
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={repositoryState.status === "loading"}
-          onClick={() => setRepositoryRefreshNonce((value) => value + 1)}
-        >
-          <RefreshCcw
-            className={cn(
-              "size-3.5",
-              repositoryState.status === "loading" && "animate-spin",
-            )}
-          />
-          Refresh
-        </Button>
-      </div>
-
-      <LabeledField
-        title="Post-Create Command"
-        description="Runs once in the new workspace root after creation. Useful for `bun install`, `npm install`, or multi-line bootstrap commands."
-      >
-        <DraftTextarea
-          className="min-h-[120px] rounded-md border-border/80 bg-background font-mono text-sm"
-          value={projectWorkspaceInitCommand}
-          onCommit={(nextValue) =>
-            setProjectWorkspaceInitCommand({
-              projectPath: args.project.projectPath,
-              command: nextValue,
-            })}
-          placeholder="bun install"
-        />
-      </LabeledField>
-
-      <LabeledField
-        title="Reuse Root node_modules"
-        description="Creates `node_modules` in each new worktree as a symlink to the repository root install. Faster startup, but later installs in that workspace will modify the shared dependency tree."
-      >
-        <button
-          type="button"
-          aria-pressed={projectUseRootNodeModulesSymlink}
-          onClick={() =>
-            setProjectWorkspaceUseRootNodeModulesSymlink({
-              projectPath: args.project.projectPath,
-              enabled: !projectUseRootNodeModulesSymlink,
-            })}
-          className={cn(
-            "flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors",
-            projectUseRootNodeModulesSymlink
-              ? "border-primary/50 bg-primary/5"
-              : "border-border/80 bg-background hover:border-border",
-          )}
-        >
-          <div>
-            <p className="text-sm font-medium text-foreground">
-              Enable shared `node_modules` symlink
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The symlink exists only inside the created workspace, so deleting
-              the workspace leaves the repository root untouched.
-            </p>
-          </div>
-          <span
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
-              projectUseRootNodeModulesSymlink
-                ? "border-primary/40 bg-primary/10 text-primary"
-                : "border-border/80 text-muted-foreground",
-            )}
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={repositoryState.status === "loading"}
+            onClick={() => setRepositoryRefreshNonce((value) => value + 1)}
           >
-            {projectUseRootNodeModulesSymlink ? "On" : "Off"}
-          </span>
-        </button>
-      </LabeledField>
-
-      <LabeledField title="Repository Root Path">
-        <div className="rounded-md border border-border/80 bg-background px-3 py-2.5 font-mono text-xs break-all">
-          {repositoryState.rootPath ?? "Not detected"}
-        </div>
-      </LabeledField>
-
-      <LabeledField
-        title="Remote Status"
-        description={repositoryState.detail}
-      >
-        {repositoryState.status === "error" ? (
-          <p className="text-sm text-destructive">{repositoryState.detail}</p>
-        ) : repositoryState.remotes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No remotes configured.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {repositoryState.remotes.map((remote) => (
-              <div
-                key={remote.name}
-                className="rounded-md border border-border/80 bg-background px-3 py-2.5"
-              >
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">{remote.name}</p>
-                  <Badge
-                    variant="secondary"
-                    className="h-5 px-1.5 text-[10px] uppercase tracking-wide"
-                  >
-                    configured
-                  </Badge>
-                </div>
-                <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
-                  fetch: {remote.fetchUrl ?? "-"}
-                </p>
-                <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
-                  push: {remote.pushUrl ?? remote.fetchUrl ?? "-"}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </LabeledField>
-
-      <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-destructive">
-              Remove project
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Removes this project from Stave&apos;s registered project list
-              without deleting files on disk.
-            </p>
-          </div>
+            <RefreshCcw
+              className={cn(
+                "size-3.5",
+                repositoryState.status === "loading" && "animate-spin",
+              )}
+            />
+            Refresh
+          </Button>
           <Button
             type="button"
             size="sm"
-            variant="destructive"
-            onClick={() =>
-              args.onRequestRemove({
-                projectPath: args.project.projectPath,
-                projectName: args.project.projectName,
-              })}
+            variant="ghost"
+            onClick={args.onClose}
           >
-            <Trash2 className="size-4" />
-            Remove project
+            <X className="size-4" />
+            Close
           </Button>
         </div>
       </div>
-    </SettingsCard>
+
+      <SettingsCard
+        title="Repository Settings"
+        description="Repository-specific defaults, git metadata, and list management for this project."
+        className={cn(args.highlighted && "ring-1 ring-primary/20")}
+      >
+        <LabeledField
+          title="Post-Create Command"
+          description="Runs once in the new workspace root after creation. Useful for `bun install`, `npm install`, or multi-line bootstrap commands."
+        >
+          <DraftTextarea
+            className="min-h-[120px] rounded-md border-border/80 bg-background font-mono text-sm"
+            value={projectWorkspaceInitCommand}
+            onCommit={(nextValue) =>
+              setProjectWorkspaceInitCommand({
+                projectPath: args.project.projectPath,
+                command: nextValue,
+              })}
+            placeholder="bun install"
+          />
+        </LabeledField>
+
+        <LabeledField
+          title="Reuse Root node_modules"
+          description="Creates `node_modules` in each new worktree as a symlink to the repository root install. Faster startup, but later installs in that workspace will modify the shared dependency tree."
+        >
+          <button
+            type="button"
+            aria-pressed={projectUseRootNodeModulesSymlink}
+            onClick={() =>
+              setProjectWorkspaceUseRootNodeModulesSymlink({
+                projectPath: args.project.projectPath,
+                enabled: !projectUseRootNodeModulesSymlink,
+              })}
+            className={cn(
+              "flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors",
+              projectUseRootNodeModulesSymlink
+                ? "border-primary/50 bg-primary/5"
+                : "border-border/80 bg-background hover:border-border",
+            )}
+          >
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Enable shared `node_modules` symlink
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The symlink exists only inside the created workspace, so deleting
+                the workspace leaves the repository root untouched.
+              </p>
+            </div>
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
+                projectUseRootNodeModulesSymlink
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border/80 text-muted-foreground",
+              )}
+            >
+              {projectUseRootNodeModulesSymlink ? "On" : "Off"}
+            </span>
+          </button>
+        </LabeledField>
+
+        <LabeledField title="Repository Root Path">
+          <div className="rounded-md border border-border/80 bg-background px-3 py-2.5 font-mono text-xs break-all">
+            {repositoryState.rootPath ?? "Not detected"}
+          </div>
+        </LabeledField>
+
+        <LabeledField
+          title="Remote Status"
+          description={repositoryState.detail}
+        >
+          {repositoryState.status === "error" ? (
+            <p className="text-sm text-destructive">{repositoryState.detail}</p>
+          ) : repositoryState.remotes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No remotes configured.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {repositoryState.remotes.map((remote) => (
+                <div
+                  key={remote.name}
+                  className="rounded-md border border-border/80 bg-background px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">{remote.name}</p>
+                    <Badge
+                      variant="secondary"
+                      className="h-5 px-1.5 text-[10px] uppercase tracking-wide"
+                    >
+                      configured
+                    </Badge>
+                  </div>
+                  <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
+                    fetch: {remote.fetchUrl ?? "-"}
+                  </p>
+                  <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
+                    push: {remote.pushUrl ?? remote.fetchUrl ?? "-"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </LabeledField>
+
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-destructive">
+                Remove project
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Removes this project from Stave&apos;s registered project list
+                without deleting files on disk.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              onClick={() =>
+                args.onRequestRemove({
+                  projectPath: args.project.projectPath,
+                  projectName: args.project.projectName,
+                })}
+            >
+              <Trash2 className="size-4" />
+              Remove project
+            </Button>
+          </div>
+        </div>
+      </SettingsCard>
+    </div>
   );
 }
 
@@ -461,11 +485,13 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
     ] as const),
   );
   const removeProjectFromList = useAppStore((state) => state.removeProjectFromList);
-  const projectCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const projectMenuRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [projectToRemove, setProjectToRemove] = useState<{
     projectPath: string;
     projectName: string;
   } | null>(null);
+  const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const projects = useMemo(
     () =>
       captureCurrentProjectState({
@@ -493,12 +519,43 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
   );
 
   useEffect(() => {
-    const highlightedProjectPath = args.highlightedProjectPath?.trim();
-    if (!highlightedProjectPath) {
+    if (projects.length === 0) {
+      setSelectedProjectPath(null);
+      setDetailOpen(false);
       return;
     }
 
-    const node = projectCardRefs.current[highlightedProjectPath];
+    const highlightedProjectPath = args.highlightedProjectPath?.trim();
+    const highlightedProject = highlightedProjectPath
+      ? projects.find((project) => project.projectPath === highlightedProjectPath) ?? null
+      : null;
+
+    if (highlightedProject && (selectedProjectPath !== highlightedProject.projectPath || !detailOpen)) {
+      setSelectedProjectPath(highlightedProject.projectPath);
+      setDetailOpen(true);
+      return;
+    }
+
+    if (selectedProjectPath && projects.some((project) => project.projectPath === selectedProjectPath)) {
+      return;
+    }
+
+    const currentProject = projectPath
+      ? projects.find((project) => project.projectPath === projectPath) ?? null
+      : null;
+    const fallbackProject = currentProject ?? projects[0] ?? null;
+
+    setSelectedProjectPath(fallbackProject?.projectPath ?? null);
+    setDetailOpen(Boolean(fallbackProject));
+  }, [args.highlightedProjectPath, detailOpen, projectPath, projects, selectedProjectPath]);
+
+  useEffect(() => {
+    const activeProjectPath = args.highlightedProjectPath?.trim() || selectedProjectPath;
+    if (!activeProjectPath) {
+      return;
+    }
+
+    const node = projectMenuRefs.current[activeProjectPath];
     if (!node) {
       return;
     }
@@ -508,43 +565,112 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [args.highlightedProjectPath, projects.length]);
+  }, [args.highlightedProjectPath, projects.length, selectedProjectPath]);
+
+  const selectedProject = detailOpen
+    ? (projects.find((project) => project.projectPath === selectedProjectPath) ?? null)
+    : null;
+  const selectedProjectName = projects.find((project) => project.projectPath === selectedProjectPath)?.projectName ?? null;
 
   return (
     <>
       <SectionHeading
         title="Projects"
-        description="Review repository-specific workspace defaults, git metadata, and removal actions for every registered project."
+        description="Choose a registered project from the menu, then review repository-specific workspace defaults, git metadata, and removal actions."
       />
-      <SectionStack>
-        {projects.length === 0 ? (
-          <SettingsCard
-            title="No Projects Yet"
-            description="Open a project from the sidebar to register it here."
-          >
-            <p className="text-sm text-muted-foreground">
-              Registered projects will show their repository defaults and
-              metadata in this section.
-            </p>
-          </SettingsCard>
-        ) : (
-          projects.map((project) => (
-            <div
-              key={project.projectPath}
-              ref={(node) => {
-                projectCardRefs.current[project.projectPath] = node;
-              }}
-            >
-              <ProjectSettingsCard
-                project={project}
-                isCurrent={project.projectPath === projectPath}
-                highlighted={args.highlightedProjectPath === project.projectPath}
-                onRequestRemove={setProjectToRemove}
-              />
+      {projects.length === 0 ? (
+        <SettingsCard
+          title="No Projects Yet"
+          description="Open a project from the sidebar to register it here."
+        >
+          <p className="text-sm text-muted-foreground">
+            Registered projects will show their repository defaults and
+            metadata in this section.
+          </p>
+        </SettingsCard>
+      ) : (
+        <section className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <div className="rounded-2xl border border-border/80 bg-card/70 p-2 shadow-xs">
+            <div className="flex items-center justify-between px-2 pb-2 pt-1">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Project Menu
+              </p>
+              <Badge variant="secondary" className="h-6 px-2">
+                {projects.length}
+              </Badge>
             </div>
-          ))
-        )}
-      </SectionStack>
+            <div className="flex flex-col gap-1">
+              {projects.map((project) => {
+                const selected = selectedProjectPath === project.projectPath;
+                const current = project.projectPath === projectPath;
+
+                return (
+                  <button
+                    key={project.projectPath}
+                    ref={(node) => {
+                      projectMenuRefs.current[project.projectPath] = node;
+                    }}
+                    type="button"
+                    onClick={() => {
+                      setSelectedProjectPath(project.projectPath);
+                      setDetailOpen(true);
+                    }}
+                    className={cn(
+                      "flex w-full flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition-colors",
+                      selected
+                        ? "border-primary/35 bg-primary/5 shadow-xs"
+                        : "border-transparent bg-transparent hover:border-border/80 hover:bg-muted/50",
+                    )}
+                    aria-current={selected ? "true" : undefined}
+                  >
+                    <div className="flex w-full items-center gap-2">
+                      <Folder className={cn("size-4 shrink-0", selected ? "text-primary" : "text-muted-foreground")} />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {project.projectName}
+                      </span>
+                      {current ? (
+                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                          current
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="w-full truncate pl-6 text-xs text-muted-foreground">
+                      {project.projectPath}
+                    </p>
+                    <div className="flex items-center gap-2 pl-6 text-[11px] text-muted-foreground">
+                      <span>{project.workspaces.length} ws</span>
+                      <span>default: {project.defaultBranch}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="min-w-0">
+            {selectedProject ? (
+              <ProjectSettingsPanel
+                project={selectedProject}
+                isCurrent={selectedProject.projectPath === projectPath}
+                highlighted={args.highlightedProjectPath === selectedProject.projectPath}
+                onRequestRemove={setProjectToRemove}
+                onClose={() => setDetailOpen(false)}
+              />
+            ) : (
+              <SettingsCard
+                title="Project Details"
+                description="Select a project from the menu to open its settings panel."
+              >
+                <p className="text-sm text-muted-foreground">
+                  {selectedProjectName
+                    ? `The detail panel for "${selectedProjectName}" is closed. Pick it again from the menu to reopen it.`
+                    : "Pick a project from the menu to inspect its workspace defaults and repository metadata."}
+                </p>
+              </SettingsCard>
+            )}
+          </div>
+        </section>
+      )}
       <ConfirmDialog
         open={Boolean(projectToRemove)}
         title="Remove Project"

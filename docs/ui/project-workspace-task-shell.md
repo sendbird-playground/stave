@@ -65,8 +65,8 @@ Replace the legacy workspace/task shell with a three-part layout:
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
   - shows workspace shortcuts in the collapsed rail and includes the parent project name in the tooltip
 - `SettingsDialog`
-  - includes a `Projects` section that renders repository workspace defaults and git metadata per registered project
-  - keeps project removal inside each project card instead of the sidebar row
+  - includes a `Projects` section with a dedicated project menu and a single detail panel for the selected project
+  - keeps repository workspace defaults, git metadata, close action, and project removal inside that selected-project panel instead of the main sidebar row
 - `WorkspaceTaskTabs`
   - renders active tasks as horizontal tabs for the selected workspace
   - uses one shared leading slot for responding wave or model icon
