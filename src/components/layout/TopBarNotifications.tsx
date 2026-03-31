@@ -13,12 +13,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui";
+import {
+  getNextNotificationView,
+  type NotificationView,
+  shouldShowNotificationApprovalActions,
+} from "@/components/layout/top-bar-notifications.utils";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { isNotificationUnread } from "@/lib/notifications/notification.types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-
-type NotificationView = "unread" | "history";
 
 function getNotificationKindLabel(kind: "task.turn_completed" | "task.approval_requested") {
   return kind === "task.approval_requested" ? "Approval" : "Completed";
@@ -50,6 +53,7 @@ export function TopBarNotifications(props: {
       state.resolveNotificationApproval,
     ] as const),
   );
+  const [open, setOpen] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [view, setView] = useState<NotificationView>("unread");
 
@@ -66,6 +70,14 @@ export function TopBarNotifications(props: {
       || pendingActionId === `mark:${notificationId}`
       || pendingActionId === `approve:${notificationId}`
       || pendingActionId === `deny:${notificationId}`;
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen);
+    setView((previousView) => getNextNotificationView({
+      isOpening: nextOpen,
+      previousView,
+    }));
   }
 
   async function handleMarkAllRead() {
@@ -106,7 +118,7 @@ export function TopBarNotifications(props: {
   }
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
@@ -243,7 +255,10 @@ export function TopBarNotifications(props: {
                 projectName: notification.projectName,
                 workspaceName: notification.workspaceName,
               });
-              const approvalAction = notification.action?.type === "approval";
+              const showApprovalActions = shouldShowNotificationApprovalActions({
+                unread,
+                action: notification.action,
+              });
               const createdLabel = formatTaskUpdatedAt({ value: notification.createdAt });
               const readLabel = notification.readAt ? formatTaskUpdatedAt({ value: notification.readAt }) : null;
               const notificationBusy = pendingActionId === "mark-all" || isNotificationActionPending(notification.id);
@@ -323,7 +338,7 @@ export function TopBarNotifications(props: {
                         </div>
                       </div>
                     </div>
-                    {approvalAction ? (
+                    {showApprovalActions ? (
                       <div className="mt-3 flex items-center justify-end gap-2">
                         <Button
                           type="button"
