@@ -74,6 +74,19 @@ When changing PR status fetching, derivation, or UI rendering:
 
 See `docs/features/workspace-pr-status.md` for the full architecture reference.
 
+## Project / Workspace Integrity Contract
+
+When changing project selection, workspace hydration, worktree import, notification deep-linking, or task ownership:
+
+- read `docs/architecture/workspace-integrity.md` first
+- inspect `src/store/project.utils.ts`
+- inspect `src/store/app.store.ts`
+- inspect the current consumer surfaces under `src/components/layout/`
+- verify default workspace selection is path-aware, not flag-only
+- verify rehydrate logic self-heals corrupted current state and persisted registry state
+- verify task-scoped git / filesystem actions resolve cwd from task ownership, not from the currently selected workspace
+- add or update regressions in `tests/project-utils.test.ts`, `tests/workspace-integrity-regression.test.ts`, and `tests/bridge-persistence-regression.test.ts`
+
 ## Minimum Verification
 
 - run `bun run typecheck` after provider or IPC contract changes

@@ -49,6 +49,14 @@ Replace the legacy workspace/task shell with a three-part layout:
 - Provider stream events are replayed into either the active workspace state or the cached inactive workspace session, depending on task ownership.
 - When an inactive workspace stream completes, its session snapshot is persisted.
 
+### Workspace Integrity Warning
+
+> Project root, default workspace id, workspace path, and task ownership must never drift apart.
+> A `workspaceDefaultById` flag alone is not a trusted source of truth.
+> Any future change in this shell must preserve path-aware default workspace resolution, task-owned cwd resolution, and boot-time self-healing of corrupted project registry entries.
+
+See `docs/architecture/workspace-integrity.md` before changing the shell, hydration flow, notification routing, or task-scoped git actions.
+
 ### UI Components
 
 - `ProjectWorkspaceSidebar`
