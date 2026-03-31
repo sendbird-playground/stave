@@ -45,6 +45,35 @@ That installer script:
 - removes the macOS quarantine attribute from the installed app
 - opens Stave after installation
 
+## Automatic Daily Updates
+
+Keep Stave up-to-date automatically with a macOS LaunchAgent that checks for new releases every day at 10:00 AM:
+
+```bash
+gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/setup-auto-update.sh | bash
+```
+
+This registers a daily background task that:
+
+- compares the installed version against the latest GitHub release
+- downloads and installs the update silently if a new version is available
+- skips the check when the version is already current
+- logs all activity to `~/Library/Logs/Stave/auto-update.log`
+
+If your Mac is asleep at 10:00 AM, macOS runs the check as soon as the machine wakes up.
+
+To check status:
+
+```bash
+launchctl print gui/$(id -u)/com.astyfx.stave.auto-update
+```
+
+To uninstall:
+
+```bash
+gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/setup-auto-update.sh | bash -s -- uninstall
+```
+
 ## Manual Fallback
 
 If you need the release bundle directly, download `Stave-macOS.zip` from the latest release.

@@ -14,6 +14,12 @@ If you already have GitHub CLI authenticated for `sendbird-playground`, install 
 gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/install-latest-release.sh | bash
 ```
 
+To enable automatic daily updates (macOS LaunchAgent):
+
+```bash
+gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/setup-auto-update.sh | bash
+```
+
 If this is your first time using `gh`, or you need SSO/scope troubleshooting, see the full [Install Guide](docs/install-guide.md).
 
 ## Highlights
