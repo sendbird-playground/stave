@@ -1,5 +1,6 @@
 import { Home, Keyboard, LoaderCircle, Moon, RefreshCw, Settings, Sun } from "lucide-react";
 import { Suspense, lazy, useCallback, useState } from "react";
+import { createPortal } from "react-dom";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui";
 import { STAVE_LOGO_URL } from "@/lib/providers/model-catalog";
@@ -52,7 +53,7 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
 
   function OverlayLoadingFallback(args: { title: string }) {
     return (
-      <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]">
         <Card className="w-full max-w-md border-border/80 bg-background/95 p-6 shadow-2xl">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" />
@@ -118,16 +119,22 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {shortcutsOpen ? (
-        <Suspense fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}>
-          <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-        </Suspense>
-      ) : null}
-      {settingsOpen ? (
-        <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
-          <SettingsDialog open={settingsOpen} onOpenChange={({ open }) => setSettingsOpen(open)} />
-        </Suspense>
-      ) : null}
+      {shortcutsOpen
+        ? createPortal(
+            <Suspense fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}>
+              <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+            </Suspense>,
+            document.body,
+          )
+        : null}
+      {settingsOpen
+        ? createPortal(
+            <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
+              <SettingsDialog open={settingsOpen} onOpenChange={({ open }) => setSettingsOpen(open)} />
+            </Suspense>,
+            document.body,
+          )
+        : null}
     </>
   );
 }
