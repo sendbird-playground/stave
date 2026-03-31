@@ -2300,6 +2300,7 @@ export const useAppStore = create<AppState>()(
             },
             providerConversationByTask: {
               ...state.providerConversationByTask,
+              [nextTask.id]: {},
             },
             taskWorkspaceIdById: {
               ...state.taskWorkspaceIdById,
@@ -2397,6 +2398,7 @@ export const useAppStore = create<AppState>()(
             },
             providerConversationByTask: {
               ...state.providerConversationByTask,
+              [duplicatedTask.id]: {},
             },
             taskWorkspaceIdById: {
               ...state.taskWorkspaceIdById,
@@ -2954,6 +2956,14 @@ export const useAppStore = create<AppState>()(
             messagesByTask: {
               ...nextState.messagesByTask,
               [seededTaskId]: nextState.messagesByTask[seededTaskId] ?? [],
+            },
+            nativeConversationReadyByTask: {
+              ...nextState.nativeConversationReadyByTask,
+              [seededTaskId]: false,
+            },
+            providerConversationByTask: {
+              ...nextState.providerConversationByTask,
+              [seededTaskId]: {},
             },
             taskWorkspaceIdById: {
               ...nextState.taskWorkspaceIdById,
@@ -3705,10 +3715,7 @@ export const useAppStore = create<AppState>()(
           }
           const selectedTab = state.editorTabs.find((tab) => tab.id === tabId);
           if (!selectedTab) {
-            return {
-              activeEditorTabId: tabId,
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-            };
+            return {};
           }
           const isDiffTab = isDiffEditorTab(selectedTab);
           return {
