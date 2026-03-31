@@ -230,13 +230,37 @@ export function registerScmHandlers() {
     try {
       const raw = JSON.parse(result.stdout);
 
-      // Derive a single checks rollup from the statusCheckRollup array
+      // Derive a single checks rollup from the statusCheckRollup array.
+      // When a check is re-run, GitHub may return both the original (failed) run
+      // and the new run with the same name. Deduplicate CheckRuns by name,
+      // keeping only the most recent one (by startedAt) to avoid stale failures
+      // from previous attempts marking an otherwise-passing PR as failed.
       let checksRollup: "SUCCESS" | "FAILURE" | "PENDING" | null = null;
       const checks: unknown[] = Array.isArray(raw.statusCheckRollup)
         ? raw.statusCheckRollup
         : [];
       if (checks.length > 0) {
-        const hasFailure = checks.some((c: any) => {
+        const latestCheckRunByName = new Map<string, any>();
+        const nonCheckRuns: any[] = [];
+        for (const c of checks as any[]) {
+          if (c.__typename === "CheckRun" && c.name) {
+            const existing = latestCheckRunByName.get(c.name);
+            if (!existing) {
+              latestCheckRunByName.set(c.name, c);
+            } else {
+              const existingTime = existing.startedAt ? new Date(existing.startedAt).getTime() : 0;
+              const currentTime = c.startedAt ? new Date(c.startedAt).getTime() : 0;
+              if (currentTime > existingTime) {
+                latestCheckRunByName.set(c.name, c);
+              }
+            }
+          } else {
+            nonCheckRuns.push(c);
+          }
+        }
+        const dedupedChecks = [...latestCheckRunByName.values(), ...nonCheckRuns];
+
+        const hasFailure = dedupedChecks.some((c: any) => {
           if (c.__typename === "CheckRun") {
             return c.conclusion === "FAILURE" || c.conclusion === "CANCELLED" || c.conclusion === "TIMED_OUT" || c.conclusion === "ACTION_REQUIRED";
           }
@@ -248,7 +272,7 @@ export function registerScmHandlers() {
         if (hasFailure) {
           checksRollup = "FAILURE";
         } else {
-          const hasPending = checks.some((c: any) => {
+          const hasPending = dedupedChecks.some((c: any) => {
             if (c.__typename === "CheckRun") return c.status !== "COMPLETED";
             if (c.__typename === "StatusContext") return c.state === "PENDING" || c.state === "EXPECTED";
             return false;
