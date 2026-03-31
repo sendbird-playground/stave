@@ -1,4 +1,3 @@
-import { describe, expect, test } from "bun:test";
 import {
   NOTIFICATION_SOUND_COOLDOWN_MS,
   NOTIFICATION_SOUND_PRESETS,
@@ -6,6 +5,7 @@ import {
   normalizeNotificationSoundVolume,
   playNotificationSound,
 } from "@/lib/notifications/notification-sound";
+import { describe, expect, test } from "bun:test";
 
 function createFakeParam() {
   const calls: Array<{ method: string; value: number; time: number }> = [];
@@ -80,7 +80,13 @@ function createFakeAudioContext() {
 
 describe("notification-sound", () => {
   test("exports the supported presets and player function", () => {
-    expect(NOTIFICATION_SOUND_PRESETS).toEqual(["chime", "bell", "pulse", "bright"]);
+    expect(NOTIFICATION_SOUND_PRESETS).toEqual([
+      "chime",
+      "bell",
+      "pulse",
+      "bright",
+      "harvest",
+    ]);
     expect(typeof playNotificationSound).toBe("function");
   });
 
