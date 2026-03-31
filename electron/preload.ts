@@ -360,6 +360,12 @@ contextBridge.exposeInMainWorld("api", {
       };
     },
   },
+  eslint: {
+    lint: (args: { rootPath: string; filePath: string; text: string }) =>
+      ipcRenderer.invoke("eslint:lint", args),
+    fix: (args: { rootPath: string; filePath: string; text: string }) =>
+      ipcRenderer.invoke("eslint:fix", args),
+  },
   terminal: {
     runCommand: (args: TerminalRunArgs) =>
       ipcRenderer.invoke("terminal:run-command", args),

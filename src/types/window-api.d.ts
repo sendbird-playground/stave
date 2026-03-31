@@ -352,6 +352,34 @@ interface WindowLspApi {
   ) => () => void;
 }
 
+interface EslintRequestArgs {
+  rootPath: string;
+  filePath: string;
+  text: string;
+}
+
+interface EslintDiagnostic {
+  ruleId: string | null;
+  severity: number;
+  message: string;
+  line: number;
+  column: number;
+  endLine?: number;
+  endColumn?: number;
+}
+
+interface EslintResult {
+  ok: boolean;
+  diagnostics?: EslintDiagnostic[];
+  output?: string;
+  detail?: string;
+}
+
+interface WindowEslintApi {
+  lint?: (args: EslintRequestArgs) => Promise<EslintResult>;
+  fix?: (args: EslintRequestArgs) => Promise<EslintResult>;
+}
+
 interface TerminalRunArgs {
   command: string;
   cwd?: string;
@@ -823,6 +851,7 @@ interface WindowApi {
   skills?: WindowSkillsApi;
   localMcp?: WindowLocalMcpApi;
   lsp?: WindowLspApi;
+  eslint?: WindowEslintApi;
   terminal?: WindowTerminalApi;
   sourceControl?: WindowSourceControlApi;
   metrics?: WindowMetricsApi;

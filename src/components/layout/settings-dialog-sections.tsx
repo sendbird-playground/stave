@@ -1743,6 +1743,8 @@ function EditorSection() {
     editorTabSize,
     editorLspEnabled,
     editorAiCompletions,
+    editorEslintEnabled,
+    editorFormatOnSave,
     pythonLspCommand,
     typescriptLspCommand,
   ] = useAppStore(
@@ -1755,6 +1757,8 @@ function EditorSection() {
       state.settings.editorTabSize,
       state.settings.editorLspEnabled,
       state.settings.editorAiCompletions,
+      state.settings.editorEslintEnabled,
+      state.settings.editorFormatOnSave,
       state.settings.pythonLspCommand,
       state.settings.typescriptLspCommand,
     ] as const),
@@ -1894,6 +1898,34 @@ function EditorSection() {
               placeholder="pyright-langserver"
               value={pythonLspCommand}
               onCommit={(nextValue) => updateSettings({ patch: { pythonLspCommand: nextValue } })}
+            />
+          </LabeledField>
+        </SettingsCard>
+        <SettingsCard title="ESLint">
+          <LabeledField
+            title="Enable ESLint"
+            description="Reads ESLint config from the opened project and shows diagnostics in the editor. Requires ESLint installed in the project's node_modules."
+          >
+            <ChoiceButtons
+              value={editorEslintEnabled ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { editorEslintEnabled: value === "on" } })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
+          <LabeledField
+            title="Format on Save"
+            description="Automatically apply ESLint auto-fix when saving a file."
+          >
+            <ChoiceButtons
+              value={editorFormatOnSave ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { editorFormatOnSave: value === "on" } })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
             />
           </LabeledField>
         </SettingsCard>

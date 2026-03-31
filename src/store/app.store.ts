@@ -8,6 +8,7 @@ import {
   markNotificationRead as markPersistedNotificationRead,
 } from "@/lib/db/notifications.db";
 import { workspaceFsAdapter } from "@/lib/fs";
+import { formatWithEslint } from "@/components/layout/editor-language-intelligence";
 import {
   listWorkspaceSummaries,
   loadWorkspaceSnapshot,
@@ -254,6 +255,8 @@ export interface AppSettings {
   editorTabSize: number;
   editorLspEnabled: boolean;
   editorAiCompletions: boolean;
+  editorEslintEnabled: boolean;
+  editorFormatOnSave: boolean;
   pythonLspCommand: string;
   typescriptLspCommand: string;
   diffViewMode: "unified" | "split";
@@ -662,6 +665,8 @@ const defaultSettings: AppSettings = {
   editorTabSize: 2,
   editorLspEnabled: false,
   editorAiCompletions: false,
+  editorEslintEnabled: false,
+  editorFormatOnSave: false,
   pythonLspCommand: "",
   typescriptLspCommand: "",
   diffViewMode: "unified",
@@ -4053,9 +4058,31 @@ export const useAppStore = create<AppState>()(
           return { ok: false };
         }
 
+        // Format on save with ESLint
+        let contentToSave = activeTab.content;
+        if (state.settings.editorFormatOnSave && state.settings.editorEslintEnabled) {
+          const rootPath = state.workspacePathById[state.activeWorkspaceId] || state.projectPath;
+          if (rootPath) {
+            const formatted = await formatWithEslint({
+              rootPath,
+              filePath: activeTab.filePath,
+              text: activeTab.content,
+            });
+            if (formatted !== null) {
+              contentToSave = formatted;
+              // Update the tab content with formatted text
+              set((s) => ({
+                editorTabs: s.editorTabs.map((tab) =>
+                  tab.id === activeTab.id ? { ...tab, content: formatted } : tab
+                ),
+              }));
+            }
+          }
+        }
+
         let result = await workspaceFsAdapter.writeFile({
           filePath: activeTab.filePath,
-          content: activeTab.content,
+          content: contentToSave,
           expectedRevision: activeTab.baseRevision,
         });
         if (!result.ok) {

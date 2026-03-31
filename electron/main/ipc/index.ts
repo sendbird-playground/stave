@@ -1,6 +1,7 @@
 import { registerFilesystemHandlers } from "./filesystem";
 import { registerInlineCompletionHandlers } from "./inline-completion";
 import { registerLocalMcpHandlers } from "./local-mcp";
+import { registerEslintHandlers } from "./eslint";
 import { registerLspHandlers } from "./lsp";
 import { registerMetricsHandlers } from "./metrics";
 import { registerPersistenceHandlers } from "./persistence";
@@ -20,6 +21,7 @@ export function registerHandlers() {
   registerFilesystemHandlers();
   registerSkillsHandlers();
   registerLspHandlers();
+  registerEslintHandlers();
   registerScreenshotHandlers();
   registerInlineCompletionHandlers();
   registerMetricsHandlers();

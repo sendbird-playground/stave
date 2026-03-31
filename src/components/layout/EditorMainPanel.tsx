@@ -49,6 +49,7 @@ export function EditorMainPanel() {
     editorWordWrap,
     editorLspEnabled,
     editorAiCompletions,
+    editorEslintEnabled,
     pythonLspCommand,
     typescriptLspCommand,
     setLayout,
@@ -77,6 +78,7 @@ export function EditorMainPanel() {
     state.settings.editorWordWrap,
     state.settings.editorLspEnabled,
     state.settings.editorAiCompletions,
+    state.settings.editorEslintEnabled,
     state.settings.pythonLspCommand,
     state.settings.typescriptLspCommand,
     state.setLayout,
@@ -101,6 +103,8 @@ export function EditorMainPanel() {
   const editorRef = useRef<MonacoEditorApi.IStandaloneCodeEditor | null>(null);
   const diffEditorRef = useRef<DiffEditorModelOwner | null>(null);
   const activeDiffTabIdRef = useRef<string | null>(null);
+  const saveActiveEditorTabRef = useRef(saveActiveEditorTab);
+  saveActiveEditorTabRef.current = saveActiveEditorTab;
   const pendingEditorNavigationRef = useRef<PendingEditorNavigation | null>(null);
   const editorOpenerDisposableRef = useRef<MonacoDisposable | null>(null);
   const workspaceRootPathRef = useRef(workspaceRootPath);
@@ -108,6 +112,7 @@ export function EditorMainPanel() {
     enabled: editorLspEnabled,
     pythonLspCommand,
     typescriptLspCommand,
+    eslintEnabled: editorEslintEnabled,
   });
   const languageIntelligenceRuntimeRef = useRef<LanguageIntelligenceRuntime>({
     getWorkspaceRootPath: () => workspaceRootPathRef.current,
@@ -131,6 +136,7 @@ export function EditorMainPanel() {
     enabled: editorLspEnabled,
     pythonLspCommand,
     typescriptLspCommand,
+    eslintEnabled: editorEslintEnabled,
   };
 
   const activeTab = editorTabs.find((tab) => tab.id === activeEditorTabId) ?? null;
@@ -499,11 +505,14 @@ export function EditorMainPanel() {
                   lineNumbers: editorLineNumbers,
                   wordWrap: editorWordWrap ? "on" : "off",
                 }}
-                onMount={(editor) => {
+                onMount={(editor, monaco) => {
                   editorRef.current = null;
                   diffEditorRef.current = editor;
                   editor.getOriginalEditor().updateOptions({ tabSize: editorTabSize });
                   editor.getModifiedEditor().updateOptions({ tabSize: editorTabSize });
+                  editor.getModifiedEditor().addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+                    void saveActiveEditorTabRef.current();
+                  });
                   editor.getModifiedEditor().onDidChangeModelContent(() => {
                     const activeDiffTabId = activeDiffTabIdRef.current;
                     if (!activeDiffTabId) {
@@ -521,9 +530,12 @@ export function EditorMainPanel() {
                 value={activeTab.content}
                 path={activeModelPath}
                 beforeMount={configureMonaco}
-                onMount={(editor) => {
+                onMount={(editor, monaco) => {
                   editorRef.current = editor;
                   attachInlineCompletionInteractionTracking(editor);
+                  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+                    void saveActiveEditorTabRef.current();
+                  });
                 }}
                 onChange={(value) =>
                   updateEditorContent({
