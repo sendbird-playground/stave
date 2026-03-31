@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { workspaceFsAdapter } from "@/lib/fs";
 import type { WorkspaceCreateEntryResult, WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
@@ -515,7 +516,7 @@ export function EditorPanel() {
       className="h-full min-w-0 w-full overflow-hidden"
     >
       <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card">
-        <div className="flex h-10 items-center justify-between border-b border-border/80 px-3">
+        <div className={cn("flex items-center justify-between border-b border-border/80 px-3", PANEL_BAR_HEIGHT_CLASS)}>
           <TooltipProvider>
             <div className="flex items-center gap-1.5">
               <Tooltip>

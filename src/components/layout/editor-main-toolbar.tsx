@@ -1,4 +1,5 @@
 import { AlignJustify, Columns2, FileCode2, PenLine, Save, Send, X } from "lucide-react";
+import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { EditorTab } from "@/types/chat";
@@ -16,7 +17,7 @@ export function EditorMainToolbar(args: {
   onCloseEditor: () => void;
 }) {
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/80 px-3 text-sm">
+    <div className={cn("flex shrink-0 items-center justify-between border-b border-border/80 px-3 text-sm", PANEL_BAR_HEIGHT_CLASS)}>
       <p className="inline-flex items-center gap-2 font-medium text-foreground">
         <FileCode2 className="size-4 text-muted-foreground" />
         Editor
