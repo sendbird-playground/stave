@@ -211,7 +211,10 @@ export function TopBar() {
             <TopBarBranchDropdown noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
           ) : null}
           {hasProjectContext ? (
-            <TopBarOpenPR noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
+            <TopBarOpenPR
+              key={`${activeWorkspaceId}:${activeWorkspacePath}`}
+              noDragStyle={TOP_BAR_NO_DRAG_STYLE}
+            />
           ) : null}
         </TooltipProvider>
       </div>
