@@ -13,6 +13,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Conversation flow](architecture/conversation-flow.md)
 - [Entrypoints](architecture/entrypoints.md)
 - [Contracts](architecture/contracts.md)
+- [Workspace integrity](architecture/workspace-integrity.md)
 - [Repo map spec](architecture/repo-map-spec.md)
 - [Provider runtimes](providers/provider-runtimes.md)
 - [Local MCP user guide](features/local-mcp-user-guide.md)

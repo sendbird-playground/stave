@@ -158,11 +158,13 @@ import {
   buildImportedWorktreeWorkspaceId,
   resolveImportedWorktreeName,
   resolveCurrentProjectDefaultWorkspaceId,
+  normalizeCurrentProjectState,
   cloneRecentProjectState,
   normalizeRecentProjectStates,
   upsertRecentProjectState,
   captureCurrentProjectState,
   resolveProjectForWorkspaceId,
+  resolveTaskWorkspaceContext,
 } from "@/store/project.utils";
 import {
   type WorkspacePrInfo,
@@ -1081,24 +1083,23 @@ export const useAppStore = create<AppState>()(
       workspaceRuntimeCacheById: {},
       taskWorkspaceIdById: {},
       hydrateProjectRegistry: async () => {
+        const rawPersistedProjects = (await loadProjectRegistrySnapshot()) as RecentProjectState[];
         const persistedProjects = normalizeRecentProjectStates({
-          projects: (await loadProjectRegistrySnapshot()) as RecentProjectState[],
+          projects: rawPersistedProjects,
         });
         if (persistedProjects.length === 0) {
           return;
         }
-        set((state) => {
-          const mergedProjects = mergeRecentProjectsByPath({
-            persistedProjects,
-            stateProjects: state.recentProjects,
-          });
-          const currentProject = state.projectPath
-            ? mergedProjects.find((project) => project.projectPath === state.projectPath) ?? null
-            : null;
-          if (!currentProject && mergedProjects.length === state.recentProjects.length) {
-            return state;
-          }
-          return {
+        const state = get();
+        const mergedProjects = mergeRecentProjectsByPath({
+          persistedProjects,
+          stateProjects: state.recentProjects,
+        });
+        const currentProject = state.projectPath
+          ? mergedProjects.find((project) => project.projectPath === state.projectPath) ?? null
+          : null;
+        if (currentProject || mergedProjects.length !== state.recentProjects.length) {
+          set(() => ({
             recentProjects: mergedProjects,
             ...(currentProject ? {
               projectName: normalizeProjectDisplayName({
@@ -1107,8 +1108,13 @@ export const useAppStore = create<AppState>()(
               }),
               defaultBranch: state.defaultBranch || currentProject.defaultBranch,
             } : {}),
-          };
-        });
+          }));
+        }
+        if (JSON.stringify(rawPersistedProjects) !== JSON.stringify(mergedProjects)) {
+          await saveProjectRegistrySnapshot({
+            projects: mergedProjects,
+          });
+        }
       },
       flushProjectRegistry: async () => {
         const state = get();
@@ -1147,6 +1153,7 @@ export const useAppStore = create<AppState>()(
           projectPath: stateBeforeHydrate.projectPath,
           workspaces: currentProject?.workspaces ?? stateBeforeHydrate.workspaces,
           workspaceDefaultById: currentProject?.workspaceDefaultById ?? stateBeforeHydrate.workspaceDefaultById,
+          workspacePathById: currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById,
         });
         if (initialRows.length === 0 && stateBeforeHydrate.projectPath) {
           await persistWorkspaceSnapshot({
@@ -1178,6 +1185,7 @@ export const useAppStore = create<AppState>()(
           projectPath: stateBeforeHydrate.projectPath,
           workspaces: rows,
           workspaceDefaultById: currentProject?.workspaceDefaultById ?? stateBeforeHydrate.workspaceDefaultById,
+          workspacePathById: currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById,
         });
         const branchById: Record<string, string> = {
           ...(currentProject?.workspaceBranchById ?? stateBeforeHydrate.workspaceBranchById),
@@ -1484,6 +1492,7 @@ export const useAppStore = create<AppState>()(
           projectPath,
           workspaces: state.workspaces,
           workspaceDefaultById: state.workspaceDefaultById,
+          workspacePathById: state.workspacePathById,
         });
 
         // Build set of known workspace paths for quick lookup.
@@ -2228,6 +2237,9 @@ export const useAppStore = create<AppState>()(
         if (workspaceId === current.activeWorkspaceId) {
           return;
         }
+        if (!current.workspaces.some((workspace) => workspace.id === workspaceId)) {
+          return;
+        }
 
         const [nextSnapshot, latestWorkspaceTurns] = current.workspaceRuntimeCacheById[workspaceId]
           ? [null, []]
@@ -2235,13 +2247,15 @@ export const useAppStore = create<AppState>()(
               loadWorkspaceSnapshot({ workspaceId }),
               listLatestWorkspaceTurns({ workspaceId }),
             ]);
-        const workspacePath = current.workspacePathById[workspaceId];
-        if (workspacePath) {
-          await workspaceFsAdapter.setRoot?.({
-            rootPath: workspacePath,
-            rootName: current.projectName ?? "project",
-          });
+        const workspacePath = current.workspacePathById[workspaceId]
+          ?? (current.workspaceDefaultById[workspaceId] ? current.projectPath ?? undefined : undefined);
+        if (!workspacePath) {
+          return;
         }
+        await workspaceFsAdapter.setRoot?.({
+          rootPath: workspacePath,
+          rootName: current.projectName ?? "project",
+        });
         const files = await workspaceFsAdapter.listFiles();
         const nextWorkspaces = current.workspaces;
         const workspaceState = current.workspaceRuntimeCacheById[workspaceId]
@@ -2847,9 +2861,16 @@ export const useAppStore = create<AppState>()(
       viewTaskChanges: async ({ taskId }) => {
         const state = get();
         const checkpoint = state.taskCheckpointById[taskId];
-        const workspaceCwd = state.workspacePathById[state.activeWorkspaceId] || state.projectPath || undefined;
+        const workspaceCwd = resolveTaskWorkspaceContext({
+          taskId,
+          activeWorkspaceId: state.activeWorkspaceId,
+          taskWorkspaceIdById: state.taskWorkspaceIdById,
+          workspacePathById: state.workspacePathById,
+          workspaceDefaultById: state.workspaceDefaultById,
+          projectPath: state.projectPath,
+        }).cwd;
         const runCommand = window.api?.terminal?.runCommand;
-        if (!runCommand) {
+        if (!runCommand || !workspaceCwd) {
           return;
         }
 
@@ -2891,9 +2912,16 @@ export const useAppStore = create<AppState>()(
       rollbackTask: async ({ taskId }) => {
         const state = get();
         const checkpoint = state.taskCheckpointById[taskId];
-        const workspaceCwd = state.workspacePathById[state.activeWorkspaceId] || state.projectPath || undefined;
+        const workspaceCwd = resolveTaskWorkspaceContext({
+          taskId,
+          activeWorkspaceId: state.activeWorkspaceId,
+          taskWorkspaceIdById: state.taskWorkspaceIdById,
+          workspacePathById: state.workspacePathById,
+          workspaceDefaultById: state.workspaceDefaultById,
+          projectPath: state.projectPath,
+        }).cwd;
         const runCommand = window.api?.terminal?.runCommand;
-        if (!runCommand || !checkpoint) {
+        if (!runCommand || !checkpoint || !workspaceCwd) {
           return;
         }
 
@@ -3058,14 +3086,20 @@ export const useAppStore = create<AppState>()(
         void window.api?.provider?.cleanupTask?.({ taskId });
       },
       setWorkspaceBranch: ({ workspaceId, branch }) =>
-        set((state) => ({
-          workspaceBranchById: {
-            ...state.workspaceBranchById,
-            [workspaceId]: branch,
-          },
-        })),
+        set((state) => {
+          if (!state.workspaces.some((workspace) => workspace.id === workspaceId)) {
+            return state;
+          }
+          return {
+            workspaceBranchById: {
+              ...state.workspaceBranchById,
+              [workspaceId]: branch,
+            },
+          };
+        }),
       fetchWorkspacePrStatus: async ({ workspaceId }) => {
         const state = get();
+        if (!state.workspaces.some((workspace) => workspace.id === workspaceId)) return;
         const cwd = state.workspacePathById[workspaceId];
         if (!cwd) return;
         if (state.workspaceDefaultById[workspaceId]) return;
@@ -3403,8 +3437,14 @@ export const useAppStore = create<AppState>()(
           return;
         }
         const provider = task?.provider ?? state.draftProvider ?? "claude-code";
-        const taskWorkspaceId = state.taskWorkspaceIdById[resolvedTaskId] ?? state.activeWorkspaceId;
-        const workspaceCwd = state.workspacePathById[state.activeWorkspaceId] || state.projectPath || undefined;
+        const { workspaceId: taskWorkspaceId, cwd: workspaceCwd } = resolveTaskWorkspaceContext({
+          taskId: resolvedTaskId,
+          activeWorkspaceId: state.activeWorkspaceId,
+          taskWorkspaceIdById: state.taskWorkspaceIdById,
+          workspacePathById: state.workspacePathById,
+          workspaceDefaultById: state.workspaceDefaultById,
+          projectPath: state.projectPath,
+        });
         const runCommand = window.api?.terminal?.runCommand;
 
         if (!state.taskCheckpointById[resolvedTaskId] && runCommand) {
@@ -4526,6 +4566,35 @@ export const useAppStore = create<AppState>()(
         state.recentProjects = normalizeRecentProjectStates({
           projects: state.recentProjects,
         });
+        const normalizedCurrentProject = normalizeCurrentProjectState({
+          projectPath: state.projectPath,
+          projectName: state.projectName,
+          defaultBranch: state.defaultBranch,
+          workspaces: state.workspaces,
+          activeWorkspaceId: state.activeWorkspaceId,
+          workspaceBranchById: state.workspaceBranchById,
+          workspacePathById: state.workspacePathById,
+          workspaceDefaultById: state.workspaceDefaultById,
+          recentProjects: state.recentProjects,
+        });
+        if (state.projectPath && normalizedCurrentProject) {
+          state.projectName = normalizeProjectDisplayName({
+            projectPath: normalizedCurrentProject.projectPath,
+            projectName: state.projectName?.trim() || normalizedCurrentProject.projectName,
+          });
+          state.defaultBranch = normalizedCurrentProject.defaultBranch;
+          state.workspaces = normalizedCurrentProject.workspaces;
+          state.activeWorkspaceId = normalizedCurrentProject.activeWorkspaceId;
+          state.workspaceBranchById = normalizedCurrentProject.workspaceBranchById;
+          state.workspacePathById = normalizedCurrentProject.workspacePathById;
+          state.workspaceDefaultById = normalizedCurrentProject.workspaceDefaultById;
+        } else if (state.projectPath) {
+          state.workspaces = [];
+          state.activeWorkspaceId = "";
+          state.workspaceBranchById = {};
+          state.workspacePathById = {};
+          state.workspaceDefaultById = {};
+        }
         if (legacyProjectInitCommand) {
           state.recentProjects = state.recentProjects.map((project) => ({
             ...cloneRecentProjectState(project),

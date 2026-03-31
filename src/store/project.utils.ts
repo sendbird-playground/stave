@@ -270,15 +270,224 @@ export function resolveCurrentProjectDefaultWorkspaceId(args: {
   projectPath?: string | null;
   workspaces: WorkspaceSummary[];
   workspaceDefaultById: Record<string, boolean>;
+  workspacePathById?: Record<string, string>;
 }) {
+  const expectedDefaultWorkspaceId = buildProjectDefaultWorkspaceId({
+    projectPath: args.projectPath,
+  });
+  const comparableProjectPath = normalizeComparablePath(args.projectPath);
+  const workspaceIds = new Set(args.workspaces.map((workspace) => workspace.id));
+  const workspacePathById = args.workspacePathById ?? {};
+
+  if (expectedDefaultWorkspaceId !== starterWorkspaceId) {
+    if (
+      args.workspaceDefaultById[expectedDefaultWorkspaceId]
+      || workspaceIds.has(expectedDefaultWorkspaceId)
+    ) {
+      return expectedDefaultWorkspaceId;
+    }
+  }
+
   const rememberedDefaultWorkspaceId = Object.entries(args.workspaceDefaultById)
-    .find(([, isDefault]) => isDefault)?.[0];
+    .find(([workspaceId, isDefault]) => {
+      if (!isDefault) {
+        return false;
+      }
+      if (
+        workspaceId !== starterWorkspaceId
+        && workspaceId !== expectedDefaultWorkspaceId
+        && !workspaceIds.has(workspaceId)
+      ) {
+        return false;
+      }
+      if (!comparableProjectPath) {
+        return true;
+      }
+
+      const comparableWorkspacePath = normalizeComparablePath(workspacePathById[workspaceId]);
+      if (comparableWorkspacePath) {
+        return comparableWorkspacePath === comparableProjectPath;
+      }
+
+      if (workspaceId === starterWorkspaceId || workspaceId === expectedDefaultWorkspaceId) {
+        return true;
+      }
+
+      const workspace = args.workspaces.find((item) => item.id === workspaceId);
+      return workspace?.name.toLowerCase() === defaultWorkspaceName.toLowerCase();
+    })?.[0];
   if (rememberedDefaultWorkspaceId) {
     return rememberedDefaultWorkspaceId;
   }
+  if (comparableProjectPath) {
+    const rootWorkspace = args.workspaces.find((workspace) => (
+      normalizeComparablePath(workspacePathById[workspace.id]) === comparableProjectPath
+    ));
+    if (rootWorkspace) {
+      return rootWorkspace.id;
+    }
+  }
+  const compatibleNamedDefaultWorkspace = args.workspaces.find((workspace) => (
+    workspace.name.toLowerCase() === defaultWorkspaceName.toLowerCase()
+    && (!comparableProjectPath || normalizeComparablePath(workspacePathById[workspace.id]) === comparableProjectPath)
+  ));
   return args.workspaces.find((workspace) => workspace.id === starterWorkspaceId)?.id
-    ?? args.workspaces.find((workspace) => workspace.name.toLowerCase() === defaultWorkspaceName.toLowerCase())?.id
-    ?? buildProjectDefaultWorkspaceId({ projectPath: args.projectPath });
+    ?? compatibleNamedDefaultWorkspace?.id
+    ?? expectedDefaultWorkspaceId;
+}
+
+function normalizeRecentProjectStateEntry(project: RecentProjectState): RecentProjectState | null {
+  const projectPath = project?.projectPath?.trim();
+  if (!projectPath) {
+    return null;
+  }
+
+  const lastOpenedAt = project.lastOpenedAt?.trim() || new Date().toISOString();
+  const defaultBranch = project.defaultBranch?.trim() || "main";
+  const workspaceBranchById = { ...(project.workspaceBranchById ?? {}) };
+  const workspacePathById = { ...(project.workspacePathById ?? {}) };
+  const providedWorkspaces = Array.isArray(project.workspaces)
+    ? project.workspaces.filter((workspace) => Boolean(workspace?.id && workspace?.name))
+    : [];
+  const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
+    projectPath,
+    workspaces: providedWorkspaces,
+    workspaceDefaultById: { ...(project.workspaceDefaultById ?? {}) },
+    workspacePathById,
+  });
+  const comparableProjectPath = normalizeComparablePath(projectPath);
+  const defaultWorkspaceSource = providedWorkspaces.find((workspace) => (
+    workspace.id === defaultWorkspaceId
+    || normalizeComparablePath(workspacePathById[workspace.id]) === comparableProjectPath
+  ));
+  const workspaces: WorkspaceSummary[] = [{
+    id: defaultWorkspaceId,
+    name: defaultWorkspaceName,
+    updatedAt: defaultWorkspaceSource?.updatedAt || lastOpenedAt,
+  }];
+  const seenWorkspaceIds = new Set([defaultWorkspaceId]);
+
+  for (const workspace of providedWorkspaces) {
+    const comparableWorkspacePath = normalizeComparablePath(workspacePathById[workspace.id]);
+    const representsProjectRoot = (
+      workspace.id === defaultWorkspaceId
+      || comparableWorkspacePath === comparableProjectPath
+      || workspace.name.toLowerCase() === defaultWorkspaceName.toLowerCase()
+    );
+    if (representsProjectRoot || seenWorkspaceIds.has(workspace.id)) {
+      continue;
+    }
+    workspaces.push({
+      id: workspace.id,
+      name: workspace.name,
+      updatedAt: workspace.updatedAt || lastOpenedAt,
+    });
+    seenWorkspaceIds.add(workspace.id);
+  }
+
+  const nextWorkspaceBranchById: Record<string, string> = {
+    [defaultWorkspaceId]: workspaceBranchById[defaultWorkspaceId]
+      || (defaultWorkspaceSource ? workspaceBranchById[defaultWorkspaceSource.id] : undefined)
+      || defaultBranch,
+  };
+  const nextWorkspacePathById: Record<string, string> = {
+    [defaultWorkspaceId]: projectPath,
+  };
+  const nextWorkspaceDefaultById: Record<string, boolean> = {
+    [defaultWorkspaceId]: true,
+  };
+
+  for (const workspace of workspaces) {
+    if (workspace.id === defaultWorkspaceId) {
+      continue;
+    }
+    nextWorkspaceBranchById[workspace.id] = workspaceBranchById[workspace.id] || workspace.name;
+    const preservedPath = workspacePathById[workspace.id]?.trim();
+    if (preservedPath) {
+      nextWorkspacePathById[workspace.id] = preservedPath;
+    }
+    nextWorkspaceDefaultById[workspace.id] = false;
+  }
+
+  const activeWorkspaceId = workspaces.some((workspace) => workspace.id === project.activeWorkspaceId)
+    ? project.activeWorkspaceId
+    : defaultWorkspaceId;
+
+  return {
+    projectPath,
+    projectName: normalizeProjectDisplayName({
+      projectPath,
+      projectName: project.projectName,
+    }),
+    lastOpenedAt,
+    defaultBranch,
+    workspaces,
+    activeWorkspaceId,
+    workspaceBranchById: nextWorkspaceBranchById,
+    workspacePathById: nextWorkspacePathById,
+    workspaceDefaultById: nextWorkspaceDefaultById,
+    newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
+      value: project.newWorkspaceInitCommand,
+    }),
+    newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+      value: project.newWorkspaceUseRootNodeModulesSymlink,
+    }),
+  };
+}
+
+export function normalizeCurrentProjectState(args: {
+  projectPath: string | null;
+  projectName: string | null;
+  defaultBranch: string;
+  workspaces: WorkspaceSummary[];
+  activeWorkspaceId: string;
+  workspaceBranchById: Record<string, string>;
+  workspacePathById: Record<string, string>;
+  workspaceDefaultById: Record<string, boolean>;
+  recentProjects: RecentProjectState[];
+}) {
+  const projectPath = args.projectPath?.trim();
+  if (!projectPath) {
+    return null;
+  }
+
+  const rememberedProject = args.recentProjects.find((project) => project.projectPath === projectPath) ?? null;
+  return normalizeRecentProjectStateEntry({
+    projectPath,
+    projectName: args.projectName?.trim()
+      || rememberedProject?.projectName
+      || resolveProjectNameFromPath({ projectPath }),
+    lastOpenedAt: rememberedProject?.lastOpenedAt || new Date().toISOString(),
+    defaultBranch: args.defaultBranch || rememberedProject?.defaultBranch || "main",
+    workspaces: args.workspaces,
+    activeWorkspaceId: args.activeWorkspaceId,
+    workspaceBranchById: args.workspaceBranchById,
+    workspacePathById: args.workspacePathById,
+    workspaceDefaultById: args.workspaceDefaultById,
+    newWorkspaceInitCommand: rememberedProject?.newWorkspaceInitCommand,
+    newWorkspaceUseRootNodeModulesSymlink: rememberedProject?.newWorkspaceUseRootNodeModulesSymlink,
+  });
+}
+
+export function resolveTaskWorkspaceContext(args: {
+  taskId: string;
+  activeWorkspaceId: string;
+  taskWorkspaceIdById: Record<string, string>;
+  workspacePathById: Record<string, string>;
+  workspaceDefaultById?: Record<string, boolean>;
+  projectPath?: string | null;
+}) {
+  const workspaceId = args.taskWorkspaceIdById[args.taskId] ?? args.activeWorkspaceId;
+  const projectPath = args.projectPath?.trim();
+  const workspacePath = args.workspacePathById[workspaceId]?.trim();
+
+  return {
+    workspaceId,
+    cwd: workspacePath
+      || (args.workspaceDefaultById?.[workspaceId] ? projectPath : undefined)
+      || projectPath
+      || undefined,
+  };
 }
 
 export function cloneRecentProjectState(project: RecentProjectState): RecentProjectState {
@@ -301,71 +510,13 @@ export function normalizeRecentProjectStates(args: { projects?: RecentProjectSta
   let normalizedProjects: RecentProjectState[] = [];
 
   for (const project of args.projects ?? []) {
-    const projectPath = project?.projectPath?.trim();
-    if (!projectPath) {
+    const normalizedProject = normalizeRecentProjectStateEntry(project);
+    if (!normalizedProject) {
       continue;
     }
-
-    const lastOpenedAt = project.lastOpenedAt?.trim() || new Date().toISOString();
-    const defaultBranch = project.defaultBranch?.trim() || "main";
-    const workspaceBranchById = { ...(project.workspaceBranchById ?? {}) };
-    const workspacePathById = { ...(project.workspacePathById ?? {}) };
-    const workspaceDefaultById = { ...(project.workspaceDefaultById ?? {}) };
-    const providedWorkspaces = Array.isArray(project.workspaces)
-      ? project.workspaces.filter((workspace) => Boolean(workspace?.id && workspace?.name))
-      : [];
-    const initialDefaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
-      projectPath,
-      workspaces: providedWorkspaces,
-      workspaceDefaultById,
-    });
-    const workspaces = providedWorkspaces.length > 0
-      ? providedWorkspaces.map((workspace) => ({
-          id: workspace.id,
-          name: workspace.name,
-          updatedAt: workspace.updatedAt || lastOpenedAt,
-        }))
-      : [{
-          id: initialDefaultWorkspaceId,
-          name: defaultWorkspaceName,
-          updatedAt: lastOpenedAt,
-        }];
-    const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
-      projectPath,
-      workspaces,
-      workspaceDefaultById,
-    });
-    const activeWorkspaceId = workspaces.some((workspace) => workspace.id === project.activeWorkspaceId)
-      ? project.activeWorkspaceId
-      : defaultWorkspaceId;
-
-    workspaceBranchById[defaultWorkspaceId] = workspaceBranchById[defaultWorkspaceId] || defaultBranch;
-    workspacePathById[defaultWorkspaceId] = workspacePathById[defaultWorkspaceId] || projectPath;
     normalizedProjects = upsertRecentProjectState({
       projects: normalizedProjects,
-      project: {
-        projectPath,
-        projectName: normalizeProjectDisplayName({
-          projectPath,
-          projectName: project.projectName,
-        }),
-        lastOpenedAt,
-        defaultBranch,
-        workspaces,
-        activeWorkspaceId,
-        workspaceBranchById,
-        workspacePathById,
-        workspaceDefaultById: {
-          ...workspaceDefaultById,
-          [defaultWorkspaceId]: true,
-        },
-        newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
-          value: project.newWorkspaceInitCommand,
-        }),
-        newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
-          value: project.newWorkspaceUseRootNodeModulesSymlink,
-        }),
-      },
+      project: normalizedProject,
     });
   }
 
@@ -373,8 +524,12 @@ export function normalizeRecentProjectStates(args: { projects?: RecentProjectSta
 }
 
 export function upsertRecentProjectState(args: { projects: RecentProjectState[]; project: RecentProjectState }) {
-  const nextProject = cloneRecentProjectState(args.project);
-  const existingIndex = args.projects.findIndex((item) => item.projectPath === args.project.projectPath);
+  const normalizedProject = normalizeRecentProjectStateEntry(args.project);
+  if (!normalizedProject) {
+    return args.projects.map((project) => cloneRecentProjectState(project));
+  }
+  const nextProject = cloneRecentProjectState(normalizedProject);
+  const existingIndex = args.projects.findIndex((item) => item.projectPath === normalizedProject.projectPath);
   if (existingIndex >= 0) {
     return args.projects.map((item, index) => (index === existingIndex ? nextProject : cloneRecentProjectState(item)));
   }
