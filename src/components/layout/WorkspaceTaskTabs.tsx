@@ -234,7 +234,7 @@ export function WorkspaceTaskTabs() {
       <div className={cn("flex min-w-0 items-stretch border-b border-border/70 bg-muted/30", PANEL_BAR_HEIGHT_CLASS)}>
         <div className="flex min-w-0 w-full items-stretch">
           <div className="min-w-0 flex-1 overflow-x-auto">
-            <div className="flex min-w-max items-stretch">
+            <div className="flex h-full min-w-max items-stretch">
               {visibleTasks.map((task, index) => {
                 const isActive = task.id === activeTaskId;
                 const isResponding = Boolean(activeTurnIdsByTask[task.id]);
@@ -336,32 +336,32 @@ export function WorkspaceTaskTabs() {
                   </div>
                 );
               })}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="self-center h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground"
-                      onClick={() => createTask({ title: "" })}
-                    >
-                      <Plus className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <span>New Task</span>
-                    <KbdGroup className="ml-1">
-                      <Kbd>{shortcutModifierSymbol}</Kbd>
-                      <Kbd>N</Kbd>
-                    </KbdGroup>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
           </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 self-center rounded-sm p-0 text-muted-foreground"
+                  onClick={() => createTask({ title: "" })}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <span>New Task</span>
+                <KbdGroup className="ml-1">
+                  <Kbd>{shortcutModifierSymbol}</Kbd>
+                  <Kbd>N</Kbd>
+                </KbdGroup>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-9 shrink-0 self-center ml-2">
+              <Button variant="ghost" size="sm" className="h-8 w-8 shrink-0 self-center rounded-sm p-0 text-muted-foreground">
                 <Ellipsis className="size-4" />
               </Button>
             </DropdownMenuTrigger>
