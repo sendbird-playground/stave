@@ -7,6 +7,7 @@ import { useAppStore } from "@/store/app.store";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { canSendEditorContextToTask } from "@/store/editor.utils";
 import { buildDiffEditorModelPath, releaseDiffEditorModels, type DiffEditorModelOwner } from "./editor-main-panel.utils";
 import { EditorImagePreviewOverlay } from "./editor-image-preview-overlay";
 import { EditorMainTabStrip } from "./editor-main-tab-strip";
@@ -90,6 +91,7 @@ export function EditorMainPanel() {
     state.saveActiveEditorTab,
   ] as const));
   const workspaceRootPath = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? "");
+  const activeTaskIsResponding = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
   const [tabToClose, setTabToClose] = useState<{ id: string; fileName: string } | null>(null);
   const [bulkCloseRequest, setBulkCloseRequest] = useState<{ tabIds: string[]; title: string; description: string } | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -139,6 +141,11 @@ export function EditorMainPanel() {
   const activeModelPath = activeTab ? toMonacoModelPath(activeTab.filePath) : undefined;
   const showDiffDisplayControls = Boolean(editorDiffMode && activeTab?.originalContent != null && !activeTabIsImage);
   const activeDiffSessionKey = showDiffDisplayControls && activeTab ? activeTab.id : null;
+  const sendToAgentDisabled = !canSendEditorContextToTask({
+    taskId: activeTaskId,
+    hasActiveEditorTab: Boolean(activeTab),
+    isTaskResponding: activeTaskIsResponding,
+  });
   const shouldLoadWorkspaceSupport = Boolean(
     workspaceRootPath
     && activeTab
@@ -407,6 +414,7 @@ export function EditorMainPanel() {
       <EditorMainToolbar
         activeTab={activeTab}
         activeTabIsImage={activeTabIsImage}
+        sendToAgentDisabled={sendToAgentDisabled}
         editorDiffMode={editorDiffMode}
         diffViewMode={diffViewMode}
         showDiffDisplayControls={showDiffDisplayControls}

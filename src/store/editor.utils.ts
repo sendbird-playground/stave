@@ -101,6 +101,18 @@ export function isImageFilePath(args: { filePath: string }) {
     || value.endsWith(".avif");
 }
 
+export function canSendEditorContextToTask(args: {
+  taskId?: string | null;
+  hasActiveEditorTab: boolean;
+  isTaskResponding: boolean;
+}) {
+  return Boolean(
+    args.hasActiveEditorTab
+    && args.taskId
+    && !args.isTaskResponding,
+  );
+}
+
 export function updateMessageById(args: {
   messages: ChatMessage[];
   messageId: string;
