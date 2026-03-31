@@ -16,7 +16,7 @@
 # --------------------------------------------------------------------------
 set -euo pipefail
 
-LABEL="com.astyfx.stave.auto-update"
+LABEL="com.stave.app.auto-update"
 STAVE_BIN_DIR="$HOME/.stave/bin"
 SCRIPT_PATH="${STAVE_BIN_DIR}/auto-update-stave.sh"
 PLIST_NAME="${LABEL}.plist"

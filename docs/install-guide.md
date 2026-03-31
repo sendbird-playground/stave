@@ -65,7 +65,7 @@ If your Mac is asleep at 10:00 AM, macOS runs the check as soon as the machine w
 To check status:
 
 ```bash
-launchctl print gui/$(id -u)/com.astyfx.stave.auto-update
+launchctl print gui/$(id -u)/com.stave.app.auto-update
 ```
 
 To uninstall:
