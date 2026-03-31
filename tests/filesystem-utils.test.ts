@@ -123,7 +123,7 @@ describe("filesystem path helpers", () => {
     ]);
   });
 
-  test("skips symlinked entries that resolve outside the workspace root", async () => {
+  test("shows symlinked entries that resolve outside the workspace root in the explorer", async () => {
     const workspaceRoot = createTempWorkspace();
     const externalRoot = createTempWorkspace();
     writeText(path.join(externalRoot, "private/secret.txt"), "top-secret\n");
@@ -133,10 +133,26 @@ describe("filesystem path helpers", () => {
     const files = await listFilesRecursive({ rootPath: workspaceRoot });
     const rootEntries = await listDirectoryEntries({ rootPath: workspaceRoot });
 
+    // listFilesRecursive must NOT traverse external symlinks to avoid indexing the whole filesystem
     expect(files).not.toContain(".external/secret.txt");
     expect(files).not.toContain(".secret");
-    expect(rootEntries.some((entry) => entry.path === ".external")).toBe(false);
-    expect(rootEntries.some((entry) => entry.path === ".secret")).toBe(false);
+
+    // listDirectoryEntries (Explorer) MUST show external symlinks so dotfile repos are navigable
+    expect(rootEntries).toContainEqual({ name: ".external", path: ".external", type: "folder" });
+    expect(rootEntries).toContainEqual({ name: ".secret", path: ".secret", type: "file" });
+  });
+
+  test("allows expanding symlinked directories that resolve outside the workspace root", async () => {
+    const workspaceRoot = createTempWorkspace();
+    const externalRoot = createTempWorkspace();
+    writeText(path.join(externalRoot, "nvim/init.lua"), "vim.o.number = true\n");
+    symlinkSync(externalRoot, path.join(workspaceRoot, ".config"));
+
+    const rootEntries = await listDirectoryEntries({ rootPath: workspaceRoot });
+    const configEntries = await listDirectoryEntries({ rootPath: workspaceRoot, directoryPath: ".config" });
+
+    expect(rootEntries).toContainEqual({ name: ".config", path: ".config", type: "folder" });
+    expect(configEntries).toContainEqual({ name: "nvim", path: ".config/nvim", type: "folder" });
   });
 
   test("hides symlinked directories that would recurse back to an ancestor", async () => {
