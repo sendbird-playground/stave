@@ -34,6 +34,7 @@ type RuntimeSettings = Pick<
   | "codexReasoningSummary"
   | "codexSupportsReasoningSummaries"
   | "codexFastMode"
+  | "codexExperimentalPlanMode"
   | "codexFastModeVisible"
   | "staveAutoClassifierModel"
   | "staveAutoSupervisorModel"
@@ -145,6 +146,7 @@ export function buildProviderRuntimeOptions(args: {
     codexReasoningSummary: settings.codexReasoningSummary,
     codexSupportsReasoningSummaries: settings.codexSupportsReasoningSummaries,
     codexFastMode: settings.codexFastMode,
+    codexExperimentalPlanMode: settings.codexExperimentalPlanMode,
     ...(args.provider === "codex" && providerConversation?.codex?.trim()
       ? { codexResumeThreadId: providerConversation.codex }
       : {}),

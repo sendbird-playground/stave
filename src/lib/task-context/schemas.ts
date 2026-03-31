@@ -171,6 +171,7 @@ const TaskSchema = z.object({
   updatedAt: z.string(),
   unread: z.boolean(),
   archivedAt: z.string().nullable().optional().transform((value) => value ?? null),
+  planFilePaths: z.array(z.string()).optional().default([]),
 });
 
 const TaskProviderConversationStateSchema = z.object({

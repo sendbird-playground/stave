@@ -125,6 +125,7 @@ export const PROVIDER_RUNTIME_OPTION_KEYS = [
   "codexReasoningSummary",
   "codexSupportsReasoningSummaries",
   "codexFastMode",
+  "codexExperimentalPlanMode",
   "codexResumeThreadId",
   "staveAuto",
 ] as const satisfies readonly (keyof ProviderRuntimeOptions)[];

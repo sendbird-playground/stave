@@ -249,6 +249,8 @@ export interface AppSettings {
   turnDiagnosticsVisible: boolean;
   providerTimeoutMs: number;
   claudePermissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+  /** Stores the permission mode that was active before entering plan mode, so it can be restored when plan mode is exited. */
+  claudePermissionModeBeforePlan: "default" | "acceptEdits" | "bypassPermissions" | "dontAsk" | null;
   claudeAllowDangerouslySkipPermissions: boolean;
   claudeSandboxEnabled: boolean;
   claudeAllowUnsandboxedCommands: boolean;
@@ -269,6 +271,7 @@ export interface AppSettings {
   codexReasoningSummary: "auto" | "concise" | "detailed" | "none";
   codexSupportsReasoningSummaries: "auto" | "enabled" | "disabled";
   codexFastMode: boolean;
+  codexExperimentalPlanMode: boolean;
 }
 
 interface AppState {
@@ -342,6 +345,7 @@ interface AppState {
   updatePromptDraft: (args: { taskId: string; patch: Partial<{ text: string; attachedFilePaths: string[]; attachments: Attachment[] }> }) => void;
   clearPromptDraft: (args: { taskId: string }) => void;
   createTask: (args: { title?: string }) => void;
+  registerPlanFile: (args: { taskId: string; filePath: string }) => void;
   renameTask: (args: { taskId: string; title: string }) => void;
   restoreTask: (args: { taskId: string }) => void;
   duplicateTask: (args: { taskId: string }) => void;
@@ -643,6 +647,7 @@ const defaultSettings: AppSettings = {
   turnDiagnosticsVisible: true,
   providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
   claudePermissionMode: "acceptEdits",
+  claudePermissionModeBeforePlan: null,
   claudeAllowDangerouslySkipPermissions: false,
   claudeSandboxEnabled: false,
   claudeAllowUnsandboxedCommands: true,
@@ -663,6 +668,7 @@ const defaultSettings: AppSettings = {
   codexReasoningSummary: "auto",
   codexSupportsReasoningSummaries: "auto",
   codexFastMode: true,
+  codexExperimentalPlanMode: false,
 };
 
 function createDefaultProviderAvailability() {
@@ -2262,6 +2268,17 @@ export const useAppStore = create<AppState>()(
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
+      },
+      registerPlanFile: ({ taskId, filePath }) => {
+        set((state) => ({
+          tasks: state.tasks.map((task) => {
+            if (task.id !== taskId) return task;
+            const existing = task.planFilePaths ?? [];
+            if (existing.includes(filePath)) return task;
+            return { ...task, planFilePaths: [...existing, filePath] };
+          }),
+          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+        }));
       },
       renameTask: ({ taskId, title }) => {
         const nextTitle = title.trim();
@@ -4025,6 +4042,7 @@ export const useAppStore = create<AppState>()(
         state.settings.providerTimeoutMs = normalizeProviderTimeoutMs({
           value: state.settings.providerTimeoutMs,
         });
+        state.settings.codexExperimentalPlanMode ??= false;
         state.recentProjects = normalizeRecentProjectStates({
           projects: state.recentProjects,
         });

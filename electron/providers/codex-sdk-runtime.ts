@@ -24,8 +24,8 @@ import {
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
 
-const SUPPORTED_CODEX_SDK_VERSION = "0.117.0";
-const SUPPORTED_CODEX_CLI_VERSION = "0.117.0";
+const SUPPORTED_CODEX_SDK_VERSION = "0.118.0-alpha.3";
+const SUPPORTED_CODEX_CLI_VERSION = "0.118.0-alpha.3";
 const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
@@ -119,6 +119,7 @@ export function buildCodexConfigOverrides(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
   const config: Record<string, string | boolean> = {};
+  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode === true;
   const summaryMode = args.runtimeOptions?.codexReasoningSummary;
   const supportsSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries;
   const hasExplicitRawReasoningToggle = Object.prototype.hasOwnProperty.call(
@@ -141,6 +142,12 @@ export function buildCodexConfigOverrides(args: {
   const codexFastMode = args.runtimeOptions?.codexFastMode;
   if (codexFastMode !== undefined) {
     config["features.fast_mode"] = codexFastMode;
+  }
+  if (experimentalPlanMode) {
+    config.collaboration_mode_kind = "plan";
+    if (args.runtimeOptions?.codexModelReasoningEffort) {
+      config.plan_mode_reasoning_effort = args.runtimeOptions.codexModelReasoningEffort;
+    }
   }
 
   return Object.keys(config).length > 0 ? config : undefined;
@@ -172,8 +179,9 @@ function buildThreadKey(args: {
   const reasoningSummary = args.runtimeOptions?.codexReasoningSummary ?? "summary-auto";
   const supportsReasoningSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries ?? "supports-auto";
   const showRawAgentReasoning = args.runtimeOptions?.codexShowRawAgentReasoning ? "raw1" : "raw0";
+  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode ? "plan1" : "plan0";
 
-  return `${args.taskId ?? "default"}:${args.cwd}:${sandboxMode}:${skipGitRepoCheck}:${networkAccessEnabled ? "net1" : "net0"}:${approvalPolicy ?? "approval-default"}:${model}:${modelReasoningEffort}:${webSearchMode}:${reasoningSummary}:${supportsReasoningSummaries}:${showRawAgentReasoning}`;
+  return `${args.taskId ?? "default"}:${args.cwd}:${sandboxMode}:${skipGitRepoCheck}:${networkAccessEnabled ? "net1" : "net0"}:${approvalPolicy ?? "approval-default"}:${model}:${modelReasoningEffort}:${webSearchMode}:${reasoningSummary}:${supportsReasoningSummaries}:${showRawAgentReasoning}:${experimentalPlanMode}`;
 }
 
 function resolveThreadId(args: { threadKey: string; fallbackThreadId?: string }) {
@@ -348,6 +356,32 @@ const codexItemTextLength = new Map<string, number>();
 const codexItemLastEmitTime = new Map<string, number>();
 const CODEX_OUTPUT_THROTTLE_MS = 200;
 
+/**
+ * Codex plan item shape (not yet in SDK types but present in CLI exec JSONL).
+ * When the SDK adds a `PlanItem` type this interface can be retired.
+ */
+interface CodexPlanItem {
+  id: string;
+  type: "plan";
+  plan_markdown?: string;
+  text?: string;
+}
+
+/**
+ * Extract plan text from a `<proposed_plan>` block if the agent wrapped its
+ * output in Codex plan-mode tags.  Returns `null` when no block is found.
+ */
+export function extractProposedPlan(text: string): string | null {
+  const openTag = "<proposed_plan>";
+  const closeTag = "</proposed_plan>";
+  const openIdx = text.indexOf(openTag);
+  if (openIdx === -1) return null;
+  const contentStart = openIdx + openTag.length;
+  const closeIdx = text.indexOf(closeTag, contentStart);
+  if (closeIdx === -1) return null;
+  return text.slice(contentStart, closeIdx).trim();
+}
+
 function buildCodexTodoToolInput(args: {
   items: Array<{ text?: string; completed?: boolean }>;
 }) {
@@ -359,19 +393,86 @@ function buildCodexTodoToolInput(args: {
   });
 }
 
+export function buildCodexTodoPlanText(args: {
+  items: Array<{ text?: string; completed?: boolean }>;
+}): string | null {
+  const lines = args.items
+    .map((item) => {
+      const text = item.text?.trim() ?? "";
+      if (!text) {
+        return null;
+      }
+      return `- [${item.completed ? "x" : " "}] ${text}`;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return `## Draft Plan\n${lines.join("\n")}`;
+}
+
+export function resolveCodexPlanReadyText(args: {
+  pendingMessageText?: string | null;
+  latestTodoPlanText?: string | null;
+}): string | null {
+  const pendingText = args.pendingMessageText?.trim() ?? "";
+  if (pendingText) {
+    return extractProposedPlan(pendingText) ?? pendingText;
+  }
+
+  const todoPlanText = args.latestTodoPlanText?.trim() ?? "";
+  return todoPlanText || null;
+}
+
 export function mapCodexItemEvent(args: {
   lifecycle: "item.started" | "item.updated" | "item.completed";
-  item: ThreadItem;
+  item: ThreadItem | CodexPlanItem;
 }): BridgeEvent[] {
   const { item, lifecycle } = args;
   const itemId = (item as { id?: string }).id ?? "";
 
   switch (item.type) {
+    // ── Structured plan item (Codex CLI exec JSONL, not yet in SDK types) ──
+    case "plan": {
+      const planItem = item as CodexPlanItem;
+      const planText = (planItem.plan_markdown ?? planItem.text ?? "").trim();
+      if (lifecycle === "item.completed") {
+        codexItemTextLength.delete(itemId);
+        return planText ? [{ type: "plan_ready", planText }] : [];
+      }
+      // For started/updated, stream the plan text as regular text so the
+      // user can see progress while the plan is being generated.
+      if (!planText) return [];
+      const prev = codexItemTextLength.get(itemId) ?? 0;
+      const delta = planText.slice(prev);
+      if (!delta) return [];
+      codexItemTextLength.set(itemId, planText.length);
+      return [{ type: "text", text: delta }];
+    }
+
     case "agent_message": {
       if (lifecycle === "item.completed") {
         const prev = codexItemTextLength.get(itemId) ?? 0;
         codexItemTextLength.delete(itemId);
         const full = item.text ?? "";
+
+        // Detect <proposed_plan> block from plan-mode collaboration output.
+        // When the model wraps its response in plan tags the CLI may still
+        // emit it as a plain agent_message (especially in exec mode where
+        // the structured plan item isn't surfaced yet).
+        const proposedPlan = extractProposedPlan(full);
+        if (proposedPlan) {
+          // Emit trailing text delta first so the streaming view is complete,
+          // then emit plan_ready so the plan viewer picks it up.
+          const delta = full.slice(prev);
+          const events: BridgeEvent[] = [];
+          if (delta) events.push({ type: "text", text: delta });
+          events.push({ type: "plan_ready", planText: proposedPlan });
+          return events;
+        }
+
         const delta = full.slice(prev);
         return delta ? [{ type: "text", text: delta }] : [];
       }
@@ -556,6 +657,7 @@ function ensureThread(args: {
   conversation?: StreamTurnArgs["conversation"];
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }): Thread {
+  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode === true;
   const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccessEnabled
     ?? parseBooleanEnv({
       value: process.env.STAVE_CODEX_NETWORK_ACCESS,
@@ -581,10 +683,12 @@ function ensureThread(args: {
   }
   const resumeThreadId = resolveThreadId({
     threadKey,
-    fallbackThreadId: resolveProviderResumeConversationId({
-      conversation: args.conversation,
-      fallbackResumeId: args.runtimeOptions?.codexResumeThreadId,
-    }),
+    fallbackThreadId: experimentalPlanMode
+      ? undefined
+      : resolveProviderResumeConversationId({
+        conversation: args.conversation,
+        fallbackResumeId: args.runtimeOptions?.codexResumeThreadId,
+      }),
   });
   const threadOptions = {
     ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
@@ -674,7 +778,37 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     const streamed = await thread.runStreamed(providerPrompt, turnOptions);
 
     const codexDebug = args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";
+    const codexExperimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode === true;
     const events: BridgeEvent[] = [];
+    let sawExperimentalPlanTodo = false;
+    let latestTodoPlanText: string | null = null;
+    let pendingPlanMessageText: string | null = null;
+    const emitBridgeEvent = (event: BridgeEvent) => {
+      events.push(event);
+      args.onEvent?.(event);
+    };
+    const emitBridgeEvents = (nextEvents: BridgeEvent[]) => {
+      nextEvents.forEach(emitBridgeEvent);
+    };
+    const flushPendingPlanMessage = (asPlanReady: boolean) => {
+      const planText = resolveCodexPlanReadyText({
+        pendingMessageText: pendingPlanMessageText,
+        latestTodoPlanText,
+      });
+      const text = pendingPlanMessageText?.trim() ?? "";
+      pendingPlanMessageText = null;
+
+      if (asPlanReady) {
+        if (planText) {
+          emitBridgeEvent({ type: "plan_ready", planText });
+        }
+        return;
+      }
+
+      if (text) {
+        emitBridgeEvent({ type: "text", text });
+      }
+    };
     // Clear any stale delta-tracking state from a previous aborted turn.
     codexItemTextLength.clear();
     codexItemLastEmitTime.clear();
@@ -684,14 +818,46 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
       if (codexDebug) {
         console.debug("[codex-sdk-runtime] event", threadEvent.type, threadEvent);
       }
+      if (
+        codexExperimentalPlanMode
+        && pendingPlanMessageText
+        && !(threadEvent.type === "item.completed" && threadEvent.item.type === "agent_message")
+        && threadEvent.type !== "turn.completed"
+      ) {
+        flushPendingPlanMessage(false);
+      }
       switch (threadEvent.type) {
         case "turn.started":
           codexItemTextLength.clear();
           codexItemLastEmitTime.clear();
+          sawExperimentalPlanTodo = false;
+          latestTodoPlanText = null;
+          pendingPlanMessageText = null;
           break;
         case "item.started":
         case "item.updated":
         case "item.completed": {
+          if (codexExperimentalPlanMode && threadEvent.item.type === "todo_list") {
+            sawExperimentalPlanTodo = true;
+            latestTodoPlanText = buildCodexTodoPlanText({
+              items: threadEvent.item.items ?? [],
+            });
+          }
+          if (
+            codexExperimentalPlanMode
+            && threadEvent.type === "item.completed"
+            && threadEvent.item.type === "agent_message"
+            && (sawExperimentalPlanTodo || Boolean(extractProposedPlan(threadEvent.item.text ?? "")))
+          ) {
+            if (pendingPlanMessageText) {
+              flushPendingPlanMessage(false);
+            }
+            pendingPlanMessageText = threadEvent.item.text ?? "";
+            if (codexDebug) {
+              console.debug("[codex-sdk-runtime] buffering final codex plan candidate");
+            }
+            break;
+          }
           const mapped = mapCodexItemEvent({
             lifecycle: threadEvent.type,
             item: threadEvent.item,
@@ -712,32 +878,37 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
           if (codexDebug) {
             console.debug("[codex-sdk-runtime] item", threadEvent.type, threadEvent.item.type, "→", mapped.map((e) => e.type));
           }
-          events.push(...mapped);
-          mapped.forEach((itemEvent) => args.onEvent?.(itemEvent));
+          emitBridgeEvents(mapped);
           break;
         }
         case "turn.failed":
-          events.push({
+          if (pendingPlanMessageText) {
+            flushPendingPlanMessage(false);
+          }
+          emitBridgeEvent({
             type: "error",
             message: toCodexUserFacingErrorMessage({ message: threadEvent.error?.message ?? "Codex turn failed." }),
             recoverable: true,
           });
-          args.onEvent?.(events[events.length - 1]!);
-          events.push({ type: "done" });
-          args.onEvent?.(events[events.length - 1]!);
+          emitBridgeEvent({ type: "done" });
           break;
         case "error":
-          events.push({
+          if (pendingPlanMessageText) {
+            flushPendingPlanMessage(false);
+          }
+          emitBridgeEvent({
             type: "error",
             message: toCodexUserFacingErrorMessage({ message: threadEvent.message }),
             recoverable: true,
           });
-          args.onEvent?.(events[events.length - 1]!);
           break;
         case "turn.completed":
+          if (codexExperimentalPlanMode && (pendingPlanMessageText || latestTodoPlanText)) {
+            flushPendingPlanMessage(true);
+          }
           {
             const completedEvent = threadEvent as TurnCompletedEvent;
-            events.push({
+            emitBridgeEvent({
               type: "usage",
               inputTokens: completedEvent.usage.input_tokens,
               outputTokens: completedEvent.usage.output_tokens,
@@ -745,22 +916,21 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
                 ? { cacheReadTokens: completedEvent.usage.cached_input_tokens }
                 : {}),
             });
-            args.onEvent?.(events[events.length - 1]!);
           }
-          events.push({ type: "done" });
-          args.onEvent?.(events[events.length - 1]!);
+          emitBridgeEvent({ type: "done" });
           break;
         case "thread.started":
           rememberThreadId({
             threadKey,
             threadId: threadEvent.thread_id,
           });
-          events.push({
-            type: "provider_conversation",
-            providerId: "codex",
-            nativeConversationId: threadEvent.thread_id,
-          });
-          args.onEvent?.(events[events.length - 1]!);
+          if (!codexExperimentalPlanMode) {
+            emitBridgeEvent({
+              type: "provider_conversation",
+              providerId: "codex",
+              nativeConversationId: threadEvent.thread_id,
+            });
+          }
           break;
         default:
           if (codexDebug) {

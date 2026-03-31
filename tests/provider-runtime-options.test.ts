@@ -25,6 +25,7 @@ const settings = {
   codexReasoningSummary: "auto",
   codexSupportsReasoningSummaries: "auto",
   codexFastMode: true,
+  codexExperimentalPlanMode: false,
   codexFastModeVisible: true,
   staveAutoClassifierModel: "claude-haiku-4-5",
   staveAutoSupervisorModel: "claude-opus-4-6",
@@ -62,6 +63,7 @@ describe("buildProviderRuntimeOptions", () => {
       claudeResumeSessionId: "claude-session-1",
       codexResumeThreadId: "codex-thread-1",
       codexFastMode: true,
+      codexExperimentalPlanMode: false,
     });
   });
 
@@ -90,6 +92,7 @@ describe("buildProviderRuntimeOptions", () => {
     })).toMatchObject({
       model: "gpt-5.4",
       codexResumeThreadId: "codex-thread-1",
+      codexExperimentalPlanMode: false,
     });
   });
 });

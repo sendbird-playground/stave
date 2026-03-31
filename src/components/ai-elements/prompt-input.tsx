@@ -1,7 +1,9 @@
-import { Camera, Check, FilePlus2, FolderOpen, Globe2, LoaderCircle, OctagonX, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
-import type { Attachment } from "@/types/chat";
+import { Brain, Camera, Check, ClipboardCheck, FilePlus2, FolderOpen, Globe2, LoaderCircle, OctagonX, Plus, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
+import type { Attachment, UserInputPart } from "@/types/chat";
 import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Input, Popover, PopoverAnchor, PopoverContent, Textarea } from "@/components/ui";
+import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Popover, PopoverAnchor, PopoverContent, Textarea } from "@/components/ui";
+import { UserInputCard } from "./user-input-card";
+import { PlanHistoryPopover } from "@/components/session/PlanHistoryPopover";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
 import { filterCommandPaletteItems, getSlashCommandSearchQuery } from "@/lib/commands";
 import { getActiveSkillTokenMatch, replaceSkillToken } from "@/lib/skills/catalog";
@@ -38,6 +40,13 @@ interface PromptInputProps {
   onPermissionModeChange?: (value: PermissionModeValue) => void;
   fastMode?: boolean;
   onFastModeChange?: (enabled: boolean) => void;
+  planMode?: boolean;
+  onPlanModeChange?: (enabled: boolean) => void;
+  thinkingMode?: "adaptive" | "enabled" | "disabled";
+  onThinkingModeChange?: (value: "adaptive" | "enabled" | "disabled") => void;
+  pendingUserInput?: { messageId: string; part: UserInputPart } | null;
+  onUserInputSubmit?: (args: { messageId: string; answers: Record<string, string> }) => void;
+  onUserInputDeny?: (args: { messageId: string }) => void;
   onSubmit: (args: { text: string; filePaths: string[] }) => void | Promise<void>;
   onAbort?: () => void;
 }
@@ -69,6 +78,13 @@ export function PromptInput(args: PromptInputProps) {
     onPermissionModeChange,
     fastMode,
     onFastModeChange,
+    planMode,
+    onPlanModeChange,
+    thinkingMode,
+    onThinkingModeChange,
+    pendingUserInput,
+    onUserInputSubmit,
+    onUserInputDeny,
     onSubmit,
     onAbort,
   } = args;
@@ -344,6 +360,20 @@ export function PromptInput(args: PromptInputProps) {
       return <UserRound className="size-3.5 text-foreground/80" />;
     }
     return <Globe2 className="size-3.5 text-foreground/80" />;
+  }
+
+  if (pendingUserInput && onUserInputSubmit && onUserInputDeny) {
+    return (
+      <div className="space-y-3 rounded-xl border border-primary/40 bg-card p-4">
+        <UserInputCard
+          toolName={pendingUserInput.part.toolName}
+          questions={pendingUserInput.part.questions}
+          state={pendingUserInput.part.state}
+          onSubmit={(answers) => onUserInputSubmit({ messageId: pendingUserInput.messageId, answers })}
+          onDeny={() => onUserInputDeny({ messageId: pendingUserInput.messageId })}
+        />
+      </div>
+    );
   }
 
   return (
@@ -790,7 +820,7 @@ export function PromptInput(args: PromptInputProps) {
               onClick={() => onFastModeChange(!fastMode)}
               title={fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
               className={cn(
-                "inline-flex h-9 items-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors",
+                "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
                 fastMode
                   ? "border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
                   : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
@@ -798,7 +828,46 @@ export function PromptInput(args: PromptInputProps) {
               )}
             >
               <Zap className={cn("size-3.5", fastMode && "fill-amber-400")} />
-              <span>Fast</span>
+            </button>
+          ) : null}
+          {onPlanModeChange ? (
+            <button
+              type="button"
+              disabled={interactionsDisabled}
+              onClick={() => onPlanModeChange(!planMode)}
+              title={planMode ? "Plan mode ON" : "Plan mode OFF"}
+              className={cn(
+                "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+                planMode
+                  ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
+                  : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
+                interactionsDisabled && "cursor-not-allowed opacity-60",
+              )}
+            >
+              <ClipboardCheck className="size-3.5" />
+            </button>
+          ) : null}
+          <PlanHistoryPopover variant="icon" />
+          {onThinkingModeChange ? (
+            <button
+              type="button"
+              disabled={interactionsDisabled}
+              onClick={() => {
+                const cycle = { adaptive: "enabled", enabled: "disabled", disabled: "adaptive" } as const;
+                onThinkingModeChange(cycle[thinkingMode ?? "adaptive"]);
+              }}
+              title={`Thinking: ${thinkingMode ?? "adaptive"}`}
+              className={cn(
+                "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+                thinkingMode === "enabled"
+                  ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
+                  : thinkingMode === "disabled"
+                    ? "border-border/70 bg-secondary text-muted-foreground/50 hover:bg-secondary/60"
+                    : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
+                interactionsDisabled && "cursor-not-allowed opacity-60",
+              )}
+            >
+              <Brain className="size-3.5" />
             </button>
           ) : null}
           {hasControlsDrawerContent ? (
@@ -847,32 +916,6 @@ export function PromptInput(args: PromptInputProps) {
               </DrawerContent>
             </Drawer>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setAttachOpen((prev) => !prev)}
-            disabled={interactionsDisabled}
-            className={cn(
-              "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
-              attachOpen && "bg-secondary/90 text-foreground",
-            )}
-          >
-            <FilePlus2 className="size-3.5" />
-          </Button>
-          {screenshotAvailable ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onCaptureScreenshot?.()}
-              disabled={interactionsDisabled}
-              className="h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60"
-              aria-label="Capture screenshot"
-            >
-              <Camera className="size-3.5" />
-            </Button>
-          ) : null}
         </div>
         <div className="flex items-center gap-2">
           {isTurnActive ? (
@@ -887,6 +930,35 @@ export function PromptInput(args: PromptInputProps) {
               Abort
             </Button>
           ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={interactionsDisabled}
+                className={cn(
+                  "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
+                  attachOpen && "bg-secondary/90 text-foreground",
+                )}
+                aria-label="Attach file or capture screenshot"
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="end">
+              <DropdownMenuItem onClick={() => setAttachOpen((prev) => !prev)}>
+                <FilePlus2 className="mr-2 size-3.5" />
+                Attach file
+              </DropdownMenuItem>
+              {screenshotAvailable ? (
+                <DropdownMenuItem onClick={() => onCaptureScreenshot?.()}>
+                  <Camera className="mr-2 size-3.5" />
+                  Screenshot
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button type="submit" size="sm" className="h-9 rounded-md px-3.5 text-sm" disabled={interactionsDisabled}>
             {isTurnActive ? (
               <>

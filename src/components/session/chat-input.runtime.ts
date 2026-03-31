@@ -21,11 +21,47 @@ import type { AppSettings } from "@/store/app.store";
 
 type UpdateSettings = (args: { patch: Partial<AppSettings> }) => void;
 
+/**
+ * Transition Claude permission mode while maintaining the "before-plan"
+ * save/restore contract.  Used by the toggle button, drawer, and quick
+ * controls — keep them in sync through this single helper.
+ */
+export function transitionClaudePermissionMode(args: {
+  nextMode: AppSettings["claudePermissionMode"];
+  currentMode: AppSettings["claudePermissionMode"];
+  beforePlan: AppSettings["claudePermissionModeBeforePlan"];
+  updateSettings: UpdateSettings;
+}): void {
+  const { nextMode, currentMode, beforePlan, updateSettings } = args;
+  if (nextMode === currentMode) return;
+
+  if (nextMode === "plan") {
+    // Entering plan mode — save current mode
+    updateSettings({
+      patch: {
+        claudePermissionModeBeforePlan: currentMode !== "plan" ? currentMode : beforePlan,
+        claudePermissionMode: "plan",
+      },
+    });
+  } else if (currentMode === "plan") {
+    // Leaving plan mode — clear saved mode
+    updateSettings({
+      patch: {
+        claudePermissionMode: nextMode,
+        claudePermissionModeBeforePlan: null,
+      },
+    });
+  } else {
+    updateSettings({ patch: { claudePermissionMode: nextMode } });
+  }
+}
+
 interface ChatInputRuntimeArgs {
   activeProvider: ProviderId;
   permissionMode: PermissionModeValue;
   providerTimeoutMs: number;
   claudePermissionMode: AppSettings["claudePermissionMode"];
+  claudePermissionModeBeforePlan: AppSettings["claudePermissionModeBeforePlan"];
   claudeAllowDangerouslySkipPermissions: boolean;
   claudeSandboxEnabled: boolean;
   claudeAllowUnsandboxedCommands: boolean;
@@ -45,6 +81,7 @@ interface ChatInputRuntimeArgs {
   codexReasoningSummary: AppSettings["codexReasoningSummary"];
   codexSupportsReasoningSummaries: AppSettings["codexSupportsReasoningSummaries"];
   codexFastMode: boolean;
+  codexExperimentalPlanMode: boolean;
   codexPathOverride: string;
   staveAutoFastMode: boolean;
   staveAutoOrchestrationMode: AppSettings["staveAutoOrchestrationMode"];
@@ -113,9 +150,14 @@ export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): 
         label: "Permission",
         value: args.permissionMode,
         options: permissionOptions,
-        onSelect: (value: string) => args.updateSettings({
-          patch: { claudePermissionMode: value as typeof args.claudePermissionMode },
-        }),
+        onSelect: (value: string) => {
+          transitionClaudePermissionMode({
+            nextMode: value as typeof args.claudePermissionMode,
+            currentMode: args.claudePermissionMode,
+            beforePlan: args.claudePermissionModeBeforePlan,
+            updateSettings: args.updateSettings,
+          });
+        },
       },
       {
         id: "thinking-mode",
@@ -273,6 +315,12 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
       id: "summary-support",
       label: "Summary Support",
       value: findOptionLabel(CODEX_REASONING_SUPPORT_OPTIONS, args.codexSupportsReasoningSummaries),
+    },
+    {
+      id: "plan-mode",
+      label: "Plan",
+      value: args.codexExperimentalPlanMode ? "Experimental" : "Off",
+      tone: args.codexExperimentalPlanMode ? "warning" : "default",
     },
     {
       id: "fast-mode",

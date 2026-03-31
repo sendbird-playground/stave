@@ -79,6 +79,7 @@ export const RuntimeOptionsObjectSchema = z.object({
   codexReasoningSummary: z.union([z.literal("auto"), z.literal("concise"), z.literal("detailed"), z.literal("none")]).optional(),
   codexSupportsReasoningSummaries: z.union([z.literal("auto"), z.literal("enabled"), z.literal("disabled")]).optional(),
   codexFastMode: z.boolean().optional(),
+  codexExperimentalPlanMode: z.boolean().optional(),
   codexResumeThreadId: z.string().max(200).optional(),
   staveAuto: z.object({
     classifierModel: z.string().max(200),

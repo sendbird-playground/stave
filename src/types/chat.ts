@@ -174,6 +174,8 @@ export interface Task {
   updatedAt: string;
   unread: boolean;
   archivedAt?: string | null;
+  /** Relative paths to persisted plan files (.stave/plans/*.md) */
+  planFilePaths?: string[];
 }
 
 export interface EditorTab {

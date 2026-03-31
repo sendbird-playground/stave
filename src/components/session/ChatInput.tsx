@@ -22,12 +22,14 @@ import {
 import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { findLatestPendingUserInputPart } from "@/store/provider-message.utils";
 import type { Attachment, ChatMessage } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
 import {
   buildChatInputRuntimeQuickControls,
   buildChatInputRuntimeStatusItems,
   buildCommandCatalogRuntimeOptions,
+  transitionClaudePermissionMode,
 } from "./chat-input.runtime";
 import { getLatestPromptSuggestions, mergePromptSuggestionWithDraft } from "./chat-input.utils";
 
@@ -94,6 +96,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     openFileFromTree,
     abortTaskTurn,
     refreshSkillCatalog,
+    resolveUserInput,
   ] = useAppStore(useShallow((state) => [
     state.activeTaskId,
     state.projectFiles,
@@ -107,6 +110,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.openFileFromTree,
     state.abortTaskTurn,
     state.refreshSkillCatalog,
+    state.resolveUserInput,
   ] as const));
   const activeProvider = useAppStore((state) => (
     state.tasks.find((task) => task.id === state.activeTaskId)?.provider ?? state.draftProvider
@@ -120,6 +124,14 @@ export function ChatInput(args: ChatInputProps = {}) {
   const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
   const activeMessageCount = useAppStore((state) => (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length);
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
+  const pendingUserInput = useAppStore((state) => {
+    const messages = state.messagesByTask[state.activeTaskId] ?? [];
+    const lastMessage = messages.at(-1);
+    if (!lastMessage) return null;
+    const part = findLatestPendingUserInputPart({ message: lastMessage });
+    if (!part) return null;
+    return { messageId: lastMessage.id, part };
+  });
   const [
     modelClaude,
     modelCodex,
@@ -147,6 +159,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     codexReasoningSummary,
     codexSupportsReasoningSummaries,
     codexPathOverride,
+    codexExperimentalPlanMode,
     claudeFastMode,
     codexFastMode,
     claudeFastModeVisible,
@@ -156,6 +169,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     staveAutoMaxSubtasks,
     staveAutoAllowCrossProviderWorkers,
     staveAutoMaxParallelSubtasks,
+    claudePermissionModeBeforePlan,
   ] = useAppStore(useShallow((state) => [
     state.settings.modelClaude,
     state.settings.modelCodex,
@@ -183,6 +197,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.settings.codexReasoningSummary,
     state.settings.codexSupportsReasoningSummaries,
     state.settings.codexPathOverride,
+    state.settings.codexExperimentalPlanMode,
     state.settings.claudeFastMode,
     state.settings.codexFastMode,
     state.settings.claudeFastModeVisible,
@@ -192,6 +207,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.settings.staveAutoMaxSubtasks,
     state.settings.staveAutoAllowCrossProviderWorkers,
     state.settings.staveAutoMaxParallelSubtasks,
+    state.settings.claudePermissionModeBeforePlan,
   ] as const));
   const providerSelectionTarget = activeTaskId || "draft:session";
   const skillCatalog = useAppStore((state) => state.skillCatalog);
@@ -232,6 +248,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       permissionMode,
       providerTimeoutMs,
       claudePermissionMode,
+      claudePermissionModeBeforePlan,
       claudeAllowDangerouslySkipPermissions,
       claudeSandboxEnabled,
       claudeAllowUnsandboxedCommands,
@@ -251,6 +268,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       codexReasoningSummary,
       codexSupportsReasoningSummaries,
       codexFastMode,
+      codexExperimentalPlanMode,
       codexPathOverride,
       staveAutoFastMode,
       staveAutoOrchestrationMode,
@@ -281,6 +299,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     codexSkipGitRepoCheck,
     codexShowRawAgentReasoning,
     codexSupportsReasoningSummaries,
+    codexExperimentalPlanMode,
     codexWebSearchMode,
     permissionMode,
     providerTimeoutMs,
@@ -290,6 +309,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     staveAutoMaxSubtasks,
     staveAutoOrchestrationMode,
     updateSettings,
+    claudePermissionModeBeforePlan,
   ]);
   const runtimeStatusItems = useMemo(() => {
     return buildChatInputRuntimeStatusItems({
@@ -316,6 +336,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       codexReasoningSummary,
       codexSupportsReasoningSummaries,
       codexFastMode,
+      codexExperimentalPlanMode,
       codexPathOverride,
       staveAutoFastMode,
       staveAutoOrchestrationMode,
@@ -323,6 +344,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       staveAutoAllowCrossProviderWorkers,
       staveAutoMaxParallelSubtasks,
       updateSettings,
+      claudePermissionModeBeforePlan,
     });
   }, [
     activeProvider,
@@ -332,6 +354,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     claudeEffort,
     claudeFastMode,
     claudePermissionMode,
+    claudePermissionModeBeforePlan,
     claudeSandboxEnabled,
     claudeSettingSources,
     claudeTaskBudgetTokens,
@@ -346,6 +369,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     codexSkipGitRepoCheck,
     codexShowRawAgentReasoning,
     codexSupportsReasoningSummaries,
+    codexExperimentalPlanMode,
     codexWebSearchMode,
     permissionMode,
     providerTimeoutMs,
@@ -667,12 +691,49 @@ export function ChatInput(args: ChatInputProps = {}) {
                   }
                 : undefined
           }
+          planMode={
+            activeProvider === "codex"
+              ? codexExperimentalPlanMode
+              : (activeProvider === "claude-code" || activeProvider === "stave") && claudePermissionMode === "plan"
+          }
+          onPlanModeChange={
+            activeProvider === "codex"
+              ? (enabled) => updateSettings({ patch: { codexExperimentalPlanMode: enabled } })
+              : activeProvider === "claude-code" || activeProvider === "stave"
+              ? (enabled) => {
+                  transitionClaudePermissionMode({
+                    nextMode: enabled ? "plan" : (claudePermissionModeBeforePlan ?? "acceptEdits"),
+                    currentMode: claudePermissionMode,
+                    beforePlan: claudePermissionModeBeforePlan,
+                    updateSettings,
+                  });
+                }
+              : undefined
+          }
+          thinkingMode={activeProvider === "claude-code" || activeProvider === "stave" ? claudeThinkingMode : undefined}
+          onThinkingModeChange={
+            activeProvider === "claude-code" || activeProvider === "stave"
+              ? (value) => updateSettings({ patch: { claudeThinkingMode: value } })
+              : undefined
+          }
+          pendingUserInput={pendingUserInput}
+          onUserInputSubmit={pendingUserInput ? ({ messageId, answers }) => {
+            resolveUserInput({ taskId: activeTaskId, messageId, answers });
+          } : undefined}
+          onUserInputDeny={pendingUserInput ? ({ messageId }) => {
+            resolveUserInput({ taskId: activeTaskId, messageId, denied: true });
+          } : undefined}
           permissionMode={permissionMode}
           runtimeQuickControls={runtimeQuickControls}
           runtimeStatusItems={runtimeStatusItems}
           onPermissionModeChange={(value) => {
             if (activeProvider === "claude-code") {
-              updateSettings({ patch: { claudePermissionMode: value as typeof claudePermissionMode } });
+              transitionClaudePermissionMode({
+                nextMode: value as typeof claudePermissionMode,
+                currentMode: claudePermissionMode,
+                beforePlan: claudePermissionModeBeforePlan,
+                updateSettings,
+              });
             } else {
               updateSettings({ patch: { codexApprovalPolicy: value as typeof codexApprovalPolicy } });
             }
