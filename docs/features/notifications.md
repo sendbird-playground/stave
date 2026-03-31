@@ -7,6 +7,7 @@ Stave now includes an in-app notification center for background task activity.
 - records task turn completions across workspaces
 - records approval requests with project / workspace / task context
 - keeps notification history in SQLite
+- can play an optional synthesized alert sound for new notifications
 - tracks read / unread state
 - lets you jump from a notification back into the related project, workspace, and task
 - lets you approve or deny approval requests directly from the notification center
@@ -19,6 +20,7 @@ Stave now includes an in-app notification center for background task activity.
 - unread notifications stay in the main inbox list
 - read notifications move out of the inbox and remain visible in a separate history view
 - notifications stay readable after the underlying task or workspace is no longer active
+- Settings > General includes Notification Sound controls for enable/disable, preset, volume, and preview
 
 ## Persistence model
 
