@@ -595,7 +595,10 @@ export function ProjectWorkspaceSidebar(args: {
     <>
       <aside
         data-testid="project-workspace-sidebar"
-        className={cn("hidden h-full shrink-0 overflow-hidden bg-card/80 lg:flex lg:flex-col", args.collapsed && "border-r border-border/70")}
+        className={cn(
+          "sidebar-liquid-glass hidden h-full shrink-0 overflow-hidden text-sidebar-foreground lg:flex lg:flex-col",
+          args.collapsed && "border-r border-sidebar-border/60",
+        )}
         style={{
           width: `${args.collapsed ? COLLAPSED_PROJECT_SIDEBAR_WIDTH : args.width}px`,
           minWidth: `${args.collapsed ? COLLAPSED_PROJECT_SIDEBAR_WIDTH : args.width}px`,
@@ -607,7 +610,7 @@ export function ProjectWorkspaceSidebar(args: {
       >
         <div
           className={cn(
-            "border-b border-border/70",
+            "border-b border-sidebar-border/55",
             args.collapsed ? "px-2 pb-3" : "flex h-12 items-center px-3",
           )}
           style={
@@ -744,7 +747,12 @@ export function ProjectWorkspaceSidebar(args: {
         {!args.collapsed ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
             <TooltipProvider>
-              <div className={cn("mb-3 flex items-center justify-between rounded-md border border-border/60 bg-card/70 px-3", PANEL_BAR_HEIGHT_CLASS)}>
+              <div
+                className={cn(
+                  "sidebar-liquid-panel mb-3 flex items-center justify-between rounded-lg border border-sidebar-border/60 px-3",
+                  PANEL_BAR_HEIGHT_CLASS,
+                )}
+              >
                 <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Projects
                 </span>
@@ -826,7 +834,7 @@ export function ProjectWorkspaceSidebar(args: {
                               {({ dragHandle, isDragging }) => (
                                 <section
                                   className={cn(
-                                    "rounded-md border border-border/70 bg-background/70 transition-colors",
+                                    "sidebar-liquid-panel rounded-xl border border-sidebar-border/60 transition-colors",
                                     isDragging && "ring-1 ring-primary/20",
                                   )}
                                 >
@@ -1172,7 +1180,7 @@ export function ProjectWorkspaceSidebar(args: {
         ) : null}
         <div
           className={cn(
-            "border-t border-border/70",
+            "border-t border-sidebar-border/55",
             args.collapsed ? "px-2 py-2" : "px-3 py-2",
           )}
         >

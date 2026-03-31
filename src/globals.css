@@ -274,6 +274,120 @@
     height: 0;
     display: none;
   }
+
+  .sidebar-liquid-glass {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--sidebar) 78%, white 22%) 0%,
+        color-mix(in oklab, var(--sidebar) 68%, transparent) 18%,
+        color-mix(in oklab, var(--sidebar) 82%, transparent) 100%
+      );
+    box-shadow:
+      inset -1px 0 0 color-mix(in oklab, white 24%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 42%, transparent),
+      16px 0 34px -28px color-mix(in oklab, var(--foreground) 20%, transparent);
+    backdrop-filter: blur(30px) saturate(170%);
+    -webkit-backdrop-filter: blur(30px) saturate(170%);
+  }
+
+  .sidebar-liquid-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        circle at top left,
+        color-mix(in oklab, white 60%, transparent) 0%,
+        transparent 42%
+      ),
+      radial-gradient(
+        circle at 18% 78%,
+        color-mix(in oklab, var(--primary) 12%, transparent) 0%,
+        transparent 36%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, white 18%, transparent) 0%,
+        transparent 32%,
+        color-mix(in oklab, black 8%, transparent) 100%
+      );
+    opacity: 0.92;
+  }
+
+  .sidebar-liquid-glass::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, white 18%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 52%, transparent);
+  }
+
+  .sidebar-liquid-glass > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .sidebar-liquid-panel {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--sidebar) 58%, white 18%) 0%,
+        color-mix(in oklab, var(--sidebar) 52%, transparent) 100%
+      );
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 38%, transparent),
+      0 16px 28px -24px color-mix(in oklab, var(--foreground) 32%, transparent);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+  }
+
+  .sidebar-liquid-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, white 20%, transparent) 0%,
+        transparent 42%
+      ),
+      radial-gradient(
+        circle at top left,
+        color-mix(in oklab, white 16%, transparent) 0%,
+        transparent 48%
+      );
+    opacity: 0.9;
+  }
+
+  .sidebar-liquid-panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, white 14%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 34%, transparent);
+  }
+
+  .sidebar-liquid-panel > * {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 @keyframes dropdown-in {
