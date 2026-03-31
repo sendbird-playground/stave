@@ -5,10 +5,15 @@
 // Types
 export {
   THEME_TOKEN_NAMES,
+  EXTENDED_THEME_TOKEN_NAMES,
+  BUILTIN_THEME_TOKEN_NAMES,
   type ThemeTokenName,
+  type ExtendedThemeTokenName,
+  type BuiltinThemeTokenName,
   type ThemeModeName,
   type ThemeTokenValues,
   type ThemeOverrideValues,
+  type BuiltinThemeTokenValues,
   type CustomThemeDefinition,
 } from "./types";
 

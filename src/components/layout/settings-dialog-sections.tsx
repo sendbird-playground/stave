@@ -981,7 +981,7 @@ function ThemeSection() {
 
         <SettingsCard
           title="Theme Presets"
-          description="Apply a curated colour palette. Presets override the base dark / light tokens; manual token tweaks below still take priority."
+          description="Apply a curated palette inspired by popular VS Code themes. Presets override the base light / dark tokens; manual token tweaks below still take priority."
         >
           <div className="grid gap-3">
             {allThemes.map((theme) => (
@@ -1022,7 +1022,7 @@ function ThemeSection() {
 
         <SettingsCard
           title="Design Tokens"
-          description="Defaults follow `bunx --bun shadcn@latest init --preset bNQ7GS20w`. Override any token below."
+          description="These are Stave's base light and dark tokens. Custom presets layer on top, and manual overrides below still win."
         >
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/30 p-3">
             <div className="flex items-center gap-2">
