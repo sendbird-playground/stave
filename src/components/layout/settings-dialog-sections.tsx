@@ -3,7 +3,12 @@ import { Bot, ChevronDown, ChevronRight, Code2, Cog, Folder, Globe, KeyRound, Mo
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { useShallow } from "zustand/react/shallow";
-import { Badge, Button, Textarea } from "@/components/ui";
+import { Badge, Button, Slider, Textarea } from "@/components/ui";
+import {
+  NOTIFICATION_SOUND_PRESETS,
+  playNotificationSound,
+  type NotificationSoundPreset,
+} from "@/lib/notifications/notification-sound";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CLAUDE_SDK_MODEL_OPTIONS,
@@ -77,6 +82,15 @@ function formatThemeTokenLabel(token: ThemeTokenName) {
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");
 }
+
+function formatNotificationSoundPresetLabel(preset: NotificationSoundPreset) {
+  return `${preset.slice(0, 1).toUpperCase()}${preset.slice(1)}`;
+}
+
+const NOTIFICATION_SOUND_PRESET_OPTIONS: Array<{ value: NotificationSoundPreset; label: string }> = NOTIFICATION_SOUND_PRESETS.map((preset) => ({
+  value: preset,
+  label: formatNotificationSoundPresetLabel(preset),
+}));
 
 interface GitRemoteState {
   name: string;
@@ -556,13 +570,24 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
 }
 
 function GeneralSection() {
-  const [language, confirmBeforeClose] = useAppStore(
+  const [
+    language,
+    confirmBeforeClose,
+    notificationSoundEnabled,
+    notificationSoundPreset,
+    notificationSoundVolume,
+  ] = useAppStore(
     useShallow((state) => [
       state.settings.language,
       state.settings.confirmBeforeClose,
+      state.settings.notificationSoundEnabled,
+      state.settings.notificationSoundPreset,
+      state.settings.notificationSoundVolume,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const notificationSoundVolumePercent = Math.round(notificationSoundVolume * 100);
+
   return (
     <>
       <SectionHeading
@@ -594,6 +619,78 @@ function GeneralSection() {
               ]}
             />
           </LabeledField>
+        </SettingsCard>
+        <SettingsCard
+          title="Notification Sound"
+          description="Play a short synthesized alert when a task finishes or an approval request arrives."
+        >
+          <LabeledField
+            title="Sound"
+            description="Enable or mute notification sounds across the app."
+          >
+            <ChoiceButtons
+              value={notificationSoundEnabled ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { notificationSoundEnabled: value === "on" } })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
+          {notificationSoundEnabled ? (
+            <>
+              <LabeledField
+                title="Preset"
+                description="Choose the synthesized alert tone to use for notifications."
+              >
+                <ChoiceButtons
+                  value={notificationSoundPreset}
+                  onChange={(value) => updateSettings({ patch: { notificationSoundPreset: value } })}
+                  options={NOTIFICATION_SOUND_PRESET_OPTIONS}
+                />
+              </LabeledField>
+              <LabeledField
+                title="Volume"
+                description="Adjust the playback level for notification sounds."
+              >
+                <div className="flex items-center gap-3">
+                  <Slider
+                    aria-label="Notification sound volume"
+                    className="flex-1"
+                    value={[notificationSoundVolumePercent]}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onValueChange={(values) => {
+                      const nextValue = values[0];
+                      if (typeof nextValue !== "number") {
+                        return;
+                      }
+                      updateSettings({ patch: { notificationSoundVolume: nextValue / 100 } });
+                    }}
+                  />
+                  <Badge variant="outline" className="min-w-14 justify-center">
+                    {notificationSoundVolumePercent}%
+                  </Badge>
+                </div>
+              </LabeledField>
+              <LabeledField
+                title="Preview"
+                description="Play the current preset once with the current volume."
+              >
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => playNotificationSound({
+                    preset: notificationSoundPreset,
+                    volume: notificationSoundVolume,
+                  })}
+                >
+                  Test Sound
+                </Button>
+              </LabeledField>
+            </>
+          ) : null}
         </SettingsCard>
       </SectionStack>
     </>

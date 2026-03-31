@@ -25,6 +25,14 @@ import {
   sortNotificationsNewestFirst,
   workspaceHasActiveTurns,
 } from "@/lib/notifications/notification.types";
+import {
+  DEFAULT_NOTIFICATION_SOUND_PRESET,
+  DEFAULT_NOTIFICATION_SOUND_VOLUME,
+  normalizeNotificationSoundPreset,
+  normalizeNotificationSoundVolume,
+  playNotificationSound,
+  type NotificationSoundPreset,
+} from "@/lib/notifications/notification-sound";
 import { resolveCommandInput } from "@/lib/commands";
 import {
   buildCanonicalConversationRequest,
@@ -245,6 +253,9 @@ export interface AppSettings {
   typescriptLspCommand: string;
   diffViewMode: "unified" | "split";
   confirmBeforeClose: boolean;
+  notificationSoundEnabled: boolean;
+  notificationSoundVolume: number;
+  notificationSoundPreset: NotificationSoundPreset;
   providerDebugStream: boolean;
   turnDiagnosticsVisible: boolean;
   providerTimeoutMs: number;
@@ -639,6 +650,9 @@ const defaultSettings: AppSettings = {
   typescriptLspCommand: "",
   diffViewMode: "unified",
   confirmBeforeClose: true,
+  notificationSoundEnabled: true,
+  notificationSoundVolume: DEFAULT_NOTIFICATION_SOUND_VOLUME,
+  notificationSoundPreset: DEFAULT_NOTIFICATION_SOUND_PRESET,
   providerDebugStream: false,
   turnDiagnosticsVisible: true,
   providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
@@ -890,6 +904,17 @@ export const useAppStore = create<AppState>()(
               notification: result.notification!,
             }),
           }));
+          const {
+            notificationSoundEnabled,
+            notificationSoundVolume,
+            notificationSoundPreset,
+          } = get().settings;
+          if (notificationSoundEnabled) {
+            playNotificationSound({
+              preset: notificationSoundPreset,
+              volume: notificationSoundVolume,
+            });
+          }
           return result.notification;
         } catch (error) {
           console.error("[notifications] failed to persist notification", error);
@@ -2115,6 +2140,20 @@ export const useAppStore = create<AppState>()(
                 claudeSettingSources: normalizeClaudeSettingSources({
                   value: patch.claudeSettingSources,
                 }),
+              }),
+          ...(patch.notificationSoundVolume === undefined
+            ? {}
+            : {
+                notificationSoundVolume: normalizeNotificationSoundVolume(
+                  patch.notificationSoundVolume,
+                ),
+              }),
+          ...(patch.notificationSoundPreset === undefined
+            ? {}
+            : {
+                notificationSoundPreset: normalizeNotificationSoundPreset(
+                  patch.notificationSoundPreset,
+                ),
               }),
         };
 
@@ -3965,6 +4004,15 @@ export const useAppStore = create<AppState>()(
         // Migrate legacy fastModeVisible → per-provider fields.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = state.settings as any;
+        state.settings.notificationSoundEnabled = typeof raw.notificationSoundEnabled === "boolean"
+          ? raw.notificationSoundEnabled
+          : defaultSettings.notificationSoundEnabled;
+        state.settings.notificationSoundVolume = normalizeNotificationSoundVolume(
+          raw.notificationSoundVolume,
+        );
+        state.settings.notificationSoundPreset = normalizeNotificationSoundPreset(
+          raw.notificationSoundPreset,
+        );
         if (typeof raw.staveModelPlanner === "string" && typeof raw.staveAutoPlanModel !== "string") {
           raw.staveAutoPlanModel = raw.staveModelPlanner;
         }

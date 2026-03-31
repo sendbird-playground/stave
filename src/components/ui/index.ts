@@ -28,6 +28,7 @@ export { Textarea } from "./textarea";
 export { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./empty";
 export { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./resizable";
 export { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectScrollDownButton, SelectScrollUpButton, SelectSeparator, SelectTrigger, SelectValue } from "./select";
+export { Slider } from "./slider";
 export { toast, Toaster } from "./sonner";
 export { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "./table";
 export { Toggle, toggleVariants } from "./toggle";
