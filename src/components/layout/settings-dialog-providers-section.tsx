@@ -284,6 +284,7 @@ export function ProvidersSection() {
     codexReasoningSummary,
     codexSupportsReasoningSummaries,
     codexFastMode,
+    planAutoApprove,
   ] = useAppStore(
     useShallow((state) => [
       state.settings.providerTimeoutMs,
@@ -307,6 +308,7 @@ export function ProvidersSection() {
       state.settings.codexReasoningSummary,
       state.settings.codexSupportsReasoningSummaries,
       state.settings.codexFastMode,
+      state.settings.planAutoApprove,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -369,6 +371,13 @@ export function ProvidersSection() {
                 ))}
               </SelectContent>
             </Select>
+          </LabeledField>
+          <LabeledField title="Plan Auto Approve" description="Automatically approve plans without manual confirmation.">
+            <ChoiceButtons
+              value={planAutoApprove ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { planAutoApprove: value === "on" } })}
+              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+            />
           </LabeledField>
           <LabeledField title="Dangerous Skip Permissions">
             <ChoiceButtons

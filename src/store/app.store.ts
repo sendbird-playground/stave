@@ -296,6 +296,8 @@ export interface AppSettings {
   codexSupportsReasoningSummaries: "auto" | "enabled" | "disabled";
   codexFastMode: boolean;
   codexExperimentalPlanMode: boolean;
+  /** When true, automatically approve plans without user interaction. */
+  planAutoApprove: boolean;
 }
 
 interface AppState {
@@ -703,6 +705,7 @@ const defaultSettings: AppSettings = {
   codexSupportsReasoningSummaries: "auto",
   codexFastMode: true,
   codexExperimentalPlanMode: false,
+  planAutoApprove: false,
 };
 
 function createDefaultProviderAvailability() {
