@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
-import { Bot, ChevronDown, ChevronRight, Code2, Cog, FileAudio, Folder, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Trash2, Upload, Wrench, X } from "lucide-react";
+import { Bot, Check, ChevronDown, ChevronRight, Code2, Cog, Contrast, FileAudio, Folder, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Trash2, Upload, Wrench, X } from "lucide-react";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { useShallow } from "zustand/react/shallow";
@@ -24,8 +24,14 @@ import {
 import { BOOLEAN_TOGGLE_OPTIONS } from "@/lib/providers/runtime-option-contract";
 import { cn } from "@/lib/utils";
 import {
+  BUILTIN_CUSTOM_THEMES,
+  MAX_USER_THEMES,
   PRESET_THEME_TOKENS,
   THEME_TOKEN_NAMES,
+  exportCustomThemeJson,
+  listAllCustomThemes,
+  parseCustomThemeFile,
+  type CustomThemeDefinition,
   type ThemeModeName,
   type ThemeTokenName,
   useAppStore,
@@ -958,27 +964,81 @@ function GeneralSection() {
 function ThemeSection() {
   const [themeEditorMode, setThemeEditorMode] = useState<ThemeModeName>("light");
   const themeMode = useAppStore((state) => state.settings.themeMode);
+  const customThemeId = useAppStore((state) => state.settings.customThemeId);
+  const userCustomThemes = useAppStore((state) => state.settings.userCustomThemes);
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const installCustomTheme = useAppStore((state) => state.installCustomTheme);
+  const removeCustomTheme = useAppStore((state) => state.removeCustomTheme);
+
+  const allThemes = useMemo(
+    () => listAllCustomThemes({ userThemes: userCustomThemes }),
+    [userCustomThemes],
+  );
+  const builtinIds = useMemo(
+    () => new Set(BUILTIN_CUSTOM_THEMES.map((t) => t.id)),
+    [],
+  );
 
   return (
     <>
-      <SectionHeading title="Design" description="Control theme mode and the shadcn token values that shape the interface." />
+      <SectionHeading title="Design" description="Control theme mode, theme presets, and design token overrides." />
       <SectionStack>
         <SettingsCard title="Appearance" description="Choose how the app resolves light and dark mode.">
           <div className="grid gap-2 sm:grid-cols-3">
-            <Button className="h-10 rounded-md" variant={themeMode === "light" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "light" } })}>
+            <Button className="h-10 rounded-md" variant={themeMode === "light" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "light", customThemeId: null } })}>
               <Sun className="size-4" />
               Light
             </Button>
-            <Button className="h-10 rounded-md" variant={themeMode === "dark" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "dark" } })}>
+            <Button className="h-10 rounded-md" variant={themeMode === "dark" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "dark", customThemeId: null } })}>
               <Moon className="size-4" />
               Dark
             </Button>
-            <Button className="h-10 rounded-md" variant={themeMode === "system" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "system" } })}>
+            <Button className="h-10 rounded-md" variant={themeMode === "system" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "system", customThemeId: null } })}>
               <Monitor className="size-4" />
               System
             </Button>
           </div>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Theme Presets"
+          description="Apply a curated colour palette. Presets override the base dark / light tokens; manual token tweaks below still take priority."
+        >
+          <div className="grid gap-3">
+            {allThemes.map((theme) => (
+              <CustomThemeCard
+                key={theme.id}
+                theme={theme}
+                isActive={customThemeId === theme.id}
+                isBuiltin={builtinIds.has(theme.id)}
+                onSelect={() => updateSettings({ patch: { customThemeId: theme.id } })}
+                onDeselect={() => updateSettings({ patch: { customThemeId: null } })}
+                onRemove={builtinIds.has(theme.id) ? undefined : () => removeCustomTheme({ themeId: theme.id })}
+                onExport={() => {
+                  const json = exportCustomThemeJson({ theme });
+                  const blob = new Blob([json], { type: "application/json" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${theme.id}.theme.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              />
+            ))}
+          </div>
+
+          <ThemeImportButton
+            existingIds={allThemes.map((t) => t.id)}
+            userThemeCount={userCustomThemes.length}
+            onInstall={(theme) => {
+              const result = installCustomTheme({ theme });
+              if (result.ok) {
+                updateSettings({ patch: { customThemeId: theme.id } });
+              }
+              return result;
+            }}
+          />
         </SettingsCard>
 
         <SettingsCard
@@ -1021,6 +1081,184 @@ function ThemeSection() {
         </SettingsCard>
       </SectionStack>
     </>
+  );
+}
+
+/** A visual card for a single custom theme preset. */
+const CustomThemeCard = memo(function CustomThemeCard(args: {
+  theme: CustomThemeDefinition;
+  isActive: boolean;
+  isBuiltin: boolean;
+  onSelect: () => void;
+  onDeselect: () => void;
+  onRemove?: () => void;
+  onExport?: () => void;
+}) {
+  const { theme, isActive, isBuiltin } = args;
+  const previewTokens = ["background", "foreground", "primary", "accent", "destructive", "border", "success", "warning"] as const;
+  const previewColors = previewTokens.map((t) => theme.tokens[t]).filter(Boolean);
+
+  return (
+    <div
+      className={cn(
+        "group relative grid gap-3 rounded-xl border p-4 transition-colors sm:grid-cols-[1fr_auto] sm:items-center",
+        isActive
+          ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+          : "border-border/70 bg-background/60 hover:border-primary/40 hover:bg-muted/30",
+      )}
+    >
+      {/* main clickable area */}
+      <button
+        type="button"
+        className="grid gap-1.5 text-left"
+        onClick={isActive ? args.onDeselect : args.onSelect}
+      >
+        <div className="flex items-center gap-2">
+          <Contrast className="size-4 shrink-0 text-muted-foreground" />
+          <p className="text-sm font-semibold">{theme.name}</p>
+          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+            {theme.baseMode}
+          </Badge>
+          {!isBuiltin && (
+            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+              User
+            </Badge>
+          )}
+          {isActive && (
+            <span className="ml-auto flex items-center gap-1 text-xs font-medium text-primary sm:ml-0">
+              <Check className="size-3.5" />
+              Active
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{theme.description}</p>
+        {theme.author && (
+          <p className="text-[11px] text-muted-foreground/70">
+            by {theme.author}
+            {theme.version ? ` \u00B7 v${theme.version}` : ""}
+          </p>
+        )}
+      </button>
+
+      {/* right column: swatches + action buttons */}
+      <div className="flex flex-col items-end gap-2">
+        {/* colour swatch strip */}
+        <div className="flex items-center gap-1">
+          {previewColors.map((color, i) => (
+            <span
+              key={i}
+              className="size-6 rounded-md border border-border/50"
+              style={{ backgroundColor: color }}
+              aria-hidden="true"
+            />
+          ))}
+        </div>
+
+        {/* action buttons */}
+        <div className="flex items-center gap-1">
+          {args.onExport && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs"
+              onClick={(e) => { e.stopPropagation(); args.onExport?.(); }}
+            >
+              <Upload className="size-3" />
+              Export
+            </Button>
+          )}
+          {args.onRemove && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); args.onRemove?.(); }}
+            >
+              <Trash2 className="size-3" />
+              Remove
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/** Button + file input for importing a custom theme JSON file. */
+function ThemeImportButton(args: {
+  existingIds: string[];
+  userThemeCount: number;
+  onInstall: (theme: CustomThemeDefinition) => { ok: boolean; error?: string };
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImportError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset so the same file can be re-selected.
+    e.target.value = "";
+
+    if (file.size > 256 * 1024) {
+      setImportError("File too large (max 256 KB).");
+      return;
+    }
+
+    const text = await file.text();
+    const result = parseCustomThemeFile({ text, existingIds: args.existingIds });
+    if (!result.ok) {
+      setImportError(result.errors?.join(" ") ?? "Unknown validation error.");
+      return;
+    }
+
+    const installResult = args.onInstall(result.theme!);
+    if (!installResult.ok) {
+      setImportError(installResult.error ?? "Failed to install theme.");
+    }
+  };
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-center gap-3">
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5"
+          disabled={args.userThemeCount >= MAX_USER_THEMES}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Upload className="size-3.5" />
+          Import Theme JSON
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          {args.userThemeCount} / {MAX_USER_THEMES} user themes
+        </span>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {importError && (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          {importError}
+        </p>
+      )}
+
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Drop a <code className="rounded bg-muted px-1 py-0.5 text-[10px]">.theme.json</code> file
+        to install a community theme. The JSON must include <code className="rounded bg-muted px-1 py-0.5 text-[10px]">id</code>,{" "}
+        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">name</code>,{" "}
+        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">baseMode</code>, and a{" "}
+        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">tokens</code> map.
+      </p>
+    </div>
   );
 }
 

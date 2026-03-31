@@ -68,6 +68,77 @@ The repository-local copy of this skill lives at `skills/stave-design-system/SKI
 - Treat glassmorphism as a restrained accent that supports depth, not as the default treatment for every surface.
 - Keep desktop density, accessibility, and light/dark consistency ahead of visual novelty.
 - If a UI change alters shared design-system behavior or preset-facing copy, update the related docs in the same change.
+- **All UI work must verify the theme system.** See the "Theme System" section below — it applies to every layout, component, colour, and surface change, not just theme-specific files.
+
+## Theme System (mandatory for ALL UI work)
+
+**Every change that touches Stave's UI — layout, components, colours, shadcn presets, new surfaces, dialogs, sidebar, editor, terminal, or any visual element — must verify and, if needed, update the theme system.**
+
+This is not limited to "theme files only". If you add a new component that introduces a colour token, restructure a layout that relies on existing tokens, swap a shadcn preset, or change how any surface looks in light/dark mode, the theme system is part of that change.
+
+All UI colour is driven by CSS custom properties in `src/globals.css` and the theme module at `src/lib/themes/`. Both the base light/dark system **and** the custom theme system (built-in presets + user-installable themes) consume the same token set. A token added to one layer but missing from the other is a visual regression.
+
+### Required check files
+
+| File | Role |
+|------|------|
+| `src/globals.css` | Base `:root` and `.dark` CSS variable declarations + `@theme inline` Tailwind mapping |
+| `src/lib/themes/types.ts` | `THEME_TOKEN_NAMES` array and `ThemeTokenName` type (core tokens) |
+| `src/lib/themes/presets.ts` | `PRESET_THEME_TOKENS` — default values for light and dark base modes |
+| `src/lib/themes/builtin-themes.ts` | Built-in custom theme definitions (e.g. Dark High Contrast) |
+| `src/lib/themes/apply.ts` | DOM application logic (`applyCustomTheme`, `applyThemeOverrides`, etc.) |
+| `src/lib/themes/validate.ts` | Zod schema for user-installable theme JSON |
+| `src/lib/themes/index.ts` | Public API re-exports |
+| `src/store/theme.utils.ts` | Thin re-export layer (keeps `@/store/theme.utils` import path working) |
+| `tests/custom-theme.test.ts` | Theme validation and integrity tests |
+
+### When to apply these rules
+
+These rules apply when **any** of the following is true:
+
+- A CSS custom property (`--*`) is added, removed, renamed, or its value changed in `globals.css`.
+- A component or layout introduces a new semantic colour that does not already have a CSS variable.
+- A shadcn preset is applied or changed (presets rewrite `globals.css` token values).
+- A new UI surface is added (panel, dialog, tab, sidebar section, etc.) that uses its own colour tokens.
+- Base light or dark mode colours are adjusted for any reason.
+- The Tailwind `@theme inline` block is modified.
+- The settings Design section or theme application logic is modified.
+
+### Rules
+
+- **Adding or renaming a CSS custom property in `globals.css`:**
+  1. If the property is a core UI token (used by shadcn or layout), add it to `THEME_TOKEN_NAMES` in `types.ts` and provide default values in `presets.ts` for both light and dark modes.
+  2. Update **every** built-in custom theme in `builtin-themes.ts` to include a value for the new token. A built-in theme that omits a token the base theme defines will fall through to the base value, which may break the theme's visual intent.
+  3. If the property is an extended token (editor, terminal, diff, chart, provider, etc.), it does not need to be in `THEME_TOKEN_NAMES` but **must** still be added to every built-in theme in `builtin-themes.ts` and to the `@theme inline` block in `globals.css`.
+  4. Update the Tailwind `@theme inline` block in `globals.css` so Tailwind utility classes resolve the new variable.
+
+- **Removing or renaming a CSS custom property:**
+  1. Remove / rename in `globals.css`, `types.ts`, `presets.ts`, `builtin-themes.ts`, and the `@theme inline` block.
+  2. Search for usages across all component files (`src/components/`) and Tailwind classes (`bg-<token>`, `text-<token>`, `border-<token>`, etc.).
+
+- **Modifying base light/dark colour values:**
+  1. Keep `globals.css` declarations and `PRESET_THEME_TOKENS` in `presets.ts` in sync. They must always hold identical values.
+  2. Evaluate whether each built-in custom theme still looks correct against the new base palette. If not, update the theme's `tokens` map.
+
+- **Adding a new UI surface or component with its own colour tokens:**
+  1. Define the CSS variable in both `:root` and `.dark` blocks in `globals.css`.
+  2. Add the variable to the `@theme inline` block if it should be available as a Tailwind utility.
+  3. Add the token value to every built-in custom theme in `builtin-themes.ts`.
+
+- **Applying or changing a shadcn preset:**
+  1. After `shadcn init`, compare the regenerated token values in `globals.css` with `presets.ts` and reconcile.
+  2. Re-evaluate every built-in custom theme against the new base palette.
+
+- **Adding a new built-in custom theme:**
+  1. Define it as a `CustomThemeDefinition` object in `builtin-themes.ts` and add it to the `BUILTIN_CUSTOM_THEMES` array.
+  2. It must include values for **all** core tokens (the 27 in `THEME_TOKEN_NAMES`) plus every extended token used in `globals.css`.
+  3. Add a test case in `tests/custom-theme.test.ts` to verify the new theme's integrity.
+
+- **Changing the settings UI (Design section) or theme application logic:**
+  1. Verify that `applyCustomTheme` → `applyThemeOverrides` → `applyFontOverrides` cascade order is preserved (custom theme < user overrides).
+  2. Verify that `installCustomTheme` / `removeCustomTheme` store actions still pass `userThemes` to `findCustomThemeById`.
+
+- **Do not treat any UI or design change as complete** until you have explicitly checked every file in the table above for required updates. TypeScript passing is not sufficient — a missing token in a built-in theme is a silent visual regression, not a type error.
 
 ## Quick Reference
 
