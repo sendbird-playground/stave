@@ -30,6 +30,7 @@ When enabled, slow commits are logged to the console and recorded as `performanc
 The Settings dialog includes desktop-only diagnostics for renderer and compositor troubleshooting:
 
 - `Session Replay UI` toggles the replay entry point for the active chat session
+- `Local MCP Request Log` shows recent inbound local MCP requests separately from Session Replay
 - `GPU Acceleration` shows Electron-reported hardware acceleration and GPU feature status
 
 The GPU status card is available only when the preload bridge exposes `window.api.window.getGpuStatus()`.

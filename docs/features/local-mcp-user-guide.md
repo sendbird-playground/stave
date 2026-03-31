@@ -29,6 +29,7 @@ In Stave:
 1. Open `Settings`
 2. Go to `Developer`
 3. Find the `Local MCP Server` card
+4. Use the separate `Local MCP Request Log` card when you want inbound MCP request visibility outside Session Replay
 
 You can manage:
 
@@ -36,6 +37,7 @@ You can manage:
 - `Port`: use `0` for automatic port selection, or set a fixed localhost port
 - `Token`: the Bearer token required by local clients
 - `Rotate`: immediately replace the token and restart the server
+- `Local MCP Request Log`: inspect recent inbound `/mcp` requests, response codes, timings, and sanitized payloads
 
 Every change is applied by restarting the local MCP server inside the app.
 
@@ -89,6 +91,8 @@ If the running task asks for confirmation or structured answers:
 - inspect turn events with `stave_list_turn_events`
 - answer using `stave_respond_approval` or `stave_respond_user_input`
 
+Use `Local MCP Request Log` in Developer settings when you need transport-level request visibility that stays separate from task replay data.
+
 These responses continue the same Stave turn. They do not create a new task.
 
 ## Security Notes
@@ -105,6 +109,7 @@ These responses continue the same Stave turn. They do not create a new task.
 
 - confirm Stave is running
 - confirm `Local MCP Server` is enabled
+- check `Local MCP Request Log` for recent inbound requests and response codes
 - confirm the bot is using the current token
 - confirm the bot is using the current manifest URL after any restart or token rotation
 

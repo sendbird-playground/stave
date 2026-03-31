@@ -5,7 +5,7 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "@/lib/providers/provider.types";
-import type { StaveLocalMcpStatus } from "@/lib/local-mcp";
+import type { StaveLocalMcpRequestLog, StaveLocalMcpStatus } from "@/lib/local-mcp";
 import type { RepoMapResponse } from "@/lib/fs/repo-map.types";
 import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
@@ -244,6 +244,18 @@ interface WindowLocalMcpApi {
   rotateToken?: () => Promise<{
     ok: boolean;
     status: StaveLocalMcpStatus | null;
+    message?: string;
+  }>;
+  listRequestLogs?: (args?: {
+    limit?: number;
+  }) => Promise<{
+    ok: boolean;
+    logs: StaveLocalMcpRequestLog[];
+    message?: string;
+  }>;
+  clearRequestLogs?: () => Promise<{
+    ok: boolean;
+    cleared: number;
     message?: string;
   }>;
 }

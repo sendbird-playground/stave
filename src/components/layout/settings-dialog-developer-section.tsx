@@ -1,10 +1,10 @@
 import { useEffect, useReducer, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { Button } from "@/components/ui";
+import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { ClaudeContextUsageSnapshot, ClaudePluginReloadSnapshot } from "@/lib/providers/provider.types";
-import type { StaveLocalMcpStatus } from "@/lib/local-mcp";
+import type { StaveLocalMcpRequestLog, StaveLocalMcpStatus } from "@/lib/local-mcp";
 import { formatClaudeSettingSources, formatTokenBudget } from "@/lib/providers/runtime-option-contract";
 import { getRepoMapCacheSnapshot, clearRepoMapContextCache, type RepoMapCacheEntry } from "@/lib/fs/repo-map-context-cache";
 import { useAppStore } from "@/store/app.store";
@@ -27,6 +27,13 @@ interface GpuStatusSnapshot {
 interface LocalMcpViewState {
   status: "loading" | "ready" | "error";
   snapshot: StaveLocalMcpStatus | null;
+  detail: string;
+  busy: boolean;
+}
+
+interface LocalMcpRequestLogViewState {
+  status: "loading" | "ready" | "error";
+  logs: StaveLocalMcpRequestLog[];
   detail: string;
   busy: boolean;
 }
@@ -177,6 +184,7 @@ export function DeveloperSection() {
         </SettingsCard>
 
         <LocalMcpServerCard />
+        <LocalMcpRequestLogCard />
 
         <SettingsCard
           title="Claude Runtime Tools"
@@ -689,6 +697,248 @@ function LocalMcpServerCard() {
           {state.detail}
         </p>
       ) : null}
+    </SettingsCard>
+  );
+}
+
+function getLocalMcpRequestBadgeVariant(log: StaveLocalMcpRequestLog) {
+  if (log.statusCode >= 500 || log.errorMessage) {
+    return "destructive" as const;
+  }
+  if (log.statusCode >= 400) {
+    return "warning" as const;
+  }
+  return "success" as const;
+}
+
+function getLocalMcpRequestPrimaryLabel(log: StaveLocalMcpRequestLog) {
+  if (log.toolName) {
+    return log.toolName;
+  }
+  if (log.rpcMethod) {
+    return log.rpcMethod;
+  }
+  return `${log.httpMethod} ${log.path}`;
+}
+
+function getLocalMcpRequestMeta(log: StaveLocalMcpRequestLog) {
+  const parts = [log.httpMethod, log.path];
+  if (log.rpcMethod) {
+    parts.push(log.rpcMethod);
+  }
+  if (log.rpcRequestId) {
+    parts.push(`id=${log.rpcRequestId}`);
+  }
+  return parts.join(" · ");
+}
+
+function getLocalMcpRequestPayloadText(payload: unknown) {
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(payload);
+  }
+}
+
+function LocalMcpRequestLogCard() {
+  const [state, setState] = useState<LocalMcpRequestLogViewState>({
+    status: "loading",
+    logs: [],
+    detail: "Loading local MCP request logs...",
+    busy: false,
+  });
+
+  async function refreshLogs(silent = false) {
+    const listRequestLogs = window.api?.localMcp?.listRequestLogs;
+    if (!listRequestLogs) {
+      setState({
+        status: "error",
+        logs: [],
+        detail: "Local MCP request log API unavailable.",
+        busy: false,
+      });
+      return;
+    }
+
+    if (!silent) {
+      setState((current) => ({
+        ...current,
+        busy: true,
+        status: current.logs.length > 0 ? current.status : "loading",
+        detail: current.logs.length > 0 ? current.detail : "Loading local MCP request logs...",
+      }));
+    }
+
+    try {
+      const result = await listRequestLogs({ limit: 100 });
+      if (!result.ok) {
+        setState({
+          status: "error",
+          logs: [],
+          detail: result.message || "Failed to load local MCP request logs.",
+          busy: false,
+        });
+        return;
+      }
+      setState({
+        status: "ready",
+        logs: result.logs,
+        detail: result.logs.length > 0
+          ? `Showing the latest ${result.logs.length} local MCP requests.`
+          : "No local MCP requests recorded yet.",
+        busy: false,
+      });
+    } catch (error) {
+      setState({
+        status: "error",
+        logs: [],
+        detail: error instanceof Error ? error.message : "Failed to load local MCP request logs.",
+        busy: false,
+      });
+    }
+  }
+
+  useEffect(() => {
+    void refreshLogs();
+    const intervalId = window.setInterval(() => {
+      void refreshLogs(true);
+    }, 3000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  async function handleClearLogs() {
+    const clearRequestLogs = window.api?.localMcp?.clearRequestLogs;
+    if (!clearRequestLogs) {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        detail: "Local MCP request log API unavailable.",
+        busy: false,
+      }));
+      return;
+    }
+
+    setState((current) => ({
+      ...current,
+      busy: true,
+      detail: "Clearing local MCP request logs...",
+    }));
+
+    try {
+      const result = await clearRequestLogs();
+      if (!result.ok) {
+        setState((current) => ({
+          ...current,
+          status: "error",
+          detail: result.message || "Failed to clear local MCP request logs.",
+          busy: false,
+        }));
+        return;
+      }
+      setState({
+        status: "ready",
+        logs: [],
+        detail: `Cleared ${result.cleared} local MCP request log${result.cleared === 1 ? "" : "s"}.`,
+        busy: false,
+      });
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        status: "error",
+        detail: error instanceof Error ? error.message : "Failed to clear local MCP request logs.",
+        busy: false,
+      }));
+    }
+  }
+
+  return (
+    <SettingsCard
+      title="Local MCP Request Log"
+      description="Separate from Session Replay. Captures recent inbound requests to the embedded local MCP server."
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-muted-foreground">{state.detail}</span>
+        <div className="flex gap-2">
+          <Button
+            className="h-8 text-xs"
+            variant="outline"
+            disabled={state.busy}
+            onClick={() => void refreshLogs()}
+          >
+            Refresh
+          </Button>
+          <Button
+            className="h-8 text-xs"
+            variant="outline"
+            disabled={state.busy || state.logs.length === 0}
+            onClick={() => void handleClearLogs()}
+          >
+            Clear
+          </Button>
+        </div>
+      </div>
+
+      {state.logs.length === 0 ? (
+        <p className="rounded-md border border-border/80 bg-background px-3 py-2 text-sm text-muted-foreground">
+          No requests yet. Health checks are excluded, and the panel auto-refreshes while it stays open.
+        </p>
+      ) : (
+        <div className="overflow-hidden rounded-md border border-border/80 bg-background">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-28">Time</TableHead>
+                <TableHead>Request</TableHead>
+                <TableHead className="w-28">Status</TableHead>
+                <TableHead>Payload</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {state.logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell className="align-top text-xs text-muted-foreground" title={log.createdAt}>
+                    {formatRelativeTime(log.createdAt)}
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{getLocalMcpRequestPrimaryLabel(log)}</Badge>
+                      {log.toolName && log.rpcMethod ? (
+                        <Badge variant="secondary">{log.rpcMethod}</Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
+                      {getLocalMcpRequestMeta(log)}
+                    </p>
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <div className="flex flex-col gap-1">
+                      <Badge variant={getLocalMcpRequestBadgeVariant(log)}>{log.statusCode}</Badge>
+                      <span className="text-xs text-muted-foreground">{log.durationMs}ms</span>
+                      {log.errorMessage ? (
+                        <span className="text-xs text-destructive">{log.errorMessage}</span>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell className="align-top">
+                    {log.requestPayload == null ? (
+                      <span className="text-xs text-muted-foreground">No payload</span>
+                    ) : (
+                      <details className="rounded-md border border-border/70 bg-muted/20">
+                        <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-foreground">
+                          View request payload
+                        </summary>
+                        <pre className="max-h-64 overflow-auto border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">
+                          {getLocalMcpRequestPayloadText(log.requestPayload)}
+                        </pre>
+                      </details>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </SettingsCard>
   );
 }

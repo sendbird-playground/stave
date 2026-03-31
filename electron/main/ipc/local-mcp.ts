@@ -1,10 +1,12 @@
 import { ipcMain } from "electron";
 import {
+  clearStaveMcpRequestLogs,
   getStaveMcpServerStatus,
+  listStaveMcpRequestLogs,
   rotateStaveMcpToken,
   updateStaveMcpServerConfig,
 } from "../stave-mcp-server";
-import { LocalMcpConfigUpdateArgsSchema } from "./schemas";
+import { ListLocalMcpRequestLogsArgsSchema, LocalMcpConfigUpdateArgsSchema } from "./schemas";
 
 export function registerLocalMcpHandlers() {
   ipcMain.handle("local-mcp:get-status", async () => {
@@ -46,6 +48,38 @@ export function registerLocalMcpHandlers() {
         ok: false,
         status: null,
         message: error instanceof Error ? error.message : "Failed to rotate local MCP token.",
+      };
+    }
+  });
+
+  ipcMain.handle("local-mcp:list-request-logs", async (_event, args: unknown) => {
+    const parsedArgs = ListLocalMcpRequestLogsArgsSchema.safeParse(args ?? {});
+    if (!parsedArgs.success) {
+      return { ok: false, logs: [], message: "Invalid local MCP request log query." };
+    }
+    try {
+      const logs = await listStaveMcpRequestLogs({
+        limit: parsedArgs.data.limit,
+      });
+      return { ok: true, logs };
+    } catch (error) {
+      return {
+        ok: false,
+        logs: [],
+        message: error instanceof Error ? error.message : "Failed to load local MCP request logs.",
+      };
+    }
+  });
+
+  ipcMain.handle("local-mcp:clear-request-logs", async () => {
+    try {
+      const cleared = await clearStaveMcpRequestLogs();
+      return { ok: true, cleared };
+    } catch (error) {
+      return {
+        ok: false,
+        cleared: 0,
+        message: error instanceof Error ? error.message : "Failed to clear local MCP request logs.",
       };
     }
   });
