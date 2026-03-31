@@ -864,32 +864,38 @@ export function ProjectWorkspaceSidebar(args: {
                                             aria-label={`toggle-project-${project.projectPath}`}
                                             aria-expanded={!collapsed}
                                           >
-                                            <Folder
-                                              className={cn(
-                                                "size-4 transition-all duration-200",
-                                                "group-hover/project-row:scale-75 group-hover/project-row:opacity-0",
-                                                "group-focus-within/project-row:scale-75 group-focus-within/project-row:opacity-0",
-                                              )}
-                                            />
-                                            <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                                              {collapsed ? (
-                                                <ChevronRight
+                                            {projectBusy ? (
+                                              <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                                            ) : (
+                                              <>
+                                                <Folder
                                                   className={cn(
-                                                    "size-4 scale-75 opacity-0 transition-all duration-200",
-                                                    "group-hover/project-row:scale-100 group-hover/project-row:opacity-100",
-                                                    "group-focus-within/project-row:scale-100 group-focus-within/project-row:opacity-100",
+                                                    "size-4 transition-all duration-200",
+                                                    "group-hover/project-row:scale-75 group-hover/project-row:opacity-0",
+                                                    "group-focus-within/project-row:scale-75 group-focus-within/project-row:opacity-0",
                                                   )}
                                                 />
-                                              ) : (
-                                                <ChevronDown
-                                                  className={cn(
-                                                    "size-4 scale-75 opacity-0 transition-all duration-200",
-                                                    "group-hover/project-row:scale-100 group-hover/project-row:opacity-100",
-                                                    "group-focus-within/project-row:scale-100 group-focus-within/project-row:opacity-100",
+                                                <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                                  {collapsed ? (
+                                                    <ChevronRight
+                                                      className={cn(
+                                                        "size-4 scale-75 opacity-0 transition-all duration-200",
+                                                        "group-hover/project-row:scale-100 group-hover/project-row:opacity-100",
+                                                        "group-focus-within/project-row:scale-100 group-focus-within/project-row:opacity-100",
+                                                      )}
+                                                    />
+                                                  ) : (
+                                                    <ChevronDown
+                                                      className={cn(
+                                                        "size-4 scale-75 opacity-0 transition-all duration-200",
+                                                        "group-hover/project-row:scale-100 group-hover/project-row:opacity-100",
+                                                        "group-focus-within/project-row:scale-100 group-focus-within/project-row:opacity-100",
+                                                      )}
+                                                    />
                                                   )}
-                                                />
-                                              )}
-                                            </span>
+                                                </span>
+                                              </>
+                                            )}
                                           </Button>
                                         </TooltipTrigger>
                                         <TooltipContent side="right">
@@ -902,9 +908,6 @@ export function ProjectWorkspaceSidebar(args: {
                                         <span className="min-w-0 flex-1 truncate font-medium">
                                           {project.projectName}
                                         </span>
-                                        {projectBusy ? (
-                                          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-                                        ) : null}
                                         <div
                                           className={cn(
                                             "flex shrink-0 items-center gap-0.5 transition-all duration-200",
@@ -1053,7 +1056,9 @@ export function ProjectWorkspaceSidebar(args: {
                                                           }
                                                         >
                                                           <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                                                            {isResponding ? (
+                                                            {workspaceBusy ? (
+                                                              <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                                                            ) : isResponding ? (
                                                               <WaveIndicator
                                                                 className={cn(
                                                                   "gap-px",
@@ -1083,9 +1088,6 @@ export function ProjectWorkspaceSidebar(args: {
                                                             )}
                                                           </span>
                                                         </button>
-                                                        {workspaceBusy ? (
-                                                          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-                                                        ) : null}
                                                         {(isResponding ||
                                                           canArchiveWorkspace) ? (
                                                           <div className="relative flex h-7 min-w-7 shrink-0 items-center justify-center pr-1">
