@@ -168,7 +168,6 @@ function ProjectSettingsPanel(args: {
   isCurrent: boolean;
   highlighted: boolean;
   onRequestRemove: (args: { projectPath: string; projectName: string }) => void;
-  onClose: () => void;
 }) {
   const setProjectWorkspaceInitCommand = useAppStore(
     (state) => state.setProjectWorkspaceInitCommand,
@@ -315,15 +314,6 @@ function ProjectSettingsPanel(args: {
               )}
             />
             Refresh
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={args.onClose}
-          >
-            <X className="size-4" />
-            Close
           </Button>
         </div>
       </div>
@@ -496,7 +486,6 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
     projectName: string;
   } | null>(null);
   const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const projects = useMemo(
     () =>
       captureCurrentProjectState({
@@ -526,7 +515,6 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
   useEffect(() => {
     if (projects.length === 0) {
       setSelectedProjectPath(null);
-      setDetailOpen(false);
       return;
     }
 
@@ -535,9 +523,8 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
       ? projects.find((project) => project.projectPath === highlightedProjectPath) ?? null
       : null;
 
-    if (highlightedProject && (selectedProjectPath !== highlightedProject.projectPath || !detailOpen)) {
+    if (highlightedProject && selectedProjectPath !== highlightedProject.projectPath) {
       setSelectedProjectPath(highlightedProject.projectPath);
-      setDetailOpen(true);
       return;
     }
 
@@ -551,8 +538,7 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
     const fallbackProject = currentProject ?? projects[0] ?? null;
 
     setSelectedProjectPath(fallbackProject?.projectPath ?? null);
-    setDetailOpen(Boolean(fallbackProject));
-  }, [args.highlightedProjectPath, detailOpen, projectPath, projects, selectedProjectPath]);
+  }, [args.highlightedProjectPath, projectPath, projects, selectedProjectPath]);
 
   useEffect(() => {
     const activeProjectPath = args.highlightedProjectPath?.trim() || selectedProjectPath;
@@ -572,10 +558,7 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
     return () => window.cancelAnimationFrame(frame);
   }, [args.highlightedProjectPath, projects.length, selectedProjectPath]);
 
-  const selectedProject = detailOpen
-    ? (projects.find((project) => project.projectPath === selectedProjectPath) ?? null)
-    : null;
-  const selectedProjectName = projects.find((project) => project.projectPath === selectedProjectPath)?.projectName ?? null;
+  const selectedProject = projects.find((project) => project.projectPath === selectedProjectPath) ?? null;
 
   return (
     <>
@@ -618,7 +601,6 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
                     type="button"
                     onClick={() => {
                       setSelectedProjectPath(project.projectPath);
-                      setDetailOpen(true);
                     }}
                     className={cn(
                       "flex w-full flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition-colors",
@@ -659,7 +641,6 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
                 isCurrent={selectedProject.projectPath === projectPath}
                 highlighted={args.highlightedProjectPath === selectedProject.projectPath}
                 onRequestRemove={setProjectToRemove}
-                onClose={() => setDetailOpen(false)}
               />
             ) : (
               <SettingsCard
@@ -667,9 +648,7 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
                 description="Select a project from the menu to open its settings panel."
               >
                 <p className="text-sm text-muted-foreground">
-                  {selectedProjectName
-                    ? `The detail panel for "${selectedProjectName}" is closed. Pick it again from the menu to reopen it.`
-                    : "Pick a project from the menu to inspect its workspace defaults and repository metadata."}
+                  Pick a project from the menu to inspect its workspace defaults and repository metadata.
                 </p>
               </SettingsCard>
             )}
