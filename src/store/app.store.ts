@@ -326,6 +326,8 @@ interface AppState {
   hydrateProjectRegistry: () => Promise<void>;
   flushProjectRegistry: () => Promise<void>;
   hydrateWorkspaces: () => Promise<void>;
+  /** Lightweight refresh: discover new/removed git worktrees without full rehydration. */
+  refreshWorkspaces: () => Promise<void>;
   hydrateNotifications: () => Promise<void>;
   flushActiveWorkspaceSnapshot: (args?: { sync?: boolean }) => Promise<void>;
   createProject: (args: { name?: string }) => Promise<void>;
@@ -1389,6 +1391,197 @@ export const useAppStore = create<AppState>()(
               tasks: workspaceState.tasks,
             }),
             ...workspaceState,
+          };
+        });
+      },
+      refreshWorkspaces: async () => {
+        const state = get();
+        if (!state.hasHydratedWorkspaces || !state.projectPath) {
+          return;
+        }
+        const runner = window.api?.terminal?.runCommand;
+        if (!runner) {
+          return;
+        }
+        const projectPath = state.projectPath;
+
+        // Prune and list current git worktrees.
+        await runner({ cwd: projectPath, command: "git worktree prune" });
+        const listResult = await runner({ cwd: projectPath, command: "git worktree list --porcelain" });
+        if (!listResult.ok) {
+          return;
+        }
+        const discoveredWorktrees = parseGitWorktrees({ stdout: listResult.stdout });
+
+        const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
+          projectPath,
+          workspaces: state.workspaces,
+          workspaceDefaultById: state.workspaceDefaultById,
+        });
+
+        // Build set of known workspace paths for quick lookup.
+        const knownPathToId = new Map<string, string>();
+        for (const workspace of state.workspaces) {
+          const wsPath = normalizeComparablePath(
+            state.workspacePathById[workspace.id]
+            ?? (workspace.id === defaultWorkspaceId
+              ? projectPath
+              : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: workspace.name })}`)
+          );
+          if (wsPath) {
+            knownPathToId.set(wsPath, workspace.id);
+          }
+        }
+
+        const registeredWorktreePaths = new Set(
+          discoveredWorktrees
+            .map((entry) => normalizeComparablePath(entry.path))
+            .filter(Boolean),
+        );
+        const currentProjectPath = normalizeComparablePath(projectPath);
+
+        // Detect new worktrees not yet tracked as workspaces.
+        const newRows: WorkspaceSummary[] = [];
+        const newBranchById: Record<string, string> = {};
+        const newPathById: Record<string, string> = {};
+        for (const worktree of discoveredWorktrees) {
+          const normalizedWorktreePath = normalizeComparablePath(worktree.path);
+          if (
+            !worktree.branch
+            || !normalizedWorktreePath
+            || normalizedWorktreePath === currentProjectPath
+            || knownPathToId.has(normalizedWorktreePath)
+          ) {
+            continue;
+          }
+
+          const workspaceName = resolveImportedWorktreeName({
+            branch: worktree.branch,
+            worktreePath: worktree.path,
+          });
+          const workspaceId = buildImportedWorktreeWorkspaceId({
+            projectPath,
+            worktreePath: worktree.path,
+          });
+
+          // Persist an empty snapshot so the workspace is available immediately.
+          await persistWorkspaceSnapshot({
+            workspaceId,
+            workspaceName,
+            activeTaskId: "",
+            tasks: [],
+            messagesByTask: {},
+            promptDraftByTask: {},
+            editorTabs: [],
+            activeEditorTabId: null,
+            providerConversationByTask: {},
+          });
+
+          newRows.push({
+            id: workspaceId,
+            name: workspaceName,
+            updatedAt: new Date().toISOString(),
+          });
+          newBranchById[workspaceId] = worktree.branch;
+          newPathById[workspaceId] = worktree.path;
+        }
+
+        // Detect stale workspaces whose git worktrees no longer exist.
+        const staleIds: string[] = [];
+        for (const workspace of state.workspaces) {
+          if (workspace.id === defaultWorkspaceId) continue;
+          const wsPath = normalizeComparablePath(
+            state.workspacePathById[workspace.id]
+            ?? `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: workspace.name })}`
+          );
+          if (wsPath && !registeredWorktreePaths.has(wsPath)) {
+            staleIds.push(workspace.id);
+          }
+        }
+        for (const id of staleIds) {
+          await closeWorkspacePersistence({ workspaceId: id });
+        }
+
+        // Nothing changed – skip store update.
+        if (newRows.length === 0 && staleIds.length === 0) {
+          return;
+        }
+
+        const staleIdSet = new Set(staleIds);
+        set((current) => {
+          let nextWorkspaces = current.workspaces;
+          if (staleIds.length > 0) {
+            nextWorkspaces = nextWorkspaces.filter((ws) => !staleIdSet.has(ws.id));
+          }
+          if (newRows.length > 0) {
+            nextWorkspaces = [...nextWorkspaces, ...newRows];
+          }
+
+          const nextBranch = { ...current.workspaceBranchById, ...newBranchById };
+          const nextPath = { ...current.workspacePathById, ...newPathById };
+          const nextDefault = { ...current.workspaceDefaultById };
+          const nextRuntimeCache = { ...current.workspaceRuntimeCacheById };
+          const nextTaskOwnership = { ...current.taskWorkspaceIdById };
+
+          for (const id of staleIds) {
+            delete nextBranch[id];
+            delete nextPath[id];
+            delete nextDefault[id];
+            delete nextRuntimeCache[id];
+          }
+          // Clean up task-workspace ownership for stale workspaces.
+          if (staleIds.length > 0) {
+            for (const [taskId, ownerId] of Object.entries(nextTaskOwnership)) {
+              if (staleIdSet.has(ownerId)) {
+                delete nextTaskOwnership[taskId];
+              }
+            }
+          }
+
+          // If the active workspace was removed, fall back to the default.
+          let nextActiveWorkspaceId = current.activeWorkspaceId;
+          if (staleIdSet.has(nextActiveWorkspaceId)) {
+            nextActiveWorkspaceId = defaultWorkspaceId
+              || nextWorkspaces[0]?.id
+              || "";
+          }
+
+          return {
+            workspaces: nextWorkspaces,
+            activeWorkspaceId: nextActiveWorkspaceId,
+            workspaceBranchById: nextBranch,
+            workspacePathById: nextPath,
+            workspaceDefaultById: nextDefault,
+            workspaceRuntimeCacheById: nextRuntimeCache,
+            taskWorkspaceIdById: nextTaskOwnership,
+            recentProjects: current.projectPath
+              ? upsertRecentProjectState({
+                  projects: current.recentProjects,
+                  project: {
+                    projectPath: current.projectPath,
+                    projectName: normalizeProjectDisplayName({
+                      projectPath: current.projectPath,
+                      projectName: current.projectName,
+                    }),
+                    lastOpenedAt: current.recentProjects.find((p) => p.projectPath === current.projectPath)?.lastOpenedAt
+                      ?? new Date().toISOString(),
+                    defaultBranch: current.defaultBranch,
+                    workspaces: nextWorkspaces,
+                    activeWorkspaceId: nextActiveWorkspaceId,
+                    workspaceBranchById: nextBranch,
+                    workspacePathById: nextPath,
+                    workspaceDefaultById: nextDefault,
+                    newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
+                      projectPath: current.projectPath,
+                      recentProjects: current.recentProjects,
+                    }),
+                    newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+                      projectPath: current.projectPath,
+                      recentProjects: current.recentProjects,
+                    }),
+                  },
+                })
+              : current.recentProjects,
           };
         });
       },
