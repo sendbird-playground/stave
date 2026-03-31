@@ -25,12 +25,16 @@ export default function App() {
       }
       void useAppStore.getState().refreshProviderAvailability();
     })();
-    const timer = window.setInterval(() => {
+    const providerTimer = window.setInterval(() => {
       void useAppStore.getState().refreshProviderAvailability();
     }, 10000);
+    const workspaceTimer = window.setInterval(() => {
+      void useAppStore.getState().refreshWorkspaces();
+    }, 30000);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearInterval(providerTimer);
+      window.clearInterval(workspaceTimer);
     };
   }, []);
 

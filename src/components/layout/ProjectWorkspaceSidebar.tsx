@@ -25,6 +25,7 @@ import {
   LoaderCircle,
   PanelLeft,
   Plus,
+  RefreshCw,
   Settings,
 } from "lucide-react";
 import {
@@ -227,6 +228,7 @@ export function ProjectWorkspaceSidebar(args: {
     setLayout,
     workspacePrInfoById,
     fetchAllWorkspacePrStatuses,
+    refreshWorkspaces,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -268,6 +270,7 @@ export function ProjectWorkspaceSidebar(args: {
           state.setLayout,
           state.workspacePrInfoById,
           state.fetchAllWorkspacePrStatuses,
+          state.refreshWorkspaces,
         ] as const,
     ),
   );
@@ -933,6 +936,26 @@ export function ProjectWorkspaceSidebar(args: {
                                             </TooltipTrigger>
                                             <TooltipContent side="top">
                                               New workspace
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 w-7 rounded-md p-0"
+                                                disabled={projectBusy}
+                                                onClick={() =>
+                                                  void refreshWorkspaces()
+                                                }
+                                                aria-label={`refresh-workspaces-${project.projectPath}`}
+                                              >
+                                                <RefreshCw className="size-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top">
+                                              Refresh workspaces
                                             </TooltipContent>
                                           </Tooltip>
                                           <Tooltip>
