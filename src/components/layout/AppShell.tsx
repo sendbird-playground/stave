@@ -346,7 +346,7 @@ export function AppShell() {
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
-        <div ref={panelRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/50">
+        <div ref={panelRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {hasProject ? <WorkspaceTaskTabs /> : null}
