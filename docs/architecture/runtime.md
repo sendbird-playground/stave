@@ -17,6 +17,8 @@ The renderer does not call provider SDKs directly. It sends provider turn reques
 
 The same terminal bridge is also used for local workspace automation such as running an optional repo-scoped post-create bootstrap command and creating an optional workspace-local symlink to the repository root `node_modules` when a new git worktree workspace is created.
 
+The desktop runtime can also host a local-only automation surface in the main process so same-machine tools can create projects, workspaces, tasks, and turns without going through the renderer.
+
 ## Browser dev runtime
 
 When Stave runs as plain Vite in a browser, there is no Electron preload bridge, IPC, or main process. In that mode, `server/dev-server.ts` provides a local HTTP bridge for provider turns, terminal commands, and source-control actions.
@@ -30,3 +32,5 @@ That path is:
 ## Packaging notes
 
 `bun run dev:desktop` uses a development profile. Built desktop runs use the production profile. On the first run after the dev/prod split, Stave migrates the old shared `stave.sqlite` database into the development profile and lets the packaged app create a fresh production database.
+
+Production-side automation surfaces must live in `electron/main/*`, not `server/dev-server.ts`, so packaged installs keep working without Bun.

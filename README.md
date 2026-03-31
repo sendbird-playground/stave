@@ -32,6 +32,7 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - automatic import of existing branch-backed git worktrees when a project opens
 - optional repo-scoped post-create workspace bootstrap command for new git worktrees, such as `bun install` or `npm install`
 - optional repo-scoped reuse of the repository root `node_modules` via workspace-local symlink for faster worktree startup
+- local-only packaged-app MCP automation surface for same-machine bots and helpers, with Settings-managed port/token control
 - SQLite-backed local persistence for projects, workspaces, tasks, messages, turns, and notifications
 
 ## Stack
@@ -219,11 +220,14 @@ Stable project documentation now lives under `docs/`.
 - [Install Guide](docs/install-guide.md)
 - [Runtime architecture](docs/architecture/runtime.md)
 - [Architecture map](docs/architecture/index.md)
+- [Embedded local MCP plan](docs/architecture/local-mcp-embedded-plan.md)
+- [Local MCP user guide](docs/features/local-mcp-user-guide.md)
 - [Conversation flow](docs/architecture/conversation-flow.md)
 - [Entrypoints](docs/architecture/entrypoints.md)
 - [Contracts](docs/architecture/contracts.md)
 - [Repo map spec](docs/architecture/repo-map-spec.md)
 - [Provider runtimes](docs/providers/provider-runtimes.md)
+- [Remote Stave control roadmap](docs/future/remote-stave-control-roadmap-2026-03-31.md)
 - [Notifications](docs/features/notifications.md)
 - [Codex native plan roadmap](docs/future/codex-native-plan-mode-roadmap-2026-03-31.md)
 - [Session Replay](docs/features/session-replay.md)

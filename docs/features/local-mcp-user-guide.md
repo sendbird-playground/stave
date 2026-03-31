@@ -1,0 +1,121 @@
+# Local MCP User Guide
+
+This guide explains how a packaged Stave desktop user can expose the built-in local MCP server to same-machine tools such as `agentize`.
+
+## Who This Is For
+
+Use this when:
+
+- Stave is installed as a desktop app
+- the bot and Stave run on the same machine
+- you want the bot to create workspaces, run tasks, and answer approvals through Stave
+
+This is not a remote internet-facing setup. The server is loopback-only.
+
+## What Stave Exposes
+
+When Local MCP is enabled, Stave exposes a localhost MCP endpoint that can:
+
+- register a project in Stave
+- create a git-worktree workspace
+- run a task prompt in that workspace
+- read task status and turn events
+- answer approval and user-input requests
+
+## Open The Settings
+
+In Stave:
+
+1. Open `Settings`
+2. Go to `Developer`
+3. Find the `Local MCP Server` card
+
+You can manage:
+
+- `Server`: turn the local MCP server on or off
+- `Port`: use `0` for automatic port selection, or set a fixed localhost port
+- `Token`: the Bearer token required by local clients
+- `Rotate`: immediately replace the token and restart the server
+
+Every change is applied by restarting the local MCP server inside the app.
+
+## Connection Info
+
+When the server is running, the Settings card shows:
+
+- `MCP URL`
+- `Health URL`
+- `Config file`
+- one or more `Manifest` paths
+
+Stave also writes a machine-readable manifest for local tools:
+
+- `~/.stave/local-mcp.json`
+- `<Stave userData>/stave-local-mcp.json`
+
+The manifest includes the URL and token a local client needs.
+
+## Typical `agentize` Flow
+
+1. Start Stave
+2. Enable `Local MCP Server` in Settings if needed
+3. Let `agentize` read `~/.stave/local-mcp.json`
+4. Connect to the `url` from the manifest using `Authorization: Bearer <token>`
+5. Call tools in this order:
+   - `stave_register_project`
+   - `stave_create_workspace`
+   - `stave_run_task`
+   - `stave_get_task` or `stave_list_turn_events`
+   - `stave_respond_approval` or `stave_respond_user_input` when needed
+
+## Example Manifest
+
+```json
+{
+  "version": 1,
+  "name": "stave-local-mcp",
+  "mode": "local-only",
+  "url": "http://127.0.0.1:43127/mcp",
+  "healthUrl": "http://127.0.0.1:43127/health",
+  "token": "your-token-here"
+}
+```
+
+## Approval And User Input
+
+If the running task asks for confirmation or structured answers:
+
+- poll task state with `stave_get_task`
+- inspect turn events with `stave_list_turn_events`
+- answer using `stave_respond_approval` or `stave_respond_user_input`
+
+These responses continue the same Stave turn. They do not create a new task.
+
+## Security Notes
+
+- the server binds to `127.0.0.1`
+- it is intended for same-user, same-machine automation only
+- anyone with the token can act as a local MCP client
+- rotate the token if you suspect local exposure
+- disable the server when you are not using it
+
+## Troubleshooting
+
+### The bot cannot connect
+
+- confirm Stave is running
+- confirm `Local MCP Server` is enabled
+- confirm the bot is using the current token
+- confirm the bot is using the current manifest URL after any restart or token rotation
+
+### The port changes between launches
+
+`Port = 0` means Stave chooses any available port. Set a fixed port in Settings if your local tool wants a stable one.
+
+### The bot gets `401 Unauthorized`
+
+The token is wrong or stale. Copy the token again from Settings or rotate it and refresh the bot-side manifest cache.
+
+### The UI and bot seem out of sync
+
+The first pass prioritizes durable snapshot persistence. If an already-open workspace view looks stale, refresh or switch workspaces once to reload the latest persisted state.

@@ -5,6 +5,7 @@ import { openExternalWithFallback } from "./utils/external-url";
 const MIN_ZOOM_FACTOR = 0.5;
 const MAX_ZOOM_FACTOR = 2;
 const ZOOM_STEP = 0.1;
+const runtimeDir = import.meta.dirname;
 
 function clampZoomFactor(value: number) {
   return Math.min(MAX_ZOOM_FACTOR, Math.max(MIN_ZOOM_FACTOR, value));
@@ -31,7 +32,7 @@ export function createMainWindow() {
     trafficLightPosition: isMac ? { x: 12, y: 16 } : undefined,
     title: "Stave",
     webPreferences: {
-      preload: path.join(__dirname, "../preload/index.js"),
+      preload: path.join(runtimeDir, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -66,7 +67,7 @@ export function createMainWindow() {
   if (devServerUrl) {
     void window.loadURL(devServerUrl);
   } else {
-    void window.loadFile(path.join(__dirname, "../renderer/index.html"));
+    void window.loadFile(path.join(runtimeDir, "../renderer/index.html"));
   }
 
   window.webContents.on("before-input-event", (event, input) => {

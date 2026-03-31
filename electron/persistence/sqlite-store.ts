@@ -500,7 +500,7 @@ export class SqliteStore {
     id: string;
     workspaceId: string;
     taskId: string;
-    providerId: "claude-code" | "codex";
+    providerId: "claude-code" | "codex" | "stave";
     createdAt?: string;
   }) {
     const createdAt = args.createdAt ?? new Date().toISOString();

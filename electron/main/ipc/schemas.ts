@@ -33,6 +33,12 @@ export const SkillCatalogArgsSchema = z.object({
   workspacePath: z.string().max(4096).optional(),
 }).strict();
 
+export const LocalMcpConfigUpdateArgsSchema = z.object({
+  enabled: z.boolean().optional(),
+  port: z.number().int().min(0).max(65_535).optional(),
+  token: z.string().max(4096).optional(),
+}).strict();
+
 export const RuntimeOptionsObjectSchema = z.object({
   model: z.string().max(200).optional(),
   chatStreamingEnabled: z.boolean().optional(),
