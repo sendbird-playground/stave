@@ -1,7 +1,15 @@
-export const NOTIFICATION_SOUND_PRESETS = ["chime", "bell", "pulse", "bright"] as const;
-export type NotificationSoundPreset = (typeof NOTIFICATION_SOUND_PRESETS)[number];
+export const NOTIFICATION_SOUND_PRESETS = [
+  "chime",
+  "bell",
+  "pulse",
+  "bright",
+  "harvest",
+] as const;
+export type NotificationSoundPreset =
+  (typeof NOTIFICATION_SOUND_PRESETS)[number];
 
-export const DEFAULT_NOTIFICATION_SOUND_PRESET: NotificationSoundPreset = "chime";
+export const DEFAULT_NOTIFICATION_SOUND_PRESET: NotificationSoundPreset =
+  "chime";
 export const DEFAULT_NOTIFICATION_SOUND_VOLUME = 0.5;
 export const NOTIFICATION_SOUND_COOLDOWN_MS = 500;
 
@@ -46,18 +54,95 @@ interface NotificationSoundNote {
 
 const PRESET_NOTES: Record<NotificationSoundPreset, NotificationSoundNote[]> = {
   chime: [
-    { frequency: 523.25, waveform: "sine", startOffsetMs: 0, durationMs: 320, gain: 0.28, attackMs: 12 },
-    { frequency: 659.25, waveform: "sine", startOffsetMs: 80, durationMs: 260, gain: 0.22, attackMs: 10 },
+    {
+      frequency: 523.25,
+      waveform: "sine",
+      startOffsetMs: 0,
+      durationMs: 320,
+      gain: 0.28,
+      attackMs: 12,
+    },
+    {
+      frequency: 659.25,
+      waveform: "sine",
+      startOffsetMs: 80,
+      durationMs: 260,
+      gain: 0.22,
+      attackMs: 10,
+    },
   ],
   bell: [
-    { frequency: 880, waveform: "sine", startOffsetMs: 0, durationMs: 380, gain: 0.28, attackMs: 8, detuneCents: 4 },
+    {
+      frequency: 880,
+      waveform: "sine",
+      startOffsetMs: 0,
+      durationMs: 380,
+      gain: 0.28,
+      attackMs: 8,
+      detuneCents: 4,
+    },
   ],
   pulse: [
-    { frequency: 220, waveform: "triangle", startOffsetMs: 0, durationMs: 240, gain: 0.2, attackMs: 8 },
+    {
+      frequency: 220,
+      waveform: "triangle",
+      startOffsetMs: 0,
+      durationMs: 240,
+      gain: 0.2,
+      attackMs: 8,
+    },
   ],
   bright: [
-    { frequency: 1046.5, waveform: "square", startOffsetMs: 0, durationMs: 180, gain: 0.16, attackMs: 4 },
-    { frequency: 1318.51, waveform: "square", startOffsetMs: 20, durationMs: 160, gain: 0.12, attackMs: 4 },
+    {
+      frequency: 1046.5,
+      waveform: "square",
+      startOffsetMs: 0,
+      durationMs: 180,
+      gain: 0.16,
+      attackMs: 4,
+    },
+    {
+      frequency: 1318.51,
+      waveform: "square",
+      startOffsetMs: 20,
+      durationMs: 160,
+      gain: 0.12,
+      attackMs: 4,
+    },
+  ],
+  harvest: [
+    {
+      frequency: 659.25,
+      waveform: "sine",
+      startOffsetMs: 0,
+      durationMs: 130,
+      gain: 0.22,
+      attackMs: 6,
+    },
+    {
+      frequency: 830.61,
+      waveform: "sine",
+      startOffsetMs: 90,
+      durationMs: 130,
+      gain: 0.22,
+      attackMs: 6,
+    },
+    {
+      frequency: 987.77,
+      waveform: "sine",
+      startOffsetMs: 180,
+      durationMs: 130,
+      gain: 0.22,
+      attackMs: 6,
+    },
+    {
+      frequency: 1318.51,
+      waveform: "sine",
+      startOffsetMs: 270,
+      durationMs: 340,
+      gain: 0.26,
+      attackMs: 8,
+    },
   ],
 };
 
@@ -102,11 +187,18 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function isNotificationSoundPreset(value: unknown): value is NotificationSoundPreset {
-  return typeof value === "string" && NOTIFICATION_SOUND_PRESETS.includes(value as NotificationSoundPreset);
+export function isNotificationSoundPreset(
+  value: unknown
+): value is NotificationSoundPreset {
+  return (
+    typeof value === "string" &&
+    NOTIFICATION_SOUND_PRESETS.includes(value as NotificationSoundPreset)
+  );
 }
 
-export function normalizeNotificationSoundPreset(value: unknown): NotificationSoundPreset {
+export function normalizeNotificationSoundPreset(
+  value: unknown
+): NotificationSoundPreset {
   return isNotificationSoundPreset(value)
     ? value
     : DEFAULT_NOTIFICATION_SOUND_PRESET;
@@ -127,9 +219,9 @@ function scheduleNote(args: {
 }) {
   const oscillator = args.audioContext.createOscillator();
   const gainNode = args.audioContext.createGain();
-  const noteStartTime = args.startTime + (args.note.startOffsetMs / 1000);
-  const noteAttackTime = noteStartTime + ((args.note.attackMs ?? 12) / 1000);
-  const noteReleaseTime = noteStartTime + (args.note.durationMs / 1000);
+  const noteStartTime = args.startTime + args.note.startOffsetMs / 1000;
+  const noteAttackTime = noteStartTime + (args.note.attackMs ?? 12) / 1000;
+  const noteReleaseTime = noteStartTime + args.note.durationMs / 1000;
 
   oscillator.type = args.note.waveform;
   oscillator.frequency.setValueAtTime(args.note.frequency, noteStartTime);
