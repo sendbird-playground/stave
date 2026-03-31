@@ -66,7 +66,7 @@ export function EditorMainTabStrip(args: {
               }}
               onDrop={(event) => args.onTabDrop(event, tab.id)}
               className={[
-                "group -mb-px flex shrink-0 items-center gap-1.5 rounded-t-md border px-3 py-1.5 text-sm transition-colors",
+                "group -mb-px flex shrink-0 items-center gap-1.5 rounded-t-md border px-3 py-2.5 text-sm transition-colors",
                 tab.id === args.activeEditorTabId
                   ? "border-border/80 border-b-editor bg-editor-tab-active text-editor-foreground"
                   : "border-transparent border-b-border/80 bg-editor-tab text-muted-foreground hover:bg-editor-muted hover:text-editor-foreground",
