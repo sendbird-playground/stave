@@ -34,6 +34,8 @@ function parsePlanFilePath(filePath: string): PlanHistoryEntry {
   };
 }
 
+const EMPTY_PLAN_FILE_PATHS: string[] = [];
+
 interface PlanHistoryPopoverProps {
   /** Render as icon-only button (toolbar) vs labelled button */
   variant?: "icon" | "labelled";
@@ -51,7 +53,7 @@ export function PlanHistoryPopover(args: PlanHistoryPopoverProps) {
       const task = state.tasks.find((t) => t.id === state.activeTaskId);
       return [
         state.activeTaskId,
-        task?.planFilePaths ?? [],
+        task?.planFilePaths ?? EMPTY_PLAN_FILE_PATHS,
         state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? null,
       ] as const;
     }),
