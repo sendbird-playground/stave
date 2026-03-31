@@ -39,6 +39,10 @@ export const LocalMcpConfigUpdateArgsSchema = z.object({
   token: z.string().max(4096).optional(),
 }).strict();
 
+export const ListLocalMcpRequestLogsArgsSchema = z.object({
+  limit: z.number().int().min(1).max(500).optional(),
+}).strict();
+
 export const RuntimeOptionsObjectSchema = z.object({
   model: z.string().max(200).optional(),
   chatStreamingEnabled: z.boolean().optional(),

@@ -356,4 +356,82 @@ describe("SqliteStore", () => {
 
     store.close();
   });
+
+  nativeSqliteTest("stores and clears local MCP request logs", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+
+    store.createLocalMcpRequestLog({
+      log: {
+        id: "local-mcp-log-1",
+        httpMethod: "POST",
+        path: "/mcp",
+        rpcMethod: "tools/call",
+        rpcRequestId: "rpc-1",
+        toolName: "stave_run_task",
+        statusCode: 200,
+        durationMs: 42,
+        requestPayload: {
+          jsonrpc: "2.0",
+          id: "rpc-1",
+          method: "tools/call",
+          params: {
+            name: "stave_run_task",
+            arguments: {
+              workspaceId: "ws-1",
+              prompt: "hello",
+            },
+          },
+        },
+        errorMessage: null,
+        createdAt: "2026-03-06T02:00:00.000Z",
+      },
+    });
+    store.createLocalMcpRequestLog({
+      log: {
+        id: "local-mcp-log-2",
+        httpMethod: "POST",
+        path: "/mcp",
+        rpcMethod: null,
+        rpcRequestId: null,
+        toolName: null,
+        statusCode: 401,
+        durationMs: 3,
+        requestPayload: null,
+        errorMessage: "Unauthorized.",
+        createdAt: "2026-03-06T02:00:01.000Z",
+      },
+    });
+
+    const logs = store.listLocalMcpRequestLogs({ limit: 10 });
+
+    expect(logs.map((log) => log.id)).toEqual([
+      "local-mcp-log-2",
+      "local-mcp-log-1",
+    ]);
+    expect(logs[1]).toMatchObject({
+      toolName: "stave_run_task",
+      rpcMethod: "tools/call",
+      rpcRequestId: "rpc-1",
+      statusCode: 200,
+      durationMs: 42,
+    });
+    expect(logs[1]?.requestPayload).toEqual({
+      jsonrpc: "2.0",
+      id: "rpc-1",
+      method: "tools/call",
+      params: {
+        name: "stave_run_task",
+        arguments: {
+          workspaceId: "ws-1",
+          prompt: "hello",
+        },
+      },
+    });
+
+    expect(store.clearLocalMcpRequestLogs()).toBe(2);
+    expect(store.listLocalMcpRequestLogs({ limit: 10 })).toEqual([]);
+
+    store.close();
+  });
 });

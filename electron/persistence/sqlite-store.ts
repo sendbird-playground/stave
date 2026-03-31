@@ -2,6 +2,8 @@ import path from "node:path";
 import { mkdirSync } from "node:fs";
 import Database from "better-sqlite3";
 import type {
+  PersistenceLocalMcpRequestLog,
+  PersistenceLocalMcpRequestLogCreateInput,
   PersistenceProjectRegistryEntry,
   PersistenceNotificationCreateInput,
   PersistenceNotificationRecord,
@@ -53,6 +55,22 @@ interface NotificationRow {
   created_at: string;
   read_at: string | null;
 }
+
+interface LocalMcpRequestLogRow {
+  id: string;
+  http_method: string;
+  path: string;
+  rpc_method: string | null;
+  rpc_request_id: string | null;
+  tool_name: string | null;
+  status_code: number;
+  duration_ms: number;
+  request_payload_json: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+const MAX_LOCAL_MCP_REQUEST_LOGS = 500;
 
 export class SqliteStore {
   private db: Database.Database;
@@ -168,6 +186,23 @@ export class SqliteStore {
 
       CREATE INDEX IF NOT EXISTS idx_notifications_unread_created
         ON notifications (read_at, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS local_mcp_request_logs (
+        id TEXT PRIMARY KEY,
+        http_method TEXT NOT NULL,
+        path TEXT NOT NULL,
+        rpc_method TEXT,
+        rpc_request_id TEXT,
+        tool_name TEXT,
+        status_code INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        request_payload_json TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_local_mcp_request_logs_created
+        ON local_mcp_request_logs (created_at DESC, id DESC);
     `);
 
   }
@@ -190,6 +225,22 @@ export class SqliteStore {
       payload: JSON.parse(row.payload_json) as Record<string, unknown>,
       createdAt: row.created_at,
       readAt: row.read_at,
+    };
+  }
+
+  private mapLocalMcpRequestLogRow(row: LocalMcpRequestLogRow): PersistenceLocalMcpRequestLog {
+    return {
+      id: row.id,
+      httpMethod: row.http_method,
+      path: row.path,
+      rpcMethod: row.rpc_method,
+      rpcRequestId: row.rpc_request_id,
+      toolName: row.tool_name,
+      statusCode: row.status_code,
+      durationMs: row.duration_ms,
+      requestPayload: row.request_payload_json ? JSON.parse(row.request_payload_json) : null,
+      errorMessage: row.error_message,
+      createdAt: row.created_at,
     };
   }
 
@@ -377,6 +428,84 @@ export class SqliteStore {
       SET read_at = ?
       WHERE read_at IS NULL
     `).run(readAt);
+    return result.changes;
+  }
+
+  createLocalMcpRequestLog(args: {
+    log: PersistenceLocalMcpRequestLogCreateInput;
+  }) {
+    const createdAt = args.log.createdAt ?? new Date().toISOString();
+    const tx = this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO local_mcp_request_logs (
+          id,
+          http_method,
+          path,
+          rpc_method,
+          rpc_request_id,
+          tool_name,
+          status_code,
+          duration_ms,
+          request_payload_json,
+          error_message,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        args.log.id,
+        args.log.httpMethod,
+        args.log.path,
+        args.log.rpcMethod ?? null,
+        args.log.rpcRequestId ?? null,
+        args.log.toolName ?? null,
+        args.log.statusCode,
+        args.log.durationMs,
+        args.log.requestPayload === null ? null : JSON.stringify(args.log.requestPayload),
+        args.log.errorMessage ?? null,
+        createdAt,
+      );
+
+      this.db.prepare(`
+        DELETE FROM local_mcp_request_logs
+        WHERE id NOT IN (
+          SELECT id
+          FROM local_mcp_request_logs
+          ORDER BY created_at DESC, id DESC
+          LIMIT ?
+        )
+      `).run(MAX_LOCAL_MCP_REQUEST_LOGS);
+    });
+
+    tx();
+  }
+
+  listLocalMcpRequestLogs(args?: {
+    limit?: number;
+  }): PersistenceLocalMcpRequestLog[] {
+    const limit = Math.max(1, Math.min(500, args?.limit ?? 100));
+    const rows = this.db.prepare(`
+      SELECT
+        id,
+        http_method,
+        path,
+        rpc_method,
+        rpc_request_id,
+        tool_name,
+        status_code,
+        duration_ms,
+        request_payload_json,
+        error_message,
+        created_at
+      FROM local_mcp_request_logs
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(limit) as LocalMcpRequestLogRow[];
+
+    return rows.map((row) => this.mapLocalMcpRequestLogRow(row));
+  }
+
+  clearLocalMcpRequestLogs(): number {
+    const result = this.db.prepare("DELETE FROM local_mcp_request_logs").run();
     return result.changes;
   }
 

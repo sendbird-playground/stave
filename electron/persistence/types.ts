@@ -99,6 +99,24 @@ export interface PersistenceTurnSummary {
   eventCount: number;
 }
 
+export interface PersistenceLocalMcpRequestLog {
+  id: string;
+  httpMethod: string;
+  path: string;
+  rpcMethod: string | null;
+  rpcRequestId: string | null;
+  toolName: string | null;
+  statusCode: number;
+  durationMs: number;
+  requestPayload: unknown | null;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface PersistenceLocalMcpRequestLogCreateInput extends Omit<PersistenceLocalMcpRequestLog, "createdAt"> {
+  createdAt?: string;
+}
+
 export type PersistenceNotificationKind =
   | "task.turn_completed"
   | "task.approval_requested";

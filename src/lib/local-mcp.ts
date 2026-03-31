@@ -25,3 +25,17 @@ export interface StaveLocalMcpStatus {
   manifestPaths: string[];
   configPath: string;
 }
+
+export interface StaveLocalMcpRequestLog {
+  id: string;
+  httpMethod: string;
+  path: string;
+  rpcMethod: string | null;
+  rpcRequestId: string | null;
+  toolName: string | null;
+  statusCode: number;
+  durationMs: number;
+  requestPayload: unknown | null;
+  errorMessage: string | null;
+  createdAt: string;
+}
