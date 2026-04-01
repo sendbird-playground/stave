@@ -803,7 +803,7 @@ export function EditorPanel() {
           ) : (
             <>
               <p className="mb-1 text-sm text-muted-foreground">Branch: {sourceBranch} | Changes ({filteredScmItems.length})</p>
-              {hasConflicts ? <p className="mb-1 text-sm text-warning-foreground">Conflict detected.</p> : null}
+              {hasConflicts ? <p className="mb-1 text-sm text-warning">Conflict detected.</p> : null}
               {sourceError ? <p className="mb-1 text-sm text-destructive">{sourceError}</p> : null}
               {!sourceError && filteredScmItems.length === 0 ? <p className="text-sm text-muted-foreground">No local changes.</p> : null}
               <div className="space-y-1">
@@ -814,7 +814,7 @@ export function EditorPanel() {
                         {item.path}
                       </button>
                       <div className="flex items-center gap-1">
-                        <span className="text-success-foreground">{item.code}</span>
+                        <span className="text-success">{item.code}</span>
                         <button
                           type="button"
                           className="rounded-sm border border-border/80 px-1 py-0.5 text-sm hover:bg-secondary/60"
