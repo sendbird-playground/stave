@@ -6,7 +6,12 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "../src/lib/providers/provider.types";
-import type { StaveLocalMcpRequestLog, StaveLocalMcpStatus } from "../src/lib/local-mcp";
+import type {
+  StaveLocalMcpRequestLog,
+  StaveLocalMcpRequestLogPage,
+  StaveLocalMcpRequestLogQuery,
+  StaveLocalMcpStatus,
+} from "../src/lib/local-mcp";
 import type { RepoMapResponse } from "../src/lib/fs/repo-map.types";
 import type { AppNotification, AppNotificationCreateInput } from "../src/lib/notifications/notification.types";
 import type { SkillCatalogResponse } from "../src/lib/skills/types";
@@ -304,11 +309,20 @@ contextBridge.exposeInMainWorld("api", {
       status: StaveLocalMcpStatus | null;
       message?: string;
     }>,
-    listRequestLogs: (args?: {
-      limit?: number;
-    }) => ipcRenderer.invoke("local-mcp:list-request-logs", args ?? {}) as Promise<{
+    listRequestLogs: (args?: StaveLocalMcpRequestLogQuery) =>
+      ipcRenderer.invoke("local-mcp:list-request-logs", args ?? {}) as Promise<{
       ok: boolean;
-      logs: StaveLocalMcpRequestLog[];
+      logs: StaveLocalMcpRequestLogPage["logs"];
+      total: StaveLocalMcpRequestLogPage["total"];
+      limit: StaveLocalMcpRequestLogPage["limit"];
+      offset: StaveLocalMcpRequestLogPage["offset"];
+      hasMore: StaveLocalMcpRequestLogPage["hasMore"];
+      message?: string;
+    }>,
+    getRequestLog: (args: { id: string; includePayload?: boolean }) =>
+      ipcRenderer.invoke("local-mcp:get-request-log", args) as Promise<{
+      ok: boolean;
+      log: StaveLocalMcpRequestLog | null;
       message?: string;
     }>,
     clearRequestLogs: () => ipcRenderer.invoke("local-mcp:clear-request-logs") as Promise<{

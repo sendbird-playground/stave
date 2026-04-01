@@ -11,6 +11,8 @@ import type {
   StaveLocalMcpConfig,
   StaveLocalMcpManifest,
   StaveLocalMcpRequestLog,
+  StaveLocalMcpRequestLogPage,
+  StaveLocalMcpRequestLogQuery,
   StaveLocalMcpStatus,
 } from "../../src/lib/local-mcp";
 import {
@@ -188,11 +190,17 @@ async function persistLocalMcpRequestLog(args: {
   }
 }
 
-export async function listStaveMcpRequestLogs(args?: {
-  limit?: number;
-}): Promise<StaveLocalMcpRequestLog[]> {
+export async function listStaveMcpRequestLogs(args?: StaveLocalMcpRequestLogQuery): Promise<StaveLocalMcpRequestLogPage> {
   const store = await ensurePersistenceReady();
   return store.listLocalMcpRequestLogs(args);
+}
+
+export async function getStaveMcpRequestLog(args: {
+  id: string;
+  includePayload?: boolean;
+}): Promise<StaveLocalMcpRequestLog | null> {
+  const store = await ensurePersistenceReady();
+  return store.getLocalMcpRequestLog(args);
 }
 
 export async function clearStaveMcpRequestLogs() {

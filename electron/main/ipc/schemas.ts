@@ -41,6 +41,13 @@ export const LocalMcpConfigUpdateArgsSchema = z.object({
 
 export const ListLocalMcpRequestLogsArgsSchema = z.object({
   limit: z.number().int().min(1).max(500).optional(),
+  offset: z.number().int().min(0).max(10_000).optional(),
+  includePayload: z.boolean().optional(),
+}).strict();
+
+export const GetLocalMcpRequestLogArgsSchema = z.object({
+  id: z.string().min(1).max(200),
+  includePayload: z.boolean().optional(),
 }).strict();
 
 export const LocalMcpApprovalResponseArgsSchema = z.object({

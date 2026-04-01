@@ -1,5 +1,5 @@
-import { useEffect, useReducer, useState } from "react";
-import { TriangleAlert } from "lucide-react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
@@ -36,7 +36,14 @@ interface LocalMcpRequestLogViewState {
   logs: StaveLocalMcpRequestLog[];
   detail: string;
   busy: boolean;
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
 }
+
+const LOCAL_MCP_REQUEST_LOG_PAGE_SIZE = 25;
+const LOCAL_MCP_REQUEST_LOG_AUTO_REFRESH_MS = 5000;
 
 export function DeveloperSection() {
   const [
@@ -740,15 +747,170 @@ function getLocalMcpRequestPayloadText(payload: unknown) {
   }
 }
 
+function getLocalMcpRequestLogDetail(args: {
+  count: number;
+  total: number;
+  offset: number;
+  limit: number;
+}) {
+  if (args.total === 0) {
+    return "No local MCP requests recorded yet.";
+  }
+
+  const start = args.offset + 1;
+  const end = args.offset + args.count;
+  const page = Math.floor(args.offset / args.limit) + 1;
+  const totalPages = Math.max(1, Math.ceil(args.total / args.limit));
+  const refreshMode = args.offset === 0
+    ? "Auto-refresh is active on this page."
+    : "Auto-refresh pauses while browsing older pages.";
+  return `Showing ${start}-${end} of ${args.total} local MCP requests (page ${page} of ${totalPages}). ${refreshMode}`;
+}
+
+type LocalMcpRequestPayloadLoadState =
+  | {
+      status: "idle" | "loading" | "empty" | "error";
+      payload: null;
+      error: string;
+    }
+  | {
+      status: "ready";
+      payload: unknown;
+      error: string;
+    };
+
+function LocalMcpRequestPayloadCell({ log }: { log: StaveLocalMcpRequestLog }) {
+  const [open, setOpen] = useState(false);
+  const [payloadState, setPayloadState] = useState<LocalMcpRequestPayloadLoadState>(
+    log.hasRequestPayload
+      ? { status: "idle", payload: null, error: "" }
+      : { status: "empty", payload: null, error: "" },
+  );
+  const payloadText = useMemo(() => {
+    if (payloadState.status !== "ready") {
+      return "";
+    }
+    return getLocalMcpRequestPayloadText(payloadState.payload);
+  }, [payloadState]);
+
+  useEffect(() => {
+    if (!log.hasRequestPayload) {
+      setOpen(false);
+      setPayloadState({ status: "empty", payload: null, error: "" });
+      return;
+    }
+    if (log.requestPayload != null) {
+      setPayloadState({ status: "ready", payload: log.requestPayload, error: "" });
+    }
+  }, [log.hasRequestPayload, log.requestPayload]);
+
+  async function handleTogglePayload() {
+    const nextOpen = !open;
+    setOpen(nextOpen);
+
+    if (!nextOpen || !log.hasRequestPayload || payloadState.status === "loading" || payloadState.status === "ready") {
+      return;
+    }
+
+    const getRequestLog = window.api?.localMcp?.getRequestLog;
+    if (!getRequestLog) {
+      setPayloadState({
+        status: "error",
+        payload: null,
+        error: "Local MCP request log API unavailable.",
+      });
+      return;
+    }
+
+    setPayloadState({ status: "loading", payload: null, error: "" });
+
+    try {
+      const result = await getRequestLog({ id: log.id, includePayload: true });
+      if (!result.ok) {
+        setPayloadState({
+          status: "error",
+          payload: null,
+          error: result.message || "Failed to load request payload.",
+        });
+        return;
+      }
+      if (result.log?.requestPayload == null) {
+        setPayloadState({ status: "empty", payload: null, error: "" });
+        return;
+      }
+      setPayloadState({ status: "ready", payload: result.log.requestPayload, error: "" });
+    } catch (error) {
+      setPayloadState({
+        status: "error",
+        payload: null,
+        error: error instanceof Error ? error.message : "Failed to load request payload.",
+      });
+    }
+  }
+
+  if (!log.hasRequestPayload) {
+    return <span className="text-xs text-muted-foreground">No payload</span>;
+  }
+
+  return (
+    <div className="rounded-md border border-border/70 bg-muted/20">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => void handleTogglePayload()}
+      >
+        <span>{open ? "Hide request payload" : "View request payload"}</span>
+        {payloadState.status === "loading" ? (
+          <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+        ) : null}
+      </button>
+
+      {open && payloadState.status === "loading" ? (
+        <div className="border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">
+          Loading request payload...
+        </div>
+      ) : null}
+
+      {open && payloadState.status === "ready" ? (
+        <pre className="max-h-64 overflow-auto border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">
+          {payloadText}
+        </pre>
+      ) : null}
+
+      {open && payloadState.status === "empty" ? (
+        <div className="border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">
+          No payload recorded for this request.
+        </div>
+      ) : null}
+
+      {open && payloadState.status === "error" ? (
+        <div className="border-t border-border/70 px-3 py-2 text-xs text-destructive">
+          {payloadState.error}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function LocalMcpRequestLogCard() {
+  const latestRequestIdRef = useRef(0);
   const [state, setState] = useState<LocalMcpRequestLogViewState>({
     status: "loading",
     logs: [],
     detail: "Loading local MCP request logs...",
     busy: false,
+    total: 0,
+    limit: LOCAL_MCP_REQUEST_LOG_PAGE_SIZE,
+    offset: 0,
+    hasMore: false,
   });
+  const page = Math.floor(state.offset / state.limit) + 1;
+  const totalPages = state.total === 0 ? 1 : Math.ceil(state.total / state.limit);
 
-  async function refreshLogs(silent = false) {
+  async function refreshLogs(args?: {
+    silent?: boolean;
+    offset?: number;
+  }) {
     const listRequestLogs = window.api?.localMcp?.listRequestLogs;
     if (!listRequestLogs) {
       setState({
@@ -756,9 +918,18 @@ function LocalMcpRequestLogCard() {
         logs: [],
         detail: "Local MCP request log API unavailable.",
         busy: false,
+        total: 0,
+        limit: LOCAL_MCP_REQUEST_LOG_PAGE_SIZE,
+        offset: 0,
+        hasMore: false,
       });
       return;
     }
+
+    const silent = args?.silent === true;
+    const offset = args?.offset ?? state.offset;
+    const requestId = latestRequestIdRef.current + 1;
+    latestRequestIdRef.current = requestId;
 
     if (!silent) {
       setState((current) => ({
@@ -770,41 +941,67 @@ function LocalMcpRequestLogCard() {
     }
 
     try {
-      const result = await listRequestLogs({ limit: 100 });
+      const result = await listRequestLogs({
+        limit: LOCAL_MCP_REQUEST_LOG_PAGE_SIZE,
+        offset,
+        includePayload: false,
+      });
+      if (requestId !== latestRequestIdRef.current) {
+        return;
+      }
       if (!result.ok) {
-        setState({
+        setState((current) => ({
+          ...current,
           status: "error",
-          logs: [],
           detail: result.message || "Failed to load local MCP request logs.",
           busy: false,
-        });
+        }));
         return;
       }
       setState({
         status: "ready",
         logs: result.logs,
-        detail: result.logs.length > 0
-          ? `Showing the latest ${result.logs.length} local MCP requests.`
-          : "No local MCP requests recorded yet.",
+        detail: getLocalMcpRequestLogDetail({
+          count: result.logs.length,
+          total: result.total,
+          offset: result.offset,
+          limit: result.limit || LOCAL_MCP_REQUEST_LOG_PAGE_SIZE,
+        }),
         busy: false,
+        total: result.total,
+        limit: result.limit || LOCAL_MCP_REQUEST_LOG_PAGE_SIZE,
+        offset: result.offset,
+        hasMore: result.hasMore,
       });
     } catch (error) {
-      setState({
+      if (requestId !== latestRequestIdRef.current) {
+        return;
+      }
+      setState((current) => ({
+        ...current,
         status: "error",
-        logs: [],
         detail: error instanceof Error ? error.message : "Failed to load local MCP request logs.",
         busy: false,
-      });
+      }));
     }
   }
 
   useEffect(() => {
-    void refreshLogs();
-    const intervalId = window.setInterval(() => {
-      void refreshLogs(true);
-    }, 3000);
-    return () => window.clearInterval(intervalId);
+    void refreshLogs({ offset: 0 });
   }, []);
+
+  useEffect(() => {
+    if (state.offset !== 0) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      if (document.hidden) {
+        return;
+      }
+      void refreshLogs({ silent: true, offset: 0 });
+    }, LOCAL_MCP_REQUEST_LOG_AUTO_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, [state.offset]);
 
   async function handleClearLogs() {
     const clearRequestLogs = window.api?.localMcp?.clearRequestLogs;
@@ -818,6 +1015,9 @@ function LocalMcpRequestLogCard() {
       return;
     }
 
+    const requestId = latestRequestIdRef.current + 1;
+    latestRequestIdRef.current = requestId;
+
     setState((current) => ({
       ...current,
       busy: true,
@@ -826,6 +1026,9 @@ function LocalMcpRequestLogCard() {
 
     try {
       const result = await clearRequestLogs();
+      if (requestId !== latestRequestIdRef.current) {
+        return;
+      }
       if (!result.ok) {
         setState((current) => ({
           ...current,
@@ -840,8 +1043,15 @@ function LocalMcpRequestLogCard() {
         logs: [],
         detail: `Cleared ${result.cleared} local MCP request log${result.cleared === 1 ? "" : "s"}.`,
         busy: false,
+        total: 0,
+        limit: LOCAL_MCP_REQUEST_LOG_PAGE_SIZE,
+        offset: 0,
+        hasMore: false,
       });
     } catch (error) {
+      if (requestId !== latestRequestIdRef.current) {
+        return;
+      }
       setState((current) => ({
         ...current,
         status: "error",
@@ -851,26 +1061,58 @@ function LocalMcpRequestLogCard() {
     }
   }
 
+  function handleShowNewerLogs() {
+    if (state.busy || state.offset === 0) {
+      return;
+    }
+    void refreshLogs({ offset: Math.max(0, state.offset - state.limit) });
+  }
+
+  function handleShowOlderLogs() {
+    if (state.busy || !state.hasMore) {
+      return;
+    }
+    void refreshLogs({ offset: state.offset + state.limit });
+  }
+
   return (
     <SettingsCard
       title="Local MCP Request Log"
       description="Separate from Session Replay. Captures recent inbound requests to the embedded local MCP server."
     >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm text-muted-foreground">{state.detail}</span>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <span className="max-w-3xl text-sm text-muted-foreground">{state.detail}</span>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            className="h-8 gap-1 text-xs"
+            variant="outline"
+            disabled={state.busy || state.offset === 0}
+            onClick={handleShowNewerLogs}
+          >
+            <ChevronLeft className="size-3.5" />
+            Newer
+          </Button>
+          <Button
+            className="h-8 gap-1 text-xs"
+            variant="outline"
+            disabled={state.busy || !state.hasMore}
+            onClick={handleShowOlderLogs}
+          >
+            Older
+            <ChevronRight className="size-3.5" />
+          </Button>
           <Button
             className="h-8 text-xs"
             variant="outline"
             disabled={state.busy}
-            onClick={() => void refreshLogs()}
+            onClick={() => void refreshLogs({ offset: state.offset })}
           >
             Refresh
           </Button>
           <Button
             className="h-8 text-xs"
             variant="outline"
-            disabled={state.busy || state.logs.length === 0}
+            disabled={state.busy || state.total === 0}
             onClick={() => void handleClearLogs()}
           >
             Clear
@@ -880,7 +1122,7 @@ function LocalMcpRequestLogCard() {
 
       {state.logs.length === 0 ? (
         <p className="rounded-md border border-border/80 bg-background px-3 py-2 text-sm text-muted-foreground">
-          No requests yet. Health checks are excluded, and the panel auto-refreshes while it stays open.
+          No requests yet. Health checks are excluded, the latest page auto-refreshes while it stays open, and payloads load only when you expand a row.
         </p>
       ) : (
         <div className="overflow-hidden rounded-md border border-border/80 bg-background">
@@ -920,23 +1162,26 @@ function LocalMcpRequestLogCard() {
                     </div>
                   </TableCell>
                   <TableCell className="align-top">
-                    {log.requestPayload == null ? (
-                      <span className="text-xs text-muted-foreground">No payload</span>
-                    ) : (
-                      <details className="rounded-md border border-border/70 bg-muted/20">
-                        <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-foreground">
-                          View request payload
-                        </summary>
-                        <pre className="max-h-64 overflow-auto border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">
-                          {getLocalMcpRequestPayloadText(log.requestPayload)}
-                        </pre>
-                      </details>
-                    )}
+                    <LocalMcpRequestPayloadCell log={log} />
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 bg-muted/10 px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              Page {page} of {totalPages}
+            </span>
+            {state.offset === 0 ? (
+              <span className="text-xs text-muted-foreground">
+                Auto-refreshing latest page every {Math.floor(LOCAL_MCP_REQUEST_LOG_AUTO_REFRESH_MS / 1000)}s.
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Auto-refresh is paused on older pages to keep pagination stable.
+              </span>
+            )}
+          </div>
         </div>
       )}
     </SettingsCard>
