@@ -8,6 +8,13 @@ describe("resolvePlanViewerState", () => {
       claudePermissionMode: "plan",
       codexExperimentalPlanMode: false,
       isTurnActive: false,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "claude-code",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "1. Inspect\n2. Patch",
+      },
       lastMessage: {
         role: "assistant",
         providerId: "claude-code",
@@ -30,6 +37,13 @@ describe("resolvePlanViewerState", () => {
       claudePermissionMode: "plan",
       codexExperimentalPlanMode: true,
       isTurnActive: false,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "1. Inspect\n2. Patch",
+      },
       lastMessage: {
         role: "assistant",
         providerId: "codex",
@@ -52,6 +66,7 @@ describe("resolvePlanViewerState", () => {
       claudePermissionMode: "plan",
       codexExperimentalPlanMode: false,
       isTurnActive: true,
+      latestPlanMessage: null,
       lastMessage: null,
     });
 
@@ -68,6 +83,7 @@ describe("resolvePlanViewerState", () => {
       claudePermissionMode: "default",
       codexExperimentalPlanMode: true,
       isTurnActive: true,
+      latestPlanMessage: null,
       lastMessage: null,
     });
 
@@ -86,6 +102,13 @@ describe("resolvePlanViewerState", () => {
       claudePermissionMode: "plan",
       codexExperimentalPlanMode: false,
       isTurnActive: true,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "claude-code",
+        isPlanResponse: true,
+        isStreaming: true,
+        planText: "1. Read the codebase\n2. Make changes",
+      },
       lastMessage: {
         role: "assistant",
         providerId: "claude-code",
@@ -102,12 +125,100 @@ describe("resolvePlanViewerState", () => {
     });
   });
 
+  test("keeps the viewer open while revising a plan in plan mode", () => {
+    const state = resolvePlanViewerState({
+      activeProvider: "claude-code",
+      claudePermissionMode: "plan",
+      codexExperimentalPlanMode: false,
+      isTurnActive: false,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "claude-code",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "1. Inspect\n2. Patch",
+      },
+      lastMessage: {
+        role: "user",
+        providerId: "user",
+        isPlanResponse: false,
+        isStreaming: false,
+        planText: undefined,
+      },
+    });
+
+    expect(state).toEqual({
+      planText: "1. Inspect\n2. Patch",
+      isPlanPreparing: false,
+      isPlanPending: true,
+    });
+  });
+
+  test("hides the inline viewer once the task has moved past plan review", () => {
+    const state = resolvePlanViewerState({
+      activeProvider: "claude-code",
+      claudePermissionMode: "default",
+      codexExperimentalPlanMode: false,
+      isTurnActive: false,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "claude-code",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "1. Inspect\n2. Patch",
+      },
+      lastMessage: {
+        role: "user",
+        providerId: "user",
+        isPlanResponse: false,
+        isStreaming: false,
+        planText: undefined,
+      },
+    });
+
+    expect(state).toEqual({
+      planText: "1. Inspect\n2. Patch",
+      isPlanPreparing: false,
+      isPlanPending: false,
+    });
+  });
+
+  test("still shows the viewer when the latest message is the plan response", () => {
+    const state = resolvePlanViewerState({
+      activeProvider: "claude-code",
+      claudePermissionMode: "default",
+      codexExperimentalPlanMode: false,
+      isTurnActive: false,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "claude-code",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "1. Inspect\n2. Patch",
+      },
+      lastMessage: {
+        role: "assistant",
+        providerId: "claude-code",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "1. Inspect\n2. Patch",
+      },
+    });
+
+    expect(state).toEqual({
+      planText: "1. Inspect\n2. Patch",
+      isPlanPreparing: false,
+      isPlanPending: true,
+    });
+  });
+
   test("stays hidden when no plan mode and no plan response", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
       claudePermissionMode: "default",
       codexExperimentalPlanMode: false,
       isTurnActive: false,
+      latestPlanMessage: null,
       lastMessage: {
         role: "assistant",
         providerId: "claude-code",

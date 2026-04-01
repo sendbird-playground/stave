@@ -327,7 +327,7 @@ export interface AppSettings {
   codexSupportsReasoningSummaries: "auto" | "enabled" | "disabled";
   codexFastMode: boolean;
   codexExperimentalPlanMode: boolean;
-  /** When true, automatically approve plans without user interaction. */
+  /** Legacy key name: when true, automatically approve provider tool prompts without user interaction. */
   planAutoApprove: boolean;
 }
 

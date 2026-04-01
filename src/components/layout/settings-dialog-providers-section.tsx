@@ -372,7 +372,7 @@ export function ProvidersSection() {
               </SelectContent>
             </Select>
           </LabeledField>
-          <LabeledField title="Plan Auto Approve" description="Automatically approve plans without manual confirmation.">
+          <LabeledField title="Tool Approval Auto Approve" description="Automatically approve provider tool and command prompts. Does not auto-approve plans.">
             <ChoiceButtons
               value={planAutoApprove ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { planAutoApprove: value === "on" } })}

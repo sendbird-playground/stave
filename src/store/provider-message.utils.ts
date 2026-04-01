@@ -95,6 +95,27 @@ export function findLatestPendingApprovalPart(args: {
   return undefined;
 }
 
+export function findLatestPendingApproval(args: {
+  messages: ChatMessage[];
+}): { messageId: string; part: ApprovalPart } | null {
+  for (let messageIndex = args.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const message = args.messages[messageIndex];
+    if (!message) {
+      continue;
+    }
+
+    const part = findLatestPendingApprovalPart({ message });
+    if (part) {
+      return {
+        messageId: message.id,
+        part,
+      };
+    }
+  }
+
+  return null;
+}
+
 export function findPendingApprovalMessageByRequestId(args: {
   messages: ChatMessage[];
   requestId: string;

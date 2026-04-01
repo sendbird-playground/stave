@@ -4,6 +4,7 @@ import { ChatInput } from "@/components/session/ChatInput";
 import { ChatPanel } from "@/components/session/ChatPanel";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { PlanViewer } from "@/components/session/PlanViewer";
+import { TaskAutoApproval } from "@/components/session/TaskAutoApproval";
 import { Button, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
 import { isTaskManaged } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
@@ -177,6 +178,7 @@ export function ChatArea() {
 
   return (
     <div {...sessionAreaProps}>
+      <TaskAutoApproval />
       {content}
     </div>
   );

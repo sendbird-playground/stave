@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ClipboardCheck, FileText, History, X } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, FileText, History, X } from "lucide-react";
 import { Button, Popover, PopoverContent, PopoverTrigger } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
 import { useAppStore } from "@/store/app.store";
@@ -38,7 +38,7 @@ const EMPTY_PLAN_FILE_PATHS: string[] = [];
 
 interface PlanHistoryPopoverProps {
   /** Render as icon-only button (toolbar) vs labelled button */
-  variant?: "icon" | "labelled";
+  variant?: "icon" | "labelled" | "floating";
   className?: string;
 }
 
@@ -48,11 +48,10 @@ export function PlanHistoryPopover(args: PlanHistoryPopoverProps) {
   const [selectedPlan, setSelectedPlan] = useState<{ filePath: string; content: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [activeTaskId, planFilePaths, projectPath] = useAppStore(
+  const [planFilePaths, projectPath] = useAppStore(
     useShallow((state) => {
       const task = state.tasks.find((t) => t.id === state.activeTaskId);
       return [
-        state.activeTaskId,
         task?.planFilePaths ?? EMPTY_PLAN_FILE_PATHS,
         state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? null,
       ] as const;
@@ -78,14 +77,37 @@ export function PlanHistoryPopover(args: PlanHistoryPopoverProps) {
     }
   }, [projectPath]);
 
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setSelectedPlan(null);
+    }
+  }, []);
+
   if (entries.length === 0) {
     return null;
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        {variant === "icon" ? (
+        {variant === "floating" ? (
+          <button
+            type="button"
+            title={`Open plan history (${entries.length})`}
+            className={cn(
+              "relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/80 bg-card/95 text-muted-foreground shadow-lg transition-all hover:-translate-y-0.5 hover:text-foreground supports-backdrop-filter:backdrop-blur-xl",
+              open && "border-primary/30 text-foreground shadow-primary/10",
+              className,
+            )}
+          >
+            <History className="size-4" />
+            <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold leading-5 text-primary-foreground shadow-sm">
+              {entries.length}
+            </span>
+            <span className="sr-only">Open plan history</span>
+          </button>
+        ) : variant === "icon" ? (
           <button
             type="button"
             title="Plan history"
@@ -111,21 +133,34 @@ export function PlanHistoryPopover(args: PlanHistoryPopoverProps) {
       </PopoverTrigger>
       <PopoverContent
         side="top"
-        align="start"
+        align={variant === "floating" ? "end" : "start"}
         className="w-[420px] max-h-[480px] overflow-hidden p-0"
       >
         {selectedPlan ? (
           <div className="flex flex-col max-h-[480px]">
             <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2">
-              <ClipboardCheck className="size-3.5 text-primary" />
-              <p className="flex-1 text-xs font-medium text-muted-foreground truncate">
-                {parsePlanFilePath(selectedPlan.filePath).label}
-              </p>
               <button
                 type="button"
                 onClick={() => setSelectedPlan(null)}
                 className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 title="Back to list"
+              >
+                <ArrowLeft className="size-3.5" />
+              </button>
+              <ClipboardCheck className="size-3.5 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Plan history
+                </p>
+                <p className="truncate text-xs font-medium text-foreground">
+                  {parsePlanFilePath(selectedPlan.filePath).label}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenChange(false)}
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Close plan history"
               >
                 <X className="size-3.5" />
               </button>
@@ -138,10 +173,21 @@ export function PlanHistoryPopover(args: PlanHistoryPopoverProps) {
           <div className="flex flex-col max-h-[480px]">
             <div className="flex items-center gap-2 border-b border-border/70 px-3 py-2">
               <History className="size-3.5 text-primary" />
-              <p className="flex-1 text-xs font-medium">
-                Plan History
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium">Plan History</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Reopen saved plans without bringing the full review panel back.
+                </p>
+              </div>
               <span className="text-xs text-muted-foreground">{entries.length} plan{entries.length !== 1 ? "s" : ""}</span>
+              <button
+                type="button"
+                onClick={() => handleOpenChange(false)}
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Close plan history"
+              >
+                <X className="size-3.5" />
+              </button>
             </div>
             <div className="overflow-y-auto">
               {entries.map((entry, index) => (

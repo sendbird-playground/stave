@@ -39,7 +39,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const [copied, setCopied] = useState(false);
   const persistedPlanRef = useRef<string | null>(null);
 
-  const [activeTaskId, activeTask, draftProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, planAutoApprove, sendUserMessage, createTask, updatePromptDraft, updateSettings, registerPlanFile, projectPath] = useAppStore(
+  const [activeTaskId, activeTask, draftProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, sendUserMessage, createTask, updatePromptDraft, updateSettings, registerPlanFile, projectPath] = useAppStore(
     useShallow((state) => [
       state.activeTaskId,
       state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
@@ -47,7 +47,6 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
       state.settings.claudePermissionMode,
       state.settings.claudePermissionModeBeforePlan,
       state.settings.codexExperimentalPlanMode,
-      state.settings.planAutoApprove,
       state.sendUserMessage,
       state.createTask,
       state.updatePromptDraft,
@@ -88,9 +87,12 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     activeProvider,
     claudePermissionMode,
     codexExperimentalPlanMode,
-    lastMessage: latestPlanMessage ?? lastMessage,
+    latestPlanMessage,
+    lastMessage,
     isTurnActive,
   });
+  const planHistoryCount = activeTask?.planFilePaths?.length ?? 0;
+  const showFloatingHistoryTrigger = !isPlanPreparing && !isPlanPending && planHistoryCount > 0;
 
   // Reset view state when a new plan arrives so it opens fully
   useEffect(() => {
@@ -135,20 +137,18 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     setRevisionText("");
   }, [activeProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, updateSettings, sendUserMessage, activeTaskId, isManagedTask]);
 
-  // Auto-approve: when planAutoApprove is enabled and a plan is pending, approve it automatically.
-  const autoApprovedPlanRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (isManagedTask) {
-      return;
-    }
-    if (planAutoApprove && isPlanPending && planText && planText !== autoApprovedPlanRef.current) {
-      autoApprovedPlanRef.current = planText;
-      handleApprove();
-    }
-  }, [planAutoApprove, isPlanPending, planText, handleApprove, isManagedTask]);
-
-  if (!isPlanPreparing && !isPlanPending) {
+  if (!isPlanPreparing && !isPlanPending && !showFloatingHistoryTrigger) {
     return null;
+  }
+
+  if (showFloatingHistoryTrigger) {
+    return (
+      <div className="pointer-events-none absolute bottom-full left-0 right-0 z-20 px-3 pb-2 sm:px-4">
+        <div className="mx-auto flex max-w-6xl justify-end">
+          <PlanHistoryPopover variant="floating" className="pointer-events-auto" />
+        </div>
+      </div>
+    );
   }
 
   function handleCopy() {

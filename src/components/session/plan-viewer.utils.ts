@@ -3,33 +3,39 @@ import type { ChatMessage } from "@/types/chat";
 const PLAN_VIEWER_COLLAPSED_GAP_PX = 8;
 const PLAN_VIEWER_EXPANDED_TOP_PX = 12;
 
+type PlanMessage = Pick<ChatMessage, "role" | "providerId" | "isPlanResponse" | "isStreaming" | "planText">;
+
+function hasPlanContent(message?: PlanMessage | null) {
+  return message?.role === "assistant"
+    && message.isPlanResponse === true
+    && Boolean(message.planText?.trim());
+}
+
 export function resolvePlanViewerState(args: {
   activeProvider: "claude-code" | "codex" | "stave";
   claudePermissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
   codexExperimentalPlanMode?: boolean;
-  lastMessage?: Pick<ChatMessage, "role" | "providerId" | "isPlanResponse" | "isStreaming" | "planText"> | null;
+  latestPlanMessage?: PlanMessage | null;
+  lastMessage?: PlanMessage | null;
   isTurnActive: boolean;
 }) {
-  const planText = args.lastMessage?.planText?.trim() ?? "";
+  const planText = args.latestPlanMessage?.planText?.trim() ?? "";
 
   const isClaudePlanMode =
     (args.activeProvider === "claude-code" || args.activeProvider === "stave")
     && args.claudePermissionMode === "plan";
   const isCodexPlanMode = args.activeProvider === "codex" && args.codexExperimentalPlanMode === true;
-  const lastMessageHasPlan =
-    args.lastMessage?.role === "assistant" &&
-    args.lastMessage.isPlanResponse === true;
-  const hasPlanContent = lastMessageHasPlan && Boolean(planText);
+  const isPlanModeActive = isClaudePlanMode || isCodexPlanMode;
+  const lastMessageHasPlan = hasPlanContent(args.lastMessage);
+  const hasHistoricalPlan = hasPlanContent(args.latestPlanMessage);
 
-  // "Preparing" only while in plan mode, turn is active, and plan hasn't arrived yet.
-  // Once plan_ready fires (hasPlanContent becomes true), we switch to "pending"
-  // even though the turn may still be active (done event hasn't arrived yet).
-  const isPlanPreparing = (isClaudePlanMode || isCodexPlanMode) && args.isTurnActive && !hasPlanContent;
+  // Stay in "preparing" while plan mode is active and the current turn has not
+  // produced a fresh plan response yet. Historical plan text may still exist.
+  const isPlanPreparing = isPlanModeActive && args.isTurnActive && !lastMessageHasPlan;
 
-  // Plan is viewable as soon as it has content, regardless of isTurnActive/isStreaming.
-  // This fixes the bug where the viewer stayed on "Preparing plan…" because
-  // plan_ready fires before the done event that clears isTurnActive.
-  const isPlanPending = hasPlanContent;
+  // Render the full viewer only while the task is still in plan review, or
+  // when the latest message is itself the plan response awaiting user action.
+  const isPlanPending = hasHistoricalPlan && (isPlanModeActive || lastMessageHasPlan);
 
   return {
     planText,
