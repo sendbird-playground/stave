@@ -36,6 +36,18 @@ export function collectAncestorFolders(args: { path: string }) {
   return folders;
 }
 
+export function getExplorerExpandedPathsAfterCreate(args: {
+  path: string;
+  type: "file" | "folder";
+}) {
+  if (args.type === "folder") {
+    return collectAncestorFolders({ path: args.path });
+  }
+
+  const parentPath = args.path.split("/").slice(0, -1).join("/");
+  return collectAncestorFolders({ path: parentPath });
+}
+
 export function buildExplorerIndex(args: { files: string[]; filter?: string }): ExplorerIndex {
   const root: ExplorerNode = { name: "root", path: "", type: "folder", children: [] };
   const normalizedFilter = args.filter?.trim().toLowerCase() ?? "";

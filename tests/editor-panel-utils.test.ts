@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildExplorerIndex, collectAncestorFolders, normalizeRelativeInputPath } from "@/components/layout/editor-panel.utils";
+import {
+  buildExplorerIndex,
+  collectAncestorFolders,
+  getExplorerExpandedPathsAfterCreate,
+  normalizeRelativeInputPath,
+} from "@/components/layout/editor-panel.utils";
 
 describe("normalizeRelativeInputPath", () => {
   test("normalizes safe relative paths", () => {
@@ -19,6 +24,37 @@ describe("collectAncestorFolders", () => {
       "src/components",
       "src/components/layout",
     ]);
+  });
+});
+
+describe("getExplorerExpandedPathsAfterCreate", () => {
+  test("expands ancestor folders for new files", () => {
+    expect(getExplorerExpandedPathsAfterCreate({
+      path: "src/components/layout/EditorPanel.tsx",
+      type: "file",
+    })).toEqual([
+      "src",
+      "src/components",
+      "src/components/layout",
+    ]);
+  });
+
+  test("expands the created folder as well for new directories", () => {
+    expect(getExplorerExpandedPathsAfterCreate({
+      path: "src/components/layout",
+      type: "folder",
+    })).toEqual([
+      "src",
+      "src/components",
+      "src/components/layout",
+    ]);
+  });
+
+  test("keeps root-level file creation collapsed", () => {
+    expect(getExplorerExpandedPathsAfterCreate({
+      path: "README.md",
+      type: "file",
+    })).toEqual([]);
   });
 });
 
