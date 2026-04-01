@@ -44,6 +44,7 @@ import {
 } from "@/store/project.utils";
 import { DeveloperSection } from "./settings-dialog-developer-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
+import { ToolingSection } from "./settings-dialog-tooling-section";
 import {
   ChoiceButtons,
   DraftInput,
@@ -61,6 +62,7 @@ export const settingsSections = [
   { id: "theme", label: "Design", icon: Palette },
   { id: "chat", label: "Chat", icon: Bot },
   { id: "providers", label: "Providers", icon: Wrench },
+  { id: "tooling", label: "Tooling", icon: Shield },
   { id: "subagents", label: "Subagent", icon: Wrench },
   { id: "skills", label: "Skills", icon: SearchCheck },
   { id: "commands", label: "Command", icon: KeyRound },
@@ -72,7 +74,7 @@ export const settingsSections = [
 export type SectionId = (typeof settingsSections)[number]["id"];
 
 export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
-  { label: "Workspace", ids: ["general", "projects", "theme", "editor", "terminal"] },
+  { label: "Workspace", ids: ["general", "projects", "theme", "editor", "terminal", "tooling"] },
   { label: "Agents", ids: ["chat", "providers"] },
   { label: "Automation", ids: ["subagents", "skills", "commands", "developer"] },
 ];
@@ -2168,6 +2170,8 @@ export function SettingsDialogSectionContent(args: {
       return <TerminalSection />;
     case "chat":
       return <ChatSection />;
+    case "tooling":
+      return <ToolingSection />;
     case "subagents":
       return <SubagentsSection />;
     case "skills":
