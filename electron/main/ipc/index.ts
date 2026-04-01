@@ -10,6 +10,7 @@ import { registerScmHandlers } from "./scm";
 import { registerScreenshotHandlers } from "./screenshot";
 import { registerSkillsHandlers } from "./skills";
 import { registerTerminalHandlers } from "./terminal";
+import { registerToolingHandlers } from "./tooling";
 import { registerWindowHandlers } from "./window";
 
 export function registerHandlers() {
@@ -17,6 +18,7 @@ export function registerHandlers() {
   registerProviderHandlers();
   registerPersistenceHandlers();
   registerTerminalHandlers();
+  registerToolingHandlers();
   registerScmHandlers();
   registerFilesystemHandlers();
   registerSkillsHandlers();

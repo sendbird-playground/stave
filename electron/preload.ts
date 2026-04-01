@@ -10,6 +10,11 @@ import type { StaveLocalMcpRequestLog, StaveLocalMcpStatus } from "../src/lib/lo
 import type { RepoMapResponse } from "../src/lib/fs/repo-map.types";
 import type { AppNotification, AppNotificationCreateInput } from "../src/lib/notifications/notification.types";
 import type { SkillCatalogResponse } from "../src/lib/skills/types";
+import type {
+  SyncOriginMainResult,
+  ToolingStatusRequest,
+  ToolingStatusSnapshot,
+} from "../src/lib/tooling-status";
 
 interface ProviderSlashCommand {
   name: string;
@@ -417,6 +422,12 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("terminal:resize-session", args),
     closeSession: (args: { sessionId: string }) =>
       ipcRenderer.invoke("terminal:close-session", args),
+  },
+  tooling: {
+    getStatus: (args: ToolingStatusRequest) =>
+      ipcRenderer.invoke("tooling:get-status", args) as Promise<ToolingStatusSnapshot>,
+    syncOriginMain: (args: { cwd?: string }) =>
+      ipcRenderer.invoke("tooling:sync-origin-main", args) as Promise<SyncOriginMainResult>,
   },
   sourceControl: {
     getStatus: (args: { cwd?: string }) =>

@@ -10,12 +10,16 @@ export function resolveCommandCwd(args: { cwd?: string }) {
   return process.cwd();
 }
 
-export function runCommand(args: { command: string; cwd?: string }): Promise<CommandResult> {
+export function runCommand(args: {
+  command: string;
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<CommandResult> {
   return new Promise<CommandResult>((resolve) => {
     const child = spawn(args.command, {
       shell: true,
       cwd: resolveCommandCwd({ cwd: args.cwd }),
-      env: buildExecutableLookupEnv(),
+      env: args.env ?? buildExecutableLookupEnv(),
     });
 
     let stdout = "";
@@ -45,12 +49,17 @@ export function runCommand(args: { command: string; cwd?: string }): Promise<Com
   });
 }
 
-export function runCommandArgs(args: { command: string; commandArgs?: string[]; cwd?: string }): Promise<CommandResult> {
+export function runCommandArgs(args: {
+  command: string;
+  commandArgs?: string[];
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<CommandResult> {
   return new Promise<CommandResult>((resolve) => {
     const child = spawn(args.command, args.commandArgs ?? [], {
       shell: false,
       cwd: resolveCommandCwd({ cwd: args.cwd }),
-      env: buildExecutableLookupEnv(),
+      env: args.env ?? buildExecutableLookupEnv(),
     });
 
     let stdout = "";

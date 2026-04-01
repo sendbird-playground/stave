@@ -10,6 +10,11 @@ import type { RepoMapResponse } from "@/lib/fs/repo-map.types";
 import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
+import type {
+  SyncOriginMainResult,
+  ToolingStatusRequest,
+  ToolingStatusSnapshot,
+} from "@/lib/tooling-status";
 
 interface ProviderStreamTurnArgs {
   turnId?: string;
@@ -451,6 +456,11 @@ interface WindowTerminalApi {
   }) => Promise<{ ok: boolean; stderr?: string }>;
 }
 
+interface WindowToolingApi {
+  getStatus?: (args: ToolingStatusRequest) => Promise<ToolingStatusSnapshot>;
+  syncOriginMain?: (args: { cwd?: string }) => Promise<SyncOriginMainResult>;
+}
+
 interface SourceControlStatusItem {
   code: string;
   path: string;
@@ -887,6 +897,7 @@ interface WindowApi {
   lsp?: WindowLspApi;
   eslint?: WindowEslintApi;
   terminal?: WindowTerminalApi;
+  tooling?: WindowToolingApi;
   sourceControl?: WindowSourceControlApi;
   metrics?: WindowMetricsApi;
   capture?: WindowCaptureApi;

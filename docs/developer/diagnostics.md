@@ -29,8 +29,10 @@ When enabled, slow commits are logged to the console and recorded as `performanc
 
 The Settings dialog includes desktop-only diagnostics for renderer and compositor troubleshooting:
 
+- `Tooling` shows current workspace sync state against `origin/main` and the native shell / CLI auth status Stave depends on (`git`, `gh`, `claude`, `codex`)
 - `Session Replay UI` toggles the replay entry point for the active chat session
 - `Local MCP Request Log` shows recent inbound local MCP requests separately from Session Replay
 - `GPU Acceleration` shows Electron-reported hardware acceleration and GPU feature status
 
 The GPU status card is available only when the preload bridge exposes `window.api.window.getGpuStatus()`.
+The Tooling section is available only when the preload bridge exposes `window.api.tooling.getStatus()` and `window.api.tooling.syncOriginMain()`.

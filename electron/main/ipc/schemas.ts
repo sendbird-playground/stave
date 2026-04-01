@@ -459,6 +459,15 @@ export const OpenPathArgsSchema = z.object({
   path: z.string().min(1).max(4096),
 }).strict();
 
+export const ToolingStatusArgsSchema = z.object({
+  cwd: z.string().max(4096).optional(),
+  codexPathOverride: z.string().max(4096).optional(),
+}).strict();
+
+export const SyncOriginMainArgsSchema = z.object({
+  cwd: z.string().max(4096).optional(),
+}).strict();
+
 const FilesystemRootPathSchema = z.string().min(1).max(4096);
 const FilesystemFilePathSchema = z.string().min(1).max(4096);
 
