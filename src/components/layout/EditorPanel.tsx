@@ -7,6 +7,7 @@ import {
   FolderPlus,
   FolderTree,
   GitBranch,
+  Info,
   LoaderCircle,
   RefreshCcw,
   X,
@@ -21,6 +22,7 @@ import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { ExplorerEntryIcon } from "./explorer-entry-icon";
+import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
 import { collectAncestorFolders, normalizeRelativeInputPath } from "./editor-panel.utils";
 
 interface SourceControlItem {
@@ -526,6 +528,7 @@ export function EditorPanel() {
                     size="sm"
                     className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "explorer" && "bg-secondary/80 text-foreground")}
                     onClick={() => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "explorer" } })}
+                    title="explorer"
                   >
                     <FolderTree className="size-4" />
                   </Button>
@@ -539,11 +542,26 @@ export function EditorPanel() {
                     size="sm"
                     className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "changes" && "bg-secondary/80 text-foreground")}
                     onClick={() => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "changes" } })}
+                    title="changes"
                   >
                     <GitBranch className="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Changes</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "information" && "bg-secondary/80 text-foreground")}
+                    onClick={() => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "information" } })}
+                    title="information"
+                  >
+                    <Info className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Information</TooltipContent>
               </Tooltip>
             </div>
             <div className="flex items-center gap-1.5">
@@ -556,6 +574,10 @@ export function EditorPanel() {
                     onClick={() => {
                       if (rightTab === "changes") {
                         void loadScmStatus();
+                      } else if (rightTab === "information") {
+                        if (activeWorkspaceId) {
+                          void useAppStore.getState().fetchWorkspacePrStatus({ workspaceId: activeWorkspaceId });
+                        }
                       } else {
                         void Promise.all([
                           refreshProjectFiles(),
@@ -606,7 +628,9 @@ export function EditorPanel() {
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-auto p-2">
-          {rightTab === "explorer" ? (
+          {rightTab === "information" ? (
+            <WorkspaceInformationPanel />
+          ) : rightTab === "explorer" ? (
             <>
               <div className="mb-1 flex items-center justify-between gap-2">
                 <p className="truncate text-sm text-muted-foreground">{explorerProjectName}</p>

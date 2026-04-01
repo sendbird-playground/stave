@@ -5,10 +5,11 @@
 ## Overview
 
 Each non-default workspace maps 1:1 to a git worktree branch.
-This feature fetches the GitHub PR associated with that branch, derives a single status enum, and surfaces it in two places:
+This feature fetches the GitHub PR associated with that branch, derives a single status enum, and surfaces it in three places:
 
 1. **Sidebar** — workspace row icon reflects PR lifecycle state with semantic color
 2. **Top bar** — "Create PR" button becomes a PR status hub with contextual actions
+3. **Right-rail information panel** — workspace details view shows the live branch PR beside manually stored PR references
 
 Default workspaces (typically `main`) are excluded; they never carry a PR.
 
@@ -133,6 +134,7 @@ gh pr view --json ...
 | Icon component | `src/components/layout/PrStatusIcon.tsx` | Reusable icon renderer: status → Lucide icon + color |
 | Sidebar | `src/components/layout/ProjectWorkspaceSidebar.tsx` | Renders `PrStatusIcon` for non-default workspaces |
 | TopBar hub | `src/components/layout/TopBarOpenPR.tsx` | PR status badge, dropdown actions, creation dialog |
+| Information panel | `src/components/layout/WorkspaceInformationPanel.tsx` | Shows live PR status in the workspace information side panel |
 
 ### IPC Handlers
 

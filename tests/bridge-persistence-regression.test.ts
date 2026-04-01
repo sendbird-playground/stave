@@ -548,6 +548,14 @@ describe("workspace snapshot schema compatibility", () => {
       attachedFilePaths: [],
       attachments: [],
     });
+    expect(loaded?.workspaceInformation).toEqual({
+      jiraIssues: [],
+      figmaResources: [],
+      linkedPullRequests: [],
+      notes: "",
+      todos: [],
+      customFields: [],
+    });
     expect(loaded?.providerConversationByTask).toEqual({});
     expect(loaded?.editorTabs).toEqual([]);
     expect(loaded?.activeEditorTabId).toBeNull();
@@ -618,6 +626,14 @@ describe("workspace snapshot schema compatibility", () => {
       "task-2": {
         "claude-code": "session-live-2",
       },
+    });
+    expect(loaded?.workspaceInformation).toEqual({
+      jiraIssues: [],
+      figmaResources: [],
+      linkedPullRequests: [],
+      notes: "",
+      todos: [],
+      customFields: [],
     });
     expect(loaded?.editorTabs).toEqual([]);
     expect(loaded?.activeEditorTabId).toBeNull();

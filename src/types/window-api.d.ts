@@ -10,6 +10,7 @@ import type { RepoMapResponse } from "@/lib/fs/repo-map.types";
 import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
+import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type {
   SyncOriginMainResult,
   ToolingStatusRequest,
@@ -638,6 +639,7 @@ interface WindowPersistenceApi {
         isDirty: boolean;
       }>;
       activeEditorTabId?: string | null;
+      workspaceInformation?: WorkspaceInformationState;
     } | null;
   }>;
   loadProjectRegistry?: () => Promise<{
@@ -703,6 +705,7 @@ interface WindowPersistenceApi {
         isDirty: boolean;
       }>;
       activeEditorTabId?: string | null;
+      workspaceInformation?: WorkspaceInformationState;
     };
   }) => Promise<{ ok: boolean }>;
   saveProjectRegistry?: (args: {
@@ -826,6 +829,7 @@ interface WindowPersistenceApi {
         isDirty: boolean;
       }>;
       activeEditorTabId?: string | null;
+      workspaceInformation?: WorkspaceInformationState;
     };
   }) => { ok: boolean };
   listTurnEvents?: (args: {

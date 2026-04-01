@@ -64,6 +64,10 @@ import {
   PROVIDER_TIMEOUT_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
 import {
+  createEmptyWorkspaceInformation,
+  type WorkspaceInformationState,
+} from "@/lib/workspace-information";
+import {
   findLatestPendingApprovalPart,
   findPendingApprovalMessageByRequestId,
   findLatestPendingUserInputPart,
@@ -340,6 +344,7 @@ interface AppState {
   activeTaskId: string;
   draftProvider: ProviderId;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  workspaceInformation: WorkspaceInformationState;
   promptFocusNonce: number;
   providerCommandCatalogRefreshNonce: number;
   tasks: Task[];
@@ -397,6 +402,9 @@ interface AppState {
   selectTask: (args: { taskId: string }) => void;
   clearTaskSelection: () => void;
   updatePromptDraft: (args: { taskId: string; patch: Partial<{ text: string; attachedFilePaths: string[]; attachments: Attachment[] }> }) => void;
+  updateWorkspaceInformation: (args: {
+    updater: (current: WorkspaceInformationState) => WorkspaceInformationState;
+  }) => void;
   clearPromptDraft: (args: { taskId: string }) => void;
   createTask: (args: { title?: string }) => void;
   registerPlanFile: (args: { taskId: string; filePath: string }) => void;
@@ -1044,6 +1052,7 @@ export const useAppStore = create<AppState>()(
       activeTaskId: "",
       draftProvider: "claude-code",
       promptDraftByTask: {},
+      workspaceInformation: createEmptyWorkspaceInformation(),
       promptFocusNonce: 0,
       providerCommandCatalogRefreshNonce: 0,
       tasks: [],
@@ -1690,6 +1699,7 @@ export const useAppStore = create<AppState>()(
           tasks: state.tasks,
           messagesByTask: state.messagesByTask,
           promptDraftByTask: state.promptDraftByTask,
+          workspaceInformation: state.workspaceInformation,
           editorTabs: state.editorTabs,
           activeEditorTabId: state.activeEditorTabId,
           providerConversationByTask: state.providerConversationByTask,
@@ -1714,6 +1724,7 @@ export const useAppStore = create<AppState>()(
           tasks: state.tasks,
           messagesByTask: state.messagesByTask,
           promptDraftByTask: state.promptDraftByTask,
+          workspaceInformation: state.workspaceInformation,
           editorTabs: state.editorTabs,
           activeEditorTabId: state.activeEditorTabId,
           providerConversationByTask: state.providerConversationByTask,
@@ -1755,6 +1766,7 @@ export const useAppStore = create<AppState>()(
             tasks: refreshedSession.tasks,
             messagesByTask: refreshedSession.messagesByTask,
             activeTaskId: refreshedSession.activeTaskId,
+            workspaceInformation: refreshedSession.workspaceInformation,
             activeTurnIdsByTask: refreshedSession.activeTurnIdsByTask,
             providerConversationByTask: refreshedSession.providerConversationByTask,
             nativeConversationReadyByTask: refreshedSession.nativeConversationReadyByTask,
@@ -2652,6 +2664,18 @@ export const useAppStore = create<AppState>()(
               ...state.promptDraftByTask,
               [taskId]: nextDraft,
             },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
+      },
+      updateWorkspaceInformation: ({ updater }) => {
+        set((state) => {
+          const nextWorkspaceInformation = updater(state.workspaceInformation);
+          if (nextWorkspaceInformation === state.workspaceInformation) {
+            return state;
+          }
+          return {
+            workspaceInformation: nextWorkspaceInformation,
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
@@ -3714,6 +3738,7 @@ export const useAppStore = create<AppState>()(
                 tasks: persistedInactiveWorkspaceSession.session.tasks,
                 messagesByTask: persistedInactiveWorkspaceSession.session.messagesByTask,
                 promptDraftByTask: persistedInactiveWorkspaceSession.session.promptDraftByTask,
+                workspaceInformation: persistedInactiveWorkspaceSession.session.workspaceInformation,
                 editorTabs: persistedInactiveWorkspaceSession.session.editorTabs,
                 activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
                 providerConversationByTask: persistedInactiveWorkspaceSession.session.providerConversationByTask,
