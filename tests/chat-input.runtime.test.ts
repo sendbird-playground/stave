@@ -57,6 +57,7 @@ describe("chat-input runtime helpers", () => {
     const items = buildChatInputRuntimeStatusItems(baseArgs);
 
     expect(items.find((item) => item.id === "timeout")?.value).toBe("1 hour");
+    expect(items.find((item) => item.id === "sandbox")?.value).toBe("Read Only");
     expect(items.find((item) => item.id === "plan-mode")?.value).toBe("Experimental");
     expect(items.find((item) => item.id === "summary")?.value).toBe("Detailed");
     expect(items.find((item) => item.id === "codex-binary")?.value).toBe(".../bin/codex");

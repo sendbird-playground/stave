@@ -9,6 +9,10 @@ Current implementation details:
 
 - Stave enables Codex plan turns with `collaboration_mode_kind = "plan"`.
 - Stave forwards `plan_mode_reasoning_effort` from the active Codex reasoning setting.
+- Stave forces Codex plan turns onto a `read-only` sandbox so plan turns do
+  not mutate the workspace even if normal Codex turns use a writable sandbox.
+- Stave forces the effective Codex approval policy to `never` during plan
+  turns so the read-only planning loop does not keep pausing for approval.
 - The current TypeScript SDK path does not surface first-class `plan` items or
   `item/plan/delta` events.
 - In practice, the exec JSON stream currently exposes plan-mode progress as

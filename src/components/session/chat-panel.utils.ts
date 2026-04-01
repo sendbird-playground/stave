@@ -166,7 +166,12 @@ export function getRenderableMessageParts(message: Pick<ChatMessage, "content" |
 }
 
 export function isCodeDiffSummarySystemEvent(content: string): boolean {
-  return content.trimStart().toLowerCase().startsWith("modifying:");
+  const normalized = content.trimStart().toLowerCase();
+  return (
+    normalized.startsWith("modifying:")
+    || normalized.startsWith("applied file change(s):")
+    || normalized.startsWith("skipped inline diff for file(s):")
+  );
 }
 
 export function getVisibleMessageParts(parts: MessagePart[]): MessagePart[] {
@@ -249,6 +254,9 @@ export function shouldRenderInlineSystemEvent(args: { content: string }): boolea
   if (!normalized) {
     return false;
   }
+  if (isCodeDiffSummarySystemEvent(args.content)) {
+    return false;
+  }
   if (normalized.startsWith("[error]")) {
     return false;
   }
@@ -327,20 +335,22 @@ export function getMessageBodyFallbackState(args: {
 }): MessageBodyFallbackState {
   const reasoningParts = args.renderableParts.filter((part) => part.type === "thinking");
   const visibleParts = args.renderableParts.filter(hasVisibleMessagePartContent);
-  const hasSystemEventParts = args.renderableParts.some((part) => part.type === "system_event");
+  const hasNonDiffSummarySystemEventParts = args.renderableParts.some((part) => (
+    part.type === "system_event" && !isCodeDiffSummarySystemEvent(part.content)
+  ));
   const hasReplayOnlyToolParts = args.renderableParts.some((part) => (
     part.type === "tool_use" && !shouldRenderInlineToolPart({ toolName: part.toolName })
   ));
 
   if (args.isActivelyStreaming && visibleParts.length === 0 && reasoningParts.length === 0) {
-    if (hasSystemEventParts || hasReplayOnlyToolParts) {
+    if (hasNonDiffSummarySystemEventParts || hasReplayOnlyToolParts) {
       return "content";
     }
     return "streaming-placeholder";
   }
 
   if (!args.isActivelyStreaming && visibleParts.length === 0 && reasoningParts.length === 0) {
-    if (hasSystemEventParts || hasReplayOnlyToolParts) {
+    if (hasNonDiffSummarySystemEventParts || hasReplayOnlyToolParts) {
       return "content";
     }
     return "empty-completed";

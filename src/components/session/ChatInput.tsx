@@ -19,6 +19,7 @@ import {
   providerSupportsNativeCommandCatalog,
   toHumanModelName,
 } from "@/lib/providers/model-catalog";
+import { resolveEffectiveCodexApprovalPolicy } from "@/lib/providers/codex-runtime-options";
 import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
 import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
@@ -237,7 +238,13 @@ export function ChatInput(args: ChatInputProps = {}) {
   });
   const draftSaveTimerRef = useRef<number | null>(null);
   const permissionMode: PermissionModeValue =
-    activeProvider === "codex" ? codexApprovalPolicy : claudePermissionMode;
+    activeProvider === "codex"
+      ? resolveEffectiveCodexApprovalPolicy({
+        approvalPolicy: codexApprovalPolicy,
+        planMode: codexExperimentalPlanMode,
+        fallback: "on-request",
+      })
+      : claudePermissionMode;
   const isEmpty = activeMessageCount === 0;
   const activeModel = activeProvider === "claude-code"
     ? modelClaude

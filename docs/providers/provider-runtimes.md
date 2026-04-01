@@ -138,6 +138,11 @@ Experimental Codex plan mode:
 
 - When `codexExperimentalPlanMode` is enabled, Stave forwards
   `collaboration_mode_kind = "plan"` and `plan_mode_reasoning_effort`.
+- Stave also forces Codex plan turns onto a `read-only` sandbox, even if the
+  normal Codex runtime setting is `workspace-write` or `danger-full-access`, so
+  plan turns cannot mutate the workspace.
+- Stave also forces the effective Codex approval policy to `never` during plan
+  turns so read-only planning does not keep stopping on inline approval prompts.
 - The current TypeScript SDK exec stream still exposes plan-mode progress as
   `todo_list` items plus a final `agent_message`, not as a first-class `plan`
   item.
