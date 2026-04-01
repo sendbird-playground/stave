@@ -216,13 +216,31 @@ describe("BUILTIN_CUSTOM_THEMES", () => {
       expect.arrayContaining([
         "github-light-default",
         "github-dark-default",
+        "one-light",
         "one-dark-pro",
         "dracula",
+        "ayu-light",
         "ayu-mirage",
+        "night-owl-light",
         "night-owl",
+        "tokyo-night-light",
         "tokyo-night",
+        "solarized-light",
+        "light-modern",
       ]),
     );
+  });
+
+  it("keeps light and dark preset counts balanced", () => {
+    const counts = BUILTIN_CUSTOM_THEMES.reduce(
+      (acc, theme) => {
+        acc[theme.baseMode] += 1;
+        return acc;
+      },
+      { light: 0, dark: 0 },
+    );
+
+    expect(counts.light).toBe(counts.dark);
   });
 
   it("all built-in themes have unique ids", () => {
