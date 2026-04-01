@@ -127,14 +127,26 @@ export function ChatInput(args: ChatInputProps = {}) {
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
   const isManagedTask = isTaskManaged(activeTask);
   const isPromptLocked = isTurnActive || isManagedTask;
-  const pendingUserInput = useAppStore((state) => {
-    const messages = state.messagesByTask[state.activeTaskId] ?? [];
+  const [pendingUserInputMessageId, pendingUserInputPart] = useAppStore(useShallow((state) => {
+    const messages = state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
     const lastMessage = messages.at(-1);
-    if (!lastMessage) return null;
+    if (!lastMessage) {
+      return [null, null] as const;
+    }
     const part = findLatestPendingUserInputPart({ message: lastMessage });
-    if (!part) return null;
-    return { messageId: lastMessage.id, part };
-  });
+    return [lastMessage.id, part ?? null] as const;
+  }));
+  // Keep the store snapshot ref-stable. Returning a fresh object directly from
+  // the selector can trip React 19 + Zustand 5 into a render loop.
+  const pendingUserInput = useMemo(() => {
+    if (!pendingUserInputMessageId || !pendingUserInputPart) {
+      return null;
+    }
+    return {
+      messageId: pendingUserInputMessageId,
+      part: pendingUserInputPart,
+    };
+  }, [pendingUserInputMessageId, pendingUserInputPart]);
   const managedNotice = isManagedTask
     ? `This task is managed by ${getTaskControlOwner(activeTask) === "external" ? "an external controller" : "Stave"}. Take over to continue here.`
     : null;

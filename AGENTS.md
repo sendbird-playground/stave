@@ -223,6 +223,30 @@ All IPC events emitted from `electron/providers/` travel through `adapter.factor
 - The Zod schema variable names (e.g. `StaveExecutionProcessingEventSchema`) must mirror the TypeScript type for easy auditing. If they diverge, treat it as a bug.
 - After any change to either file, verify with `bun run typecheck`. TypeScript type errors may not surface missing Zod entries — manually cross-check that every member of the `NormalizedProviderEvent` union has a corresponding Zod schema in `NormalizedProviderEventSchema`.
 
+## React 19 + Zustand Selector Stability
+
+**Treat unstable Zustand selector outputs as a runtime correctness bug, not a micro-optimization.** In this repo, React 19 + Zustand 5 can enter `Maximum update depth exceeded` loops when a selector returns a fresh snapshot every render.
+
+This applies to `useAppStore(...)`, `useStore(...)`, and any equivalent hook built on `useSyncExternalStore`.
+
+### Rules
+
+- Do **not** return a freshly allocated object, array, `Map`, `Set`, or function from a plain store selector.
+- If you need multiple store values, prefer `useShallow((state) => [a, b, c] as const)` or separate primitive selectors.
+- Do **not** do `.map()`, `.filter()`, `.slice()`, object spread, or inline object assembly inside a selector unless the selector is wrapped in `useShallow` **and** every returned item is itself reference-stable.
+- Do **not** use inline fallback allocations such as `?? []`, `?? {}`, or `|| []` inside selectors. Use module-level constants like `EMPTY_MESSAGES` instead.
+- When a component needs a derived object like `{ messageId, part }`, select stable primitives / existing references first, then assemble the derived object with `useMemo` outside the store hook.
+- Derive presentation arrays (`visibleMessages`, filtered tasks, grouped items, etc.) after the selector using `useMemo`, not inside the selector.
+- A selector that returns an existing object from store state or a primitive is usually safe. A selector that creates a new container is suspicious by default.
+
+### Required verification
+
+- Any change to hot renderer surfaces using Zustand subscriptions must check for selector stability before the work is considered complete.
+- High-risk surfaces include `ChatInput`, `PlanViewer`, `ChatPanel`, `ProjectWorkspaceSidebar`, `WorkspaceTaskTabs`, and task/workspace switch flows.
+- After changing selector logic on those surfaces, run `bun run typecheck` and the most relevant `bun test` targets.
+- If the change affects task switching, workspace switching, plan mode, replay drawers, or streaming UI, do a manual smoke check for those flows as well.
+- See `docs/developer/zustand-selector-stability.md` for examples and review checklist.
+
 ## Code Conventions
 
 - **Import paths:** always use `@/...` alias, never bare `../../` from `src/`.
