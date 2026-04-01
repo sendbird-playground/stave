@@ -1,4 +1,4 @@
-import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
+import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
@@ -20,7 +20,7 @@ export interface WorkspaceSnapshot {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  promptDraftByTask: Record<string, PromptDraft>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
   editorTabs?: EditorTab[];
   activeEditorTabId?: string | null;

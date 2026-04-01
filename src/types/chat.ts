@@ -17,6 +17,22 @@ export type Attachment =
   | { kind: "file"; filePath: string }
   | { kind: "image"; id: string; dataUrl: string; label: string };
 
+export type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+export type ClaudePermissionModeBeforePlan = Exclude<ClaudePermissionMode, "plan"> | null;
+
+export interface PromptDraftRuntimeOverrides {
+  claudePermissionMode?: ClaudePermissionMode;
+  claudePermissionModeBeforePlan?: ClaudePermissionModeBeforePlan;
+  codexExperimentalPlanMode?: boolean;
+}
+
+export interface PromptDraft {
+  text: string;
+  attachedFilePaths: string[];
+  attachments: Attachment[];
+  runtimeOverrides?: PromptDraftRuntimeOverrides;
+}
+
 export interface MessagePartBase {
   type: MessagePartType;
 }
@@ -179,7 +195,7 @@ export interface Task {
   archivedAt?: string | null;
   controlMode: TaskControlMode;
   controlOwner: TaskControlOwner;
-  /** Relative paths to persisted plan files (.stave/plans/*.md) */
+  /** Legacy relative paths to persisted plan files kept for snapshot compatibility. */
   planFilePaths?: string[];
 }
 

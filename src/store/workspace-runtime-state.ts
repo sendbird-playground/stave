@@ -1,15 +1,11 @@
 import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
-import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
+import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 import { applyProviderEventsToWorkspaceSession } from "@/store/workspace-turn-replay";
 import type { WorkspaceSessionState } from "@/store/workspace-session-state";
 
-type PromptDraftByTask = Record<string, {
-  text: string;
-  attachedFilePaths: string[];
-  attachments: Attachment[];
-}>;
+type PromptDraftByTask = Record<string, PromptDraft>;
 
 type ActiveWorkspaceProjectionState = {
   activeTaskId: string;
