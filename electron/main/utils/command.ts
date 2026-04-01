@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { buildExecutableLookupEnv } from "../../providers/executable-path";
 import type { CommandResult, SourceControlStatusItem } from "../types";
 
 export function resolveCommandCwd(args: { cwd?: string }) {
@@ -14,6 +15,7 @@ export function runCommand(args: { command: string; cwd?: string }): Promise<Com
     const child = spawn(args.command, {
       shell: true,
       cwd: resolveCommandCwd({ cwd: args.cwd }),
+      env: buildExecutableLookupEnv(),
     });
 
     let stdout = "";
@@ -48,6 +50,7 @@ export function runCommandArgs(args: { command: string; commandArgs?: string[]; 
     const child = spawn(args.command, args.commandArgs ?? [], {
       shell: false,
       cwd: resolveCommandCwd({ cwd: args.cwd }),
+      env: buildExecutableLookupEnv(),
     });
 
     let stdout = "";

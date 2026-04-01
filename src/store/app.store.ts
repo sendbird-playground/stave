@@ -3683,21 +3683,21 @@ export const useAppStore = create<AppState>()(
           flushEvents: (pendingEvents) => {
             let persistInactiveWorkspaceSession: { workspaceId: string; session: WorkspaceSessionState } | null = null;
             let updatedSession: WorkspaceSessionState | null = null;
-
-            set((nextState) => {
-              const applied = applyPendingProviderEventsToStoreState({
-                state: nextState,
-                taskWorkspaceId,
-                taskId: resolvedTaskId,
-                events: pendingEvents,
-                provider,
-                model: activeModel,
-                turnId,
-              });
-              persistInactiveWorkspaceSession = applied.persistInactiveWorkspaceSession;
-              updatedSession = applied.updatedSession;
-              return applied.statePatch;
+            const currentState = get();
+            const applied = applyPendingProviderEventsToStoreState({
+              state: currentState,
+              taskWorkspaceId,
+              taskId: resolvedTaskId,
+              events: pendingEvents,
+              provider,
+              model: activeModel,
+              turnId,
             });
+            persistInactiveWorkspaceSession = applied.persistInactiveWorkspaceSession;
+            updatedSession = applied.updatedSession;
+            if (applied.stateChanged) {
+              set(applied.statePatch);
+            }
             const persistedInactiveWorkspaceSession = persistInactiveWorkspaceSession as {
               workspaceId: string;
               session: WorkspaceSessionState;

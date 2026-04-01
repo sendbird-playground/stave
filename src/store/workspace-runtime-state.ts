@@ -122,6 +122,7 @@ export function applyPendingProviderEventsToStoreState(args: {
         eventTypes: args.events.map((event) => event.type),
       });
       return {
+        stateChanged: false,
         statePatch: {} as WorkspaceRuntimeStatePatch,
         persistInactiveWorkspaceSession: null,
         updatedSession: null,
@@ -139,6 +140,7 @@ export function applyPendingProviderEventsToStoreState(args: {
 
     if (!applied.stateChanged) {
       return {
+        stateChanged: false,
         statePatch: {} as WorkspaceRuntimeStatePatch,
         persistInactiveWorkspaceSession: null,
         updatedSession: null,
@@ -146,6 +148,7 @@ export function applyPendingProviderEventsToStoreState(args: {
     }
 
     return {
+      stateChanged: true,
       statePatch: {
         ...createActiveWorkspaceStatePatch(applied.session),
         workspaceSnapshotVersion: applied.snapshotChanged
@@ -160,6 +163,7 @@ export function applyPendingProviderEventsToStoreState(args: {
   const workspaceSession = args.state.workspaceRuntimeCacheById[args.taskWorkspaceId];
   if (!workspaceSession) {
     return {
+      stateChanged: false,
       statePatch: {} as WorkspaceRuntimeStatePatch,
       persistInactiveWorkspaceSession: null,
       updatedSession: null,
@@ -176,6 +180,7 @@ export function applyPendingProviderEventsToStoreState(args: {
       eventTypes: args.events.map((event) => event.type),
     });
     return {
+      stateChanged: false,
       statePatch: {} as WorkspaceRuntimeStatePatch,
       persistInactiveWorkspaceSession: null,
       updatedSession: null,
@@ -193,6 +198,7 @@ export function applyPendingProviderEventsToStoreState(args: {
 
   if (!applied.stateChanged) {
     return {
+      stateChanged: false,
       statePatch: {} as WorkspaceRuntimeStatePatch,
       persistInactiveWorkspaceSession: null,
       updatedSession: null,
@@ -200,6 +206,7 @@ export function applyPendingProviderEventsToStoreState(args: {
   }
 
   return {
+    stateChanged: true,
     statePatch: {
       workspaceRuntimeCacheById: {
         ...args.state.workspaceRuntimeCacheById,
