@@ -3,6 +3,11 @@ import {
   changeWorkspaceInfoCustomFieldType,
   createEmptyWorkspaceInformation,
   createWorkspaceInfoCustomField,
+  extractFigmaResourceReference,
+  extractGitHubPullRequestReference,
+  extractJiraIssueReference,
+  formatWorkspaceInfoHostLabel,
+  isGitHubPullRequestUrl,
   isWorkspaceInfoUrl,
   updateWorkspaceInfoSelectFieldOptions,
 } from "@/lib/workspace-information";
@@ -19,7 +24,10 @@ test("createEmptyWorkspaceInformation returns empty defaults", () => {
 });
 
 test("changeWorkspaceInfoCustomFieldType preserves id and label while resetting value", () => {
-  const textField = createWorkspaceInfoCustomField({ type: "text", label: "Owner" });
+  const textField = createWorkspaceInfoCustomField({
+    type: "text",
+    label: "Owner",
+  });
   const nextField = changeWorkspaceInfoCustomFieldType({
     field: {
       ...textField,
@@ -38,7 +46,10 @@ test("changeWorkspaceInfoCustomFieldType preserves id and label while resetting 
 
 test("updateWorkspaceInfoSelectFieldOptions deduplicates options and resets stale value", () => {
   const field = {
-    ...createWorkspaceInfoCustomField({ type: "single_select", label: "Stage" }),
+    ...createWorkspaceInfoCustomField({
+      type: "single_select",
+      label: "Stage",
+    }),
     options: ["design", "review"],
     value: "review",
   };
@@ -57,4 +68,54 @@ test("isWorkspaceInfoUrl accepts only http and https urls", () => {
   expect(isWorkspaceInfoUrl("http://example.com/path")).toBe(true);
   expect(isWorkspaceInfoUrl("ftp://example.com")).toBe(false);
   expect(isWorkspaceInfoUrl("not a url")).toBe(false);
+});
+
+test("extractGitHubPullRequestReference parses github pull request urls", () => {
+  expect(
+    extractGitHubPullRequestReference(
+      "https://github.com/openai/stave/pull/164",
+    ),
+  ).toEqual({
+    owner: "openai",
+    repo: "stave",
+    number: 164,
+  });
+  expect(
+    isGitHubPullRequestUrl("https://github.com/openai/stave/pull/164"),
+  ).toBe(true);
+  expect(
+    isGitHubPullRequestUrl("https://github.com/openai/stave/issues/164"),
+  ).toBe(false);
+});
+
+test("extractJiraIssueReference reads the issue key from jira-style urls", () => {
+  expect(
+    extractJiraIssueReference("https://company.atlassian.net/browse/ABC-123"),
+  ).toEqual({
+    host: "company.atlassian.net",
+    issueKey: "ABC-123",
+  });
+});
+
+test("extractFigmaResourceReference reads the resource kind, title, and node id", () => {
+  expect(
+    extractFigmaResourceReference(
+      "https://www.figma.com/file/FILE123/Workspace-Information?node-id=42-7",
+    ),
+  ).toEqual({
+    host: "figma.com",
+    kind: "file",
+    fileKey: "FILE123",
+    title: "Workspace Information",
+    nodeId: "42-7",
+  });
+});
+
+test("formatWorkspaceInfoHostLabel normalizes www-prefixed hosts", () => {
+  expect(
+    formatWorkspaceInfoHostLabel(
+      "https://www.github.com/openai/stave/pull/164",
+    ),
+  ).toBe("github.com");
+  expect(formatWorkspaceInfoHostLabel("not a url")).toBe("");
 });

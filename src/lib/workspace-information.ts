@@ -8,7 +8,8 @@ export const WORKSPACE_INFO_FIELD_TYPES = [
   "single_select",
 ] as const;
 
-export type WorkspaceInfoFieldType = typeof WORKSPACE_INFO_FIELD_TYPES[number];
+export type WorkspaceInfoFieldType =
+  (typeof WORKSPACE_INFO_FIELD_TYPES)[number];
 
 export const WORKSPACE_LINKED_PR_STATUSES = [
   "planned",
@@ -18,7 +19,35 @@ export const WORKSPACE_LINKED_PR_STATUSES = [
   "closed",
 ] as const;
 
-export type WorkspaceLinkedPrStatus = typeof WORKSPACE_LINKED_PR_STATUSES[number];
+export type WorkspaceLinkedPrStatus =
+  (typeof WORKSPACE_LINKED_PR_STATUSES)[number];
+
+export interface GitHubPullRequestReference {
+  owner: string;
+  repo: string;
+  number: number;
+}
+
+export interface JiraIssueReference {
+  host: string;
+  issueKey: string;
+}
+
+export type FigmaResourceKind =
+  | "file"
+  | "design"
+  | "proto"
+  | "board"
+  | "slides"
+  | "unknown";
+
+export interface FigmaResourceReference {
+  host: string;
+  kind: FigmaResourceKind;
+  fileKey: string;
+  title: string;
+  nodeId: string | null;
+}
 
 export interface WorkspaceJiraIssue {
   id: string;
@@ -157,16 +186,120 @@ export function parseWorkspaceInfoOptions(rawValue: string) {
   return rawValue
     .split(",")
     .map((item) => item.trim())
-    .filter((item, index, array) => item.length > 0 && array.indexOf(item) === index);
+    .filter(
+      (item, index, array) => item.length > 0 && array.indexOf(item) === index,
+    );
+}
+
+function parseWorkspaceInfoUrl(value: string) {
+  try {
+    return new URL(value.trim());
+  } catch {
+    return null;
+  }
 }
 
 export function isWorkspaceInfoUrl(value: string) {
-  try {
-    const url = new URL(value.trim());
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
+  const url = parseWorkspaceInfoUrl(value);
+  if (!url) {
     return false;
   }
+  return url.protocol === "http:" || url.protocol === "https:";
+}
+
+export function formatWorkspaceInfoHostLabel(value: string) {
+  const url = parseWorkspaceInfoUrl(value);
+  if (!url) {
+    return "";
+  }
+  return url.hostname.replace(/^www\./, "");
+}
+
+export function extractGitHubPullRequestReference(
+  value: string,
+): GitHubPullRequestReference | null {
+  const url = parseWorkspaceInfoUrl(value);
+  if (!url || url.hostname.replace(/^www\./, "") !== "github.com") {
+    return null;
+  }
+
+  const segments = url.pathname.split("/").filter(Boolean);
+  if ((segments[2] ?? "") !== "pull") {
+    return null;
+  }
+
+  const owner = segments[0] ?? "";
+  const repo = segments[1] ?? "";
+  const number = Number.parseInt(segments[3] ?? "", 10);
+  if (!owner || !repo || !Number.isInteger(number) || number < 1) {
+    return null;
+  }
+
+  return { owner, repo, number };
+}
+
+export function isGitHubPullRequestUrl(value: string) {
+  return extractGitHubPullRequestReference(value) !== null;
+}
+
+export function extractJiraIssueReference(
+  value: string,
+): JiraIssueReference | null {
+  const url = parseWorkspaceInfoUrl(value);
+  if (!url) {
+    return null;
+  }
+
+  const match =
+    `${decodeURIComponent(url.pathname)} ${decodeURIComponent(url.search)}`.match(
+      /\b([A-Z][A-Z0-9]+-\d+)\b/,
+    );
+  const issueKey = match?.[1]?.trim();
+  if (!issueKey) {
+    return null;
+  }
+
+  return {
+    host: formatWorkspaceInfoHostLabel(value),
+    issueKey,
+  };
+}
+
+export function extractFigmaResourceReference(
+  value: string,
+): FigmaResourceReference | null {
+  const url = parseWorkspaceInfoUrl(value);
+  if (!url || url.hostname.replace(/^www\./, "") !== "figma.com") {
+    return null;
+  }
+
+  const segments = url.pathname.split("/").filter(Boolean);
+  const rawKind = segments[0] ?? "";
+  const kind: FigmaResourceKind =
+    rawKind === "file" ||
+    rawKind === "design" ||
+    rawKind === "proto" ||
+    rawKind === "board" ||
+    rawKind === "slides"
+      ? rawKind
+      : "unknown";
+  const fileKey = segments[1] ?? "";
+  if (!fileKey) {
+    return null;
+  }
+
+  const title = decodeURIComponent(segments[2] ?? "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+  const nodeId = url.searchParams.get("node-id")?.trim() || null;
+
+  return {
+    host: formatWorkspaceInfoHostLabel(value),
+    kind,
+    fileKey,
+    title,
+    nodeId,
+  };
 }
 
 export function createWorkspaceInfoCustomField(args?: {
@@ -217,7 +350,9 @@ export function updateWorkspaceInfoSelectFieldOptions(args: {
   rawValue: string;
 }): WorkspaceSingleSelectField {
   const options = parseWorkspaceInfoOptions(args.rawValue);
-  const nextValue = options.includes(args.field.value) ? args.field.value : (options[0] ?? "");
+  const nextValue = options.includes(args.field.value)
+    ? args.field.value
+    : (options[0] ?? "");
 
   return {
     ...args.field,

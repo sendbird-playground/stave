@@ -13,7 +13,10 @@ import type {
   StaveLocalMcpStatus,
 } from "../src/lib/local-mcp";
 import type { RepoMapResponse } from "../src/lib/fs/repo-map.types";
-import type { AppNotification, AppNotificationCreateInput } from "../src/lib/notifications/notification.types";
+import type {
+  AppNotification,
+  AppNotificationCreateInput,
+} from "../src/lib/notifications/notification.types";
 import type { SkillCatalogResponse } from "../src/lib/skills/types";
 import type {
   SyncOriginMainResult,
@@ -210,7 +213,8 @@ contextBridge.exposeInMainWorld("api", {
     listWorkspaces: () => ipcRenderer.invoke("persistence:list-workspaces"),
     loadWorkspace: (args: { workspaceId: string }) =>
       ipcRenderer.invoke("persistence:load-workspace", args),
-    loadProjectRegistry: () => ipcRenderer.invoke("persistence:load-project-registry"),
+    loadProjectRegistry: () =>
+      ipcRenderer.invoke("persistence:load-project-registry"),
     upsertWorkspace: (args: { id: string; name: string; snapshot: unknown }) =>
       ipcRenderer.invoke("persistence:upsert-workspace", args),
     saveProjectRegistry: (args: { projects: unknown[] }) =>
@@ -231,12 +235,18 @@ contextBridge.exposeInMainWorld("api", {
         notification: AppNotification | null;
       }>,
     markNotificationRead: (args: { id: string; readAt?: string }) =>
-      ipcRenderer.invoke("persistence:mark-notification-read", args) as Promise<{
+      ipcRenderer.invoke(
+        "persistence:mark-notification-read",
+        args,
+      ) as Promise<{
         ok: boolean;
         notification: AppNotification | null;
       }>,
     markAllNotificationsRead: (args?: { readAt?: string }) =>
-      ipcRenderer.invoke("persistence:mark-all-notifications-read", args ?? {}) as Promise<{
+      ipcRenderer.invoke(
+        "persistence:mark-all-notifications-read",
+        args ?? {},
+      ) as Promise<{
         ok: boolean;
         count: number;
       }>,
@@ -290,80 +300,86 @@ contextBridge.exposeInMainWorld("api", {
       ) as Promise<SkillCatalogResponse>,
   },
   localMcp: {
-    getStatus: () => ipcRenderer.invoke("local-mcp:get-status") as Promise<{
-      ok: boolean;
-      status: StaveLocalMcpStatus | null;
-      message?: string;
-    }>,
+    getStatus: () =>
+      ipcRenderer.invoke("local-mcp:get-status") as Promise<{
+        ok: boolean;
+        status: StaveLocalMcpStatus | null;
+        message?: string;
+      }>,
     updateConfig: (args: {
       enabled?: boolean;
       port?: number;
       token?: string;
-    }) => ipcRenderer.invoke("local-mcp:update-config", args) as Promise<{
-      ok: boolean;
-      status: StaveLocalMcpStatus | null;
-      message?: string;
-    }>,
-    rotateToken: () => ipcRenderer.invoke("local-mcp:rotate-token") as Promise<{
-      ok: boolean;
-      status: StaveLocalMcpStatus | null;
-      message?: string;
-    }>,
+    }) =>
+      ipcRenderer.invoke("local-mcp:update-config", args) as Promise<{
+        ok: boolean;
+        status: StaveLocalMcpStatus | null;
+        message?: string;
+      }>,
+    rotateToken: () =>
+      ipcRenderer.invoke("local-mcp:rotate-token") as Promise<{
+        ok: boolean;
+        status: StaveLocalMcpStatus | null;
+        message?: string;
+      }>,
     listRequestLogs: (args?: StaveLocalMcpRequestLogQuery) =>
       ipcRenderer.invoke("local-mcp:list-request-logs", args ?? {}) as Promise<{
-      ok: boolean;
-      logs: StaveLocalMcpRequestLogPage["logs"];
-      total: StaveLocalMcpRequestLogPage["total"];
-      limit: StaveLocalMcpRequestLogPage["limit"];
-      offset: StaveLocalMcpRequestLogPage["offset"];
-      hasMore: StaveLocalMcpRequestLogPage["hasMore"];
-      message?: string;
-    }>,
+        ok: boolean;
+        logs: StaveLocalMcpRequestLogPage["logs"];
+        total: StaveLocalMcpRequestLogPage["total"];
+        limit: StaveLocalMcpRequestLogPage["limit"];
+        offset: StaveLocalMcpRequestLogPage["offset"];
+        hasMore: StaveLocalMcpRequestLogPage["hasMore"];
+        message?: string;
+      }>,
     getRequestLog: (args: { id: string; includePayload?: boolean }) =>
       ipcRenderer.invoke("local-mcp:get-request-log", args) as Promise<{
-      ok: boolean;
-      log: StaveLocalMcpRequestLog | null;
-      message?: string;
-    }>,
-    clearRequestLogs: () => ipcRenderer.invoke("local-mcp:clear-request-logs") as Promise<{
-      ok: boolean;
-      cleared: number;
-      message?: string;
-    }>,
+        ok: boolean;
+        log: StaveLocalMcpRequestLog | null;
+        message?: string;
+      }>,
+    clearRequestLogs: () =>
+      ipcRenderer.invoke("local-mcp:clear-request-logs") as Promise<{
+        ok: boolean;
+        cleared: number;
+        message?: string;
+      }>,
     respondApproval: (args: {
       workspaceId: string;
       taskId: string;
       requestId: string;
       approved: boolean;
-    }) => ipcRenderer.invoke("local-mcp:respond-approval", args) as Promise<{
-      ok: boolean;
-      message?: string;
-      result?: {
+    }) =>
+      ipcRenderer.invoke("local-mcp:respond-approval", args) as Promise<{
         ok: boolean;
-        workspaceId: string;
-        taskId: string;
-        requestId: string;
-        approved: boolean;
-      };
-    }>,
+        message?: string;
+        result?: {
+          ok: boolean;
+          workspaceId: string;
+          taskId: string;
+          requestId: string;
+          approved: boolean;
+        };
+      }>,
     respondUserInput: (args: {
       workspaceId: string;
       taskId: string;
       requestId: string;
       answers?: Record<string, string>;
       denied?: boolean;
-    }) => ipcRenderer.invoke("local-mcp:respond-user-input", args) as Promise<{
-      ok: boolean;
-      message?: string;
-      result?: {
+    }) =>
+      ipcRenderer.invoke("local-mcp:respond-user-input", args) as Promise<{
         ok: boolean;
-        workspaceId: string;
-        taskId: string;
-        requestId: string;
-        answers?: Record<string, string>;
-        denied?: boolean;
-      };
-    }>,
+        message?: string;
+        result?: {
+          ok: boolean;
+          workspaceId: string;
+          taskId: string;
+          requestId: string;
+          answers?: Record<string, string>;
+          denied?: boolean;
+        };
+      }>,
   },
   lsp: {
     syncDocument: (args: {
@@ -439,9 +455,15 @@ contextBridge.exposeInMainWorld("api", {
   },
   tooling: {
     getStatus: (args: ToolingStatusRequest) =>
-      ipcRenderer.invoke("tooling:get-status", args) as Promise<ToolingStatusSnapshot>,
+      ipcRenderer.invoke(
+        "tooling:get-status",
+        args,
+      ) as Promise<ToolingStatusSnapshot>,
     syncOriginMain: (args: { cwd?: string }) =>
-      ipcRenderer.invoke("tooling:sync-origin-main", args) as Promise<SyncOriginMainResult>,
+      ipcRenderer.invoke(
+        "tooling:sync-origin-main",
+        args,
+      ) as Promise<SyncOriginMainResult>,
   },
   sourceControl: {
     getStatus: (args: { cwd?: string }) =>
@@ -487,6 +509,25 @@ contextBridge.exposeInMainWorld("api", {
       }>,
     getPrStatus: (args: { cwd?: string }) =>
       ipcRenderer.invoke("scm:get-pr-status", args) as Promise<{
+        ok: boolean;
+        pr: {
+          number: number;
+          title: string;
+          state: "OPEN" | "CLOSED" | "MERGED";
+          isDraft: boolean;
+          url: string;
+          reviewDecision: string | null;
+          mergeable: string;
+          mergeStateStatus: string;
+          checksRollup: "SUCCESS" | "FAILURE" | "PENDING" | null;
+          mergedAt: string | null;
+          baseRefName: string;
+          headRefName: string;
+        } | null;
+        stderr?: string;
+      }>,
+    getPrStatusForUrl: (args: { url: string; cwd?: string }) =>
+      ipcRenderer.invoke("scm:get-pr-status-for-url", args) as Promise<{
         ok: boolean;
         pr: {
           number: number;
