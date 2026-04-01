@@ -1,3 +1,17 @@
+## [0.0.31](https://github.com/sendbird-playground/stave/compare/v0.0.30...v0.0.31) (2026-04-01)
+
+### Features
+
+* add task auto-approval and improve plan history UI ([#158](https://github.com/sendbird-playground/stave/issues/158)) ([f60f361](https://github.com/sendbird-playground/stave/commit/f60f361a6f4e7b94696e7cf382dd110e9b3e744d))
+* **codex:** enforce read-only sandbox for plan mode ([#154](https://github.com/sendbird-playground/stave/issues/154)) ([2693bb8](https://github.com/sendbird-playground/stave/commit/2693bb8f91519a79a822e93990922ec9e357005f))
+* handle notifications for archived tasks ([#153](https://github.com/sendbird-playground/stave/issues/153)) ([ccbe5de](https://github.com/sendbird-playground/stave/commit/ccbe5de79d76ffe42fe838848cc899b8b18aac03))
+* **local-mcp:** add paginated browsing with lazy payload loading ([#160](https://github.com/sendbird-playground/stave/issues/160)) ([30caacf](https://github.com/sendbird-playground/stave/commit/30caacf7b976cdd4691947b34100d43c0c46328e))
+* **plan-viewer:** respond to input dock height changes ([#155](https://github.com/sendbird-playground/stave/issues/155)) ([4fb089c](https://github.com/sendbird-playground/stave/commit/4fb089cd30c3cd1982426cfac6dec0e426cb03bc))
+* **workspace:** add workspace information panel ([#157](https://github.com/sendbird-playground/stave/issues/157)) ([1d3dafb](https://github.com/sendbird-playground/stave/commit/1d3dafbe5e2ac824199ff6b87f982c498d62507e))
+
+### Bug Fixes
+
+* **chat:** stabilize zustand selector snapshots ([#152](https://github.com/sendbird-playground/stave/issues/152)) ([75e2434](https://github.com/sendbird-playground/stave/commit/75e24345b47ac20addb349147fca5c7af26d7418))
 ## [0.0.30](https://github.com/sendbird-playground/stave/compare/v0.0.29...v0.0.30) (2026-04-01)
 
 ### Features
