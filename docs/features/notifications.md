@@ -20,6 +20,7 @@ Stave now includes an in-app notification center for background task activity.
 - unread notifications stay in the main inbox list
 - read notifications move out of the inbox and remain visible in a separate history view
 - notifications stay readable after the underlying task or workspace is no longer active
+- if the linked task is archived, opening the notification still routes to the correct project and workspace, then asks you to restore the task before reopening it
 - Settings > General includes task completion sound controls for enable/disable, preset, volume, and preview
 
 ## Persistence model

@@ -80,6 +80,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - uses one shared leading slot for responding wave or model icon
   - supports drag-and-drop reordering directly in the tab strip
   - exposes the archive action with confirmation, per-task overflow menu, and workspace-level `Task History`
+  - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`

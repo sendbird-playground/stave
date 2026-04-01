@@ -35,6 +35,91 @@ afterEach(() => {
 });
 
 describe("workspace integrity regressions", () => {
+  test("notification deep-links do not silently reopen archived tasks", async () => {
+    const localStorage = createMemoryStorage();
+    (globalThis as { window?: unknown }).window = {
+      localStorage,
+      api: {
+        fs: {
+          listFiles: async () => ({ ok: true, files: [] }),
+        },
+      },
+    };
+
+    const { useAppStore } = await import("../src/store/app.store");
+    useAppStore.setState({
+      ...useAppStore.getInitialState(),
+      projectPath: "/tmp/project-a",
+      projectName: "project-a",
+      workspaces: [{ id: "ws-main", name: "Default Workspace", updatedAt: "2026-03-31T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      workspacePathById: { "ws-main": "/tmp/project-a" },
+      workspaceBranchById: { "ws-main": "main" },
+      workspaceDefaultById: { "ws-main": true },
+      activeTaskId: "task-active",
+      tasks: [
+        {
+          id: "task-active",
+          title: "Active Task",
+          provider: "codex",
+          updatedAt: "2026-03-31T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+        {
+          id: "task-archived",
+          title: "Archived Task",
+          provider: "codex",
+          updatedAt: "2026-03-31T00:01:00.000Z",
+          unread: false,
+          archivedAt: "2026-03-30T23:59:00.000Z",
+        },
+      ],
+      notifications: [{
+        id: "notification-archived-task",
+        kind: "task.turn_completed",
+        title: "Archived Task",
+        body: "Latest run finished in Default Workspace.",
+        projectPath: "/tmp/project-a",
+        projectName: "project-a",
+        workspaceId: "ws-main",
+        workspaceName: "Default Workspace",
+        taskId: "task-archived",
+        taskTitle: "Archived Task",
+        turnId: "turn-1",
+        providerId: "codex",
+        action: null,
+        payload: {},
+        createdAt: "2026-03-31T00:02:00.000Z",
+        readAt: null,
+      }],
+      messagesByTask: {
+        "task-active": [],
+        "task-archived": [],
+      },
+      taskWorkspaceIdById: {
+        "task-active": "ws-main",
+        "task-archived": "ws-main",
+      },
+    });
+
+    const result = await useAppStore.getState().openNotificationContext({ notificationId: "notification-archived-task" });
+
+    expect(result).toEqual({
+      status: "archived-task",
+      taskId: "task-archived",
+      taskTitle: "Archived Task",
+    });
+    expect(useAppStore.getState().activeTaskId).toBe("task-active");
+    expect(useAppStore.getState().tasks.find((task) => task.id === "task-archived")?.archivedAt).toBe("2026-03-30T23:59:00.000Z");
+    expect(useAppStore.getState().notifications[0]?.readAt).toBeString();
+
+    useAppStore.getState().restoreTask({ taskId: "task-archived" });
+
+    expect(useAppStore.getState().activeTaskId).toBe("task-archived");
+    expect(useAppStore.getState().tasks.find((task) => task.id === "task-archived")?.archivedAt).toBeNull();
+  });
+
   test("switchWorkspace ignores workspace ids that are not owned by the active project", async () => {
     const localStorage = createMemoryStorage();
     (globalThis as { window?: unknown }).window = {

@@ -18,10 +18,15 @@ import {
   type NotificationView,
   shouldShowNotificationApprovalActions,
 } from "@/components/layout/top-bar-notifications.utils";
-import { formatTaskUpdatedAt, isTaskManaged } from "@/lib/tasks";
+import { formatTaskUpdatedAt, isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import { isNotificationUnread } from "@/lib/notifications/notification.types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+
+interface ArchivedNotificationPrompt {
+  notificationId: string;
+  taskTitle: string;
+}
 
 function getNotificationKindLabel(kind: "task.turn_completed" | "task.approval_requested") {
   return kind === "task.approval_requested" ? "Approval" : "Completed";
@@ -44,7 +49,7 @@ function buildLocationLabel(args: {
 export function TopBarNotifications(props: {
   noDragStyle: CSSProperties;
 }) {
-  const [notifications, tasks, markNotificationRead, markAllNotificationsRead, openNotificationContext, resolveNotificationApproval] = useAppStore(
+  const [notifications, tasks, markNotificationRead, markAllNotificationsRead, openNotificationContext, resolveNotificationApproval, restoreTask] = useAppStore(
     useShallow((state) => [
       state.notifications,
       state.tasks,
@@ -52,11 +57,13 @@ export function TopBarNotifications(props: {
       state.markAllNotificationsRead,
       state.openNotificationContext,
       state.resolveNotificationApproval,
+      state.restoreTask,
     ] as const),
   );
   const [open, setOpen] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [view, setView] = useState<NotificationView>("unread");
+  const [archivedPrompt, setArchivedPrompt] = useState<ArchivedNotificationPrompt | null>(null);
 
   const unreadNotifications = notifications.filter(isNotificationUnread);
   const historyNotifications = notifications.filter((notification) => !isNotificationUnread(notification));
@@ -70,11 +77,15 @@ export function TopBarNotifications(props: {
     return pendingActionId === `open:${notificationId}`
       || pendingActionId === `mark:${notificationId}`
       || pendingActionId === `approve:${notificationId}`
-      || pendingActionId === `deny:${notificationId}`;
+      || pendingActionId === `deny:${notificationId}`
+      || pendingActionId === `restore:${notificationId}`;
   }
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
+    if (!nextOpen) {
+      setArchivedPrompt(null);
+    }
     setView((previousView) => getNextNotificationView({
       isOpening: nextOpen,
       previousView,
@@ -85,6 +96,7 @@ export function TopBarNotifications(props: {
     setPendingActionId("mark-all");
     try {
       await markAllNotificationsRead();
+      setArchivedPrompt(null);
       setView("history");
     } finally {
       setPendingActionId(null);
@@ -95,6 +107,7 @@ export function TopBarNotifications(props: {
     setPendingActionId(`mark:${notificationId}`);
     try {
       await markNotificationRead({ id: notificationId });
+      setArchivedPrompt((current) => current?.notificationId === notificationId ? null : current);
     } finally {
       setPendingActionId(null);
     }
@@ -103,7 +116,33 @@ export function TopBarNotifications(props: {
   async function handleOpenNotification(notificationId: string) {
     setPendingActionId(`open:${notificationId}`);
     try {
-      await openNotificationContext({ notificationId });
+      const result = await openNotificationContext({ notificationId });
+      if (result.status === "archived-task") {
+        setArchivedPrompt({
+          notificationId,
+          taskTitle: result.taskTitle,
+        });
+      } else {
+        setArchivedPrompt((current) => current?.notificationId === notificationId ? null : current);
+      }
+    } finally {
+      setPendingActionId(null);
+    }
+  }
+
+  async function handleRestoreArchivedTask() {
+    if (!archivedPrompt) {
+      return;
+    }
+
+    setPendingActionId(`restore:${archivedPrompt.notificationId}`);
+    try {
+      const result = await openNotificationContext({ notificationId: archivedPrompt.notificationId });
+      if (result.status === "archived-task") {
+        restoreTask({ taskId: result.taskId });
+      }
+      setArchivedPrompt(null);
+      setOpen(false);
     } finally {
       setPendingActionId(null);
     }
@@ -261,13 +300,18 @@ export function TopBarNotifications(props: {
                 action: notification.action,
               });
               const approvalAction = notification.action?.type === "approval";
-              const approvalTask = notification.taskId
+              const notificationTask = notification.taskId
                 ? tasks.find((task) => task.id === notification.taskId) ?? null
                 : null;
-              const approvalHandledExternally = approvalAction && isTaskManaged(approvalTask);
+              const taskIsArchived = isTaskArchived(notificationTask ?? { archivedAt: null });
+              const approvalHandledExternally = approvalAction && isTaskManaged(notificationTask);
               const createdLabel = formatTaskUpdatedAt({ value: notification.createdAt });
               const readLabel = notification.readAt ? formatTaskUpdatedAt({ value: notification.readAt }) : null;
               const notificationBusy = pendingActionId === "mark-all" || isNotificationActionPending(notification.id);
+              const showArchivedPrompt = archivedPrompt?.notificationId === notification.id;
+              const archivedTaskTitle = showArchivedPrompt
+                ? (archivedPrompt?.taskTitle ?? notification.taskTitle ?? "this task")
+                : null;
 
               return (
                 <div
@@ -321,6 +365,11 @@ export function TopBarNotifications(props: {
                                   {locationLabel}
                                 </span>
                               ) : null}
+                              {taskIsArchived ? (
+                                <Badge variant="outline" className="rounded-sm border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.16em] text-warning-foreground">
+                                  Archived
+                                </Badge>
+                              ) : null}
                               {notification.taskTitle ? (
                                 <span className="truncate">
                                   {notification.taskTitle}
@@ -373,6 +422,35 @@ export function TopBarNotifications(props: {
                             </Button>
                           </>
                         )}
+                      </div>
+                    ) : null}
+                    {showArchivedPrompt ? (
+                      <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-3">
+                        <p className="text-sm font-medium text-foreground">This task is archived.</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Restore <span className="font-medium text-foreground">{archivedTaskTitle}</span> to reopen it from notifications.
+                        </p>
+                        <div className="mt-3 flex items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            disabled={notificationBusy}
+                            onClick={() => setArchivedPrompt(null)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-8"
+                            disabled={notificationBusy}
+                            onClick={() => void handleRestoreArchivedTask()}
+                          >
+                            Restore and open
+                          </Button>
+                        </div>
                       </div>
                     ) : null}
                   </div>

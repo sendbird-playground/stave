@@ -204,6 +204,10 @@ export type {
 } from "@/lib/themes";
 export type { RecentProjectState } from "@/store/project.utils";
 
+type NotificationContextOpenResult =
+  | { status: "opened" }
+  | { status: "archived-task"; taskId: string; taskTitle: string };
+
 interface SkillCatalogState {
   status: "idle" | "loading" | "ready" | "error";
   workspacePath: string | null;
@@ -424,7 +428,7 @@ interface AppState {
   takeOverTask: (args: { taskId: string }) => void;
   markNotificationRead: (args: { id: string }) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
-  openNotificationContext: (args: { notificationId: string }) => Promise<void>;
+  openNotificationContext: (args: { notificationId: string }) => Promise<NotificationContextOpenResult>;
   resolveNotificationApproval: (args: { notificationId: string; approved: boolean }) => Promise<void>;
   sendUserMessage: (args: {
     taskId: string;
@@ -1006,7 +1010,7 @@ export const useAppStore = create<AppState>()(
         }
       };
 
-      const openNotificationContextInternal = async (notification: AppNotification) => {
+      const openNotificationContextInternal = async (notification: AppNotification): Promise<NotificationContextOpenResult> => {
         const projectPath = notification.projectPath?.trim();
         if (projectPath && projectPath !== get().projectPath) {
           await get().openProject({ projectPath });
@@ -1023,9 +1027,24 @@ export const useAppStore = create<AppState>()(
 
         const afterWorkspaceOpen = get();
         const taskId = notification.taskId?.trim();
-        if (taskId && afterWorkspaceOpen.tasks.some((task) => task.id === taskId)) {
-          afterWorkspaceOpen.selectTask({ taskId });
+        if (!taskId) {
+          return { status: "opened" };
         }
+
+        const targetTask = afterWorkspaceOpen.tasks.find((task) => task.id === taskId);
+        if (!targetTask) {
+          return { status: "opened" };
+        }
+        if (isTaskArchived(targetTask)) {
+          return {
+            status: "archived-task",
+            taskId,
+            taskTitle: targetTask.title.trim() || notification.taskTitle?.trim() || "Untitled Task",
+          };
+        }
+
+        afterWorkspaceOpen.selectTask({ taskId });
+        return { status: "opened" };
       };
 
       return ({
@@ -3338,12 +3357,13 @@ export const useAppStore = create<AppState>()(
       openNotificationContext: async ({ notificationId }) => {
         const notification = get().notifications.find((item) => item.id === notificationId);
         if (!notification) {
-          return;
+          return { status: "opened" };
         }
-        await openNotificationContextInternal(notification);
+        const result = await openNotificationContextInternal(notification);
         if (isNotificationUnread(notification)) {
           await get().markNotificationRead({ id: notification.id });
         }
+        return result;
       },
       resolveNotificationApproval: async ({ notificationId, approved }) => {
         const notification = get().notifications.find((item) => item.id === notificationId);
