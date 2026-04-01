@@ -1,3 +1,18 @@
+## [0.0.32](https://github.com/sendbird-playground/stave/compare/v0.0.31...v0.0.32) (2026-04-01)
+
+### Features
+
+* add Slack thread support to workspace information panel ([#171](https://github.com/sendbird-playground/stave/issues/171)) ([ad131d5](https://github.com/sendbird-playground/stave/commit/ad131d575de7d8b8b734aedb7b1f6ec2c2aca9bf))
+* persist and surface workspace plan history ([#164](https://github.com/sendbird-playground/stave/issues/164)) ([720f405](https://github.com/sendbird-playground/stave/commit/720f4058b8a5001ad98c6e859aec56489a84654f))
+* **ui:** add calendar and switch components ([#169](https://github.com/sendbird-playground/stave/issues/169)) ([6a2b599](https://github.com/sendbird-playground/stave/commit/6a2b59952d0f5decf62a3e76704ce2be2abf5198))
+* **workspace:** add continue workspace for completed PRs ([#167](https://github.com/sendbird-playground/stave/issues/167)) ([3df1f0a](https://github.com/sendbird-playground/stave/commit/3df1f0a7439db1a5db1fec4aa4ad4780bd866c85))
+* **workspace:** improve workspace information panel ([#166](https://github.com/sendbird-playground/stave/issues/166)) ([a2cbdef](https://github.com/sendbird-playground/stave/commit/a2cbdef3076feb2e2cda78e9b581d88bfa0c418c))
+
+### Bug Fixes
+
+* **chat:** guard plan approval and archived task turns ([#163](https://github.com/sendbird-playground/stave/issues/163)) ([2bb474e](https://github.com/sendbird-playground/stave/commit/2bb474ed01b89db1e5760c00152bd11adaec5dd2))
+* **editor:** hide editor panel when last tab is closed ([#162](https://github.com/sendbird-playground/stave/issues/162)) ([45c0dca](https://github.com/sendbird-playground/stave/commit/45c0dca2d66efb71f45fecb2f9fcb30e5daa6666))
+
 ## [0.0.31](https://github.com/sendbird-playground/stave/compare/v0.0.30...v0.0.31) (2026-04-01)
 
 ### Features
