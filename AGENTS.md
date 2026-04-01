@@ -28,18 +28,18 @@ Do not use `$stave-worktree-pr-flow` for plain `commit` or `push` requests that 
 
 ## Release Workflow
 
-Use `$stave-patch-release` only for explicit Stave release requests. This includes requests to ship or publish a release, bump the app version, generate release notes or changelog entries for a release, create or move a semver release tag, or repair an already-created release.
+Use `$stave-release` only for explicit Stave release requests. This includes requests to ship or publish a release, bump the app version, generate release notes or changelog entries for a release, or prepare a versioned release PR against `main`.
 
-Both Codex and Claude should treat the literal token `$stave-patch-release` as an explicit release trigger.
-The repository-local copy of this skill lives at `skills/stave-patch-release/SKILL.md`.
+Both Codex and Claude should treat the literal token `$stave-release` as an explicit release trigger.
+The repository-local copy of this skill lives at `skills/stave-release/SKILL.md`.
 
-- Use `$stave-patch-release`.
+- Use `$stave-release`.
 - Generate or refresh `CHANGELOG.md` with `bunx --bun conventional-changelog-cli -p conventionalcommits -i CHANGELOG.md -s` instead of hand-writing release sections.
 - Keep release tags in `vX.Y.Z` form. Incremental `conventional-changelog` generation depends on semver tags.
 - If the repo has no prior semver release tag, stop and report that the release flow needs a baseline tag before incremental changelog generation is safe.
-- Push the release commit and matching release tag to both `origin` and `public`.
+- Use the repository release skill flow to create a release branch, open a PR against `main`, and keep the original checkout clean.
 
-Do not use `$stave-patch-release` for ordinary `commit`, `push`, or `commit and push` requests unless the user also explicitly asks to release.
+Do not use `$stave-release` for ordinary `commit`, `push`, or `commit and push` requests unless the user also explicitly asks to release.
 
 For ordinary commit/push requests:
 

@@ -12,8 +12,8 @@ See [AGENTS.md](./AGENTS.md) for the authoritative project policy.
 
 ## Release and Push Requests
 
-- Repository-local copy: `skills/stave-patch-release/SKILL.md`
-- Treat `$stave-patch-release` as the Stave release workflow trigger.
-- Use `$stave-patch-release` only when the user explicitly asks to release, ship, publish, version, tag, generate release notes, or repair an already-created release.
+- Repository-local copy: `skills/stave-release/SKILL.md`
+- Treat `$stave-release` as the Stave release workflow trigger.
+- Use `$stave-release` only when the user explicitly asks to release, ship, publish, version, or generate release notes for a release PR.
 - If the user only asks to commit, push, or commit and push current work, use a normal git commit/push flow instead.
 - For ordinary commit/push requests, do not bump `package.json`, do not touch `CHANGELOG.md`, and do not create or move semver release tags unless the user explicitly asks for release work.

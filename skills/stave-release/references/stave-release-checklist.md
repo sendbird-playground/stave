@@ -16,53 +16,62 @@
 ## Release Sequence
 
 1. Detect repo root: `git rev-parse --show-toplevel`
-2. Read the current version from `package.json`.
-3. Run `git status --short` — working tree should be clean before starting a release. If unclean, create a temporary worktree:
+2. Capture the original checkout branch and path. The original checkout must end the flow on that same branch unless the user explicitly asks otherwise.
+3. Read the current version from `package.json`.
+4. Run `git status --short` to determine whether stash handoff is needed.
+5. Always create a dedicated temporary release worktree.
+   If the original checkout is dirty, transfer the state into the release worktree:
    ```bash
    git stash push --include-untracked -m "worktree-pr:release-x.y.z:<timestamp>"
    git worktree add -b release-x.y.z ../.worktrees/<repo>/release-x.y.z HEAD
    # apply stash inside the new worktree, verify diff landed there
    ```
-   Record the temporary worktree path for cleanup after PR creation.
-4. Verify `origin` exists: `git remote -v`
-5. Find the most recent semver tag: `git tag --list 'v*' --sort=-version:refname | head -5`
-6. Bump only the patch component in `package.json`.
-7. Generate or refresh `CHANGELOG.md`:
+   If the original checkout is clean:
+   ```bash
+   git worktree add -b release-x.y.z ../.worktrees/<repo>/release-x.y.z HEAD
+   ```
+   Record the temporary worktree path for cleanup after PR creation and do the rest of the release work there.
+6. Verify `origin` exists: `git remote -v`
+7. Find the most recent semver tag: `git tag --list 'v*' --sort=-version:refname | head -5`
+8. Bump only the patch component in `package.json`.
+9. Generate or refresh `CHANGELOG.md`:
 
 ```bash
 bunx --bun conventional-changelog-cli -p conventionalcommits -i CHANGELOG.md -s
 ```
 
-8. Inspect the newly generated top release section.
-9. If it is missing meaningful bullets, append a concise 3–7 bullet summary derived from the actual diff:
+10. Inspect the newly generated top release section.
+11. If it is missing meaningful bullets, append a concise 3–7 bullet summary derived from the actual diff:
    - `git diff --stat <prev-tag>..HEAD`
    - `git diff --name-only <prev-tag>..HEAD`
    - Summarize user-visible or architecture-significant outcomes, not file lists.
-10. Update `README.md` and other release-facing docs if the shipped behavior changed.
-11. Run verification:
+12. Update `README.md` and other release-facing docs if the shipped behavior changed.
+13. Run verification:
     - minimum: `bun run typecheck`
     - focused tests for changed areas
     - `bun test` or `bun run test:ci` when scope is broad
-12. Stage and commit:
+14. Stage and commit:
 
 ```bash
 git add -A
 git commit -m "chore: release x.y.z"
 ```
 
-13. Push and open a PR:
+15. Push and open a PR:
 
 ```bash
 git push origin <branch>
 gh pr create --base main --title "chore: release x.y.z" --body "..."
 ```
 
-14. Clean up the temporary worktree (only if one was created in step 3):
+16. Clean up the temporary release worktree and verify the original checkout stayed on its original branch:
 
 ```bash
 git worktree remove ../.worktrees/<repo>/release-x.y.z
 git worktree prune
 ```
+
+If the original checkout was switched for any reason, check it back out before stopping. In the common case, finish back on `main`.
 
 ## Repair Rules
 
@@ -73,3 +82,4 @@ git worktree prune
 - If `origin` is missing, stop and report before committing.
 - If verification fails, stop and surface the failure unless the user explicitly accepts releasing anyway.
 - Do not create a local semver tag until the PR is merged. Tag on the merged `main` commit.
+- Do not leave the original checkout on the temporary release branch. Preserve or restore the starting branch, usually `main`.

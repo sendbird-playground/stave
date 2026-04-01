@@ -1,6 +1,6 @@
 ---
 name: stave-release
-description: Release workflow for the Stave repository that bumps the patch version, generates release notes with `conventional-changelog`, and opens a pull request against `main`. Use when the user asks to cut the next patch release, ship the current changes as a versioned release, or prepare a release PR. After the PR merges, the repository's GitHub Actions workflow builds and publishes the release artifacts automatically.
+description: Release workflow for the Stave repository that bumps the patch version, generates release notes with `conventional-changelog`, and opens a pull request against `main` from a dedicated temporary release worktree so the user's original checkout stays on its original branch. Use when the user asks to cut the next patch release, ship the current changes as a versioned release, or prepare a release PR. After the PR merges, the repository's GitHub Actions workflow builds and publishes the release artifacts automatically.
 ---
 
 # Stave Release
@@ -14,6 +14,7 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
 1. Detect the repository root.
    - Run `git rev-parse --show-toplevel` to find the repo root. Never assume a hardcoded path.
    - All subsequent file reads and writes use this path as the base.
+   - Capture the original checkout path and branch up front. The original checkout must end the flow on that same branch unless the user explicitly asks otherwise.
 
 2. Inspect the release state before editing.
    - Read `package.json` to load the current version.
@@ -39,12 +40,15 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
    - Run focused tests for changed areas (`bun test` or `bun run test:ci` when scope is broad).
    - Report any verification that could not run.
 
-6. Stage and commit directly on the current branch (or in a temporary worktree if the working tree is unclean).
-   - If the working tree is unclean, create a temporary worktree at `../.worktrees/<repo>/release-x.y.z`:
+6. Create a dedicated temporary release worktree and commit there.
+   - Always create the release branch in a temporary worktree at `../.worktrees/<repo>/release-x.y.z`. Do not leave the user's original checkout on the release branch.
+   - If the original working tree is unclean:
      - `git stash push --include-untracked -m "worktree-pr:release-x.y.z:<timestamp>"`
      - `git worktree add -b release-x.y.z ../.worktrees/<repo>/release-x.y.z HEAD`
      - Apply the stash inside the new worktree and verify the diff landed there.
-     - Record the temporary worktree path for cleanup in step 8.
+   - If the original working tree is clean:
+     - `git worktree add -b release-x.y.z ../.worktrees/<repo>/release-x.y.z HEAD`
+   - Record the temporary worktree path for cleanup in step 8 and run all remaining release edits from that worktree.
    - Stage: `git add -A`
    - Commit with a Conventional Commit: `chore: release x.y.z`
    - Do not amend a previously pushed release commit; always create a new commit.
@@ -56,11 +60,11 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
    - PR body must include: a bullet summary of shipped changes, the verification commands run and their results, and the `🤖 Generated with Claude Code` footer.
    - **Never push directly to `main`.** All releases land via PR.
 
-8. Clean up the temporary worktree (only if one was created in step 6).
-   - Skip this step when the commit was made directly on the current branch.
+8. Clean up the temporary worktree and restore the original checkout state.
    - If push and PR creation in step 7 succeeded and the temporary worktree is clean, remove it:
      `git worktree remove ../.worktrees/<repo>/release-x.y.z`
    - Run `git worktree prune` to remove stale metadata.
+   - Verify the original checkout is still on its original branch. If it was switched for any reason, check it back out before finishing. For the common case, that means ending back on `main`.
    - Never remove a dirty temporary worktree.
 
 9. Report the outcome.
@@ -69,6 +73,7 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
    - State the PR URL.
    - State which verification commands ran and their results.
    - State whether a temporary worktree was created and, if so, whether it was removed or kept.
+   - State which branch the original checkout ended on after cleanup.
    - Note that GitHub Actions will build and publish release artifacts after the PR merges.
 
 ## Guardrails
@@ -82,3 +87,4 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
 - Do not create a local semver tag before the PR is merged. Tag the merged `main` commit after merge.
 - If verification fails, stop and surface the failure unless the user explicitly accepts releasing anyway.
 - Do not leave a temporary release worktree behind after a successful PR creation; always remove it and run `git worktree prune`.
+- Do not leave the user's original checkout on `release-x.y.z`; restore or preserve the original branch, usually `main`.
