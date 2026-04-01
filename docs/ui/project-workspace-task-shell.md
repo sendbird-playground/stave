@@ -83,7 +83,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
-  - exposes a workspace information panel for Jira links, Figma references, PR metadata, notes, todos, saved plans, and custom structured fields
+  - exposes a workspace information panel with shared accordion sections, a distinct summary card, URL-first Jira/Figma/GitHub integrations, notes, todos, saved plans, and custom structured fields
   - surfaces workspace-level plan history from markdown files under `.stave/context/plans`, while still showing legacy `.stave/plans` files
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`
   - keeps terminal independent while making editor and explorer/changes mutually exclusive on small widths
@@ -126,3 +126,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
 - Workspace information should persist across workspace switches and app restart.
 - On narrow widths, task tabs should stay visible while the compact rail remains pinned and right-side panels reduce the remaining workspace width from the top of the shell.
 - Explorer refresh should invalidate cached folder entries and repopulate the currently expanded folders.
+
+### Future Work
+
+- If Jira or Figma integrations become directly callable from the Stave UI layer, upgrade the workspace information cards from URL-derived previews to live remote metadata fetched through those integrations.

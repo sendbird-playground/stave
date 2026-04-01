@@ -11,8 +11,12 @@ import type {
   StaveLocalMcpStatus,
 } from "@/lib/local-mcp";
 import type { RepoMapResponse } from "@/lib/fs/repo-map.types";
-import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
+import type {
+  AppNotification,
+  AppNotificationCreateInput,
+} from "@/lib/notifications/notification.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
+import type { GitHubPrPayload } from "@/lib/pr-status";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { PromptDraft } from "@/types/chat";
@@ -44,9 +48,7 @@ interface WindowProviderApi {
   startStreamTurn?: (
     args: ProviderStreamTurnArgs,
   ) => Promise<{ ok: boolean; streamId: string; message?: string }>;
-  startPushTurn?: (
-    args: ProviderStreamTurnArgs,
-  ) => Promise<{
+  startPushTurn?: (args: ProviderStreamTurnArgs) => Promise<{
     ok: boolean;
     streamId: string;
     turnId: string | null;
@@ -148,9 +150,7 @@ interface WindowFsApi {
     files: string[];
     stderr?: string;
   }>;
-  resolvePath?: (args: {
-    inputPath: string;
-  }) => Promise<{
+  resolvePath?: (args: { inputPath: string }) => Promise<{
     ok: boolean;
     rootPath?: string;
     rootName?: string;
@@ -266,10 +266,7 @@ interface WindowLocalMcpApi {
     hasMore: boolean;
     message?: string;
   }>;
-  getRequestLog?: (args: {
-    id: string;
-    includePayload?: boolean;
-  }) => Promise<{
+  getRequestLog?: (args: { id: string; includePayload?: boolean }) => Promise<{
     ok: boolean;
     log: StaveLocalMcpRequestLog | null;
     message?: string;
@@ -567,20 +564,12 @@ interface WindowSourceControlApi {
   }) => Promise<{ ok: boolean; prUrl?: string; stderr?: string }>;
   getPrStatus?: (args: { cwd?: string }) => Promise<{
     ok: boolean;
-    pr: {
-      number: number;
-      title: string;
-      state: "OPEN" | "CLOSED" | "MERGED";
-      isDraft: boolean;
-      url: string;
-      reviewDecision: string | null;
-      mergeable: string;
-      mergeStateStatus: string;
-      checksRollup: "SUCCESS" | "FAILURE" | "PENDING" | null;
-      mergedAt: string | null;
-      baseRefName: string;
-      headRefName: string;
-    } | null;
+    pr: GitHubPrPayload | null;
+    stderr?: string;
+  }>;
+  getPrStatusForUrl?: (args: { url: string; cwd?: string }) => Promise<{
+    ok: boolean;
+    pr: GitHubPrPayload | null;
     stderr?: string;
   }>;
   setPrReady?: (args: { cwd?: string }) => Promise<SourceControlCommandResult>;
@@ -588,7 +577,9 @@ interface WindowSourceControlApi {
     method?: "merge" | "squash" | "rebase";
     cwd?: string;
   }) => Promise<SourceControlCommandResult>;
-  updatePrBranch?: (args: { cwd?: string }) => Promise<SourceControlCommandResult>;
+  updatePrBranch?: (args: {
+    cwd?: string;
+  }) => Promise<SourceControlCommandResult>;
 }
 
 interface WindowPersistenceApi {
@@ -729,16 +720,11 @@ interface WindowPersistenceApi {
     inserted: boolean;
     notification: AppNotification | null;
   }>;
-  markNotificationRead?: (args: {
-    id: string;
-    readAt?: string;
-  }) => Promise<{
+  markNotificationRead?: (args: { id: string; readAt?: string }) => Promise<{
     ok: boolean;
     notification: AppNotification | null;
   }>;
-  markAllNotificationsRead?: (args?: {
-    readAt?: string;
-  }) => Promise<{
+  markAllNotificationsRead?: (args?: { readAt?: string }) => Promise<{
     ok: boolean;
     count: number;
   }>;
