@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowRightCircle, ClipboardCheck, Copy, Minus, Maximize2 } from "lucide-react";
 import { Button, Textarea, WaveIndicator } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
@@ -6,9 +6,12 @@ import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
 import { APPROVE_PLAN_MESSAGE } from "@/lib/providers/plan-response";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { useAppStore } from "@/store/app.store";
+import {
+  resolvePromptDraftRuntimeState,
+  transitionClaudePromptDraftPermissionMode,
+} from "@/store/prompt-draft-runtime";
 import { resolvePlanViewerInsets, resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
-import { transitionClaudePermissionMode } from "@/components/session/chat-input.runtime";
-import { PlanHistoryPopover } from "@/components/session/PlanHistoryPopover";
+import type { PromptDraft } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
 
 type ViewState = "normal" | "minimized" | "expanded";
@@ -17,45 +20,40 @@ interface PlanViewerProps {
   inputDockHeight?: number;
 }
 
-/** Persist plan text to .stave/plans/{taskId}_{timestamp}.md. Returns the relative file path on success. */
-async function persistPlanToFile(args: { projectPath: string; taskId: string; planText: string }): Promise<string | null> {
-  try {
-    const rootPath = args.projectPath;
-    await window.api?.fs?.createDirectory?.({ rootPath, directoryPath: ".stave/plans" });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const shortTaskId = args.taskId.slice(0, 8);
-    const filePath = `.stave/plans/${shortTaskId}_${timestamp}.md`;
-    await window.api?.fs?.writeFile?.({ rootPath, filePath, content: args.planText });
-    return filePath;
-  } catch {
-    return null;
-  }
-}
+const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
 
 export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const [revising, setRevising] = useState(false);
   const [revisionText, setRevisionText] = useState("");
   const [viewState, setViewState] = useState<ViewState>("normal");
   const [copied, setCopied] = useState(false);
-  const persistedPlanRef = useRef<string | null>(null);
 
-  const [activeTaskId, activeTask, draftProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, sendUserMessage, createTask, updatePromptDraft, updateSettings, registerPlanFile, projectPath] = useAppStore(
+  const [activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, sendUserMessage, createTask, updatePromptDraft] = useAppStore(
     useShallow((state) => [
       state.activeTaskId,
       state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
       state.draftProvider,
+      state.promptDraftByTask[state.activeTaskId] ?? EMPTY_PROMPT_DRAFT,
       state.settings.claudePermissionMode,
       state.settings.claudePermissionModeBeforePlan,
       state.settings.codexExperimentalPlanMode,
       state.sendUserMessage,
       state.createTask,
       state.updatePromptDraft,
-      state.updateSettings,
-      state.registerPlanFile,
-      state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? null,
     ] as const),
   );
   const activeProvider = activeTask?.provider ?? draftProvider;
+  const taskRuntimeState = resolvePromptDraftRuntimeState({
+    promptDraft,
+    fallback: {
+      claudePermissionMode,
+      claudePermissionModeBeforePlan,
+      codexExperimentalPlanMode,
+    },
+  });
+  const effectiveClaudePermissionMode = taskRuntimeState.claudePermissionMode;
+  const effectiveClaudePermissionModeBeforePlan = taskRuntimeState.claudePermissionModeBeforePlan;
+  const effectiveCodexExperimentalPlanMode = taskRuntimeState.codexExperimentalPlanMode;
   const isManagedTask = isTaskManaged(activeTask);
   const managedNotice = isManagedTask
     ? `Plan responses are managed by ${getTaskControlOwner(activeTask) === "external" ? "an external controller" : "Stave"}. Take over to reply here.`
@@ -85,14 +83,12 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   // Use the latest plan message for the plan text and pending state
   const { planText, isPlanPreparing, isPlanPending } = resolvePlanViewerState({
     activeProvider,
-    claudePermissionMode,
-    codexExperimentalPlanMode,
+    claudePermissionMode: effectiveClaudePermissionMode,
+    codexExperimentalPlanMode: effectiveCodexExperimentalPlanMode,
     latestPlanMessage,
     lastMessage,
     isTurnActive,
   });
-  const planHistoryCount = activeTask?.planFilePaths?.length ?? 0;
-  const showFloatingHistoryTrigger = !isPlanPreparing && !isPlanPending && planHistoryCount > 0;
 
   // Reset view state when a new plan arrives so it opens fully
   useEffect(() => {
@@ -104,51 +100,50 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     }
   }, [isPlanPending]);
 
-  // Persist plan to .stave/plans/ when a new plan text arrives
-  useEffect(() => {
-    if (isPlanPending && planText && planText !== persistedPlanRef.current && projectPath) {
-      persistedPlanRef.current = planText;
-      void (async () => {
-        const filePath = await persistPlanToFile({ projectPath, taskId: activeTaskId, planText });
-        if (filePath) {
-          registerPlanFile({ taskId: activeTaskId, filePath });
-        }
-      })();
-    }
-  }, [isPlanPending, planText, projectPath, activeTaskId, registerPlanFile]);
-
   const handleApprove = useCallback(() => {
     if (isManagedTask) {
       return;
     }
     // Restore the permission mode that was active before plan mode
-    if ((activeProvider === "claude-code" || activeProvider === "stave") && claudePermissionMode === "plan") {
-      transitionClaudePermissionMode({
-        nextMode: claudePermissionModeBeforePlan ?? "acceptEdits",
-        currentMode: claudePermissionMode,
-        beforePlan: claudePermissionModeBeforePlan,
-        updateSettings,
+    if ((activeProvider === "claude-code" || activeProvider === "stave") && effectiveClaudePermissionMode === "plan") {
+      updatePromptDraft({
+        taskId: activeTaskId,
+        patch: {
+          runtimeOverrides: transitionClaudePromptDraftPermissionMode({
+            nextMode: effectiveClaudePermissionModeBeforePlan ?? "acceptEdits",
+            currentMode: effectiveClaudePermissionMode,
+            beforePlan: effectiveClaudePermissionModeBeforePlan,
+          }),
+        },
       });
-    } else if (activeProvider === "codex" && codexExperimentalPlanMode) {
-      updateSettings({ patch: { codexExperimentalPlanMode: false } });
+    } else if (activeProvider === "codex" && effectiveCodexExperimentalPlanMode) {
+      updatePromptDraft({
+        taskId: activeTaskId,
+        patch: {
+          runtimeOverrides: {
+            ...promptDraft.runtimeOverrides,
+            codexExperimentalPlanMode: false,
+          },
+        },
+      });
     }
     sendUserMessage({ taskId: activeTaskId, content: APPROVE_PLAN_MESSAGE });
     setRevising(false);
     setRevisionText("");
-  }, [activeProvider, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, updateSettings, sendUserMessage, activeTaskId, isManagedTask]);
+  }, [
+    activeProvider,
+    activeTaskId,
+    effectiveClaudePermissionMode,
+    effectiveClaudePermissionModeBeforePlan,
+    effectiveCodexExperimentalPlanMode,
+    isManagedTask,
+    promptDraft.runtimeOverrides,
+    sendUserMessage,
+    updatePromptDraft,
+  ]);
 
-  if (!isPlanPreparing && !isPlanPending && !showFloatingHistoryTrigger) {
+  if (!isPlanPreparing && !isPlanPending) {
     return null;
-  }
-
-  if (showFloatingHistoryTrigger) {
-    return (
-      <div className="pointer-events-none absolute bottom-full left-0 right-0 z-20 px-3 pb-2 sm:px-4">
-        <div className="mx-auto flex max-w-6xl justify-end">
-          <PlanHistoryPopover variant="floating" className="pointer-events-auto" />
-        </div>
-      </div>
-    );
   }
 
   function handleCopy() {
@@ -210,7 +205,6 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
             <WaveIndicator className="text-primary" />
           ) : (
             <>
-              <PlanHistoryPopover variant="labelled" className="h-7 text-xs" />
               <button
                 onClick={() => setViewState(isMinimized ? "normal" : "minimized")}
                 className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"

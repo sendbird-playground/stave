@@ -2,6 +2,7 @@ import type { PromptInputRuntimeControl, PromptInputRuntimeStatusItem } from "@/
 import { getPermissionModeOptions, type PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
 import { resolveEffectiveCodexSandboxMode } from "@/lib/providers/codex-runtime-options";
 import type { ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
+import type { ClaudePermissionMode } from "@/types/chat";
 import {
   CLAUDE_EFFORT_OPTIONS,
   CLAUDE_THINKING_OPTIONS,
@@ -89,6 +90,7 @@ interface ChatInputRuntimeArgs {
   staveAutoMaxSubtasks: number;
   staveAutoAllowCrossProviderWorkers: boolean;
   staveAutoMaxParallelSubtasks: number;
+  onClaudePermissionModeChange?: (value: ClaudePermissionMode) => void;
   updateSettings: UpdateSettings;
 }
 
@@ -152,6 +154,10 @@ export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): 
         value: args.permissionMode,
         options: permissionOptions,
         onSelect: (value: string) => {
+          if (args.onClaudePermissionModeChange) {
+            args.onClaudePermissionModeChange(value as ClaudePermissionMode);
+            return;
+          }
           transitionClaudePermissionMode({
             nextMode: value as typeof args.claudePermissionMode,
             currentMode: args.claudePermissionMode,

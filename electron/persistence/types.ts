@@ -1,4 +1,4 @@
-import type { Attachment } from "../../src/types/chat";
+import type { PromptDraft } from "../../src/types/chat";
 import type { WorkspaceInformationState } from "../../src/lib/workspace-information";
 
 export interface PersistenceTaskRow {
@@ -34,11 +34,7 @@ export interface PersistenceWorkspaceSnapshot {
   activeTaskId: string;
   tasks: PersistenceTaskRow[];
   messagesByTask: Record<string, PersistenceChatMessageRow[]>;
-  promptDraftByTask?: Record<string, {
-    text: string;
-    attachedFilePaths: string[];
-    attachments?: Attachment[];
-  }>;
+  promptDraftByTask?: Record<string, PromptDraft>;
   providerConversationByTask?: Record<string, {
     "claude-code"?: string;
     codex?: string;

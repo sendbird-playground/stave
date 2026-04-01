@@ -15,6 +15,7 @@ import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifica
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
+import type { PromptDraft } from "@/types/chat";
 import type {
   SyncOriginMainResult,
   ToolingStatusRequest,
@@ -626,13 +627,7 @@ interface WindowPersistenceApi {
           parts: unknown[];
         }>
       >;
-      promptDraftByTask?: Record<
-        string,
-        {
-          text: string;
-          attachedFilePaths?: string[];
-        }
-      >;
+      promptDraftByTask?: Record<string, PromptDraft>;
       providerConversationByTask?: Record<
         string,
         {
@@ -692,13 +687,7 @@ interface WindowPersistenceApi {
           parts: unknown[];
         }>
       >;
-      promptDraftByTask?: Record<
-        string,
-        {
-          text: string;
-          attachedFilePaths?: string[];
-        }
-      >;
+      promptDraftByTask?: Record<string, PromptDraft>;
       providerConversationByTask?: Record<
         string,
         {
@@ -816,13 +805,7 @@ interface WindowPersistenceApi {
           parts: unknown[];
         }>
       >;
-      promptDraftByTask?: Record<
-        string,
-        {
-          text: string;
-          attachedFilePaths?: string[];
-        }
-      >;
+      promptDraftByTask?: Record<string, PromptDraft>;
       providerConversationByTask?: Record<
         string,
         {

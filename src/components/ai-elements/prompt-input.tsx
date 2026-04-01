@@ -3,7 +3,6 @@ import type { Attachment, UserInputPart } from "@/types/chat";
 import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
-import { PlanHistoryPopover } from "@/components/session/PlanHistoryPopover";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
 import { filterCommandPaletteItems, getSlashCommandSearchQuery } from "@/lib/commands";
 import { getActiveSkillTokenMatch, replaceSkillToken } from "@/lib/skills/catalog";
@@ -857,7 +856,6 @@ export function PromptInput(args: PromptInputProps) {
               <TooltipContent side="top">{planMode ? "Plan mode ON" : "Plan mode OFF"}</TooltipContent>
             </Tooltip>
           ) : null}
-          <PlanHistoryPopover variant="icon" />
           {onThinkingModeChange ? (
             <Tooltip>
               <TooltipTrigger asChild>

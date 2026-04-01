@@ -144,6 +144,24 @@ const AttachmentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("image"), id: z.string(), dataUrl: z.string(), label: z.string() }),
 ]);
 
+const PromptDraftRuntimeOverridesSchema = z.object({
+  claudePermissionMode: z.union([
+    z.literal("default"),
+    z.literal("acceptEdits"),
+    z.literal("bypassPermissions"),
+    z.literal("plan"),
+    z.literal("dontAsk"),
+  ]).optional(),
+  claudePermissionModeBeforePlan: z.union([
+    z.literal("default"),
+    z.literal("acceptEdits"),
+    z.literal("bypassPermissions"),
+    z.literal("dontAsk"),
+    z.null(),
+  ]).optional(),
+  codexExperimentalPlanMode: z.boolean().optional(),
+});
+
 const ChatMessageSchema = z.object({
   id: z.string(),
   role: z.union([z.literal("user"), z.literal("assistant")]),
@@ -294,6 +312,7 @@ export const WorkspaceSnapshotSchema = z.object({
     text: z.string(),
     attachedFilePaths: z.array(z.string()).optional().default([]),
     attachments: z.array(AttachmentSchema).optional().default([]),
+    runtimeOverrides: PromptDraftRuntimeOverridesSchema.optional(),
   })).optional().default({}),
   providerConversationByTask: z.record(z.string(), TaskProviderConversationStateSchema).optional().default({}),
   editorTabs: z.array(EditorTabSchema).optional().default([]),

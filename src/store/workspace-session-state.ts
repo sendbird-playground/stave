@@ -3,7 +3,7 @@ import { type TaskProviderConversationState, type WorkspaceSnapshot, upsertWorks
 import { normalizeTaskControl } from "@/lib/tasks";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { createEmptyWorkspaceInformation, type WorkspaceInformationState } from "@/lib/workspace-information";
-import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
+import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 
 export const starterWorkspaceId = "base";
 export const defaultWorkspaceName = "Default Workspace";
@@ -14,7 +14,7 @@ export interface WorkspaceSessionState {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  promptDraftByTask: Record<string, PromptDraft>;
   workspaceInformation: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
@@ -28,7 +28,7 @@ export function createEmptyWorkspaceState() {
     activeTaskId: "",
     tasks: [] as Task[],
     messagesByTask: {} as Record<string, ChatMessage[]>,
-    promptDraftByTask: {} as Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>,
+    promptDraftByTask: {} as Record<string, PromptDraft>,
     workspaceInformation: createEmptyWorkspaceInformation(),
     editorTabs: [] as EditorTab[],
     activeEditorTabId: null as string | null,
@@ -226,7 +226,7 @@ export function createWorkspaceSnapshot(args: {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  promptDraftByTask: Record<string, PromptDraft>;
   workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
@@ -250,7 +250,7 @@ export async function persistWorkspaceSnapshot(args: {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
-  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  promptDraftByTask: Record<string, PromptDraft>;
   workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;

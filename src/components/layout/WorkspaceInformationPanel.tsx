@@ -36,6 +36,7 @@ import {
 import { PR_STATUS_VISUAL } from "@/lib/pr-status";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { WorkspacePlansSection } from "@/components/layout/WorkspacePlansSection";
 
 function updateItemById<T extends { id: string }>(
   items: T[],
@@ -258,19 +259,23 @@ export function WorkspaceInformationPanel() {
     workspaces,
     workspacePath,
     workspaceInformation,
+    workspacePlansRefreshNonce,
     updateWorkspaceInformation,
     isDefaultWorkspace,
     prInfo,
     fetchWorkspacePrStatus,
+    openFileFromTree,
   ] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
     state.workspaces,
     state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? "",
     state.workspaceInformation,
+    state.workspacePlansRefreshNonce,
     state.updateWorkspaceInformation,
     Boolean(state.workspaceDefaultById[state.activeWorkspaceId]),
     state.workspacePrInfoById[state.activeWorkspaceId] ?? null,
     state.fetchWorkspacePrStatus,
+    state.openFileFromTree,
   ] as const));
 
   const workspaceName = workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.name ?? "Workspace";
@@ -304,6 +309,12 @@ export function WorkspaceInformationPanel() {
         workspaceName={workspaceName}
         workspacePath={workspacePath || "Workspace path unavailable"}
         information={workspaceInformation}
+      />
+
+      <WorkspacePlansSection
+        workspacePath={workspacePath}
+        refreshNonce={workspacePlansRefreshNonce}
+        onOpenFile={openFileFromTree}
       />
 
       <Card size="sm" className="border border-border/70 bg-background/80">

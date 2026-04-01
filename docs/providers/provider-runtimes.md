@@ -149,6 +149,11 @@ Experimental Codex plan mode:
 - Stave therefore keeps experimental plan threads separate from normal Codex
   turns and promotes the final plan-mode agent message into a Stave
   `plan_ready` response, with a todo-list markdown fallback.
+- Finalized plan reviews are persisted as workspace markdown files under
+  `.stave/context/plans/<taskId>_<timestamp>.md`.
+- The workspace information panel indexes those saved plan files and also
+  continues to show legacy `.stave/plans/*.md` entries for backward
+  compatibility.
 
 Codex checkpoint support:
 

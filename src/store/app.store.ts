@@ -96,9 +96,17 @@ import {
 import type {
   Attachment,
   ChatMessage,
+  ClaudePermissionMode,
+  ClaudePermissionModeBeforePlan,
   EditorTab,
+  PromptDraft,
   Task,
 } from "@/types/chat";
+import {
+  arePromptDraftRuntimeOverridesEqual,
+  resolvePromptDraftRuntimeState,
+} from "@/store/prompt-draft-runtime";
+import { persistWorkspacePlanFile } from "@/lib/plans";
 import {
   buildWorkspaceSessionState,
   createEmptyWorkspaceState,
@@ -222,6 +230,7 @@ interface SkillCatalogState {
 }
 
 const APP_STORE_KEY = "stave-store";
+const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
 export { DEFAULT_PROVIDER_TIMEOUT_MS, PROVIDER_TIMEOUT_OPTIONS } from "@/lib/providers/runtime-option-contract";
 
 export interface AppSettings {
@@ -303,9 +312,9 @@ export interface AppSettings {
   providerDebugStream: boolean;
   turnDiagnosticsVisible: boolean;
   providerTimeoutMs: number;
-  claudePermissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+  claudePermissionMode: ClaudePermissionMode;
   /** Stores the permission mode that was active before entering plan mode, so it can be restored when plan mode is exited. */
-  claudePermissionModeBeforePlan: "default" | "acceptEdits" | "bypassPermissions" | "dontAsk" | null;
+  claudePermissionModeBeforePlan: ClaudePermissionModeBeforePlan;
   claudeAllowDangerouslySkipPermissions: boolean;
   claudeSandboxEnabled: boolean;
   claudeAllowUnsandboxedCommands: boolean;
@@ -347,10 +356,11 @@ interface AppState {
   isDarkMode: boolean;
   activeTaskId: string;
   draftProvider: ProviderId;
-  promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  promptDraftByTask: Record<string, PromptDraft>;
   workspaceInformation: WorkspaceInformationState;
   promptFocusNonce: number;
   providerCommandCatalogRefreshNonce: number;
+  workspacePlansRefreshNonce: number;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   layout: LayoutState;
@@ -403,15 +413,15 @@ interface AppState {
   removeCustomTheme: (args: { themeId: string }) => void;
   updateSettings: (args: { patch: Partial<AppSettings> }) => void;
   refreshProviderCommandCatalog: () => void;
+  notifyWorkspacePlansChanged: () => void;
   selectTask: (args: { taskId: string }) => void;
   clearTaskSelection: () => void;
-  updatePromptDraft: (args: { taskId: string; patch: Partial<{ text: string; attachedFilePaths: string[]; attachments: Attachment[] }> }) => void;
+  updatePromptDraft: (args: { taskId: string; patch: Partial<PromptDraft> }) => void;
   updateWorkspaceInformation: (args: {
     updater: (current: WorkspaceInformationState) => WorkspaceInformationState;
   }) => void;
   clearPromptDraft: (args: { taskId: string }) => void;
   createTask: (args: { title?: string }) => void;
-  registerPlanFile: (args: { taskId: string; filePath: string }) => void;
   renameTask: (args: { taskId: string; title: string }) => void;
   restoreTask: (args: { taskId: string }) => void;
   duplicateTask: (args: { taskId: string }) => void;
@@ -1074,6 +1084,7 @@ export const useAppStore = create<AppState>()(
       workspaceInformation: createEmptyWorkspaceInformation(),
       promptFocusNonce: 0,
       providerCommandCatalogRefreshNonce: 0,
+      workspacePlansRefreshNonce: 0,
       tasks: [],
       messagesByTask: {},
       layout: {
@@ -2642,6 +2653,11 @@ export const useAppStore = create<AppState>()(
           providerCommandCatalogRefreshNonce: state.providerCommandCatalogRefreshNonce + 1,
         }));
       },
+      notifyWorkspacePlansChanged: () => {
+        set((state) => ({
+          workspacePlansRefreshNonce: state.workspacePlansRefreshNonce + 1,
+        }));
+      },
       selectTask: ({ taskId }) => set((state) => {
         if (state.activeTaskId === taskId) {
           return state;
@@ -2662,11 +2678,12 @@ export const useAppStore = create<AppState>()(
       }),
       updatePromptDraft: ({ taskId, patch }) => {
         set((state) => {
-          const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePaths: [], attachments: [] };
+          const currentDraft = state.promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
           const nextDraft = {
             text: currentDraft.text,
             attachedFilePaths: currentDraft.attachedFilePaths,
             attachments: currentDraft.attachments,
+            runtimeOverrides: currentDraft.runtimeOverrides,
             ...patch,
           };
           if (
@@ -2675,6 +2692,7 @@ export const useAppStore = create<AppState>()(
             && nextDraft.attachedFilePaths.every((p, i) => p === currentDraft.attachedFilePaths[i])
             && nextDraft.attachments.length === currentDraft.attachments.length
             && nextDraft.attachments.every((a, i) => a === currentDraft.attachments[i])
+            && arePromptDraftRuntimeOverridesEqual(nextDraft.runtimeOverrides, currentDraft.runtimeOverrides)
           ) {
             return state;
           }
@@ -2701,14 +2719,19 @@ export const useAppStore = create<AppState>()(
       },
       clearPromptDraft: ({ taskId }) => {
         set((state) => {
-          const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePaths: [], attachments: [] };
+          const currentDraft = state.promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
           if (!currentDraft.text && currentDraft.attachedFilePaths.length === 0 && currentDraft.attachments.length === 0) {
             return state;
           }
           return {
             promptDraftByTask: {
               ...state.promptDraftByTask,
-              [taskId]: { text: "", attachedFilePaths: [], attachments: [] },
+              [taskId]: {
+                text: "",
+                attachedFilePaths: [],
+                attachments: [],
+                ...(currentDraft.runtimeOverrides ? { runtimeOverrides: currentDraft.runtimeOverrides } : {}),
+              },
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
@@ -2753,17 +2776,6 @@ export const useAppStore = create<AppState>()(
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
-      },
-      registerPlanFile: ({ taskId, filePath }) => {
-        set((state) => ({
-          tasks: state.tasks.map((task) => {
-            if (task.id !== taskId) return task;
-            const existing = task.planFilePaths ?? [];
-            if (existing.includes(filePath)) return task;
-            return { ...task, planFilePaths: [...existing, filePath] };
-          }),
-          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-        }));
       },
       renameTask: ({ taskId, title }) => {
         const nextTitle = title.trim();
@@ -3433,7 +3445,8 @@ export const useAppStore = create<AppState>()(
         let state = get();
         let resolvedTaskId = taskId;
         let task = state.tasks.find((item) => item.id === resolvedTaskId);
-        const isNewlyCreatedTask = !task;
+        const sourcePromptDraftTaskId = taskId || "draft:session";
+        const sourcePromptDraft = state.promptDraftByTask[sourcePromptDraftTaskId] ?? EMPTY_PROMPT_DRAFT;
         if (!task) {
           const seededTaskId = crypto.randomUUID();
           const seededTitleText = resolveSkillSelections({
@@ -3470,6 +3483,17 @@ export const useAppStore = create<AppState>()(
             taskWorkspaceIdById: {
               ...nextState.taskWorkspaceIdById,
               [seededTaskId]: nextState.activeWorkspaceId,
+            },
+            promptDraftByTask: {
+              ...nextState.promptDraftByTask,
+              [seededTaskId]: {
+                text: "",
+                attachedFilePaths: [],
+                attachments: [],
+                ...(sourcePromptDraft.runtimeOverrides
+                  ? { runtimeOverrides: sourcePromptDraft.runtimeOverrides }
+                  : {}),
+              },
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
           }));
@@ -3510,6 +3534,15 @@ export const useAppStore = create<AppState>()(
         }
 
         const existingHistory = state.messagesByTask[resolvedTaskId] ?? [];
+        const promptDraft = state.promptDraftByTask[resolvedTaskId] ?? sourcePromptDraft;
+        const resolvedPromptDraftRuntimeState = resolvePromptDraftRuntimeState({
+          promptDraft,
+          fallback: {
+            claudePermissionMode: state.settings.claudePermissionMode,
+            claudePermissionModeBeforePlan: state.settings.claudePermissionModeBeforePlan,
+            codexExperimentalPlanMode: state.settings.codexExperimentalPlanMode,
+          },
+        });
 
         // ── Slash-command interception ────────────────────────────────────
         // Check BEFORE building the prompt or touching the provider.
@@ -3764,6 +3797,20 @@ export const useAppStore = create<AppState>()(
                 providerConversationByTask: persistedInactiveWorkspaceSession.session.providerConversationByTask,
               });
             }
+            const nextPlanReady = pendingEvents
+              .filter((event): event is Extract<NormalizedProviderEvent, { type: "plan_ready" }> => event.type === "plan_ready")
+              .at(-1);
+            if (nextPlanReady?.planText?.trim() && workspaceCwd) {
+              void persistWorkspacePlanFile({
+                rootPath: workspaceCwd,
+                taskId: resolvedTaskId,
+                planText: nextPlanReady.planText,
+              }).then((filePath) => {
+                if (filePath) {
+                  latestState.notifyWorkspacePlansChanged();
+                }
+              });
+            }
             const notificationSession = updatedSession as WorkspaceSessionState | null;
             if (notificationSession) {
               const notificationsToPersist = buildApprovalNotificationInputs({
@@ -3805,7 +3852,11 @@ export const useAppStore = create<AppState>()(
           runtimeOptions: buildProviderRuntimeOptions({
             provider,
             model: activeModel,
-            settings: get().settings,
+            settings: {
+              ...get().settings,
+              claudePermissionMode: resolvedPromptDraftRuntimeState.claudePermissionMode,
+              codexExperimentalPlanMode: resolvedPromptDraftRuntimeState.codexExperimentalPlanMode,
+            },
             providerConversation,
           }),
           onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
@@ -4481,7 +4532,7 @@ export const useAppStore = create<AppState>()(
         }
 
         // Attach the file to the prompt draft so the user can type their instruction first.
-        const currentDraft = state.promptDraftByTask[taskId] ?? { text: "", attachedFilePaths: [], attachments: [] };
+        const currentDraft = state.promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
         if (!currentDraft.attachedFilePaths.includes(activeTab.filePath)) {
           get().updatePromptDraft({
             taskId,

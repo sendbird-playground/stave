@@ -1,8 +1,9 @@
 import { Check, ChevronDown, Shield } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import type { ClaudePermissionMode } from "@/types/chat";
+export type { ClaudePermissionMode } from "@/types/chat";
 
-export type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
 export type CodexApprovalPolicy = "never" | "on-request" | "untrusted";
 export type PermissionModeValue = ClaudePermissionMode | CodexApprovalPolicy;
 
