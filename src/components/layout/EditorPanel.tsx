@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { ExplorerEntryIcon } from "./explorer-entry-icon";
 import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
-import { collectAncestorFolders, normalizeRelativeInputPath } from "./editor-panel.utils";
+import { getExplorerExpandedPathsAfterCreate, normalizeRelativeInputPath } from "./editor-panel.utils";
 
 interface SourceControlItem {
   code: string;
@@ -41,6 +41,10 @@ interface ExplorerDirectoryState {
   status: "loading" | "ready" | "error";
   error?: string;
 }
+
+type PendingExplorerCreate =
+  | { type: "file"; placeholder: string }
+  | { type: "folder"; placeholder: string };
 
 function ExplorerTreeRow(args: {
   entry: WorkspaceDirectoryEntry;
@@ -138,6 +142,9 @@ export function EditorPanel() {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [explorerDirectoryStateByPath, setExplorerDirectoryStateByPath] = useState<Record<string, ExplorerDirectoryState>>({});
   const [explorerError, setExplorerError] = useState("");
+  const [pendingExplorerCreate, setPendingExplorerCreate] = useState<PendingExplorerCreate | null>(null);
+  const [pendingExplorerCreatePath, setPendingExplorerCreatePath] = useState("");
+  const [isCreatingExplorerEntry, setIsCreatingExplorerEntry] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
 
   const [sourceBranch, setSourceBranch] = useState("unknown");
@@ -149,6 +156,7 @@ export function EditorPanel() {
   const explorerDirectoryStateRef = useRef<Record<string, ExplorerDirectoryState>>({});
   const explorerRequestTokenRef = useRef(0);
   const selectedDiffRequestIdRef = useRef(0);
+  const pendingExplorerCreateInputRef = useRef<HTMLInputElement | null>(null);
 
   const explorerRootState = explorerDirectoryStateByPath[""];
   const explorerTree = explorerRootState?.entries ?? [];
@@ -247,6 +255,9 @@ export function EditorPanel() {
     setExplorerDirectoryStateByPath({});
     setExpandedFolders(new Set());
     setExplorerError("");
+    setPendingExplorerCreate(null);
+    setPendingExplorerCreatePath("");
+    setIsCreatingExplorerEntry(false);
   }, [activeWorkspaceId, workspaceCwd]);
 
   useEffect(() => {
@@ -258,6 +269,19 @@ export function EditorPanel() {
     }
     void loadExplorerDirectory({ directoryPath: "" });
   }, [activeWorkspaceId, hasHydratedWorkspaces, rightTab, sidebarOverlayVisible, workspaceCwd]);
+
+  useEffect(() => {
+    if (!pendingExplorerCreate) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      pendingExplorerCreateInputRef.current?.focus();
+      pendingExplorerCreateInputRef.current?.select();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [pendingExplorerCreate]);
 
   async function loadScmStatus() {
     const getStatus = window.api?.sourceControl?.getStatus;
@@ -449,67 +473,73 @@ export function EditorPanel() {
     return result;
   }
 
-  async function handleAddFolder() {
-    const nextPath = window.prompt("New folder path (relative to project root)");
-    if (nextPath === null) {
-      return;
-    }
-    const folderPath = normalizeRelativeInputPath({ value: nextPath });
-    if (!folderPath) {
-      setExplorerError("Enter a valid relative folder path.");
-      return;
-    }
-
-    const result = await runExplorerCreateOperation({
-      execute: () => workspaceFsAdapter.createDirectory({ directoryPath: folderPath }),
-      fallbackError: "Failed to create folder.",
+  function startExplorerCreate(type: PendingExplorerCreate["type"]) {
+    setExplorerError("");
+    setPendingExplorerCreate({
+      type,
+      placeholder: type === "file" ? "src/components/new-file.tsx" : "src/components/new-folder",
     });
-    if (!result) {
-      return;
-    }
-
-    const nextExpandedFolders = new Set(expandedFolders);
-    for (const folder of collectAncestorFolders({ path: folderPath })) {
-      nextExpandedFolders.add(folder);
-    }
-
-    await Promise.all([
-      refreshProjectFiles(),
-      reloadExplorer({ expandedPaths: nextExpandedFolders }),
-    ]);
+    setPendingExplorerCreatePath("");
   }
 
-  async function handleAddFile() {
-    const nextPath = window.prompt("New file path (relative to project root)");
-    if (nextPath === null) {
-      return;
-    }
-    const filePath = normalizeRelativeInputPath({ value: nextPath });
-    if (!filePath) {
-      setExplorerError("Enter a valid relative file path.");
-      return;
-    }
-    const segments = filePath.split("/");
-    const parentPath = segments.slice(0, -1).join("/");
-
-    const result = await runExplorerCreateOperation({
-      execute: () => workspaceFsAdapter.createFile({ filePath }),
-      fallbackError: "Failed to create file.",
-    });
-    if (!result) {
+  function cancelExplorerCreate() {
+    if (isCreatingExplorerEntry) {
       return;
     }
 
-    const nextExpandedFolders = new Set(expandedFolders);
-    for (const folder of collectAncestorFolders({ path: parentPath })) {
-      nextExpandedFolders.add(folder);
+    setPendingExplorerCreate(null);
+    setPendingExplorerCreatePath("");
+  }
+
+  async function submitExplorerCreate() {
+    if (!pendingExplorerCreate || isCreatingExplorerEntry) {
+      return;
     }
 
-    await Promise.all([
-      refreshProjectFiles(),
-      reloadExplorer({ expandedPaths: nextExpandedFolders }),
-    ]);
-    handleOpenExplorerFile(filePath);
+    const entryPath = normalizeRelativeInputPath({ value: pendingExplorerCreatePath });
+    if (!entryPath) {
+      setExplorerError(`Enter a valid relative ${pendingExplorerCreate.type} path.`);
+      return;
+    }
+
+    setIsCreatingExplorerEntry(true);
+    try {
+      const result = await runExplorerCreateOperation({
+        execute: () => (
+          pendingExplorerCreate.type === "file"
+            ? workspaceFsAdapter.createFile({ filePath: entryPath })
+            : workspaceFsAdapter.createDirectory({ directoryPath: entryPath })
+        ),
+        fallbackError: pendingExplorerCreate.type === "file"
+          ? "Failed to create file."
+          : "Failed to create folder.",
+      });
+      if (!result) {
+        return;
+      }
+
+      const nextExpandedFolders = new Set(expandedFolders);
+      for (const folder of getExplorerExpandedPathsAfterCreate({
+        path: entryPath,
+        type: pendingExplorerCreate.type,
+      })) {
+        nextExpandedFolders.add(folder);
+      }
+
+      setPendingExplorerCreate(null);
+      setPendingExplorerCreatePath("");
+
+      await Promise.all([
+        refreshProjectFiles(),
+        reloadExplorer({ expandedPaths: nextExpandedFolders }),
+      ]);
+
+      if (pendingExplorerCreate.type === "file") {
+        handleOpenExplorerFile(entryPath);
+      }
+    } finally {
+      setIsCreatingExplorerEntry(false);
+    }
   }
 
   return (
@@ -643,7 +673,7 @@ export function EditorPanel() {
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                          onClick={() => void handleAddFile()}
+                          onClick={() => startExplorerCreate("file")}
                         >
                           <FilePlus className="size-4" />
                         </Button>
@@ -657,7 +687,7 @@ export function EditorPanel() {
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                          onClick={() => void handleAddFolder()}
+                          onClick={() => startExplorerCreate("folder")}
                         >
                           <FolderPlus className="size-4" />
                         </Button>
@@ -697,6 +727,59 @@ export function EditorPanel() {
               </div>
               {explorerError ? <p className="mb-1 text-sm text-destructive">{explorerError}</p> : null}
               <div className="space-y-1">
+                {pendingExplorerCreate ? (
+                  <form
+                    className="rounded-sm border border-border/80 bg-muted/40 px-2 py-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void submitExplorerCreate();
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      {pendingExplorerCreate.type === "file" ? (
+                        <FilePlus className="size-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <FolderPlus className="size-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <Input
+                        ref={pendingExplorerCreateInputRef}
+                        value={pendingExplorerCreatePath}
+                        onChange={(event) => setPendingExplorerCreatePath(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            cancelExplorerCreate();
+                          }
+                        }}
+                        className="h-8 rounded-sm border-border/80 bg-background px-2 text-sm"
+                        placeholder={pendingExplorerCreate.placeholder}
+                        aria-label={pendingExplorerCreate.type === "file" ? "New file path" : "New folder path"}
+                        disabled={isCreatingExplorerEntry}
+                      />
+                      <Button
+                        type="submit"
+                        size="sm"
+                        className="h-8 rounded-sm"
+                        disabled={isCreatingExplorerEntry}
+                      >
+                        {isCreatingExplorerEntry ? "Creating..." : "Create"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 rounded-sm px-2 text-muted-foreground"
+                        onClick={cancelExplorerCreate}
+                        disabled={isCreatingExplorerEntry}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Enter a path relative to the project root. Press Enter to create or Esc to cancel.
+                    </p>
+                  </form>
+                ) : null}
                 {isExplorerLoading && explorerTree.length === 0 ? (
                   <p className="flex items-center gap-2 text-sm text-muted-foreground">
                     <LoaderCircle className="size-4 animate-spin" />
