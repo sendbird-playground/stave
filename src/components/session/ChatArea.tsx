@@ -1,5 +1,5 @@
 import { FolderOpen, Layers } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { ChatInput } from "@/components/session/ChatInput";
 import { ChatPanel } from "@/components/session/ChatPanel";
 import { EmptySplash } from "@/components/session/EmptySplash";
@@ -13,6 +13,7 @@ import { useShallow } from "zustand/react/shallow";
 export function ChatArea() {
   const chatInputDockRef = useRef<HTMLDivElement | null>(null);
   const [chatInputDockHeight, setChatInputDockHeight] = useState(0);
+  const sessionAreaRef = useRef<HTMLDivElement>(null);
   const [
     projectPath,
     hasAnyWorkspace,
@@ -78,9 +79,33 @@ export function ChatArea() {
     return () => observer.disconnect();
   }, [isEmpty]);
 
+  const handleSessionAreaMouseDownCapture = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    // Keep Escape scoped to the task surface even when users click a non-focusable
+    // message area before pressing the shortcut.
+    if (target.closest("button, a, input, textarea, select, [role='button'], [role='link'], [role='textbox'], [contenteditable='true']")) {
+      return;
+    }
+
+    sessionAreaRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const sessionAreaProps = {
+    ref: sessionAreaRef,
+    tabIndex: -1,
+    "data-testid": "session-area",
+    "data-task-abort-scope": "",
+    onMouseDownCapture: handleSessionAreaMouseDownCapture,
+    className: "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface outline-none",
+  } as const;
+
   if (!projectPath) {
     return (
-      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
+      <div {...sessionAreaProps}>
         <Empty data-testid="splash-no-project">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -102,7 +127,7 @@ export function ChatArea() {
 
   if (hasAnyWorkspace && !hasSelectedWorkspace) {
     return (
-      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
+      <div {...sessionAreaProps}>
         <Empty data-testid="splash-no-workspace">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -118,7 +143,7 @@ export function ChatArea() {
 
   if (!hasSelectedTask) {
     return (
-      <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
+      <div {...sessionAreaProps}>
         <EmptySplash onCreateTask={() => createTask({ title: "" })} showCreateTaskAction />
       </div>
     );
@@ -151,7 +176,7 @@ export function ChatArea() {
       );
 
   return (
-    <div data-testid="session-area" className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface">
+    <div {...sessionAreaProps}>
       {content}
     </div>
   );
