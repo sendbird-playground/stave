@@ -6,12 +6,16 @@ import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
 import { APPROVE_PLAN_MESSAGE } from "@/lib/providers/plan-response";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { useAppStore } from "@/store/app.store";
-import { resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
+import { resolvePlanViewerInsets, resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
 import { transitionClaudePermissionMode } from "@/components/session/chat-input.runtime";
 import { PlanHistoryPopover } from "@/components/session/PlanHistoryPopover";
 import { useShallow } from "zustand/react/shallow";
 
 type ViewState = "normal" | "minimized" | "expanded";
+
+interface PlanViewerProps {
+  inputDockHeight?: number;
+}
 
 /** Persist plan text to .stave/plans/{taskId}_{timestamp}.md. Returns the relative file path on success. */
 async function persistPlanToFile(args: { projectPath: string; taskId: string; planText: string }): Promise<string | null> {
@@ -28,7 +32,7 @@ async function persistPlanToFile(args: { projectPath: string; taskId: string; pl
   }
 }
 
-export function PlanViewer() {
+export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const [revising, setRevising] = useState(false);
   const [revisionText, setRevisionText] = useState("");
   const [viewState, setViewState] = useState<ViewState>("normal");
@@ -177,17 +181,22 @@ export function PlanViewer() {
   const isMinimized = viewState === "minimized";
   const isExpanded = viewState === "expanded";
   const providerLabel = activeProvider === "codex" ? "Codex" : "Claude";
+  const { topOffset, bottomOffset } = resolvePlanViewerInsets({
+    isExpanded,
+    inputDockHeight,
+  });
+  const viewerStyle = isExpanded
+    ? { top: topOffset ?? 0, bottom: bottomOffset }
+    : { bottom: bottomOffset };
 
   return (
     <div
-      className={[
-        "absolute bottom-full left-0 right-0 z-20 px-3 pb-2 sm:px-4",
-        isExpanded ? "top-0 bottom-0" : "",
-      ].join(" ")}
+      className="pointer-events-none absolute left-0 right-0 z-20 px-3 sm:px-4"
+      style={viewerStyle}
     >
       <div
         className={[
-          "mx-auto flex max-w-6xl flex-col rounded-xl border border-border/80 bg-card shadow-lg",
+          "pointer-events-auto mx-auto flex max-w-6xl min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
           isExpanded ? "h-full" : "",
         ].join(" ")}
       >
@@ -223,7 +232,7 @@ export function PlanViewer() {
         {/* Body — hidden when preparing or minimized */}
         {!isPlanPreparing && !isMinimized && (
           <>
-            <div className={["overflow-y-auto px-4 py-3", isExpanded ? "flex-1" : "max-h-72"].join(" ")}>
+            <div className={["min-h-0 overflow-y-auto px-4 py-3", isExpanded ? "flex-1" : "max-h-72"].join(" ")}>
               <MessageResponse>{planText || "Plan ready."}</MessageResponse>
             </div>
             {revising ? (

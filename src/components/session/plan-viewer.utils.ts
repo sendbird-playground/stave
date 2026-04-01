@@ -1,5 +1,8 @@
 import type { ChatMessage } from "@/types/chat";
 
+const PLAN_VIEWER_COLLAPSED_GAP_PX = 8;
+const PLAN_VIEWER_EXPANDED_TOP_PX = 12;
+
 export function resolvePlanViewerState(args: {
   activeProvider: "claude-code" | "codex" | "stave";
   claudePermissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
@@ -32,5 +35,17 @@ export function resolvePlanViewerState(args: {
     planText,
     isPlanPreparing,
     isPlanPending,
+  };
+}
+
+export function resolvePlanViewerInsets(args: {
+  isExpanded: boolean;
+  inputDockHeight: number;
+}) {
+  const bottomOffset = Math.max(0, Math.round(args.inputDockHeight)) + PLAN_VIEWER_COLLAPSED_GAP_PX;
+
+  return {
+    topOffset: args.isExpanded ? PLAN_VIEWER_EXPANDED_TOP_PX : null,
+    bottomOffset,
   };
 }
