@@ -550,6 +550,7 @@ describe("workspace snapshot schema compatibility", () => {
     });
     expect(loaded?.workspaceInformation).toEqual({
       jiraIssues: [],
+      confluencePages: [],
       figmaResources: [],
       linkedPullRequests: [],
       slackThreads: [],
@@ -630,6 +631,7 @@ describe("workspace snapshot schema compatibility", () => {
     });
     expect(loaded?.workspaceInformation).toEqual({
       jiraIssues: [],
+      confluencePages: [],
       figmaResources: [],
       linkedPullRequests: [],
       slackThreads: [],

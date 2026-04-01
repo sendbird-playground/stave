@@ -250,6 +250,14 @@ const WorkspaceSlackThreadSchema = z.object({
   note: z.string().optional().default(""),
 });
 
+const WorkspaceConfluencePageSchema = z.object({
+  id: z.string(),
+  title: z.string().optional().default(""),
+  url: z.string().optional().default(""),
+  spaceKey: z.string().optional().default(""),
+  note: z.string().optional().default(""),
+});
+
 const WorkspaceTodoItemSchema = z.object({
   id: z.string(),
   text: z.string().optional().default(""),
@@ -304,6 +312,7 @@ const WorkspaceInfoCustomFieldSchema = z.discriminatedUnion("type", [
 
 const WorkspaceInformationSchema = z.object({
   jiraIssues: z.array(WorkspaceJiraIssueSchema).optional().default([]),
+  confluencePages: z.array(WorkspaceConfluencePageSchema).optional().default([]),
   figmaResources: z.array(WorkspaceFigmaResourceSchema).optional().default([]),
   linkedPullRequests: z.array(WorkspaceLinkedPullRequestSchema).optional().default([]),
   slackThreads: z.array(WorkspaceSlackThreadSchema).optional().default([]),
@@ -327,6 +336,7 @@ export const WorkspaceSnapshotSchema = z.object({
   activeEditorTabId: z.string().nullable().optional().default(null),
   workspaceInformation: WorkspaceInformationSchema.optional().default({
     jiraIssues: [],
+    confluencePages: [],
     figmaResources: [],
     linkedPullRequests: [],
     slackThreads: [],

@@ -81,6 +81,14 @@ export interface WorkspaceSlackThread {
   note: string;
 }
 
+export interface WorkspaceConfluencePage {
+  id: string;
+  title: string;
+  url: string;
+  spaceKey: string;
+  note: string;
+}
+
 export interface WorkspaceTodoItem {
   id: string;
   text: string;
@@ -139,6 +147,7 @@ export type WorkspaceInfoCustomField =
 
 export interface WorkspaceInformationState {
   jiraIssues: WorkspaceJiraIssue[];
+  confluencePages: WorkspaceConfluencePage[];
   figmaResources: WorkspaceFigmaResource[];
   linkedPullRequests: WorkspaceLinkedPullRequest[];
   slackThreads: WorkspaceSlackThread[];
@@ -187,6 +196,16 @@ export function createWorkspaceSlackThread(): WorkspaceSlackThread {
     id: buildWorkspaceInformationId("slack"),
     url: "",
     channelName: "",
+    note: "",
+  };
+}
+
+export function createWorkspaceConfluencePage(): WorkspaceConfluencePage {
+  return {
+    id: buildWorkspaceInformationId("confluence"),
+    title: "",
+    url: "",
+    spaceKey: "",
     note: "",
   };
 }
@@ -407,6 +426,52 @@ export function isSlackThreadUrl(value: string) {
   return extractSlackThreadReference(value) !== null;
 }
 
+export interface ConfluencePageReference {
+  host: string;
+  spaceKey: string;
+  title: string;
+}
+
+export function extractConfluencePageReference(
+  value: string,
+): ConfluencePageReference | null {
+  const url = parseWorkspaceInfoUrl(value);
+  if (!url || !url.hostname.endsWith("atlassian.net")) {
+    return null;
+  }
+
+  const segments = url.pathname.split("/").filter(Boolean);
+
+  // Pattern: /wiki/spaces/SPACE/pages/12345/Page+Title
+  if (segments[0] === "wiki" && segments[1] === "spaces" && segments[2]) {
+    const spaceKey = segments[2];
+    const title =
+      segments[5]
+        ? decodeURIComponent(segments[5].replace(/\+/g, " ")).trim()
+        : "";
+    return {
+      host: formatWorkspaceInfoHostLabel(value),
+      spaceKey,
+      title,
+    };
+  }
+
+  // Pattern: /wiki/x/... (tiny URL) — no space info available
+  if (segments[0] === "wiki") {
+    return {
+      host: formatWorkspaceInfoHostLabel(value),
+      spaceKey: "",
+      title: "",
+    };
+  }
+
+  return null;
+}
+
+export function isConfluencePageUrl(value: string) {
+  return extractConfluencePageReference(value) !== null;
+}
+
 export const WORKSPACE_INFO_FIELD_TYPE_LABELS: Record<
   WorkspaceInfoFieldType,
   string
@@ -423,6 +488,7 @@ export const WORKSPACE_INFO_FIELD_TYPE_LABELS: Record<
 export function createEmptyWorkspaceInformation(): WorkspaceInformationState {
   return {
     jiraIssues: [],
+    confluencePages: [],
     figmaResources: [],
     linkedPullRequests: [],
     slackThreads: [],
