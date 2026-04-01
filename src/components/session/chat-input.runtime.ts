@@ -1,5 +1,6 @@
 import type { PromptInputRuntimeControl, PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
 import { getPermissionModeOptions, type PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
+import { resolveEffectiveCodexSandboxMode } from "@/lib/providers/codex-runtime-options";
 import type { ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import {
   CLAUDE_EFFORT_OPTIONS,
@@ -279,6 +280,12 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
     ];
   }
 
+  const effectiveCodexSandboxMode = resolveEffectiveCodexSandboxMode({
+    sandboxMode: args.codexSandboxMode,
+    planMode: args.codexExperimentalPlanMode,
+    fallback: "workspace-write",
+  });
+
   return [
     {
       id: "timeout",
@@ -288,8 +295,8 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
     {
       id: "sandbox",
       label: "Sandbox",
-      value: formatTitleCaseRuntimeValue(args.codexSandboxMode),
-      tone: args.codexSandboxMode === "danger-full-access" ? "warning" : "default",
+      value: formatTitleCaseRuntimeValue(effectiveCodexSandboxMode),
+      tone: effectiveCodexSandboxMode === "danger-full-access" ? "warning" : "default",
     },
     {
       id: "network",

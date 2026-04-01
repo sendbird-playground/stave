@@ -49,6 +49,24 @@ describe("normalizeCodexApprovalPolicy", () => {
 });
 
 describe("buildProviderRuntimeOptions", () => {
+  test("forces Codex plan turns onto a read-only sandbox", () => {
+    expect(buildProviderRuntimeOptions({
+      provider: "codex",
+      model: "gpt-5.4",
+      settings: {
+        ...settings,
+        codexSandboxMode: "danger-full-access",
+        codexExperimentalPlanMode: true,
+      },
+      providerConversation: null,
+    })).toMatchObject({
+      model: "gpt-5.4",
+      codexApprovalPolicy: "never",
+      codexSandboxMode: "read-only",
+      codexExperimentalPlanMode: true,
+    });
+  });
+
   test("forwards both resume ids when Stave routes across providers", () => {
     expect(buildProviderRuntimeOptions({
       provider: "stave",
@@ -92,6 +110,7 @@ describe("buildProviderRuntimeOptions", () => {
     })).toMatchObject({
       model: "gpt-5.4",
       codexResumeThreadId: "codex-thread-1",
+      codexSandboxMode: "workspace-write",
       codexExperimentalPlanMode: false,
     });
   });

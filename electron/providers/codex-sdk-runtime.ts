@@ -10,6 +10,10 @@ import {
   buildProviderTurnPrompt,
   resolveProviderResumeConversationId,
 } from "../../src/lib/providers/provider-request-translators";
+import {
+  resolveEffectiveCodexApprovalPolicy,
+  resolveEffectiveCodexSandboxMode,
+} from "../../src/lib/providers/codex-runtime-options";
 import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
 import { createRequire } from "node:module";
@@ -35,28 +39,36 @@ const moduleRequire = createRequire(import.meta.url);
 function resolveSandboxMode(args: {
   runtimeValue?: "read-only" | "workspace-write" | "danger-full-access";
   envValue?: string;
+  planMode?: boolean;
   fallback: "read-only" | "workspace-write" | "danger-full-access";
 }) {
-  const candidate = args.runtimeValue ?? args.envValue;
-  if (candidate === "read-only" || candidate === "workspace-write" || candidate === "danger-full-access") {
-    return candidate;
-  }
-  return args.fallback;
+  return resolveEffectiveCodexSandboxMode({
+    sandboxMode: args.runtimeValue ?? args.envValue,
+    planMode: args.planMode,
+    fallback: args.fallback,
+  });
 }
 
 export function resolveApprovalPolicy(args: {
   runtimeValue?: "never" | "on-request" | "untrusted";
   envValue?: string;
+  planMode?: boolean;
+  fallback?: "never" | "on-request" | "untrusted";
 }): "never" | "on-request" | "untrusted" | undefined {
   const candidate = args.runtimeValue ?? args.envValue;
-  if (
-    candidate === "never"
-    || candidate === "on-request"
-    || candidate === "untrusted"
-  ) {
-    return candidate;
+  if (candidate !== "never" && candidate !== "on-request" && candidate !== "untrusted") {
+    return args.fallback == null
+      ? undefined
+      : resolveEffectiveCodexApprovalPolicy({
+        planMode: args.planMode,
+        fallback: args.fallback,
+      });
   }
-  return undefined;
+  return resolveEffectiveCodexApprovalPolicy({
+    approvalPolicy: candidate,
+    planMode: args.planMode,
+    fallback: args.fallback,
+  });
 }
 
 function toCodexUserFacingErrorMessage(args: { message: string }) {
@@ -158,6 +170,7 @@ function buildThreadKey(args: {
   cwd: string;
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
+  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode ? "plan1" : "plan0";
   const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccessEnabled
     ?? parseBooleanEnv({
       value: process.env.STAVE_CODEX_NETWORK_ACCESS,
@@ -166,11 +179,14 @@ function buildThreadKey(args: {
   const sandboxMode = resolveSandboxMode({
     runtimeValue: args.runtimeOptions?.codexSandboxMode,
     envValue: process.env.STAVE_CODEX_SANDBOX_MODE?.trim(),
+    planMode: experimentalPlanMode === "plan1",
     fallback: "workspace-write",
   });
   const approvalPolicy = resolveApprovalPolicy({
     runtimeValue: args.runtimeOptions?.codexApprovalPolicy,
     envValue: process.env.STAVE_CODEX_APPROVAL_POLICY?.trim(),
+    planMode: experimentalPlanMode === "plan1",
+    fallback: "on-request",
   });
   const skipGitRepoCheck = args.runtimeOptions?.codexSkipGitRepoCheck ? "nogit1" : "nogit0";
   const model = args.runtimeOptions?.model?.trim() || "model-default";
@@ -179,8 +195,6 @@ function buildThreadKey(args: {
   const reasoningSummary = args.runtimeOptions?.codexReasoningSummary ?? "summary-auto";
   const supportsReasoningSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries ?? "supports-auto";
   const showRawAgentReasoning = args.runtimeOptions?.codexShowRawAgentReasoning ? "raw1" : "raw0";
-  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode ? "plan1" : "plan0";
-
   return `${args.taskId ?? "default"}:${args.cwd}:${sandboxMode}:${skipGitRepoCheck}:${networkAccessEnabled ? "net1" : "net0"}:${approvalPolicy ?? "approval-default"}:${model}:${modelReasoningEffort}:${webSearchMode}:${reasoningSummary}:${supportsReasoningSummaries}:${showRawAgentReasoning}:${experimentalPlanMode}`;
 }
 
@@ -615,12 +629,6 @@ export function mapCodexItemEvent(args: {
       return [];
     }
     case "file_change": {
-      if (lifecycle === "item.started") {
-        const paths = (item.changes ?? []).map((change) => change.path ?? "").filter(Boolean);
-        if (paths.length > 0) {
-          return [{ type: "system", content: `Modifying: ${paths.join(", ")}` }];
-        }
-      }
       if (lifecycle !== "item.completed") return [];
       if (item.status === "failed") {
         return [{
@@ -666,11 +674,14 @@ function ensureThread(args: {
   const sandboxMode = resolveSandboxMode({
     runtimeValue: args.runtimeOptions?.codexSandboxMode,
     envValue: process.env.STAVE_CODEX_SANDBOX_MODE?.trim(),
+    planMode: experimentalPlanMode,
     fallback: "workspace-write",
   });
   const approvalPolicy = resolveApprovalPolicy({
     runtimeValue: args.runtimeOptions?.codexApprovalPolicy,
     envValue: process.env.STAVE_CODEX_APPROVAL_POLICY?.trim(),
+    planMode: experimentalPlanMode,
+    fallback: "on-request",
   });
   const threadKey = buildThreadKey({
     taskId: args.taskId,

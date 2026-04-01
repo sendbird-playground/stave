@@ -52,12 +52,10 @@ describe("getVisibleMessageParts", () => {
     ]);
   });
 
-  test("keeps modifying system events visible when there is no inline diff", () => {
+  test("hides modifying system events even when there is no inline diff", () => {
     expect(getVisibleMessageParts([
       { type: "system_event", content: "Modifying: src/a.ts" },
-    ])).toEqual([
-      { type: "system_event", content: "Modifying: src/a.ts" },
-    ]);
+    ])).toEqual([]);
   });
 });
 
@@ -249,7 +247,8 @@ describe("system event visibility", () => {
   test("identifies codex file-change summary notices", () => {
     expect(isCodeDiffSummarySystemEvent("Modifying: src/a.ts")).toBe(true);
     expect(isCodeDiffSummarySystemEvent("  modifying: src/a.ts, src/b.ts")).toBe(true);
-    expect(isCodeDiffSummarySystemEvent("Applied file change(s): src/a.ts")).toBe(false);
+    expect(isCodeDiffSummarySystemEvent("Applied file change(s): src/a.ts")).toBe(true);
+    expect(isCodeDiffSummarySystemEvent("Skipped inline diff for file(s): src/a.ts")).toBe(true);
   });
 
   test("hides inline error-like system events", () => {
@@ -265,6 +264,13 @@ describe("system event visibility", () => {
       type: "system_event",
       content: "Response was cut off because the output limit was reached.",
     })).toBe(true);
+  });
+
+  test("treats hidden file-change summary notices as empty when no other content exists", () => {
+    expect(getMessageBodyFallbackState({
+      isActivelyStreaming: false,
+      renderableParts: [{ type: "system_event", content: "Applied file change(s): src/a.ts" }],
+    })).toBe("empty-completed");
   });
 
   test("hides subagent progress events from standalone inline rendering", () => {

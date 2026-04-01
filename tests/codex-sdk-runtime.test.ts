@@ -80,6 +80,33 @@ describe("mapCodexItemEvent", () => {
     ]);
   });
 
+  test("suppresses inline system messages for file_change items and only surfaces failures", () => {
+    expect(mapCodexItemEvent({
+      lifecycle: "item.started",
+      item: {
+        id: "file-change-1",
+        type: "file_change",
+        changes: [{ path: "src/app.ts" }],
+      } as any,
+    })).toEqual([]);
+
+    expect(mapCodexItemEvent({
+      lifecycle: "item.completed",
+      item: {
+        id: "file-change-2",
+        type: "file_change",
+        status: "failed",
+        changes: [{ path: "src/app.ts" }],
+      } as any,
+    })).toEqual([
+      {
+        type: "error",
+        message: "File change failed: src/app.ts",
+        recoverable: false,
+      },
+    ]);
+  });
+
   test("emits plan_ready when agent_message contains <proposed_plan> tags", () => {
     const events = mapCodexItemEvent({
       lifecycle: "item.completed",
@@ -277,5 +304,13 @@ describe("resolveApprovalPolicy", () => {
   test("returns undefined for unknown or deprecated approval modes", () => {
     expect(resolveApprovalPolicy({ runtimeValue: undefined })).toBeUndefined();
     expect(resolveApprovalPolicy({ envValue: "on-failure" })).toBeUndefined();
+  });
+
+  test("forces never in plan mode when a fallback policy is provided", () => {
+    expect(resolveApprovalPolicy({
+      runtimeValue: "on-request",
+      planMode: true,
+      fallback: "on-request",
+    })).toBe("never");
   });
 });

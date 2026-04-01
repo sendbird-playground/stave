@@ -1,4 +1,8 @@
 import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
+import {
+  resolveEffectiveCodexApprovalPolicy,
+  resolveEffectiveCodexSandboxMode,
+} from "@/lib/providers/codex-runtime-options";
 import type { ClaudeSettingSource, ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import { buildStaveAutoProfileFromSettings } from "@/lib/providers/stave-auto-profile";
 import type { AppSettings } from "@/store/app.store";
@@ -54,14 +58,10 @@ type RuntimeSettings = Pick<
 export function normalizeCodexApprovalPolicy(args: {
   value?: string;
 }): NonNullable<ProviderRuntimeOptions["codexApprovalPolicy"]> {
-  if (
-    args.value === "never"
-    || args.value === "on-request"
-    || args.value === "untrusted"
-  ) {
-    return args.value;
-  }
-  return DEFAULT_CODEX_APPROVAL_POLICY;
+  return resolveEffectiveCodexApprovalPolicy({
+    approvalPolicy: args.value as ProviderRuntimeOptions["codexApprovalPolicy"] | undefined,
+    fallback: DEFAULT_CODEX_APPROVAL_POLICY,
+  });
 }
 
 export function normalizeClaudeTaskBudgetTokens(args: {
@@ -133,11 +133,19 @@ export function buildProviderRuntimeOptions(args: {
       : args.provider === "claude-code" && providerConversation?.["claude-code"]?.trim()
         ? { claudeResumeSessionId: providerConversation["claude-code"] }
         : {}),
-    codexSandboxMode: settings.codexSandboxMode,
+    codexSandboxMode: resolveEffectiveCodexSandboxMode({
+      sandboxMode: settings.codexSandboxMode,
+      planMode: settings.codexExperimentalPlanMode,
+      fallback: "workspace-write",
+    }),
     codexSkipGitRepoCheck: settings.codexSkipGitRepoCheck,
     codexNetworkAccessEnabled: settings.codexNetworkAccessEnabled,
-    codexApprovalPolicy: normalizeCodexApprovalPolicy({
-      value: settings.codexApprovalPolicy,
+    codexApprovalPolicy: resolveEffectiveCodexApprovalPolicy({
+      approvalPolicy: normalizeCodexApprovalPolicy({
+        value: settings.codexApprovalPolicy,
+      }),
+      planMode: settings.codexExperimentalPlanMode,
+      fallback: DEFAULT_CODEX_APPROVAL_POLICY,
     }),
     codexPathOverride: settings.codexPathOverride || undefined,
     codexModelReasoningEffort: settings.codexModelReasoningEffort,
