@@ -36,11 +36,13 @@ export function resolvePlanViewerState(args: {
   // Render the full viewer only while the task is still in plan review, or
   // when the latest message is itself the plan response awaiting user action.
   const isPlanPending = hasHistoricalPlan && (isPlanModeActive || lastMessageHasPlan);
+  const canReplyToPlan = isPlanPending && !args.isTurnActive;
 
   return {
     planText,
     isPlanPreparing,
     isPlanPending,
+    canReplyToPlan,
   };
 }
 

@@ -54,6 +54,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const effectiveClaudePermissionMode = taskRuntimeState.claudePermissionMode;
   const effectiveClaudePermissionModeBeforePlan = taskRuntimeState.claudePermissionModeBeforePlan;
   const effectiveCodexExperimentalPlanMode = taskRuntimeState.codexExperimentalPlanMode;
+  const providerLabel = activeProvider === "codex" ? "Codex" : "Claude";
   const isManagedTask = isTaskManaged(activeTask);
   const managedNotice = isManagedTask
     ? `Plan responses are managed by ${getTaskControlOwner(activeTask) === "external" ? "an external controller" : "Stave"}. Take over to reply here.`
@@ -81,7 +82,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
 
   // Use the latest plan message for the plan text and pending state
-  const { planText, isPlanPreparing, isPlanPending } = resolvePlanViewerState({
+  const { planText, isPlanPreparing, isPlanPending, canReplyToPlan } = resolvePlanViewerState({
     activeProvider,
     claudePermissionMode: effectiveClaudePermissionMode,
     codexExperimentalPlanMode: effectiveCodexExperimentalPlanMode,
@@ -89,6 +90,10 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     lastMessage,
     isTurnActive,
   });
+  const planReplyNotice = !isManagedTask && isPlanPending && !canReplyToPlan
+    ? `Wait for ${providerLabel} to finish the current turn before replying to the plan.`
+    : null;
+  const replyNotice = managedNotice ?? planReplyNotice;
 
   // Reset view state when a new plan arrives so it opens fully
   useEffect(() => {
@@ -101,7 +106,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   }, [isPlanPending]);
 
   const handleApprove = useCallback(() => {
-    if (isManagedTask) {
+    if (isManagedTask || !canReplyToPlan) {
       return;
     }
     // Restore the permission mode that was active before plan mode
@@ -133,6 +138,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   }, [
     activeProvider,
     activeTaskId,
+    canReplyToPlan,
     effectiveClaudePermissionMode,
     effectiveClaudePermissionModeBeforePlan,
     effectiveCodexExperimentalPlanMode,
@@ -167,7 +173,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   }
 
   function handleRevise() {
-    if (isManagedTask || !revisionText.trim()) return;
+    if (isManagedTask || !canReplyToPlan || !revisionText.trim()) return;
     sendUserMessage({ taskId: activeTaskId, content: revisionText.trim() });
     setRevising(false);
     setRevisionText("");
@@ -175,7 +181,6 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
 
   const isMinimized = viewState === "minimized";
   const isExpanded = viewState === "expanded";
-  const providerLabel = activeProvider === "codex" ? "Codex" : "Claude";
   const { topOffset, bottomOffset } = resolvePlanViewerInsets({
     isExpanded,
     inputDockHeight,
@@ -234,6 +239,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
                 <Textarea
                   autoFocus
                   value={revisionText}
+                  disabled={!canReplyToPlan}
                   onChange={(e) => setRevisionText(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -249,7 +255,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
                   className="min-h-[72px] rounded-lg border-border/70 bg-background text-base leading-7"
                 />
                 <div className="mt-2 flex items-center gap-2">
-                  <Button size="sm" onClick={handleRevise} disabled={!revisionText.trim()}>
+                  <Button size="sm" onClick={handleRevise} disabled={!canReplyToPlan || !revisionText.trim()}>
                     Send
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => { setRevising(false); setRevisionText(""); }}>
@@ -267,15 +273,15 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
                   <ArrowRightCircle className="size-3.5" />
                   Handoff
                 </Button>
-                <Button size="sm" disabled={isManagedTask} onClick={handleApprove}>
+                <Button size="sm" disabled={isManagedTask || !canReplyToPlan} onClick={handleApprove}>
                   <ClipboardCheck className="size-3.5" />
                   Approve
                 </Button>
-                <Button size="sm" variant="outline" disabled={isManagedTask} onClick={() => setRevising(true)}>
+                <Button size="sm" variant="outline" disabled={isManagedTask || !canReplyToPlan} onClick={() => setRevising(true)}>
                   Revise
                 </Button>
-                {managedNotice ? (
-                  <p className="text-xs text-muted-foreground">{managedNotice}</p>
+                {replyNotice ? (
+                  <p className="text-xs text-muted-foreground">{replyNotice}</p>
                 ) : null}
               </div>
             )}

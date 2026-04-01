@@ -164,6 +164,13 @@ export function getArchiveFallbackTaskId(args: { tasks: Task[]; archivedTaskId: 
   return activeFallback?.id ?? "";
 }
 
+export function getRespondingTasks<T extends Pick<Task, "id" | "archivedAt">>(args: {
+  tasks: T[];
+  activeTurnIdsByTask: Record<string, string | undefined>;
+}) {
+  return args.tasks.filter((task) => !isTaskArchived(task) && Boolean(args.activeTurnIdsByTask[task.id]));
+}
+
 export function getRespondingProviderId(args: {
   fallbackProviderId: ProviderId;
   messages: ChatMessage[];

@@ -57,7 +57,7 @@ import {
   WaveIndicator,
 } from "@/components/ui";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
-import { getRespondingProviderId } from "@/lib/tasks";
+import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
@@ -466,9 +466,10 @@ export function ProjectWorkspaceSidebar(args: {
       return [];
     }
 
-    return runtimeState.tasks.filter((task) =>
-      Boolean(runtimeState.activeTurnIdsByTask[task.id]),
-    );
+    return getRespondingTasks({
+      tasks: runtimeState.tasks,
+      activeTurnIdsByTask: runtimeState.activeTurnIdsByTask,
+    });
   }
 
   function getWorkspaceRespondingTaskCount(workspaceId: string) {

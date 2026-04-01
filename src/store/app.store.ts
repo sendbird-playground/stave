@@ -112,6 +112,7 @@ import {
   createEmptyWorkspaceState,
   createWorkspaceSnapshot,
   defaultWorkspaceName,
+  interruptActiveTaskTurns,
   persistWorkspaceSnapshot,
   starterWorkspaceId,
   type WorkspaceSessionState,
@@ -662,6 +663,8 @@ function buildApprovalNotificationInputs(args: {
     } satisfies AppNotificationCreateInput;
   });
 }
+
+const ARCHIVED_TASK_TURN_NOTICE = "Generation stopped because the task was archived before this turn completed.";
 
 const defaultSettings: AppSettings = {
   themeMode: "dark",
@@ -3084,11 +3087,23 @@ export const useAppStore = create<AppState>()(
         });
       },
       archiveTask: ({ taskId }) => {
+        const activeTurnId = get().activeTurnIdsByTask[taskId];
         set((state) => {
           const targetTask = state.tasks.find((task) => task.id === taskId);
           if (!targetTask || isTaskArchived(targetTask) || isManagedTaskReadOnly({ state, taskId })) {
             return {};
           }
+          const interrupted = state.activeTurnIdsByTask[taskId]
+            ? interruptActiveTaskTurns({
+                tasks: [targetTask],
+                messagesByTask: state.messagesByTask,
+                activeTurnIdsByTask: state.activeTurnIdsByTask,
+                notice: ARCHIVED_TASK_TURN_NOTICE,
+              })
+            : {
+                messagesByTask: state.messagesByTask,
+                activeTurnIdsByTask: state.activeTurnIdsByTask,
+              };
           const nextTasks = state.tasks.map((task) =>
             task.id === taskId
               ? {
@@ -3104,9 +3119,17 @@ export const useAppStore = create<AppState>()(
           return {
             tasks: nextTasks,
             activeTaskId: shouldSwitch ? fallbackTaskId : state.activeTaskId,
+            messagesByTask: interrupted.messagesByTask,
+            activeTurnIdsByTask: interrupted.activeTurnIdsByTask,
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
+        if (activeTurnId) {
+          const abortTurn = window.api?.provider?.abortTurn;
+          if (abortTurn) {
+            void abortTurn({ turnId: activeTurnId });
+          }
+        }
         void window.api?.provider?.cleanupTask?.({ taskId });
       },
       setTaskProvider: ({ taskId, provider }) => {
