@@ -4239,6 +4239,7 @@ export const useAppStore = create<AppState>()(
               activeEditorTabId: null,
               layout: {
                 ...state.layout,
+                editorVisible: false,
                 editorDiffMode: false,
               },
               workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
