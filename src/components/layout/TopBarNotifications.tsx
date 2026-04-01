@@ -366,7 +366,7 @@ export function TopBarNotifications(props: {
                                 </span>
                               ) : null}
                               {taskIsArchived ? (
-                                <Badge variant="outline" className="rounded-sm border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.16em] text-warning-foreground">
+                                <Badge variant="outline" className="rounded-sm border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.16em] text-warning dark:bg-warning/15">
                                   Archived
                                 </Badge>
                               ) : null}

@@ -34,7 +34,7 @@ export function parseTodoInput(args: { input: string }): { todos: TodoItem[] } {
 
 function TodoItemIcon({ status }: { status: TodoStatus }) {
   if (status === "completed") {
-    return <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success-foreground" />;
+    return <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />;
   }
   if (status === "in_progress") {
     return <LoaderCircle className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />;

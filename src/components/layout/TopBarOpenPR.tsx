@@ -82,9 +82,9 @@ type Step =
 function InlineNoticeBanner(props: { notice: InlineNotice }) {
   const toneClassName =
     props.notice.tone === "success"
-      ? "border-success/30 bg-success/10 text-success-foreground"
+      ? "border-success/30 bg-success/10 text-success dark:bg-success/15"
       : props.notice.tone === "warning"
-        ? "border-warning/40 bg-warning/10 text-warning-foreground"
+        ? "border-warning/40 bg-warning/10 text-warning dark:bg-warning/15"
         : props.notice.tone === "error"
           ? "border-destructive/40 bg-destructive/10 text-destructive"
           : "border-border/70 bg-muted/30 text-foreground";
@@ -852,7 +852,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
                   disabled={isDialogBusy}
                 />
                 {titleValidationMessage ? (
-                  <p className="text-xs text-warning-foreground">{titleValidationMessage}</p>
+                  <p className="text-xs text-warning">{titleValidationMessage}</p>
                 ) : null}
               </div>
 

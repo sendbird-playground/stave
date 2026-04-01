@@ -39,7 +39,7 @@ interface PromptInputRuntimeBarProps {
 
 function statusPillToneClass(tone: PromptInputRuntimeStatusItem["tone"]) {
   if (tone === "warning") {
-    return "border-warning/40 bg-warning/10 text-warning-foreground";
+    return "border-warning/40 bg-warning/10 text-warning dark:bg-warning/15";
   }
   return "border-border/70 bg-background/60 text-foreground";
 }

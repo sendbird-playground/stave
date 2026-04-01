@@ -49,12 +49,12 @@ function StatusBadge(args: {
 }) {
   const className =
     args.state === "ready" || args.state === "synced"
-      ? "border-success/30 bg-success/10 text-success-foreground"
+      ? "border-success/30 bg-success/10 text-success dark:bg-success/15"
       : args.state === "warning"
         || args.state === "behind"
         || args.state === "ahead"
         || args.state === "dirty"
-      ? "border-warning/40 bg-warning/10 text-warning-foreground"
+      ? "border-warning/40 bg-warning/10 text-warning dark:bg-warning/15"
       : "border-destructive/30 bg-destructive/10 text-destructive";
 
   return (
@@ -82,9 +82,9 @@ function AuthBadge(args: { tool: ToolingStatusEntry }) {
 
   const className =
     args.tool.authState === "authenticated"
-      ? "border-success/30 bg-success/10 text-success-foreground"
+      ? "border-success/30 bg-success/10 text-success dark:bg-success/15"
       : args.tool.authState === "unauthenticated"
-        ? "border-warning/40 bg-warning/10 text-warning-foreground"
+        ? "border-warning/40 bg-warning/10 text-warning dark:bg-warning/15"
         : "border-border/80 bg-muted/30 text-muted-foreground";
 
   return (
