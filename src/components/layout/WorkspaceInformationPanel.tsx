@@ -10,15 +10,14 @@ import {
   GitPullRequestClosed,
   GitPullRequestDraft,
   Globe,
-  Info,
-  Link2,
+  Hash,
   Plus,
   RefreshCcw,
   SlidersHorizontal,
   StickyNote,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   Accordion,
@@ -50,10 +49,12 @@ import {
   createWorkspaceInfoCustomField,
   createWorkspaceJiraIssue,
   createWorkspaceLinkedPullRequest,
+  createWorkspaceSlackThread,
   createWorkspaceTodoItem,
   extractFigmaResourceReference,
   extractGitHubPullRequestReference,
   extractJiraIssueReference,
+  extractSlackThreadReference,
   formatWorkspaceInfoHostLabel,
   isGitHubPullRequestUrl,
   isWorkspaceInfoUrl,
@@ -62,6 +63,7 @@ import {
   type WorkspaceInformationState,
   updateWorkspaceInfoSelectFieldOptions,
   WORKSPACE_INFO_FIELD_TYPES,
+  WORKSPACE_INFO_FIELD_TYPE_LABELS,
 } from "@/lib/workspace-information";
 import {
   derivePrStatus,
@@ -108,11 +110,12 @@ function openExternalUrl(url: string) {
 
 const WORKSPACE_INFORMATION_SECTION_IDS = [
   "overview",
-  "note",
   "todo",
+  "note",
+  "github",
   "jira",
   "figma",
-  "github",
+  "slack",
   "custom",
 ] as const;
 
@@ -309,6 +312,33 @@ function FigmaIcon({ className }: { className?: string }) {
   );
 }
 
+function SlackIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("size-4", className)}
+    >
+      <path
+        d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"
+        fill="#E01E5A"
+      />
+      <path
+        d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.527 2.527 0 0 1 2.521 2.521 2.527 2.527 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"
+        fill="#36C5F0"
+      />
+      <path
+        d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.27 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.163 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"
+        fill="#2EB67D"
+      />
+      <path
+        d="M15.163 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.163 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.27a2.527 2.527 0 0 1-2.52-2.523 2.527 2.527 0 0 1 2.52-2.52h6.315A2.528 2.528 0 0 1 24 15.163a2.528 2.528 0 0 1-2.522 2.523h-6.315z"
+        fill="#ECB22E"
+      />
+    </svg>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Shared section wrapper — minimal, borderless accordion style
 // ---------------------------------------------------------------------------
@@ -320,9 +350,16 @@ function SectionHeader(props: {
   count?: number;
   action?: ReactNode;
   children: ReactNode;
+  first?: boolean;
 }) {
   return (
-    <AccordionItem value={props.value} className="border-b border-border/50">
+    <AccordionItem
+      value={props.value}
+      className={cn(
+        "border-b border-border/50",
+        props.first && "border-t-0",
+      )}
+    >
       <div className="group/section-row flex items-center">
         <AccordionTrigger className="flex-1 gap-2 py-2 pr-1 pl-0 hover:no-underline [&>svg[data-slot=accordion-trigger-icon]]:hidden">
           <div className="flex items-center gap-2 text-left">
@@ -374,7 +411,7 @@ function InlineLinkRow(props: {
   actions?: ReactNode;
 }) {
   return (
-    <div className="group/link-row flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/50">
+    <div className="group/link-row flex items-center gap-2.5 rounded-md px-2 py-1.5">
       <span className="flex size-5 shrink-0 items-center justify-center">
         {props.icon}
       </span>
@@ -399,19 +436,6 @@ function InlineLinkRow(props: {
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/link-row:opacity-100">
         {props.actions}
         <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground"
-                onClick={() => openExternalUrl(props.url)}
-                aria-label="Open link"
-              >
-                <ExternalLink className="size-3" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="left">Open link</TooltipContent>
-          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -654,6 +678,81 @@ function CustomFieldDatePicker(props: {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Single-select options input — tracks raw text so commas aren't swallowed
+// ---------------------------------------------------------------------------
+
+function SingleSelectOptionsInput(props: {
+  field: WorkspaceInfoCustomField & { type: "single_select" };
+  onFieldChange: (field: WorkspaceInfoCustomField) => void;
+}) {
+  const { field, onFieldChange } = props;
+  const [rawValue, setRawValue] = useState(() => field.options.join(", "));
+  const committedRef = useRef(field.options);
+
+  // Sync if options changed externally
+  useEffect(() => {
+    const joined = field.options.join(", ");
+    if (committedRef.current !== field.options) {
+      committedRef.current = field.options;
+      setRawValue(joined);
+    }
+  }, [field.options]);
+
+  function commit(text: string) {
+    const next = updateWorkspaceInfoSelectFieldOptions({
+      field,
+      rawValue: text,
+    });
+    committedRef.current = next.options;
+    setRawValue(next.options.join(", "));
+    onFieldChange(next);
+  }
+
+  // Filter out empty-string options — Radix Select crashes on value=""
+  const validOptions = field.options.filter((opt) => opt.length > 0);
+  const hasValidSelection =
+    field.value.length > 0 && validOptions.includes(field.value);
+
+  return (
+    <div className="space-y-1.5">
+      <Input
+        className="h-8 text-[13px]"
+        value={rawValue}
+        onChange={(event) => setRawValue(event.target.value)}
+        onBlur={(event) => commit(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            commit((event.target as HTMLInputElement).value);
+          }
+        }}
+        placeholder="Options (comma-separated)"
+      />
+      <Select
+        value={hasValidSelection ? field.value : undefined}
+        onValueChange={(value) => onFieldChange({ ...field, value })}
+      >
+        <SelectTrigger className="h-8 w-full text-[13px]">
+          <SelectValue placeholder="Select" />
+        </SelectTrigger>
+        <SelectContent>
+          {validOptions.length === 0 ? (
+            <SelectItem value="__empty__" disabled>
+              No options defined
+            </SelectItem>
+          ) : (
+            validOptions.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))
+          )}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function renderCustomFieldInput(args: {
   field: WorkspaceInfoCustomField;
   onFieldChange: (field: WorkspaceInfoCustomField) => void;
@@ -735,51 +834,10 @@ function renderCustomFieldInput(args: {
           ) : null}
         </div>
       );
-    case "single_select": {
-      // Filter out empty-string options — Radix Select crashes on value=""
-      const validOptions = field.options.filter((opt) => opt.length > 0);
-      const hasValidSelection =
-        field.value.length > 0 && validOptions.includes(field.value);
-
+    case "single_select":
       return (
-        <div className="space-y-1.5">
-          <Input
-            className="h-8 text-[13px]"
-            value={field.options.join(", ")}
-            onChange={(event) =>
-              onFieldChange(
-                updateWorkspaceInfoSelectFieldOptions({
-                  field,
-                  rawValue: event.target.value,
-                }),
-              )
-            }
-            placeholder="Options (comma-separated)"
-          />
-          <Select
-            value={hasValidSelection ? field.value : undefined}
-            onValueChange={(value) => onFieldChange({ ...field, value })}
-          >
-            <SelectTrigger className="h-8 w-full text-[13px]">
-              <SelectValue placeholder="Select" />
-            </SelectTrigger>
-            <SelectContent>
-              {validOptions.length === 0 ? (
-                <SelectItem value="__empty__" disabled>
-                  No options defined
-                </SelectItem>
-              ) : (
-                validOptions.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
-        </div>
+        <SingleSelectOptionsInput field={field} onFieldChange={onFieldChange} />
       );
-    }
     case "text":
     default:
       return (
@@ -987,13 +1045,10 @@ export function WorkspaceInformationPanel() {
   return (
     <div className="flex flex-col">
       {/* ── Panel header ─────────────────────────────────────── */}
-      <header className="flex h-10 shrink-0 items-center border-b border-border/80 px-3 text-sm">
-        <div className="flex min-w-0 items-center gap-2">
-          <Info className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate font-medium text-foreground">
-            Information
-          </span>
-        </div>
+      <header className="px-3 pt-4 pb-1">
+        <h2 className="font-heading text-base font-medium text-foreground">
+          Information
+        </h2>
       </header>
 
       {/* ── Accordion sections ───────────────────────────────── */}
@@ -1005,6 +1060,118 @@ export function WorkspaceInformationPanel() {
             setOpenSections(value as WorkspaceInformationSectionId[])
           }
         >
+          {/* ── Todo ──────────────────────────────────────────── */}
+          <SectionHeader
+            value="todo"
+            title="Todos"
+            icon={<CheckCircle2 className="size-[15px]" />}
+            count={openTodoCount}
+            first
+            action={
+              <AddButton
+                onClick={() =>
+                  patchWorkspaceInformation((current) => ({
+                    ...current,
+                    todos: [...current.todos, createWorkspaceTodoItem()],
+                  }))
+                }
+                label="Add todo"
+              />
+            }
+          >
+            <div className="space-y-0.5">
+              {workspaceInformation.todos.length === 0 ? (
+                <EmptyHint>No todos yet</EmptyHint>
+              ) : null}
+              {workspaceInformation.todos.map((todo) => (
+                <div
+                  key={todo.id}
+                  className="group/todo flex items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors",
+                      todo.completed
+                        ? "text-primary"
+                        : "text-muted-foreground/40 hover:text-muted-foreground",
+                    )}
+                    onClick={() =>
+                      patchWorkspaceInformation((current) => ({
+                        ...current,
+                        todos: updateItemById(current.todos, todo.id, (item) => ({
+                          ...item,
+                          completed: !item.completed,
+                        })),
+                      }))
+                    }
+                    aria-label={
+                      todo.completed
+                        ? "Mark incomplete"
+                        : "Mark complete"
+                    }
+                  >
+                    {todo.completed ? (
+                      <CheckCircle2 className="size-[15px]" />
+                    ) : (
+                      <Circle className="size-[15px]" />
+                    )}
+                  </button>
+                  <Input
+                    value={todo.text}
+                    onChange={(event) =>
+                      patchWorkspaceInformation((current) => ({
+                        ...current,
+                        todos: updateItemById(current.todos, todo.id, (item) => ({
+                          ...item,
+                          text: event.target.value,
+                        })),
+                      }))
+                    }
+                    placeholder="Todo item"
+                    className={cn(
+                      "h-7 flex-1 border-0 bg-transparent px-1 text-[13px] shadow-none focus-visible:ring-0",
+                      todo.completed &&
+                        "text-muted-foreground/50 line-through",
+                    )}
+                  />
+                  <button
+                    type="button"
+                    className="flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover/todo:opacity-100"
+                    onClick={() =>
+                      patchWorkspaceInformation((current) => ({
+                        ...current,
+                        todos: removeItemById(current.todos, todo.id),
+                      }))
+                    }
+                    aria-label="Remove todo"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </SectionHeader>
+
+          {/* ── Note ──────────────────────────────────────────── */}
+          <SectionHeader
+            value="note"
+            title="Notes"
+            icon={<StickyNote className="size-[15px]" />}
+          >
+            <Textarea
+              className="min-h-20 resize-none text-[13px]"
+              value={workspaceInformation.notes}
+              onChange={(event) =>
+                patchWorkspaceInformation((current) => ({
+                  ...current,
+                  notes: event.target.value,
+                }))
+              }
+              placeholder="Notes, blockers, handoff details..."
+            />
+          </SectionHeader>
+
           {/* ── GitHub ────────────────────────────────────────── */}
           <SectionHeader
             value="github"
@@ -1359,114 +1526,88 @@ export function WorkspaceInformationPanel() {
             </div>
           </SectionHeader>
 
-          {/* ── Note ──────────────────────────────────────────── */}
+          {/* ── Slack ─────────────────────────────────────────── */}
           <SectionHeader
-            value="note"
-            title="Notes"
-            icon={<StickyNote className="size-[15px]" />}
-          >
-            <Textarea
-              className="min-h-20 resize-none text-[13px]"
-              value={workspaceInformation.notes}
-              onChange={(event) =>
-                patchWorkspaceInformation((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
-              placeholder="Notes, blockers, handoff details..."
-            />
-          </SectionHeader>
-
-          {/* ── Todo ──────────────────────────────────────────── */}
-          <SectionHeader
-            value="todo"
-            title="Todos"
-            icon={<CheckCircle2 className="size-[15px]" />}
-            count={openTodoCount}
+            value="slack"
+            title="Slack"
+            icon={<SlackIcon className="size-[15px]" />}
+            count={workspaceInformation.slackThreads?.length ?? 0}
             action={
               <AddButton
                 onClick={() =>
                   patchWorkspaceInformation((current) => ({
                     ...current,
-                    todos: [...current.todos, createWorkspaceTodoItem()],
+                    slackThreads: [
+                      ...(current.slackThreads ?? []),
+                      createWorkspaceSlackThread(),
+                    ],
                   }))
                 }
-                label="Add todo"
+                label="Add Slack thread"
               />
             }
           >
-            <div className="space-y-0.5">
-              {workspaceInformation.todos.length === 0 ? (
-                <EmptyHint>No todos yet</EmptyHint>
+            <div className="-mx-2 space-y-0.5">
+              {(workspaceInformation.slackThreads?.length ?? 0) === 0 ? (
+                <EmptyHint>No linked Slack threads</EmptyHint>
               ) : null}
-              {workspaceInformation.todos.map((todo) => (
-                <div
-                  key={todo.id}
-                  className="group/todo flex items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
-                >
-                  <button
-                    type="button"
-                    className={cn(
-                      "flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors",
-                      todo.completed
-                        ? "text-primary"
-                        : "text-muted-foreground/40 hover:text-muted-foreground",
-                    )}
-                    onClick={() =>
+              {(workspaceInformation.slackThreads ?? []).map((thread) => {
+                const slackRef = extractSlackThreadReference(thread.url);
+                const host =
+                  slackRef?.host || formatWorkspaceInfoHostLabel(thread.url);
+                const label =
+                  thread.channelName.trim() ||
+                  (slackRef ? `#${slackRef.channelId}` : "Slack thread");
+
+                if (!isWorkspaceInfoUrl(thread.url)) {
+                  return (
+                    <InlineUrlInput
+                      key={thread.id}
+                      value={thread.url}
+                      icon={<SlackIcon className="size-3.5" />}
+                      placeholder="https://team.slack.com/archives/C.../p..."
+                      onChange={(url) =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          slackThreads: updateItemById(
+                            current.slackThreads ?? [],
+                            thread.id,
+                            (item) => ({ ...item, url }),
+                          ),
+                        }))
+                      }
+                      onRemove={() =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          slackThreads: removeItemById(
+                            current.slackThreads ?? [],
+                            thread.id,
+                          ),
+                        }))
+                      }
+                    />
+                  );
+                }
+
+                return (
+                  <InlineLinkRow
+                    key={thread.id}
+                    icon={<Hash className="size-[15px] text-muted-foreground/70" />}
+                    label={label}
+                    sublabel={host || undefined}
+                    url={thread.url}
+                    onRemove={() =>
                       patchWorkspaceInformation((current) => ({
                         ...current,
-                        todos: updateItemById(current.todos, todo.id, (item) => ({
-                          ...item,
-                          completed: !item.completed,
-                        })),
+                        slackThreads: removeItemById(
+                          current.slackThreads ?? [],
+                          thread.id,
+                        ),
                       }))
                     }
-                    aria-label={
-                      todo.completed
-                        ? "Mark incomplete"
-                        : "Mark complete"
-                    }
-                  >
-                    {todo.completed ? (
-                      <CheckCircle2 className="size-[15px]" />
-                    ) : (
-                      <Circle className="size-[15px]" />
-                    )}
-                  </button>
-                  <Input
-                    value={todo.text}
-                    onChange={(event) =>
-                      patchWorkspaceInformation((current) => ({
-                        ...current,
-                        todos: updateItemById(current.todos, todo.id, (item) => ({
-                          ...item,
-                          text: event.target.value,
-                        })),
-                      }))
-                    }
-                    placeholder="Todo item"
-                    className={cn(
-                      "h-7 flex-1 border-0 bg-transparent px-1 text-[13px] shadow-none focus-visible:ring-0",
-                      todo.completed &&
-                        "text-muted-foreground/50 line-through",
-                    )}
                   />
-                  <button
-                    type="button"
-                    className="flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover/todo:opacity-100"
-                    onClick={() =>
-                      patchWorkspaceInformation((current) => ({
-                        ...current,
-                        todos: removeItemById(current.todos, todo.id),
-                      }))
-                    }
-                    aria-label="Remove todo"
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </SectionHeader>
 
@@ -1491,14 +1632,14 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {workspaceInformation.customFields.length === 0 ? (
                 <EmptyHint>No custom fields</EmptyHint>
               ) : null}
               {workspaceInformation.customFields.map((field) => (
                 <div
                   key={field.id}
-                  className="group/field space-y-1.5 rounded-md border border-border/40 bg-muted/10 p-2.5"
+                  className="group/field space-y-1.5"
                 >
                   <div className="flex items-center gap-1.5">
                     <Input
@@ -1523,13 +1664,13 @@ export function WorkspaceInformationPanel() {
                         )
                       }
                     >
-                      <SelectTrigger className="h-7 w-24 border-0 bg-transparent text-[11px] text-muted-foreground shadow-none">
+                      <SelectTrigger className="h-7 w-auto min-w-[5.5rem] border-0 bg-transparent text-[11px] text-muted-foreground shadow-none">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {WORKSPACE_INFO_FIELD_TYPES.map((type) => (
                           <SelectItem key={type} value={type}>
-                            {type}
+                            {WORKSPACE_INFO_FIELD_TYPE_LABELS[type]}
                           </SelectItem>
                         ))}
                       </SelectContent>

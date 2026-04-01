@@ -220,6 +220,7 @@ describe("continueWorkspaceFromSummary", () => {
         jiraIssues: [],
         figmaResources: [],
         linkedPullRequests: [],
+        slackThreads: [],
         notes: "Remember the follow-up branch handoff.",
         todos: [{ id: "todo-1", text: "Handle merged workspace continue flow", completed: false }],
         customFields: [],

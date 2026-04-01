@@ -243,6 +243,13 @@ const WorkspaceLinkedPullRequestSchema = z.object({
   note: z.string().optional().default(""),
 });
 
+const WorkspaceSlackThreadSchema = z.object({
+  id: z.string(),
+  url: z.string().optional().default(""),
+  channelName: z.string().optional().default(""),
+  note: z.string().optional().default(""),
+});
+
 const WorkspaceTodoItemSchema = z.object({
   id: z.string(),
   text: z.string().optional().default(""),
@@ -299,6 +306,7 @@ const WorkspaceInformationSchema = z.object({
   jiraIssues: z.array(WorkspaceJiraIssueSchema).optional().default([]),
   figmaResources: z.array(WorkspaceFigmaResourceSchema).optional().default([]),
   linkedPullRequests: z.array(WorkspaceLinkedPullRequestSchema).optional().default([]),
+  slackThreads: z.array(WorkspaceSlackThreadSchema).optional().default([]),
   notes: z.string().optional().default(""),
   todos: z.array(WorkspaceTodoItemSchema).optional().default([]),
   customFields: z.array(WorkspaceInfoCustomFieldSchema).optional().default([]),
@@ -321,6 +329,7 @@ export const WorkspaceSnapshotSchema = z.object({
     jiraIssues: [],
     figmaResources: [],
     linkedPullRequests: [],
+    slackThreads: [],
     notes: "",
     todos: [],
     customFields: [],
