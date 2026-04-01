@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  findLatestPendingApproval,
   findLatestPendingApprovalPart,
   findPendingApprovalMessageByRequestId,
   findLatestPendingUserInputPart,
@@ -118,6 +119,49 @@ describe("findLatestPendingApprovalPart", () => {
     })).toMatchObject({
       requestId: "req-new",
       state: "approval-requested",
+    });
+  });
+});
+
+describe("findLatestPendingApproval", () => {
+  test("finds the newest pending approval across messages", () => {
+    expect(findLatestPendingApproval({
+      messages: [
+        {
+          id: "message-1",
+          role: "assistant",
+          model: "codex",
+          providerId: "codex",
+          content: "",
+          parts: [{
+            type: "approval",
+            toolName: "Read",
+            description: "older",
+            requestId: "req-old",
+            state: "approval-requested",
+          }],
+        },
+        {
+          id: "message-2",
+          role: "assistant",
+          model: "codex",
+          providerId: "codex",
+          content: "",
+          parts: [{
+            type: "approval",
+            toolName: "Bash",
+            description: "newer",
+            requestId: "req-new",
+            state: "approval-requested",
+          }],
+        },
+      ],
+    })).toMatchObject({
+      messageId: "message-2",
+      part: {
+        requestId: "req-new",
+        state: "approval-requested",
+      },
     });
   });
 });
