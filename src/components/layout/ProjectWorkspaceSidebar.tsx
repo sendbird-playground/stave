@@ -40,6 +40,10 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
+import {
+  buildCollapsedWorkspaceEntries,
+  type ProjectSidebarCollapsedProjectView,
+} from "@/components/layout/ProjectWorkspaceSidebar.utils";
 import { CreateWorkspaceDialog } from "@/components/layout/CreateWorkspaceDialog";
 import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
 import { MemoryUsagePopover } from "@/components/layout/ResourcesPopover";
@@ -72,18 +76,7 @@ const loadKeyboardShortcutsDrawer = () =>
   }));
 const KeyboardShortcutsDrawer = lazy(() => loadKeyboardShortcutsDrawer());
 
-interface ProjectSidebarView {
-  projectPath: string;
-  projectName: string;
-  workspaces: Array<{
-    id: string;
-    name: string;
-    isDefault: boolean;
-    branch?: string;
-  }>;
-  activeWorkspaceId: string;
-  isCurrent: boolean;
-}
+type ProjectSidebarView = ProjectSidebarCollapsedProjectView;
 
 function formatWorkspaceName(name: string, branch?: string) {
   if (name.toLowerCase() === "default workspace") {
@@ -332,17 +325,10 @@ export function ProjectWorkspaceSidebar(args: {
   ]);
   const collapsedWorkspaceEntries = useMemo(
     () =>
-      projects.flatMap((project) =>
-        project.workspaces.map((workspace) => ({
-          projectPath: project.projectPath,
-          projectName: project.projectName,
-          workspaceId: workspace.id,
-          workspaceName: workspace.name,
-          isDefault: workspace.isDefault,
-          branch: workspace.branch,
-          isActive: project.isCurrent && workspace.id === activeWorkspaceId,
-        })),
-      ),
+      buildCollapsedWorkspaceEntries({
+        projects,
+        activeWorkspaceId,
+      }),
     [activeWorkspaceId, projects],
   );
   const projectSensors = useSensors(
@@ -675,9 +661,8 @@ export function ProjectWorkspaceSidebar(args: {
             <TooltipProvider>
               <div className="flex flex-col items-center gap-2">
                 {collapsedWorkspaceEntries.map((entry) => {
-                  const workspaceBusy =
-                    busyWorkspaceKey ===
-                    `${entry.projectPath}:${entry.workspaceId}`;
+                  const entryKey = `${entry.projectPath}:${entry.workspaceId}`;
+                  const workspaceBusy = busyWorkspaceKey === entryKey;
                   const respondingTaskCount = getWorkspaceRespondingTaskCount(
                     entry.workspaceId,
                   );
@@ -687,60 +672,68 @@ export function ProjectWorkspaceSidebar(args: {
                   );
 
                   return (
-                    <Tooltip key={`${entry.projectPath}:${entry.workspaceId}`}>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          className={cn(
-                            "flex h-10 w-10 items-center justify-center rounded-md border transition-colors",
-                            entry.isActive
-                              ? "border-primary/40 bg-primary/10 text-primary shadow-sm"
-                              : "border-transparent bg-background/60 text-muted-foreground hover:border-border/70 hover:bg-secondary/70 hover:text-foreground",
-                          )}
-                          onClick={() =>
-                            void handleProjectWorkspaceOpen({
-                              projectPath: entry.projectPath,
-                              workspaceId: entry.workspaceId,
-                            })
-                          }
-                          aria-label={`collapsed-workspace-${entry.workspaceId}`}
-                        >
-                          {workspaceBusy ? (
-                            <LoaderCircle className="size-4 animate-spin" />
-                          ) : isResponding ? (
-                            <WaveIndicator
-                              className={cn("gap-px", respondingToneClass)}
-                              barClassName="h-3 w-0.5 rounded-[2px]"
-                            />
-                          ) : !entry.isDefault &&
-                            workspacePrInfoById[entry.workspaceId] ? (
-                            <PrStatusIcon
-                              status={
-                                workspacePrInfoById[entry.workspaceId]!.derived
-                              }
-                            />
-                          ) : (
-                            <WorkspaceIdentityMark
-                              workspaceName={entry.workspaceName}
-                              isDefault={entry.isDefault}
-                            />
-                          )}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="max-w-[220px]">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium">
-                            {formatWorkspaceName(
-                              entry.workspaceName,
-                              entry.branch,
+                    <div key={entryKey} className="flex w-full flex-col items-center">
+                      {entry.startsProjectGroup ? (
+                        <div
+                          aria-hidden="true"
+                          className="mb-2 h-px w-5 rounded-full bg-sidebar-border/70"
+                        />
+                      ) : null}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className={cn(
+                              "flex h-10 w-10 items-center justify-center rounded-md border transition-colors",
+                              entry.isActive
+                                ? "border-primary/40 bg-primary/10 text-primary shadow-sm"
+                                : "border-transparent bg-background/60 text-muted-foreground hover:border-border/70 hover:bg-secondary/70 hover:text-foreground",
                             )}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {entry.projectName}
-                          </p>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
+                            onClick={() =>
+                              void handleProjectWorkspaceOpen({
+                                projectPath: entry.projectPath,
+                                workspaceId: entry.workspaceId,
+                              })
+                            }
+                            aria-label={`collapsed-workspace-${entry.workspaceId}`}
+                          >
+                            {workspaceBusy ? (
+                              <LoaderCircle className="size-4 animate-spin" />
+                            ) : isResponding ? (
+                              <WaveIndicator
+                                className={cn("gap-px", respondingToneClass)}
+                                barClassName="h-3 w-0.5 rounded-[2px]"
+                              />
+                            ) : !entry.isDefault &&
+                              workspacePrInfoById[entry.workspaceId] ? (
+                              <PrStatusIcon
+                                status={
+                                  workspacePrInfoById[entry.workspaceId]!.derived
+                                }
+                              />
+                            ) : (
+                              <WorkspaceIdentityMark
+                                workspaceName={entry.workspaceName}
+                                isDefault={entry.isDefault}
+                              />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-[220px]">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">
+                              {formatWorkspaceName(
+                                entry.workspaceName,
+                                entry.branch,
+                              )}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {entry.projectName}
+                            </p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                   );
                 })}
               </div>
