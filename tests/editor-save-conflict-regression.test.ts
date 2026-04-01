@@ -234,6 +234,25 @@ describe("editor save/conflict behavior", () => {
     expect(tab?.content).toBe("local change\n");
   });
 
+  test("closes the editor panel when the last open tab is closed", async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), "stave-editor-"));
+    const filePath = "note.txt";
+    await writeFile(path.join(rootPath, filePath), "alpha\n", "utf8");
+
+    const { useAppStore } = await setupStore({ rootPath, filePath });
+    await useAppStore.getState().openFileFromTree({ filePath });
+
+    const opened = useAppStore.getState().editorTabs[0];
+    expect(opened).toBeDefined();
+    expect(useAppStore.getState().layout.editorVisible).toBe(true);
+
+    useAppStore.getState().closeEditorTab({ tabId: opened.id });
+
+    expect(useAppStore.getState().editorTabs).toHaveLength(0);
+    expect(useAppStore.getState().activeEditorTabId).toBeNull();
+    expect(useAppStore.getState().layout.editorVisible).toBe(false);
+  });
+
   test("refreshes clean tabs from disk and flags dirty tabs as conflict", async () => {
     const rootPath = await mkdtemp(path.join(tmpdir(), "stave-editor-"));
     const filePath = "note.txt";
