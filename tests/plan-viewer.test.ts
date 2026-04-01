@@ -28,6 +28,7 @@ describe("resolvePlanViewerState", () => {
       planText: "1. Inspect\n2. Patch",
       isPlanPreparing: false,
       isPlanPending: true,
+      canReplyToPlan: true,
     });
   });
 
@@ -57,6 +58,7 @@ describe("resolvePlanViewerState", () => {
       planText: "1. Inspect\n2. Patch",
       isPlanPreparing: false,
       isPlanPending: true,
+      canReplyToPlan: true,
     });
   });
 
@@ -74,6 +76,7 @@ describe("resolvePlanViewerState", () => {
       planText: "",
       isPlanPreparing: true,
       isPlanPending: false,
+      canReplyToPlan: false,
     });
   });
 
@@ -91,6 +94,7 @@ describe("resolvePlanViewerState", () => {
       planText: "",
       isPlanPreparing: true,
       isPlanPending: false,
+      canReplyToPlan: false,
     });
   });
 
@@ -122,6 +126,37 @@ describe("resolvePlanViewerState", () => {
       planText: "1. Read the codebase\n2. Make changes",
       isPlanPreparing: false,
       isPlanPending: true,
+      canReplyToPlan: false,
+    });
+  });
+
+  test("waits for Codex to finish the current turn before allowing plan replies", () => {
+    const state = resolvePlanViewerState({
+      activeProvider: "codex",
+      claudePermissionMode: "default",
+      codexExperimentalPlanMode: true,
+      isTurnActive: true,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: true,
+        planText: "1. Inspect\n2. Patch",
+      },
+      lastMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: true,
+        planText: "1. Inspect\n2. Patch",
+      },
+    });
+
+    expect(state).toEqual({
+      planText: "1. Inspect\n2. Patch",
+      isPlanPreparing: false,
+      isPlanPending: true,
+      canReplyToPlan: false,
     });
   });
 
@@ -151,6 +186,7 @@ describe("resolvePlanViewerState", () => {
       planText: "1. Inspect\n2. Patch",
       isPlanPreparing: false,
       isPlanPending: true,
+      canReplyToPlan: true,
     });
   });
 
@@ -180,6 +216,7 @@ describe("resolvePlanViewerState", () => {
       planText: "1. Inspect\n2. Patch",
       isPlanPreparing: false,
       isPlanPending: false,
+      canReplyToPlan: false,
     });
   });
 
@@ -209,6 +246,7 @@ describe("resolvePlanViewerState", () => {
       planText: "1. Inspect\n2. Patch",
       isPlanPreparing: false,
       isPlanPending: true,
+      canReplyToPlan: true,
     });
   });
 
@@ -232,6 +270,7 @@ describe("resolvePlanViewerState", () => {
       planText: "",
       isPlanPreparing: false,
       isPlanPending: false,
+      canReplyToPlan: false,
     });
   });
 });

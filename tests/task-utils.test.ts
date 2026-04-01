@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   getArchiveFallbackTaskId,
+  getRespondingTasks,
   getRespondingProviderId,
   getTaskCounts,
   getVisibleTasks,
@@ -52,6 +53,16 @@ describe("task utils", () => {
     ];
 
     expect(getRespondingProviderId({ fallbackProviderId: "stave", messages })).toBe("codex");
+  });
+
+  test("ignores archived tasks when listing responding tasks", () => {
+    expect(getRespondingTasks({
+      tasks,
+      activeTurnIdsByTask: {
+        "task-active-1": "turn-1",
+        "task-archived-1": "turn-2",
+      },
+    }).map((task) => task.id)).toEqual(["task-active-1"]);
   });
 
   test("falls back to the last assistant provider when a turn has no streaming marker", () => {
