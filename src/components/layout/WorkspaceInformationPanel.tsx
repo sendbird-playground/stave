@@ -1,22 +1,25 @@
 import {
+  CalendarIcon,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Circle,
   ExternalLink,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
+  Globe,
+  Info,
   Link2,
   Plus,
   RefreshCcw,
+  SlidersHorizontal,
   StickyNote,
-  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import {
   Accordion,
   AccordionContent,
@@ -25,6 +28,9 @@ import {
   Badge,
   Button,
   Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Select,
   SelectContent,
   SelectItem,
@@ -36,6 +42,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui";
+import { Calendar } from "@/components/ui/calendar";
+import { Switch } from "@/components/ui/switch";
 import {
   changeWorkspaceInfoCustomFieldType,
   createWorkspaceFigmaResource,
@@ -315,11 +323,19 @@ function SectionHeader(props: {
 }) {
   return (
     <AccordionItem value={props.value} className="border-b border-border/50">
-      <div className="flex items-center gap-1">
-        <AccordionTrigger className="flex-1 gap-2 py-2.5 pr-1 pl-0 hover:no-underline [&>svg[data-slot=accordion-trigger-icon]]:size-3.5 [&>svg[data-slot=accordion-trigger-icon]]:text-muted-foreground/60">
+      <div className="group/section-row flex items-center">
+        <AccordionTrigger className="flex-1 gap-2 py-2 pr-1 pl-0 hover:no-underline [&>svg[data-slot=accordion-trigger-icon]]:hidden">
           <div className="flex items-center gap-2 text-left">
-            <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-              {props.icon}
+            <span className="relative flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+              {/* Section icon — visible by default, fades out on row hover */}
+              <span className="flex items-center justify-center transition-all duration-150 group-hover/section-row:scale-75 group-hover/section-row:opacity-0">
+                {props.icon}
+              </span>
+              {/* Chevron — hidden by default, fades in on row hover */}
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <ChevronRight className="size-4 scale-75 opacity-0 transition-all duration-150 group-aria-expanded/accordion-trigger:hidden group-hover/section-row:scale-100 group-hover/section-row:opacity-100" />
+                <ChevronDown className="hidden size-4 scale-75 opacity-0 transition-all duration-150 group-aria-expanded/accordion-trigger:block group-hover/section-row:scale-100 group-hover/section-row:opacity-100" />
+              </span>
             </span>
             <span className="text-[13px] font-medium text-foreground/80">
               {props.title}
@@ -332,10 +348,12 @@ function SectionHeader(props: {
           </div>
         </AccordionTrigger>
         {props.action ? (
-          <div className="flex shrink-0 items-center">{props.action}</div>
+          <div className="ml-auto flex shrink-0 items-center">
+            {props.action}
+          </div>
         ) : null}
       </div>
-      <AccordionContent className="pb-3 pt-0">
+      <AccordionContent className="pb-2.5 pt-0">
         {props.children}
       </AccordionContent>
     </AccordionItem>
@@ -587,6 +605,55 @@ function GitHubPrRow(props: {
 // Custom field inline renderer
 // ---------------------------------------------------------------------------
 
+function CustomFieldDatePicker(props: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const selected = props.value ? new Date(props.value + "T00:00:00") : undefined;
+  const isValid = selected && !Number.isNaN(selected.getTime());
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-8 w-full justify-start text-left text-[13px] font-normal",
+            !props.value && "text-muted-foreground",
+          )}
+        >
+          <CalendarIcon className="mr-2 size-3.5" />
+          {isValid
+            ? selected.toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              })
+            : "Pick a date"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={isValid ? selected : undefined}
+          onSelect={(date) => {
+            if (!date) {
+              props.onChange("");
+              return;
+            }
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, "0");
+            const dd = String(date.getDate()).padStart(2, "0");
+            props.onChange(`${yyyy}-${mm}-${dd}`);
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function renderCustomFieldInput(args: {
   field: WorkspaceInfoCustomField;
   onFieldChange: (field: WorkspaceInfoCustomField) => void;
@@ -625,25 +692,24 @@ function renderCustomFieldInput(args: {
       );
     case "boolean":
       return (
-        <Button
-          type="button"
-          size="sm"
-          variant={field.value ? "default" : "outline"}
-          className="h-7 rounded-md text-xs"
-          onClick={() => onFieldChange({ ...field, value: !field.value })}
-        >
-          {field.value ? "Enabled" : "Disabled"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={field.value}
+            onCheckedChange={(checked) =>
+              onFieldChange({ ...field, value: Boolean(checked) })
+            }
+            size="sm"
+          />
+          <span className="text-[12px] text-muted-foreground">
+            {field.value ? "Enabled" : "Disabled"}
+          </span>
+        </div>
       );
     case "date":
       return (
-        <Input
-          type="date"
-          className="h-8 text-[13px]"
+        <CustomFieldDatePicker
           value={field.value}
-          onChange={(event) =>
-            onFieldChange({ ...field, value: event.target.value })
-          }
+          onChange={(value) => onFieldChange({ ...field, value })}
         />
       );
     case "url":
@@ -669,7 +735,12 @@ function renderCustomFieldInput(args: {
           ) : null}
         </div>
       );
-    case "single_select":
+    case "single_select": {
+      // Filter out empty-string options — Radix Select crashes on value=""
+      const validOptions = field.options.filter((opt) => opt.length > 0);
+      const hasValidSelection =
+        field.value.length > 0 && validOptions.includes(field.value);
+
       return (
         <div className="space-y-1.5">
           <Input
@@ -686,17 +757,19 @@ function renderCustomFieldInput(args: {
             placeholder="Options (comma-separated)"
           />
           <Select
-            value={field.value}
+            value={hasValidSelection ? field.value : undefined}
             onValueChange={(value) => onFieldChange({ ...field, value })}
           >
             <SelectTrigger className="h-8 w-full text-[13px]">
               <SelectValue placeholder="Select" />
             </SelectTrigger>
             <SelectContent>
-              {field.options.length === 0 ? (
-                <SelectItem value="">No options</SelectItem>
+              {validOptions.length === 0 ? (
+                <SelectItem value="__empty__" disabled>
+                  No options defined
+                </SelectItem>
               ) : (
-                field.options.map((option) => (
+                validOptions.map((option) => (
                   <SelectItem key={option} value={option}>
                     {option}
                   </SelectItem>
@@ -706,6 +779,7 @@ function renderCustomFieldInput(args: {
           </Select>
         </div>
       );
+    }
     case "text":
     default:
       return (
@@ -757,7 +831,6 @@ function EmptyHint(props: { children: ReactNode }) {
 export function WorkspaceInformationPanel() {
   const [
     activeWorkspaceId,
-    workspaces,
     workspacePath,
     workspaceInformation,
     updateWorkspaceInformation,
@@ -769,7 +842,6 @@ export function WorkspaceInformationPanel() {
       (state) =>
         [
           state.activeWorkspaceId,
-          state.workspaces,
           state.workspacePathById[state.activeWorkspaceId] ??
             state.projectPath ??
             "",
@@ -781,10 +853,6 @@ export function WorkspaceInformationPanel() {
         ] as const,
     ),
   );
-
-  const workspaceName =
-    workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.name ??
-    "Workspace";
 
   const [openSections, setOpenSections] = useState<
     WorkspaceInformationSectionId[]
@@ -919,27 +987,17 @@ export function WorkspaceInformationPanel() {
   return (
     <div className="flex flex-col">
       {/* ── Panel header ─────────────────────────────────────── */}
-      <div className="border-b border-border/50 px-4 py-3">
-        <p className="text-[13px] font-semibold text-foreground">
-          {workspaceName}
-        </p>
-        {/* Current branch PR quick badge */}
-        {!isDefaultWorkspace && currentBranchPr && currentBranchPrStatus ? (
-          <button
-            type="button"
-            className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground"
-            onClick={() => openExternalUrl(currentBranchPr.url)}
-          >
-            <PrStatusIcon status={currentBranchPrStatus} className="size-3.5" />
-            <span className="truncate">
-              #{currentBranchPr.number} {currentBranchPr.title}
-            </span>
-          </button>
-        ) : null}
-      </div>
+      <header className="flex h-10 shrink-0 items-center border-b border-border/80 px-3 text-sm">
+        <div className="flex min-w-0 items-center gap-2">
+          <Info className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate font-medium text-foreground">
+            Information
+          </span>
+        </div>
+      </header>
 
       {/* ── Accordion sections ───────────────────────────────── */}
-      <div className="px-3">
+      <div className="px-2">
         <Accordion
           type="multiple"
           value={openSections}
@@ -1172,7 +1230,7 @@ export function WorkspaceInformationPanel() {
                 return (
                   <InlineLinkRow
                     key={issue.id}
-                    icon={<JiraIcon className="size-[15px]" />}
+                    icon={<Globe className="size-[15px] text-muted-foreground/70" />}
                     label={title}
                     sublabel={host ? `${host}${issueKey ? ` · ${issueKey}` : ""}` : issueKey}
                     badge={
@@ -1276,7 +1334,7 @@ export function WorkspaceInformationPanel() {
                 return (
                   <InlineLinkRow
                     key={resource.id}
-                    icon={<FigmaIcon className="size-[15px]" />}
+                    icon={<Globe className="size-[15px] text-muted-foreground/70" />}
                     label={title}
                     sublabel={
                       host
@@ -1416,7 +1474,7 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="custom"
             title="Custom Fields"
-            icon={<ChevronDown className="size-[15px] rotate-[-90deg]" />}
+            icon={<SlidersHorizontal className="size-[15px]" />}
             count={workspaceInformation.customFields.length}
             action={
               <AddButton

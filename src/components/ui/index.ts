@@ -6,6 +6,7 @@ export {
 } from "./accordion";
 export { Badge, badgeVariants } from "./badge";
 export { Button, buttonVariants } from "./button";
+export { Calendar, CalendarDayButton } from "./calendar";
 export {
   Card,
   CardAction,
@@ -101,6 +102,7 @@ export {
   SelectValue,
 } from "./select";
 export { Slider } from "./slider";
+export { Switch } from "./switch";
 export { toast, Toaster } from "./sonner";
 export {
   Table,
