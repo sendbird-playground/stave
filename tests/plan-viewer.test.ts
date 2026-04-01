@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
+import { resolvePlanViewerInsets, resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
 
 describe("resolvePlanViewerState", () => {
   test("shows a completed Claude plan response in the viewer", () => {
@@ -121,6 +121,28 @@ describe("resolvePlanViewerState", () => {
       planText: "",
       isPlanPreparing: false,
       isPlanPending: false,
+    });
+  });
+});
+
+describe("resolvePlanViewerInsets", () => {
+  test("anchors the viewer above the chat input dock in normal mode", () => {
+    expect(resolvePlanViewerInsets({
+      isExpanded: false,
+      inputDockHeight: 76,
+    })).toEqual({
+      topOffset: null,
+      bottomOffset: 84,
+    });
+  });
+
+  test("keeps expanded mode pinned to the full chat viewport above the input dock", () => {
+    expect(resolvePlanViewerInsets({
+      isExpanded: true,
+      inputDockHeight: 76,
+    })).toEqual({
+      topOffset: 12,
+      bottomOffset: 84,
     });
   });
 });

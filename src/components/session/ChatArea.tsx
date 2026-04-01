@@ -1,5 +1,5 @@
 import { FolderOpen, Layers } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatInput } from "@/components/session/ChatInput";
 import { ChatPanel } from "@/components/session/ChatPanel";
 import { EmptySplash } from "@/components/session/EmptySplash";
@@ -11,6 +11,8 @@ import { useAppStore } from "@/store/app.store";
 import { useShallow } from "zustand/react/shallow";
 
 export function ChatArea() {
+  const chatInputDockRef = useRef<HTMLDivElement | null>(null);
+  const [chatInputDockHeight, setChatInputDockHeight] = useState(0);
   const [
     projectPath,
     hasAnyWorkspace,
@@ -47,6 +49,34 @@ export function ChatArea() {
     }, 3000);
     return () => window.clearInterval(handle);
   }, [refreshActiveManagedTask, shouldPollManagedTask]);
+
+  useLayoutEffect(() => {
+    if (isEmpty) {
+      setChatInputDockHeight(0);
+      return;
+    }
+
+    const node = chatInputDockRef.current;
+    if (!node) {
+      return;
+    }
+
+    const syncHeight = () => {
+      const nextHeight = node.offsetHeight;
+      setChatInputDockHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
+    };
+
+    syncHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => syncHeight());
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [isEmpty]);
 
   if (!projectPath) {
     return (
@@ -105,19 +135,19 @@ export function ChatArea() {
         </section>
       )
     : (
-        <>
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <RenderProfiler id="ChatPanel" thresholdMs={8}>
             <ChatPanel />
           </RenderProfiler>
-          <div className="relative shrink-0">
-            <RenderProfiler id="PlanViewer">
-              <PlanViewer />
-            </RenderProfiler>
+          <RenderProfiler id="PlanViewer">
+            <PlanViewer inputDockHeight={chatInputDockHeight} />
+          </RenderProfiler>
+          <div ref={chatInputDockRef} className="relative z-10 shrink-0">
             <RenderProfiler id="ChatInput" thresholdMs={8}>
               <ChatInput />
             </RenderProfiler>
           </div>
-        </>
+        </div>
       );
 
   return (
