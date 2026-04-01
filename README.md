@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="build/icon.svg" width="100" alt="Stave Logo" />
+</div>
+
 # Stave
 
 Stave is an Electron-based AI coding workspace built with Bun, React, Vite, and TypeScript.
