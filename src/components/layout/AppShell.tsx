@@ -19,6 +19,7 @@ const EditorPanel = lazy(() =>
     default: module.EditorPanel,
   }))
 );
+
 type ResizableLayoutKey =
   | "workspaceSidebarWidth"
   | "editorPanelWidth"
@@ -26,6 +27,13 @@ type ResizableLayoutKey =
   | "terminalDockHeight";
 
 const WORKSPACE_SIDEBAR_MAX_WIDTH = 340;
+const MIN_CHAT_PANEL_WIDTH = 420;
+const MIN_EXPLORER_PANEL_WIDTH = 200;
+const PANEL_SEPARATOR_WIDTH = 1;
+
+function clampPanelWidth(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
 
 export function AppShell() {
   const [
@@ -53,11 +61,13 @@ export function AppShell() {
   ] as const));
   const hasProject = Boolean(projectPath);
   const panelRowRef = useRef<HTMLDivElement>(null);
+  const contentRowRef = useRef<HTMLDivElement>(null);
   const pendingLayoutPatchRef = useRef<Partial<Record<ResizableLayoutKey, number>> | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const [zoomHudPercent, setZoomHudPercent] = useState<number | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [sidebarResizing, setSidebarResizing] = useState(false);
+  const [contentRowWidth, setContentRowWidth] = useState(0);
   const [isLargeViewport, setIsLargeViewport] = useState(() =>
     typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches
   );
@@ -262,6 +272,28 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
+    const node = contentRowRef.current;
+    if (!node) {
+      return undefined;
+    }
+
+    const syncWidth = () => {
+      const nextWidth = node.offsetWidth;
+      setContentRowWidth((currentWidth) => currentWidth === nextWidth ? currentWidth : nextWidth);
+    };
+
+    syncWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver(() => syncWidth());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
     }
@@ -282,12 +314,94 @@ export function AppShell() {
     }
   }, [editorVisible, isLargeViewport, setLayout, sidebarOverlayVisible]);
 
-  const showDesktopEditor = isLargeViewport && editorVisible;
-  const showDesktopSidebar = isLargeViewport && sidebarOverlayVisible;
-  const mobileOverlayMode = !isLargeViewport
-    ? (editorVisible ? "editor" : (sidebarOverlayVisible ? "sidebar" : null))
-    : null;
-  const showMobileRightPanel = mobileOverlayMode !== null;
+  const hasMeasuredContentRowWidth = contentRowWidth > 0;
+  const canShowDesktopEditor = !hasMeasuredContentRowWidth
+    || contentRowWidth >= MIN_CHAT_PANEL_WIDTH + MIN_EDITOR_PANEL_WIDTH + PANEL_SEPARATOR_WIDTH;
+  const canShowDesktopSidebar = !hasMeasuredContentRowWidth
+    || contentRowWidth >= MIN_CHAT_PANEL_WIDTH + MIN_EXPLORER_PANEL_WIDTH + PANEL_SEPARATOR_WIDTH;
+  const canShowDesktopEditorAndSidebar = !hasMeasuredContentRowWidth
+    || contentRowWidth >= MIN_CHAT_PANEL_WIDTH + MIN_EDITOR_PANEL_WIDTH + MIN_EXPLORER_PANEL_WIDTH + (PANEL_SEPARATOR_WIDTH * 2);
+
+  let showDesktopEditor = false;
+  let showDesktopSidebar = false;
+  let overlayRightPanelMode: "editor" | "sidebar" | null = null;
+
+  // On compact laptop widths, keep the center panel readable by moving the
+  // secondary right-side panel into the overlay instead of overflowing inline.
+  if (!isLargeViewport) {
+    overlayRightPanelMode = editorVisible ? "editor" : (sidebarOverlayVisible ? "sidebar" : null);
+  } else if (editorVisible && sidebarOverlayVisible) {
+    if (canShowDesktopEditorAndSidebar) {
+      showDesktopEditor = true;
+      showDesktopSidebar = true;
+    } else if (canShowDesktopEditor) {
+      showDesktopEditor = true;
+      overlayRightPanelMode = "sidebar";
+    } else if (canShowDesktopSidebar) {
+      showDesktopSidebar = true;
+      overlayRightPanelMode = "editor";
+    } else {
+      overlayRightPanelMode = "editor";
+    }
+  } else if (editorVisible) {
+    if (canShowDesktopEditor) {
+      showDesktopEditor = true;
+    } else {
+      overlayRightPanelMode = "editor";
+    }
+  } else if (sidebarOverlayVisible) {
+    if (canShowDesktopSidebar) {
+      showDesktopSidebar = true;
+    } else {
+      overlayRightPanelMode = "sidebar";
+    }
+  }
+
+  let desktopEditorWidth = editorPanelWidth;
+  let desktopSidebarWidth = explorerPanelWidth;
+
+  if (hasMeasuredContentRowWidth) {
+    if (showDesktopEditor && showDesktopSidebar) {
+      desktopSidebarWidth = clampPanelWidth(
+        explorerPanelWidth,
+        MIN_EXPLORER_PANEL_WIDTH,
+        Math.max(
+          MIN_EXPLORER_PANEL_WIDTH,
+          contentRowWidth - MIN_CHAT_PANEL_WIDTH - Math.max(editorPanelWidth, MIN_EDITOR_PANEL_WIDTH) - (PANEL_SEPARATOR_WIDTH * 2),
+        ),
+      );
+      desktopEditorWidth = clampPanelWidth(
+        editorPanelWidth,
+        MIN_EDITOR_PANEL_WIDTH,
+        Math.max(
+          MIN_EDITOR_PANEL_WIDTH,
+          contentRowWidth - MIN_CHAT_PANEL_WIDTH - desktopSidebarWidth - (PANEL_SEPARATOR_WIDTH * 2),
+        ),
+      );
+      desktopSidebarWidth = clampPanelWidth(
+        desktopSidebarWidth,
+        MIN_EXPLORER_PANEL_WIDTH,
+        Math.max(
+          MIN_EXPLORER_PANEL_WIDTH,
+          contentRowWidth - MIN_CHAT_PANEL_WIDTH - desktopEditorWidth - (PANEL_SEPARATOR_WIDTH * 2),
+        ),
+      );
+    } else if (showDesktopEditor) {
+      desktopEditorWidth = clampPanelWidth(
+        editorPanelWidth,
+        MIN_EDITOR_PANEL_WIDTH,
+        Math.max(MIN_EDITOR_PANEL_WIDTH, contentRowWidth - MIN_CHAT_PANEL_WIDTH - PANEL_SEPARATOR_WIDTH),
+      );
+    } else if (showDesktopSidebar) {
+      desktopSidebarWidth = clampPanelWidth(
+        explorerPanelWidth,
+        MIN_EXPLORER_PANEL_WIDTH,
+        Math.max(MIN_EXPLORER_PANEL_WIDTH, contentRowWidth - MIN_CHAT_PANEL_WIDTH - PANEL_SEPARATOR_WIDTH),
+      );
+    }
+  }
+
+  const showOverlayRightPanel = overlayRightPanelMode !== null;
 
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
@@ -345,7 +459,7 @@ export function AppShell() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
         <div ref={panelRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div ref={contentRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               {hasProject ? <WorkspaceTaskTabs /> : null}
               <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -390,13 +504,15 @@ export function AppShell() {
                   onMouseDown={(event) => {
                     event.preventDefault();
                     const startX = event.clientX;
-                    const startWidth = editorPanelWidth;
+                    const startWidth = desktopEditorWidth;
                     const onMove = (moveEvent: MouseEvent) => {
-                      const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
-                      const explorerWidth = showDesktopSidebar ? explorerPanelWidth : 0;
+                      const containerWidth = contentRowRef.current?.offsetWidth ?? 9999;
+                      const explorerWidth = showDesktopSidebar ? desktopSidebarWidth : 0;
                       const separators = showDesktopSidebar ? 2 : 1;
-                      const chatMinWidth = 420;
-                      const maxEditor = Math.max(0, containerWidth - chatMinWidth - explorerWidth - separators);
+                      const maxEditor = Math.max(
+                        MIN_EDITOR_PANEL_WIDTH,
+                        containerWidth - MIN_CHAT_PANEL_WIDTH - explorerWidth - separators,
+                      );
                       const minEditor = Math.min(MIN_EDITOR_PANEL_WIDTH, maxEditor);
                       const delta = startX - moveEvent.clientX;
                       const next = Math.max(minEditor, Math.min(maxEditor, startWidth + delta));
@@ -413,7 +529,7 @@ export function AppShell() {
                 >
                   <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
                 </div>
-                <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${editorPanelWidth}px` }}>
+                <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopEditorWidth}px` }}>
                   <RenderProfiler id="EditorMainPanel" thresholdMs={10}>
                     <EditorMainPanel />
                   </RenderProfiler>
@@ -427,15 +543,17 @@ export function AppShell() {
                   onMouseDown={(event) => {
                     event.preventDefault();
                     const startX = event.clientX;
-                    const startWidth = explorerPanelWidth;
+                    const startWidth = desktopSidebarWidth;
                     const onMove = (moveEvent: MouseEvent) => {
-                      const containerWidth = panelRowRef.current?.offsetWidth ?? 9999;
-                      const editorWidth = showDesktopEditor ? editorPanelWidth : 0;
+                      const containerWidth = contentRowRef.current?.offsetWidth ?? 9999;
+                      const editorWidth = showDesktopEditor ? desktopEditorWidth : 0;
                       const separators = showDesktopEditor ? 2 : 1;
-                      const chatMinWidth = 420;
-                      const maxExplorer = Math.max(200, containerWidth - chatMinWidth - editorWidth - separators);
+                      const maxExplorer = Math.max(
+                        MIN_EXPLORER_PANEL_WIDTH,
+                        containerWidth - MIN_CHAT_PANEL_WIDTH - editorWidth - separators,
+                      );
                       const delta = startX - moveEvent.clientX;
-                      const next = Math.max(200, Math.min(maxExplorer, startWidth + delta));
+                      const next = Math.max(MIN_EXPLORER_PANEL_WIDTH, Math.min(maxExplorer, startWidth + delta));
                       scheduleLayoutResizePatch("explorerPanelWidth", next);
                     };
                     const onUp = () => {
@@ -449,8 +567,8 @@ export function AppShell() {
                 >
                   <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
                 </div>
-                <Suspense fallback={<aside className="bg-card p-3 text-sm text-muted-foreground" style={{ width: `${explorerPanelWidth}px` }}>Loading panel...</aside>}>
-                  <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${explorerPanelWidth}px` }}>
+                <Suspense fallback={<aside className="bg-card p-3 text-sm text-muted-foreground" style={{ width: `${desktopSidebarWidth}px` }}>Loading panel...</aside>}>
+                  <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopSidebarWidth}px` }}>
                     <RenderProfiler id="EditorPanel" thresholdMs={8}>
                       <EditorPanel />
                     </RenderProfiler>
@@ -458,9 +576,9 @@ export function AppShell() {
                 </Suspense>
               </>
             ) : null}
-            {showMobileRightPanel ? (
-              <div className="min-h-0 min-w-0 w-[min(22rem,56vw)] max-w-[22rem] border-l border-border/40 lg:hidden">
-                {mobileOverlayMode === "editor" ? (
+            {showOverlayRightPanel ? (
+              <div className="min-h-0 min-w-0 w-[min(22rem,56vw)] max-w-[22rem] border-l border-border/40">
+                {overlayRightPanelMode === "editor" ? (
                   <RenderProfiler id="EditorMainPanelMobile" thresholdMs={10}>
                     <EditorMainPanel />
                   </RenderProfiler>
