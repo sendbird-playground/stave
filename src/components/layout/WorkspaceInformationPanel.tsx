@@ -1,14 +1,18 @@
 import {
-  Box,
   CheckCircle2,
+  ChevronDown,
   Circle,
   ExternalLink,
-  FileText,
-  Info,
-  ListTodo,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
+  Link2,
   Plus,
   RefreshCcw,
+  StickyNote,
   Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -20,19 +24,17 @@ import {
   AccordionTrigger,
   Badge,
   Button,
-  Card,
-  CardContent,
   Input,
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from "@/components/ui";
 import {
   changeWorkspaceInfoCustomFieldType,
@@ -62,6 +64,10 @@ import {
 } from "@/lib/pr-status";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+
+// ---------------------------------------------------------------------------
+// Utility helpers (unchanged business logic)
+// ---------------------------------------------------------------------------
 
 function updateItemById<T extends { id: string }>(
   items: T[],
@@ -146,20 +152,16 @@ function readStoredWorkspaceInformationSections(): WorkspaceInformationSectionId
   }
 }
 
-function formatCountLabel(count: number, singular: string, plural: string) {
-  return count === 1 ? `1 ${singular}` : `${count} ${plural}`;
-}
-
 function formatFigmaKindLabel(
   kind?: "file" | "design" | "proto" | "board" | "slides" | "unknown",
 ) {
   if (kind === "proto") {
-    return "prototype";
+    return "Prototype";
   }
   if (kind === "unknown" || !kind) {
-    return "resource";
+    return "Resource";
   }
-  return kind;
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 
 async function fetchLinkedPullRequestPreview(args: {
@@ -209,151 +211,381 @@ async function fetchLinkedPullRequestPreview(args: {
   }
 }
 
-function SectionMark(props: { children: ReactNode; className?: string }) {
+// ---------------------------------------------------------------------------
+// Brand SVG Icons
+// ---------------------------------------------------------------------------
+
+function GitHubIcon({ className }: { className?: string }) {
   return (
-    <span
-      className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/20 text-muted-foreground",
-        props.className,
-      )}
+    <svg
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className={cn("size-4", className)}
     >
-      {props.children}
-    </span>
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
   );
 }
 
-function ServiceMark(props: { label: string }) {
+function JiraIcon({ className }: { className?: string }) {
   return (
-    <SectionMark className="text-[10px] font-semibold tracking-[0.08em] text-foreground">
-      {props.label}
-    </SectionMark>
-  );
-}
-
-function PrStatusBadge(props: { status: WorkspacePrStatus }) {
-  const visual = PR_STATUS_VISUAL[props.status];
-
-  return (
-    <Badge
-      className={cn(
-        "rounded-sm border px-2 py-0.5 text-[11px] font-medium",
-        PR_TONE_BADGE_CLASS[visual.tone],
-      )}
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("size-4", className)}
     >
-      {visual.label}
-    </Badge>
+      <defs>
+        <linearGradient
+          id="jira-grad-1"
+          x1="21.45"
+          y1="2.65"
+          x2="12.97"
+          y2="11.45"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0.18" stopColor="#0052CC" />
+          <stop offset="1" stopColor="#2684FF" />
+        </linearGradient>
+        <linearGradient
+          id="jira-grad-2"
+          x1="12.64"
+          y1="12.3"
+          x2="3.5"
+          y2="21.2"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0.18" stopColor="#0052CC" />
+          <stop offset="1" stopColor="#2684FF" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M22.16 11.18L12.82 1.84 12 1.02l-7.34 7.34a.46.46 0 000 .65l4.5 4.5a.46.46 0 00.65 0L12 11.32l2.19 2.19-4.5 4.5a.46.46 0 000 .65l4.5 4.5a.46.46 0 00.65 0l7.32-7.34a.46.46 0 000-.64z"
+        fill="url(#jira-grad-1)"
+      />
+      <path
+        d="M12 11.32a4.63 4.63 0 01-.03-6.52L4.66 12.13l4.5 4.5L12 13.8a4.63 4.63 0 010-2.48z"
+        fill="url(#jira-grad-2)"
+      />
+    </svg>
   );
 }
 
-function IntegrationCard(props: { children: ReactNode; className?: string }) {
+function FigmaIcon({ className }: { className?: string }) {
   return (
-    <Card
-      size="sm"
-      className={cn(
-        "gap-0 border border-border/70 bg-background/75 shadow-none",
-        props.className,
-      )}
+    <svg
+      viewBox="0 0 38 57"
+      fill="none"
+      className={cn("size-4", className)}
     >
-      <CardContent className="space-y-3 py-4">{props.children}</CardContent>
-    </Card>
+      <path
+        d="M19 28.5a9.5 9.5 0 119 9.5 9.5 9.5 0 01-9.5-9.5z"
+        fill="#1ABCFE"
+      />
+      <path
+        d="M0 47.5A9.5 9.5 0 019.5 38H19v9.5a9.5 9.5 0 11-19 0z"
+        fill="#0ACF83"
+      />
+      <path
+        d="M19 0v19h9.5a9.5 9.5 0 100-19H19z"
+        fill="#FF7262"
+      />
+      <path
+        d="M0 9.5A9.5 9.5 0 009.5 19H19V0H9.5A9.5 9.5 0 000 9.5z"
+        fill="#F24E1E"
+      />
+      <path
+        d="M0 28.5A9.5 9.5 0 009.5 38H19V19H9.5A9.5 9.5 0 000 28.5z"
+        fill="#A259FF"
+      />
+    </svg>
   );
 }
 
-function ConnectionUrlEditor(props: {
-  icon: ReactNode;
-  url: string;
-  placeholder: string;
-  helperText?: string;
-  onChange: (url: string) => void;
-  onRemove: () => void;
-}) {
-  return (
-    <Card
-      size="sm"
-      className="gap-0 border border-dashed border-border/70 bg-muted/10 shadow-none"
-    >
-      <CardContent className="space-y-2 py-4">
-        <InputGroup>
-          <InputGroupAddon>{props.icon}</InputGroupAddon>
-          <InputGroupInput
-            value={props.url}
-            onChange={(event) => props.onChange(event.target.value)}
-            placeholder={props.placeholder}
-          />
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton
-              size="icon-xs"
-              disabled={!isWorkspaceInfoUrl(props.url)}
-              onClick={() => openExternalUrl(props.url)}
-              aria-label="Open link"
-            >
-              <ExternalLink className="size-3.5" />
-            </InputGroupButton>
-            <InputGroupButton
-              size="icon-xs"
-              onClick={props.onRemove}
-              aria-label="Remove link"
-            >
-              <Trash2 className="size-3.5" />
-            </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
-        {props.helperText ? (
-          <p className="text-xs text-muted-foreground">{props.helperText}</p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
+// ---------------------------------------------------------------------------
+// Shared section wrapper — minimal, borderless accordion style
+// ---------------------------------------------------------------------------
 
-function WorkspaceInformationSection(props: {
+function SectionHeader(props: {
   value: WorkspaceInformationSectionId;
   title: string;
   icon: ReactNode;
-  countLabel?: string;
+  count?: number;
   action?: ReactNode;
-  accent?: boolean;
   children: ReactNode;
 }) {
   return (
-    <AccordionItem
-      value={props.value}
-      className={cn(
-        "rounded-xl border px-4 shadow-xs",
-        props.accent
-          ? "border-primary/20 bg-linear-to-br from-primary/8 via-background/95 to-background"
-          : "border-border/70 bg-background/85",
-      )}
-    >
-      <div className="flex items-start gap-2">
-        <AccordionTrigger className="min-w-0 flex-1 py-3 pl-0 pr-1 hover:no-underline">
-          <div className="flex min-w-0 items-start gap-3 text-left">
-            {props.icon}
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-start gap-2">
-                <p className="text-sm font-medium text-foreground">
-                  {props.title}
-                </p>
-                {props.countLabel ? (
-                  <Badge
-                    variant="outline"
-                    className="rounded-sm px-1.5 text-[10px]"
-                  >
-                    {props.countLabel}
-                  </Badge>
-                ) : null}
-              </div>
-            </div>
+    <AccordionItem value={props.value} className="border-b border-border/50">
+      <div className="flex items-center gap-1">
+        <AccordionTrigger className="flex-1 gap-2 py-2.5 pr-1 pl-0 hover:no-underline [&>svg[data-slot=accordion-trigger-icon]]:size-3.5 [&>svg[data-slot=accordion-trigger-icon]]:text-muted-foreground/60">
+          <div className="flex items-center gap-2 text-left">
+            <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
+              {props.icon}
+            </span>
+            <span className="text-[13px] font-medium text-foreground/80">
+              {props.title}
+            </span>
+            {props.count !== undefined && props.count > 0 ? (
+              <span className="text-[11px] tabular-nums text-muted-foreground/60">
+                {props.count}
+              </span>
+            ) : null}
           </div>
         </AccordionTrigger>
-        {props.action ? <div className="pt-2">{props.action}</div> : null}
+        {props.action ? (
+          <div className="flex shrink-0 items-center">{props.action}</div>
+        ) : null}
       </div>
-      <AccordionContent className="pb-4 pt-1">
+      <AccordionContent className="pb-3 pt-0">
         {props.children}
       </AccordionContent>
     </AccordionItem>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Inline link row — compact clickable item for Jira/Figma/GitHub
+// ---------------------------------------------------------------------------
+
+function InlineLinkRow(props: {
+  icon: ReactNode;
+  label: string;
+  sublabel?: string;
+  badge?: ReactNode;
+  url: string;
+  onRemove: () => void;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="group/link-row flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/50">
+      <span className="flex size-5 shrink-0 items-center justify-center">
+        {props.icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="min-w-0 truncate text-[13px] font-medium text-foreground hover:text-primary hover:underline"
+            onClick={() => openExternalUrl(props.url)}
+            title={props.label}
+          >
+            {props.label}
+          </button>
+          {props.badge}
+        </div>
+        {props.sublabel ? (
+          <p className="truncate text-[11px] text-muted-foreground/70">
+            {props.sublabel}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/link-row:opacity-100">
+        {props.actions}
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+                onClick={() => openExternalUrl(props.url)}
+                aria-label="Open link"
+              >
+                <ExternalLink className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Open link</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+                onClick={props.onRemove}
+                aria-label="Remove"
+              >
+                <X className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Remove</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline URL input — shown when adding a new link
+// ---------------------------------------------------------------------------
+
+function InlineUrlInput(props: {
+  value: string;
+  onChange: (value: string) => void;
+  onRemove: () => void;
+  placeholder: string;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1">
+      <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground/50">
+        {props.icon}
+      </span>
+      <Input
+        value={props.value}
+        onChange={(event) => props.onChange(event.target.value)}
+        placeholder={props.placeholder}
+        className="h-7 flex-1 border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0"
+        autoFocus
+      />
+      <button
+        type="button"
+        className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+        onClick={props.onRemove}
+        aria-label="Remove"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GitHub PR row — styled like actual GitHub
+// ---------------------------------------------------------------------------
+
+function GitHubPrStatusIcon(props: {
+  status: WorkspacePrStatus;
+  className?: string;
+}) {
+  const { status } = props;
+  const cls = cn("size-4 shrink-0", props.className);
+
+  if (status === "merged") {
+    return <GitMerge className={cn(cls, "text-[#8250df] dark:text-[#a371f7]")} />;
+  }
+  if (status === "closed_unmerged") {
+    return (
+      <GitPullRequestClosed
+        className={cn(cls, "text-[#cf222e] dark:text-[#f85149]")}
+      />
+    );
+  }
+  if (status === "draft") {
+    return (
+      <GitPullRequestDraft
+        className={cn(cls, "text-[#59636e] dark:text-[#8b949e]")}
+      />
+    );
+  }
+  // Open states
+  return (
+    <GitPullRequest
+      className={cn(cls, "text-[#1a7f37] dark:text-[#3fb950]")}
+    />
+  );
+}
+
+function GitHubPrRow(props: {
+  number: number;
+  title: string;
+  status: WorkspacePrStatus;
+  repo?: string;
+  branch?: string;
+  url: string;
+  onRemove?: () => void;
+  onRefresh?: () => void;
+  loading?: boolean;
+  isCurrent?: boolean;
+}) {
+  const visual = PR_STATUS_VISUAL[props.status];
+
+  return (
+    <div className="group/pr-row flex items-start gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-muted/50">
+      <GitHubPrStatusIcon
+        status={props.status}
+        className="mt-0.5 size-[15px]"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2">
+          <button
+            type="button"
+            className="min-w-0 text-left text-[13px] font-medium leading-snug text-foreground hover:text-primary hover:underline"
+            onClick={() => openExternalUrl(props.url)}
+          >
+            {props.title}
+          </button>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] tabular-nums text-muted-foreground/70">
+            #{props.number}
+          </span>
+          <Badge
+            className={cn(
+              "h-[18px] rounded-full border px-1.5 py-0 text-[10px] font-medium leading-none",
+              PR_TONE_BADGE_CLASS[visual.tone],
+            )}
+          >
+            {visual.label}
+          </Badge>
+          {props.isCurrent ? (
+            <Badge
+              variant="outline"
+              className="h-[18px] rounded-full px-1.5 py-0 text-[10px] font-normal leading-none"
+            >
+              Current branch
+            </Badge>
+          ) : null}
+          {props.repo ? (
+            <span className="text-[11px] text-muted-foreground/60">
+              {props.repo}
+            </span>
+          ) : null}
+          {props.branch ? (
+            <span className="font-mono text-[10px] text-muted-foreground/50">
+              {props.branch}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5 pt-0.5 opacity-0 transition-opacity group-hover/pr-row:opacity-100">
+        {props.onRefresh ? (
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground",
+              props.loading && "animate-spin",
+            )}
+            onClick={props.onRefresh}
+            aria-label="Refresh"
+          >
+            <RefreshCcw className="size-3" />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+          onClick={() => openExternalUrl(props.url)}
+          aria-label="Open on GitHub"
+        >
+          <ExternalLink className="size-3" />
+        </button>
+        {props.onRemove ? (
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+            onClick={props.onRemove}
+            aria-label="Remove"
+          >
+            <X className="size-3" />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Custom field inline renderer
+// ---------------------------------------------------------------------------
 
 function renderCustomFieldInput(args: {
   field: WorkspaceInfoCustomField;
@@ -365,18 +597,19 @@ function renderCustomFieldInput(args: {
     case "textarea":
       return (
         <Textarea
-          className="min-h-20"
+          className="min-h-16 text-[13px]"
           value={field.value}
           onChange={(event) =>
             onFieldChange({ ...field, value: event.target.value })
           }
-          placeholder="Field value"
+          placeholder="Value"
         />
       );
     case "number":
       return (
         <Input
           type="number"
+          className="h-8 text-[13px]"
           value={field.value ?? ""}
           onChange={(event) =>
             onFieldChange({
@@ -387,27 +620,26 @@ function renderCustomFieldInput(args: {
                   : Number(event.target.value),
             })
           }
-          placeholder="Field value"
+          placeholder="Value"
         />
       );
     case "boolean":
       return (
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={field.value ? "default" : "outline"}
-            className="h-8 rounded-sm"
-            onClick={() => onFieldChange({ ...field, value: !field.value })}
-          >
-            {field.value ? "Enabled" : "Disabled"}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={field.value ? "default" : "outline"}
+          className="h-7 rounded-md text-xs"
+          onClick={() => onFieldChange({ ...field, value: !field.value })}
+        >
+          {field.value ? "Enabled" : "Disabled"}
+        </Button>
       );
     case "date":
       return (
         <Input
           type="date"
+          className="h-8 text-[13px]"
           value={field.value}
           onChange={(event) =>
             onFieldChange({ ...field, value: event.target.value })
@@ -416,31 +648,32 @@ function renderCustomFieldInput(args: {
       );
     case "url":
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Input
+            className="h-8 flex-1 text-[13px]"
             value={field.value}
             onChange={(event) =>
               onFieldChange({ ...field, value: event.target.value })
             }
             placeholder="https://..."
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 rounded-sm p-0"
-            disabled={!isWorkspaceInfoUrl(field.value)}
-            onClick={() => openExternalUrl(field.value)}
-            aria-label="Open link"
-          >
-            <ExternalLink className="size-4" />
-          </Button>
+          {isWorkspaceInfoUrl(field.value) ? (
+            <button
+              type="button"
+              className="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+              onClick={() => openExternalUrl(field.value)}
+              aria-label="Open link"
+            >
+              <ExternalLink className="size-3.5" />
+            </button>
+          ) : null}
         </div>
       );
     case "single_select":
       return (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <Input
+            className="h-8 text-[13px]"
             value={field.options.join(", ")}
             onChange={(event) =>
               onFieldChange(
@@ -450,14 +683,14 @@ function renderCustomFieldInput(args: {
                 }),
               )
             }
-            placeholder="Options, comma-separated"
+            placeholder="Options (comma-separated)"
           />
           <Select
             value={field.value}
             onValueChange={(value) => onFieldChange({ ...field, value })}
           >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select an option" />
+            <SelectTrigger className="h-8 w-full text-[13px]">
+              <SelectValue placeholder="Select" />
             </SelectTrigger>
             <SelectContent>
               {field.options.length === 0 ? (
@@ -477,15 +710,49 @@ function renderCustomFieldInput(args: {
     default:
       return (
         <Input
+          className="h-8 text-[13px]"
           value={field.value}
           onChange={(event) =>
             onFieldChange({ ...field, value: event.target.value })
           }
-          placeholder="Field value"
+          placeholder="Value"
         />
       );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Add button — compact ghost + icon
+// ---------------------------------------------------------------------------
+
+function AddButton(props: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+      onClick={props.onClick}
+      aria-label={props.label ?? "Add"}
+    >
+      <Plus className="size-3.5" />
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+function EmptyHint(props: { children: ReactNode }) {
+  return (
+    <p className="px-2 py-1 text-[12px] text-muted-foreground/50">
+      {props.children}
+    </p>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
 export function WorkspaceInformationPanel() {
   const [
@@ -643,658 +910,171 @@ export function WorkspaceInformationPanel() {
     }));
   }
 
-  const currentBranchPrCount = prInfo?.pr ? 1 : 0;
   const currentBranchPr = prInfo?.pr ?? null;
   const currentBranchPrStatus = prInfo?.derived ?? null;
-  const totalConnections =
-    currentBranchPrCount +
-    workspaceInformation.jiraIssues.length +
-    workspaceInformation.figmaResources.length +
-    workspaceInformation.linkedPullRequests.length;
   const openTodoCount = workspaceInformation.todos.filter(
     (todo) => !todo.completed,
   ).length;
 
   return (
-    <div className="space-y-3">
-      <Accordion
-        type="multiple"
-        value={openSections}
-        onValueChange={(value) =>
-          setOpenSections(value as WorkspaceInformationSectionId[])
-        }
-        className="space-y-3"
-      >
-        <WorkspaceInformationSection
-          value="overview"
-          title="Workspace information"
-          icon={
-            <SectionMark className="border-primary/20 bg-primary/10 text-primary">
-              <Info className="size-4" />
-            </SectionMark>
-          }
-          countLabel={formatCountLabel(totalConnections, "link", "links")}
-          accent
-        >
-          <div className="space-y-3">
-            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                  Workspace
-                </p>
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  {workspaceName}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border/70 bg-background/70 px-3 py-2.5">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-                  GitHub
-                </p>
-                {isDefaultWorkspace ? (
-                  <p className="mt-1 text-sm font-medium text-foreground">
-                    Default workspace
-                  </p>
-                ) : prInfo?.pr ? (
-                  <div className="mt-1 flex items-center gap-2">
-                    <PrStatusIcon status={prInfo.derived} className="size-4" />
-                    <p className="text-sm font-medium text-foreground">
-                      #{prInfo.pr.number}{" "}
-                      {PR_STATUS_VISUAL[prInfo.derived].label}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="mt-1 text-sm font-medium text-foreground">
-                    No current branch PR
-                  </p>
-                )}
-              </div>
-            </div>
+    <div className="flex flex-col">
+      {/* ── Panel header ─────────────────────────────────────── */}
+      <div className="border-b border-border/50 px-4 py-3">
+        <p className="text-[13px] font-semibold text-foreground">
+          {workspaceName}
+        </p>
+        {/* Current branch PR quick badge */}
+        {!isDefaultWorkspace && currentBranchPr && currentBranchPrStatus ? (
+          <button
+            type="button"
+            className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground"
+            onClick={() => openExternalUrl(currentBranchPr.url)}
+          >
+            <PrStatusIcon status={currentBranchPrStatus} className="size-3.5" />
+            <span className="truncate">
+              #{currentBranchPr.number} {currentBranchPr.title}
+            </span>
+          </button>
+        ) : null}
+      </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="rounded-sm">
-                {workspaceInformation.jiraIssues.length} Jira
-              </Badge>
-              <Badge variant="outline" className="rounded-sm">
-                {workspaceInformation.figmaResources.length} Figma
-              </Badge>
-              <Badge variant="outline" className="rounded-sm">
-                {workspaceInformation.linkedPullRequests.length +
-                  currentBranchPrCount}{" "}
-                GitHub
-              </Badge>
-              <Badge variant="outline" className="rounded-sm">
-                {workspaceInformation.todos.length} Todos
-              </Badge>
-              <Badge variant="outline" className="rounded-sm">
-                {workspaceInformation.customFields.length} Custom fields
-              </Badge>
-            </div>
-          </div>
-        </WorkspaceInformationSection>
-
-        <WorkspaceInformationSection
-          value="note"
-          title="Note"
-          icon={
-            <SectionMark>
-              <FileText className="size-4" />
-            </SectionMark>
+      {/* ── Accordion sections ───────────────────────────────── */}
+      <div className="px-3">
+        <Accordion
+          type="multiple"
+          value={openSections}
+          onValueChange={(value) =>
+            setOpenSections(value as WorkspaceInformationSectionId[])
           }
-          countLabel={workspaceInformation.notes.trim() ? "saved" : "empty"}
         >
-          <Textarea
-            className="min-h-28"
-            value={workspaceInformation.notes}
-            onChange={(event) =>
-              patchWorkspaceInformation((current) => ({
-                ...current,
-                notes: event.target.value,
-              }))
+          {/* ── GitHub ────────────────────────────────────────── */}
+          <SectionHeader
+            value="github"
+            title="Pull Requests"
+            icon={<GitHubIcon className="size-[15px]" />}
+            count={
+              workspaceInformation.linkedPullRequests.length +
+              (currentBranchPr ? 1 : 0)
             }
-            placeholder="Workspace note, blockers, or handoff details"
-          />
-        </WorkspaceInformationSection>
-
-        <WorkspaceInformationSection
-          value="todo"
-          title="Todo"
-          icon={
-            <SectionMark>
-              <ListTodo className="size-4" />
-            </SectionMark>
-          }
-          countLabel={formatCountLabel(openTodoCount, "open", "open")}
-          action={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 rounded-sm"
-              onClick={() =>
-                patchWorkspaceInformation((current) => ({
-                  ...current,
-                  todos: [...current.todos, createWorkspaceTodoItem()],
-                }))
-              }
-            >
-              <Plus className="mr-1 size-4" />
-              Add
-            </Button>
-          }
-        >
-          <div className="space-y-2">
-            {workspaceInformation.todos.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No todos yet.</p>
-            ) : null}
-            {workspaceInformation.todos.map((todo) => (
-              <div
-                key={todo.id}
-                className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/15 px-3 py-2"
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "h-8 w-8 rounded-sm p-0",
-                    todo.completed && "text-primary",
-                  )}
-                  onClick={() =>
-                    patchWorkspaceInformation((current) => ({
-                      ...current,
-                      todos: updateItemById(current.todos, todo.id, (item) => ({
-                        ...item,
-                        completed: !item.completed,
-                      })),
-                    }))
-                  }
-                  aria-label={
-                    todo.completed
-                      ? "Mark todo incomplete"
-                      : "Mark todo complete"
-                  }
-                >
-                  {todo.completed ? (
-                    <CheckCircle2 className="size-4" />
-                  ) : (
-                    <Circle className="size-4" />
-                  )}
-                </Button>
-                <Input
-                  value={todo.text}
-                  onChange={(event) =>
-                    patchWorkspaceInformation((current) => ({
-                      ...current,
-                      todos: updateItemById(current.todos, todo.id, (item) => ({
-                        ...item,
-                        text: event.target.value,
-                      })),
-                    }))
-                  }
-                  placeholder="Todo item"
-                  className={cn(
-                    todo.completed && "text-muted-foreground line-through",
-                  )}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 rounded-sm p-0 text-muted-foreground"
-                  onClick={() =>
-                    patchWorkspaceInformation((current) => ({
-                      ...current,
-                      todos: removeItemById(current.todos, todo.id),
-                    }))
-                  }
-                  aria-label="Remove todo"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </WorkspaceInformationSection>
-
-        <WorkspaceInformationSection
-          value="jira"
-          title="Jira"
-          icon={<ServiceMark label="JR" />}
-          countLabel={formatCountLabel(
-            workspaceInformation.jiraIssues.length,
-            "issue",
-            "issues",
-          )}
-          action={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 rounded-sm"
-              onClick={() =>
-                patchWorkspaceInformation((current) => ({
-                  ...current,
-                  jiraIssues: [
-                    ...current.jiraIssues,
-                    createWorkspaceJiraIssue(),
-                  ],
-                }))
-              }
-            >
-              <Plus className="mr-1 size-4" />
-              Add
-            </Button>
-          }
-        >
-          <div className="space-y-3">
-            {workspaceInformation.jiraIssues.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No Jira links.</p>
-            ) : null}
-            {workspaceInformation.jiraIssues.map((issue) => {
-              const issueRef = extractJiraIssueReference(issue.url);
-              const issueKey =
-                issue.issueKey.trim() || issueRef?.issueKey || "";
-              const host =
-                issueRef?.host || formatWorkspaceInfoHostLabel(issue.url);
-              const title =
-                issue.title.trim() || issueKey || "Linked Jira issue";
-
-              if (!isWorkspaceInfoUrl(issue.url)) {
-                return (
-                  <ConnectionUrlEditor
-                    key={issue.id}
-                    icon={<ServiceMark label="JR" />}
-                    url={issue.url}
-                    placeholder="https://company.atlassian.net/browse/ABC-123"
-                    onChange={(url) =>
-                      patchWorkspaceInformation((current) => ({
-                        ...current,
-                        jiraIssues: updateItemById(
-                          current.jiraIssues,
-                          issue.id,
-                          (item) => {
-                            const parsed = extractJiraIssueReference(url);
-                            return {
-                              ...item,
-                              url,
-                              issueKey: parsed?.issueKey ?? item.issueKey,
-                            };
-                          },
-                        ),
-                      }))
-                    }
-                    onRemove={() =>
-                      patchWorkspaceInformation((current) => ({
-                        ...current,
-                        jiraIssues: removeItemById(
-                          current.jiraIssues,
-                          issue.id,
-                        ),
-                      }))
-                    }
-                  />
-                );
-              }
-
-              return (
-                <IntegrationCard key={issue.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ServiceMark label="JR" />
-                        {issueKey ? (
-                          <Badge variant="secondary" className="rounded-sm">
-                            {issueKey}
-                          </Badge>
-                        ) : null}
-                        {issue.status.trim() ? (
-                          <Badge variant="outline" className="rounded-sm">
-                            {issue.status.trim()}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="text-sm font-medium leading-5 text-foreground">
-                        {title}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-sm p-0"
-                        onClick={() => openExternalUrl(issue.url)}
-                        aria-label="Open Jira issue"
-                      >
-                        <ExternalLink className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-sm p-0 text-muted-foreground"
-                        onClick={() =>
-                          patchWorkspaceInformation((current) => ({
-                            ...current,
-                            jiraIssues: removeItemById(
-                              current.jiraIssues,
-                              issue.id,
-                            ),
-                          }))
-                        }
-                        aria-label="Remove Jira issue"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {host ? (
-                      <Badge
-                        variant="outline"
-                        className="rounded-sm font-normal"
-                      >
-                        {host}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  {issue.note.trim() ? (
-                    <p className="text-xs leading-5 text-muted-foreground whitespace-pre-wrap">
-                      {issue.note.trim()}
-                    </p>
-                  ) : null}
-                </IntegrationCard>
-              );
-            })}
-          </div>
-        </WorkspaceInformationSection>
-
-        <WorkspaceInformationSection
-          value="figma"
-          title="Figma"
-          icon={<ServiceMark label="FG" />}
-          countLabel={formatCountLabel(
-            workspaceInformation.figmaResources.length,
-            "file",
-            "files",
-          )}
-          action={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 rounded-sm"
-              onClick={() =>
-                patchWorkspaceInformation((current) => ({
-                  ...current,
-                  figmaResources: [
-                    ...current.figmaResources,
-                    createWorkspaceFigmaResource(),
-                  ],
-                }))
-              }
-            >
-              <Plus className="mr-1 size-4" />
-              Add
-            </Button>
-          }
-        >
-          <div className="space-y-3">
-            {workspaceInformation.figmaResources.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No Figma links.</p>
-            ) : null}
-            {workspaceInformation.figmaResources.map((resource) => {
-              const figmaRef = extractFigmaResourceReference(resource.url);
-              const title =
-                resource.title.trim() ||
-                figmaRef?.title ||
-                "Linked Figma resource";
-              const host =
-                figmaRef?.host || formatWorkspaceInfoHostLabel(resource.url);
-              const nodeId = resource.nodeId.trim() || figmaRef?.nodeId || "";
-
-              if (!isWorkspaceInfoUrl(resource.url)) {
-                return (
-                  <ConnectionUrlEditor
-                    key={resource.id}
-                    icon={<ServiceMark label="FG" />}
-                    url={resource.url}
-                    placeholder="https://www.figma.com/file/..."
-                    onChange={(url) =>
-                      patchWorkspaceInformation((current) => ({
-                        ...current,
-                        figmaResources: updateItemById(
-                          current.figmaResources,
-                          resource.id,
-                          (item) => {
-                            const parsed = extractFigmaResourceReference(url);
-                            return {
-                              ...item,
-                              url,
-                              title: parsed?.title || item.title,
-                              nodeId: parsed?.nodeId ?? item.nodeId,
-                            };
-                          },
-                        ),
-                      }))
-                    }
-                    onRemove={() =>
-                      patchWorkspaceInformation((current) => ({
-                        ...current,
-                        figmaResources: removeItemById(
-                          current.figmaResources,
-                          resource.id,
-                        ),
-                      }))
-                    }
-                  />
-                );
-              }
-
-              return (
-                <IntegrationCard key={resource.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ServiceMark label="FG" />
-                        <Badge
-                          variant="secondary"
-                          className="rounded-sm capitalize"
-                        >
-                          {formatFigmaKindLabel(figmaRef?.kind)}
-                        </Badge>
-                        {nodeId ? (
-                          <Badge variant="outline" className="rounded-sm">
-                            node {nodeId}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="text-sm font-medium leading-5 text-foreground">
-                        {title}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-sm p-0"
-                        onClick={() => openExternalUrl(resource.url)}
-                        aria-label="Open Figma resource"
-                      >
-                        <ExternalLink className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-sm p-0 text-muted-foreground"
-                        onClick={() =>
-                          patchWorkspaceInformation((current) => ({
-                            ...current,
-                            figmaResources: removeItemById(
-                              current.figmaResources,
-                              resource.id,
-                            ),
-                          }))
-                        }
-                        aria-label="Remove Figma resource"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {host ? (
-                      <Badge
-                        variant="outline"
-                        className="rounded-sm font-normal"
-                      >
-                        {host}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  {resource.note.trim() ? (
-                    <p className="text-xs leading-5 text-muted-foreground whitespace-pre-wrap">
-                      {resource.note.trim()}
-                    </p>
-                  ) : null}
-                </IntegrationCard>
-              );
-            })}
-          </div>
-        </WorkspaceInformationSection>
-
-        <WorkspaceInformationSection
-          value="github"
-          title="GitHub"
-          icon={<ServiceMark label="GH" />}
-          countLabel={formatCountLabel(
-            workspaceInformation.linkedPullRequests.length +
-              currentBranchPrCount,
-            "item",
-            "items",
-          )}
-          action={
-            <div className="flex items-center gap-2">
-              {!isDefaultWorkspace ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 rounded-sm"
-                  onClick={() =>
-                    void fetchWorkspacePrStatus({
-                      workspaceId: activeWorkspaceId,
-                    })
-                  }
-                >
-                  <RefreshCcw className="mr-1 size-4" />
-                  Refresh
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 rounded-sm"
-                onClick={() =>
-                  patchWorkspaceInformation((current) => ({
-                    ...current,
-                    linkedPullRequests: [
-                      ...current.linkedPullRequests,
-                      createWorkspaceLinkedPullRequest(),
-                    ],
-                  }))
-                }
-              >
-                <Plus className="mr-1 size-4" />
-                Add
-              </Button>
-            </div>
-          }
-        >
-          <div className="space-y-3">
-            {!isDefaultWorkspace && currentBranchPr ? (
-              <IntegrationCard className="border-primary/15 bg-primary/[0.04]">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <ServiceMark label="GH" />
-                      <Badge variant="secondary" className="rounded-sm">
-                        Current branch
-                      </Badge>
-                      {currentBranchPrStatus ? (
-                        <PrStatusBadge status={currentBranchPrStatus} />
-                      ) : null}
-                    </div>
-                    <p className="text-sm font-medium leading-5 text-foreground">
-                      #{currentBranchPr.number} {currentBranchPr.title}
-                    </p>
-                  </div>
-                  <Button
+            action={
+              <div className="flex items-center gap-0.5">
+                {!isDefaultWorkspace ? (
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 rounded-sm p-0"
-                    onClick={() => openExternalUrl(currentBranchPr.url)}
-                    aria-label="Open pull request on GitHub"
+                    className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+                    onClick={() =>
+                      void fetchWorkspacePrStatus({
+                        workspaceId: activeWorkspaceId,
+                      })
+                    }
+                    aria-label="Refresh"
                   >
-                    <ExternalLink className="size-4" />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="rounded-sm">
-                    #{currentBranchPr.number}
-                  </Badge>
-                  <Badge variant="outline" className="rounded-sm">
-                    {currentBranchPr.headRefName} →{" "}
-                    {currentBranchPr.baseRefName}
-                  </Badge>
-                </div>
-              </IntegrationCard>
-            ) : !isDefaultWorkspace ? (
-              <p className="text-xs text-muted-foreground">
-                No current branch PR.
-              </p>
-            ) : null}
+                    <RefreshCcw className="size-3.5" />
+                  </button>
+                ) : null}
+                <AddButton
+                  onClick={() =>
+                    patchWorkspaceInformation((current) => ({
+                      ...current,
+                      linkedPullRequests: [
+                        ...current.linkedPullRequests,
+                        createWorkspaceLinkedPullRequest(),
+                      ],
+                    }))
+                  }
+                  label="Add pull request"
+                />
+              </div>
+            }
+          >
+            <div className="-mx-2 space-y-0.5">
+              {/* Current branch PR */}
+              {!isDefaultWorkspace && currentBranchPr && currentBranchPrStatus ? (
+                <GitHubPrRow
+                  number={currentBranchPr.number}
+                  title={currentBranchPr.title}
+                  status={currentBranchPrStatus}
+                  branch={`${currentBranchPr.headRefName} → ${currentBranchPr.baseRefName}`}
+                  url={currentBranchPr.url}
+                  isCurrent
+                />
+              ) : !isDefaultWorkspace ? (
+                <EmptyHint>No PR for current branch</EmptyHint>
+              ) : null}
 
-            {workspaceInformation.linkedPullRequests.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No related GitHub PRs.
-              </p>
-            ) : null}
-            {workspaceInformation.linkedPullRequests.map((item) => {
-              const githubRef = extractGitHubPullRequestReference(item.url);
-              const preview = linkedPullRequestPreviewById[item.id];
-              const previewInfo = preview?.info;
-              const previewStatus = previewInfo?.derived;
-              const title =
-                previewInfo?.pr.title ||
-                item.title.trim() ||
-                (githubRef
-                  ? `${githubRef.owner}/${githubRef.repo} #${githubRef.number}`
-                  : "Linked GitHub PR");
+              {/* Linked PRs */}
+              {workspaceInformation.linkedPullRequests.map((item) => {
+                const githubRef = extractGitHubPullRequestReference(item.url);
+                const preview = linkedPullRequestPreviewById[item.id];
+                const previewInfo = preview?.info;
+                const previewStatus = previewInfo?.derived;
 
-              if (!isWorkspaceInfoUrl(item.url)) {
+                if (!isWorkspaceInfoUrl(item.url)) {
+                  return (
+                    <InlineUrlInput
+                      key={item.id}
+                      value={item.url}
+                      icon={<GitHubIcon className="size-3.5 text-muted-foreground/50" />}
+                      placeholder="https://github.com/owner/repo/pull/123"
+                      onChange={(url) =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          linkedPullRequests: updateItemById(
+                            current.linkedPullRequests,
+                            item.id,
+                            (pullRequest) => ({
+                              ...pullRequest,
+                              url,
+                            }),
+                          ),
+                        }))
+                      }
+                      onRemove={() =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          linkedPullRequests: removeItemById(
+                            current.linkedPullRequests,
+                            item.id,
+                          ),
+                        }))
+                      }
+                    />
+                  );
+                }
+
+                const title =
+                  previewInfo?.pr.title ||
+                  item.title.trim() ||
+                  (githubRef
+                    ? `${githubRef.owner}/${githubRef.repo} #${githubRef.number}`
+                    : "Linked PR");
+                const number = previewInfo?.pr.number ?? githubRef?.number ?? 0;
+                const repo = githubRef
+                  ? `${githubRef.owner}/${githubRef.repo}`
+                  : undefined;
+                const branch =
+                  previewInfo?.pr.headRefName && previewInfo.pr.baseRefName
+                    ? `${previewInfo.pr.headRefName} → ${previewInfo.pr.baseRefName}`
+                    : undefined;
+
                 return (
-                  <ConnectionUrlEditor
+                  <GitHubPrRow
                     key={item.id}
-                    icon={<ServiceMark label="GH" />}
+                    number={number}
+                    title={title}
+                    status={
+                      previewStatus ??
+                      (preview?.loading ? "review_required" : "review_required")
+                    }
+                    repo={repo}
+                    branch={branch}
                     url={item.url}
-                    placeholder="https://github.com/owner/repo/pull/123"
-                    onChange={(url) =>
-                      patchWorkspaceInformation((current) => ({
-                        ...current,
-                        linkedPullRequests: updateItemById(
-                          current.linkedPullRequests,
-                          item.id,
-                          (pullRequest) => ({
-                            ...pullRequest,
-                            url,
-                          }),
-                        ),
-                      }))
+                    loading={preview?.loading}
+                    onRefresh={() =>
+                      void refreshLinkedPullRequestPreview({
+                        itemId: item.id,
+                        url: item.url.trim(),
+                      })
                     }
                     onRemove={() =>
                       patchWorkspaceInformation((current) => ({
@@ -1307,222 +1087,426 @@ export function WorkspaceInformationPanel() {
                     }
                   />
                 );
-              }
+              })}
 
-              return (
-                <IntegrationCard key={item.id}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ServiceMark label="GH" />
-                        <Badge variant="secondary" className="rounded-sm">
-                          Related PR
-                        </Badge>
-                        {previewStatus ? (
-                          <PrStatusBadge status={previewStatus} />
-                        ) : preview?.loading ? (
-                          <Badge variant="outline" className="rounded-sm">
-                            Loading
-                          </Badge>
-                        ) : preview?.error ? (
-                          <Badge variant="outline" className="rounded-sm">
-                            Lookup unavailable
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="text-sm font-medium leading-5 text-foreground">
-                        {title}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-sm p-0"
-                        disabled={!githubRef}
-                        onClick={() =>
-                          void refreshLinkedPullRequestPreview({
-                            itemId: item.id,
-                            url: item.url.trim(),
-                          })
-                        }
-                        aria-label="Refresh linked GitHub PR"
-                      >
-                        <RefreshCcw className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-sm p-0"
-                        onClick={() => openExternalUrl(item.url)}
-                        aria-label="Open linked GitHub PR"
-                      >
-                        <ExternalLink className="size-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 rounded-sm p-0 text-muted-foreground"
-                        onClick={() =>
-                          patchWorkspaceInformation((current) => ({
-                            ...current,
-                            linkedPullRequests: removeItemById(
-                              current.linkedPullRequests,
-                              item.id,
-                            ),
-                          }))
-                        }
-                        aria-label="Remove linked GitHub PR"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </div>
+              {workspaceInformation.linkedPullRequests.length === 0 &&
+              !currentBranchPr &&
+              !isDefaultWorkspace ? null : workspaceInformation
+                  .linkedPullRequests.length === 0 && isDefaultWorkspace ? (
+                <EmptyHint>No linked pull requests</EmptyHint>
+              ) : null}
+            </div>
+          </SectionHeader>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {githubRef ? (
-                      <>
-                        <Badge variant="outline" className="rounded-sm">
-                          #{githubRef.number}
-                        </Badge>
+          {/* ── Jira ──────────────────────────────────────────── */}
+          <SectionHeader
+            value="jira"
+            title="Jira Issues"
+            icon={<JiraIcon className="size-[15px]" />}
+            count={workspaceInformation.jiraIssues.length}
+            action={
+              <AddButton
+                onClick={() =>
+                  patchWorkspaceInformation((current) => ({
+                    ...current,
+                    jiraIssues: [
+                      ...current.jiraIssues,
+                      createWorkspaceJiraIssue(),
+                    ],
+                  }))
+                }
+                label="Add Jira issue"
+              />
+            }
+          >
+            <div className="-mx-2 space-y-0.5">
+              {workspaceInformation.jiraIssues.length === 0 ? (
+                <EmptyHint>No linked Jira issues</EmptyHint>
+              ) : null}
+              {workspaceInformation.jiraIssues.map((issue) => {
+                const issueRef = extractJiraIssueReference(issue.url);
+                const issueKey =
+                  issue.issueKey.trim() || issueRef?.issueKey || "";
+                const host =
+                  issueRef?.host || formatWorkspaceInfoHostLabel(issue.url);
+                const title =
+                  issue.title.trim() || issueKey || "Linked Jira issue";
+
+                if (!isWorkspaceInfoUrl(issue.url)) {
+                  return (
+                    <InlineUrlInput
+                      key={issue.id}
+                      value={issue.url}
+                      icon={<JiraIcon className="size-3.5" />}
+                      placeholder="https://company.atlassian.net/browse/ABC-123"
+                      onChange={(url) =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          jiraIssues: updateItemById(
+                            current.jiraIssues,
+                            issue.id,
+                            (item) => {
+                              const parsed = extractJiraIssueReference(url);
+                              return {
+                                ...item,
+                                url,
+                                issueKey: parsed?.issueKey ?? item.issueKey,
+                              };
+                            },
+                          ),
+                        }))
+                      }
+                      onRemove={() =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          jiraIssues: removeItemById(
+                            current.jiraIssues,
+                            issue.id,
+                          ),
+                        }))
+                      }
+                    />
+                  );
+                }
+
+                return (
+                  <InlineLinkRow
+                    key={issue.id}
+                    icon={<JiraIcon className="size-[15px]" />}
+                    label={title}
+                    sublabel={host ? `${host}${issueKey ? ` · ${issueKey}` : ""}` : issueKey}
+                    badge={
+                      issue.status.trim() ? (
                         <Badge
                           variant="outline"
-                          className="rounded-sm font-normal"
+                          className="h-[18px] rounded-full px-1.5 py-0 text-[10px] font-normal leading-none"
                         >
-                          {githubRef.owner}/{githubRef.repo}
+                          {issue.status.trim()}
                         </Badge>
-                      </>
-                    ) : null}
-                    {previewInfo?.pr.headRefName &&
-                    previewInfo.pr.baseRefName ? (
-                      <Badge variant="outline" className="rounded-sm">
-                        {previewInfo.pr.headRefName} →{" "}
-                        {previewInfo.pr.baseRefName}
-                      </Badge>
-                    ) : null}
-                  </div>
-
-                  {preview?.error ? (
-                    <p className="text-xs text-muted-foreground">
-                      {preview.error}
-                    </p>
-                  ) : null}
-                </IntegrationCard>
-              );
-            })}
-          </div>
-        </WorkspaceInformationSection>
-
-        <WorkspaceInformationSection
-          value="custom"
-          title="Custom fields"
-          icon={
-            <SectionMark>
-              <Box className="size-4" />
-            </SectionMark>
-          }
-          countLabel={formatCountLabel(
-            workspaceInformation.customFields.length,
-            "field",
-            "fields",
-          )}
-          action={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 rounded-sm"
-              onClick={() =>
-                patchWorkspaceInformation((current) => ({
-                  ...current,
-                  customFields: [
-                    ...current.customFields,
-                    createWorkspaceInfoCustomField(),
-                  ],
-                }))
-              }
-            >
-              <Plus className="mr-1 size-4" />
-              Add
-            </Button>
-          }
-        >
-          <div className="space-y-3">
-            {workspaceInformation.customFields.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No custom fields yet.
-              </p>
-            ) : null}
-            {workspaceInformation.customFields.map((field) => (
-              <div
-                key={field.id}
-                className="space-y-2 rounded-lg border border-border/70 bg-muted/15 p-3"
-              >
-                <div className="grid grid-cols-[minmax(0,1fr)_11rem_auto] gap-2">
-                  <Input
-                    value={field.label}
-                    onChange={(event) =>
-                      patchCustomField(field.id, (currentField) => ({
-                        ...currentField,
-                        label: event.target.value,
-                      }))
+                      ) : null
                     }
-                    placeholder="Field label"
-                  />
-                  <Select
-                    value={field.type}
-                    onValueChange={(value) =>
-                      patchCustomField(field.id, (currentField) =>
-                        changeWorkspaceInfoCustomFieldType({
-                          field: currentField,
-                          type: value as WorkspaceInfoFieldType,
-                        }),
-                      )
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Field type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {WORKSPACE_INFO_FIELD_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 w-9 rounded-sm p-0 text-muted-foreground"
-                    onClick={() =>
+                    url={issue.url}
+                    onRemove={() =>
                       patchWorkspaceInformation((current) => ({
                         ...current,
-                        customFields: removeItemById(
-                          current.customFields,
-                          field.id,
+                        jiraIssues: removeItemById(
+                          current.jiraIssues,
+                          issue.id,
                         ),
                       }))
                     }
-                    aria-label="Remove custom field"
+                  />
+                );
+              })}
+            </div>
+          </SectionHeader>
+
+          {/* ── Figma ─────────────────────────────────────────── */}
+          <SectionHeader
+            value="figma"
+            title="Figma"
+            icon={<FigmaIcon className="size-[15px]" />}
+            count={workspaceInformation.figmaResources.length}
+            action={
+              <AddButton
+                onClick={() =>
+                  patchWorkspaceInformation((current) => ({
+                    ...current,
+                    figmaResources: [
+                      ...current.figmaResources,
+                      createWorkspaceFigmaResource(),
+                    ],
+                  }))
+                }
+                label="Add Figma resource"
+              />
+            }
+          >
+            <div className="-mx-2 space-y-0.5">
+              {workspaceInformation.figmaResources.length === 0 ? (
+                <EmptyHint>No linked Figma resources</EmptyHint>
+              ) : null}
+              {workspaceInformation.figmaResources.map((resource) => {
+                const figmaRef = extractFigmaResourceReference(resource.url);
+                const title =
+                  resource.title.trim() ||
+                  figmaRef?.title ||
+                  "Linked Figma resource";
+                const host =
+                  figmaRef?.host || formatWorkspaceInfoHostLabel(resource.url);
+
+                if (!isWorkspaceInfoUrl(resource.url)) {
+                  return (
+                    <InlineUrlInput
+                      key={resource.id}
+                      value={resource.url}
+                      icon={<FigmaIcon className="size-3.5" />}
+                      placeholder="https://www.figma.com/file/..."
+                      onChange={(url) =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          figmaResources: updateItemById(
+                            current.figmaResources,
+                            resource.id,
+                            (item) => {
+                              const parsed = extractFigmaResourceReference(url);
+                              return {
+                                ...item,
+                                url,
+                                title: parsed?.title || item.title,
+                                nodeId: parsed?.nodeId ?? item.nodeId,
+                              };
+                            },
+                          ),
+                        }))
+                      }
+                      onRemove={() =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          figmaResources: removeItemById(
+                            current.figmaResources,
+                            resource.id,
+                          ),
+                        }))
+                      }
+                    />
+                  );
+                }
+
+                return (
+                  <InlineLinkRow
+                    key={resource.id}
+                    icon={<FigmaIcon className="size-[15px]" />}
+                    label={title}
+                    sublabel={
+                      host
+                        ? `${host}${figmaRef?.kind && figmaRef.kind !== "unknown" ? ` · ${formatFigmaKindLabel(figmaRef.kind)}` : ""}`
+                        : figmaRef?.kind
+                          ? formatFigmaKindLabel(figmaRef.kind)
+                          : undefined
+                    }
+                    url={resource.url}
+                    onRemove={() =>
+                      patchWorkspaceInformation((current) => ({
+                        ...current,
+                        figmaResources: removeItemById(
+                          current.figmaResources,
+                          resource.id,
+                        ),
+                      }))
+                    }
+                  />
+                );
+              })}
+            </div>
+          </SectionHeader>
+
+          {/* ── Note ──────────────────────────────────────────── */}
+          <SectionHeader
+            value="note"
+            title="Notes"
+            icon={<StickyNote className="size-[15px]" />}
+          >
+            <Textarea
+              className="min-h-20 resize-none text-[13px]"
+              value={workspaceInformation.notes}
+              onChange={(event) =>
+                patchWorkspaceInformation((current) => ({
+                  ...current,
+                  notes: event.target.value,
+                }))
+              }
+              placeholder="Notes, blockers, handoff details..."
+            />
+          </SectionHeader>
+
+          {/* ── Todo ──────────────────────────────────────────── */}
+          <SectionHeader
+            value="todo"
+            title="Todos"
+            icon={<CheckCircle2 className="size-[15px]" />}
+            count={openTodoCount}
+            action={
+              <AddButton
+                onClick={() =>
+                  patchWorkspaceInformation((current) => ({
+                    ...current,
+                    todos: [...current.todos, createWorkspaceTodoItem()],
+                  }))
+                }
+                label="Add todo"
+              />
+            }
+          >
+            <div className="space-y-0.5">
+              {workspaceInformation.todos.length === 0 ? (
+                <EmptyHint>No todos yet</EmptyHint>
+              ) : null}
+              {workspaceInformation.todos.map((todo) => (
+                <div
+                  key={todo.id}
+                  className="group/todo flex items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors",
+                      todo.completed
+                        ? "text-primary"
+                        : "text-muted-foreground/40 hover:text-muted-foreground",
+                    )}
+                    onClick={() =>
+                      patchWorkspaceInformation((current) => ({
+                        ...current,
+                        todos: updateItemById(current.todos, todo.id, (item) => ({
+                          ...item,
+                          completed: !item.completed,
+                        })),
+                      }))
+                    }
+                    aria-label={
+                      todo.completed
+                        ? "Mark incomplete"
+                        : "Mark complete"
+                    }
                   >
-                    <Trash2 className="size-4" />
-                  </Button>
+                    {todo.completed ? (
+                      <CheckCircle2 className="size-[15px]" />
+                    ) : (
+                      <Circle className="size-[15px]" />
+                    )}
+                  </button>
+                  <Input
+                    value={todo.text}
+                    onChange={(event) =>
+                      patchWorkspaceInformation((current) => ({
+                        ...current,
+                        todos: updateItemById(current.todos, todo.id, (item) => ({
+                          ...item,
+                          text: event.target.value,
+                        })),
+                      }))
+                    }
+                    placeholder="Todo item"
+                    className={cn(
+                      "h-7 flex-1 border-0 bg-transparent px-1 text-[13px] shadow-none focus-visible:ring-0",
+                      todo.completed &&
+                        "text-muted-foreground/50 line-through",
+                    )}
+                  />
+                  <button
+                    type="button"
+                    className="flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover/todo:opacity-100"
+                    onClick={() =>
+                      patchWorkspaceInformation((current) => ({
+                        ...current,
+                        todos: removeItemById(current.todos, todo.id),
+                      }))
+                    }
+                    aria-label="Remove todo"
+                  >
+                    <X className="size-3" />
+                  </button>
                 </div>
-                {renderCustomFieldInput({
-                  field,
-                  onFieldChange: (nextField) =>
-                    patchCustomField(field.id, () => nextField),
-                })}
-              </div>
-            ))}
-          </div>
-        </WorkspaceInformationSection>
-      </Accordion>
+              ))}
+            </div>
+          </SectionHeader>
+
+          {/* ── Custom fields ─────────────────────────────────── */}
+          <SectionHeader
+            value="custom"
+            title="Custom Fields"
+            icon={<ChevronDown className="size-[15px] rotate-[-90deg]" />}
+            count={workspaceInformation.customFields.length}
+            action={
+              <AddButton
+                onClick={() =>
+                  patchWorkspaceInformation((current) => ({
+                    ...current,
+                    customFields: [
+                      ...current.customFields,
+                      createWorkspaceInfoCustomField(),
+                    ],
+                  }))
+                }
+                label="Add custom field"
+              />
+            }
+          >
+            <div className="space-y-2.5">
+              {workspaceInformation.customFields.length === 0 ? (
+                <EmptyHint>No custom fields</EmptyHint>
+              ) : null}
+              {workspaceInformation.customFields.map((field) => (
+                <div
+                  key={field.id}
+                  className="group/field space-y-1.5 rounded-md border border-border/40 bg-muted/10 p-2.5"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={field.label}
+                      onChange={(event) =>
+                        patchCustomField(field.id, (currentField) => ({
+                          ...currentField,
+                          label: event.target.value,
+                        }))
+                      }
+                      placeholder="Label"
+                      className="h-7 flex-1 border-0 bg-transparent px-1 text-[13px] font-medium shadow-none focus-visible:ring-0"
+                    />
+                    <Select
+                      value={field.type}
+                      onValueChange={(value) =>
+                        patchCustomField(field.id, (currentField) =>
+                          changeWorkspaceInfoCustomFieldType({
+                            field: currentField,
+                            type: value as WorkspaceInfoFieldType,
+                          }),
+                        )
+                      }
+                    >
+                      <SelectTrigger className="h-7 w-24 border-0 bg-transparent text-[11px] text-muted-foreground shadow-none">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {WORKSPACE_INFO_FIELD_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <button
+                      type="button"
+                      className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover/field:opacity-100"
+                      onClick={() =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          customFields: removeItemById(
+                            current.customFields,
+                            field.id,
+                          ),
+                        }))
+                      }
+                      aria-label="Remove field"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                  {renderCustomFieldInput({
+                    field,
+                    onFieldChange: (nextField) =>
+                      patchCustomField(field.id, () => nextField),
+                  })}
+                </div>
+              ))}
+            </div>
+          </SectionHeader>
+
+          {/* Hidden overview section (kept for accordion state compat) */}
+          <AccordionItem value="overview" className="hidden" />
+        </Accordion>
+      </div>
     </div>
   );
 }
