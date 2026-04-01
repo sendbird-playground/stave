@@ -11,6 +11,7 @@ import {
   GitPullRequestDraft,
   Globe,
   Hash,
+  Link,
   Plus,
   RefreshCcw,
   SlidersHorizontal,
@@ -45,12 +46,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { Switch } from "@/components/ui/switch";
 import {
   changeWorkspaceInfoCustomFieldType,
+  createWorkspaceConfluencePage,
   createWorkspaceFigmaResource,
   createWorkspaceInfoCustomField,
   createWorkspaceJiraIssue,
   createWorkspaceLinkedPullRequest,
   createWorkspaceSlackThread,
   createWorkspaceTodoItem,
+  extractConfluencePageReference,
   extractFigmaResourceReference,
   extractGitHubPullRequestReference,
   extractJiraIssueReference,
@@ -114,6 +117,7 @@ const WORKSPACE_INFORMATION_SECTION_IDS = [
   "note",
   "github",
   "jira",
+  "confluence",
   "figma",
   "slack",
   "custom",
@@ -334,6 +338,38 @@ function SlackIcon({ className }: { className?: string }) {
       <path
         d="M15.163 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.163 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.27a2.527 2.527 0 0 1-2.52-2.523 2.527 2.527 0 0 1 2.52-2.52h6.315A2.528 2.528 0 0 1 24 15.163a2.528 2.528 0 0 1-2.522 2.523h-6.315z"
         fill="#ECB22E"
+      />
+    </svg>
+  );
+}
+
+function ConfluenceIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={cn("size-4", className)}
+    >
+      <defs>
+        <linearGradient
+          id="confluence-grad"
+          x1="20.76"
+          y1="3.53"
+          x2="10.29"
+          y2="21.52"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset="0" stopColor="#0052CC" />
+          <stop offset="1" stopColor="#2684FF" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M1.26 18.35c-.29.48-.62 1.04-.86 1.44a.72.72 0 0 0 .25.98l4.2 2.58a.72.72 0 0 0 .99-.22c.2-.35.49-.84.82-1.4 2.3-3.89 4.58-3.42 8.77-1.39l4.06 1.95a.72.72 0 0 0 .97-.36l2.14-4.62a.72.72 0 0 0-.34-.93c-1.15-.56-3.45-1.67-5.76-2.78-5.73-2.75-11.37-3.06-15.24 4.75z"
+        fill="url(#confluence-grad)"
+      />
+      <path
+        d="M22.74 5.65c.29-.48.62-1.04.86-1.44a.72.72 0 0 0-.25-.98L19.15.65a.72.72 0 0 0-.99.22c-.2.35-.49.84-.82 1.4-2.3 3.89-4.58 3.42-8.77 1.39L4.51 1.71a.72.72 0 0 0-.97.36L1.4 6.69a.72.72 0 0 0 .34.93c1.15.56 3.45 1.67 5.76 2.78 5.73 2.75 11.37 3.06 15.24-4.75z"
+        fill="url(#confluence-grad)"
       />
     </svg>
   );
@@ -1045,7 +1081,7 @@ export function WorkspaceInformationPanel() {
   return (
     <div className="flex flex-col">
       {/* ── Panel header ─────────────────────────────────────── */}
-      <header className="px-3 pt-4 pb-1">
+      <header className="px-3 pt-2 pb-2">
         <h2 className="font-heading text-base font-medium text-foreground">
           Information
         </h2>
@@ -1079,14 +1115,14 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="space-y-0.5">
+            <div className="-mx-2 space-y-0.5">
               {workspaceInformation.todos.length === 0 ? (
                 <EmptyHint>No todos yet</EmptyHint>
               ) : null}
               {workspaceInformation.todos.map((todo) => (
                 <div
                   key={todo.id}
-                  className="group/todo flex items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors hover:bg-muted/50"
+                  className="group/todo flex items-center gap-1.5 rounded-md px-3 py-0.5 transition-colors hover:bg-muted/50"
                 >
                   <button
                     type="button"
@@ -1239,7 +1275,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={item.id}
                       value={item.url}
-                      icon={<GitHubIcon className="size-3.5 text-muted-foreground/50" />}
+                      icon={<Link className="size-3.5" />}
                       placeholder="https://github.com/owner/repo/pull/123"
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1362,7 +1398,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={issue.id}
                       value={issue.url}
-                      icon={<JiraIcon className="size-3.5" />}
+                      icon={<Link className="size-3.5" />}
                       placeholder="https://company.atlassian.net/browse/ABC-123"
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1426,6 +1462,110 @@ export function WorkspaceInformationPanel() {
             </div>
           </SectionHeader>
 
+          {/* ── Confluence ──────────────────────────────────────── */}
+          <SectionHeader
+            value="confluence"
+            title="Confluence"
+            icon={<ConfluenceIcon className="size-[15px]" />}
+            count={(workspaceInformation.confluencePages ?? []).length}
+            action={
+              <AddButton
+                onClick={() =>
+                  patchWorkspaceInformation((current) => ({
+                    ...current,
+                    confluencePages: [
+                      ...(current.confluencePages ?? []),
+                      createWorkspaceConfluencePage(),
+                    ],
+                  }))
+                }
+                label="Add Confluence page"
+              />
+            }
+          >
+            <div className="-mx-2 space-y-0.5">
+              {(workspaceInformation.confluencePages ?? []).length === 0 ? (
+                <EmptyHint>No linked Confluence pages</EmptyHint>
+              ) : null}
+              {(workspaceInformation.confluencePages ?? []).map((page) => {
+                const confluenceRef = extractConfluencePageReference(page.url);
+                const title =
+                  page.title.trim() ||
+                  confluenceRef?.title ||
+                  "Linked Confluence page";
+                const host =
+                  confluenceRef?.host ||
+                  formatWorkspaceInfoHostLabel(page.url);
+                const spaceKey =
+                  page.spaceKey.trim() || confluenceRef?.spaceKey || "";
+
+                if (!isWorkspaceInfoUrl(page.url)) {
+                  return (
+                    <InlineUrlInput
+                      key={page.id}
+                      value={page.url}
+                      icon={<Link className="size-3.5" />}
+                      placeholder="https://company.atlassian.net/wiki/spaces/..."
+                      onChange={(url) =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          confluencePages: updateItemById(
+                            current.confluencePages ?? [],
+                            page.id,
+                            (item) => {
+                              const parsed =
+                                extractConfluencePageReference(url);
+                              return {
+                                ...item,
+                                url,
+                                title: parsed?.title || item.title,
+                                spaceKey: parsed?.spaceKey || item.spaceKey,
+                              };
+                            },
+                          ),
+                        }))
+                      }
+                      onRemove={() =>
+                        patchWorkspaceInformation((current) => ({
+                          ...current,
+                          confluencePages: removeItemById(
+                            current.confluencePages ?? [],
+                            page.id,
+                          ),
+                        }))
+                      }
+                    />
+                  );
+                }
+
+                return (
+                  <InlineLinkRow
+                    key={page.id}
+                    icon={
+                      <Globe className="size-[15px] text-muted-foreground/70" />
+                    }
+                    label={title}
+                    sublabel={
+                      host
+                        ? `${host}${spaceKey ? ` · ${spaceKey}` : ""}`
+                        : spaceKey || undefined
+                    }
+                    url={page.url}
+                    onRemove={() =>
+                      patchWorkspaceInformation((current) => ({
+                        ...current,
+                        confluencePages: removeItemById(
+                          current.confluencePages ?? [],
+                          page.id,
+                        ),
+                      }))
+                    }
+                  />
+                );
+              })}
+            </div>
+          </SectionHeader>
+
           {/* ── Figma ─────────────────────────────────────────── */}
           <SectionHeader
             value="figma"
@@ -1465,7 +1605,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={resource.id}
                       value={resource.url}
-                      icon={<FigmaIcon className="size-3.5" />}
+                      icon={<Link className="size-3.5" />}
                       placeholder="https://www.figma.com/file/..."
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1564,7 +1704,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={thread.id}
                       value={thread.url}
-                      icon={<SlackIcon className="size-3.5" />}
+                      icon={<Link className="size-3.5" />}
                       placeholder="https://team.slack.com/archives/C.../p..."
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1632,14 +1772,14 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="space-y-3">
+            <div className="-mx-2 space-y-3">
               {workspaceInformation.customFields.length === 0 ? (
                 <EmptyHint>No custom fields</EmptyHint>
               ) : null}
               {workspaceInformation.customFields.map((field) => (
                 <div
                   key={field.id}
-                  className="group/field space-y-1.5"
+                  className="group/field space-y-1.5 px-2"
                 >
                   <div className="flex items-center gap-1.5">
                     <Input

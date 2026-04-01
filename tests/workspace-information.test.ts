@@ -3,6 +3,7 @@ import {
   changeWorkspaceInfoCustomFieldType,
   createEmptyWorkspaceInformation,
   createWorkspaceInfoCustomField,
+  extractConfluencePageReference,
   extractFigmaResourceReference,
   extractGitHubPullRequestReference,
   extractJiraIssueReference,
@@ -15,6 +16,7 @@ import {
 test("createEmptyWorkspaceInformation returns empty defaults", () => {
   expect(createEmptyWorkspaceInformation()).toEqual({
     jiraIssues: [],
+    confluencePages: [],
     figmaResources: [],
     linkedPullRequests: [],
     slackThreads: [],
@@ -119,4 +121,35 @@ test("formatWorkspaceInfoHostLabel normalizes www-prefixed hosts", () => {
     ),
   ).toBe("github.com");
   expect(formatWorkspaceInfoHostLabel("not a url")).toBe("");
+});
+
+test("extractConfluencePageReference parses confluence page urls", () => {
+  expect(
+    extractConfluencePageReference(
+      "https://company.atlassian.net/wiki/spaces/ENG/pages/12345/My+Page+Title",
+    ),
+  ).toEqual({
+    host: "company.atlassian.net",
+    spaceKey: "ENG",
+    title: "My Page Title",
+  });
+});
+
+test("extractConfluencePageReference handles wiki-only urls", () => {
+  expect(
+    extractConfluencePageReference(
+      "https://company.atlassian.net/wiki/x/abc123",
+    ),
+  ).toEqual({
+    host: "company.atlassian.net",
+    spaceKey: "",
+    title: "",
+  });
+});
+
+test("extractConfluencePageReference returns null for non-confluence urls", () => {
+  expect(extractConfluencePageReference("https://github.com/org/repo")).toBe(
+    null,
+  );
+  expect(extractConfluencePageReference("not a url")).toBe(null);
 });
