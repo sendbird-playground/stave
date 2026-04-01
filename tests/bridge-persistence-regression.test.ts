@@ -1156,6 +1156,160 @@ describe("workspace store hydration ordering", () => {
     );
   });
 
+  test("late events after an inactive workspace turn completes do not emit redundant store updates", async () => {
+    const localStorage = createMemoryStorage();
+    const upsertCalls: Array<unknown> = [];
+    let streamListener: ((payload: { streamId: string; event: unknown; done: boolean }) => void) | null = null;
+    const originalWarn = console.warn;
+    const warnCalls: unknown[][] = [];
+
+    (globalThis as { window: unknown }).window = {
+      localStorage,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        provider: {
+          startPushTurn: async () => ({
+            ok: true,
+            streamId: "stream-1",
+            turnId: "turn-main-1",
+          }),
+          subscribeStreamEvents: (listener: typeof streamListener) => {
+            streamListener = listener;
+            return () => {
+              if (streamListener === listener) {
+                streamListener = null;
+              }
+            };
+          },
+          abortTurn: async () => ({ ok: true, message: "aborted" }),
+          cleanupTask: async () => ({ ok: true }),
+        },
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [
+              { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
+              { id: "ws-alt", name: "Alt", updatedAt: "2026-03-10T00:00:01.000Z" },
+            ],
+          }),
+          loadWorkspace: async ({ workspaceId }: { workspaceId: string }) => ({
+            ok: true,
+            snapshot: workspaceId === "ws-alt"
+              ? {
+                  activeTaskId: "task-alt",
+                  tasks: [{
+                    id: "task-alt",
+                    title: "Alt Task",
+                    provider: "claude-code",
+                    updatedAt: "2026-03-10T00:00:01.000Z",
+                    unread: false,
+                  }],
+                  messagesByTask: { "task-alt": [] },
+                  promptDraftByTask: {},
+                  providerConversationByTask: {},
+                }
+              : null,
+          }),
+          upsertWorkspace: async (args: unknown) => {
+            upsertCalls.push(args);
+            return { ok: true };
+          },
+        },
+        fs: {
+          listFiles: async () => ({ ok: true, files: [] }),
+        },
+      },
+    } as unknown;
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
+        { id: "ws-alt", name: "Alt", updatedAt: "2026-03-10T00:00:01.000Z" },
+      ],
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-main": "/tmp/stave-project",
+        "ws-alt": "/tmp/stave-project-alt",
+      },
+      workspaceBranchById: {
+        "ws-main": "main",
+        "ws-alt": "alt",
+      },
+      workspaceDefaultById: {
+        "ws-main": true,
+        "ws-alt": false,
+      },
+      draftProvider: "codex",
+      tasks: [{
+        id: "task-main",
+        title: "Main Task",
+        provider: "codex",
+        updatedAt: "2026-03-10T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      messagesByTask: { "task-main": [] },
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {},
+      nativeConversationReadyByTask: {},
+      providerConversationByTask: {},
+    });
+
+    useAppStore.getState().sendUserMessage({
+      taskId: "task-main",
+      content: "Finish, then ignore anything late.",
+    });
+
+    await Bun.sleep(0);
+    expect(streamListener).toBeFunction();
+
+    await useAppStore.getState().switchWorkspace({ workspaceId: "ws-alt" });
+    console.warn = (...args: unknown[]) => {
+      warnCalls.push(args);
+    };
+
+    try {
+      streamListener?.({
+        streamId: "stream-1",
+        event: { type: "done" },
+        done: true,
+      });
+      streamListener?.({
+        streamId: "stream-1",
+        event: { type: "text", text: "too late" },
+        done: false,
+      });
+
+      await Bun.sleep(25);
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    const state = useAppStore.getState();
+    const inactiveWorkspaceSession = state.workspaceRuntimeCacheById["ws-main"];
+    const inactiveWorkspaceAssistant = inactiveWorkspaceSession?.messagesByTask["task-main"]?.at(-1);
+    const lateDropWarning = warnCalls.find((call) => call[0] === "[provider-turn] dropped late events for inactive cached workspace turn");
+
+    expect(lateDropWarning).toBeDefined();
+    expect(lateDropWarning?.[1]).toMatchObject({
+      taskId: "task-main",
+      workspaceId: "ws-main",
+      activeTurnId: null,
+      eventTypes: ["text"],
+    });
+    expect(inactiveWorkspaceSession?.activeTurnIdsByTask["task-main"]).toBeUndefined();
+    expect(inactiveWorkspaceAssistant?.content).toBe("No response returned.");
+    expect(inactiveWorkspaceAssistant?.isStreaming).toBe(false);
+    expect(upsertCalls).toHaveLength(1);
+  });
+
   test("switchWorkspace restores per-workspace editor tabs", async () => {
     const localStorage = createMemoryStorage();
     localStorage.setItem("stave:workspace-fallback:v1", JSON.stringify([

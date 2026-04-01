@@ -15,6 +15,7 @@ export function runProviderTurn(args: {
   const adapter = getProviderAdapter({ providerId: args.provider });
 
   void (async () => {
+    let emittedDoneEvent = false;
     try {
       for await (const event of adapter.runTurn({
         turnId: args.turnId,
@@ -25,6 +26,9 @@ export function runProviderTurn(args: {
         cwd: args.cwd,
         runtimeOptions: args.runtimeOptions,
       })) {
+        if (event.type === "done") {
+          emittedDoneEvent = true;
+        }
         args.onEvent({ event });
       }
     } catch (error) {
@@ -35,7 +39,9 @@ export function runProviderTurn(args: {
         },
       });
     } finally {
-      args.onEvent({ event: { type: "done" } });
+      if (!emittedDoneEvent) {
+        args.onEvent({ event: { type: "done" } });
+      }
     }
   })();
 }
