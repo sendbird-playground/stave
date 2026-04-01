@@ -25,6 +25,8 @@ location.reload();
 
 When enabled, slow commits are logged to the console and recorded as `performance.measure(...)` entries prefixed with `stave:render:`.
 
+If you are debugging repeated re-renders or `Maximum update depth exceeded`, review [Zustand selector stability](zustand-selector-stability.md) before changing store subscriptions.
+
 ## Settings diagnostics
 
 The Settings dialog includes desktop-only diagnostics for renderer and compositor troubleshooting:
