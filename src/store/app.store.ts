@@ -20,6 +20,10 @@ import {
 } from "@/lib/db/workspaces.db";
 import type { CanonicalRetrievedContextPart, ClaudeSettingSource, NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
 import { getRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
+import {
+  buildWorkspaceContinueSummaryFilePath,
+  buildWorkspaceContinueSummaryMarkdown,
+} from "@/lib/workspace-continue";
 import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import {
   isNotificationUnread,
@@ -399,6 +403,9 @@ interface AppState {
     fromBranch?: string;
     initCommand?: string;
     useRootNodeModulesSymlink?: boolean;
+  }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
+  continueWorkspaceFromSummary: (args: {
+    name: string;
   }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
   closeWorkspace: (args: { workspaceId: string }) => Promise<void>;
   switchWorkspace: (args: { workspaceId: string }) => Promise<void>;
@@ -2190,6 +2197,176 @@ export const useAppStore = create<AppState>()(
         return creationNotice
           ? { ok: true, ...creationNotice }
           : { ok: true };
+      },
+      continueWorkspaceFromSummary: async ({ name }) => {
+        const current = get();
+        const sourceWorkspaceId = current.activeWorkspaceId;
+        if (!sourceWorkspaceId) {
+          return { ok: false, message: "Select a workspace before continuing." };
+        }
+        if (current.workspaceDefaultById[sourceWorkspaceId]) {
+          return { ok: false, message: "The default workspace cannot be continued into a new workspace." };
+        }
+
+        const sourceWorkspace = current.workspaces.find((workspace) => workspace.id === sourceWorkspaceId) ?? null;
+        const sourceWorkspaceName = sourceWorkspace?.name ?? current.workspaceBranchById[sourceWorkspaceId] ?? "workspace";
+        const sourceWorkspacePath = current.workspacePathById[sourceWorkspaceId] ?? current.projectPath ?? "";
+        const sourceBranch = current.workspaceBranchById[sourceWorkspaceId] ?? sourceWorkspaceName;
+        const sourcePrInfo = current.workspacePrInfoById[sourceWorkspaceId] ?? null;
+        const baseBranch = sourcePrInfo?.pr?.baseRefName?.trim() || current.defaultBranch.trim() || "main";
+        const activeTask = current.tasks.find((task) => task.id === current.activeTaskId) ?? current.tasks[0] ?? null;
+        const notes = current.workspaceInformation.notes.trim();
+        const openTodos = current.workspaceInformation.todos
+          .filter((todo) => !todo.completed && todo.text.trim().length > 0)
+          .map((todo) => todo.text.trim());
+
+        const runCommand = window.api?.terminal?.runCommand;
+        const getHistory = window.api?.sourceControl?.getHistory;
+        let diffStat = "";
+        let changedFiles: string[] = [];
+        let recentCommitSubjects: string[] = [];
+
+        if (runCommand && sourceWorkspacePath) {
+          const diffStatResult = await runCommand({
+            cwd: sourceWorkspacePath,
+            command: `git diff --stat ${JSON.stringify(baseBranch)}...HEAD`,
+          });
+          if (diffStatResult.ok) {
+            diffStat = (diffStatResult.stdout || "").trim();
+          }
+
+          const changedFilesResult = await runCommand({
+            cwd: sourceWorkspacePath,
+            command: `git diff --name-only ${JSON.stringify(baseBranch)}...HEAD`,
+          });
+          if (changedFilesResult.ok) {
+            changedFiles = (changedFilesResult.stdout || "")
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean);
+          }
+        }
+
+        if (getHistory && sourceWorkspacePath) {
+          try {
+            const historyResult = await getHistory({ cwd: sourceWorkspacePath, limit: 8 });
+            if (historyResult.ok) {
+              recentCommitSubjects = historyResult.items
+                .map((item) => item.subject.trim())
+                .filter(Boolean);
+            }
+          } catch {
+            // Keep the continuation brief deterministic even when git history is unavailable.
+          }
+        }
+
+        const summaryFilePath = buildWorkspaceContinueSummaryFilePath({ sourceBranch });
+        const summaryMarkdown = buildWorkspaceContinueSummaryMarkdown({
+          generatedAt: new Date().toISOString(),
+          sourceWorkspaceName,
+          sourceBranch,
+          baseBranch,
+          pr: sourcePrInfo?.pr
+            ? {
+              number: sourcePrInfo.pr.number,
+              title: sourcePrInfo.pr.title,
+              url: sourcePrInfo.pr.url,
+              status: sourcePrInfo.derived,
+            }
+            : undefined,
+          activeTaskTitle: activeTask?.title,
+          notes,
+          openTodos,
+          changedFiles,
+          recentCommitSubjects,
+          diffStat,
+        });
+
+        const creationResult = await get().createWorkspace({
+          name,
+          mode: "branch",
+          fromBranch: baseBranch,
+        });
+        if (!creationResult.ok) {
+          return creationResult;
+        }
+
+        const next = get();
+        const targetWorkspaceId = next.activeWorkspaceId;
+        const targetWorkspacePath = next.workspacePathById[targetWorkspaceId] ?? next.projectPath ?? "";
+        const warnings: string[] = [];
+        let attachedSummary = false;
+
+        if (targetWorkspacePath) {
+          try {
+            await workspaceFsAdapter.setRoot?.({
+              rootPath: targetWorkspacePath,
+              rootName: next.projectName ?? sourceWorkspaceName,
+              files: next.projectFiles,
+            });
+
+            const createDirectoryResult = await workspaceFsAdapter.createDirectory({ directoryPath: ".stave/context" });
+            if (!createDirectoryResult.ok && !createDirectoryResult.alreadyExists) {
+              warnings.push(createDirectoryResult.stderr || "Could not create the continuation brief directory.");
+            } else {
+              const createFileResult = await workspaceFsAdapter.createFile({ filePath: summaryFilePath });
+              if (!createFileResult.ok && !createFileResult.alreadyExists) {
+                warnings.push(createFileResult.stderr || "Could not create the continuation brief file.");
+              } else {
+                const writeSummaryResult = await workspaceFsAdapter.writeFile({
+                  filePath: summaryFilePath,
+                  content: summaryMarkdown,
+                });
+                if (!writeSummaryResult.ok) {
+                  warnings.push("Could not write the continuation brief file.");
+                } else {
+                  attachedSummary = true;
+                  set((state) => ({
+                    projectFiles: workspaceFsAdapter.getKnownFiles().length > 0
+                      ? workspaceFsAdapter.getKnownFiles()
+                      : state.projectFiles,
+                  }));
+                }
+              }
+            }
+          } catch (error) {
+            warnings.push(error instanceof Error ? error.message : "Could not prepare the continuation brief file.");
+          }
+        } else {
+          warnings.push("The new workspace path is unavailable, so the continuation brief could not be created.");
+        }
+
+        get().createTask({
+          title: `Continue from ${sourceWorkspaceName}`,
+        });
+
+        const continuedTaskId = get().activeTaskId;
+        if (continuedTaskId && attachedSummary) {
+          get().updatePromptDraft({
+            taskId: continuedTaskId,
+            patch: {
+              attachedFilePaths: [summaryFilePath],
+            },
+          });
+        }
+
+        const resultMessages = [
+          creationResult.message?.trim() ?? "",
+          attachedSummary
+            ? `Attached \`${summaryFilePath}\` to the new task draft.`
+            : "",
+          warnings.length > 0
+            ? warnings.join(" ")
+            : "",
+        ].filter(Boolean);
+
+        return {
+          ok: true,
+          noticeLevel: warnings.length > 0 || creationResult.noticeLevel === "warning"
+            ? "warning"
+            : "success",
+          message: resultMessages.join(" "),
+        };
       },
       closeWorkspace: async ({ workspaceId }) => {
         const state = get();

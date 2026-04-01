@@ -10,6 +10,7 @@ This feature fetches the GitHub PR associated with that branch, derives a single
 1. **Sidebar** — workspace row icon reflects PR lifecycle state with semantic color
 2. **Top bar** — "Create PR" button becomes a PR status hub with contextual actions
 3. **Right-rail information panel** — workspace details view shows the live branch PR beside manually stored PR references
+4. **Continue handoff** — merged or closed workspaces can spin up a fresh follow-up workspace with a generated continuation brief attached to the first task draft
 
 Default workspaces (typically `main`) are excluded; they never carry a PR.
 
@@ -124,17 +125,19 @@ gh pr view --json ...
 
 ### File Map
 
-| Layer              | File                                                  | Role                                                                                                         |
-| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Types & derivation | `src/lib/pr-status.ts`                                | `WorkspacePrStatus`, `GitHubPrPayload`, `derivePrStatus()`, visual config, action config                     |
+| Layer              | File                                                  | Role                                                                                                          |
+| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Types & derivation | `src/lib/pr-status.ts`                                | `WorkspacePrStatus`, `GitHubPrPayload`, `derivePrStatus()`, visual config, action config                      |
 | IPC handlers       | `electron/main/ipc/scm.ts`                            | `scm:get-pr-status`, `scm:get-pr-status-for-url`, `scm:set-pr-ready`, `scm:merge-pr`, `scm:update-pr-branch` |
-| Preload bridge     | `electron/preload.ts`                                 | `getPrStatus`, `getPrStatusForUrl`, `setPrReady`, `mergePr`, `updatePrBranch`                                |
-| Window API types   | `src/types/window-api.d.ts`                           | Type definitions for the 5 PR-related methods                                                                |
-| Store              | `src/store/app.store.ts`                              | `workspacePrInfoById`, `fetchWorkspacePrStatus`, `fetchAllWorkspacePrStatuses`                               |
-| Icon component     | `src/components/layout/PrStatusIcon.tsx`              | Reusable icon renderer: status → Lucide icon + color                                                         |
-| Sidebar            | `src/components/layout/ProjectWorkspaceSidebar.tsx`   | Renders `PrStatusIcon` for non-default workspaces                                                            |
-| TopBar hub         | `src/components/layout/TopBarOpenPR.tsx`              | PR status badge, dropdown actions, creation dialog                                                           |
-| Information panel  | `src/components/layout/WorkspaceInformationPanel.tsx` | Shows the current branch PR plus related manual PR URLs resolved through GitHub metadata when available      |
+| Preload bridge     | `electron/preload.ts`                                 | `getPrStatus`, `getPrStatusForUrl`, `setPrReady`, `mergePr`, `updatePrBranch`                                 |
+| Window API types   | `src/types/window-api.d.ts`                           | Type definitions for the 5 PR-related methods                                                                 |
+| Store              | `src/store/app.store.ts`                              | `workspacePrInfoById`, `fetchWorkspacePrStatus`, `fetchAllWorkspacePrStatuses`, `continueWorkspaceFromSummary` |
+| Icon component     | `src/components/layout/PrStatusIcon.tsx`              | Reusable icon renderer: status → Lucide icon + color                                                          |
+| Sidebar            | `src/components/layout/ProjectWorkspaceSidebar.tsx`   | Renders `PrStatusIcon` for non-default workspaces                                                             |
+| TopBar hub         | `src/components/layout/TopBarOpenPR.tsx`              | PR status badge, dropdown actions, creation dialog, and continue entry for completed workspaces               |
+| Continue dialog    | `src/components/layout/ContinueWorkspaceDialog.tsx`   | New workspace handoff dialog for completed PR workspaces                                                      |
+| Information panel  | `src/components/layout/WorkspaceInformationPanel.tsx` | Shows the current branch PR plus related manual PR URLs resolved through GitHub metadata when available       |
+| Continue helper    | `src/lib/workspace-continue.ts`                       | Builds the continuation markdown brief and `.stave/context/...` file path                                     |
 
 ### IPC Handlers
 
@@ -183,6 +186,24 @@ The top bar button changes based on status:
 | `ready_to_merge`    | Merge PR       | Open on GitHub, Refresh                |
 | `merged`            | —              | View on GitHub                         |
 | `closed_unmerged`   | —              | View on GitHub                         |
+
+### Continue Flow For Completed Workspaces
+
+When the active workspace PR is in a terminal state (`merged` or `closed_unmerged`), the top bar shows a secondary **Continue** button beside the PR status badge.
+
+The flow:
+
+1. Prompt for the new workspace branch name
+2. Create a fresh worktree from the PR base branch (or project default branch fallback)
+3. Generate a markdown continuation brief from:
+   - source branch and PR metadata
+   - current workspace notes and open todos
+   - recent commit subjects
+   - branch diff summary and changed file list
+4. Write the brief to `.stave/context/continued-from-<branch>.md`
+5. Create a new task in the fresh workspace and attach that markdown file to the prompt draft
+
+This is intentionally a **summary brief** flow, not a full task-history clone. It keeps the new workspace clean while carrying the previous implementation context forward in an explicit, reviewable artifact.
 
 ### PR Creation Dialog
 

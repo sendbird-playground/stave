@@ -12,6 +12,7 @@ import {
   RefreshCw,
   TriangleAlert,
 } from "lucide-react";
+import { ContinueWorkspaceDialog } from "@/components/layout/ContinueWorkspaceDialog";
 import {
   Badge,
   Button,
@@ -192,6 +193,8 @@ function PullRequestBranchRoute(props: { currentBranch?: string; baseBranch: str
 export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const [step, setStep] = useState<Step>("idle");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [continueDialogOpen, setContinueDialogOpen] = useState(false);
+  const [continuingWorkspace, setContinuingWorkspace] = useState(false);
 
   // PR fields
   const [prTitle, setPrTitle] = useState("");
@@ -216,6 +219,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     activeTurnIdsByTask,
     workspacePrInfoById,
     fetchWorkspacePrStatus,
+    continueWorkspaceFromSummary,
   ] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
     state.workspaceDefaultById,
@@ -227,6 +231,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     state.activeTurnIdsByTask,
     state.workspacePrInfoById,
     state.fetchWorkspacePrStatus,
+    state.continueWorkspaceFromSummary,
   ] as const));
 
   const isDefaultWorkspace = Boolean(workspaceDefaultById[activeWorkspaceId]);
@@ -594,6 +599,32 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     fetchStatus();
   }
 
+  async function handleContinueWorkspace(args: { name: string }) {
+    setContinuingWorkspace(true);
+    try {
+      const result = await continueWorkspaceFromSummary({ name: args.name });
+      if (!result.ok) {
+        toast.error("Unable to continue in a new workspace", {
+          description: result.message ?? "The continuation brief could not be prepared.",
+        });
+        return result;
+      }
+
+      if (result.noticeLevel === "warning") {
+        toast.warning("Workspace continued with warning", {
+          description: result.message ?? "The workspace was created, but part of the continuation brief setup needs attention.",
+        });
+      } else {
+        toast.success("Workspace continued", {
+          description: result.message ?? "The new workspace is ready with a continuation brief attached.",
+        });
+      }
+      return result;
+    } finally {
+      setContinuingWorkspace(false);
+    }
+  }
+
   function handleOpenGitHub() {
     const url = prInfo?.pr?.url;
     if (url) {
@@ -632,9 +663,14 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     null;
   const hasRespondingTask = tasks.some((task) => Boolean(activeTurnIdsByTask[task.id]));
   const isCreateDisabled = isBusy || hasRespondingTask;
+  const canContinueWorkspace = prStatus === "merged" || prStatus === "closed_unmerged";
+  const isContinueDisabled = isBusy || continuingWorkspace || hasRespondingTask;
   const createPrTooltip = hasRespondingTask
     ? "Pause or finish the running task before creating a pull request"
     : "Create a pull request on GitHub";
+  const continueTooltip = hasRespondingTask
+    ? "Pause or finish the running task before continuing into a new workspace"
+    : "Create a new workspace and attach a continuation brief from this completed branch";
 
   const badgeColorClass = PR_TONE_BADGE_CLASS[visual.tone];
 
@@ -671,78 +707,102 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         </Tooltip>
       ) : (
         /* Has PR – show status dropdown */
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
+        <div className="flex items-center gap-1.5">
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                      badgeColorClass,
+                    )}
+                    style={props.noDragStyle}
+                    disabled={isBusy || continuingWorkspace}
+                  >
+                    {isBusy ? (
+                      <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+                    ) : (
+                      <PrStatusIcon status={prStatus} className="size-3.5" />
+                    )}
+                    {statusLabel ?? visual.label}
+                  </button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                PR #{prInfo?.pr?.number}: {visual.label}
+              </TooltipContent>
+            </Tooltip>
+
+            <DropdownMenuContent align="end" className="w-64">
+              {/* PR info header */}
+              <DropdownMenuLabel className="flex flex-col gap-0.5">
+                <span className="truncate text-xs font-medium">
+                  #{prInfo?.pr?.number} {prInfo?.pr?.title}
+                </span>
+                <span className="text-[10px] font-normal text-muted-foreground">
+                  {currentBranch} &rarr; {prInfo?.pr?.baseRefName ?? baseBranch}
+                </span>
+              </DropdownMenuLabel>
+
+              <DropdownMenuSeparator />
+
+              {/* Primary action */}
+              {actions.primary ? (
+                <DropdownMenuItem
+                  className="font-medium"
+                  onSelect={() => handleAction(actions.primary!.key)}
+                >
+                  {actions.primary.label}
+                </DropdownMenuItem>
+              ) : null}
+
+              {/* Secondary actions */}
+              {actions.secondary.map((action) => (
+                <DropdownMenuItem
+                  key={action.key}
+                  onSelect={() => handleAction(action.key)}
+                >
+                  {action.key === "open_github" || action.key === "refresh" ? (
+                    <span className="flex items-center gap-2">
+                      {action.key === "open_github" ? (
+                        <ExternalLink className="size-3.5 text-muted-foreground" />
+                      ) : (
+                        <RefreshCw className="size-3.5 text-muted-foreground" />
+                      )}
+                      {action.label}
+                    </span>
+                  ) : (
+                    action.label
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {canContinueWorkspace ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
-                    badgeColorClass,
-                  )}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background/80 px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-accent disabled:opacity-50"
                   style={props.noDragStyle}
-                  disabled={isBusy}
+                  onClick={() => setContinueDialogOpen(true)}
+                  disabled={isContinueDisabled}
                 >
-                  {isBusy ? (
+                  {continuingWorkspace ? (
                     <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
                   ) : (
-                    <PrStatusIcon status={prStatus} className="size-3.5" />
+                    <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
                   )}
-                  {statusLabel ?? visual.label}
+                  Continue
                 </button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              PR #{prInfo?.pr?.number}: {visual.label}
-            </TooltipContent>
-          </Tooltip>
-
-          <DropdownMenuContent align="end" className="w-64">
-            {/* PR info header */}
-            <DropdownMenuLabel className="flex flex-col gap-0.5">
-              <span className="truncate text-xs font-medium">
-                #{prInfo?.pr?.number} {prInfo?.pr?.title}
-              </span>
-              <span className="text-[10px] font-normal text-muted-foreground">
-                {currentBranch} &rarr; {prInfo?.pr?.baseRefName ?? baseBranch}
-              </span>
-            </DropdownMenuLabel>
-
-            <DropdownMenuSeparator />
-
-            {/* Primary action */}
-            {actions.primary ? (
-              <DropdownMenuItem
-                className="font-medium"
-                onSelect={() => handleAction(actions.primary!.key)}
-              >
-                {actions.primary.label}
-              </DropdownMenuItem>
-            ) : null}
-
-            {/* Secondary actions */}
-            {actions.secondary.map((action) => (
-              <DropdownMenuItem
-                key={action.key}
-                onSelect={() => handleAction(action.key)}
-              >
-                {action.key === "open_github" || action.key === "refresh" ? (
-                  <span className="flex items-center gap-2">
-                    {action.key === "open_github" ? (
-                      <ExternalLink className="size-3.5 text-muted-foreground" />
-                    ) : (
-                      <RefreshCw className="size-3.5 text-muted-foreground" />
-                    )}
-                    {action.label}
-                  </span>
-                ) : (
-                  action.label
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{continueTooltip}</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
       )}
 
       {/* --- PR Creation Dialog --- */}
@@ -879,6 +939,16 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           )}
         </DialogContent>
       </Dialog>
+
+      <ContinueWorkspaceDialog
+        open={continueDialogOpen}
+        sourceBranch={currentBranch}
+        sourceWorkspaceName={currentBranch}
+        baseBranch={prInfo?.pr?.baseRefName ?? baseBranch}
+        prTitle={prInfo?.pr?.title}
+        onOpenChange={setContinueDialogOpen}
+        onContinue={handleContinueWorkspace}
+      />
     </>
   );
 }
