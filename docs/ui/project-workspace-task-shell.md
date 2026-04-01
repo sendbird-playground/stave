@@ -83,6 +83,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
+  - exposes a workspace information panel for Jira links, Figma references, PR metadata, notes, todos, and custom structured fields
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`
   - keeps terminal independent while making editor and explorer/changes mutually exclusive on small widths
   - opens its right-side panels as full-height siblings under the top bar instead of placing them beneath the task-tabs row
@@ -121,5 +122,6 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
 - Task archive from tab close should preserve history.
 - Project removal should not touch filesystem data.
 - Explorer / editor / terminal actions should still work from the right rail.
+- Workspace information should persist across workspace switches and app restart.
 - On narrow widths, task tabs should stay visible while the compact rail remains pinned and right-side panels reduce the remaining workspace width from the top of the shell.
 - Explorer refresh should invalidate cached folder entries and repopulate the currently expanded folders.

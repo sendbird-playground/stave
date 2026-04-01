@@ -194,6 +194,98 @@ const EditorTabSchema = z.object({
   isDirty: z.boolean(),
 });
 
+const WorkspaceJiraIssueSchema = z.object({
+  id: z.string(),
+  issueKey: z.string().optional().default(""),
+  title: z.string().optional().default(""),
+  url: z.string().optional().default(""),
+  status: z.string().optional().default(""),
+  note: z.string().optional().default(""),
+});
+
+const WorkspaceFigmaResourceSchema = z.object({
+  id: z.string(),
+  title: z.string().optional().default(""),
+  url: z.string().optional().default(""),
+  nodeId: z.string().optional().default(""),
+  note: z.string().optional().default(""),
+});
+
+const WorkspaceLinkedPullRequestSchema = z.object({
+  id: z.string(),
+  title: z.string().optional().default(""),
+  url: z.string().optional().default(""),
+  status: z.union([
+    z.literal("planned"),
+    z.literal("open"),
+    z.literal("review"),
+    z.literal("merged"),
+    z.literal("closed"),
+  ]).optional().default("planned"),
+  note: z.string().optional().default(""),
+});
+
+const WorkspaceTodoItemSchema = z.object({
+  id: z.string(),
+  text: z.string().optional().default(""),
+  completed: z.boolean().optional().default(false),
+});
+
+const WorkspaceInfoCustomFieldSchema = z.discriminatedUnion("type", [
+  z.object({
+    id: z.string(),
+    label: z.string().optional().default(""),
+    type: z.literal("text"),
+    value: z.string().optional().default(""),
+  }),
+  z.object({
+    id: z.string(),
+    label: z.string().optional().default(""),
+    type: z.literal("textarea"),
+    value: z.string().optional().default(""),
+  }),
+  z.object({
+    id: z.string(),
+    label: z.string().optional().default(""),
+    type: z.literal("number"),
+    value: z.number().nullable().optional().default(null),
+  }),
+  z.object({
+    id: z.string(),
+    label: z.string().optional().default(""),
+    type: z.literal("boolean"),
+    value: z.boolean().optional().default(false),
+  }),
+  z.object({
+    id: z.string(),
+    label: z.string().optional().default(""),
+    type: z.literal("date"),
+    value: z.string().optional().default(""),
+  }),
+  z.object({
+    id: z.string(),
+    label: z.string().optional().default(""),
+    type: z.literal("url"),
+    value: z.string().optional().default(""),
+  }),
+  z.object({
+    id: z.string(),
+    label: z.string().optional().default(""),
+    type: z.literal("single_select"),
+    value: z.string().optional().default(""),
+    options: z.array(z.string()).optional().default([]),
+  }),
+]);
+
+const WorkspaceInformationSchema = z.object({
+  jiraIssues: z.array(WorkspaceJiraIssueSchema).optional().default([]),
+  figmaResources: z.array(WorkspaceFigmaResourceSchema).optional().default([]),
+  linkedPullRequests: z.array(WorkspaceLinkedPullRequestSchema).optional().default([]),
+  notes: z.string().optional().default(""),
+  todos: z.array(WorkspaceTodoItemSchema).optional().default([]),
+  customFields: z.array(WorkspaceInfoCustomFieldSchema).optional().default([]),
+});
+
 export const WorkspaceSnapshotSchema = z.object({
   activeTaskId: z.string(),
   tasks: z.array(TaskSchema),
@@ -206,6 +298,14 @@ export const WorkspaceSnapshotSchema = z.object({
   providerConversationByTask: z.record(z.string(), TaskProviderConversationStateSchema).optional().default({}),
   editorTabs: z.array(EditorTabSchema).optional().default([]),
   activeEditorTabId: z.string().nullable().optional().default(null),
+  workspaceInformation: WorkspaceInformationSchema.optional().default({
+    jiraIssues: [],
+    figmaResources: [],
+    linkedPullRequests: [],
+    notes: "",
+    todos: [],
+    customFields: [],
+  }),
 });
 
 export function parseWorkspaceSnapshot(args: { payload: unknown }): WorkspaceSnapshot | null {

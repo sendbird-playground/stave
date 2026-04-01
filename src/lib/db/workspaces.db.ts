@@ -1,6 +1,7 @@
 import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
+import type { WorkspaceInformationState } from "@/lib/workspace-information";
 export interface WorkspaceSummary {
   id: string;
   name: string;
@@ -23,6 +24,7 @@ export interface WorkspaceSnapshot {
   providerConversationByTask: Record<string, TaskProviderConversationState>;
   editorTabs?: EditorTab[];
   activeEditorTabId?: string | null;
+  workspaceInformation: WorkspaceInformationState;
 }
 
 interface RequiredPersistenceApi {

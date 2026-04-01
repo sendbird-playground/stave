@@ -2,6 +2,7 @@ import { type PersistedTurnSummary } from "@/lib/db/turns.db";
 import { type TaskProviderConversationState, type WorkspaceSnapshot, upsertWorkspace } from "@/lib/db/workspaces.db";
 import { normalizeTaskControl } from "@/lib/tasks";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
+import { createEmptyWorkspaceInformation, type WorkspaceInformationState } from "@/lib/workspace-information";
 import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
 
 export const starterWorkspaceId = "base";
@@ -14,6 +15,7 @@ export interface WorkspaceSessionState {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  workspaceInformation: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
@@ -27,6 +29,7 @@ export function createEmptyWorkspaceState() {
     tasks: [] as Task[],
     messagesByTask: {} as Record<string, ChatMessage[]>,
     promptDraftByTask: {} as Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>,
+    workspaceInformation: createEmptyWorkspaceInformation(),
     editorTabs: [] as EditorTab[],
     activeEditorTabId: null as string | null,
     providerConversationByTask: {} as Record<string, TaskProviderConversationState>,
@@ -207,6 +210,7 @@ export function buildWorkspaceSessionState(args: {
     tasks,
     messagesByTask,
     promptDraftByTask: args.snapshot?.promptDraftByTask ?? empty.promptDraftByTask,
+    workspaceInformation: args.snapshot?.workspaceInformation ?? empty.workspaceInformation,
     editorTabs,
     activeEditorTabId,
     activeTurnIdsByTask,
@@ -223,6 +227,7 @@ export function createWorkspaceSnapshot(args: {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
@@ -232,6 +237,7 @@ export function createWorkspaceSnapshot(args: {
     tasks: args.tasks,
     messagesByTask: normalizeMessagesForSnapshot({ messagesByTask: args.messagesByTask }),
     promptDraftByTask: args.promptDraftByTask,
+    workspaceInformation: args.workspaceInformation ?? createEmptyWorkspaceInformation(),
     editorTabs: args.editorTabs,
     activeEditorTabId: args.activeEditorTabId,
     providerConversationByTask: args.providerConversationByTask,
@@ -245,6 +251,7 @@ export async function persistWorkspaceSnapshot(args: {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, { text: string; attachedFilePaths: string[]; attachments: Attachment[] }>;
+  workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
@@ -257,6 +264,7 @@ export async function persistWorkspaceSnapshot(args: {
       tasks: args.tasks,
       messagesByTask: args.messagesByTask,
       promptDraftByTask: args.promptDraftByTask,
+      workspaceInformation: args.workspaceInformation,
       editorTabs: args.editorTabs,
       activeEditorTabId: args.activeEditorTabId,
       providerConversationByTask: args.providerConversationByTask,

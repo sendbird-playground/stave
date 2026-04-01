@@ -25,4 +25,7 @@ test("right panel tabs switch", async ({ page }) => {
 
   await rightPanel.getByTitle("changes").click();
   await expect(rightPanel.getByText(/Branch:/)).toBeVisible();
+
+  await rightPanel.getByTitle("information").click();
+  await expect(rightPanel.getByText("Workspace Information")).toBeVisible();
 });

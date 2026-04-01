@@ -1,5 +1,6 @@
 import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
+import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { Attachment, ChatMessage, EditorTab, Task } from "@/types/chat";
 import { applyProviderEventsToWorkspaceSession } from "@/store/workspace-turn-replay";
 import type { WorkspaceSessionState } from "@/store/workspace-session-state";
@@ -15,6 +16,7 @@ type ActiveWorkspaceProjectionState = {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: PromptDraftByTask;
+  workspaceInformation: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
@@ -34,6 +36,7 @@ export type ActiveWorkspaceStatePatch = Pick<
   | "tasks"
   | "messagesByTask"
   | "promptDraftByTask"
+  | "workspaceInformation"
   | "editorTabs"
   | "activeEditorTabId"
   | "activeTurnIdsByTask"
@@ -54,6 +57,7 @@ export function createWorkspaceSessionStateFromAppState(
     tasks: state.tasks,
     messagesByTask: state.messagesByTask,
     promptDraftByTask: state.promptDraftByTask,
+    workspaceInformation: state.workspaceInformation,
     editorTabs: state.editorTabs,
     activeEditorTabId: state.activeEditorTabId,
     activeTurnIdsByTask: state.activeTurnIdsByTask,
@@ -68,6 +72,7 @@ export function createActiveWorkspaceStatePatch(session: WorkspaceSessionState):
     tasks: session.tasks,
     messagesByTask: session.messagesByTask,
     promptDraftByTask: session.promptDraftByTask,
+    workspaceInformation: session.workspaceInformation,
     editorTabs: session.editorTabs,
     activeEditorTabId: session.activeEditorTabId,
     activeTurnIdsByTask: session.activeTurnIdsByTask,
@@ -85,6 +90,7 @@ export function saveActiveWorkspaceRuntimeCache(args: {
     | "tasks"
     | "messagesByTask"
     | "promptDraftByTask"
+    | "workspaceInformation"
     | "editorTabs"
     | "activeEditorTabId"
     | "activeTurnIdsByTask"

@@ -1,4 +1,5 @@
 import type { Attachment } from "../../src/types/chat";
+import type { WorkspaceInformationState } from "../../src/lib/workspace-information";
 
 export interface PersistenceTaskRow {
   id: string;
@@ -56,6 +57,7 @@ export interface PersistenceWorkspaceSnapshot {
     isDirty: boolean;
   }>;
   activeEditorTabId?: string | null;
+  workspaceInformation?: WorkspaceInformationState;
 }
 
 export interface PersistenceWorkspaceSummary {

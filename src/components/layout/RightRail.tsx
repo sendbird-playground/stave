@@ -1,4 +1,4 @@
-import { FileCode2, FolderTree, GitBranch, TerminalSquare } from "lucide-react";
+import { FileCode2, FolderTree, GitBranch, Info, TerminalSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
@@ -50,7 +50,7 @@ export function RightRail() {
     });
   }
 
-  function toggleSidebarTab(tab: "explorer" | "changes") {
+  function toggleSidebarTab(tab: "explorer" | "changes" | "information") {
     if (sidebarOverlayVisible && sidebarOverlayTab === tab) {
       setLayout({ patch: { sidebarOverlayVisible: false } });
       return;
@@ -67,9 +67,13 @@ export function RightRail() {
   const editorActive = editorVisible;
   const explorerActive = sidebarOverlayVisible && sidebarOverlayTab === "explorer";
   const changesActive = sidebarOverlayVisible && sidebarOverlayTab === "changes";
+  const informationActive = sidebarOverlayVisible && sidebarOverlayTab === "information";
 
   return (
-    <aside className="flex h-full w-12 shrink-0 flex-col items-center border-l border-border/70 bg-card/70 py-2 lg:w-14 lg:py-3">
+    <aside
+      data-testid="workspace-bar"
+      className="flex h-full w-12 shrink-0 flex-col items-center border-l border-border/70 bg-card/70 py-2 lg:w-14 lg:py-3"
+    >
       <TooltipProvider>
         <div className="flex w-full flex-col items-center gap-2">
           <Tooltip>
@@ -125,6 +129,24 @@ export function RightRail() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">Changes</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant={informationActive ? "default" : "ghost"}
+                disabled={!hasProject}
+                className={cn(
+                  "h-9 w-9 rounded-md border border-transparent p-0 lg:h-10 lg:w-10",
+                  !informationActive && "hover:border-border/80 hover:bg-secondary/70"
+                )}
+                onClick={() => toggleSidebarTab("information")}
+                aria-label="Information"
+              >
+                <Info className="size-3.5 lg:size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Information</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>

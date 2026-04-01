@@ -8,7 +8,7 @@ export interface LayoutState {
   terminalDockHeight: number;
   editorVisible: boolean;
   sidebarOverlayVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes";
+  sidebarOverlayTab: "explorer" | "changes" | "information";
   terminalDocked: boolean;
   editorDiffMode: boolean;
 }
@@ -39,7 +39,9 @@ export function normalizeLayoutState(layout: LayoutState): LayoutState {
   return {
     ...layout,
     editorPanelWidth: Math.max(MIN_EDITOR_PANEL_WIDTH, layout.editorPanelWidth),
-    sidebarOverlayTab: layout.sidebarOverlayTab === "changes" ? "changes" : "explorer",
+    sidebarOverlayTab: layout.sidebarOverlayTab === "changes"
+      ? "changes"
+      : (layout.sidebarOverlayTab === "information" ? "information" : "explorer"),
   };
 }
 
