@@ -403,20 +403,62 @@ describe("SqliteStore", () => {
       },
     });
 
-    const logs = store.listLocalMcpRequestLogs({ limit: 10 });
+    const firstPage = store.listLocalMcpRequestLogs({ limit: 1, includePayload: false });
 
-    expect(logs.map((log) => log.id)).toEqual([
+    expect(firstPage.logs.map((log) => log.id)).toEqual([
       "local-mcp-log-2",
+    ]);
+    expect(firstPage).toMatchObject({
+      total: 2,
+      limit: 1,
+      offset: 0,
+      hasMore: true,
+    });
+    expect(firstPage.logs[0]).toMatchObject({
+      id: "local-mcp-log-2",
+      hasRequestPayload: false,
+      requestPayload: null,
+    });
+
+    const secondPage = store.listLocalMcpRequestLogs({ limit: 1, offset: 1, includePayload: false });
+
+    expect(secondPage.logs.map((log) => log.id)).toEqual([
       "local-mcp-log-1",
     ]);
-    expect(logs[1]).toMatchObject({
+    expect(secondPage).toMatchObject({
+      total: 2,
+      limit: 1,
+      offset: 1,
+      hasMore: false,
+    });
+    expect(secondPage.logs[0]).toMatchObject({
+      id: "local-mcp-log-1",
+      hasRequestPayload: true,
+      requestPayload: null,
+    });
+
+    const clampedPage = store.listLocalMcpRequestLogs({ limit: 1, offset: 99, includePayload: false });
+
+    expect(clampedPage).toMatchObject({
+      total: 2,
+      limit: 1,
+      offset: 1,
+      hasMore: false,
+    });
+    expect(clampedPage.logs[0]?.id).toBe("local-mcp-log-1");
+
+    const log = store.getLocalMcpRequestLog({ id: "local-mcp-log-1", includePayload: true });
+
+    expect(log).toMatchObject({
+      id: "local-mcp-log-1",
+      hasRequestPayload: true,
       toolName: "stave_run_task",
       rpcMethod: "tools/call",
       rpcRequestId: "rpc-1",
       statusCode: 200,
       durationMs: 42,
     });
-    expect(logs[1]?.requestPayload).toEqual({
+    expect(log?.requestPayload).toEqual({
       jsonrpc: "2.0",
       id: "rpc-1",
       method: "tools/call",
@@ -430,7 +472,13 @@ describe("SqliteStore", () => {
     });
 
     expect(store.clearLocalMcpRequestLogs()).toBe(2);
-    expect(store.listLocalMcpRequestLogs({ limit: 10 })).toEqual([]);
+    expect(store.listLocalMcpRequestLogs({ limit: 10, includePayload: false })).toEqual({
+      logs: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+      hasMore: false,
+    });
 
     store.close();
   });

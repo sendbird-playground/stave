@@ -35,7 +35,22 @@ export interface StaveLocalMcpRequestLog {
   toolName: string | null;
   statusCode: number;
   durationMs: number;
+  hasRequestPayload: boolean;
   requestPayload: unknown | null;
   errorMessage: string | null;
   createdAt: string;
+}
+
+export interface StaveLocalMcpRequestLogQuery {
+  limit?: number;
+  offset?: number;
+  includePayload?: boolean;
+}
+
+export interface StaveLocalMcpRequestLogPage {
+  logs: StaveLocalMcpRequestLog[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
 }

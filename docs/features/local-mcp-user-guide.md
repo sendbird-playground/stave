@@ -37,7 +37,7 @@ You can manage:
 - `Port`: use `0` for automatic port selection, or set a fixed localhost port
 - `Token`: the Bearer token required by local clients
 - `Rotate`: immediately replace the token and restart the server
-- `Local MCP Request Log`: inspect recent inbound `/mcp` requests, response codes, timings, and sanitized payloads
+- `Local MCP Request Log`: inspect recent inbound `/mcp` requests with paginated browsing, latest-page auto-refresh, response codes, timings, and on-demand sanitized payload loading
 
 Every change is applied by restarting the local MCP server inside the app.
 
@@ -103,7 +103,7 @@ If the running task asks for confirmation or structured answers:
 - answer using `stave_respond_approval` or `stave_respond_user_input`
 - Stave shows these requests for visibility, but managed tasks expect the originating client to answer them
 
-Use `Local MCP Request Log` in Developer settings when you need transport-level request visibility that stays separate from task replay data.
+Use `Local MCP Request Log` in Developer settings when you need transport-level request visibility that stays separate from task replay data. The latest page auto-refreshes while older pages stay stable for pagination.
 
 These responses continue the same Stave turn. They do not create a new task.
 

@@ -5,7 +5,11 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "@/lib/providers/provider.types";
-import type { StaveLocalMcpRequestLog, StaveLocalMcpStatus } from "@/lib/local-mcp";
+import type {
+  StaveLocalMcpRequestLog,
+  StaveLocalMcpRequestLogQuery,
+  StaveLocalMcpStatus,
+} from "@/lib/local-mcp";
 import type { RepoMapResponse } from "@/lib/fs/repo-map.types";
 import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
@@ -252,11 +256,21 @@ interface WindowLocalMcpApi {
     status: StaveLocalMcpStatus | null;
     message?: string;
   }>;
-  listRequestLogs?: (args?: {
-    limit?: number;
-  }) => Promise<{
+  listRequestLogs?: (args?: StaveLocalMcpRequestLogQuery) => Promise<{
     ok: boolean;
     logs: StaveLocalMcpRequestLog[];
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+    message?: string;
+  }>;
+  getRequestLog?: (args: {
+    id: string;
+    includePayload?: boolean;
+  }) => Promise<{
+    ok: boolean;
+    log: StaveLocalMcpRequestLog | null;
     message?: string;
   }>;
   clearRequestLogs?: () => Promise<{

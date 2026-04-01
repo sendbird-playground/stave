@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import {
   clearStaveMcpRequestLogs,
+  getStaveMcpRequestLog,
   getStaveMcpServerStatus,
   listStaveMcpRequestLogs,
   rotateStaveMcpToken,
@@ -11,6 +12,7 @@ import {
   respondUserInput,
 } from "../stave-mcp-service";
 import {
+  GetLocalMcpRequestLogArgsSchema,
   ListLocalMcpRequestLogsArgsSchema,
   LocalMcpApprovalResponseArgsSchema,
   LocalMcpConfigUpdateArgsSchema,
@@ -64,18 +66,52 @@ export function registerLocalMcpHandlers() {
   ipcMain.handle("local-mcp:list-request-logs", async (_event, args: unknown) => {
     const parsedArgs = ListLocalMcpRequestLogsArgsSchema.safeParse(args ?? {});
     if (!parsedArgs.success) {
-      return { ok: false, logs: [], message: "Invalid local MCP request log query." };
+      return {
+        ok: false,
+        logs: [],
+        total: 0,
+        limit: 0,
+        offset: 0,
+        hasMore: false,
+        message: "Invalid local MCP request log query.",
+      };
     }
     try {
-      const logs = await listStaveMcpRequestLogs({
+      const page = await listStaveMcpRequestLogs({
         limit: parsedArgs.data.limit,
+        offset: parsedArgs.data.offset,
+        includePayload: parsedArgs.data.includePayload,
       });
-      return { ok: true, logs };
+      return { ok: true, ...page };
     } catch (error) {
       return {
         ok: false,
         logs: [],
+        total: 0,
+        limit: 0,
+        offset: 0,
+        hasMore: false,
         message: error instanceof Error ? error.message : "Failed to load local MCP request logs.",
+      };
+    }
+  });
+
+  ipcMain.handle("local-mcp:get-request-log", async (_event, args: unknown) => {
+    const parsedArgs = GetLocalMcpRequestLogArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, log: null, message: "Invalid local MCP request log lookup." };
+    }
+    try {
+      const log = await getStaveMcpRequestLog({
+        id: parsedArgs.data.id,
+        includePayload: parsedArgs.data.includePayload,
+      });
+      return { ok: true, log };
+    } catch (error) {
+      return {
+        ok: false,
+        log: null,
+        message: error instanceof Error ? error.message : "Failed to load local MCP request log.",
       };
     }
   });

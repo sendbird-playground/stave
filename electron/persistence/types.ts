@@ -112,13 +112,22 @@ export interface PersistenceLocalMcpRequestLog {
   toolName: string | null;
   statusCode: number;
   durationMs: number;
+  hasRequestPayload: boolean;
   requestPayload: unknown | null;
   errorMessage: string | null;
   createdAt: string;
 }
 
-export interface PersistenceLocalMcpRequestLogCreateInput extends Omit<PersistenceLocalMcpRequestLog, "createdAt"> {
+export interface PersistenceLocalMcpRequestLogCreateInput extends Omit<PersistenceLocalMcpRequestLog, "createdAt" | "hasRequestPayload"> {
   createdAt?: string;
+}
+
+export interface PersistenceLocalMcpRequestLogPage {
+  logs: PersistenceLocalMcpRequestLog[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
 }
 
 export type PersistenceNotificationKind =

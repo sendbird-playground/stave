@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import type {
   PersistenceLocalMcpRequestLog,
   PersistenceLocalMcpRequestLogCreateInput,
+  PersistenceLocalMcpRequestLogPage,
   PersistenceProjectRegistryEntry,
   PersistenceNotificationCreateInput,
   PersistenceNotificationRecord,
@@ -65,6 +66,7 @@ interface LocalMcpRequestLogRow {
   tool_name: string | null;
   status_code: number;
   duration_ms: number;
+  has_request_payload: number;
   request_payload_json: string | null;
   error_message: string | null;
   created_at: string;
@@ -238,10 +240,19 @@ export class SqliteStore {
       toolName: row.tool_name,
       statusCode: row.status_code,
       durationMs: row.duration_ms,
+      hasRequestPayload: row.has_request_payload === 1,
       requestPayload: row.request_payload_json ? JSON.parse(row.request_payload_json) : null,
       errorMessage: row.error_message,
       createdAt: row.created_at,
     };
+  }
+
+  private getLocalMcpRequestLogCount(): number {
+    const row = this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM local_mcp_request_logs
+    `).get() as { count: number };
+    return row.count;
   }
 
   private getNotificationById(id: string): PersistenceNotificationRecord | null {
@@ -481,8 +492,16 @@ export class SqliteStore {
 
   listLocalMcpRequestLogs(args?: {
     limit?: number;
-  }): PersistenceLocalMcpRequestLog[] {
+    offset?: number;
+    includePayload?: boolean;
+  }): PersistenceLocalMcpRequestLogPage {
     const limit = Math.max(1, Math.min(500, args?.limit ?? 100));
+    const total = this.getLocalMcpRequestLogCount();
+    const maxOffset = total === 0 ? 0 : Math.floor((total - 1) / limit) * limit;
+    const offset = Math.max(0, Math.min(args?.offset ?? 0, maxOffset));
+    const requestPayloadColumn = args?.includePayload === true
+      ? "request_payload_json"
+      : "NULL AS request_payload_json";
     const rows = this.db.prepare(`
       SELECT
         id,
@@ -493,15 +512,51 @@ export class SqliteStore {
         tool_name,
         status_code,
         duration_ms,
-        request_payload_json,
+        CASE WHEN request_payload_json IS NULL THEN 0 ELSE 1 END AS has_request_payload,
+        ${requestPayloadColumn},
         error_message,
         created_at
       FROM local_mcp_request_logs
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `).all(limit) as LocalMcpRequestLogRow[];
+      OFFSET ?
+    `).all(limit, offset) as LocalMcpRequestLogRow[];
 
-    return rows.map((row) => this.mapLocalMcpRequestLogRow(row));
+    return {
+      logs: rows.map((row) => this.mapLocalMcpRequestLogRow(row)),
+      total,
+      limit,
+      offset,
+      hasMore: offset + rows.length < total,
+    };
+  }
+
+  getLocalMcpRequestLog(args: {
+    id: string;
+    includePayload?: boolean;
+  }): PersistenceLocalMcpRequestLog | null {
+    const requestPayloadColumn = args.includePayload === true
+      ? "request_payload_json"
+      : "NULL AS request_payload_json";
+    const row = this.db.prepare(`
+      SELECT
+        id,
+        http_method,
+        path,
+        rpc_method,
+        rpc_request_id,
+        tool_name,
+        status_code,
+        duration_ms,
+        CASE WHEN request_payload_json IS NULL THEN 0 ELSE 1 END AS has_request_payload,
+        ${requestPayloadColumn},
+        error_message,
+        created_at
+      FROM local_mcp_request_logs
+      WHERE id = ?
+    `).get(args.id) as LocalMcpRequestLogRow | undefined;
+
+    return row ? this.mapLocalMcpRequestLogRow(row) : null;
   }
 
   clearLocalMcpRequestLogs(): number {
