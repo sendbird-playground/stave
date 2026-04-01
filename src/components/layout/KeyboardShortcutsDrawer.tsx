@@ -133,7 +133,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           },
           {
             label: "Stop active turn",
-            description: "Abort the current task run.",
+            description: "Abort the current task run while focus is in the task pane.",
             sequences: [["Esc"]],
           },
         ],

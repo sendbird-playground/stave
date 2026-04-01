@@ -12,6 +12,7 @@ import { RenderProfiler } from "@/lib/render-profiler";
 import { MIN_EDITOR_PANEL_WIDTH, WORKSPACE_SIDEBAR_MIN_WIDTH, useAppStore } from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
+import { isEditableShortcutTarget, shouldAbortTaskOnEscape } from "@/components/layout/app-shell.shortcuts";
 
 const EditorPanel = lazy(() =>
   import("@/components/layout/EditorPanel").then((module) => ({
@@ -25,17 +26,6 @@ type ResizableLayoutKey =
   | "terminalDockHeight";
 
 const WORKSPACE_SIDEBAR_MAX_WIDTH = 340;
-
-function isEditableShortcutTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement
-    && (
-      target.isContentEditable
-      || (
-        Boolean(target.closest("input, textarea, select, [role='textbox'], [contenteditable='true']"))
-        && !target.closest("[data-prompt-input-root]")
-      )
-    );
-}
 
 export function AppShell() {
   const [
@@ -182,7 +172,15 @@ export function AppShell() {
       }
 
       if (!hasMod) {
-        if (event.key === "Escape") {
+        const activeElement = typeof document === "undefined" ? null : document.activeElement;
+        if (shouldAbortTaskOnEscape({
+          key: event.key,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+          target: event.target,
+          activeElement,
+        })) {
           store.abortTaskTurn({ taskId: store.activeTaskId });
         }
         return;
