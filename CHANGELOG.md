@@ -1,3 +1,13 @@
+## [0.0.30](https://github.com/sendbird-playground/stave/compare/v0.0.29...v0.0.30) (2026-04-01)
+
+### Features
+
+* **settings:** add native tooling diagnostics ([#149](https://github.com/sendbird-playground/stave/issues/149)) ([6222b37](https://github.com/sendbird-playground/stave/commit/6222b37de0b3931a0a2fc94e1eb8723aef825851))
+* **theme:** add matching light theme presets ([#150](https://github.com/sendbird-playground/stave/issues/150)) ([a8a5308](https://github.com/sendbird-playground/stave/commit/a8a5308b64c590f09c3d190d9d6b908a8a9526a2))
+
+### Bug Fixes
+
+* stabilize workspace turns and gh lookup ([#148](https://github.com/sendbird-playground/stave/issues/148)) ([af87f75](https://github.com/sendbird-playground/stave/commit/af87f755a15caa8ed7964e464f74ceb57d8da1b1))
 ## [0.0.29](https://github.com/sendbird-playground/stave/compare/v0.0.28...v0.0.29) (2026-03-31)
 
 ### Features
