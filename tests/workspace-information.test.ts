@@ -17,6 +17,7 @@ test("createEmptyWorkspaceInformation returns empty defaults", () => {
     jiraIssues: [],
     figmaResources: [],
     linkedPullRequests: [],
+    slackThreads: [],
     notes: "",
     todos: [],
     customFields: [],

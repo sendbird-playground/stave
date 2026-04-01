@@ -74,6 +74,13 @@ export interface WorkspaceLinkedPullRequest {
   note: string;
 }
 
+export interface WorkspaceSlackThread {
+  id: string;
+  url: string;
+  channelName: string;
+  note: string;
+}
+
 export interface WorkspaceTodoItem {
   id: string;
   text: string;
@@ -134,6 +141,7 @@ export interface WorkspaceInformationState {
   jiraIssues: WorkspaceJiraIssue[];
   figmaResources: WorkspaceFigmaResource[];
   linkedPullRequests: WorkspaceLinkedPullRequest[];
+  slackThreads: WorkspaceSlackThread[];
   notes: string;
   todos: WorkspaceTodoItem[];
   customFields: WorkspaceInfoCustomField[];
@@ -170,6 +178,15 @@ export function createWorkspaceLinkedPullRequest(): WorkspaceLinkedPullRequest {
     title: "",
     url: "",
     status: "planned",
+    note: "",
+  };
+}
+
+export function createWorkspaceSlackThread(): WorkspaceSlackThread {
+  return {
+    id: buildWorkspaceInformationId("slack"),
+    url: "",
+    channelName: "",
     note: "",
   };
 }
@@ -361,11 +378,54 @@ export function updateWorkspaceInfoSelectFieldOptions(args: {
   };
 }
 
+export interface SlackThreadReference {
+  host: string;
+  channelId: string;
+}
+
+export function extractSlackThreadReference(
+  value: string,
+): SlackThreadReference | null {
+  const url = parseWorkspaceInfoUrl(value);
+  if (!url || !url.hostname.endsWith("slack.com")) {
+    return null;
+  }
+
+  // https://yourteam.slack.com/archives/C12345678/p1234567890
+  const segments = url.pathname.split("/").filter(Boolean);
+  if (segments[0] !== "archives" || !segments[1]) {
+    return null;
+  }
+
+  return {
+    host: formatWorkspaceInfoHostLabel(value),
+    channelId: segments[1],
+  };
+}
+
+export function isSlackThreadUrl(value: string) {
+  return extractSlackThreadReference(value) !== null;
+}
+
+export const WORKSPACE_INFO_FIELD_TYPE_LABELS: Record<
+  WorkspaceInfoFieldType,
+  string
+> = {
+  text: "Text",
+  textarea: "Textarea",
+  number: "Number",
+  boolean: "Boolean",
+  date: "Date",
+  url: "URL",
+  single_select: "Single select",
+};
+
 export function createEmptyWorkspaceInformation(): WorkspaceInformationState {
   return {
     jiraIssues: [],
     figmaResources: [],
     linkedPullRequests: [],
+    slackThreads: [],
     notes: "",
     todos: [],
     customFields: [],
