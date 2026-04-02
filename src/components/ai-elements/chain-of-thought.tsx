@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Brain, Check, ChevronDown, Circle, LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Shimmer } from "./shimmer";
 
 /* ─── Data type (used by the `steps` prop shorthand) ─────────────── */
 
@@ -213,9 +214,12 @@ export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonEleme
         {isStreaming ? (
           <span className="inline-flex items-center gap-2 font-medium">
             <Brain className="size-4" />
-            <span className="bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground bg-[length:200%_100%] bg-clip-text text-transparent motion-safe:animate-shimmer">
+            <Shimmer
+              as="span"
+              className="[--shimmer-base-color:var(--color-muted-foreground)] [--shimmer-highlight-color:var(--color-foreground)]"
+            >
               Thinking
-            </span>
+            </Shimmer>
           </span>
         ) : (
           <>

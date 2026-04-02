@@ -27,6 +27,7 @@ import {
   ChainOfThoughtTrigger,
   MessageResponse,
   OrchestrationCard,
+  Shimmer,
   StaveProcessingCard,
   ToolInput,
   ToolOutput,
@@ -493,9 +494,12 @@ function AssistantTraceEntryView(args: {
       const parsed = parseSubagentToolInput({ input: entry.part.input });
       const resolvedTitle = parsed.description ?? parsed.subagentType ?? "Subagent";
       const titleContent = status === "active" ? (
-        <span className="bg-gradient-to-r from-foreground via-primary to-foreground bg-[length:200%_100%] bg-clip-text text-transparent motion-safe:animate-shimmer">
+        <Shimmer
+          as="span"
+          className="[--shimmer-base-color:var(--color-foreground)] [--shimmer-highlight-color:var(--color-primary)]"
+        >
           {resolvedTitle}
-        </span>
+        </Shimmer>
       ) : undefined;
       return (
         <ChainOfThoughtStep

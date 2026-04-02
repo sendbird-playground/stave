@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Brain, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Shimmer } from "./shimmer";
 
 interface ReasoningProps extends HTMLAttributes<HTMLDivElement> {
   isStreaming?: boolean;
@@ -61,16 +62,16 @@ export function ReasoningTrigger(args: ButtonHTMLAttributes<HTMLButtonElement>) 
     >
       <span className="inline-flex min-w-0 flex-1 items-center gap-2">
         <Brain className="size-4 shrink-0 text-muted-foreground" />
-        <span
-          className={cn(
-            "bg-clip-text leading-none",
-            isStreaming
-              ? "bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground bg-[length:200%_100%] text-transparent motion-safe:animate-shimmer"
-              : "text-muted-foreground",
-          )}
-        >
-          {isStreaming ? "Thinking" : "Reasoning"}
-        </span>
+        {isStreaming ? (
+          <Shimmer
+            as="span"
+            className="leading-none [--shimmer-base-color:var(--color-muted-foreground)] [--shimmer-highlight-color:var(--color-foreground)]"
+          >
+            Thinking
+          </Shimmer>
+        ) : (
+          <span className="leading-none text-muted-foreground">Reasoning</span>
+        )}
       </span>
       <ChevronDown className={cn("ml-auto size-3 shrink-0 transition-transform", open ? "rotate-180" : "rotate-0")} />
     </button>
