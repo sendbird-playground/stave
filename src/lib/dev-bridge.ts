@@ -85,7 +85,13 @@ export function installDevApiBridge() {
         path: "/api/terminal/run",
         body: args,
       }),
-      createSession: (args: { cwd?: string; shell?: string }) => postJson({
+      createSession: (args: {
+        cwd?: string;
+        shell?: string;
+        cols?: number;
+        rows?: number;
+        deliveryMode?: "poll" | "push";
+      }) => postJson({
         path: "/api/terminal/create",
         body: args,
       }),

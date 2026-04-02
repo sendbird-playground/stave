@@ -635,9 +635,12 @@ test("source control actions update status and history surfaces", async ({ page 
   await expect(rightPanel.getByText("feat: save snapshot")).toBeVisible();
 });
 
-test("terminal sessions create and poll output lifecycle", async ({ page }) => {
+test("terminal sessions stream output over push channel when available", async ({ page }) => {
   await page.addInitScript(() => {
     const sessions = new Map<string, { output: string }>();
+    const outputSubscribers = new Set<
+      (payload: { sessionId: string; output: string }) => void
+    >();
     const testState = {
       createCalls: 0,
       readCalls: 0,
@@ -667,7 +670,16 @@ test("terminal sessions create and poll output lifecycle", async ({ page }) => {
         createSession: async () => {
           testState.createCalls += 1;
           const sessionId = `session-${testState.createCalls}`;
-          sessions.set(sessionId, { output: `session ${testState.createCalls} ready\r\n` });
+          sessions.set(sessionId, { output: "" });
+          window.setTimeout(() => {
+            if (!sessions.has(sessionId)) {
+              return;
+            }
+            const output = `session ${testState.createCalls} ready\r\n`;
+            for (const subscriber of outputSubscribers) {
+              subscriber({ sessionId, output });
+            }
+          }, 10);
           return { ok: true, sessionId };
         },
         readSession: async (args: { sessionId: string }) => {
@@ -680,6 +692,15 @@ test("terminal sessions create and poll output lifecycle", async ({ page }) => {
           session.output = "";
           return { ok: true, output };
         },
+        subscribeSessionOutput: (
+          listener: (payload: { sessionId: string; output: string }) => void,
+        ) => {
+          outputSubscribers.add(listener);
+          return () => {
+            outputSubscribers.delete(listener);
+          };
+        },
+        setSessionDeliveryMode: async () => ({ ok: true }),
         writeSession: async () => ({ ok: true }),
         closeSession: async (args: { sessionId: string }) => {
           testState.closeCalls += 1;
@@ -696,9 +717,10 @@ test("terminal sessions create and poll output lifecycle", async ({ page }) => {
 
   await expect(page.getByTestId("terminal-dock")).toBeVisible();
   await expect(page.getByText("Terminal 1")).toBeVisible();
+  await expect(page.getByTestId("terminal-dock")).toContainText("session 1 ready");
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __terminalTest: { readCalls: number } }).__terminalTest.readCalls))
-    .toBeGreaterThan(0);
+    .toBe(0);
 
   await page.getByRole("button", { name: "new-terminal-session" }).click();
   await expect(page.getByText("Terminal 2")).toBeVisible();

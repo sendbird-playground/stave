@@ -47,6 +47,11 @@ interface TerminalRunArgs {
   cwd?: string;
 }
 
+interface TerminalSessionOutputPayload {
+  sessionId: string;
+  output: string;
+}
+
 interface ScmCommitArgs {
   message: string;
   cwd?: string;
@@ -80,6 +85,18 @@ ipcRenderer.on(
   "window:zoom-changed",
   (_event, payload: { factor: number; percent: number }) => {
     for (const subscriber of zoomChangeSubscribers) {
+      subscriber(payload);
+    }
+  },
+);
+
+const terminalSessionOutputSubscribers = new Set<
+  (payload: TerminalSessionOutputPayload) => void
+>();
+ipcRenderer.on(
+  "terminal:session-output",
+  (_event, payload: TerminalSessionOutputPayload) => {
+    for (const subscriber of terminalSessionOutputSubscribers) {
       subscriber(payload);
     }
   },
@@ -451,11 +468,24 @@ contextBridge.exposeInMainWorld("api", {
       shell?: string;
       cols?: number;
       rows?: number;
+      deliveryMode?: "poll" | "push";
     }) => ipcRenderer.invoke("terminal:create-session", args),
     writeSession: (args: { sessionId: string; input: string }) =>
       ipcRenderer.invoke("terminal:write-session", args),
     readSession: (args: { sessionId: string }) =>
       ipcRenderer.invoke("terminal:read-session", args),
+    subscribeSessionOutput: (
+      listener: (payload: TerminalSessionOutputPayload) => void,
+    ) => {
+      terminalSessionOutputSubscribers.add(listener);
+      return () => {
+        terminalSessionOutputSubscribers.delete(listener);
+      };
+    },
+    setSessionDeliveryMode: (args: {
+      sessionId: string;
+      deliveryMode: "poll" | "push";
+    }) => ipcRenderer.invoke("terminal:set-session-delivery-mode", args),
     resizeSession: (args: { sessionId: string; cols: number; rows: number }) =>
       ipcRenderer.invoke("terminal:resize-session", args),
     closeSession: (args: { sessionId: string }) =>
