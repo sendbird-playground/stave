@@ -1,14 +1,21 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, ChevronDown, Circle, ClipboardList, LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getStatusBadge } from "./tool";
+import { getStatusBadge, type ToolState } from "./tool";
 
-type ToolState = "input-streaming" | "input-available" | "output-available" | "output-error";
-type TodoStatus = "pending" | "in_progress" | "completed";
+export type TodoStatus = "pending" | "in_progress" | "completed";
 
-interface TodoItem {
+export interface TodoItem {
   content: string;
   status: TodoStatus;
+}
+
+export interface TodoProgress {
+  todos: TodoItem[];
+  totalCount: number;
+  completedCount: number;
+  hasPendingTodos: boolean;
+  hasInProgressTodos: boolean;
 }
 
 export function parseTodoInput(args: { input: string }): { todos: TodoItem[] } {
@@ -30,6 +37,19 @@ export function parseTodoInput(args: { input: string }): { todos: TodoItem[] } {
     /* fall through */
   }
   return { todos: [] };
+}
+
+export function getTodoProgress(args: { input: string }): TodoProgress {
+  const { todos } = parseTodoInput(args);
+  const completedCount = todos.filter((todo) => todo.status === "completed").length;
+
+  return {
+    todos,
+    totalCount: todos.length,
+    completedCount,
+    hasPendingTodos: todos.some((todo) => todo.status === "pending"),
+    hasInProgressTodos: todos.some((todo) => todo.status === "in_progress"),
+  };
 }
 
 function TodoItemIcon({ status }: { status: TodoStatus }) {
@@ -63,8 +83,7 @@ export function TodoCard({
   className?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const { todos } = useMemo(() => parseTodoInput({ input }), [input]);
-  const completedCount = todos.filter((t) => t.status === "completed").length;
+  const { todos, completedCount } = useMemo(() => getTodoProgress({ input }), [input]);
   const displayState = deriveOverallState(todos, state);
 
   return (

@@ -30,7 +30,7 @@ export { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtStep, ChainOfThoug
 export { SubagentCard, parseSubagentToolInput } from "./subagent";
 export { OrchestrationCard } from "./orchestration";
 export { StaveProcessingCard } from "./stave-processing-card";
-export { TodoCard, parseTodoInput } from "./todo";
+export { TodoCard, getTodoProgress, parseTodoInput } from "./todo";
 export { Tool, ToolContent, ToolGroup, ToolHeader, ToolInput, ToolOutput } from "./tool";
 export { ConfirmationCompact } from "./confirmation";
 export { UserInputCard } from "./user-input-card";
