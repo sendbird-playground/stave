@@ -587,6 +587,46 @@ interface WindowPersistenceApi {
     ok: boolean;
     rows: Array<{ id: string; name: string; updatedAt: string }>;
   }>;
+  loadWorkspaceShell?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    shell: {
+      activeTaskId: string;
+      tasks: Array<{
+        id: string;
+        title: string;
+        provider: "claude-code" | "codex" | "stave";
+        updatedAt: string;
+        unread: boolean;
+        archivedAt?: string | null;
+        controlMode?: "interactive" | "managed";
+        controlOwner?: "stave" | "external";
+      }>;
+      promptDraftByTask?: Record<string, PromptDraft>;
+      providerConversationByTask?: Record<
+        string,
+        {
+          "claude-code"?: string;
+          codex?: string;
+          stave?: string;
+        }
+      >;
+      editorTabs?: Array<{
+        id: string;
+        filePath: string;
+        kind?: "text" | "image";
+        language: string;
+        content: string;
+        originalContent?: string;
+        savedContent?: string;
+        baseRevision?: string | null;
+        hasConflict: boolean;
+        isDirty: boolean;
+      }>;
+      activeEditorTabId?: string | null;
+      workspaceInformation?: WorkspaceInformationState;
+      messageCountByTask?: Record<string, number>;
+    } | null;
+  }>;
   loadWorkspace?: (args: { workspaceId: string }) => Promise<{
     ok: boolean;
     snapshot: {
@@ -640,6 +680,37 @@ interface WindowPersistenceApi {
       }>;
       activeEditorTabId?: string | null;
       workspaceInformation?: WorkspaceInformationState;
+    } | null;
+  }>;
+  loadTaskMessages?: (args: {
+    workspaceId: string;
+    taskId: string;
+    limit?: number;
+    offset?: number;
+  }) => Promise<{
+    ok: boolean;
+    page: {
+      messages: Array<{
+        id: string;
+        role: "user" | "assistant";
+        model: string;
+        providerId: string;
+        content: string;
+        isStreaming?: boolean;
+        usage?: {
+          inputTokens: number;
+          outputTokens: number;
+          cacheReadTokens?: number;
+          cacheCreationTokens?: number;
+          totalCostUsd?: number;
+        };
+        promptSuggestions?: string[];
+        parts: unknown[];
+      }>;
+      totalCount: number;
+      limit: number;
+      offset: number;
+      hasMoreOlder: boolean;
     } | null;
   }>;
   loadProjectRegistry?: () => Promise<{

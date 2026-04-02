@@ -34,13 +34,20 @@ export interface RepoMapCacheEntry {
 }
 
 const cache = new Map<string, RepoMapCacheEntry>();
+const MAX_REPO_MAP_CACHE_ENTRIES = 8;
 
 /**
  * Return the cached formatted repo-map text for a workspace, or
  * `undefined` if the cache has not been populated yet.
  */
 export function getRepoMapContextCache(workspacePath: string): string | undefined {
-  return cache.get(workspacePath)?.text;
+  const entry = cache.get(workspacePath);
+  if (!entry) {
+    return undefined;
+  }
+  cache.delete(workspacePath);
+  cache.set(workspacePath, entry);
+  return entry.text;
 }
 
 /**
@@ -50,10 +57,18 @@ export function setRepoMapContextCache(
   workspacePath: string,
   entry: Omit<RepoMapCacheEntry, "cachedAt">,
 ): void {
+  cache.delete(workspacePath);
   cache.set(workspacePath, {
     ...entry,
     cachedAt: new Date().toISOString(),
   });
+  while (cache.size > MAX_REPO_MAP_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    cache.delete(oldestKey);
+  }
 }
 
 /**

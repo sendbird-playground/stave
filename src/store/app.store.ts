@@ -11,6 +11,8 @@ import { workspaceFsAdapter } from "@/lib/fs";
 import { formatWithEslint } from "@/components/layout/editor-language-intelligence";
 import {
   listWorkspaceSummaries,
+  loadTaskMessagesPage,
+  loadWorkspaceShell,
   loadWorkspaceSnapshot,
   closeWorkspacePersistence,
   loadProjectRegistrySnapshot,
@@ -112,6 +114,7 @@ import {
 } from "@/store/prompt-draft-runtime";
 import { persistWorkspacePlanFile } from "@/lib/plans";
 import {
+  buildWorkspaceSessionStateFromShell,
   buildWorkspaceSessionState,
   createEmptyWorkspaceState,
   createWorkspaceSnapshot,
@@ -236,6 +239,7 @@ interface SkillCatalogState {
 
 const APP_STORE_KEY = "stave-store";
 const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
+const TASK_MESSAGES_PAGE_SIZE = 120;
 export { DEFAULT_PROVIDER_TIMEOUT_MS, PROVIDER_TIMEOUT_OPTIONS } from "@/lib/providers/runtime-option-contract";
 
 export interface AppSettings {
@@ -348,6 +352,7 @@ export interface AppSettings {
 interface AppState {
   hasHydratedWorkspaces: boolean;
   workspaceSnapshotVersion: number;
+  promptDraftPersistenceVersion: number;
   workspaces: WorkspaceSummary[];
   activeWorkspaceId: string;
   projectPath: string | null;
@@ -368,6 +373,8 @@ interface AppState {
   workspacePlansRefreshNonce: number;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
+  messageCountByTask: Record<string, number>;
+  taskMessagesLoadingByTask: Record<string, boolean>;
   layout: LayoutState;
   settings: AppSettings;
   editorTabs: EditorTab[];
@@ -423,6 +430,7 @@ interface AppState {
   refreshProviderCommandCatalog: () => void;
   notifyWorkspacePlansChanged: () => void;
   selectTask: (args: { taskId: string }) => void;
+  loadTaskMessages: (args: { taskId: string; mode?: "latest" | "older" }) => Promise<void>;
   clearTaskSelection: () => void;
   updatePromptDraft: (args: { taskId: string; patch: Partial<PromptDraft> }) => void;
   updateWorkspaceInformation: (args: {
@@ -432,9 +440,9 @@ interface AppState {
   createTask: (args: { title?: string }) => void;
   renameTask: (args: { taskId: string; title: string }) => void;
   restoreTask: (args: { taskId: string }) => void;
-  duplicateTask: (args: { taskId: string }) => void;
+  duplicateTask: (args: { taskId: string }) => Promise<void>;
   reorderTasks: (args: { activeTaskId: string; overTaskId: string; filter: TaskFilter }) => void;
-  exportTask: (args: { taskId: string }) => void;
+  exportTask: (args: { taskId: string }) => Promise<void>;
   viewTaskChanges: (args: { taskId: string }) => Promise<void>;
   rollbackTask: (args: { taskId: string }) => Promise<void>;
   rollbackToCompactBoundary: (args: { taskId: string; gitRef: string; trigger?: string }) => Promise<void>;
@@ -779,6 +787,63 @@ function incrementWorkspaceSnapshotVersion(state: Pick<AppState, "workspaceSnaps
   return state.workspaceSnapshotVersion + 1;
 }
 
+function incrementPromptDraftPersistenceVersion(state: Pick<AppState, "promptDraftPersistenceVersion">) {
+  return state.promptDraftPersistenceVersion + 1;
+}
+
+function getRetainedLoadedMessageTaskIds(args: {
+  activeTaskId: string;
+  activeTurnIdsByTask: Record<string, string | undefined>;
+}) {
+  const retained = new Set<string>();
+  if (args.activeTaskId) {
+    retained.add(args.activeTaskId);
+  }
+  for (const [taskId, turnId] of Object.entries(args.activeTurnIdsByTask)) {
+    if (turnId) {
+      retained.add(taskId);
+    }
+  }
+  return retained;
+}
+
+function compactLoadedMessagesByTask(args: {
+  messagesByTask: Record<string, ChatMessage[]>;
+  activeTaskId: string;
+  activeTurnIdsByTask: Record<string, string | undefined>;
+}) {
+  const retained = getRetainedLoadedMessageTaskIds({
+    activeTaskId: args.activeTaskId,
+    activeTurnIdsByTask: args.activeTurnIdsByTask,
+  });
+  let changed = false;
+  const nextEntries = Object.entries(args.messagesByTask).filter(([taskId]) => {
+    const keep = retained.has(taskId);
+    if (!keep) {
+      changed = true;
+    }
+    return keep;
+  });
+  return changed ? Object.fromEntries(nextEntries) : args.messagesByTask;
+}
+
+function mergeTaskMessagePage(args: {
+  currentMessages: ChatMessage[];
+  pageMessages: ChatMessage[];
+  mode: "latest" | "older";
+}) {
+  if (args.mode === "latest") {
+    return args.pageMessages;
+  }
+
+  const seen = new Set(args.currentMessages.map((message) => message.id));
+  const olderMessages = args.pageMessages.filter((message) => !seen.has(message.id));
+  if (olderMessages.length === 0) {
+    return args.currentMessages;
+  }
+  return [...olderMessages, ...args.currentMessages];
+}
+
 function findTaskById(state: Pick<AppState, "tasks">, taskId: string) {
   return state.tasks.find((task) => task.id === taskId) ?? null;
 }
@@ -807,12 +872,12 @@ function mergeRecentProjectsByPath(args: {
   return merged;
 }
 
-function summarizeWorkspaceSnapshot(snapshot: Awaited<ReturnType<typeof loadWorkspaceSnapshot>>) {
+function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspaceShell>>) {
   if (!snapshot) {
     return 0;
   }
   return snapshot.tasks.length
-    + Object.values(snapshot.messagesByTask).reduce((sum, messages) => sum + messages.length, 0);
+    + Object.values(snapshot.messageCountByTask).reduce((sum, count) => sum + count, 0);
 }
 
 export const useAppStore = create<AppState>()(
@@ -923,11 +988,13 @@ export const useAppStore = create<AppState>()(
         // When localStorage is cleared (e.g. dev-mode port change or origin switch),
         // the project won't appear in recentProjects even though the DB still holds
         // its tasks and messages.  Loading the existing snapshot prevents data loss.
-        const existingSnapshot = await loadWorkspaceSnapshot({ workspaceId: defaultWorkspaceId });
+        const existingShell = await loadWorkspaceShell({ workspaceId: defaultWorkspaceId });
 
-        let workspaceState: ReturnType<typeof buildWorkspaceSessionState>;
-        if (existingSnapshot) {
-          workspaceState = buildWorkspaceSessionState({ snapshot: existingSnapshot });
+        let workspaceState: ReturnType<typeof buildWorkspaceSessionStateFromShell>;
+        if (existingShell) {
+          workspaceState = (await loadWorkspaceSessionFromPersistence({
+            workspaceId: defaultWorkspaceId,
+          })).workspaceState;
         } else {
           const empty = createEmptyWorkspaceState();
           await persistWorkspaceSnapshot({
@@ -1075,9 +1142,153 @@ export const useAppStore = create<AppState>()(
         return { status: "opened" };
       };
 
+      const loadWorkspaceSessionFromPersistence = async (args: {
+        workspaceId: string;
+        appendInterruptedNotices?: boolean;
+      }) => {
+        const [shell, latestTurns] = await Promise.all([
+          loadWorkspaceShell({ workspaceId: args.workspaceId }),
+          listLatestWorkspaceTurns({ workspaceId: args.workspaceId }),
+        ]);
+        const initialTaskIds = new Set<string>();
+        if (shell?.activeTaskId) {
+          initialTaskIds.add(shell.activeTaskId);
+        }
+        for (const turn of latestTurns) {
+          if (!turn.completedAt) {
+            initialTaskIds.add(turn.taskId);
+          }
+        }
+        const pageEntries = await Promise.all(
+          [...initialTaskIds].map(async (taskId) => ({
+            taskId,
+            page: await loadTaskMessagesPage({
+              workspaceId: args.workspaceId,
+              taskId,
+              limit: TASK_MESSAGES_PAGE_SIZE,
+              offset: 0,
+            }),
+          })),
+        );
+        const workspaceState = buildWorkspaceSessionStateFromShell({
+          shell,
+          messagesByTask: Object.fromEntries(pageEntries.map(({ taskId, page }) => [taskId, page.messages] as const)),
+          messageCountByTaskOverrides: Object.fromEntries(
+            pageEntries.map(({ taskId, page }) => [taskId, page.totalCount] as const),
+          ),
+          latestTurns,
+          appendInterruptedNotices: args.appendInterruptedNotices,
+        });
+        return { shell, latestTurns, workspaceState };
+      };
+
+      const loadTaskMessagesIntoSession = async (args: {
+        workspaceId: string;
+        taskId: string;
+        mode: "latest" | "older";
+      }) => {
+        const stateBefore = get();
+        const ownerWorkspaceId = stateBefore.taskWorkspaceIdById[args.taskId] ?? stateBefore.activeWorkspaceId;
+        if (!args.taskId || !ownerWorkspaceId || ownerWorkspaceId !== args.workspaceId) {
+          return;
+        }
+        const currentSession = args.workspaceId === stateBefore.activeWorkspaceId
+          ? stateBefore
+          : stateBefore.workspaceRuntimeCacheById[args.workspaceId];
+        if (!currentSession) {
+          return;
+        }
+        const currentMessages = currentSession.messagesByTask[args.taskId] ?? [];
+        const totalCount = currentSession.messageCountByTask[args.taskId] ?? currentMessages.length;
+        if (args.mode === "latest" && currentMessages.length > 0) {
+          return;
+        }
+        if (args.mode === "older" && currentMessages.length >= totalCount) {
+          return;
+        }
+
+        set((state) => ({
+          taskMessagesLoadingByTask: {
+            ...state.taskMessagesLoadingByTask,
+            [args.taskId]: true,
+          },
+        }));
+
+        try {
+          const page = await loadTaskMessagesPage({
+            workspaceId: args.workspaceId,
+            taskId: args.taskId,
+            limit: TASK_MESSAGES_PAGE_SIZE,
+            offset: args.mode === "older" ? currentMessages.length : 0,
+          });
+          set((state) => {
+            const targetSession = args.workspaceId === state.activeWorkspaceId
+              ? state
+              : state.workspaceRuntimeCacheById[args.workspaceId];
+            if (!targetSession) {
+              return {
+                taskMessagesLoadingByTask: {
+                  ...state.taskMessagesLoadingByTask,
+                  [args.taskId]: false,
+                },
+              };
+            }
+            const sessionMessages = targetSession.messagesByTask[args.taskId] ?? [];
+            const nextMessages = mergeTaskMessagePage({
+              currentMessages: sessionMessages,
+              pageMessages: page.messages,
+              mode: args.mode,
+            });
+            const nextLoadingState = {
+              ...state.taskMessagesLoadingByTask,
+              [args.taskId]: false,
+            };
+            if (args.workspaceId === state.activeWorkspaceId) {
+              return {
+                messagesByTask: {
+                  ...state.messagesByTask,
+                  [args.taskId]: nextMessages,
+                },
+                messageCountByTask: {
+                  ...state.messageCountByTask,
+                  [args.taskId]: page.totalCount,
+                },
+                taskMessagesLoadingByTask: nextLoadingState,
+              };
+            }
+            return {
+              workspaceRuntimeCacheById: {
+                ...state.workspaceRuntimeCacheById,
+                [args.workspaceId]: {
+                  ...targetSession,
+                  messagesByTask: {
+                    ...targetSession.messagesByTask,
+                    [args.taskId]: nextMessages,
+                  },
+                  messageCountByTask: {
+                    ...targetSession.messageCountByTask,
+                    [args.taskId]: page.totalCount,
+                  },
+                },
+              },
+              taskMessagesLoadingByTask: nextLoadingState,
+            };
+          });
+        } catch (error) {
+          console.error("[workspace] failed to load task messages", error);
+          set((state) => ({
+            taskMessagesLoadingByTask: {
+              ...state.taskMessagesLoadingByTask,
+              [args.taskId]: false,
+            },
+          }));
+        }
+      };
+
       return ({
       hasHydratedWorkspaces: false,
       workspaceSnapshotVersion: 0,
+      promptDraftPersistenceVersion: 0,
       workspaces: [],
       activeWorkspaceId: "",
       projectPath: null,
@@ -1097,6 +1308,8 @@ export const useAppStore = create<AppState>()(
       workspacePlansRefreshNonce: 0,
       tasks: [],
       messagesByTask: {},
+      messageCountByTask: {},
+      taskMessagesLoadingByTask: {},
       layout: {
         workspaceSidebarWidth: WORKSPACE_SIDEBAR_MIN_WIDTH,
         workspaceSidebarCollapsed: false,
@@ -1260,7 +1473,7 @@ export const useAppStore = create<AppState>()(
               );
               const snapshotScore = row.id === defaultWorkspaceId
                 ? Number.MAX_SAFE_INTEGER
-                : summarizeWorkspaceSnapshot(await loadWorkspaceSnapshot({ workspaceId: row.id }));
+                : summarizeWorkspaceShell(await loadWorkspaceShell({ workspaceId: row.id }));
               return {
                 row,
                 comparablePath,
@@ -1378,7 +1591,7 @@ export const useAppStore = create<AppState>()(
                 if (candidateRows.length > 0) {
                   const scoredCandidates = await Promise.all(candidateRows.map(async (row) => ({
                     row,
-                    score: summarizeWorkspaceSnapshot(await loadWorkspaceSnapshot({ workspaceId: row.id })),
+                    score: summarizeWorkspaceShell(await loadWorkspaceShell({ workspaceId: row.id })),
                   })));
                   scoredCandidates.sort((left, right) => (
                     right.score - left.score
@@ -1443,12 +1656,12 @@ export const useAppStore = create<AppState>()(
         const cachedWorkspaceState = preferredWorkspaceId
           ? stateBeforeHydrate.workspaceRuntimeCacheById[preferredWorkspaceId]
           : undefined;
-        const [snapshot, latestWorkspaceTurns] = preferredWorkspaceId && !cachedWorkspaceState
-          ? await Promise.all([
-              loadWorkspaceSnapshot({ workspaceId: preferredWorkspaceId }),
-              listLatestWorkspaceTurns({ workspaceId: preferredWorkspaceId }),
-            ])
-          : [null, []];
+        const loadedWorkspaceSession = preferredWorkspaceId && !cachedWorkspaceState
+          ? await loadWorkspaceSessionFromPersistence({
+              workspaceId: preferredWorkspaceId,
+              appendInterruptedNotices: true,
+            })
+          : null;
 
         const preferredWorkspacePath = pathById[preferredWorkspaceId] ?? null;
         let projectFiles = stateBeforeHydrate.projectFiles;
@@ -1467,15 +1680,14 @@ export const useAppStore = create<AppState>()(
 
         set((state) => {
           const workspaceState = cachedWorkspaceState
-            ?? buildWorkspaceSessionState({
-              snapshot,
-              latestTurns: latestWorkspaceTurns,
-              appendInterruptedNotices: true,
-            });
+            ?? loadedWorkspaceSession?.workspaceState
+            ?? buildWorkspaceSessionState({ snapshot: null });
 
           return {
             hasHydratedWorkspaces: true,
             workspaceSnapshotVersion: 0,
+            promptDraftPersistenceVersion: 0,
+            taskMessagesLoadingByTask: {},
             workspaces: rows,
             activeWorkspaceId: preferredWorkspaceId,
             recentProjects: state.projectPath
@@ -1769,6 +1981,23 @@ export const useAppStore = create<AppState>()(
           activeEditorTabId: state.activeEditorTabId,
           providerConversationByTask: state.providerConversationByTask,
         });
+
+        set((current) => {
+          if (current.activeWorkspaceId !== workspaceId) {
+            return current;
+          }
+          const compactedMessagesByTask = compactLoadedMessagesByTask({
+            messagesByTask: current.messagesByTask,
+            activeTaskId: current.activeTaskId,
+            activeTurnIdsByTask: current.activeTurnIdsByTask,
+          });
+          if (compactedMessagesByTask === current.messagesByTask) {
+            return current;
+          }
+          return {
+            messagesByTask: compactedMessagesByTask,
+          };
+        });
       },
       refreshActiveManagedTask: async () => {
         const stateBefore = get();
@@ -1778,18 +2007,14 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        const [snapshot, latestTurns] = await Promise.all([
-          loadWorkspaceSnapshot({ workspaceId }),
-          listLatestWorkspaceTurns({ workspaceId }),
-        ]);
-        if (!snapshot) {
+        const loadedWorkspaceSession = await loadWorkspaceSessionFromPersistence({
+          workspaceId,
+        });
+        if (!loadedWorkspaceSession.shell) {
           return;
         }
 
-        const nextSession = buildWorkspaceSessionState({
-          snapshot,
-          latestTurns,
-        });
+        const nextSession = loadedWorkspaceSession.workspaceState;
         const preferredActiveTaskId = nextSession.tasks.some((task) => task.id === stateBefore.activeTaskId)
           ? stateBefore.activeTaskId
           : nextSession.activeTaskId;
@@ -1805,6 +2030,7 @@ export const useAppStore = create<AppState>()(
           return {
             tasks: refreshedSession.tasks,
             messagesByTask: refreshedSession.messagesByTask,
+            messageCountByTask: refreshedSession.messageCountByTask,
             activeTaskId: refreshedSession.activeTaskId,
             workspaceInformation: refreshedSession.workspaceInformation,
             activeTurnIdsByTask: refreshedSession.activeTurnIdsByTask,
@@ -2463,12 +2689,12 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        const [nextSnapshot, latestWorkspaceTurns] = current.workspaceRuntimeCacheById[workspaceId]
-          ? [null, []]
-          : await Promise.all([
-              loadWorkspaceSnapshot({ workspaceId }),
-              listLatestWorkspaceTurns({ workspaceId }),
-            ]);
+        const loadedWorkspaceSession = current.workspaceRuntimeCacheById[workspaceId]
+          ? null
+          : await loadWorkspaceSessionFromPersistence({
+              workspaceId,
+              appendInterruptedNotices: true,
+            });
         const workspacePath = current.workspacePathById[workspaceId]
           ?? (current.workspaceDefaultById[workspaceId] ? current.projectPath ?? undefined : undefined);
         if (!workspacePath) {
@@ -2481,7 +2707,8 @@ export const useAppStore = create<AppState>()(
         const files = await workspaceFsAdapter.listFiles();
         const nextWorkspaces = current.workspaces;
         const workspaceState = current.workspaceRuntimeCacheById[workspaceId]
-          ?? buildWorkspaceSessionState({ snapshot: nextSnapshot, latestTurns: latestWorkspaceTurns });
+          ?? loadedWorkspaceSession?.workspaceState
+          ?? buildWorkspaceSessionState({ snapshot: null });
         const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({ state: current });
 
         set((state) => {
@@ -2489,6 +2716,8 @@ export const useAppStore = create<AppState>()(
             workspaces: nextWorkspaces.length > 0 ? nextWorkspaces : state.workspaces,
             activeWorkspaceId: workspaceId,
             workspaceSnapshotVersion: 0,
+            promptDraftPersistenceVersion: 0,
+            taskMessagesLoadingByTask: {},
             workspaceRuntimeCacheById: nextRuntimeCacheById,
             taskWorkspaceIdById: registerTaskWorkspaceOwnership({
               taskWorkspaceIdById: state.taskWorkspaceIdById,
@@ -2838,15 +3067,38 @@ export const useAppStore = create<AppState>()(
           workspacePlansRefreshNonce: state.workspacePlansRefreshNonce + 1,
         }));
       },
-      selectTask: ({ taskId }) => set((state) => {
-        if (state.activeTaskId === taskId) {
-          return state;
+      selectTask: ({ taskId }) => {
+        const stateBefore = get();
+        if (stateBefore.activeTaskId === taskId) {
+          return;
         }
-        return {
+        const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
+        const shouldLoadMessages = !(taskId in stateBefore.messagesByTask)
+          && (stateBefore.messageCountByTask[taskId] ?? 0) > 0;
+        set((state) => ({
           activeTaskId: taskId,
           workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-        };
-      }),
+        }));
+        if (workspaceId && shouldLoadMessages) {
+          void loadTaskMessagesIntoSession({
+            workspaceId,
+            taskId,
+            mode: "latest",
+          });
+        }
+      },
+      loadTaskMessages: async ({ taskId, mode = "latest" }) => {
+        const state = get();
+        const workspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+        if (!workspaceId || !taskId) {
+          return;
+        }
+        await loadTaskMessagesIntoSession({
+          workspaceId,
+          taskId,
+          mode,
+        });
+      },
       clearTaskSelection: () => set((state) => {
         if (!state.activeTaskId) {
           return state;
@@ -2866,22 +3118,32 @@ export const useAppStore = create<AppState>()(
             runtimeOverrides: currentDraft.runtimeOverrides,
             ...patch,
           };
-          if (
-            nextDraft.text === currentDraft.text
-            && nextDraft.attachedFilePaths.length === currentDraft.attachedFilePaths.length
-            && nextDraft.attachedFilePaths.every((p, i) => p === currentDraft.attachedFilePaths[i])
-            && nextDraft.attachments.length === currentDraft.attachments.length
-            && nextDraft.attachments.every((a, i) => a === currentDraft.attachments[i])
-            && arePromptDraftRuntimeOverridesEqual(nextDraft.runtimeOverrides, currentDraft.runtimeOverrides)
-          ) {
+          const textChanged = nextDraft.text !== currentDraft.text;
+          const attachedFilePathsChanged =
+            nextDraft.attachedFilePaths.length !== currentDraft.attachedFilePaths.length
+            || nextDraft.attachedFilePaths.some((p, i) => p !== currentDraft.attachedFilePaths[i]);
+          const attachmentsChanged =
+            nextDraft.attachments.length !== currentDraft.attachments.length
+            || nextDraft.attachments.some((a, i) => a !== currentDraft.attachments[i]);
+          const runtimeOverridesChanged = !arePromptDraftRuntimeOverridesEqual(
+            nextDraft.runtimeOverrides,
+            currentDraft.runtimeOverrides,
+          );
+          if (!textChanged && !attachedFilePathsChanged && !attachmentsChanged && !runtimeOverridesChanged) {
             return state;
           }
+          const onlyTextChanged = textChanged
+            && !attachedFilePathsChanged
+            && !attachmentsChanged
+            && !runtimeOverridesChanged;
           return {
             promptDraftByTask: {
               ...state.promptDraftByTask,
               [taskId]: nextDraft,
             },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+            ...(onlyTextChanged
+              ? { promptDraftPersistenceVersion: incrementPromptDraftPersistenceVersion(state) }
+              : { workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state) }),
           };
         });
       },
@@ -2941,6 +3203,10 @@ export const useAppStore = create<AppState>()(
               ...state.messagesByTask,
               [nextTask.id]: [],
             },
+            messageCountByTask: {
+              ...state.messageCountByTask,
+              [nextTask.id]: 0,
+            },
             nativeConversationReadyByTask: {
               ...state.nativeConversationReadyByTask,
               [nextTask.id]: false,
@@ -2981,6 +3247,10 @@ export const useAppStore = create<AppState>()(
         });
       },
       restoreTask: ({ taskId }) => {
+        const stateBefore = get();
+        const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
+        const shouldLoadMessages = !(taskId in stateBefore.messagesByTask)
+          && (stateBefore.messageCountByTask[taskId] ?? 0) > 0;
         set((state) => {
           const targetTask = state.tasks.find((task) => task.id === taskId);
           if (!targetTask || !isTaskArchived(targetTask)) {
@@ -3000,16 +3270,36 @@ export const useAppStore = create<AppState>()(
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
+        if (workspaceId && shouldLoadMessages) {
+          void loadTaskMessagesIntoSession({
+            workspaceId,
+            taskId,
+            mode: "latest",
+          });
+        }
       },
-      duplicateTask: ({ taskId }) => {
-        set((state) => {
-          const sourceTask = state.tasks.find((task) => task.id === taskId);
-          if (!sourceTask) {
-            return {};
+      duplicateTask: async ({ taskId }) => {
+        const stateBefore = get();
+        const sourceTask = stateBefore.tasks.find((task) => task.id === taskId);
+        if (!sourceTask) {
+          return;
+        }
+        const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
+        const sourceMessages = (() => {
+          const loadedMessages = stateBefore.messagesByTask[taskId];
+          const totalCount = stateBefore.messageCountByTask[taskId] ?? loadedMessages?.length ?? 0;
+          if (loadedMessages && loadedMessages.length >= totalCount) {
+            return loadedMessages;
           }
+          return null;
+        })();
+        const completeSourceMessages = sourceMessages
+          ?? (await loadWorkspaceSnapshot({ workspaceId }))?.messagesByTask[taskId]
+          ?? [];
+
+        set((state) => {
           const nextTaskId = crypto.randomUUID();
-          const sourceMessages = state.messagesByTask[taskId] ?? [];
-          const duplicatedMessages = sourceMessages.map((message) => ({
+          const duplicatedMessages = completeSourceMessages.map((message) => ({
             ...message,
             id: crypto.randomUUID(),
             isStreaming: false,
@@ -3035,6 +3325,10 @@ export const useAppStore = create<AppState>()(
               ...state.messagesByTask,
               [duplicatedTask.id]: duplicatedMessages,
             },
+            messageCountByTask: {
+              ...state.messageCountByTask,
+              [duplicatedTask.id]: duplicatedMessages.length,
+            },
             nativeConversationReadyByTask: {
               ...state.nativeConversationReadyByTask,
               [duplicatedTask.id]: false,
@@ -3045,7 +3339,7 @@ export const useAppStore = create<AppState>()(
             },
             taskWorkspaceIdById: {
               ...state.taskWorkspaceIdById,
-              [duplicatedTask.id]: state.activeWorkspaceId,
+              [duplicatedTask.id]: workspaceId,
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
@@ -3068,7 +3362,7 @@ export const useAppStore = create<AppState>()(
           };
         });
       },
-      exportTask: ({ taskId }) => {
+      exportTask: async ({ taskId }) => {
         if (typeof document === "undefined") {
           return;
         }
@@ -3077,10 +3371,16 @@ export const useAppStore = create<AppState>()(
         if (!task) {
           return;
         }
+        const workspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+        const loadedMessages = state.messagesByTask[taskId];
+        const totalCount = state.messageCountByTask[taskId] ?? loadedMessages?.length ?? 0;
+        const messages = loadedMessages && loadedMessages.length >= totalCount
+          ? loadedMessages
+          : (await loadWorkspaceSnapshot({ workspaceId }))?.messagesByTask[taskId] ?? [];
         const payload = {
           exportedAt: new Date().toISOString(),
           task,
-          messages: state.messagesByTask[taskId] ?? [],
+          messages,
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
@@ -3140,6 +3440,13 @@ export const useAppStore = create<AppState>()(
               ...nextState.messagesByTask,
               [taskId]: [...current, message],
             },
+            messageCountByTask: {
+              ...nextState.messageCountByTask,
+              [taskId]: Math.max(
+                (nextState.messageCountByTask[taskId] ?? current.length) + 1,
+                current.length + 1,
+              ),
+            },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
           };
         });
@@ -3192,6 +3499,13 @@ export const useAppStore = create<AppState>()(
               ...nextState.messagesByTask,
               [taskId]: [...current, message],
             },
+            messageCountByTask: {
+              ...nextState.messageCountByTask,
+              [taskId]: Math.max(
+                (nextState.messageCountByTask[taskId] ?? current.length) + 1,
+                current.length + 1,
+              ),
+            },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
           };
         });
@@ -3232,6 +3546,13 @@ export const useAppStore = create<AppState>()(
               messagesByTask: {
                 ...nextState.messagesByTask,
                 [taskId]: [...current, message],
+              },
+              messageCountByTask: {
+                ...nextState.messageCountByTask,
+                [taskId]: Math.max(
+                  (nextState.messageCountByTask[taskId] ?? current.length) + 1,
+                  current.length + 1,
+                ),
               },
               workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
             };
@@ -3297,6 +3618,13 @@ export const useAppStore = create<AppState>()(
             tasks: nextTasks,
             activeTaskId: shouldSwitch ? fallbackTaskId : state.activeTaskId,
             messagesByTask: interrupted.messagesByTask,
+            messageCountByTask: {
+              ...state.messageCountByTask,
+              [taskId]: Math.max(
+                state.messageCountByTask[taskId] ?? (state.messagesByTask[taskId] ?? []).length,
+                (interrupted.messagesByTask[taskId] ?? []).length,
+              ),
+            },
             activeTurnIdsByTask: interrupted.activeTurnIdsByTask,
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
@@ -3672,6 +4000,10 @@ export const useAppStore = create<AppState>()(
               ...nextState.messagesByTask,
               [seededTaskId]: nextState.messagesByTask[seededTaskId] ?? [],
             },
+            messageCountByTask: {
+              ...nextState.messageCountByTask,
+              [seededTaskId]: nextState.messageCountByTask[seededTaskId] ?? 0,
+            },
             nativeConversationReadyByTask: {
               ...nextState.nativeConversationReadyByTask,
               [seededTaskId]: false,
@@ -3780,6 +4112,7 @@ export const useAppStore = create<AppState>()(
             buildLocalCommandResponseState({
               tasks: nextState.tasks,
               messagesByTask: nextState.messagesByTask,
+              messageCountByTask: nextState.messageCountByTask,
               activeTurnIdsByTask: nextState.activeTurnIdsByTask,
               nativeConversationReadyByTask: nextState.nativeConversationReadyByTask,
               providerConversationByTask: nextState.providerConversationByTask,
@@ -3942,6 +4275,7 @@ export const useAppStore = create<AppState>()(
           buildPendingProviderTurnState({
             tasks: nextState.tasks,
             messagesByTask: nextState.messagesByTask,
+            messageCountByTask: nextState.messageCountByTask,
             activeTurnIdsByTask: nextState.activeTurnIdsByTask,
             taskWorkspaceIdById: nextState.taskWorkspaceIdById,
             workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
@@ -4138,6 +4472,13 @@ export const useAppStore = create<AppState>()(
                 ...state.messagesByTask,
                 [taskId]: [...current, systemMessage],
               },
+              messageCountByTask: {
+                ...state.messageCountByTask,
+                [taskId]: Math.max(
+                  (state.messageCountByTask[taskId] ?? current.length) + 1,
+                  current.length + 1,
+                ),
+              },
               workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
             };
           });
@@ -4229,6 +4570,13 @@ export const useAppStore = create<AppState>()(
               messagesByTask: {
                 ...state.messagesByTask,
                 [taskId]: [...current, systemMessage],
+              },
+              messageCountByTask: {
+                ...state.messageCountByTask,
+                [taskId]: Math.max(
+                  (state.messageCountByTask[taskId] ?? current.length) + 1,
+                  current.length + 1,
+                ),
               },
               workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
             };

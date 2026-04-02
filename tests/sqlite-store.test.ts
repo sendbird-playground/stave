@@ -197,6 +197,140 @@ describe("SqliteStore", () => {
     store.close();
   });
 
+  nativeSqliteTest("loads workspace shell and paged task messages without dropping preserved tasks", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+
+    store.upsertWorkspace({
+      id: "ws-1",
+      name: "Workspace One",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [
+          {
+            id: "task-1",
+            title: "Task One",
+            provider: "claude-code",
+            updatedAt: "2026-03-06T00:00:00.000Z",
+            unread: false,
+          },
+          {
+            id: "task-2",
+            title: "Task Two",
+            provider: "codex",
+            updatedAt: "2026-03-06T00:10:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-1": [
+            {
+              id: "m-1",
+              role: "user",
+              model: "user",
+              providerId: "user",
+              content: "hello",
+              isStreaming: false,
+              parts: [{ type: "text", text: "hello" }],
+            },
+            {
+              id: "m-2",
+              role: "assistant",
+              model: "claude-opus-4-6",
+              providerId: "claude-code",
+              content: "world",
+              isStreaming: false,
+              parts: [{ type: "text", text: "world" }],
+            },
+          ],
+          "task-2": [
+            {
+              id: "m-3",
+              role: "user",
+              model: "user",
+              providerId: "user",
+              content: "keep me",
+              isStreaming: false,
+              parts: [{ type: "text", text: "keep me" }],
+            },
+          ],
+        },
+      },
+    });
+
+    const shell = store.loadWorkspaceShell({ workspaceId: "ws-1" });
+    const latestTaskOne = store.loadTaskMessagesPage({
+      workspaceId: "ws-1",
+      taskId: "task-1",
+      limit: 1,
+      offset: 0,
+    });
+
+    store.upsertWorkspace({
+      id: "ws-1",
+      name: "Workspace One",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: shell?.tasks ?? [],
+        messagesByTask: {
+          "task-1": [
+            {
+              id: "m-1",
+              role: "user",
+              model: "user",
+              providerId: "user",
+              content: "hello",
+              isStreaming: false,
+              parts: [{ type: "text", text: "hello" }],
+            },
+            {
+              id: "m-2",
+              role: "assistant",
+              model: "claude-opus-4-6",
+              providerId: "claude-code",
+              content: "world",
+              isStreaming: false,
+              parts: [{ type: "text", text: "world" }],
+            },
+            {
+              id: "m-4",
+              role: "user",
+              model: "user",
+              providerId: "user",
+              content: "new tail",
+              isStreaming: false,
+              parts: [{ type: "text", text: "new tail" }],
+            },
+          ],
+        },
+      },
+    });
+
+    const preservedTaskTwo = store.loadTaskMessagesPage({
+      workspaceId: "ws-1",
+      taskId: "task-2",
+      limit: 10,
+      offset: 0,
+    });
+    const updatedShell = store.loadWorkspaceShell({ workspaceId: "ws-1" });
+    const fullSnapshot = store.loadWorkspaceSnapshot({ workspaceId: "ws-1" });
+
+    expect(shell?.messageCountByTask).toEqual({
+      "task-1": 2,
+      "task-2": 1,
+    });
+    expect(latestTaskOne?.messages.map((message) => message.id)).toEqual(["m-2"]);
+    expect(latestTaskOne?.totalCount).toBe(2);
+    expect(preservedTaskTwo?.messages.map((message) => message.id)).toEqual(["m-3"]);
+    expect(updatedShell?.messageCountByTask).toEqual({
+      "task-1": 3,
+      "task-2": 1,
+    });
+    expect(fullSnapshot?.messagesByTask["task-2"]?.map((message) => message.id)).toEqual(["m-3"]);
+
+    store.close();
+  });
+
   nativeSqliteTest("keeps request snapshots in the journal without inflating visible event counts", async () => {
     const SqliteStore = await loadSqliteStore();
     const store = new SqliteStore({ dbPath });

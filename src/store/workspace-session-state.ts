@@ -1,5 +1,10 @@
 import { type PersistedTurnSummary } from "@/lib/db/turns.db";
-import { type TaskProviderConversationState, type WorkspaceSnapshot, upsertWorkspace } from "@/lib/db/workspaces.db";
+import {
+  type TaskProviderConversationState,
+  type WorkspaceShell,
+  type WorkspaceSnapshot,
+  upsertWorkspace,
+} from "@/lib/db/workspaces.db";
 import { normalizeTaskControl } from "@/lib/tasks";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { createEmptyWorkspaceInformation, type WorkspaceInformationState } from "@/lib/workspace-information";
@@ -14,6 +19,7 @@ export interface WorkspaceSessionState {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
+  messageCountByTask: Record<string, number>;
   promptDraftByTask: Record<string, PromptDraft>;
   workspaceInformation: WorkspaceInformationState;
   editorTabs: EditorTab[];
@@ -28,6 +34,7 @@ export function createEmptyWorkspaceState() {
     activeTaskId: "",
     tasks: [] as Task[],
     messagesByTask: {} as Record<string, ChatMessage[]>,
+    messageCountByTask: {} as Record<string, number>,
     promptDraftByTask: {} as Record<string, PromptDraft>,
     workspaceInformation: createEmptyWorkspaceInformation(),
     editorTabs: [] as EditorTab[],
@@ -194,6 +201,9 @@ export function buildWorkspaceSessionState(args: {
         latestTurns: args.latestTurns,
       })
     : (args.snapshot?.messagesByTask ?? empty.messagesByTask);
+  const messageCountByTask = Object.fromEntries(
+    Object.entries(messagesByTask).map(([taskId, messages]) => [taskId, messages.length] as const),
+  ) as Record<string, number>;
   const editorTabs = args.snapshot?.editorTabs ?? empty.editorTabs;
   const requestedActiveEditorTabId = args.snapshot?.activeEditorTabId ?? empty.activeEditorTabId;
   const activeEditorTabId = editorTabs.some((tab) => tab.id === requestedActiveEditorTabId)
@@ -209,8 +219,62 @@ export function buildWorkspaceSessionState(args: {
     activeTaskId: args.snapshot?.activeTaskId ?? empty.activeTaskId,
     tasks,
     messagesByTask,
+    messageCountByTask,
     promptDraftByTask: args.snapshot?.promptDraftByTask ?? empty.promptDraftByTask,
     workspaceInformation: args.snapshot?.workspaceInformation ?? empty.workspaceInformation,
+    editorTabs,
+    activeEditorTabId,
+    activeTurnIdsByTask,
+    providerConversationByTask,
+    nativeConversationReadyByTask: buildNativeConversationReadyByTask({
+      tasks,
+      providerConversationByTask,
+    }),
+  };
+}
+
+export function buildWorkspaceSessionStateFromShell(args: {
+  shell: WorkspaceShell | null;
+  messagesByTask?: Record<string, ChatMessage[]>;
+  messageCountByTaskOverrides?: Record<string, number>;
+  latestTurns?: PersistedTurnSummary[];
+  appendInterruptedNotices?: boolean;
+}): WorkspaceSessionState {
+  const empty = createEmptyWorkspaceState();
+  const tasks = (args.shell?.tasks ?? empty.tasks).map(normalizeTaskControl);
+  const providerConversationByTask = args.shell?.providerConversationByTask ?? empty.providerConversationByTask;
+  const loadedMessagesByTask = args.messagesByTask ?? empty.messagesByTask;
+  const messagesByTask = args.appendInterruptedNotices
+    ? appendInterruptedTurnNotices({
+        messagesByTask: loadedMessagesByTask,
+        latestTurns: args.latestTurns,
+      })
+    : loadedMessagesByTask;
+  const messageCountByTask = {
+    ...(args.shell?.messageCountByTask ?? empty.messageCountByTask),
+    ...(args.messageCountByTaskOverrides ?? {}),
+  };
+  for (const [taskId, messages] of Object.entries(messagesByTask)) {
+    messageCountByTask[taskId] = Math.max(messageCountByTask[taskId] ?? 0, messages.length);
+  }
+  const editorTabs = args.shell?.editorTabs ?? empty.editorTabs;
+  const requestedActiveEditorTabId = args.shell?.activeEditorTabId ?? empty.activeEditorTabId;
+  const activeEditorTabId = editorTabs.some((tab) => tab.id === requestedActiveEditorTabId)
+    ? requestedActiveEditorTabId
+    : (editorTabs[0]?.id ?? null);
+  const activeTurnIdsByTask = Object.fromEntries(
+    (args.latestTurns ?? [])
+      .filter((turn) => !turn.completedAt)
+      .map((turn) => [turn.taskId, turn.id] as const)
+  ) as Record<string, string | undefined>;
+
+  return {
+    activeTaskId: args.shell?.activeTaskId ?? empty.activeTaskId,
+    tasks,
+    messagesByTask,
+    messageCountByTask,
+    promptDraftByTask: args.shell?.promptDraftByTask ?? empty.promptDraftByTask,
+    workspaceInformation: args.shell?.workspaceInformation ?? empty.workspaceInformation,
     editorTabs,
     activeEditorTabId,
     activeTurnIdsByTask,

@@ -46,7 +46,7 @@ interface ChatInputProps {
 
 const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
 const EMPTY_MESSAGES: ChatMessage[] = [];
-const PROMPT_DRAFT_SAVE_DELAY_MS = 250;
+const PROMPT_DRAFT_SAVE_DELAY_MS = 1200;
 const PROMPT_DRAFT_IDLE_TIMEOUT_MS = 750;
 const PROVIDER_IDS = listProviderIds();
 const MODEL_OPTION_TEMPLATES = PROVIDER_IDS.flatMap((providerId) =>
@@ -250,6 +250,21 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     syncedDraftRef.current = nextDraft;
   }
 
+  function commitCurrentDraftText() {
+    commitPromptDraftText({
+      taskId: syncedDraftRef.current.taskId,
+      text: draftTextRef.current,
+    });
+  }
+
+  function updateNonTextPromptDraft(patch: Partial<PromptDraft>) {
+    commitCurrentDraftText();
+    updatePromptDraft({
+      taskId: args.providerSelectionTarget,
+      patch,
+    });
+  }
+
   function schedulePromptDraftSave(nextDraft: { taskId: string; text: string }) {
     cancelPendingDraftSave();
     draftSaveTimerRef.current = window.setTimeout(() => {
@@ -332,6 +347,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
         <PromptInput
           focusToken={`${args.providerSelectionTarget}:${focusNonce}`}
           value={draftText}
+          onBlur={commitCurrentDraftText}
           disabled={args.isTurnActive}
           isTurnActive={args.isTurnActive}
           selectedModel={args.selectedModelOption}
@@ -351,13 +367,31 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               text: value,
             });
           }}
-          onModelSelect={args.onModelSelect}
+          onModelSelect={(selectionArgs) => {
+            commitCurrentDraftText();
+            args.onModelSelect(selectionArgs);
+          }}
           fastMode={args.fastMode}
-          onFastModeChange={args.onFastModeChange}
+          onFastModeChange={args.onFastModeChange
+            ? (enabled) => {
+                commitCurrentDraftText();
+                args.onFastModeChange?.(enabled);
+              }
+            : undefined}
           planMode={args.planMode}
-          onPlanModeChange={args.onPlanModeChange}
+          onPlanModeChange={args.onPlanModeChange
+            ? (enabled) => {
+                commitCurrentDraftText();
+                args.onPlanModeChange?.(enabled);
+              }
+            : undefined}
           thinkingMode={args.thinkingMode}
-          onThinkingModeChange={args.onThinkingModeChange}
+          onThinkingModeChange={args.onThinkingModeChange
+            ? (value) => {
+                commitCurrentDraftText();
+                args.onThinkingModeChange?.(value);
+              }
+            : undefined}
           pendingUserInput={pendingUserInput}
           onUserInputSubmit={pendingUserInput ? ({ messageId, answers }) => {
             resolveUserInput({ taskId: args.activeTaskId, messageId, answers });
@@ -368,12 +402,15 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           permissionMode={args.permissionMode}
           runtimeQuickControls={args.runtimeQuickControls}
           runtimeStatusItems={args.runtimeStatusItems}
-          onPermissionModeChange={args.onPermissionModeChange}
+          onPermissionModeChange={(value) => {
+            commitCurrentDraftText();
+            args.onPermissionModeChange(value);
+          }}
           attachments={promptDraft.attachments}
           onAttachFilesChange={({ filePaths }) =>
-            updatePromptDraft({ taskId: args.providerSelectionTarget, patch: { attachedFilePaths: filePaths } })}
+            updateNonTextPromptDraft({ attachedFilePaths: filePaths })}
           onAttachmentsChange={({ attachments }) =>
-            updatePromptDraft({ taskId: args.providerSelectionTarget, patch: { attachments } })}
+            updateNonTextPromptDraft({ attachments })}
           onCaptureScreenshot={window.api?.capture?.screenshot ? async () => {
             const result = await window.api!.capture!.screenshot();
             if (!result.ok || !result.dataUrl) {
@@ -386,10 +423,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               label: "Screenshot",
             };
             const current = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachments ?? [];
-            updatePromptDraft({
-              taskId: args.providerSelectionTarget,
-              patch: { attachments: [...current, imageAttachment] },
-            });
+            updateNonTextPromptDraft({ attachments: [...current, imageAttachment] });
           } : undefined}
           onSubmit={async ({ text, filePaths }) => {
             cancelPendingDraftSave();
@@ -461,7 +495,9 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.promptDraftByTask[activeTaskId || "draft:session"]?.runtimeOverrides
   );
   const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
-  const activeMessageCount = useAppStore((state) => (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length);
+  const activeMessageCount = useAppStore((state) =>
+    state.messageCountByTask[state.activeTaskId] ?? (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length
+  );
   const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
   const [
     modelClaude,

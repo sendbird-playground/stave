@@ -43,6 +43,7 @@ export function createFileContextPart(args: {
 export function buildLocalCommandResponseState(args: {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
+  messageCountByTask: Record<string, number>;
   activeTurnIdsByTask: Record<string, string | undefined>;
   nativeConversationReadyByTask: Record<string, boolean>;
   providerConversationByTask: Record<string, TaskProviderConversationState>;
@@ -78,6 +79,9 @@ export function buildLocalCommandResponseState(args: {
     isStreaming: false,
     parts: args.responseText ? [createUserTextPart({ text: args.responseText })] : [],
   };
+  const nextMessages = args.shouldClearProviderConversation
+    ? [userMessage, assistantMessage]
+    : [...current, userMessage, assistantMessage];
 
   return {
     tasks: args.tasks.map((taskItem) =>
@@ -87,9 +91,14 @@ export function buildLocalCommandResponseState(args: {
     ),
     messagesByTask: {
       ...args.messagesByTask,
-      [args.taskId]: args.shouldClearProviderConversation
-        ? [userMessage, assistantMessage]
-        : [...current, userMessage, assistantMessage],
+      [args.taskId]: nextMessages,
+    },
+    messageCountByTask: {
+      ...args.messageCountByTask,
+      [args.taskId]: Math.max(
+        nextMessages.length,
+        (args.messageCountByTask[args.taskId] ?? current.length) + (nextMessages.length - current.length),
+      ),
     },
     activeTurnIdsByTask: {
       ...args.activeTurnIdsByTask,
@@ -117,6 +126,7 @@ export function buildLocalCommandResponseState(args: {
 export function buildPendingProviderTurnState(args: {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
+  messageCountByTask: Record<string, number>;
   activeTurnIdsByTask: Record<string, string | undefined>;
   taskWorkspaceIdById: Record<string, string>;
   workspaceSnapshotVersion: number;
@@ -187,6 +197,7 @@ export function buildPendingProviderTurnState(args: {
     isStreaming: true,
     parts: [],
   };
+  const nextMessages = [...current, userMessage, assistantMessage];
 
   return {
     tasks: args.tasks.map((taskItem) =>
@@ -200,7 +211,14 @@ export function buildPendingProviderTurnState(args: {
     ),
     messagesByTask: {
       ...args.messagesByTask,
-      [args.taskId]: [...current, userMessage, assistantMessage],
+      [args.taskId]: nextMessages,
+    },
+    messageCountByTask: {
+      ...args.messageCountByTask,
+      [args.taskId]: Math.max(
+        nextMessages.length,
+        (args.messageCountByTask[args.taskId] ?? current.length) + (nextMessages.length - current.length),
+      ),
     },
     activeTurnIdsByTask: {
       ...args.activeTurnIdsByTask,

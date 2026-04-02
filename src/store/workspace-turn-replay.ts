@@ -53,6 +53,16 @@ export function applyProviderEventsToWorkspaceSession(args: {
             [args.taskId]: replayed.messages,
           }
         : args.session.messagesByTask,
+      messageCountByTask: replayed.changed
+        ? {
+            ...args.session.messageCountByTask,
+            [args.taskId]: Math.max(
+              replayed.messages.length,
+              (args.session.messageCountByTask[args.taskId] ?? (args.session.messagesByTask[args.taskId] ?? []).length)
+                + (replayed.messages.length - (args.session.messagesByTask[args.taskId] ?? []).length),
+            ),
+          }
+        : args.session.messageCountByTask,
       activeTurnIdsByTask: activeTurnMatches
         ? args.session.activeTurnIdsByTask
         : {

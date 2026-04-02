@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { WorkspaceSnapshot } from "@/lib/db/workspaces.db";
+import type { WorkspaceShell, WorkspaceSnapshot } from "@/lib/db/workspaces.db";
 const TextPartSchema = z.object({
   type: z.literal("text"),
   text: z.string(),
@@ -197,6 +197,7 @@ const TaskSchema = z.object({
 const TaskProviderConversationStateSchema = z.object({
   "claude-code": z.string().optional(),
   codex: z.string().optional(),
+  stave: z.string().optional(),
 });
 
 const EditorTabSchema = z.object({
@@ -346,6 +347,12 @@ export const WorkspaceSnapshotSchema = z.object({
   }),
 });
 
+export const WorkspaceShellSchema = WorkspaceSnapshotSchema.omit({
+  messagesByTask: true,
+}).extend({
+  messageCountByTask: z.record(z.string(), z.number().int().nonnegative()).optional().default({}),
+});
+
 export function parseWorkspaceSnapshot(args: { payload: unknown }): WorkspaceSnapshot | null {
   const parsed = WorkspaceSnapshotSchema.safeParse(args.payload);
   if (!parsed.success) {
@@ -353,4 +360,13 @@ export function parseWorkspaceSnapshot(args: { payload: unknown }): WorkspaceSna
     return null;
   }
   return parsed.data as WorkspaceSnapshot;
+}
+
+export function parseWorkspaceShell(args: { payload: unknown }): WorkspaceShell | null {
+  const parsed = WorkspaceShellSchema.safeParse(args.payload);
+  if (!parsed.success) {
+    console.error("[task-context] invalid workspace shell payload", parsed.error.flatten());
+    return null;
+  }
+  return parsed.data as WorkspaceShell;
 }
