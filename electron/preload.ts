@@ -211,8 +211,16 @@ contextBridge.exposeInMainWorld("api", {
   },
   persistence: {
     listWorkspaces: () => ipcRenderer.invoke("persistence:list-workspaces"),
+    loadWorkspaceShell: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("persistence:load-workspace-shell", args),
     loadWorkspace: (args: { workspaceId: string }) =>
       ipcRenderer.invoke("persistence:load-workspace", args),
+    loadTaskMessages: (args: {
+      workspaceId: string;
+      taskId: string;
+      limit?: number;
+      offset?: number;
+    }) => ipcRenderer.invoke("persistence:load-task-messages", args),
     loadProjectRegistry: () =>
       ipcRenderer.invoke("persistence:load-project-registry"),
     upsertWorkspace: (args: { id: string; name: string; snapshot: unknown }) =>

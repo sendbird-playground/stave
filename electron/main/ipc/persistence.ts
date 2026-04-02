@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import type { PersistenceWorkspaceSnapshot } from "../../persistence/types";
 import {
   CreateNotificationArgsSchema,
+  LoadTaskMessagesArgsSchema,
   ListLatestWorkspaceTurnsArgsSchema,
   ListNotificationsArgsSchema,
   ListTaskTurnsArgsSchema,
@@ -29,6 +30,26 @@ export function registerPersistenceHandlers() {
     const store = await ensurePersistenceReady();
     const snapshot = store.loadWorkspaceSnapshot({ workspaceId: parsedArgs.data.workspaceId });
     return { ok: true, snapshot };
+  });
+
+  ipcMain.handle("persistence:load-workspace-shell", async (_event, args: unknown) => {
+    const parsedArgs = WorkspaceIdArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, shell: null };
+    }
+    const store = await ensurePersistenceReady();
+    const shell = store.loadWorkspaceShell({ workspaceId: parsedArgs.data.workspaceId });
+    return { ok: true, shell };
+  });
+
+  ipcMain.handle("persistence:load-task-messages", async (_event, args: unknown) => {
+    const parsedArgs = LoadTaskMessagesArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, page: null };
+    }
+    const store = await ensurePersistenceReady();
+    const page = store.loadTaskMessagesPage(parsedArgs.data);
+    return { ok: true, page };
   });
 
   ipcMain.handle("persistence:load-project-registry", async () => {

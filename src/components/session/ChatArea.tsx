@@ -31,7 +31,7 @@ export function ChatArea() {
     state.workspaces.length > 0,
     state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId),
     state.tasks.some((task) => task.id === state.activeTaskId),
-    (state.messagesByTask[state.activeTaskId] ?? []).length,
+    state.messageCountByTask[state.activeTaskId] ?? (state.messagesByTask[state.activeTaskId] ?? []).length,
     state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
     state.activeTurnIdsByTask[state.activeTaskId],
     state.refreshActiveManagedTask,

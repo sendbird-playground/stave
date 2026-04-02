@@ -91,4 +91,20 @@ describe("repo-map-context-cache", () => {
     expect(snapshot.size).toBe(2);
     expect([...snapshot.keys()]).toEqual(["/tmp/project-a", "/tmp/project-b"]);
   });
+
+  test("evicts the oldest entries when the cache exceeds its cap", () => {
+    for (let index = 0; index < 10; index += 1) {
+      setRepoMapContextCache(`/tmp/project-${index}`, {
+        ...ENTRY_A,
+        text: `context-${index}`,
+      });
+    }
+
+    const snapshot = getRepoMapCacheSnapshot();
+
+    expect(snapshot.size).toBe(8);
+    expect(snapshot.has("/tmp/project-0")).toBe(false);
+    expect(snapshot.has("/tmp/project-1")).toBe(false);
+    expect(snapshot.has("/tmp/project-9")).toBe(true);
+  });
 });

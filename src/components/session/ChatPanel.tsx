@@ -362,13 +362,19 @@ const MemoizedChatPanelHeader = memo(ChatPanelHeader);
 function ChatPanelMessageList(args: {
   onOpenSessionReplay: (request?: Omit<SessionReplayRequestContext, "key">) => void;
 }) {
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
+  const [activeTaskId, activeTurnId, chatStreamingEnabled, loadTaskMessages] = useAppStore(useShallow((state) => [
+    state.activeTaskId,
+    state.activeTurnIdsByTask[state.activeTaskId],
+    state.settings.chatStreamingEnabled,
+    state.loadTaskMessages,
+  ] as const));
   const messages = useAppStore((state) => state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES);
-  const activeTurnId = useAppStore((state) => state.activeTurnIdsByTask[state.activeTaskId]);
-  const chatStreamingEnabled = useAppStore((state) => state.settings.chatStreamingEnabled);
+  const totalMessageCount = useAppStore((state) => state.messageCountByTask[state.activeTaskId] ?? 0);
+  const taskMessagesLoading = useAppStore((state) => state.taskMessagesLoadingByTask[state.activeTaskId] === true);
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
 
   const visibleMessages = useMemo(() => messages.filter((message) => !message.isPlanResponse), [messages]);
+  const hasOlderMessages = messages.length < totalMessageCount;
   const liveStreamingMessageId = activeTurnId ? visibleMessages.at(-1)?.id : undefined;
   const latestVisibleMessageId = visibleMessages.at(-1)?.id;
   const lastVisibleMessageScrollFingerprint = useMemo(
@@ -396,7 +402,35 @@ function ChatPanelMessageList(args: {
       forceScrollScopeKey={activeTaskId}
       withInnerLayout={visibleMessages.length === 0}
     >
-      {visibleMessages.length === 0 ? (
+      {hasOlderMessages ? (
+        <div className="mx-auto mb-3 flex w-full max-w-6xl px-3 pt-3 sm:px-5 sm:pt-4">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={taskMessagesLoading}
+            className="h-8 rounded-sm"
+            onClick={() => {
+              void loadTaskMessages({ taskId: activeTaskId, mode: "older" });
+            }}
+          >
+            {taskMessagesLoading
+              ? "Loading older messages..."
+              : `Load older messages (${totalMessageCount - messages.length} remaining)`}
+          </Button>
+        </div>
+      ) : null}
+      {visibleMessages.length === 0 && totalMessageCount > 0 && taskMessagesLoading ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MessageSquareIcon />
+            </EmptyMedia>
+            <EmptyTitle>Loading conversation</EmptyTitle>
+            <EmptyDescription>Fetching the latest messages for this task.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : visibleMessages.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">

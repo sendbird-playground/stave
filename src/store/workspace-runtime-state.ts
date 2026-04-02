@@ -11,6 +11,7 @@ type ActiveWorkspaceProjectionState = {
   activeTaskId: string;
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
+  messageCountByTask: Record<string, number>;
   promptDraftByTask: PromptDraftByTask;
   workspaceInformation: WorkspaceInformationState;
   editorTabs: EditorTab[];
@@ -31,6 +32,7 @@ export type ActiveWorkspaceStatePatch = Pick<
   | "activeTaskId"
   | "tasks"
   | "messagesByTask"
+  | "messageCountByTask"
   | "promptDraftByTask"
   | "workspaceInformation"
   | "editorTabs"
@@ -52,6 +54,7 @@ export function createWorkspaceSessionStateFromAppState(
     activeTaskId: state.activeTaskId,
     tasks: state.tasks,
     messagesByTask: state.messagesByTask,
+    messageCountByTask: state.messageCountByTask,
     promptDraftByTask: state.promptDraftByTask,
     workspaceInformation: state.workspaceInformation,
     editorTabs: state.editorTabs,
@@ -67,6 +70,7 @@ export function createActiveWorkspaceStatePatch(session: WorkspaceSessionState):
     activeTaskId: session.activeTaskId,
     tasks: session.tasks,
     messagesByTask: session.messagesByTask,
+    messageCountByTask: session.messageCountByTask,
     promptDraftByTask: session.promptDraftByTask,
     workspaceInformation: session.workspaceInformation,
     editorTabs: session.editorTabs,
@@ -74,6 +78,28 @@ export function createActiveWorkspaceStatePatch(session: WorkspaceSessionState):
     activeTurnIdsByTask: session.activeTurnIdsByTask,
     providerConversationByTask: session.providerConversationByTask,
     nativeConversationReadyByTask: session.nativeConversationReadyByTask,
+  };
+}
+
+function compactWorkspaceSessionMessages(session: WorkspaceSessionState): WorkspaceSessionState {
+  const retainedTaskIds = new Set<string>();
+  if (session.activeTaskId) {
+    retainedTaskIds.add(session.activeTaskId);
+  }
+  for (const [taskId, turnId] of Object.entries(session.activeTurnIdsByTask)) {
+    if (turnId) {
+      retainedTaskIds.add(taskId);
+    }
+  }
+  const nextMessagesByTask = Object.fromEntries(
+    Object.entries(session.messagesByTask).filter(([taskId]) => retainedTaskIds.has(taskId)),
+  );
+  if (Object.keys(nextMessagesByTask).length === Object.keys(session.messagesByTask).length) {
+    return session;
+  }
+  return {
+    ...session,
+    messagesByTask: nextMessagesByTask,
   };
 }
 
@@ -85,6 +111,7 @@ export function saveActiveWorkspaceRuntimeCache(args: {
     | "activeTaskId"
     | "tasks"
     | "messagesByTask"
+    | "messageCountByTask"
     | "promptDraftByTask"
     | "workspaceInformation"
     | "editorTabs"
@@ -97,9 +124,10 @@ export function saveActiveWorkspaceRuntimeCache(args: {
   if (!args.state.activeWorkspaceId) {
     return args.state.workspaceRuntimeCacheById;
   }
+  const nextSession = compactWorkspaceSessionMessages(createWorkspaceSessionStateFromAppState(args.state));
   return {
     ...args.state.workspaceRuntimeCacheById,
-    [args.state.activeWorkspaceId]: createWorkspaceSessionStateFromAppState(args.state),
+    [args.state.activeWorkspaceId]: nextSession,
   };
 }
 

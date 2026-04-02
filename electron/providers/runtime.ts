@@ -24,6 +24,7 @@ import { homedir } from "node:os";
 import { buildRuntimeProcessEnv, probeExecutableVersion } from "./runtime-shared";
 
 const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000);
+const ACTIVE_STREAM_TTL_MS = 15 * 60 * 1000;
 type ActiveRuntimeSession = {
   turnId: string;
   providerId: StreamTurnArgs["providerId"];
@@ -39,7 +40,7 @@ type ActiveRuntimeSession = {
 };
 
 const activeSessions = new Map<string, ActiveRuntimeSession>();
-const activeStreams = new Map<string, { events: BridgeEvent[]; done: boolean }>();
+const activeStreams = new Map<string, { events: BridgeEvent[]; done: boolean; updatedAt: number }>();
 const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
@@ -95,6 +96,14 @@ function abortActive(args: { turnId: string }) {
 
 function clearActiveTurnState(args: { turnId: string }) {
   activeSessions.delete(args.turnId);
+}
+
+function pruneExpiredStreams(now = Date.now()) {
+  for (const [streamId, session] of activeStreams.entries()) {
+    if (now - session.updatedAt > ACTIVE_STREAM_TTL_MS) {
+      activeStreams.delete(streamId);
+    }
+  }
 }
 
 function clearActiveTaskSessions(args: { taskId: string }) {
@@ -456,10 +465,11 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
 export const providerRuntime: ProviderRuntime = {
   streamTurn: (args) => runProviderTurn(args),
   startTurnStream: (args, options) => {
+    pruneExpiredStreams();
     const streamId = randomUUID();
     const turnId = args.turnId ?? randomUUID();
     const shouldBufferForPolling = !options?.onEvent;
-    const session = { events: [] as BridgeEvent[], done: false };
+    const session = { events: [] as BridgeEvent[], done: false, updatedAt: Date.now() };
     activeStreams.set(streamId, session);
     upsertActiveSession({
       turnId,
@@ -474,6 +484,7 @@ export const providerRuntime: ProviderRuntime = {
         if (shouldBufferForPolling) {
           session.events.push(event);
         }
+        session.updatedAt = Date.now();
         options?.onEvent?.(event);
       },
     })
@@ -491,6 +502,7 @@ export const providerRuntime: ProviderRuntime = {
       })
       .finally(() => {
         session.done = true;
+        session.updatedAt = Date.now();
         clearActiveTurnState({ turnId });
         if (!shouldBufferForPolling) {
           activeStreams.delete(streamId);
@@ -500,6 +512,7 @@ export const providerRuntime: ProviderRuntime = {
     return { ok: true, streamId };
   },
   readTurnStream: ({ streamId, cursor }) => {
+    pruneExpiredStreams();
     const session = activeStreams.get(streamId);
     if (!session) {
       return {
@@ -515,6 +528,7 @@ export const providerRuntime: ProviderRuntime = {
     const events = session.events.slice(nextCursor);
     const outCursor = nextCursor + events.length;
     const done = session.done;
+    session.updatedAt = Date.now();
     if (done && outCursor >= session.events.length) {
       activeStreams.delete(streamId);
     }

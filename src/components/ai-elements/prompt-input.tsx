@@ -32,6 +32,7 @@ interface PromptInputProps {
   skillsAutoSuggest?: boolean;
   skillPaletteItems?: readonly SkillCatalogEntry[];
   onValueChange: (value: string) => void;
+  onBlur?: () => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
   onAttachFilesChange: (args: { filePaths: string[] }) => void;
   onAttachmentsChange?: (args: { attachments: Attachment[] }) => void;
@@ -79,6 +80,7 @@ export function PromptInput(args: PromptInputProps) {
     skillsAutoSuggest,
     skillPaletteItems,
     onValueChange,
+    onBlur,
     onModelSelect,
     onAttachFilesChange,
     onAttachmentsChange,
@@ -418,6 +420,7 @@ export function PromptInput(args: PromptInputProps) {
                 syncCaretPosition(event.target);
                 onValueChange(event.target.value);
               }}
+              onBlur={() => onBlur?.()}
               onClick={(event) => syncCaretPosition(event.currentTarget)}
               onKeyUp={(event) => syncCaretPosition(event.currentTarget)}
               onSelect={(event) => syncCaretPosition(event.currentTarget)}

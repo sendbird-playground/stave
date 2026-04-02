@@ -1,6 +1,6 @@
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
-import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
+import { parseWorkspaceShell, parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 export interface WorkspaceSummary {
   id: string;
@@ -27,14 +27,46 @@ export interface WorkspaceSnapshot {
   workspaceInformation: WorkspaceInformationState;
 }
 
+export interface WorkspaceShell {
+  activeTaskId: string;
+  tasks: Task[];
+  promptDraftByTask: Record<string, PromptDraft>;
+  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  editorTabs?: EditorTab[];
+  activeEditorTabId?: string | null;
+  workspaceInformation: WorkspaceInformationState;
+  messageCountByTask: Record<string, number>;
+}
+
+export interface TaskMessagesPage {
+  messages: ChatMessage[];
+  totalCount: number;
+  limit: number;
+  offset: number;
+  hasMoreOlder: boolean;
+}
+
 interface RequiredPersistenceApi {
   listWorkspaces: () => Promise<{
     ok: boolean;
     rows: Array<{ id: string; name: string; updatedAt: string }>;
   }>;
+  loadWorkspaceShell?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    shell: WorkspaceShell | null;
+  }>;
   loadWorkspace: (args: { workspaceId: string }) => Promise<{
     ok: boolean;
     snapshot: WorkspaceSnapshot | null;
+  }>;
+  loadTaskMessages?: (args: {
+    workspaceId: string;
+    taskId: string;
+    limit?: number;
+    offset?: number;
+  }) => Promise<{
+    ok: boolean;
+    page: TaskMessagesPage | null;
   }>;
   upsertWorkspace: (args: {
     id: string;
@@ -95,6 +127,21 @@ function getPersistenceApi() {
   return api as RequiredPersistenceApi;
 }
 
+function buildShellFromSnapshot(snapshot: WorkspaceSnapshot): WorkspaceShell {
+  return {
+    activeTaskId: snapshot.activeTaskId,
+    tasks: snapshot.tasks,
+    promptDraftByTask: snapshot.promptDraftByTask,
+    providerConversationByTask: snapshot.providerConversationByTask,
+    editorTabs: snapshot.editorTabs,
+    activeEditorTabId: snapshot.activeEditorTabId,
+    workspaceInformation: snapshot.workspaceInformation,
+    messageCountByTask: Object.fromEntries(
+      Object.entries(snapshot.messagesByTask).map(([taskId, messages]) => [taskId, messages.length] as const)
+    ),
+  };
+}
+
 export async function listWorkspaceSummaries(): Promise<WorkspaceSummary[]> {
   const persistence = getPersistenceApi();
   if (!persistence) {
@@ -139,6 +186,101 @@ export async function loadWorkspaceSnapshot(args: { workspaceId: string }): Prom
   return {
     ...parsed,
     messagesByTask: normalizeMessagesForSnapshot({ messagesByTask: parsed.messagesByTask }),
+  };
+}
+
+export async function loadWorkspaceShell(args: { workspaceId: string }): Promise<WorkspaceShell | null> {
+  const persistence = getPersistenceApi();
+  if (!persistence) {
+    const row = loadFallbackRows().find((item) => item.id === args.workspaceId);
+    if (!row) {
+      return null;
+    }
+    const parsed = parseWorkspaceSnapshot({ payload: row.snapshot });
+    if (!parsed) {
+      return null;
+    }
+    return buildShellFromSnapshot({
+      ...parsed,
+      messagesByTask: normalizeMessagesForSnapshot({ messagesByTask: parsed.messagesByTask }),
+    });
+  }
+
+  if (!persistence.loadWorkspaceShell) {
+    const snapshot = await loadWorkspaceSnapshot(args);
+    return snapshot ? buildShellFromSnapshot(snapshot) : null;
+  }
+
+  const response = await persistence.loadWorkspaceShell({ workspaceId: args.workspaceId });
+  if (!response.ok) {
+    throw new Error(`Failed to load workspace shell: ${args.workspaceId}`);
+  }
+  if (!response.shell) {
+    return null;
+  }
+  const parsed = parseWorkspaceShell({ payload: response.shell });
+  return parsed;
+}
+
+export async function loadTaskMessagesPage(args: {
+  workspaceId: string;
+  taskId: string;
+  limit?: number;
+  offset?: number;
+}): Promise<TaskMessagesPage> {
+  const limit = Math.max(1, Math.min(500, args.limit ?? 120));
+  const offset = Math.max(0, args.offset ?? 0);
+  const persistence = getPersistenceApi();
+  if (!persistence) {
+    const row = loadFallbackRows().find((item) => item.id === args.workspaceId);
+    const snapshot = row?.snapshot ? parseWorkspaceSnapshot({ payload: row.snapshot }) : null;
+    const messages = normalizeMessagesForSnapshot({
+      messagesByTask: snapshot?.messagesByTask ?? {},
+    })[args.taskId] ?? [];
+    const start = Math.max(messages.length - offset - limit, 0);
+    const end = Math.max(messages.length - offset, 0);
+    const pageMessages = messages.slice(start, end);
+    return {
+      messages: pageMessages,
+      totalCount: messages.length,
+      limit,
+      offset,
+      hasMoreOlder: start > 0,
+    };
+  }
+
+  if (!persistence.loadTaskMessages) {
+    const snapshot = await loadWorkspaceSnapshot({ workspaceId: args.workspaceId });
+    const messages = snapshot?.messagesByTask[args.taskId] ?? [];
+    const start = Math.max(messages.length - offset - limit, 0);
+    const end = Math.max(messages.length - offset, 0);
+    const pageMessages = messages.slice(start, end);
+    return {
+      messages: pageMessages,
+      totalCount: messages.length,
+      limit,
+      offset,
+      hasMoreOlder: start > 0,
+    };
+  }
+
+  const response = await persistence.loadTaskMessages({
+    workspaceId: args.workspaceId,
+    taskId: args.taskId,
+    limit,
+    offset,
+  });
+  if (!response.ok || !response.page) {
+    throw new Error(`Failed to load task messages: ${args.workspaceId}/${args.taskId}`);
+  }
+  return {
+    messages: normalizeMessagesForSnapshot({
+      messagesByTask: { [args.taskId]: response.page.messages },
+    })[args.taskId] ?? [],
+    totalCount: response.page.totalCount,
+    limit: response.page.limit,
+    offset: response.page.offset,
+    hasMoreOlder: response.page.hasMoreOlder,
   };
 }
 

@@ -41,7 +41,7 @@ export default function App() {
   useEffect(() => {
     let timer: number | null = null;
 
-    const scheduleSnapshotFlush = (state: ReturnType<typeof useAppStore.getState>) => {
+    const scheduleSnapshotFlush = (state: ReturnType<typeof useAppStore.getState>, delayMs: number) => {
       if (timer !== null) {
         window.clearTimeout(timer);
         timer = null;
@@ -52,19 +52,24 @@ export default function App() {
       timer = window.setTimeout(() => {
         timer = null;
         void useAppStore.getState().flushActiveWorkspaceSnapshot();
-      }, 1200);
+      }, delayMs);
     };
 
-    scheduleSnapshotFlush(useAppStore.getState());
+    scheduleSnapshotFlush(useAppStore.getState(), 1200);
     const unsubscribe = useAppStore.subscribe((state, prevState) => {
       if (
         state.hasHydratedWorkspaces === prevState.hasHydratedWorkspaces
         && state.activeWorkspaceId === prevState.activeWorkspaceId
         && state.workspaceSnapshotVersion === prevState.workspaceSnapshotVersion
+        && state.promptDraftPersistenceVersion === prevState.promptDraftPersistenceVersion
       ) {
         return;
       }
-      scheduleSnapshotFlush(state);
+      const structuralChange =
+        state.hasHydratedWorkspaces !== prevState.hasHydratedWorkspaces
+        || state.activeWorkspaceId !== prevState.activeWorkspaceId
+        || state.workspaceSnapshotVersion !== prevState.workspaceSnapshotVersion;
+      scheduleSnapshotFlush(state, structuralChange ? 1200 : 5000);
     });
 
     return () => {

@@ -554,6 +554,15 @@ export const WorkspaceIdArgsSchema = z
   })
   .strict();
 
+export const LoadTaskMessagesArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+    taskId: z.string().min(1).max(200),
+    limit: z.number().int().min(1).max(500).optional(),
+    offset: z.number().int().min(0).max(1_000_000).optional(),
+  })
+  .strict();
+
 const NotificationActionSchema = z.discriminatedUnion("type", [
   z
     .object({

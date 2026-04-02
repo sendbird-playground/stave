@@ -56,10 +56,44 @@ export interface PersistenceWorkspaceSnapshot {
   workspaceInformation?: WorkspaceInformationState;
 }
 
+export interface PersistenceWorkspaceShell {
+  activeTaskId: string;
+  tasks: PersistenceTaskRow[];
+  promptDraftByTask?: Record<string, PromptDraft>;
+  providerConversationByTask?: Record<string, {
+    "claude-code"?: string;
+    codex?: string;
+    stave?: string;
+  }>;
+  editorTabs?: Array<{
+    id: string;
+    filePath: string;
+    kind?: "text" | "image";
+    language: string;
+    content: string;
+    originalContent?: string;
+    savedContent?: string;
+    baseRevision?: string | null;
+    hasConflict: boolean;
+    isDirty: boolean;
+  }>;
+  activeEditorTabId?: string | null;
+  workspaceInformation?: WorkspaceInformationState;
+  messageCountByTask?: Record<string, number>;
+}
+
 export interface PersistenceWorkspaceSummary {
   id: string;
   name: string;
   updatedAt: string;
+}
+
+export interface PersistenceTaskMessagesPage {
+  messages: PersistenceChatMessageRow[];
+  totalCount: number;
+  limit: number;
+  offset: number;
+  hasMoreOlder: boolean;
 }
 
 export interface PersistenceProjectRegistryEntry {

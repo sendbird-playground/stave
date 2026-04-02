@@ -5,6 +5,8 @@ import type {
   PersistenceLocalMcpRequestLog,
   PersistenceLocalMcpRequestLogCreateInput,
   PersistenceLocalMcpRequestLogPage,
+  PersistenceTaskMessagesPage,
+  PersistenceWorkspaceShell,
   PersistenceProjectRegistryEntry,
   PersistenceNotificationCreateInput,
   PersistenceNotificationRecord,
@@ -22,6 +24,23 @@ interface WorkspaceMetaRow {
 
 interface WorkspaceSnapshotRow {
   snapshot_json: string;
+}
+
+interface WorkspaceMessageRow {
+  id: string;
+  task_id: string;
+  role: "user" | "assistant";
+  model: string;
+  provider_id: string;
+  content: string;
+  is_streaming: number;
+  parts_json: string;
+  message_json: string | null;
+}
+
+interface TaskMessageCountRow {
+  task_id: string;
+  count: number;
 }
 
 interface JsonValueRow {
@@ -206,7 +225,11 @@ export class SqliteStore {
       CREATE INDEX IF NOT EXISTS idx_local_mcp_request_logs_created
         ON local_mcp_request_logs (created_at DESC, id DESC);
     `);
-
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN message_json TEXT");
+    } catch {
+      // column already exists
+    }
   }
 
   private mapNotificationRow(row: NotificationRow): PersistenceNotificationRecord {
@@ -304,6 +327,123 @@ export class SqliteStore {
       LIMIT 1
     `).get(dedupeKey) as NotificationRow | undefined;
     return row ? this.mapNotificationRow(row) : null;
+  }
+
+  private createWorkspaceShell(args: {
+    snapshot: PersistenceWorkspaceSnapshot;
+    messageCountByTask: Record<string, number>;
+  }): PersistenceWorkspaceShell {
+    return {
+      activeTaskId: args.snapshot.activeTaskId,
+      tasks: args.snapshot.tasks,
+      promptDraftByTask: args.snapshot.promptDraftByTask ?? {},
+      providerConversationByTask: args.snapshot.providerConversationByTask ?? {},
+      editorTabs: args.snapshot.editorTabs ?? [],
+      activeEditorTabId: args.snapshot.activeEditorTabId ?? null,
+      workspaceInformation: args.snapshot.workspaceInformation,
+      messageCountByTask: args.messageCountByTask,
+    };
+  }
+
+  private parseWorkspacePayload(args: { snapshotJson: string }): PersistenceWorkspaceShell | PersistenceWorkspaceSnapshot {
+    return JSON.parse(args.snapshotJson) as PersistenceWorkspaceShell | PersistenceWorkspaceSnapshot;
+  }
+
+  private toWorkspaceShell(args: {
+    payload: PersistenceWorkspaceShell | PersistenceWorkspaceSnapshot;
+  }): PersistenceWorkspaceShell {
+    if ("messagesByTask" in args.payload) {
+      const snapshot = args.payload as PersistenceWorkspaceSnapshot;
+      return this.createWorkspaceShell({
+        snapshot,
+        messageCountByTask: Object.fromEntries(
+          Object.entries(snapshot.messagesByTask).map(([taskId, messages]) => [taskId, messages.length] as const),
+        ),
+      });
+    }
+    return {
+      promptDraftByTask: {},
+      providerConversationByTask: {},
+      editorTabs: [],
+      activeEditorTabId: null,
+      messageCountByTask: {},
+      ...args.payload,
+    };
+  }
+
+  private readWorkspacePayload(args: { workspaceId: string }) {
+    const row = this.db
+      .prepare("SELECT snapshot_json FROM workspaces WHERE id = ?")
+      .get(args.workspaceId) as WorkspaceSnapshotRow | undefined;
+    if (!row) {
+      return null;
+    }
+    const payload = this.parseWorkspacePayload({ snapshotJson: row.snapshot_json });
+    return {
+      row,
+      payload,
+      shell: this.toWorkspaceShell({ payload }),
+    };
+  }
+
+  private mapTaskMessageRow(args: {
+    workspaceId: string;
+    taskId: string;
+    row: WorkspaceMessageRow;
+  }) {
+    if (args.row.message_json) {
+      return JSON.parse(args.row.message_json) as PersistenceWorkspaceSnapshot["messagesByTask"][string][number];
+    }
+    const prefix = `${args.workspaceId}:${args.taskId}:`;
+    return {
+      id: args.row.id.startsWith(prefix) ? args.row.id.slice(prefix.length) : args.row.id,
+      role: args.row.role,
+      model: args.row.model,
+      providerId: args.row.provider_id,
+      content: args.row.content,
+      isStreaming: args.row.is_streaming === 1,
+      parts: JSON.parse(args.row.parts_json),
+    };
+  }
+
+  private insertTaskMessages(args: {
+    workspaceId: string;
+    taskId: string;
+    messages: PersistenceWorkspaceSnapshot["messagesByTask"][string];
+  }) {
+    for (const message of args.messages) {
+      const persistedMessageRowId = `${args.workspaceId}:${args.taskId}:${message.id}`;
+      this.db.prepare(`
+        INSERT INTO messages (
+          id, workspace_id, task_id, role, model, provider_id, content, is_streaming, parts_json, message_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        persistedMessageRowId,
+        args.workspaceId,
+        args.taskId,
+        message.role,
+        message.model,
+        message.providerId,
+        message.content,
+        message.isStreaming ? 1 : 0,
+        JSON.stringify(message.parts ?? []),
+        JSON.stringify(message),
+      );
+    }
+  }
+
+  private loadAllTaskMessages(args: {
+    workspaceId: string;
+    taskId: string;
+  }) {
+    const rows = this.db.prepare(`
+      SELECT id, task_id, role, model, provider_id, content, is_streaming, parts_json, message_json
+      FROM messages
+      WHERE workspace_id = ? AND task_id = ?
+      ORDER BY rowid ASC
+    `).all(args.workspaceId, args.taskId) as WorkspaceMessageRow[];
+    return rows.map((row) => this.mapTaskMessageRow({ ...args, row }));
   }
 
   listWorkspaceSummaries(): PersistenceWorkspaceSummary[] {
@@ -564,14 +704,85 @@ export class SqliteStore {
     return result.changes;
   }
 
-  loadWorkspaceSnapshot(args: { workspaceId: string }): PersistenceWorkspaceSnapshot | null {
-    const row = this.db
-      .prepare("SELECT snapshot_json FROM workspaces WHERE id = ?")
-      .get(args.workspaceId) as WorkspaceSnapshotRow | undefined;
-    if (!row) {
+  loadWorkspaceShell(args: { workspaceId: string }): PersistenceWorkspaceShell | null {
+    const payloadEntry = this.readWorkspacePayload(args);
+    return payloadEntry?.shell ?? null;
+  }
+
+  loadTaskMessagesPage(args: {
+    workspaceId: string;
+    taskId: string;
+    limit?: number;
+    offset?: number;
+  }): PersistenceTaskMessagesPage | null {
+    const payloadEntry = this.readWorkspacePayload({ workspaceId: args.workspaceId });
+    if (!payloadEntry) {
       return null;
     }
-    return JSON.parse(row.snapshot_json) as PersistenceWorkspaceSnapshot;
+
+    const limit = Math.max(1, Math.min(500, args.limit ?? 120));
+    const offset = Math.max(0, args.offset ?? 0);
+
+    if ("messagesByTask" in payloadEntry.payload) {
+      const allMessages = (payloadEntry.payload as PersistenceWorkspaceSnapshot).messagesByTask[args.taskId] ?? [];
+      const start = Math.max(allMessages.length - offset - limit, 0);
+      const end = Math.max(allMessages.length - offset, 0);
+      return {
+        messages: allMessages.slice(start, end),
+        totalCount: allMessages.length,
+        limit,
+        offset,
+        hasMoreOlder: start > 0,
+      };
+    }
+
+    const totalCount = payloadEntry.shell.messageCountByTask?.[args.taskId]
+      ?? (() => {
+        const row = this.db.prepare(`
+          SELECT COUNT(*) AS count
+          FROM messages
+          WHERE workspace_id = ? AND task_id = ?
+        `).get(args.workspaceId, args.taskId) as { count: number };
+        return row.count;
+      })();
+    const rows = this.db.prepare(`
+      SELECT id, task_id, role, model, provider_id, content, is_streaming, parts_json, message_json
+      FROM messages
+      WHERE workspace_id = ? AND task_id = ?
+      ORDER BY rowid DESC
+      LIMIT ?
+      OFFSET ?
+    `).all(args.workspaceId, args.taskId, limit, offset) as WorkspaceMessageRow[];
+
+    return {
+      messages: rows
+        .reverse()
+        .map((row) => this.mapTaskMessageRow({ workspaceId: args.workspaceId, taskId: args.taskId, row })),
+      totalCount,
+      limit,
+      offset,
+      hasMoreOlder: offset + rows.length < totalCount,
+    };
+  }
+
+  loadWorkspaceSnapshot(args: { workspaceId: string }): PersistenceWorkspaceSnapshot | null {
+    const payloadEntry = this.readWorkspacePayload(args);
+    if (!payloadEntry) {
+      return null;
+    }
+    if ("messagesByTask" in payloadEntry.payload) {
+      return payloadEntry.payload as PersistenceWorkspaceSnapshot;
+    }
+    const { messageCountByTask: _messageCountByTask, ...shell } = payloadEntry.shell;
+    return {
+      ...shell,
+      messagesByTask: Object.fromEntries(
+        payloadEntry.shell.tasks.map((task) => [
+          task.id,
+          this.loadAllTaskMessages({ workspaceId: args.workspaceId, taskId: task.id }),
+        ] as const),
+      ),
+    };
   }
 
   loadProjectRegistry(): PersistenceProjectRegistryEntry[] {
@@ -601,16 +812,19 @@ export class SqliteStore {
     snapshot: PersistenceWorkspaceSnapshot;
   }) {
     const now = new Date().toISOString();
-    const snapshotJson = JSON.stringify(args.snapshot);
     const tx = this.db.transaction(() => {
-      this.db.prepare(`
-        INSERT INTO workspaces (id, name, updated_at, snapshot_json)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name,
-          updated_at = excluded.updated_at,
-          snapshot_json = excluded.snapshot_json
-      `).run(args.id, args.name, now, snapshotJson);
+      const existingPayloadEntry = this.readWorkspacePayload({ workspaceId: args.id });
+      const existingTaskIds = new Set(existingPayloadEntry?.shell.tasks.map((task) => task.id) ?? []);
+      const nextTaskIds = new Set(args.snapshot.tasks.map((task) => task.id));
+      const providedTaskIds = new Set(
+        Object.keys(args.snapshot.messagesByTask).filter((taskId) => nextTaskIds.has(taskId)),
+      );
+      const removedTaskIds = [...existingTaskIds].filter((taskId) => !nextTaskIds.has(taskId));
+      const preservedLegacyTaskIds = existingPayloadEntry && "messagesByTask" in existingPayloadEntry.payload
+        ? args.snapshot.tasks
+            .map((task) => task.id)
+            .filter((taskId) => !providedTaskIds.has(taskId) && taskId in (existingPayloadEntry.payload as PersistenceWorkspaceSnapshot).messagesByTask)
+        : [];
 
       this.db.prepare(`
         INSERT INTO workspace_meta (id, name, updated_at)
@@ -620,8 +834,9 @@ export class SqliteStore {
           updated_at = excluded.updated_at
       `).run(args.id, args.name, now);
 
-      this.db.prepare("DELETE FROM tasks WHERE workspace_id = ?").run(args.id);
-      this.db.prepare("DELETE FROM messages WHERE workspace_id = ?").run(args.id);
+      this.db.prepare(`
+        DELETE FROM tasks WHERE workspace_id = ?
+      `).run(args.id);
 
       for (const task of args.snapshot.tasks) {
         const persistedTaskRowId = `${args.id}:${task.id}`;
@@ -639,27 +854,57 @@ export class SqliteStore {
         );
       }
 
-      for (const [taskId, messages] of Object.entries(args.snapshot.messagesByTask)) {
-        for (const message of messages) {
-          const persistedMessageRowId = `${args.id}:${taskId}:${message.id}`;
-          this.db.prepare(`
-            INSERT INTO messages (
-              id, workspace_id, task_id, role, model, provider_id, content, is_streaming, parts_json
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            persistedMessageRowId,
-            args.id,
+      for (const taskId of removedTaskIds) {
+        this.db.prepare("DELETE FROM messages WHERE workspace_id = ? AND task_id = ?").run(args.id, taskId);
+      }
+
+      if (existingPayloadEntry && "messagesByTask" in existingPayloadEntry.payload) {
+        const legacySnapshot = existingPayloadEntry.payload as PersistenceWorkspaceSnapshot;
+        for (const taskId of preservedLegacyTaskIds) {
+          this.db.prepare("DELETE FROM messages WHERE workspace_id = ? AND task_id = ?").run(args.id, taskId);
+          this.insertTaskMessages({
+            workspaceId: args.id,
             taskId,
-            message.role,
-            message.model,
-            message.providerId,
-            message.content,
-            message.isStreaming ? 1 : 0,
-            JSON.stringify(message.parts ?? []),
-          );
+            messages: legacySnapshot.messagesByTask[taskId] ?? [],
+          });
         }
       }
+
+      for (const [taskId, messages] of Object.entries(args.snapshot.messagesByTask)) {
+        if (!nextTaskIds.has(taskId)) {
+          continue;
+        }
+        this.db.prepare("DELETE FROM messages WHERE workspace_id = ? AND task_id = ?").run(args.id, taskId);
+        this.insertTaskMessages({
+          workspaceId: args.id,
+          taskId,
+          messages,
+        });
+      }
+
+      const countRows = this.db.prepare(`
+        SELECT task_id, COUNT(*) AS count
+        FROM messages
+        WHERE workspace_id = ?
+        GROUP BY task_id
+      `).all(args.id) as TaskMessageCountRow[];
+      const countByTask = new Map(countRows.map((row) => [row.task_id, row.count] as const));
+      const shell = this.createWorkspaceShell({
+        snapshot: args.snapshot,
+        messageCountByTask: Object.fromEntries(
+          args.snapshot.tasks.map((task) => [task.id, countByTask.get(task.id) ?? 0] as const),
+        ),
+      });
+      const snapshotJson = JSON.stringify(shell);
+
+      this.db.prepare(`
+        INSERT INTO workspaces (id, name, updated_at, snapshot_json)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          updated_at = excluded.updated_at,
+          snapshot_json = excluded.snapshot_json
+      `).run(args.id, args.name, now, snapshotJson);
     });
 
     tx();
