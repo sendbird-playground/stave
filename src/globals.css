@@ -263,6 +263,19 @@
     transform-origin: top;
   }
 
+  .animate-cot-content-in {
+    animation: cot-content-in 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform-origin: top;
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+  }
+
+  .animate-thinking-shimmer {
+    animation: thinking-shimmer 2s ease-in-out infinite;
+  }
+
   .tab-strip-scroll {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -502,5 +515,38 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes cot-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes thinking-shimmer {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 1;
   }
 }

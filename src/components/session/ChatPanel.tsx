@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
-import { MessageSquareIcon } from "lucide-react";
-import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, WaveIndicator } from "@/components/ui";
+import { ArrowDownRight, ArrowUpRight, MessageSquareIcon, Zap } from "lucide-react";
+import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import {
   Conversation,
   ConversationContent,
@@ -54,6 +54,23 @@ function getMessageElapsedLabel(args: {
   return formatElapsedLabel(Math.max(0, (endMs ?? startedAt) - startedAt));
 }
 
+/* ─── Token / cost formatting ────────────────────────────────────── */
+
+function formatTokenCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 10_000) return `${(count / 1_000).toFixed(0)}k`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;
+  return String(count);
+}
+
+function formatCostUsd(usd: number): string {
+  if (usd >= 1) return `$${usd.toFixed(2)}`;
+  if (usd >= 0.01) return `$${usd.toFixed(3)}`;
+  return `$${usd.toFixed(4)}`;
+}
+
+type MessageUsage = NonNullable<ChatMessage["usage"]>;
+
 interface MessageRowProps {
   activeTaskId: string;
   activeTurnId?: string;
@@ -71,6 +88,7 @@ interface MessageRowProps {
     completedAt?: string;
     parts: MessagePart[];
     isStreaming?: boolean;
+    usage?: MessageUsage;
   };
 }
 
@@ -125,13 +143,68 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                 <MessageAction
                   key="elapsed-action"
                   label="Elapsed time"
-                  className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-background px-2 text-sm font-normal text-foreground opacity-100"
+                  className="pointer-events-none h-7 cursor-default rounded-sm px-2 text-sm font-normal text-muted-foreground opacity-100"
                 >
-                  <WaveIndicator className={cn("size-3.5", showRespondingWave ? toProviderWaveToneClass({ providerId: message.providerId, model: message.model }) : "text-muted-foreground")} animate={showRespondingWave} />
+                  {showRespondingWave ? (
+                    <WaveIndicator className={cn("size-3.5", toProviderWaveToneClass({ providerId: message.providerId, model: message.model }))} animate />
+                  ) : null}
                   {elapsedLabel}
                 </MessageAction>
               ) : null}
               <CopyButton key="copy-action" text={message.content} />
+              {message.role === "assistant" && message.usage && !showRespondingWave ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex cursor-default items-center gap-1.5 pl-1 text-[11px] leading-none text-muted-foreground/40">
+                        <span className="inline-flex items-center gap-0.5">
+                          <ArrowUpRight className="size-2.5" />
+                          {formatTokenCount(message.usage.inputTokens)}
+                        </span>
+                        <span className="inline-flex items-center gap-0.5">
+                          <ArrowDownRight className="size-2.5" />
+                          {formatTokenCount(message.usage.outputTokens)}
+                        </span>
+                        {message.usage.cacheReadTokens ? (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Zap className="size-2.5" />
+                            {formatTokenCount(message.usage.cacheReadTokens)}
+                          </span>
+                        ) : null}
+                        {message.usage.totalCostUsd != null ? (
+                          <span>{formatCostUsd(message.usage.totalCostUsd)}</span>
+                        ) : null}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                        <span className="text-muted-foreground">Input</span>
+                        <span className="text-right font-mono">{message.usage.inputTokens.toLocaleString()} tokens</span>
+                        <span className="text-muted-foreground">Output</span>
+                        <span className="text-right font-mono">{message.usage.outputTokens.toLocaleString()} tokens</span>
+                        {message.usage.cacheReadTokens ? (
+                          <>
+                            <span className="text-muted-foreground">Cache read</span>
+                            <span className="text-right font-mono">{message.usage.cacheReadTokens.toLocaleString()} tokens</span>
+                          </>
+                        ) : null}
+                        {message.usage.cacheCreationTokens ? (
+                          <>
+                            <span className="text-muted-foreground">Cache write</span>
+                            <span className="text-right font-mono">{message.usage.cacheCreationTokens.toLocaleString()} tokens</span>
+                          </>
+                        ) : null}
+                        {message.usage.totalCostUsd != null ? (
+                          <>
+                            <span className="text-muted-foreground">Cost</span>
+                            <span className="text-right font-mono">{formatCostUsd(message.usage.totalCostUsd)}</span>
+                          </>
+                        ) : null}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : null}
             </div>
           </MessageActions>
         </div>
