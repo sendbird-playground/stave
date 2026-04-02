@@ -84,7 +84,7 @@ export function ChangeCount(args: { value: number; tone: "added" | "removed" }) 
   return (
     <span
       className={cn(
-        "shrink-0 text-sm font-medium tabular-nums",
+        "shrink-0 text-[0.875em] font-medium tabular-nums",
         args.tone === "added" ? "text-success" : "text-destructive",
       )}
     >
@@ -137,7 +137,7 @@ export function ChangedFilesBlock(args: { parts: CodeDiffPart[]; taskId: string;
     <Card className="gap-0 overflow-hidden p-0">
       <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-sm font-medium">
+          <span className="text-[0.875em] font-medium">
             {parts.length} {parts.length === 1 ? "file" : "files"} edited
           </span>
           <ChangeCount value={totalAdded} tone="added" />
@@ -178,7 +178,7 @@ export function ChangedFilesBlock(args: { parts: CodeDiffPart[]; taskId: string;
               {isOpen ? (
                 <div className="border-t bg-card/40">
                   <div className="overflow-x-auto">
-                    <Suspense fallback={<div className="px-3 py-2 text-sm text-muted-foreground">Loading diff...</div>}>
+                    <Suspense fallback={<div className="px-3 py-2 text-[0.875em] text-muted-foreground">Loading diff...</div>}>
                       <ReactDiffViewer
                         oldValue={row.part.oldContent}
                         newValue={row.part.newContent}
@@ -298,7 +298,7 @@ export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {
     <Card className="gap-0 overflow-hidden p-0">
       <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-sm font-medium">
+          <span className="text-[0.875em] font-medium">
             {parts.length} {parts.length === 1 ? "referenced file" : "referenced files"}
           </span>
         </div>
@@ -346,7 +346,7 @@ export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {
                     </CodeBlockHeader>
                   </CodeBlock>
                   {part.instruction ? (
-                    <div className="border-t px-3 py-2 text-sm text-muted-foreground">{part.instruction}</div>
+                    <div className="border-t px-3 py-2 text-[0.875em] text-muted-foreground">{part.instruction}</div>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-2 border-t px-3 py-2">
                     <Button size="sm" variant="outline" onClick={() => void openFileFromTree({ filePath: part.filePath })}>
@@ -378,7 +378,7 @@ export function ImageAttachmentBlock(args: { parts: ImageContextPart[] }) {
               title="Click to view full size"
               onClick={() => setPreviewSrc({ dataUrl: part.dataUrl, label: part.label })}
             />
-            <p className="border-t border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">{part.label}</p>
+            <p className="border-t border-border/60 bg-muted/30 px-2 py-1 text-[0.75em] text-muted-foreground">{part.label}</p>
           </div>
         ))}
       </div>

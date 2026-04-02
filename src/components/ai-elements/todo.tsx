@@ -72,7 +72,7 @@ export function TodoCard({
       <button
         type="button"
         className={cn(
-          "flex w-full items-center justify-between px-3 py-2 text-sm font-semibold",
+          "flex w-full items-center justify-between px-3 py-2 text-[0.875em] font-semibold",
           open && "border-b",
         )}
         onClick={() => setOpen((v) => !v)}
@@ -81,7 +81,7 @@ export function TodoCard({
           <ClipboardList className="size-3.5 text-muted-foreground" />
           Todo
           {todos.length > 0 && (
-            <span className="ml-0.5 text-xs font-normal text-muted-foreground">
+            <span className="ml-0.5 text-[0.75em] font-normal text-muted-foreground">
               {completedCount}/{todos.length}
             </span>
           )}
@@ -96,7 +96,7 @@ export function TodoCard({
       {open && (
         <div className="px-3 py-2">
           {todos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No todos.</p>
+            <p className="text-[0.875em] text-muted-foreground">No todos.</p>
           ) : (
             <ol className="space-y-1.5">
               {todos.map((todo, idx) => (
@@ -105,7 +105,7 @@ export function TodoCard({
                   <TodoItemIcon status={todo.status} />
                   <span
                     className={cn(
-                      "text-sm leading-5",
+                      "text-[0.875em] leading-[1.6]",
                       todo.status === "completed" && "text-muted-foreground line-through",
                       todo.status === "in_progress" && "font-medium text-foreground",
                       todo.status === "pending" && "text-muted-foreground",

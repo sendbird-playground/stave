@@ -60,7 +60,7 @@ export function OrchestrationCard({ className, part }: OrchestrationCardProps) {
         onClick={() => setOpen((current) => !current)}
       >
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          <span className="inline-flex items-center gap-1.5 text-[0.875em] font-semibold text-foreground">
             <Network className="size-3.5 text-primary" />
             Orchestrated
           </span>
@@ -74,7 +74,7 @@ export function OrchestrationCard({ className, part }: OrchestrationCardProps) {
 
       {open ? (
         <div className="border-t border-primary/15 bg-background/70 px-3 py-2 space-y-1.5">
-          <p className="text-xs text-muted-foreground pb-1">
+          <p className="pb-1 text-[0.75em] text-muted-foreground">
             Supervisor: <span className="font-medium text-foreground">{supervisorModel}</span>
           </p>
           {subtasks.map((subtask) => (
@@ -84,16 +84,16 @@ export function OrchestrationCard({ className, part }: OrchestrationCardProps) {
                 providerId={resolveProviderIdForModel(subtask.model)}
                 className="size-3.5 shrink-0"
               />
-              <span className="text-xs font-medium text-muted-foreground min-w-[9rem] shrink-0">
+              <span className="min-w-[9rem] shrink-0 text-[0.75em] font-medium text-muted-foreground">
                 {subtask.model}
               </span>
-              <span className="text-sm text-foreground min-w-0 truncate flex-1">
+              <span className="min-w-0 flex-1 truncate text-[0.875em] text-foreground">
                 {subtask.title}
               </span>
               {subtask.status === "running" ? (
-                <span className="text-xs text-muted-foreground shrink-0">running...</span>
+                <span className="shrink-0 text-[0.75em] text-muted-foreground">running...</span>
               ) : subtask.status === "pending" ? (
-                <span className="text-xs text-muted-foreground shrink-0">pending</span>
+                <span className="shrink-0 text-[0.75em] text-muted-foreground">pending</span>
               ) : null}
             </div>
           ))}

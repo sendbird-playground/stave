@@ -14,8 +14,8 @@ describe("MarkdownMessage", () => {
         "| --- | --- |",
         "| Generic | Concrete |",
       ].join("\n"),
-      messageFontSize: "base",
-      messageCodeFontSize: "base",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
     }));
 
     expect(html).toContain("<table");
@@ -28,8 +28,8 @@ describe("MarkdownMessage", () => {
     const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
     const html = renderToStaticMarkup(createElement(MarkdownMessage, {
       content: "Open [chat panel](/tmp/stave/src/components/session/ChatPanel.tsx:42)",
-      messageFontSize: "base",
-      messageCodeFontSize: "base",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
       resolveFileLink: ({ href }) => resolveWorkspaceFileLink({
         href,
         workspaceCwd: "/tmp/stave",
@@ -50,8 +50,8 @@ describe("MarkdownMessage", () => {
         "[first](/tmp/stave/src/components/session/ChatPanel.tsx:10)",
         "[second](/tmp/stave/src/components/session/ChatPanel.tsx:24)",
       ].join(" "),
-      messageFontSize: "base",
-      messageCodeFontSize: "base",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
       resolveFileLink: ({ href }) => resolveWorkspaceFileLink({
         href,
         workspaceCwd: "/tmp/stave",
@@ -66,13 +66,24 @@ describe("MarkdownMessage", () => {
   test("keeps external links as standard anchors", () => {
     const html = renderToStaticMarkup(createElement(MarkdownMessage, {
       content: "Visit [OpenAI](https://openai.com/)",
-      messageFontSize: "base",
-      messageCodeFontSize: "base",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
     }));
 
     expect(html).toContain('href="https://openai.com/"');
     expect(html).toContain('target="_blank"');
     expect(html).not.toContain('data-message-file-link="true"');
+  });
+
+  test("applies numeric message and code font sizes to rendered markup", () => {
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "Use `code` here.",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+    }));
+
+    expect(html).toContain('style="font-size:18px;line-height:1.6"');
+    expect(html).toContain('style="font-size:14px"');
   });
 });
 

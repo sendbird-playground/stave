@@ -32,7 +32,7 @@ export function StaveProcessingCard({ part, className }: StaveProcessingCardProp
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-md border border-border/50 bg-muted/25 text-xs",
+        "overflow-hidden rounded-md border border-border/50 bg-muted/25 text-[0.75em]",
         className,
       )}
     >
@@ -53,12 +53,12 @@ export function StaveProcessingCard({ part, className }: StaveProcessingCardProp
 
         <div className="flex shrink-0 items-center gap-1">
           {strategy === "orchestrate" ? (
-            <Badge variant="secondary" className="h-4 px-1.5 text-[10px] leading-none">
+            <Badge variant="secondary" className="h-4 px-1.5 text-[0.625em] leading-none">
               orchestrate
             </Badge>
           ) : null}
           {fastModeApplied ? (
-            <Badge variant="outline" className="h-4 gap-0.5 border-amber-400/50 px-1.5 text-[10px] leading-none text-amber-600">
+            <Badge variant="outline" className="h-4 gap-0.5 border-amber-400/50 px-1.5 text-[0.625em] leading-none text-amber-600">
               <Zap className="size-2.5" />
               fast
             </Badge>
@@ -66,7 +66,7 @@ export function StaveProcessingCard({ part, className }: StaveProcessingCardProp
           <button
             type="button"
             onClick={() => setOpen((current) => !current)}
-            className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[0.625em] font-medium text-muted-foreground transition-colors hover:text-foreground"
             aria-expanded={open}
           >
             Details
@@ -76,7 +76,7 @@ export function StaveProcessingCard({ part, className }: StaveProcessingCardProp
       </div>
 
       {open ? (
-        <div className="grid gap-2 border-t border-border/40 bg-background/70 px-3 py-2 text-[11px] text-muted-foreground sm:grid-cols-2">
+        <div className="grid gap-2 border-t border-border/40 bg-background/70 px-3 py-2 text-[0.6875em] text-muted-foreground sm:grid-cols-2">
           <div>
             <span className="font-medium text-foreground">Strategy:</span> {strategyLabel}
           </div>

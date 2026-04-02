@@ -204,7 +204,7 @@ export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonEleme
       <button
         type="button"
         className={cn(
-          "flex w-full items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground",
+          "flex w-full items-center gap-2 text-[0.875em] text-muted-foreground transition-colors hover:text-foreground",
           args.className,
         )}
         onClick={() => setOpen(!open)}
@@ -233,7 +233,7 @@ export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonEleme
 
       {/* Collapsed summary — tool/agent/file counts */}
       {showSummary ? (
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-6 text-xs text-muted-foreground/70 motion-safe:animate-cot-step-in">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-6 text-[0.75em] text-muted-foreground/70 motion-safe:animate-cot-step-in">
           {summaryItems.map((item, index) => (
             <span key={item.label} className="inline-flex items-center gap-1">
               {index > 0 ? <span className="text-border" aria-hidden="true">·</span> : null}
@@ -297,7 +297,7 @@ export function ChainOfThoughtStep({
   return (
     <div
       className={cn(
-        "flex gap-3 text-sm",
+        "flex gap-3 text-[0.875em]",
         status === "active" && "text-foreground",
         status === "done" && "text-muted-foreground",
         status === "pending" && "text-muted-foreground/50",
@@ -337,7 +337,7 @@ export function ChainOfThoughtStep({
         )}
 
         {description != null ? (
-          <div className="mt-1 text-sm text-muted-foreground">{description}</div>
+          <div className="mt-1 text-muted-foreground">{description}</div>
         ) : null}
 
         {hasContent && open ? (

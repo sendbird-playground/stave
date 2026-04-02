@@ -137,7 +137,7 @@ export function MessagePartRenderer(args: {
             {(part.state !== "input-streaming" || part.output?.trim()) && (
               <ToolOutput
                 label={part.state === "input-streaming" ? "Live output" : undefined}
-                output={part.output ? <pre className="whitespace-pre-wrap text-sm">{part.output}</pre> : null}
+                output={part.output ? <pre className="whitespace-pre-wrap text-[0.875em]">{part.output}</pre> : null}
                 errorText={part.state === "output-error" ? (part.output ?? "Tool failed.") : undefined}
               />
             )}
@@ -222,7 +222,7 @@ export function MessagePartRenderer(args: {
           />
         );
       }
-      return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm italic text-muted-foreground">{part.content}</p>;
+      return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[0.875em] italic text-muted-foreground">{part.content}</p>;
     }
     case "orchestration_progress":
       return <OrchestrationCard part={part} />;

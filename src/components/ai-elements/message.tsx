@@ -13,7 +13,7 @@ import {
   CodeBlockHeader,
   CodeBlockTitle,
 } from "./code-block";
-import { MarkdownMessage, resolveMessageSizeClass } from "./message-markdown";
+import { MarkdownMessage } from "./message-markdown";
 
 interface MessageProps extends HTMLAttributes<HTMLDivElement> {
   from: "user" | "assistant";
@@ -73,10 +73,9 @@ export function MessageContent(props: HTMLAttributes<HTMLDivElement>) {
     <div
       className={cn(
         "flex w-full flex-col gap-3 text-foreground",
-        resolveMessageSizeClass(messageFontSize),
-        "leading-7",
         "group-[.is-user]:rounded-md group-[.is-user]:border group-[.is-user]:border-primary/35 group-[.is-user]:bg-primary/12 group-[.is-user]:px-4 group-[.is-user]:py-3"
       )}
+      style={{ fontSize: `${messageFontSize}px`, lineHeight: 1.6 }}
       {...props}
     />
   );

@@ -79,16 +79,6 @@ export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> =
   { label: "Automation", ids: ["subagents", "skills", "commands", "developer"] },
 ];
 
-function formatChatFontSizeLabel(size: "base" | "lg" | "xl") {
-  if (size === "xl") {
-    return "Extra Large · 20px";
-  }
-  if (size === "lg") {
-    return "Large · 18px";
-  }
-  return "Base · 16px";
-}
-
 function formatThemeTokenLabel(token: ThemeTokenName) {
   return token
     .split("-")
@@ -1475,33 +1465,35 @@ function ChatSection() {
         <SettingsCard title="Chat Defaults" description="These apply to the shared chat surface across tasks.">
           <LabeledField
             title="Message Font Size"
-            description="Controls the prose size for chat messages. Tailwind sizes are shown with their exact pixel value."
+            description="Prose font size for chat messages. Line height scales proportionally."
           >
-            <ChoiceButtons
-              value={messageFontSize}
-              columns={3}
-              onChange={(value) => updateSettings({ patch: { messageFontSize: value } })}
-              options={[
-                { value: "base", label: formatChatFontSizeLabel("base") },
-                { value: "lg", label: formatChatFontSizeLabel("lg") },
-                { value: "xl", label: formatChatFontSizeLabel("xl") },
-              ]}
-            />
+            <div className="flex items-center gap-3">
+              <Slider
+                min={12}
+                max={24}
+                step={1}
+                value={[messageFontSize]}
+                onValueChange={([value]) => updateSettings({ patch: { messageFontSize: value } })}
+                className="flex-1"
+              />
+              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">{messageFontSize}px</span>
+            </div>
           </LabeledField>
           <LabeledField
             title="Message Code Font Size"
-            description="Controls inline code and code blocks in chat messages. Default is Base · 16px."
+            description="Font size for inline code and code blocks in chat messages."
           >
-            <ChoiceButtons
-              value={messageCodeFontSize}
-              columns={3}
-              onChange={(value) => updateSettings({ patch: { messageCodeFontSize: value } })}
-              options={[
-                { value: "base", label: formatChatFontSizeLabel("base") },
-                { value: "lg", label: formatChatFontSizeLabel("lg") },
-                { value: "xl", label: formatChatFontSizeLabel("xl") },
-              ]}
-            />
+            <div className="flex items-center gap-3">
+              <Slider
+                min={10}
+                max={20}
+                step={1}
+                value={[messageCodeFontSize]}
+                onValueChange={([value]) => updateSettings({ patch: { messageCodeFontSize: value } })}
+                className="flex-1"
+              />
+              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">{messageCodeFontSize}px</span>
+            </div>
           </LabeledField>
           <LabeledField
             title="Message Font Family"
