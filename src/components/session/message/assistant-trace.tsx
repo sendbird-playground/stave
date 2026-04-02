@@ -33,6 +33,7 @@ import {
   parseSubagentToolInput,
   parseTodoInput,
 } from "@/components/ai-elements";
+import { MESSAGE_BODY_LINE_HEIGHT } from "@/components/ai-elements/message-styles";
 import type { TraceSummaryItem } from "@/components/ai-elements/chain-of-thought";
 import {
   ChangedFilesBlock,
@@ -432,7 +433,7 @@ function ReasoningStepView(args: {
       defaultOpen={entry.isStreaming}
       openWhen={entry.isStreaming}
     >
-      <p className="whitespace-pre-wrap leading-[1.6] text-muted-foreground">
+      <p className="whitespace-pre-wrap text-muted-foreground" style={{ lineHeight: MESSAGE_BODY_LINE_HEIGHT }}>
         {reasoningText || "Thinking..."}
       </p>
     </ChainOfThoughtStep>

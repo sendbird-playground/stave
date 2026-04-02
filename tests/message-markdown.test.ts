@@ -82,7 +82,7 @@ describe("MarkdownMessage", () => {
       messageCodeFontSize: 14,
     }));
 
-    expect(html).toContain('style="font-size:18px;line-height:1.6"');
+    expect(html).toContain('style="font-size:18px;line-height:1.68"');
     expect(html).toContain('style="font-size:14px"');
   });
 });

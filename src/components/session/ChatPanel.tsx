@@ -125,7 +125,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
           <MessageActions
             className={cn(
               message.role === "user" && "pointer-events-none self-end !ml-0 !mt-1 opacity-0 transition-opacity group-hover/message-shell:pointer-events-auto group-hover/message-shell:opacity-100",
-              message.role === "assistant" && "self-stretch !ml-0 !mt-0",
+              message.role === "assistant" && "self-stretch !ml-0 !mt-1",
             )}
           >
             <div className="flex min-w-0 items-center gap-1">
