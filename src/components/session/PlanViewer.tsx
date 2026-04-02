@@ -60,26 +60,23 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     ? `Plan responses are managed by ${getTaskControlOwner(activeTask) === "external" ? "an external controller" : "Stave"}. Take over to reply here.`
     : null;
 
-  // Find the latest plan message in the task (not just the last message).
-  // This ensures the plan viewer can show plans even if newer non-plan messages exist.
-  const latestPlanMessage = useAppStore((state) => {
+  const [latestPlanMessage, lastMessage, isTurnActive] = useAppStore(useShallow((state) => {
     const messages = state.messagesByTask[state.activeTaskId] ?? [];
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg && msg.role === "assistant" && msg.isPlanResponse && msg.planText?.trim()) {
-        return msg;
+    const lastMessage = messages.at(-1) ?? null;
+    let latestPlanMessage: (typeof lastMessage) | null = null;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const message = messages[i];
+      if (message && message.role === "assistant" && message.isPlanResponse && message.planText?.trim()) {
+        latestPlanMessage = message;
+        break;
       }
     }
-    return null;
-  });
-
-  // Also check the actual last message for "preparing" state detection
-  const lastMessage = useAppStore((state) => {
-    const messages = state.messagesByTask[state.activeTaskId];
-    return messages?.at(-1) ?? null;
-  });
-
-  const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
+    return [
+      latestPlanMessage,
+      lastMessage,
+      Boolean(state.activeTurnIdsByTask[state.activeTaskId]),
+    ] as const;
+  }));
 
   // Use the latest plan message for the plan text and pending state
   const { planText, isPlanPreparing, isPlanPending, canReplyToPlan } = resolvePlanViewerState({

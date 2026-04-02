@@ -5,6 +5,8 @@ export interface ResolvedWorkspaceFileLink {
   column?: number;
 }
 
+const knownFilePathSetCache = new WeakMap<readonly string[], Set<string>>();
+
 function stripLineSuffix(href: string) {
   return href
     .replace(/#L\d+(?:C\d+)?$/i, "")
@@ -43,10 +45,20 @@ export function toBaseName(filePath: string) {
   return filePath.split("/").filter(Boolean).at(-1) ?? filePath;
 }
 
+export function getKnownFilePathSet(filePaths: readonly string[]) {
+  const cached = knownFilePathSetCache.get(filePaths);
+  if (cached) {
+    return cached;
+  }
+  const next = new Set(filePaths);
+  knownFilePathSetCache.set(filePaths, next);
+  return next;
+}
+
 export function resolveWorkspaceFileLink(args: {
   href?: string;
   workspaceCwd?: string;
-  knownFilePaths?: Set<string>;
+  knownFilePaths?: ReadonlySet<string>;
 }): ResolvedWorkspaceFileLink | null {
   const raw = args.href?.trim();
   if (!raw || raw.startsWith("#")) {

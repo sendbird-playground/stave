@@ -2,9 +2,10 @@ import type { ButtonHTMLAttributes, HTMLAttributes, MouseEvent, ReactNode } from
 import { createContext, useContext, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Paperclip, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { resolveWorkspaceFileLink } from "@/lib/message-file-links";
+import { getKnownFilePathSet, resolveWorkspaceFileLink } from "@/lib/message-file-links";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { useAppStore } from "@/store/app.store";
+import { useShallow } from "zustand/react/shallow";
 import {
   CodeBlock,
   CodeBlockActions,
@@ -17,6 +18,40 @@ import { MarkdownMessage, resolveMessageSizeClass } from "./message-markdown";
 interface MessageProps extends HTMLAttributes<HTMLDivElement> {
   from: "user" | "assistant";
 }
+
+const EMPTY_PROJECT_FILES: readonly string[] = [];
+const MESSAGE_FILE_PATH_CACHE_KEY = "__staveMessageFilePathCache";
+
+type MessageFilePathCache = {
+  hasSubscribed: boolean;
+  knownFilePaths: ReadonlySet<string>;
+};
+
+const globalMessageFilePathCache = globalThis as typeof globalThis & {
+  [MESSAGE_FILE_PATH_CACHE_KEY]?: MessageFilePathCache;
+};
+
+const messageFilePathCache = globalMessageFilePathCache[MESSAGE_FILE_PATH_CACHE_KEY]
+  ?? (globalMessageFilePathCache[MESSAGE_FILE_PATH_CACHE_KEY] = {
+    hasSubscribed: false,
+    knownFilePaths: getKnownFilePathSet(EMPTY_PROJECT_FILES),
+  });
+
+function syncKnownProjectFilePaths() {
+  messageFilePathCache.knownFilePaths = getKnownFilePathSet(useAppStore.getState().projectFiles);
+  if (messageFilePathCache.hasSubscribed) {
+    return;
+  }
+  messageFilePathCache.hasSubscribed = true;
+  useAppStore.subscribe((state, prevState) => {
+    if (state.projectFiles === prevState.projectFiles) {
+      return;
+    }
+    messageFilePathCache.knownFilePaths = getKnownFilePathSet(state.projectFiles);
+  });
+}
+
+syncKnownProjectFilePaths();
 
 export function Message({ from, className, ...props }: MessageProps) {
   return (
@@ -52,24 +87,20 @@ interface MessageResponseProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export function MessageResponse({ isStreaming, ...props }: MessageResponseProps) {
-  const openFileFromTree = useAppStore((state) => state.openFileFromTree);
-  const setLayout = useAppStore((state) => state.setLayout);
-  const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-  const workspacePathById = useAppStore((state) => state.workspacePathById);
-  const projectPath = useAppStore((state) => state.projectPath);
-  const projectFiles = useAppStore((state) => state.projectFiles);
-  const messageFontSize = useAppStore((state) => state.settings.messageFontSize);
-  const messageCodeFontSize = useAppStore((state) => state.settings.messageCodeFontSize);
-
+  const [openFileFromTree, setLayout, messageFontSize, messageCodeFontSize, workspaceCwd] = useAppStore(useShallow((state) => [
+    state.openFileFromTree,
+    state.setLayout,
+    state.settings.messageFontSize,
+    state.settings.messageCodeFontSize,
+    state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? "",
+  ] as const));
   const content = typeof props.children === "string" ? props.children : "";
-  const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
-  const knownFilePaths = useMemo(() => new Set(projectFiles), [projectFiles]);
 
   function resolveFileLink(args: { href?: string }) {
     return resolveWorkspaceFileLink({
       href: args.href,
       workspaceCwd,
-      knownFilePaths,
+      knownFilePaths: messageFilePathCache.knownFilePaths,
     });
   }
 

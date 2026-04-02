@@ -429,6 +429,53 @@ test("source control tab loads status surface", async ({ page }) => {
 });
 
 test("terminal dock opens with session surface", async ({ page }) => {
+  await page.addInitScript(() => {
+    const sessions = new Map<string, { output: string }>();
+
+    window.localStorage.setItem("stave-store", JSON.stringify({
+      state: {
+        projectPath: "/tmp/stave-project",
+        projectName: "stave-project",
+        workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
+        activeWorkspaceId: "ws-main",
+        workspaceBranchById: { "ws-main": "main" },
+        workspacePathById: { "ws-main": "/tmp/stave-project" },
+        workspaceDefaultById: { "ws-main": true },
+      },
+      version: 0,
+    }));
+
+    (window as unknown as { api?: Record<string, unknown> }).api = {
+      provider: {
+        streamTurn: async () => [],
+      },
+      terminal: {
+        runCommand: async () => ({ ok: true, code: 0, stdout: "", stderr: "" }),
+        createSession: async () => {
+          const sessionId = "session-1";
+          if (!sessions.has(sessionId)) {
+            sessions.set(sessionId, { output: "session ready\r\n" });
+          }
+          return { ok: true, sessionId };
+        },
+        readSession: async (args: { sessionId: string }) => {
+          const session = sessions.get(args.sessionId);
+          if (!session) {
+            return { ok: false, output: "" };
+          }
+          const output = session.output;
+          session.output = "";
+          return { ok: true, output };
+        },
+        writeSession: async () => ({ ok: true }),
+        closeSession: async (args: { sessionId: string }) => {
+          sessions.delete(args.sessionId);
+          return { ok: true };
+        },
+      },
+    };
+  });
+
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
 

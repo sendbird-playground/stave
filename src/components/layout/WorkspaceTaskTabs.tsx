@@ -1,5 +1,5 @@
 import { Check, Copy, Ellipsis, Plus, X } from "lucide-react";
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
@@ -11,6 +11,7 @@ import { filterTasksByName, getRespondingProviderId, isTaskArchived, isTaskManag
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage } from "@/types/chat";
+import { useShallow } from "zustand/react/shallow";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const TASK_SHORTCUT_COUNT = 10;
@@ -89,6 +90,144 @@ function TaskHistoryDrawer(args: {
   );
 }
 
+type TaskItem = ReturnType<typeof useAppStore.getState>["tasks"][number];
+
+function useTaskRespondingState(args: {
+  taskId: string;
+  fallbackProviderId: TaskItem["provider"];
+}) {
+  const [isResponding, toneClass] = useAppStore(useShallow((state) => {
+    const isResponding = Boolean(state.activeTurnIdsByTask[args.taskId]);
+    const respondingProviderId = getRespondingProviderId({
+      fallbackProviderId: args.fallbackProviderId,
+      messages: state.messagesByTask[args.taskId] ?? EMPTY_MESSAGES,
+    });
+    return [isResponding, getProviderWaveToneClass({ providerId: respondingProviderId })] as const;
+  }));
+
+  return {
+    isResponding,
+    toneClass,
+  };
+}
+
+const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
+  task: TaskItem;
+  index: number;
+  isActive: boolean;
+  draggingTaskId: string | null;
+  dropTargetTaskId: string | null;
+  onSelectTask: (taskId: string) => void;
+  onArchiveTask: (task: { id: string; title: string }) => void;
+  onOpenTaskMenuRename: (task: { id: string; title: string }) => void;
+  onOpenTaskMenuConversationIds: (task: { id: string; title: string }) => void;
+  onDragStart: (event: DragEvent<HTMLDivElement>, taskId: string) => void;
+  onDragEnd: () => void;
+  onDragOver: (event: DragEvent<HTMLDivElement>, taskId: string, disabled: boolean) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>, taskId: string, disabled: boolean) => void;
+  onExportTask: (taskId: string) => void;
+}) {
+  const { isResponding, toneClass } = useTaskRespondingState({
+    taskId: args.task.id,
+    fallbackProviderId: args.task.provider,
+  });
+  const isManaged = isTaskManaged(args.task);
+  const shortcutLabel = getTaskShortcutLabel(args.index);
+  const buttonVisibility = args.isActive
+    ? "opacity-100"
+    : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150";
+
+  return (
+    <div
+      draggable={!isManaged}
+      onDragStart={(event) => {
+        if (isManaged) {
+          return;
+        }
+        args.onDragStart(event, args.task.id);
+      }}
+      onDragEnd={args.onDragEnd}
+      onDragOver={(event) => args.onDragOver(event, args.task.id, isManaged)}
+      onDrop={(event) => args.onDrop(event, args.task.id, isManaged)}
+      className={cn(
+        "group flex items-center gap-1 border-b-[2.5px] px-3 transition-colors",
+        isManaged ? "cursor-default" : "cursor-grab",
+        args.isActive
+          ? "border-b-primary bg-background shadow-[1px_0_3px_-1px_rgba(0,0,0,0.1),-1px_0_3px_-1px_rgba(0,0,0,0.1)]"
+          : "border-b-transparent hover:bg-background/60",
+        args.draggingTaskId === args.task.id && !isManaged && "cursor-grabbing opacity-70",
+        args.dropTargetTaskId === args.task.id && args.draggingTaskId && args.draggingTaskId !== args.task.id && "bg-primary/5",
+      )}
+    >
+      <button
+        type="button"
+        className="flex min-w-0 items-center gap-2"
+        onClick={() => args.onSelectTask(args.task.id)}
+      >
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+          {isResponding ? (
+            <WaveIndicator className={cn("gap-px", toneClass)} barClassName="h-3 w-0.5 rounded-[2px]" />
+          ) : (
+            <ModelIcon providerId={args.task.provider} className="size-4 text-muted-foreground" />
+          )}
+        </span>
+        <span className="max-w-56 truncate text-sm font-medium">{args.task.title}</span>
+        {isManaged ? (
+          <Badge variant="secondary" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
+            Managed
+          </Badge>
+        ) : null}
+        {shortcutLabel != null ? (
+          <KbdGroup className="ml-1 shrink-0 opacity-60">
+            <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutModifierSymbol}</Kbd>
+            <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutLabel}</Kbd>
+          </KbdGroup>
+        ) : null}
+      </button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
+              disabled={isManaged}
+              onClick={() => args.onArchiveTask({ id: args.task.id, title: args.task.title })}
+              aria-label={`archive-task-${args.task.id}`}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{isManaged ? "Take over this task before archiving." : "Archive task"}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="ghost" size="sm" className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)} aria-label={`task-menu-${args.task.id}`}>
+            <Ellipsis className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem disabled={isManaged} onSelect={() => args.onOpenTaskMenuRename({ id: args.task.id, title: args.task.title })}>
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => args.onExportTask(args.task.id)}>
+            Export
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              args.onOpenTaskMenuConversationIds({ id: args.task.id, title: args.task.title });
+            }}
+          >
+            Conversation IDs
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+});
+
 export function WorkspaceTaskTabs() {
   const [taskHistoryOpen, setTaskHistoryOpen] = useState(false);
   const [taskToArchive, setTaskToArchive] = useState<{ id: string; title: string } | null>(null);
@@ -99,27 +238,39 @@ export function WorkspaceTaskTabs() {
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dropTargetTaskId, setDropTargetTaskId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const tasks = useAppStore((state) => state.tasks);
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const activeTurnIdsByTask = useAppStore((state) => state.activeTurnIdsByTask);
-  const messagesByTask = useAppStore((state) => state.messagesByTask);
-  const providerConversationByTask = useAppStore((state) => state.providerConversationByTask);
-  const selectTask = useAppStore((state) => state.selectTask);
-  const createTask = useAppStore((state) => state.createTask);
-  const archiveTask = useAppStore((state) => state.archiveTask);
-  const renameTask = useAppStore((state) => state.renameTask);
-  const exportTask = useAppStore((state) => state.exportTask);
-  const restoreTask = useAppStore((state) => state.restoreTask);
-  const reorderTasks = useAppStore((state) => state.reorderTasks);
+  const [
+    tasks,
+    activeTaskId,
+    selectTask,
+    createTask,
+    archiveTask,
+    renameTask,
+    exportTask,
+    restoreTask,
+    reorderTasks,
+  ] = useAppStore(useShallow((state) => [
+    state.tasks,
+    state.activeTaskId,
+    state.selectTask,
+    state.createTask,
+    state.archiveTask,
+    state.renameTask,
+    state.exportTask,
+    state.restoreTask,
+    state.reorderTasks,
+  ] as const));
 
   const visibleTasks = tasks.filter((task) => !isTaskArchived(task));
   const archivedTasks = tasks.filter((task) => isTaskArchived(task));
+  const viewedConversationState = useAppStore((state) =>
+    taskToViewSession ? state.providerConversationByTask[taskToViewSession.id] : undefined
+  );
   const sessionTask = taskToViewSession
     ? tasks.find((task) => task.id === taskToViewSession.id) ?? null
     : null;
-  const sessionConversationRows = listProviderConversations({
-    conversations: taskToViewSession ? providerConversationByTask[taskToViewSession.id] : undefined,
-  });
+  const sessionConversationRows = useMemo(() => listProviderConversations({
+    conversations: viewedConversationState,
+  }), [viewedConversationState]);
 
   useEffect(() => {
     if (!taskToRename) {
@@ -236,125 +387,43 @@ export function WorkspaceTaskTabs() {
           <div className="min-w-0 flex-1 overflow-x-auto">
             <div className="flex h-full min-w-max items-stretch">
               {visibleTasks.map((task, index) => {
-                const isActive = task.id === activeTaskId;
-                const isResponding = Boolean(activeTurnIdsByTask[task.id]);
-                const isManaged = isTaskManaged(task);
-                const respondingProviderId = getRespondingProviderId({
-                  fallbackProviderId: task.provider,
-                  messages: messagesByTask[task.id] ?? EMPTY_MESSAGES,
-                });
-                const respondingToneClass = getProviderWaveToneClass({ providerId: respondingProviderId });
-                const shortcutLabel = getTaskShortcutLabel(index);
-                const buttonVisibility = isActive
-                  ? "opacity-100"
-                  : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150";
-
                 return (
-                  <div
+                  <WorkspaceTaskTab
                     key={task.id}
-                    draggable={!isManaged}
-                    onDragStart={(event) => {
-                      if (isManaged) {
-                        return;
-                      }
-                      handleTaskDragStart(event, task.id);
+                    task={task}
+                    index={index}
+                    isActive={task.id === activeTaskId}
+                    draggingTaskId={draggingTaskId}
+                    dropTargetTaskId={dropTargetTaskId}
+                    onSelectTask={(taskId) => selectTask({ taskId })}
+                    onArchiveTask={setTaskToArchive}
+                    onOpenTaskMenuRename={setTaskToRename}
+                    onOpenTaskMenuConversationIds={(nextTask) => {
+                      setCopiedSessionIdKey(null);
+                      setTaskToViewSession(nextTask);
                     }}
+                    onDragStart={handleTaskDragStart}
                     onDragEnd={() => {
                       setDraggingTaskId(null);
                       setDropTargetTaskId(null);
                     }}
-                    onDragOver={(event) => {
-                      if (isManaged) {
+                    onDragOver={(event, taskId, disabled) => {
+                      if (disabled) {
                         return;
                       }
                       event.preventDefault();
-                      if (draggingTaskId && draggingTaskId !== task.id) {
-                        setDropTargetTaskId(task.id);
+                      if (draggingTaskId && draggingTaskId !== taskId) {
+                        setDropTargetTaskId(taskId);
                       }
                     }}
-                    onDrop={(event) => {
-                      if (isManaged) {
+                    onDrop={(event, taskId, disabled) => {
+                      if (disabled) {
                         return;
                       }
-                      handleTaskDrop(event, task.id);
+                      handleTaskDrop(event, taskId);
                     }}
-                    className={cn(
-                      "group flex items-center gap-1 border-b-[2.5px] px-3 transition-colors",
-                      isManaged ? "cursor-default" : "cursor-grab",
-                      isActive
-                        ? "border-b-primary bg-background shadow-[1px_0_3px_-1px_rgba(0,0,0,0.1),-1px_0_3px_-1px_rgba(0,0,0,0.1)]"
-                        : "border-b-transparent hover:bg-background/60",
-                      draggingTaskId === task.id && !isManaged && "cursor-grabbing opacity-70",
-                      dropTargetTaskId === task.id && draggingTaskId && draggingTaskId !== task.id && "bg-primary/5",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      className="flex min-w-0 items-center gap-2"
-                      onClick={() => selectTask({ taskId: task.id })}
-                    >
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                        {isResponding ? (
-                          <WaveIndicator className={cn("gap-px", respondingToneClass)} barClassName="h-3 w-0.5 rounded-[2px]" />
-                        ) : (
-                          <ModelIcon providerId={task.provider} className="size-4 text-muted-foreground" />
-                        )}
-                      </span>
-                      <span className="max-w-56 truncate text-sm font-medium">{task.title}</span>
-                      {isManaged ? (
-                        <Badge variant="secondary" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
-                          Managed
-                        </Badge>
-                      ) : null}
-                      {shortcutLabel != null ? (
-                        <KbdGroup className="ml-1 shrink-0 opacity-60">
-                          <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutModifierSymbol}</Kbd>
-                          <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutLabel}</Kbd>
-                        </KbdGroup>
-                      ) : null}
-                    </button>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
-                            disabled={isManaged}
-                            onClick={() => setTaskToArchive({ id: task.id, title: task.title })}
-                            aria-label={`archive-task-${task.id}`}
-                          >
-                            <X className="size-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">{isManaged ? "Take over this task before archiving." : "Archive task"}</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button type="button" variant="ghost" size="sm" className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)} aria-label={`task-menu-${task.id}`}>
-                          <Ellipsis className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem disabled={isManaged} onSelect={() => setTaskToRename({ id: task.id, title: task.title })}>
-                          Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => exportTask({ taskId: task.id })}>
-                          Export
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            setCopiedSessionIdKey(null);
-                            setTaskToViewSession({ id: task.id, title: task.title });
-                          }}
-                        >
-                          Conversation IDs
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                    onExportTask={(taskId) => exportTask({ taskId })}
+                  />
                 );
               })}
             </div>

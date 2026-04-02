@@ -7,17 +7,15 @@ import type { ChatMessage } from "@/types/chat";
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
 export function TaskAutoApproval() {
-  const [activeTaskId, autoApproveToolRequests, resolveApproval] = useAppStore(useShallow((state) => [
-    state.activeTaskId,
-    // Legacy persisted key name. The user-facing behavior is tool approval auto-approve.
-    state.settings.planAutoApprove,
-    state.resolveApproval,
-  ] as const));
-
-  const [pendingApprovalMessageId, pendingApprovalRequestId] = useAppStore(useShallow((state) => {
-    const messages = state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
-    const pendingApproval = findLatestPendingApproval({ messages });
+  const [activeTaskId, autoApproveToolRequests, resolveApproval, pendingApprovalMessageId, pendingApprovalRequestId] = useAppStore(useShallow((state) => {
+    const autoApproveToolRequests = state.settings.planAutoApprove;
+    const pendingApproval = autoApproveToolRequests
+      ? findLatestPendingApproval({ messages: state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES })
+      : null;
     return [
+      state.activeTaskId,
+      autoApproveToolRequests,
+      state.resolveApproval,
       pendingApproval?.messageId ?? null,
       pendingApproval?.part.requestId ?? null,
     ] as const;
