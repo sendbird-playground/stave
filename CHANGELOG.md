@@ -1,3 +1,24 @@
+## [0.0.33](https://github.com/sendbird-playground/stave/compare/v0.0.32...v0.0.33) (2026-04-02)
+
+### Features
+
+* **cot:** add kind-specific icons and summary items to chain of thought ([#187](https://github.com/sendbird-playground/stave/issues/187)) ([e9d65a6](https://github.com/sendbird-playground/stave/commit/e9d65a60d20bb1e8c67ea62d2b8585ef024d9cfd))
+* **EditorPanel:** add context menu to file explorer ([#178](https://github.com/sendbird-playground/stave/issues/178)) ([69de48c](https://github.com/sendbird-playground/stave/commit/69de48ca1c9ac47975cb7aa90924cd71162d8233))
+* **editor:** refine file tab hierarchy ([#183](https://github.com/sendbird-playground/stave/issues/183)) ([3e3de48](https://github.com/sendbird-playground/stave/commit/3e3de4853d9e2136f16c7221d72152b295257e87))
+* **persistence:** add workspace shell and task message loaders ([#182](https://github.com/sendbird-playground/stave/issues/182)) ([66d1492](https://github.com/sendbird-playground/stave/commit/66d149202858b47a18f80254e58deaa7162082b2))
+* **pr-dialog:** add target branch picker ([#188](https://github.com/sendbird-playground/stave/issues/188)) ([88be8ee](https://github.com/sendbird-playground/stave/commit/88be8eedb9d7914ea4068e907142bde4b398708b))
+* **terminal:** add push-based terminal output delivery ([#184](https://github.com/sendbird-playground/stave/issues/184)) ([e0e69d9](https://github.com/sendbird-playground/stave/commit/e0e69d9749c7bd66df844ec6eeeee5e3b76c24b5))
+* **todo:** add getTodoProgress utility function ([#196](https://github.com/sendbird-playground/stave/issues/196)) ([aa97440](https://github.com/sendbird-playground/stave/commit/aa9744010e8cbb49d123b5a7b02463e854e24fdc))
+
+### Bug Fixes
+
+* **chat:** stabilize scroll-to-bottom during workspace switches ([#197](https://github.com/sendbird-playground/stave/issues/197)) ([abc1c40](https://github.com/sendbird-playground/stave/commit/abc1c40a4beae0781db9d0390deb0f2a937bb567))
+* **completion-phrases:** ensure random phrase always returns string ([fa0674c](https://github.com/sendbird-playground/stave/commit/fa0674ca9e6f7e180289a54b2c63faeb398b1193))
+* eliminate scroll flicker in virtualized lists ([#198](https://github.com/sendbird-playground/stave/issues/198)) ([e9fdcb2](https://github.com/sendbird-playground/stave/commit/e9fdcb2cc8b986eee9f04878aa45a970d3d3977e))
+* improve pull request dialog accessibility ([#189](https://github.com/sendbird-playground/stave/issues/189)) ([a3c398d](https://github.com/sendbird-playground/stave/commit/a3c398d42451be574e406ddcaa6991c86a89bf79))
+* **SettingsDialog:** improve layout height and overflow handling ([#193](https://github.com/sendbird-playground/stave/issues/193)) ([cc84864](https://github.com/sendbird-playground/stave/commit/cc84864c8089042cf3e3bcba7b00de32591be6e9))
+* **shimmer:** unify animation effects across AI elements ([#191](https://github.com/sendbird-playground/stave/issues/191)) ([7c1975a](https://github.com/sendbird-playground/stave/commit/7c1975af95f6d3cbeb451b1046b60f84395068c2))
+* **terminal:** improve sessions sidebar design ([#181](https://github.com/sendbird-playground/stave/issues/181)) ([48196e9](https://github.com/sendbird-playground/stave/commit/48196e95137131dcdeff075328f179add1868eec))
 ## [0.0.32](https://github.com/sendbird-playground/stave/compare/v0.0.31...v0.0.32) (2026-04-01)
 
 ### Features
