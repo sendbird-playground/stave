@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildExplorerIndex,
+  buildSourceControlSections,
+  buildSourceControlSummary,
   collectAncestorFolders,
   getExplorerExpandedPathsAfterCreate,
   normalizeRelativeInputPath,
@@ -101,5 +103,83 @@ describe("buildExplorerIndex", () => {
     expect(index.tree[0]?.children[0]?.path).toBe("src/components");
     expect(index.tree[0]?.children[0]?.children[0]?.path).toBe("src/components/ui");
     expect(index.tree[0]?.children[0]?.children[0]?.children[0]?.path).toBe("src/components/ui/button.tsx");
+  });
+});
+
+describe("buildSourceControlSummary", () => {
+  test("counts staged, mixed, working-tree, untracked, and conflict states independently", () => {
+    const summary = buildSourceControlSummary({
+      items: [
+        { code: "MM", path: "src/mixed.ts" },
+        { code: " M", path: "src/unstaged.ts" },
+        { code: "M ", path: "src/staged.ts" },
+        { code: "??", path: "src/new.ts" },
+        { code: "UU", path: "src/conflict.ts" },
+      ],
+    });
+
+    expect(summary).toEqual({
+      totalCount: 5,
+      stagedCount: 2,
+      unstagedCount: 2,
+      untrackedCount: 1,
+      conflictCount: 1,
+      mixedCount: 1,
+      committableCount: 2,
+      workingTreeCount: 4,
+    });
+  });
+});
+
+describe("buildSourceControlSections", () => {
+  test("groups change items into stable UI sections with action metadata", () => {
+    const sections = buildSourceControlSections({
+      items: [
+        { code: "UU", path: "src/conflict.ts" },
+        { code: "MM", path: "src/mixed.ts" },
+        { code: " M", path: "src/unstaged.ts" },
+        { code: "M ", path: "src/staged.ts" },
+        { code: "??", path: "src/new.ts" },
+      ],
+    });
+
+    expect(sections.map((section) => section.id)).toEqual([
+      "conflicted",
+      "mixed",
+      "unstaged",
+      "staged",
+      "untracked",
+    ]);
+    expect(sections[1]?.items[0]).toMatchObject({
+      fileName: "mixed.ts",
+      hasMixedChanges: true,
+      canStage: true,
+      canUnstage: true,
+      canDiscard: true,
+    });
+    expect(sections[3]?.items[0]).toMatchObject({
+      fileName: "staged.ts",
+      canStage: false,
+      canUnstage: true,
+      canDiscard: false,
+    });
+    expect(sections[4]?.items[0]).toMatchObject({
+      fileName: "new.ts",
+      canStage: true,
+      canUnstage: false,
+      canDiscard: true,
+    });
+  });
+
+  test("keeps rename metadata readable for the row detail line", () => {
+    const sections = buildSourceControlSections({
+      items: [{ code: "R ", path: "src/old.ts -> src/new.ts" }],
+    });
+
+    expect(sections[0]?.items[0]).toMatchObject({
+      fileName: "new.ts",
+      pathLabel: "src/old.ts -> src/new.ts",
+      pathDetail: "renamed from src/old.ts",
+    });
   });
 });

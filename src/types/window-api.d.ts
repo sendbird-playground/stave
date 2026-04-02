@@ -477,6 +477,8 @@ interface WindowToolingApi {
 interface SourceControlStatusItem {
   code: string;
   path: string;
+  indexStatus?: string;
+  workingTreeStatus?: string;
 }
 
 interface SourceControlStatusResult {

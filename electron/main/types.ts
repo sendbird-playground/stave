@@ -10,6 +10,8 @@ export interface CommandResult {
 export interface SourceControlStatusItem {
   code: string;
   path: string;
+  indexStatus?: string;
+  workingTreeStatus?: string;
 }
 
 export interface TerminalSession {

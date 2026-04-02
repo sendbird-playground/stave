@@ -617,10 +617,13 @@ test("source control actions update status and history surfaces", async ({ page 
   await rightPanel.getByTitle("changes").click();
 
   await expect(rightPanel.getByText("Branch: main | Changes (1)")).toBeVisible();
-  await expect(rightPanel.getByRole("button", { name: "stage", exact: true })).toBeVisible();
+  const changeRow = rightPanel.getByRole("button", { name: /README\.md/ }).first();
+  await changeRow.hover();
+  await expect(rightPanel.getByRole("button", { name: /^Stage$/ })).toBeVisible();
 
-  await rightPanel.getByRole("button", { name: "+ Stage All" }).click();
-  await expect(rightPanel.getByRole("button", { name: "unstage", exact: true })).toBeVisible();
+  await rightPanel.getByRole("button", { name: "Stage All", exact: true }).click();
+  await changeRow.hover();
+  await expect(rightPanel.getByRole("button", { name: /^Unstage$/ })).toBeVisible();
 
   const commitInput = rightPanel.getByPlaceholder(/Message/);
   await commitInput.fill("feat: save snapshot");
