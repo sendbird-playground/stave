@@ -25,6 +25,7 @@ import {
   ChainOfThoughtContent,
   ChainOfThoughtStep,
   ChainOfThoughtTrigger,
+  getTodoProgress,
   MessageResponse,
   OrchestrationCard,
   Shimmer,
@@ -32,7 +33,6 @@ import {
   ToolInput,
   ToolOutput,
   parseSubagentToolInput,
-  parseTodoInput,
 } from "@/components/ai-elements";
 import { MESSAGE_BODY_LINE_HEIGHT } from "@/components/ai-elements/message-styles";
 import type { TraceSummaryItem } from "@/components/ai-elements/chain-of-thought";
@@ -46,6 +46,7 @@ import { MessagePartRenderer, toToolDisplayName } from "@/components/session/cha
 import { parseFileChangeToolInput } from "@/components/session/chat-panel.utils";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, CodeDiffPart, ThinkingPart } from "@/types/chat";
+import { deriveTodoTraceItems, deriveTodoTraceStatus } from "./assistant-trace.utils";
 import { buildAssistantTrace, joinReasoningText, type AssistantTraceEntry } from "./assistant-trace-builder";
 
 /* ─── Step status ────────────────────────────────────────────────── */
@@ -58,12 +59,16 @@ function toStepStatus(args: { entry: AssistantTraceEntry; isStreaming: boolean }
       return "done" as const;
     case "tool":
     case "subagent":
-    case "todo":
       return args.entry.part.state === "input-streaming" || args.entry.part.state === "input-available"
         ? "active" as const
         : args.entry.part.state === "output-available" || args.entry.part.state === "output-error"
           ? "done" as const
           : "pending" as const;
+    case "todo":
+      return deriveTodoTraceStatus({
+        input: args.entry.part.input,
+        state: args.entry.part.state,
+      });
     case "approval":
       return args.entry.part.state === "approval-requested" ? "active" as const : "done" as const;
     case "user_input":
@@ -210,6 +215,14 @@ function getEntrySummary(entry: AssistantTraceEntry): ReactNode {
         </span>
       ) : null;
     }
+    case "todo": {
+      const progress = getTodoProgress({ input: entry.part.input });
+      return progress.totalCount > 0 ? (
+        <span className="ml-1 text-[0.75em] text-muted-foreground/70">
+          {progress.completedCount}/{progress.totalCount}
+        </span>
+      ) : null;
+    }
     case "diff":
       return entry.parts.length > 1 ? (
         <span className="ml-1 text-[0.75em] text-muted-foreground/70">{entry.parts.length} files</span>
@@ -338,8 +351,12 @@ function SubagentStepDetail(args: {
   );
 }
 
-function TodoStepDetail(args: { input: string }) {
-  const todos = useMemo(() => parseTodoInput({ input: args.input }).todos, [args.input]);
+function TodoStepDetail(args: {
+  input: string;
+  state?: "input-streaming" | "input-available" | "output-available" | "output-error";
+}) {
+  const todos = useMemo(() => deriveTodoTraceItems(args), [args.input, args.state]);
+
   return (
     <ol className="space-y-1.5">
       {todos.map((todo, index) => (
@@ -531,7 +548,7 @@ function AssistantTraceEntryView(args: {
           defaultOpen={entry.part.state === "input-streaming"}
           openWhen={entry.part.state === "input-streaming"}
         >
-          <TodoStepDetail input={entry.part.input} />
+          <TodoStepDetail input={entry.part.input} state={entry.part.state} />
         </ChainOfThoughtStep>
       );
 
