@@ -660,6 +660,7 @@ export function AssistantMessageBody(args: {
           openWhen={isStreaming}
           collapseWhen={!isStreaming}
           summaryItems={summaryItems}
+          seed={messageId}
         >
           <ChainOfThoughtTrigger />
           <ChainOfThoughtContent>
