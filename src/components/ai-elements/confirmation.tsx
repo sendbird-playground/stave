@@ -14,13 +14,13 @@ export function ConfirmationCompact(args: ConfirmationCompactProps) {
   const { toolName, description, state, onApprove, onReject, disabled, disabledReason } = args;
 
   return (
-    <div className="rounded-md border bg-card p-3 text-sm">
+    <div className="rounded-md border bg-card p-3 text-[0.875em]">
       <p className="font-semibold text-foreground">Approval required: {toolName}</p>
       <p className="mt-1 text-muted-foreground">{description}</p>
       {state === "approval-requested" ? (
         <>
           {disabledReason ? (
-            <p className="mt-2 text-xs text-muted-foreground">{disabledReason}</p>
+            <p className="mt-2 text-[0.75em] text-muted-foreground">{disabledReason}</p>
           ) : null}
           <div className="mt-2 flex items-center gap-2">
             <Button size="sm" disabled={disabled} onClick={onApprove}>Approve</Button>

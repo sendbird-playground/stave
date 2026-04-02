@@ -92,15 +92,15 @@ export function SubagentCard({ className, input, output, state, defaultOpen = fa
       >
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <span className="inline-flex items-center gap-1.5 text-[0.875em] font-semibold text-foreground">
               <Bot className="size-3.5 text-primary" />
               Subagent
             </span>
             {details.subagentType ? <Badge variant="secondary">{details.subagentType}</Badge> : null}
           </div>
-          <p className="text-sm font-medium text-foreground">{title}</p>
+          <p className="text-[0.875em] font-medium text-foreground">{title}</p>
           {details.prompt ? (
-            <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+            <p className="line-clamp-2 text-[0.75em] leading-[1.6] text-muted-foreground">
               {details.prompt}
             </p>
           ) : null}
@@ -115,7 +115,7 @@ export function SubagentCard({ className, input, output, state, defaultOpen = fa
         <div className="border-t border-primary/15 px-3 py-2">
           <ul className="space-y-0.5">
             {visibleProgress.map((msg, idx) => (
-              <li key={idx} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <li key={idx} className="flex items-start gap-1.5 text-[0.75em] text-muted-foreground">
                 <span
                   className={cn(
                     "mt-1.5 size-1.5 shrink-0 rounded-full",
@@ -137,7 +137,7 @@ export function SubagentCard({ className, input, output, state, defaultOpen = fa
           <ToolInput input={promptText} />
           {state !== "input-streaming" ? (
             <ToolOutput
-              output={output ? <pre className="whitespace-pre-wrap text-sm">{output}</pre> : null}
+              output={output ? <pre className="whitespace-pre-wrap text-[0.875em]">{output}</pre> : null}
               errorText={state === "output-error" ? (output ?? "Subagent failed.") : undefined}
             />
           ) : null}

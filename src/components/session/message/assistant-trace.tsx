@@ -172,7 +172,7 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       default: {
         const desc = typeof parsed.description === "string" ? parsed.description.slice(0, 50) : null;
         return desc ? (
-          <span className="ml-1 max-w-52 truncate text-xs text-muted-foreground/70">{desc}</span>
+          <span className="ml-1 max-w-52 truncate text-[0.75em] text-muted-foreground/70">{desc}</span>
         ) : null;
       }
     }
@@ -195,7 +195,7 @@ function getEntrySummary(entry: AssistantTraceEntry): ReactNode {
     }
     case "diff":
       return entry.parts.length > 1 ? (
-        <span className="ml-1 text-xs text-muted-foreground/70">{entry.parts.length} files</span>
+        <span className="ml-1 text-[0.75em] text-muted-foreground/70">{entry.parts.length} files</span>
       ) : null;
     default:
       return null;
@@ -283,7 +283,7 @@ function ToolStepDetail(args: {
       {(args.state !== "input-streaming" || args.output?.trim()) ? (
         <ToolOutput
           label={args.state === "input-streaming" ? "Live output" : undefined}
-          output={args.output ? <pre className="whitespace-pre-wrap text-sm">{args.output}</pre> : null}
+          output={args.output ? <pre className="whitespace-pre-wrap text-[0.875em]">{args.output}</pre> : null}
           errorText={args.state === "output-error" ? (args.output ?? "Tool failed.") : undefined}
         />
       ) : null}
@@ -303,7 +303,7 @@ function SubagentStepDetail(args: {
       {args.progressMessages?.length ? (
         <ul className="space-y-1">
           {args.progressMessages.map((message, index) => (
-            <li key={`${message}-${index}`} className="flex items-start gap-2 text-sm text-muted-foreground">
+            <li key={`${message}-${index}`} className="flex items-start gap-2 text-[0.875em] text-muted-foreground">
               <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-border" aria-hidden="true" />
               <span>{message}</span>
             </li>
@@ -313,7 +313,7 @@ function SubagentStepDetail(args: {
       <ToolInput input={parsed.prompt ?? parsed.raw} />
       {args.state !== "input-streaming" ? (
         <ToolOutput
-          output={args.output ? <pre className="whitespace-pre-wrap text-sm">{args.output}</pre> : null}
+          output={args.output ? <pre className="whitespace-pre-wrap text-[0.875em]">{args.output}</pre> : null}
           errorText={args.state === "output-error" ? (args.output ?? "Subagent failed.") : undefined}
         />
       ) : null}
@@ -326,7 +326,7 @@ function TodoStepDetail(args: { input: string }) {
   return (
     <ol className="space-y-1.5">
       {todos.map((todo, index) => (
-        <li key={`${todo.content}-${index}`} className="flex items-start gap-2 text-sm text-foreground">
+        <li key={`${todo.content}-${index}`} className="flex items-start gap-2 text-[0.875em] text-foreground">
           {todo.status === "completed" ? (
             <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
           ) : todo.status === "in_progress" ? (
@@ -375,7 +375,7 @@ function AssistantTraceEntryView(args: {
           defaultOpen={entry.isStreaming}
           openWhen={entry.isStreaming}
         >
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+          <p className="whitespace-pre-wrap leading-[1.6] text-muted-foreground">
             {reasoningText || "Thinking..."}
           </p>
         </ChainOfThoughtStep>
@@ -385,7 +385,7 @@ function AssistantTraceEntryView(args: {
     /* Assistant text — bullet point, content always visible (no accordion). */
     case "assistant_text":
       return (
-        <div className="flex gap-3 text-sm text-muted-foreground motion-safe:animate-cot-step-in">
+        <div className="flex gap-3 text-[0.875em] text-muted-foreground motion-safe:animate-cot-step-in">
           <div className="relative mt-0.5 flex flex-col items-center">
             <span className="flex size-4 items-center justify-center" aria-hidden="true">
               <span className="size-1.5 rounded-full bg-muted-foreground/50" />
@@ -529,7 +529,7 @@ export function AssistantMessageBody(args: {
     && trace.fileContextParts.length === 0
     && trace.imageContextParts.length === 0
   ) {
-    return <p className="text-sm italic text-muted-foreground">No response.</p>;
+    return <p className="text-[0.875em] italic text-muted-foreground">No response.</p>;
   }
 
   return (
@@ -546,7 +546,7 @@ export function AssistantMessageBody(args: {
           <ChainOfThoughtContent>
             {trace.showStreamingPlaceholder ? (
               <ChainOfThoughtStep title="Thinking" status="active" kind="thinking" icon={<Brain />} defaultOpen openWhen>
-                <p className="text-sm text-muted-foreground">Thinking...</p>
+                <p className="text-muted-foreground">Thinking...</p>
               </ChainOfThoughtStep>
             ) : null}
             {trace.entries.map((entry) => (
