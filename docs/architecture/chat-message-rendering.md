@@ -30,11 +30,30 @@ same `ChatMessage.parts` shape before UI rendering.
 - While the assistant turn is streaming, top-level `ChainOfThought` stays open.
 - After the turn completes, top-level `ChainOfThought` auto-collapses.
 - Individual steps inside `ChainOfThought` may still be opened and closed independently.
-- `Reasoning` is used to present a continuous thinking block inside a trace step.
 - `MessageResponse` renders only the final text response area below the trace.
 - Earlier assistant text that appears before later tool or system activity remains inside `ChainOfThought` as a trace step instead of being promoted to the final response.
 - The normal assistant shell is bubbleless so AI Elements composition can stay close
   to the upstream pattern.
+
+## Visual Style (AI Elements alignment)
+
+The UI follows `elements.ai-sdk.dev/components/chain-of-thought` as closely as possible:
+
+- **Root**: No outer border or background — just `not-prose w-full`.
+- **Trigger**: Simple row `[icon] label [chevron]`, text-muted-foreground, no card.
+- **Steps**: Flat flex rows `flex gap-3 text-sm` — NOT cards with borders/backgrounds.
+- **Step icons**: Status-only (spinner for active, checkmark for done, circle for pending).
+  No per-kind coloring, no icon wrappers, no status chips.
+- **Connecting line**: Vertical 1px `bg-border` line between step icons; hidden on last step via `[&>*:last-child_.cot-connector]:hidden`.
+- **Step status colors**: `active → text-foreground`, `done → text-muted-foreground`, `pending → text-muted-foreground/50`.
+- **Expandable detail**: Steps with children show a subtle chevron next to the title; click to toggle.
+- **Assistant text steps**: Always visible (no accordion); rendered inline with a Check icon.
+- **No badges/chips**: No `Done`, `Running`, `Pending`, `toolUseId`, or item-number chips.
+
+### Inline code & file links
+
+- Inline backtick code uses bordered chip style (border + subtle bg, like `inline-citation`).
+- File link chips (with line numbers) use full-opacity `border-border` for clear visibility against the white chat background.
 
 ## Naming
 

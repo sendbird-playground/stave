@@ -1,7 +1,5 @@
-import type { ReactNode } from "react";
 import { useMemo } from "react";
-import { CheckCircle2, Circle, LoaderCircle } from "lucide-react";
-import { Badge } from "@/components/ui";
+import { Check, CheckCircle2, Circle, LoaderCircle } from "lucide-react";
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -9,8 +7,6 @@ import {
   ChainOfThoughtTrigger,
   MessageResponse,
   OrchestrationCard,
-  Reasoning,
-  ReasoningContent,
   StaveProcessingCard,
   ToolInput,
   ToolOutput,
@@ -23,56 +19,43 @@ import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/chat";
 import { buildAssistantTrace, joinReasoningText, type AssistantTraceEntry } from "./assistant-trace-builder";
 
-function formatElapsedSecondsLabel(seconds: number) {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
-}
-
-function MetaRow(args: { children: ReactNode }) {
-  return <div className="flex flex-wrap items-center gap-1.5">{args.children}</div>;
-}
-
-function MetaBadge(args: { children: ReactNode; variant?: "outline" | "secondary" | "success" | "warning" }) {
-  return (
-    <Badge variant={args.variant ?? "outline"} className="h-5 rounded-md px-1.5 font-normal">
-      {args.children}
-    </Badge>
-  );
-}
+/* ─── Helpers ─────────────────────────────────────────────────────── */
 
 function toStepStatus(args: { entry: AssistantTraceEntry; isStreaming: boolean }) {
   switch (args.entry.kind) {
     case "reasoning":
-      return args.entry.isStreaming ? "active" : "done";
+      return args.entry.isStreaming ? "active" as const : "done" as const;
     case "assistant_text":
-      return "done";
+      return "done" as const;
     case "tool":
     case "subagent":
     case "todo":
       return args.entry.part.state === "input-streaming"
-        ? "active"
+        ? "active" as const
         : args.entry.part.state === "output-available" || args.entry.part.state === "output-error"
-        ? "done"
-        : "pending";
+          ? "done" as const
+          : "pending" as const;
     case "approval":
-      return args.entry.part.state === "approval-requested" ? "active" : "done";
+      return args.entry.part.state === "approval-requested" ? "active" as const : "done" as const;
     case "user_input":
-      return args.entry.part.state === "input-requested" ? "active" : "done";
+      return args.entry.part.state === "input-requested" ? "active" as const : "done" as const;
     case "diff":
     case "system":
-      return "done";
+      return "done" as const;
     case "orchestration":
-      return args.entry.part.status === "done" ? "done" : "active";
+      return args.entry.part.status === "done" ? "done" as const : "active" as const;
     case "stave_processing":
-      return args.isStreaming ? "active" : "done";
+      return args.isStreaming ? "active" as const : "done" as const;
   }
 }
 
-function ToolStepDetail(args: { input: string; output?: string; state?: "input-streaming" | "input-available" | "output-available" | "output-error" }) {
+/* ─── Step detail components (expanded content) ───────────────────── */
+
+function ToolStepDetail(args: {
+  input: string;
+  output?: string;
+  state?: "input-streaming" | "input-available" | "output-available" | "output-error";
+}) {
   return (
     <div className="space-y-2">
       <ToolInput input={args.input} />
@@ -97,17 +80,14 @@ function SubagentStepDetail(args: {
   return (
     <div className="space-y-2">
       {args.progressMessages?.length ? (
-        <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Progress</p>
-          <ul className="mt-2 space-y-1.5">
-            {args.progressMessages.map((message, index) => (
-              <li key={`${message}-${index}`} className="flex items-start gap-2 text-sm text-muted-foreground">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/60" aria-hidden="true" />
-                <span>{message}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="space-y-1">
+          {args.progressMessages.map((message, index) => (
+            <li key={`${message}-${index}`} className="flex items-start gap-2 text-sm text-muted-foreground">
+              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-border" aria-hidden="true" />
+              <span>{message}</span>
+            </li>
+          ))}
+        </ul>
       ) : null}
       <ToolInput input={parsed.prompt ?? parsed.raw} />
       {args.state !== "input-streaming" ? (
@@ -122,42 +102,33 @@ function SubagentStepDetail(args: {
 
 function TodoStepDetail(args: { input: string }) {
   const todos = useMemo(() => parseTodoInput({ input: args.input }).todos, [args.input]);
-  const completed = todos.filter((todo) => todo.status === "completed").length;
-
   return (
-    <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-        Todo {todos.length > 0 ? `${completed}/${todos.length}` : ""}
-      </p>
-      {todos.length === 0 ? (
-        <p className="mt-2 text-sm text-muted-foreground">No todos.</p>
-      ) : (
-        <ol className="mt-2 space-y-1.5">
-          {todos.map((todo, index) => (
-            <li key={`${todo.content}-${index}`} className="flex items-start gap-2 text-sm text-foreground">
-              {todo.status === "completed" ? (
-                <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
-              ) : todo.status === "in_progress" ? (
-                <LoaderCircle className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
-              ) : (
-                <Circle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/50" />
-              )}
-              <span
-                className={cn(
-                  todo.status === "completed" && "text-muted-foreground line-through",
-                  todo.status === "in_progress" && "font-medium text-foreground",
-                  todo.status === "pending" && "text-muted-foreground",
-                )}
-              >
-                {todo.content}
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
+    <ol className="space-y-1.5">
+      {todos.map((todo, index) => (
+        <li key={`${todo.content}-${index}`} className="flex items-start gap-2 text-sm text-foreground">
+          {todo.status === "completed" ? (
+            <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" />
+          ) : todo.status === "in_progress" ? (
+            <LoaderCircle className="mt-0.5 size-3.5 shrink-0 animate-spin text-primary" />
+          ) : (
+            <Circle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/50" />
+          )}
+          <span
+            className={cn(
+              todo.status === "completed" && "text-muted-foreground line-through",
+              todo.status === "in_progress" && "font-medium text-foreground",
+              todo.status === "pending" && "text-muted-foreground",
+            )}
+          >
+            {todo.content}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
+
+/* ─── Entry renderer ──────────────────────────────────────────────── */
 
 function AssistantTraceEntryView(args: {
   entry: AssistantTraceEntry;
@@ -174,77 +145,53 @@ function AssistantTraceEntryView(args: {
       return (
         <ChainOfThoughtStep
           title={entry.isStreaming ? "Thinking" : "Reasoning"}
-          kind="thinking"
           status={status}
           defaultOpen={entry.isStreaming}
           openWhen={entry.isStreaming}
-          meta={(
-            <MetaRow>
-              {entry.isStreaming ? <MetaBadge variant="warning">Live</MetaBadge> : null}
-              <MetaBadge>{entry.parts.length === 1 ? "1 chunk" : `${entry.parts.length} chunks`}</MetaBadge>
-            </MetaRow>
-          )}
         >
-          <Reasoning isStreaming={entry.isStreaming} defaultOpen>
-            <ReasoningContent>{reasoningText || "Thinking..."}</ReasoningContent>
-          </Reasoning>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+            {reasoningText || "Thinking..."}
+          </p>
         </ChainOfThoughtStep>
       );
     }
+
+    /* Assistant text is NOT an accordion - content is always visible. */
     case "assistant_text":
       return (
-        <ChainOfThoughtStep
-          title="Assistant message"
-          kind="system"
-          status={status}
-        >
-          <div className="space-y-2.5">
+        <div className="flex gap-3 text-sm text-muted-foreground motion-safe:animate-cot-step-in">
+          <div className="relative mt-0.5 flex flex-col items-center">
+            <Check className="size-4" />
+            <div className="cot-connector mt-1.5 w-px flex-1 bg-border" />
+          </div>
+          <div className="min-w-0 flex-1 pb-4">
             {entry.parts.map((part, index) => (
               <MessageResponse key={`${entry.id}-${index}`}>{part.text}</MessageResponse>
             ))}
           </div>
-        </ChainOfThoughtStep>
+        </div>
       );
+
     case "tool":
       return (
         <ChainOfThoughtStep
           title={toToolDisplayName(entry.part.toolName)}
-          kind="tool"
           status={status}
           defaultOpen={entry.part.state === "input-streaming"}
           openWhen={entry.part.state === "input-streaming"}
-          meta={(
-            <MetaRow>
-              {entry.part.toolUseId ? <MetaBadge>{entry.part.toolUseId}</MetaBadge> : null}
-              {entry.part.elapsedSeconds != null && entry.part.elapsedSeconds > 0 ? (
-                <MetaBadge>{formatElapsedSecondsLabel(entry.part.elapsedSeconds)}</MetaBadge>
-              ) : null}
-            </MetaRow>
-          )}
         >
           <ToolStepDetail input={entry.part.input} output={entry.part.output} state={entry.part.state} />
         </ChainOfThoughtStep>
       );
+
     case "subagent": {
       const parsed = parseSubagentToolInput({ input: entry.part.input });
       return (
         <ChainOfThoughtStep
           title={parsed.description ?? parsed.subagentType ?? "Subagent"}
-          kind="agent"
           status={status}
           defaultOpen={entry.part.state === "input-streaming"}
           openWhen={entry.part.state === "input-streaming"}
-          meta={(
-            <MetaRow>
-              {parsed.subagentType ? <MetaBadge variant="secondary">{parsed.subagentType}</MetaBadge> : null}
-              {entry.part.progressMessages?.length ? (
-                <MetaBadge>{entry.part.progressMessages.length} updates</MetaBadge>
-              ) : null}
-              {entry.part.elapsedSeconds != null && entry.part.elapsedSeconds > 0 ? (
-                <MetaBadge>{formatElapsedSecondsLabel(entry.part.elapsedSeconds)}</MetaBadge>
-              ) : null}
-            </MetaRow>
-          )}
         >
           <SubagentStepDetail
             input={entry.part.input}
@@ -255,94 +202,72 @@ function AssistantTraceEntryView(args: {
         </ChainOfThoughtStep>
       );
     }
+
     case "todo":
-      {
-        const todos = parseTodoInput({ input: entry.part.input }).todos;
-        const completedCount = todos.filter((todo) => todo.status === "completed").length;
-        return (
-          <ChainOfThoughtStep
-            title="Todo"
-            kind="tool"
-            status={status}
-            defaultOpen={entry.part.state === "input-streaming"}
-            openWhen={entry.part.state === "input-streaming"}
-            meta={todos.length > 0 ? (
-              <MetaRow>
-                <MetaBadge>{`${completedCount}/${todos.length}`}</MetaBadge>
-              </MetaRow>
-            ) : undefined}
-          >
-            <TodoStepDetail input={entry.part.input} />
-          </ChainOfThoughtStep>
-        );
-      }
+      return (
+        <ChainOfThoughtStep
+          title="Todo"
+          status={status}
+          defaultOpen={entry.part.state === "input-streaming"}
+          openWhen={entry.part.state === "input-streaming"}
+        >
+          <TodoStepDetail input={entry.part.input} />
+        </ChainOfThoughtStep>
+      );
+
     case "diff":
-      {
-        const pendingCount = entry.parts.filter((part) => part.status === "pending").length;
-        return (
-          <ChainOfThoughtStep
-            title={entry.parts.length === 1 ? "Changed file" : "Changed files"}
-            kind="tool"
-            status={status}
-            defaultOpen={pendingCount > 0}
-            meta={(
-              <MetaRow>
-                <MetaBadge>{entry.parts.length === 1 ? "1 file" : `${entry.parts.length} files`}</MetaBadge>
-                {pendingCount > 0 ? <MetaBadge variant="warning">{pendingCount} pending</MetaBadge> : null}
-              </MetaRow>
-            )}
-          >
-            <ChangedFilesBlock parts={entry.parts} taskId={taskId} messageId={messageId} />
-          </ChainOfThoughtStep>
-        );
-      }
+      return (
+        <ChainOfThoughtStep
+          title={entry.parts.length === 1 ? "Changed file" : `${entry.parts.length} changed files`}
+          status={status}
+          defaultOpen={entry.parts.some((p) => p.status === "pending")}
+        >
+          <ChangedFilesBlock parts={entry.parts} taskId={taskId} messageId={messageId} />
+        </ChainOfThoughtStep>
+      );
+
     case "approval":
       return (
-        <ChainOfThoughtStep
-          title={`Approval: ${entry.part.toolName}`}
-          kind="system"
-          status={status}
-          defaultOpen
-        >
+        <ChainOfThoughtStep title={`Approval: ${entry.part.toolName}`} status={status} defaultOpen>
           <MessagePartRenderer part={entry.part} taskId={taskId} messageId={messageId} />
         </ChainOfThoughtStep>
       );
+
     case "user_input":
       return (
-        <ChainOfThoughtStep
-          title={`Input: ${entry.part.toolName}`}
-          kind="system"
-          status={status}
-          defaultOpen
-        >
+        <ChainOfThoughtStep title={`Input: ${entry.part.toolName}`} status={status} defaultOpen>
           <MessagePartRenderer part={entry.part} taskId={taskId} messageId={messageId} />
         </ChainOfThoughtStep>
       );
+
     case "system":
       return (
         <ChainOfThoughtStep
           title={entry.part.content.split("\n").find(Boolean)?.trim() || "System"}
-          kind="system"
           status={status}
           defaultOpen={entry.part.compactBoundary != null}
         >
           <MessagePartRenderer part={entry.part} taskId={taskId} messageId={messageId} />
         </ChainOfThoughtStep>
       );
+
     case "orchestration":
       return (
-        <ChainOfThoughtStep title="Orchestration" kind="system" status={status} defaultOpen={isStreaming}>
+        <ChainOfThoughtStep title="Orchestration" status={status} defaultOpen={isStreaming}>
           <OrchestrationCard part={entry.part} />
         </ChainOfThoughtStep>
       );
+
     case "stave_processing":
       return (
-        <ChainOfThoughtStep title="Execution routing" kind="system" status={status} defaultOpen={isStreaming}>
+        <ChainOfThoughtStep title="Execution routing" status={status} defaultOpen={isStreaming}>
           <StaveProcessingCard part={entry.part} />
         </ChainOfThoughtStep>
       );
   }
 }
+
+/* ─── Main export ─────────────────────────────────────────────────── */
 
 export function AssistantMessageBody(args: {
   message: Pick<ChatMessage, "content" | "parts" | "isStreaming">;
@@ -375,12 +300,10 @@ export function AssistantMessageBody(args: {
           collapseWhen={!isStreaming}
         >
           <ChainOfThoughtTrigger />
-          <ChainOfThoughtContent className="space-y-1.5">
+          <ChainOfThoughtContent>
             {trace.showStreamingPlaceholder ? (
-              <ChainOfThoughtStep title="Thinking" kind="thinking" status="active" defaultOpen openWhen>
-                <Reasoning isStreaming defaultOpen>
-                  <ReasoningContent>Thinking...</ReasoningContent>
-                </Reasoning>
+              <ChainOfThoughtStep title="Thinking" status="active" defaultOpen openWhen>
+                <p className="text-sm text-muted-foreground">Thinking...</p>
               </ChainOfThoughtStep>
             ) : null}
             {trace.entries.map((entry) => (

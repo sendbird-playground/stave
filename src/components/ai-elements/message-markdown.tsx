@@ -53,7 +53,7 @@ function MessageFileLink({ href, filePath, fileName, line, column, onClick }: Me
       data-message-file-link="true"
       aria-label={tooltipLabel}
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/35 px-2 py-0.5 align-middle text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-0.5 align-middle text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
       )}
       onClick={onClick}
     >
@@ -61,7 +61,7 @@ function MessageFileLink({ href, filePath, fileName, line, column, onClick }: Me
       <span aria-hidden="true" className="shrink-0 text-border">|</span>
       <span className="min-w-0 max-w-64 truncate">{fileName}</span>
       {locationLabel ? (
-        <span className="shrink-0 rounded-sm border border-border/60 bg-background/70 px-1 py-0 text-[10px] leading-4 text-muted-foreground">
+        <span className="shrink-0 rounded-sm border border-border bg-background/70 px-1 py-0 text-[10px] leading-4 text-muted-foreground">
           {locationLabel}
         </span>
       ) : null}
@@ -141,7 +141,7 @@ export function MarkdownMessage({
       return (
         <code
           className={cn(
-            "rounded bg-muted px-1 py-0.5 font-mono",
+            "rounded-md border border-border/80 bg-muted/40 px-1.5 py-0.5 font-mono text-[0.9em]",
             resolveMessageSizeClass(messageCodeFontSizeRef.current),
           )}
         >

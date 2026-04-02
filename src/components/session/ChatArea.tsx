@@ -101,7 +101,7 @@ export function ChatArea() {
     "data-testid": "session-area",
     "data-task-abort-scope": "",
     onMouseDownCapture: handleSessionAreaMouseDownCapture,
-    className: "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface outline-none",
+    className: "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background outline-none",
   } as const;
 
   if (!projectPath) {

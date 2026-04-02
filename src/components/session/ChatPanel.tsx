@@ -127,7 +127,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                   label="Elapsed time"
                   className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-background px-2 text-sm font-normal text-foreground opacity-100"
                 >
-                  <WaveIndicator className={cn("size-3.5", showRespondingWave ? toProviderWaveToneClass({ providerId: message.providerId, model: message.model }) : "text-muted-foreground")} />
+                  <WaveIndicator className={cn("size-3.5", showRespondingWave ? toProviderWaveToneClass({ providerId: message.providerId, model: message.model }) : "text-muted-foreground")} animate={showRespondingWave} />
                   {elapsedLabel}
                 </MessageAction>
               ) : null}
