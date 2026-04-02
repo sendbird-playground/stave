@@ -26,9 +26,32 @@ function toVirtualScrollBehavior(args?: ScrollToBottomArgs): "auto" | "smooth" |
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
 const VIRTUAL_LIST_BOTTOM_GAP = 24;
+const SCROLL_DEBUG_STORAGE_KEY = "stave:debug:conversation-scroll";
 // Threshold must exceed the bottom gap so the padding zone is always considered
 // "at bottom" — otherwise auto-scroll disengages while still in the gap area.
 const AT_BOTTOM_THRESHOLD = Math.max(32, VIRTUAL_LIST_BOTTOM_GAP + 8);
+
+function isConversationScrollDebugEnabled() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return window.localStorage.getItem(SCROLL_DEBUG_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function debugConversationScroll(event: string, details: Record<string, unknown>) {
+  if (!isConversationScrollDebugEnabled()) {
+    return;
+  }
+  console.debug("[conversation-scroll]", event, details);
+}
+
+function getDistanceFromBottom(container: HTMLDivElement) {
+  return container.scrollHeight - container.scrollTop - container.clientHeight;
+}
 
 function withExtraPaddingBottom(style: CSSProperties | undefined, extra: number): CSSProperties {
   const paddingBottom = style?.paddingBottom;
@@ -76,6 +99,11 @@ export function Conversation(props: HTMLAttributes<HTMLDivElement>) {
     // as a supplementary hint but container.scrollTo is the primary driver.
     const container = containerRef.current;
     const behavior = args?.behavior ?? "auto";
+    debugConversationScroll("scroll-to-bottom", {
+      behavior,
+      hasContainer: Boolean(container),
+      hasOverride: Boolean(scrollToBottomOverrideRef.current),
+    });
     if (scrollToBottomOverrideRef.current) {
       scrollToBottomOverrideRef.current(args);
     }
@@ -84,6 +112,10 @@ export function Conversation(props: HTMLAttributes<HTMLDivElement>) {
       // the scrollToIndex from the override (if any).
       requestAnimationFrame(() => {
         container.scrollTo({ top: container.scrollHeight, behavior });
+        debugConversationScroll("container-scroll-to-bottom", {
+          behavior,
+          distanceFromBottom: Math.round(getDistanceFromBottom(container)),
+        });
       });
     }
   }, []);
@@ -323,7 +355,33 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
 
     const rafIds: number[] = [];
 
-    const restoreToBottom = () => {
+    const scheduleContainerBottomSync = (reason: string) => {
+      if (!containerEl) {
+        return;
+      }
+
+      const runSync = (attempt: number) => {
+        containerEl.scrollTo({ top: containerEl.scrollHeight, behavior: "auto" });
+        const distanceFromBottom = Math.round(getDistanceFromBottom(containerEl));
+        debugConversationScroll("container-bottom-sync", {
+          reason,
+          attempt,
+          distanceFromBottom,
+        });
+        if (attempt >= 2) {
+          return;
+        }
+        rafIds.push(requestAnimationFrame(() => {
+          if (getDistanceFromBottom(containerEl) > AT_BOTTOM_THRESHOLD) {
+            runSync(attempt + 1);
+          }
+        }));
+      };
+
+      rafIds.push(requestAnimationFrame(() => runSync(1)));
+    };
+
+    const restoreToBottom = (reason: string) => {
       if (lastIndex < 0) {
         return;
       }
@@ -332,6 +390,13 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
         align: "end",
         behavior: "auto",
       });
+      debugConversationScroll("restore-to-bottom", {
+        reason,
+        listKey: props.listKey ?? null,
+        forceScrollScopeKey: props.forceScrollScopeKey ?? null,
+        lastIndex,
+      });
+      scheduleContainerBottomSync(reason);
     };
 
     const restoreToSavedAnchor = (index: number, offset: number) => {
@@ -391,17 +456,17 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       // Re-enable stickToBottom so Virtuoso's followOutput keeps pinning new
       // content after this forced restore (e.g. during streaming).
       stickToBottomRef.current = true;
-      restoreToBottom();
+      restoreToBottom("force-scroll-key");
       return;
     }
     if (!listScopeChanged && stickToBottomRef.current) {
-      restoreToBottom();
+      restoreToBottom("list-update-while-sticky");
       return;
     }
 
     const savedIndex = props.restoreItemIndex;
     if (savedIndex == null || savedIndex < 0 || savedIndex >= props.data.length) {
-      restoreToBottom();
+      restoreToBottom(listScopeChanged ? "list-scope-change" : "fallback-no-anchor");
       return;
     }
 
