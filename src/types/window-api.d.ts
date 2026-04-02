@@ -661,6 +661,8 @@ interface WindowPersistenceApi {
           model: string;
           providerId: string;
           content: string;
+          startedAt?: string;
+          completedAt?: string;
           isStreaming?: boolean;
           usage?: {
             inputTokens: number;
@@ -711,6 +713,8 @@ interface WindowPersistenceApi {
         model: string;
         providerId: string;
         content: string;
+        startedAt?: string;
+        completedAt?: string;
         isStreaming?: boolean;
         usage?: {
           inputTokens: number;
@@ -752,6 +756,8 @@ interface WindowPersistenceApi {
           model: string;
           providerId: string;
           content: string;
+          startedAt?: string;
+          completedAt?: string;
           isStreaming?: boolean;
           usage?: {
             inputTokens: number;
@@ -865,6 +871,8 @@ interface WindowPersistenceApi {
           model: string;
           providerId: string;
           content: string;
+          startedAt?: string;
+          completedAt?: string;
           isStreaming?: boolean;
           usage?: {
             inputTokens: number;

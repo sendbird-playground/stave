@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Clock3, Copy } from "lucide-react";
 import { Badge, Button, Card, TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import {
-  type ChainOfThoughtStep,
+  type ChainOfThoughtStepData as ChainOfThoughtStep,
   CompactingIndicator,
   ConfirmationCompact,
   ContextCompactedCheckpoint,
