@@ -64,6 +64,7 @@ import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import type { ChatMessage } from "@/types/chat";
 
 const loadSettingsDialog = () =>
   import("@/components/layout/SettingsDialog").then((module) => ({
@@ -77,6 +78,43 @@ const loadKeyboardShortcutsDrawer = () =>
 const KeyboardShortcutsDrawer = lazy(() => loadKeyboardShortcutsDrawer());
 
 type ProjectSidebarView = ProjectSidebarCollapsedProjectView;
+const EMPTY_MESSAGES: ChatMessage[] = [];
+
+function resolveRespondingToneClass(args: {
+  tasks: ReturnType<typeof useAppStore.getState>["tasks"];
+  messagesByTask: Record<string, ChatMessage[]>;
+  activeTurnIdsByTask: Record<string, string | undefined>;
+}) {
+  const respondingTasks = getRespondingTasks({
+    tasks: args.tasks,
+    activeTurnIdsByTask: args.activeTurnIdsByTask,
+  });
+  if (respondingTasks.length === 0) {
+    return {
+      respondingTaskCount: 0,
+      respondingToneClass: "text-primary",
+    };
+  }
+
+  const providers = Array.from(
+    new Set(
+      respondingTasks.map((task) =>
+        getRespondingProviderId({
+          fallbackProviderId: task.provider,
+          messages: args.messagesByTask[task.id] ?? EMPTY_MESSAGES,
+        }),
+      ),
+    ),
+  );
+
+  return {
+    respondingTaskCount: respondingTasks.length,
+    respondingToneClass:
+      providers.length === 1 && providers[0]
+        ? getProviderWaveToneClass({ providerId: providers[0] })
+        : "text-primary",
+  };
+}
 
 function formatWorkspaceName(name: string, branch?: string) {
   if (name.toLowerCase() === "default workspace") {
@@ -202,9 +240,8 @@ export function ProjectWorkspaceSidebar(args: {
     workspaceDefaultById,
     workspaceBranchById,
     workspaceRuntimeCacheById,
-    tasks,
-    messagesByTask,
-    activeTurnIdsByTask,
+    activeWorkspaceRespondingTaskCount,
+    activeWorkspaceRespondingToneClass,
     activeWorkspaceBranch,
     activeWorkspaceCwd,
     defaultBranch,
@@ -224,8 +261,14 @@ export function ProjectWorkspaceSidebar(args: {
     refreshWorkspaces,
   ] = useAppStore(
     useShallow(
-      (state) =>
-        [
+      (state) => {
+        const activeWorkspaceRespondingState = resolveRespondingToneClass({
+          tasks: state.tasks,
+          messagesByTask: state.messagesByTask,
+          activeTurnIdsByTask: state.activeTurnIdsByTask,
+        });
+
+        return [
           state.projectPath,
           state.projectName,
           state.workspaces,
@@ -234,9 +277,8 @@ export function ProjectWorkspaceSidebar(args: {
           state.workspaceDefaultById,
           state.workspaceBranchById,
           state.workspaceRuntimeCacheById,
-          state.tasks,
-          state.messagesByTask,
-          state.activeTurnIdsByTask,
+          activeWorkspaceRespondingState.respondingTaskCount,
+          activeWorkspaceRespondingState.respondingToneClass,
           state.workspaceBranchById[state.activeWorkspaceId] ?? "main",
           state.workspacePathById[state.activeWorkspaceId] ??
             state.projectPath ??
@@ -264,7 +306,8 @@ export function ProjectWorkspaceSidebar(args: {
           state.workspacePrInfoById,
           state.fetchAllWorkspacePrStatuses,
           state.refreshWorkspaces,
-        ] as const,
+        ] as const;
+      },
     ),
   );
 
@@ -442,49 +485,41 @@ export function ProjectWorkspaceSidebar(args: {
 
   function getWorkspaceRuntimeState(workspaceId: string) {
     return workspaceId === activeWorkspaceId
-      ? { tasks, messagesByTask, activeTurnIdsByTask }
+      ? null
       : workspaceRuntimeCacheById[workspaceId];
   }
 
-  function getWorkspaceRespondingTasks(workspaceId: string) {
+  function getWorkspaceRespondingTaskCount(workspaceId: string) {
+    if (workspaceId === activeWorkspaceId) {
+      return activeWorkspaceRespondingTaskCount;
+    }
+
     const runtimeState = getWorkspaceRuntimeState(workspaceId);
     if (!runtimeState) {
-      return [];
+      return 0;
     }
 
     return getRespondingTasks({
       tasks: runtimeState.tasks,
       activeTurnIdsByTask: runtimeState.activeTurnIdsByTask,
-    });
-  }
-
-  function getWorkspaceRespondingTaskCount(workspaceId: string) {
-    return getWorkspaceRespondingTasks(workspaceId).length;
+    }).length;
   }
 
   function getWorkspaceRespondingToneClass(workspaceId: string) {
+    if (workspaceId === activeWorkspaceId) {
+      return activeWorkspaceRespondingToneClass;
+    }
+
     const runtimeState = getWorkspaceRuntimeState(workspaceId);
     if (!runtimeState) {
       return "text-primary";
     }
 
-    const providers = Array.from(
-      new Set(
-        getWorkspaceRespondingTasks(workspaceId).map((task) =>
-          getRespondingProviderId({
-            fallbackProviderId: task.provider,
-            messages: runtimeState.messagesByTask[task.id] ?? [],
-          }),
-        ),
-      ),
-    );
-    if (providers.length !== 1) {
-      return "text-primary";
-    }
-    const providerId = providers[0];
-    return providerId
-      ? getProviderWaveToneClass({ providerId })
-      : "text-primary";
+    return resolveRespondingToneClass({
+      tasks: runtimeState.tasks,
+      messagesByTask: runtimeState.messagesByTask,
+      activeTurnIdsByTask: runtimeState.activeTurnIdsByTask,
+    }).respondingToneClass;
   }
 
   async function handleProjectWorkspaceOpen(args: {

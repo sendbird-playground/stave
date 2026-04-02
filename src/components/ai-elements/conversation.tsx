@@ -448,7 +448,7 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
   // is appended and the user was already at the bottom. This replaces the manual
   // auto-scroll logic that was causing jitter via cascading scroll commands.
   const followOutput = useCallback(() => {
-    return stickToBottomRef.current ? "smooth" : false;
+    return stickToBottomRef.current ? "auto" : false;
   }, []);
 
   return (

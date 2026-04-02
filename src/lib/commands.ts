@@ -472,7 +472,7 @@ export function buildCommandPaletteItems(args: {
 }
 
 export function filterCommandPaletteItems(args: {
-  items: CommandPaletteItem[];
+  items: readonly CommandPaletteItem[];
   query: string | null;
 }) {
   const normalized = (args.query ?? "")

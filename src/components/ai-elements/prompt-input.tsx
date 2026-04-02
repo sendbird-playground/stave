@@ -1,6 +1,6 @@
 import { Brain, Camera, Check, ClipboardCheck, FilePlus2, FolderOpen, Globe2, OctagonX, Plus, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
 import type { Attachment, UserInputPart } from "@/types/chat";
-import { type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
@@ -26,7 +26,7 @@ interface PromptInputProps {
   permissionMode?: PermissionModeValue;
   runtimeQuickControls?: readonly PromptInputRuntimeControl[];
   runtimeStatusItems?: readonly PromptInputRuntimeStatusItem[];
-  commandPaletteItems?: CommandPaletteItem[];
+  commandPaletteItems?: readonly CommandPaletteItem[];
   commandPaletteProviderNote?: CommandPaletteProviderNote;
   skillsEnabled?: boolean;
   skillsAutoSuggest?: boolean;
@@ -49,6 +49,10 @@ interface PromptInputProps {
   onSubmit: (args: { text: string; filePaths: string[] }) => void | Promise<void>;
   onAbort?: () => void;
 }
+
+const SUPPORTS_FIELD_SIZING_CONTENT = typeof CSS !== "undefined"
+  && typeof CSS.supports === "function"
+  && CSS.supports("field-sizing", "content");
 
 export function PromptInput(args: PromptInputProps) {
   const {
@@ -101,11 +105,13 @@ export function PromptInput(args: PromptInputProps) {
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(NO_COMMAND_SELECTION);
   const [caretIndex, setCaretIndex] = useState(value.length);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const textareaAutosizeFrameRef = useRef<number | null>(null);
   const commandListRef = useRef<HTMLDivElement | null>(null);
   const wasTurnActiveRef = useRef(Boolean(isTurnActive));
   const interactionsDisabled = Boolean(disabled || isTurnActive);
   const maxTextareaHeight = 240;
   const commandQuery = useMemo(() => getSlashCommandSearchQuery(value), [value]);
+  const deferredCommandQuery = useDeferredValue(commandQuery);
   const activeSkillToken = useMemo(() => (
     skillsEnabled
       ? getActiveSkillTokenMatch({
@@ -114,12 +120,14 @@ export function PromptInput(args: PromptInputProps) {
         })
       : null
   ), [caretIndex, skillsEnabled, value]);
+  const deferredSkillQuery = useDeferredValue(activeSkillToken?.query ?? "");
+  const deferredFileFilter = useDeferredValue(fileFilter);
   const filteredCommandItems = useMemo(() => filterCommandPaletteItems({
     items: commandPaletteItems ?? [],
-    query: commandQuery,
-  }), [commandPaletteItems, commandQuery]);
+    query: deferredCommandQuery,
+  }), [commandPaletteItems, deferredCommandQuery]);
   const filteredSkillItems = useMemo(() => {
-    const query = activeSkillToken?.query.trim().toLowerCase() ?? "";
+    const query = deferredSkillQuery.trim().toLowerCase();
     const items = skillPaletteItems ?? [];
     if (!query) {
       return items;
@@ -134,7 +142,7 @@ export function PromptInput(args: PromptInputProps) {
       ];
       return haystacks.some((entry) => entry.toLowerCase().includes(query));
     });
-  }, [activeSkillToken?.query, skillPaletteItems]);
+  }, [deferredSkillQuery, skillPaletteItems]);
   const indexedCommandItems = useMemo(
     () => filteredCommandItems.map((item, index) => ({ item, index })),
     [filteredCommandItems]
@@ -194,15 +202,36 @@ export function PromptInput(args: PromptInputProps) {
     || (runtimeStatusItems?.length ?? 0) > 0
   );
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) {
       return;
     }
-    textarea.style.height = "0px";
-    const nextHeight = Math.min(textarea.scrollHeight, maxTextareaHeight);
-    textarea.style.height = `${nextHeight}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxTextareaHeight ? "auto" : "hidden";
+    if (SUPPORTS_FIELD_SIZING_CONTENT) {
+      textarea.style.height = "";
+      textarea.style.overflowY = "auto";
+      return;
+    }
+    const measureHeight = () => {
+      textarea.style.height = "auto";
+      const scrollHeight = textarea.scrollHeight;
+      const nextHeight = Math.min(scrollHeight, maxTextareaHeight);
+      const nextOverflowY = scrollHeight > maxTextareaHeight ? "auto" : "hidden";
+      if (textarea.style.height !== `${nextHeight}px`) {
+        textarea.style.height = `${nextHeight}px`;
+      }
+      if (textarea.style.overflowY !== nextOverflowY) {
+        textarea.style.overflowY = nextOverflowY;
+      }
+      textareaAutosizeFrameRef.current = null;
+    };
+    textareaAutosizeFrameRef.current = window.requestAnimationFrame(measureHeight);
+    return () => {
+      if (textareaAutosizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(textareaAutosizeFrameRef.current);
+        textareaAutosizeFrameRef.current = null;
+      }
+    };
   }, [value, maxTextareaHeight]);
 
   useEffect(() => {
@@ -295,12 +324,15 @@ export function PromptInput(args: PromptInputProps) {
   }, [selectedSkillIndex]);
 
   const filteredFiles = useMemo(() => {
-    const normalized = fileFilter.trim().toLowerCase();
+    if (!attachOpen) {
+      return [];
+    }
+    const normalized = deferredFileFilter.trim().toLowerCase();
     if (!normalized) {
       return projectFiles.slice(0, 120);
     }
     return projectFiles.filter((path) => path.toLowerCase().includes(normalized)).slice(0, 120);
-  }, [fileFilter, projectFiles]);
+  }, [attachOpen, deferredFileFilter, projectFiles]);
 
   async function submitCurrentMessage() {
     const nextText = value.trim();

@@ -21,6 +21,8 @@ interface WorkspaceTerminalState {
 const TERMINAL_TRANSCRIPT_STORAGE_KEY = "stave:terminal-task-transcript:v1";
 const TERMINAL_POLL_INTERVAL_MS = 120;
 const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
+const TERMINAL_SESSION_BUFFER_CHAR_LIMIT = 200_000;
+const TERMINAL_TRANSCRIPT_CHAR_LIMIT = 300_000;
 const DEFAULT_TERMINAL_FONT_FAMILY = '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace';
 const DEFAULT_TERMINAL_FONT_SIZE = 13;
 const DEFAULT_TERMINAL_LINE_HEIGHT = 1.2;
@@ -67,6 +69,30 @@ function resolveTerminalTheme() {
   };
 }
 
+function appendTerminalText(existing: string, nextChunk: string, limit: number) {
+  if (!nextChunk) {
+    return existing;
+  }
+  const combined = `${existing}${nextChunk}`;
+  if (combined.length <= limit) {
+    return combined;
+  }
+
+  const overflowStart = combined.length - limit;
+  const nextLineBreak = combined.indexOf("\n", overflowStart);
+  return nextLineBreak >= 0
+    ? combined.slice(nextLineBreak + 1)
+    : combined.slice(-limit);
+}
+
+function appendTerminalInput(existing: string, nextChunk: string, limit: number) {
+  if (!nextChunk) {
+    return existing;
+  }
+  const combined = `${existing}${nextChunk}`;
+  return combined.length <= limit ? combined : combined.slice(-limit);
+}
+
 export function TerminalDock() {
   const [
     terminalDockHeight,
@@ -94,7 +120,8 @@ export function TerminalDock() {
   const xtermRef = useRef<Terminal | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const sessionBufferRef = useRef<Record<string, string>>({});
-  const writeLockRef = useRef(false);
+  const pendingInputBySessionRef = useRef<Record<string, string>>({});
+  const writeInFlightBySessionRef = useRef<Record<string, boolean>>({});
   const transcriptRef = useRef<Record<string, string>>({});
   const creatingSessionRef = useRef(false);
   const transcriptFlushTimerRef = useRef<number | null>(null);
@@ -121,6 +148,50 @@ export function TerminalDock() {
       transcriptFlushTimerRef.current = null;
       window.localStorage.setItem(TERMINAL_TRANSCRIPT_STORAGE_KEY, JSON.stringify(transcriptRef.current));
     }, TERMINAL_TRANSCRIPT_FLUSH_MS);
+  }
+
+  function enqueueTerminalInput(args: { sessionId: string; input: string }) {
+    pendingInputBySessionRef.current[args.sessionId] = appendTerminalInput(
+      pendingInputBySessionRef.current[args.sessionId] ?? "",
+      args.input,
+      TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
+    );
+    flushTerminalInput(args.sessionId);
+  }
+
+  function flushTerminalInput(sessionId: string) {
+    if (writeInFlightBySessionRef.current[sessionId]) {
+      return;
+    }
+
+    const input = pendingInputBySessionRef.current[sessionId];
+    if (!input) {
+      return;
+    }
+
+    const writeSession = window.api?.terminal?.writeSession;
+    if (!writeSession) {
+      xtermRef.current?.writeln("\r\n[error] terminal bridge unavailable.");
+      delete pendingInputBySessionRef.current[sessionId];
+      return;
+    }
+
+    pendingInputBySessionRef.current[sessionId] = "";
+    writeInFlightBySessionRef.current[sessionId] = true;
+
+    void writeSession({ sessionId, input }).catch(() => {
+      pendingInputBySessionRef.current[sessionId] = appendTerminalInput(
+        input,
+        pendingInputBySessionRef.current[sessionId] ?? "",
+        TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
+      );
+      xtermRef.current?.writeln("\r\n[error] failed to write terminal input.");
+    }).finally(() => {
+      writeInFlightBySessionRef.current[sessionId] = false;
+      if (pendingInputBySessionRef.current[sessionId]) {
+        flushTerminalInput(sessionId);
+      }
+    });
   }
 
   useEffect(() => {
@@ -225,19 +296,10 @@ export function TerminalDock() {
 
     const disposable = terminal.onData((input) => {
       const currentSessionId = activeSessionIdRef.current;
-      if (!currentSessionId || writeLockRef.current) {
+      if (!currentSessionId) {
         return;
       }
-      writeLockRef.current = true;
-      const writeSession = window.api?.terminal?.writeSession;
-      if (!writeSession) {
-        terminal.writeln("\r\n[error] terminal bridge unavailable.");
-        writeLockRef.current = false;
-        return;
-      }
-      void writeSession({ sessionId: currentSessionId, input }).finally(() => {
-        writeLockRef.current = false;
-      });
+      enqueueTerminalInput({ sessionId: currentSessionId, input });
     });
 
     void stabilizeTerminalMetrics();
@@ -286,6 +348,8 @@ export function TerminalDock() {
       setBridgeError("");
       const nextId = created.sessionId;
       sessionBufferRef.current[nextId] = "";
+      pendingInputBySessionRef.current[nextId] = "";
+      writeInFlightBySessionRef.current[nextId] = false;
       setTabs((prev) => {
         const index = prev.length + 1;
         return [...prev, { id: nextId, label: `Terminal ${index}` }];
@@ -302,6 +366,8 @@ export function TerminalDock() {
       await closeSessionApi({ sessionId: args.sessionId });
     }
     delete sessionBufferRef.current[args.sessionId];
+    delete pendingInputBySessionRef.current[args.sessionId];
+    delete writeInFlightBySessionRef.current[args.sessionId];
     setTabs((prev) => {
       const next = prev.filter((tab) => tab.id !== args.sessionId);
       setActiveTabId((current) => (current === args.sessionId ? next.at(-1)?.id ?? null : current));
@@ -400,8 +466,16 @@ export function TerminalDock() {
           continue;
         }
 
-        sessionBufferRef.current[sessionId] = `${sessionBufferRef.current[sessionId] ?? ""}${read.output}`;
-        transcriptRef.current[taskKey] = `${transcriptRef.current[taskKey] ?? ""}${read.output}`;
+        sessionBufferRef.current[sessionId] = appendTerminalText(
+          sessionBufferRef.current[sessionId] ?? "",
+          read.output,
+          TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
+        );
+        transcriptRef.current[taskKey] = appendTerminalText(
+          transcriptRef.current[taskKey] ?? "",
+          read.output,
+          TERMINAL_TRANSCRIPT_CHAR_LIMIT,
+        );
         transcriptChanged = true;
         if (activeSessionIdRef.current === sessionId) {
           activeOutput += read.output;
