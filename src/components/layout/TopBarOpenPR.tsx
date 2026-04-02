@@ -918,10 +918,11 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Pull Request</DialogTitle>
-            <DialogDescription>
-              <PullRequestBranchRoute currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
+            <DialogDescription className="sr-only">
+              Create a pull request from {currentBranch ?? "HEAD"} into {effectiveTargetBranch}
             </DialogDescription>
           </DialogHeader>
+          <PullRequestBranchRoute currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
 
           {step === "loading" ? (
             <CreatePrLoadingSplash currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
