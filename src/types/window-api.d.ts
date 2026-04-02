@@ -444,6 +444,11 @@ interface TerminalRunResult {
   stderr: string;
 }
 
+interface TerminalSessionOutputPayload {
+  sessionId: string;
+  output: string;
+}
+
 interface WindowTerminalApi {
   runCommand?: (args: TerminalRunArgs) => Promise<TerminalRunResult>;
   createSession?: (args: {
@@ -451,6 +456,7 @@ interface WindowTerminalApi {
     shell?: string;
     cols?: number;
     rows?: number;
+    deliveryMode?: "poll" | "push";
   }) => Promise<{ ok: boolean; sessionId?: string }>;
   writeSession?: (args: {
     sessionId: string;
@@ -459,6 +465,13 @@ interface WindowTerminalApi {
   readSession?: (args: {
     sessionId: string;
   }) => Promise<{ ok: boolean; output: string; stderr?: string }>;
+  subscribeSessionOutput?: (
+    listener: (payload: TerminalSessionOutputPayload) => void,
+  ) => () => void;
+  setSessionDeliveryMode?: (args: {
+    sessionId: string;
+    deliveryMode: "poll" | "push";
+  }) => Promise<{ ok: boolean; stderr?: string }>;
   resizeSession?: (args: {
     sessionId: string;
     cols: number;

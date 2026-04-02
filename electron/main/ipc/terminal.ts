@@ -1,10 +1,17 @@
-import { ipcMain } from "electron";
+import { ipcMain, webContents } from "electron";
 import { randomUUID } from "node:crypto";
 import * as pty from "node-pty";
 import { deleteTerminalSession, getTerminalSession, setTerminalSession } from "../state";
 import { resolveCommandCwd, runCommand } from "../utils/command";
 
-function createTerminalSession(args: { shell?: string; cwd?: string; cols?: number; rows?: number }) {
+function createTerminalSession(args: {
+  shell?: string;
+  cwd?: string;
+  cols?: number;
+  rows?: number;
+  deliveryMode?: "poll" | "push";
+  ownerWebContentsId?: number | null;
+}) {
   const shellExe = args.shell?.trim() || process.env.SHELL || "/bin/bash";
   const cols = args.cols ?? 80;
   const rows = args.rows ?? 24;
@@ -21,12 +28,24 @@ function createTerminalSession(args: { shell?: string; cwd?: string; cols?: numb
   const session = {
     pty: ptyProcess,
     output: "",
+    deliveryMode: args.deliveryMode ?? "poll",
+    ownerWebContentsId: args.ownerWebContentsId ?? null,
   };
   setTerminalSession(sessionId, session);
 
   ptyProcess.onData((data) => {
     const current = getTerminalSession(sessionId);
     if (current) {
+      if (
+        current.deliveryMode === "push" &&
+        current.ownerWebContentsId !== null
+      ) {
+        const owner = webContents.fromId(current.ownerWebContentsId);
+        if (owner && !owner.isDestroyed()) {
+          owner.send("terminal:session-output", { sessionId, output: data });
+          return;
+        }
+      }
       current.output += data;
     }
   });
@@ -42,8 +61,22 @@ export function registerTerminalHandlers() {
     return runCommand({ command: args.command, cwd: args.cwd });
   });
 
-  ipcMain.handle("terminal:create-session", (_event, args: { cwd?: string; shell?: string; cols?: number; rows?: number }) => {
-    const sessionId = createTerminalSession({ cwd: args.cwd, shell: args.shell, cols: args.cols, rows: args.rows });
+  ipcMain.handle("terminal:create-session", (event, args: {
+    cwd?: string;
+    shell?: string;
+    cols?: number;
+    rows?: number;
+    deliveryMode?: "poll" | "push";
+  }) => {
+    const sessionId = createTerminalSession({
+      cwd: args.cwd,
+      shell: args.shell,
+      cols: args.cols,
+      rows: args.rows,
+      deliveryMode: args.deliveryMode,
+      ownerWebContentsId:
+        args.deliveryMode === "push" ? event.sender.id : null,
+    });
     return { ok: true, sessionId };
   });
 
@@ -64,6 +97,18 @@ export function registerTerminalHandlers() {
     const output = session.output;
     session.output = "";
     return { ok: true, output, stderr: "" };
+  });
+
+  ipcMain.handle("terminal:set-session-delivery-mode", (_event, args: {
+    sessionId: string;
+    deliveryMode: "poll" | "push";
+  }) => {
+    const session = getTerminalSession(args.sessionId);
+    if (!session) {
+      return { ok: false, stderr: "Terminal session not found." };
+    }
+    session.deliveryMode = args.deliveryMode;
+    return { ok: true, stderr: "" };
   });
 
   ipcMain.handle("terminal:resize-session", (_event, args: { sessionId: string; cols: number; rows: number }) => {

@@ -171,6 +171,13 @@ export function TerminalDock() {
 
   const activeSessionId = activeTabId;
   const taskKey = `${activeWorkspaceId}:${activeTaskId || "no-task"}`;
+  const taskKeyRef = useRef(taskKey);
+  const supportsPushTerminalOutput =
+    typeof window !== "undefined" &&
+    Boolean(
+      window.api?.terminal?.subscribeSessionOutput &&
+        window.api?.terminal?.setSessionDeliveryMode,
+    );
 
   function scheduleTranscriptFlush() {
     if (transcriptFlushTimerRef.current !== null) {
@@ -234,9 +241,76 @@ export function TerminalDock() {
       });
   }
 
+  function applyTerminalOutput(args: { sessionId: string; output: string }) {
+    if (!args.output) {
+      return;
+    }
+
+    sessionBufferRef.current[args.sessionId] = appendTerminalText(
+      sessionBufferRef.current[args.sessionId] ?? "",
+      args.output,
+      TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
+    );
+    transcriptRef.current[taskKeyRef.current] = appendTerminalText(
+      transcriptRef.current[taskKeyRef.current] ?? "",
+      args.output,
+      TERMINAL_TRANSCRIPT_CHAR_LIMIT,
+    );
+
+    if (activeSessionIdRef.current === args.sessionId) {
+      xtermRef.current?.write(args.output);
+    }
+
+    scheduleTranscriptFlush();
+  }
+
+  async function syncTerminalOutput(args: { sessionIds: string[] }) {
+    const readSession = window.api?.terminal?.readSession;
+    if (!readSession || args.sessionIds.length === 0) {
+      return;
+    }
+
+    const reads = await Promise.all(
+      args.sessionIds.map(
+        async (sessionId) =>
+          [sessionId, await readSession({ sessionId })] as const,
+      ),
+    );
+
+    for (const [sessionId, read] of reads) {
+      if (!read.ok || !read.output) {
+        continue;
+      }
+      applyTerminalOutput({ sessionId, output: read.output });
+    }
+  }
+
+  async function updateSessionDeliveryModes(args: {
+    sessionIds: string[];
+    deliveryMode: "poll" | "push";
+  }) {
+    const setSessionDeliveryMode = window.api?.terminal?.setSessionDeliveryMode;
+    if (!setSessionDeliveryMode || args.sessionIds.length === 0) {
+      return;
+    }
+
+    await Promise.allSettled(
+      args.sessionIds.map((sessionId) =>
+        setSessionDeliveryMode({
+          sessionId,
+          deliveryMode: args.deliveryMode,
+        }),
+      ),
+    );
+  }
+
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
+
+  useEffect(() => {
+    taskKeyRef.current = taskKey;
+  }, [taskKey]);
 
   useEffect(() => {
     if (transcriptLoadedRef.current) {
@@ -377,6 +451,30 @@ export function TerminalDock() {
     xtermRef.current.options.theme = resolveTerminalTheme();
   }, [isDarkMode]);
 
+  useEffect(() => {
+    if (!supportsPushTerminalOutput) {
+      return;
+    }
+
+    const subscribeSessionOutput = window.api?.terminal?.subscribeSessionOutput;
+    if (!subscribeSessionOutput) {
+      return;
+    }
+
+    return subscribeSessionOutput(({ sessionId, output }) => {
+      if (
+        !Object.prototype.hasOwnProperty.call(
+          sessionBufferRef.current,
+          sessionId,
+        )
+      ) {
+        return;
+      }
+
+      applyTerminalOutput({ sessionId, output });
+    });
+  }, [supportsPushTerminalOutput, taskKey]);
+
   async function createSessionTab() {
     if (creatingSessionRef.current) return;
     creatingSessionRef.current = true;
@@ -390,7 +488,12 @@ export function TerminalDock() {
       }
       const cols = xtermRef.current?.cols ?? 80;
       const rows = xtermRef.current?.rows ?? 24;
-      const created = await createSession({ cwd: workspaceCwd, cols, rows });
+      const created = await createSession({
+        cwd: workspaceCwd,
+        cols,
+        rows,
+        deliveryMode: supportsPushTerminalOutput ? "push" : "poll",
+      });
       if (!created.ok || !created.sessionId) {
         setBridgeError("Failed to create terminal session.");
         xtermRef.current?.writeln(
@@ -457,6 +560,12 @@ export function TerminalDock() {
         activeTabId: activeTabId,
         sessionBuffers: { ...sessionBufferRef.current },
       };
+      if (supportsPushTerminalOutput) {
+        void updateSessionDeliveryModes({
+          sessionIds: tabs.map((tab) => tab.id),
+          deliveryMode: "poll",
+        });
+      }
     }
 
     // Restore saved state or start fresh for the new workspace.
@@ -473,6 +582,13 @@ export function TerminalDock() {
         : "";
       if (buffer.trim()) {
         xtermRef.current?.write(buffer);
+      }
+      if (supportsPushTerminalOutput) {
+        const sessionIds = saved.tabs.map((tab) => tab.id);
+        void updateSessionDeliveryModes({
+          sessionIds,
+          deliveryMode: "push",
+        }).then(() => syncTerminalOutput({ sessionIds }));
       }
     } else {
       setTabs([]);
@@ -492,8 +608,14 @@ export function TerminalDock() {
           sessionBuffers: { ...sessionBufferRef.current },
         };
       }
+      if (supportsPushTerminalOutput) {
+        void updateSessionDeliveryModes({
+          sessionIds: tabs.map((tab) => tab.id),
+          deliveryMode: "poll",
+        });
+      }
     };
-  }, [workspaceCwd, terminalReady]);
+  }, [supportsPushTerminalOutput, workspaceCwd, terminalReady]);
 
   // Fallback: ensure a session exists when a task is active but all sessions were cleared.
   useEffect(() => {
@@ -503,6 +625,10 @@ export function TerminalDock() {
   }, [activeTaskId, tabs.length, terminalReady]);
 
   useEffect(() => {
+    if (supportsPushTerminalOutput) {
+      return;
+    }
+
     let cancelled = false;
 
     const poll = async () => {
@@ -510,48 +636,11 @@ export function TerminalDock() {
         return;
       }
 
-      const readSession = window.api?.terminal?.readSession;
-      if (!readSession || tabs.length === 0) {
+      const ids = tabs.map((tab) => tab.id);
+      if (ids.length === 0) {
         return;
       }
-
-      const ids = tabs.map((tab) => tab.id);
-      const reads = await Promise.all(
-        ids.map(
-          async (sessionId) =>
-            [sessionId, await readSession({ sessionId })] as const,
-        ),
-      );
-      let activeOutput = "";
-      let transcriptChanged = false;
-
-      for (const [sessionId, read] of reads) {
-        if (!read.ok || !read.output) {
-          continue;
-        }
-
-        sessionBufferRef.current[sessionId] = appendTerminalText(
-          sessionBufferRef.current[sessionId] ?? "",
-          read.output,
-          TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
-        );
-        transcriptRef.current[taskKey] = appendTerminalText(
-          transcriptRef.current[taskKey] ?? "",
-          read.output,
-          TERMINAL_TRANSCRIPT_CHAR_LIMIT,
-        );
-        transcriptChanged = true;
-        if (activeSessionIdRef.current === sessionId) {
-          activeOutput += read.output;
-        }
-      }
-
-      if (activeOutput) {
-        xtermRef.current?.write(activeOutput);
-      }
-      if (transcriptChanged) {
-        scheduleTranscriptFlush();
-      }
+      await syncTerminalOutput({ sessionIds: ids });
 
       if (!cancelled) {
         window.setTimeout(() => {
@@ -565,7 +654,7 @@ export function TerminalDock() {
     return () => {
       cancelled = true;
     };
-  }, [tabs, taskKey]);
+  }, [supportsPushTerminalOutput, tabs, taskKey]);
 
   useEffect(() => {
     if (!activeSessionId || !xtermRef.current) {
