@@ -110,5 +110,6 @@ export type CompletionPhrase = (typeof COMPLETION_PHRASES)[number];
  * Stateless – each call picks independently.
  */
 export function getRandomCompletionPhrase(): string {
-  return COMPLETION_PHRASES[Math.floor(Math.random() * COMPLETION_PHRASES.length)];
+  const phrase = COMPLETION_PHRASES[Math.floor(Math.random() * COMPLETION_PHRASES.length)];
+  return phrase ?? "Done";
 }
