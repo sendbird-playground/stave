@@ -25,7 +25,7 @@ export {
 } from "./code-block";
 export { Snippet } from "./snippet";
 export { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning";
-export { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtTrigger, type ChainOfThoughtStep } from "./chain-of-thought";
+export { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtStep, ChainOfThoughtTrigger, type ChainOfThoughtStep as ChainOfThoughtStepData } from "./chain-of-thought";
 export { SubagentCard, parseSubagentToolInput } from "./subagent";
 export { OrchestrationCard } from "./orchestration";
 export { StaveProcessingCard } from "./stave-processing-card";

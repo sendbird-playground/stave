@@ -62,6 +62,10 @@ function buildMessageId(args: { taskId: string; count: number }) {
   return `${args.taskId}-m-${args.count + 1}`;
 }
 
+function buildRecentTimestamp() {
+  return new Date().toISOString();
+}
+
 function hasInterruptedTurnNotice(messages: ChatMessage[]) {
   return messages.some((message) =>
     message.role === "assistant"
@@ -70,12 +74,15 @@ function hasInterruptedTurnNotice(messages: ChatMessage[]) {
 }
 
 function createInterruptedTurnNoticeMessage(args: { taskId: string; count: number }): ChatMessage {
+  const timestamp = buildRecentTimestamp();
   return {
     id: buildMessageId({ taskId: args.taskId, count: args.count }),
     role: "assistant",
     model: "system",
     providerId: "user",
     content: INTERRUPTED_TURN_NOTICE,
+    startedAt: timestamp,
+    completedAt: timestamp,
     isStreaming: false,
     parts: [{
       type: "system_event",
@@ -170,7 +177,11 @@ export function interruptActiveTaskTurns(args: {
     }
 
     nextMessagesByTask[task.id] = [
-      ...currentMessages.map((message) => (message.isStreaming ? { ...message, isStreaming: false } : message)),
+      ...currentMessages.map((message) => (
+        message.isStreaming
+          ? { ...message, completedAt: message.completedAt ?? buildRecentTimestamp(), isStreaming: false }
+          : message
+      )),
       createSystemNoticeMessage({
         taskId: task.id,
         count: currentMessages.length,

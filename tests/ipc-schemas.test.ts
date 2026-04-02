@@ -70,6 +70,8 @@ describe("provider IPC schemas", () => {
             providerId: "stave",
             model: "stave-auto",
             content: "",
+            startedAt: "2026-04-02T10:00:00.000Z",
+            completedAt: "2026-04-02T10:00:05.000Z",
             parts: [{
               type: "stave_processing",
               strategy: "direct",
@@ -88,6 +90,8 @@ describe("provider IPC schemas", () => {
     });
 
     expect(parsed).not.toBeNull();
+    expect(parsed?.messagesByTask["task-1"]?.[0]?.startedAt).toBe("2026-04-02T10:00:00.000Z");
+    expect(parsed?.messagesByTask["task-1"]?.[0]?.completedAt).toBe("2026-04-02T10:00:05.000Z");
     expect(parsed?.messagesByTask["task-1"]?.[0]?.parts[0]).toEqual({
       type: "stave_processing",
       strategy: "direct",
@@ -95,6 +99,54 @@ describe("provider IPC schemas", () => {
       reason: "General task",
       fastModeRequested: false,
       fastModeApplied: false,
+    });
+  });
+
+  test("preserves renderer-side tool metadata needed by assistant trace rendering", () => {
+    const parsed = parseWorkspaceSnapshot({
+      payload: {
+        activeTaskId: "task-1",
+        tasks: [{
+          id: "task-1",
+          title: "Task 1",
+          provider: "codex",
+          updatedAt: "2026-04-02T00:00:00.000Z",
+          unread: false,
+        }],
+        messagesByTask: {
+          "task-1": [{
+            id: "task-1-m-1",
+            role: "assistant",
+            providerId: "codex",
+            model: "gpt-5.4",
+            content: "",
+            parts: [{
+              type: "tool_use",
+              toolName: "Agent",
+              input: "{\"description\":\"Review schemas\"}",
+              output: "Done",
+              state: "output-available",
+              elapsedSeconds: 19,
+              progressMessages: ["Reading schemas", "Checking snapshots"],
+            }],
+          }],
+        },
+        promptDraftByTask: {},
+        providerConversationByTask: {},
+        editorTabs: [],
+        activeEditorTabId: null,
+      },
+    });
+
+    expect(parsed).not.toBeNull();
+    expect(parsed?.messagesByTask["task-1"]?.[0]?.parts[0]).toEqual({
+      type: "tool_use",
+      toolName: "Agent",
+      input: "{\"description\":\"Review schemas\"}",
+      output: "Done",
+      state: "output-available",
+      elapsedSeconds: 19,
+      progressMessages: ["Reading schemas", "Checking snapshots"],
     });
   });
 

@@ -23,6 +23,10 @@ function buildMessageId(args: { taskId: string; count: number }) {
   return `${args.taskId}-m-${args.count + 1}`;
 }
 
+function buildRecentTimestamp() {
+  return new Date().toISOString();
+}
+
 function createTextPart(args: { text: string }): TextPart {
   return sanitizeMessagePartPayload({
     type: "text",
@@ -362,12 +366,14 @@ function createStreamingAssistantMessage(args: {
   provider: ProviderId;
   model: string;
 }): ChatMessage {
+  const startedAt = buildRecentTimestamp();
   return {
     id: buildMessageId({ taskId: args.taskId, count: args.count }),
     role: "assistant",
     model: args.model,
     providerId: args.provider,
     content: "",
+    startedAt,
     isStreaming: true,
     parts: [],
   };
@@ -381,12 +387,14 @@ function createPlanAssistantMessage(args: {
   planText: string;
   isStreaming?: boolean;
 }): ChatMessage {
+  const startedAt = buildRecentTimestamp();
   return {
     id: buildMessageId({ taskId: args.taskId, count: args.count }),
     role: "assistant",
     model: args.model,
     providerId: args.provider,
     content: args.planText,
+    startedAt,
     isStreaming: args.isStreaming ?? true,
     isPlanResponse: true,
     planText: args.planText,
@@ -582,10 +590,12 @@ export function appendProviderEventToAssistant(args: {
   }
 
   if (args.event.type === "done") {
+    const completedAt = buildRecentTimestamp();
     if (!hasRenderableAssistantContent({ message: args.message })) {
       return {
         ...args.message,
         content: "No response returned.",
+        completedAt,
         isStreaming: false,
         parts: [
           ...args.message.parts,
@@ -611,6 +621,7 @@ export function appendProviderEventToAssistant(args: {
 
     return {
       ...args.message,
+      completedAt,
       isStreaming: false,
       parts: truncated
         ? [...finalizedParts, { type: "system_event" as const, content: "Response was cut off because the output limit was reached." }]

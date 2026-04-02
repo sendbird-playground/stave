@@ -4423,6 +4423,7 @@ export const useAppStore = create<AppState>()(
 
           const aborted: ChatMessage = {
             ...target,
+            completedAt: buildRecentTimestamp(),
             isStreaming: false,
             parts: [
               ...target.parts,

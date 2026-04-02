@@ -17,6 +17,8 @@ const ToolUsePartSchema = z.object({
   toolName: z.string(),
   input: z.string(),
   output: z.string().optional(),
+  elapsedSeconds: z.number().optional(),
+  progressMessages: z.array(z.string()).optional(),
   state: z.union([
     z.literal("input-streaming"),
     z.literal("input-available"),
@@ -168,6 +170,8 @@ const ChatMessageSchema = z.object({
   model: z.string(),
   providerId: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave"), z.literal("user")]),
   content: z.string(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
   isStreaming: z.boolean().optional(),
   isPlanResponse: z.boolean().optional(),
   planText: z.string().optional(),

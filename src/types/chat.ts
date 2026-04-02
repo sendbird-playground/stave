@@ -169,6 +169,8 @@ export interface ChatMessage {
   model: string;
   providerId: "claude-code" | "codex" | "stave" | "user";
   content: string;
+  startedAt?: string;
+  completedAt?: string;
   isStreaming?: boolean;
   isPlanResponse?: boolean;
   planText?: string;

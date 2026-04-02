@@ -60,6 +60,7 @@ export function buildLocalCommandResponseState(args: {
   const current = args.messagesByTask[args.taskId] ?? [];
   const userMessageId = buildMessageId({ taskId: args.taskId, count: current.length });
   const assistantMessageId = buildMessageId({ taskId: args.taskId, count: current.length + 1 });
+  const timestamp = buildRecentTimestamp();
 
   const userMessage: ChatMessage = {
     id: userMessageId,
@@ -76,6 +77,8 @@ export function buildLocalCommandResponseState(args: {
     model: args.activeModel,
     providerId: args.provider,
     content: args.responseText,
+    startedAt: timestamp,
+    completedAt: timestamp,
     isStreaming: false,
     parts: args.responseText ? [createUserTextPart({ text: args.responseText })] : [],
   };
@@ -194,6 +197,7 @@ export function buildPendingProviderTurnState(args: {
     model: args.activeModel,
     providerId: args.provider,
     content: "",
+    startedAt: buildRecentTimestamp(),
     isStreaming: true,
     parts: [],
   };

@@ -12,6 +12,7 @@ This file is the fast entrypoint for codebase orientation.
 6. `docs/architecture/entrypoints.md` for task-to-file routing
 7. `docs/architecture/contracts.md` for multi-file contract checklists
 8. `docs/architecture/workspace-integrity.md` before changing project/workspace/task ownership or hydration logic
+9. `docs/architecture/chat-message-rendering.md` before changing assistant message UI semantics
 
 ## Top-Level Layout
 
@@ -36,6 +37,8 @@ This file is the fast entrypoint for codebase orientation.
   - strict IPC validation boundary
 - `src/lib/session/provider-event-replay.ts`
   - normalized event replay into shared chat state
+- `src/components/session/ChatPanel.tsx`
+  - top-level conversation and assistant message rendering
 - `src/lib/pr-status.ts`
   - PR status enum, derivation, icon/color/action config
   - see [Workspace PR Status](../features/workspace-pr-status.md)

@@ -1,9 +1,8 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
-import { Clock3, MessageSquareIcon } from "lucide-react";
-import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
+import { MessageSquareIcon } from "lucide-react";
+import { Badge, Button, Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, WaveIndicator } from "@/components/ui";
 import {
-  ChainOfThought,
   Conversation,
   ConversationContent,
   ConversationScrollButton,
@@ -13,172 +12,63 @@ import {
   MessageActions,
   MessageContent,
   ModelIcon,
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-  ToolGroup,
 } from "@/components/ai-elements";
-import {
-  getVisibleMessageParts,
-  getMessageBodyFallbackState,
-  getMessageScrollFingerprint,
-  getRenderableMessageParts,
-  groupMessageParts,
-  shouldRenderInlineToolPart,
-  shouldAutoOpenToolGroup,
-} from "@/components/session/chat-panel.utils";
+import { getMessageScrollFingerprint } from "@/components/session/chat-panel.utils";
 import { canTakeOverTask, getTaskControlOwner, isTaskManaged, formatTaskUpdatedAt } from "@/lib/tasks";
 import { toHumanModelName } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, MessagePart } from "@/types/chat";
-import { SessionReplayDrawer, type SessionReplayRequestContext } from "@/components/session/SessionReplayDrawer";
 import { useShallow } from "zustand/react/shallow";
-import { BackgroundActionsSummary, buildChainOfThoughtSteps, CopyButton, MessagePartRenderer, toProviderWaveToneClass } from "./chat-panel-message-parts";
-import { ChangedFilesBlock, ImageAttachmentBlock, ReferencedFilesBlock } from "./chat-panel-file-blocks";
+import { CopyButton, toProviderWaveToneClass } from "./chat-panel-message-parts";
+import { AssistantMessageBody } from "./message/assistant-trace";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
-function MessageBody(args: {
-  message: { content?: string; parts: MessagePart[]; isStreaming?: boolean };
-  taskId: string;
-  messageId: string;
-  streamingEnabled: boolean;
-  onOpenReplay?: () => void;
-}) {
-  const { message, taskId, messageId, streamingEnabled, onOpenReplay } = args;
-  const reasoningDefaultExpanded = useAppStore((state) => state.settings.reasoningDefaultExpanded);
-  const isActivelyStreaming = Boolean(message.isStreaming);
-  const isStreaming = streamingEnabled && isActivelyStreaming;
-  const renderableParts = useMemo(() => getRenderableMessageParts({
-    content: message.content ?? "",
-    parts: message.parts,
-  }), [message.content, message.parts]);
-  const reasoningParts = useMemo(() => renderableParts.filter((part) => part.type === "thinking"), [renderableParts]);
-  const hasReasoning = reasoningParts.length > 0;
-  const reasoningText = useMemo(() => reasoningParts.map((part) => part.text).join(""), [reasoningParts]);
-  const visibleParts = useMemo(() => getVisibleMessageParts(renderableParts), [renderableParts]);
-  const chainOfThoughtSteps = useMemo(() => buildChainOfThoughtSteps(renderableParts), [renderableParts]);
-  const hasChainOfThought = chainOfThoughtSteps.length > 0;
-  const showChainOfThought = hasChainOfThought && !hasReasoning;
-  const segments = useMemo(() => groupMessageParts(visibleParts), [visibleParts]);
-  const replayOnlyToolParts = useMemo(
-    () => renderableParts.filter((part) => part.type === "tool_use" && !shouldRenderInlineToolPart({ toolName: part.toolName })),
-    [renderableParts]
-  );
-  const lastTextPartIndex = useMemo(
-    () => visibleParts.map((p, i) => (p.type === "text" ? i : -1)).filter((i) => i !== -1).at(-1),
-    [visibleParts]
-  );
-  const fallbackState = useMemo(() => getMessageBodyFallbackState({
-    isActivelyStreaming,
-    renderableParts,
-  }), [isActivelyStreaming, renderableParts]);
+const MemoizedAssistantMessageBody = memo(AssistantMessageBody);
 
-  if (fallbackState === "streaming-placeholder") {
-    return (
-      <Reasoning isStreaming defaultOpen={reasoningDefaultExpanded}>
-        <ReasoningTrigger />
-        <ReasoningContent>Thinking...</ReasoningContent>
-      </Reasoning>
-    );
+function formatElapsedLabel(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
   }
-
-  if (fallbackState === "empty-completed") {
-    return <p className="text-sm italic text-muted-foreground">No response.</p>;
-  }
-
-  return (
-    <>
-      {hasReasoning ? (
-        <Reasoning isStreaming={isStreaming} defaultOpen={reasoningDefaultExpanded}>
-          <ReasoningTrigger />
-          <ReasoningContent>{reasoningText || "Thinking..."}</ReasoningContent>
-        </Reasoning>
-      ) : null}
-      {showChainOfThought ? <ChainOfThought isStreaming={isStreaming} steps={chainOfThoughtSteps} className={hasReasoning ? "mt-2" : undefined} /> : null}
-      {replayOnlyToolParts.length > 0 ? (
-        <div className={cn("mt-2", !hasReasoning && !showChainOfThought && "mt-0")}>
-          <BackgroundActionsSummary parts={replayOnlyToolParts} onOpenReplay={onOpenReplay} />
-        </div>
-      ) : null}
-      {segments.map((segment) => {
-        if (segment.kind === "tools") {
-          const toolStates = segment.parts.map((p) => (p.type === "tool_use" ? p.state : undefined));
-          const shouldAutoOpenGroup = shouldAutoOpenToolGroup(toolStates);
-          return (
-            <div key={`${messageId}-tools-${segment.startIndex}`} className="mt-2 first:mt-0">
-              <ToolGroup
-                states={toolStates}
-                defaultOpen={shouldAutoOpenGroup}
-                openWhen={shouldAutoOpenGroup}
-              >
-                {segment.parts.map((part, idx) => (
-                  <MessagePartRenderer
-                    key={`${messageId}-part-${segment.startIndex + idx}`}
-                    part={part}
-                    taskId={taskId}
-                    messageId={messageId}
-                    isStreaming={isStreaming}
-                    isLastTextPart={false}
-                  />
-                ))}
-              </ToolGroup>
-            </div>
-          );
-        }
-        if (segment.kind === "diffs") {
-          return (
-            <div key={`${messageId}-diffs-${segment.startIndex}`} className="mt-2 first:mt-0">
-              <ChangedFilesBlock parts={segment.parts} taskId={taskId} messageId={messageId} startIndex={segment.startIndex} />
-            </div>
-          );
-        }
-        if (segment.kind === "file_contexts") {
-          return (
-            <div key={`${messageId}-file-contexts-${segment.startIndex}`} className="mt-2 first:mt-0">
-              <ReferencedFilesBlock parts={segment.parts} />
-            </div>
-          );
-        }
-        if (segment.kind === "image_contexts") {
-          return (
-            <div key={`${messageId}-image-contexts-${segment.startIndex}`} className="mt-2 first:mt-0">
-              <ImageAttachmentBlock parts={segment.parts} />
-            </div>
-          );
-        }
-        return (
-          <div key={`${messageId}-part-${segment.index}`} className="mt-2 first:mt-0">
-            <MessagePartRenderer
-              part={segment.part}
-              taskId={taskId}
-              messageId={messageId}
-              isStreaming={isStreaming}
-              isLastTextPart={segment.index === lastTextPartIndex}
-            />
-          </div>
-        );
-      })}
-    </>
-  );
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
 
-const MemoizedMessageBody = memo(MessageBody);
+function getMessageElapsedLabel(args: {
+  message: Pick<ChatMessage, "startedAt" | "completedAt">;
+  nowMs?: number;
+}) {
+  const startedAt = args.message.startedAt ? Date.parse(args.message.startedAt) : Number.NaN;
+  if (!Number.isFinite(startedAt)) {
+    return null;
+  }
+  const endMs = args.message.completedAt
+    ? Date.parse(args.message.completedAt)
+    : args.nowMs;
+  if (!Number.isFinite(endMs ?? Number.NaN)) {
+    return null;
+  }
+  return formatElapsedLabel(Math.max(0, (endMs ?? startedAt) - startedAt));
+}
 
 interface MessageRowProps {
   activeTaskId: string;
   activeTurnId?: string;
   chatStreamingEnabled: boolean;
+  elapsedAnchorMs?: number;
   isFirst?: boolean;
   liveStreamingMessageId?: string;
-  onOpenReplay?: () => void;
   message: {
     id: string;
     role: "user" | "assistant";
     providerId: "claude-code" | "codex" | "stave" | "user";
     model: string;
     content: string;
+    startedAt?: string;
+    completedAt?: string;
     parts: MessagePart[];
     isStreaming?: boolean;
   };
@@ -186,36 +76,38 @@ interface MessageRowProps {
 
 
 const MessageRow = memo(function MessageRow(args: MessageRowProps) {
-  const { activeTaskId, activeTurnId, chatStreamingEnabled, isFirst, liveStreamingMessageId, message, onOpenReplay } = args;
+  const { activeTaskId, activeTurnId, chatStreamingEnabled, elapsedAnchorMs, isFirst, liveStreamingMessageId, message } = args;
   const showRespondingWave =
     Boolean(activeTurnId)
     && message.id === liveStreamingMessageId
     && message.role === "assistant"
     && message.isStreaming;
+  const elapsedLabel = useMemo(
+    () => getMessageElapsedLabel({ message, nowMs: elapsedAnchorMs }),
+    [elapsedAnchorMs, message]
+  );
 
   return (
     <div data-message-id={message.id} className={cn(isFirst && "pt-3 sm:pt-4")}>
       <Message from={message.role}>
         <div
           className={cn(
-            "group/message-shell flex max-w-[88%] flex-col items-stretch",
-            message.role === "assistant" ? "w-full gap-1" : "w-fit",
+            "group/message-shell flex flex-col items-stretch",
+            message.role === "assistant" ? "w-full max-w-4xl gap-1.5" : "max-w-[88%] w-fit gap-1",
           )}
         >
           <MessageContent>
-            <MemoizedMessageBody
+            <MemoizedAssistantMessageBody
               message={message}
               taskId={activeTaskId}
               messageId={message.id}
               streamingEnabled={chatStreamingEnabled}
-              onOpenReplay={onOpenReplay}
             />
           </MessageContent>
           <MessageActions
             className={cn(
               message.role === "user" && "pointer-events-none self-end !ml-0 !mt-1 opacity-0 transition-opacity group-hover/message-shell:pointer-events-auto group-hover/message-shell:opacity-100",
               message.role === "assistant" && "self-stretch !ml-0 !mt-0",
-              showRespondingWave && "relative w-full items-center pr-10",
             )}
           >
             <div className="flex min-w-0 items-center gap-1">
@@ -229,17 +121,18 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                   {toHumanModelName({ model: message.model })}
                 </MessageAction>
               ) : null}
+              {message.role === "assistant" && elapsedLabel ? (
+                <MessageAction
+                  key="elapsed-action"
+                  label="Elapsed time"
+                  className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-background px-2 text-sm font-normal text-foreground opacity-100"
+                >
+                  <WaveIndicator className={cn("size-3.5", showRespondingWave ? toProviderWaveToneClass({ providerId: message.providerId, model: message.model }) : "text-muted-foreground")} />
+                  {elapsedLabel}
+                </MessageAction>
+              ) : null}
               <CopyButton key="copy-action" text={message.content} />
             </div>
-            {showRespondingWave ? (
-              <MessageAction
-                key="responding-action"
-                label="Responding"
-                className="pointer-events-none absolute right-0 top-1/2 h-8 w-8 shrink-0 -translate-y-1/2 cursor-default p-0 opacity-100"
-              >
-                <WaveIndicator className={toProviderWaveToneClass({ providerId: message.providerId, model: message.model })} />
-              </MessageAction>
-            ) : null}
           </MessageActions>
         </div>
       </Message>
@@ -247,34 +140,26 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
   );
 });
 
-function ChatPanelHeader(args: {
-  sessionReplayOpen: boolean;
-  onOpenSessionReplay: (request?: Omit<SessionReplayRequestContext, "key">) => void;
-}) {
+function ChatPanelHeader() {
   const [
     activeTaskId,
-    activeWorkspaceId,
     activeTask,
     activeTaskTitle,
     activeTaskUpdatedAt,
     activeTurnId,
     takeOverTask,
-    turnDiagnosticsVisible,
   ] = useAppStore(useShallow((state) => {
     const activeTask = state.tasks.find((task) => task.id === state.activeTaskId);
     return [
       state.activeTaskId,
-      state.activeWorkspaceId,
       activeTask ?? null,
       activeTask?.title ?? "Untitled Task",
       activeTask?.updatedAt,
       state.activeTurnIdsByTask[state.activeTaskId],
       state.takeOverTask,
-      state.settings.turnDiagnosticsVisible,
     ] as const;
   }));
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
-  const canOpenSessionReplay = Boolean(activeWorkspaceId && activeTaskId);
   const isManagedTask = isTaskManaged(activeTask);
   const canTakeOver = canTakeOverTask({ task: activeTask, activeTurnId });
   const managedLabel = isManagedTask
@@ -323,34 +208,6 @@ function ChatPanelHeader(args: {
               Take Over
             </Button>
           ) : null}
-          {turnDiagnosticsVisible ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={!canOpenSessionReplay}
-                    className={cn(
-                      "h-7 rounded-sm px-2 text-xs shadow-none",
-                      args.sessionReplayOpen
-                        ? "border-border/80 bg-secondary/80 text-foreground hover:bg-secondary/80"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                    onClick={() => args.onOpenSessionReplay({
-                      view: "overview",
-                      replayFilter: "all",
-                    })}
-                  >
-                    <Clock3 className="size-3.5 shrink-0" />
-                    <span>Replay</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Open session replay</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : null}
         </div>
       </header>
     </>
@@ -359,9 +216,7 @@ function ChatPanelHeader(args: {
 
 const MemoizedChatPanelHeader = memo(ChatPanelHeader);
 
-function ChatPanelMessageList(args: {
-  onOpenSessionReplay: (request?: Omit<SessionReplayRequestContext, "key">) => void;
-}) {
+function ChatPanelMessageList() {
   const [activeTaskId, activeTurnId, chatStreamingEnabled, loadTaskMessages] = useAppStore(useShallow((state) => [
     state.activeTaskId,
     state.activeTurnIdsByTask[state.activeTaskId],
@@ -372,6 +227,7 @@ function ChatPanelMessageList(args: {
   const totalMessageCount = useAppStore((state) => state.messageCountByTask[state.activeTaskId] ?? 0);
   const taskMessagesLoading = useAppStore((state) => state.taskMessagesLoadingByTask[state.activeTaskId] === true);
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+  const [elapsedAnchorMs, setElapsedAnchorMs] = useState(() => Date.now());
 
   const visibleMessages = useMemo(() => messages.filter((message) => !message.isPlanResponse), [messages]);
   const hasOlderMessages = messages.length < totalMessageCount;
@@ -384,14 +240,15 @@ function ChatPanelMessageList(args: {
   const autoScrollKey = `${visibleMessages.length}:${lastVisibleMessageScrollFingerprint}`;
   const forceScrollKey = latestVisibleMessageId;
 
-  // Stable callback so that memo(MessageRow) can skip re-rendering unchanged
-  // rows when the streaming message updates.
-  const onOpenReplay = useCallback(() => {
-    args.onOpenSessionReplay({
-      view: "replay",
-      replayFilter: "tools",
-    });
-  }, [args.onOpenSessionReplay]);
+  useEffect(() => {
+    if (!activeTurnId) {
+      return;
+    }
+    const handle = window.setInterval(() => {
+      setElapsedAnchorMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(handle);
+  }, [activeTurnId]);
 
   return (
     <ConversationContent
@@ -453,9 +310,9 @@ function ChatPanelMessageList(args: {
               activeTaskId={activeTaskId}
               activeTurnId={activeTurnId}
               chatStreamingEnabled={chatStreamingEnabled}
+              elapsedAnchorMs={message.id === liveStreamingMessageId ? elapsedAnchorMs : undefined}
               isFirst={index === 0}
               liveStreamingMessageId={liveStreamingMessageId}
-              onOpenReplay={onOpenReplay}
               message={message}
             />
           )}
@@ -468,26 +325,12 @@ function ChatPanelMessageList(args: {
 const MemoizedChatPanelMessageList = memo(ChatPanelMessageList);
 
 export function ChatPanel() {
-  const [sessionReplayOpen, setSessionReplayOpen] = useState(false);
-  const replayRequestKeyRef = useRef(0);
-  const [sessionReplayRequest, setSessionReplayRequest] = useState<SessionReplayRequestContext | null>(null);
-
-  const openSessionReplay = useCallback((request?: Omit<SessionReplayRequestContext, "key">) => {
-    replayRequestKeyRef.current += 1;
-    setSessionReplayRequest({ key: replayRequestKeyRef.current, ...request });
-    setSessionReplayOpen(true);
-  }, []);
-
   return (
     <Conversation>
       <div className="flex h-full w-full flex-col">
-        <MemoizedChatPanelHeader
-          sessionReplayOpen={sessionReplayOpen}
-          onOpenSessionReplay={openSessionReplay}
-        />
-        <MemoizedChatPanelMessageList onOpenSessionReplay={openSessionReplay} />
+        <MemoizedChatPanelHeader />
+        <MemoizedChatPanelMessageList />
       </div>
-      <SessionReplayDrawer open={sessionReplayOpen} onOpenChange={setSessionReplayOpen} request={sessionReplayRequest} />
       <ConversationScrollButton tooltip="Scroll to bottom" />
     </Conversation>
   );
