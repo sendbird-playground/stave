@@ -13,6 +13,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { ContinueWorkspaceDialog } from "@/components/layout/ContinueWorkspaceDialog";
+import { CreateWorkspaceBranchPicker } from "@/components/layout/CreateWorkspaceBranchPicker";
 import {
   Badge,
   Button,
@@ -186,6 +187,64 @@ function PullRequestBranchRoute(props: { currentBranch?: string; baseBranch: str
   );
 }
 
+function normalizeRemoteBranchName(branch: string) {
+  const trimmed = branch.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex < 0 || slashIndex === trimmed.length - 1) {
+    return trimmed;
+  }
+  return trimmed.slice(slashIndex + 1);
+}
+
+function buildCreatePrTargetBranchOptions(args: {
+  defaultBranch: string;
+  headBranch?: string;
+  localBranches: string[];
+  remoteBranches: string[];
+}) {
+  const headBranch = args.headBranch?.trim();
+  const seen = new Set<string>();
+  const branches: string[] = [];
+
+  const push = (branch: string) => {
+    const trimmed = branch.trim();
+    if (!trimmed || trimmed === headBranch || seen.has(trimmed)) {
+      return;
+    }
+    seen.add(trimmed);
+    branches.push(trimmed);
+  };
+
+  for (const branch of args.localBranches) {
+    push(branch);
+  }
+  for (const branch of args.remoteBranches) {
+    push(normalizeRemoteBranchName(branch));
+  }
+
+  const normalizedDefaultBranch = args.defaultBranch.trim() || "main";
+  const priorityByBranch = new Map<string, number>(
+    [normalizedDefaultBranch, "main", "master"].map((branch, index) => [branch, index]),
+  );
+
+  const prioritizedBranches = [...branches].sort((left, right) => {
+    const leftPriority = priorityByBranch.get(left) ?? Number.MAX_SAFE_INTEGER;
+    const rightPriority = priorityByBranch.get(right) ?? Number.MAX_SAFE_INTEGER;
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+    return left.localeCompare(right);
+  });
+
+  if (prioritizedBranches.length > 0) {
+    return prioritizedBranches;
+  }
+  return [normalizedDefaultBranch];
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -195,6 +254,9 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [continueDialogOpen, setContinueDialogOpen] = useState(false);
   const [continuingWorkspace, setContinuingWorkspace] = useState(false);
+  const [targetBranch, setTargetBranch] = useState("");
+  const [targetBranchOptions, setTargetBranchOptions] = useState<string[]>([]);
+  const [loadingTargetBranches, setLoadingTargetBranches] = useState(false);
 
   // PR fields
   const [prTitle, setPrTitle] = useState("");
@@ -238,7 +300,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? "";
   const hasWorkspaceContext = Boolean(activeWorkspaceId && workspaceCwd);
   const currentBranch = workspaceBranchById[activeWorkspaceId];
-  const baseBranch = defaultBranch.trim() || "main";
+  const defaultBaseBranch = defaultBranch.trim() || "main";
 
   const prInfo = workspacePrInfoById[activeWorkspaceId];
   const prStatus: WorkspacePrStatus = prInfo?.derived ?? "no_pr";
@@ -283,6 +345,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   }
 
   function generateFallbackPRDraft(files: ScmStatusItem[]) {
+    const baseBranch = targetBranch.trim() || defaultBaseBranch;
     return generateFallbackPullRequestDraft({
       baseBranch,
       headBranch: currentBranch,
@@ -296,6 +359,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
   async function handleCreateClick() {
     const getStatus = window.api?.sourceControl?.getStatus;
+    const listBranches = window.api?.sourceControl?.listBranches;
     const suggestPRDescription = window.api?.provider?.suggestPRDescription;
     if (!getStatus) {
       toast.error("Unable to create PR", { description: "Source Control bridge unavailable." });
@@ -310,6 +374,9 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     setDialogOpen(true);
     setPrTitle("");
     setPrBody("");
+    setTargetBranch(defaultBaseBranch);
+    setTargetBranchOptions([defaultBaseBranch]);
+    setLoadingTargetBranches(Boolean(listBranches));
     setCommitMessage("");
     setChangedFiles([]);
     setChangesExpanded(true);
@@ -320,16 +387,20 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     });
 
     const statusPromise = getStatus({ cwd: workspaceCwd });
+    const branchPromise = listBranches
+      ? listBranches({ cwd: workspaceCwd }).catch(() => undefined)
+      : Promise.resolve(undefined);
     const descPromise = suggestPRDescription
       ? suggestPRDescription({
         cwd: workspaceCwd,
-        baseBranch,
+        baseBranch: defaultBaseBranch,
       }).catch(() => undefined)
       : undefined;
 
-    const [status, descResult] = await Promise.all([
+    const [status, descResult, branchResult] = await Promise.all([
       statusPromise,
       descPromise ?? Promise.resolve(undefined),
+      branchPromise,
     ]);
     if (suggestionRequestIdRef.current !== requestId) {
       return;
@@ -340,11 +411,31 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       setStep("idle");
       setDialogOpen(false);
       setInlineNotice(null);
+      setLoadingTargetBranches(false);
       return;
     }
 
+    const nextTargetBranchOptions = branchResult?.ok
+      ? buildCreatePrTargetBranchOptions({
+        defaultBranch: defaultBaseBranch,
+        headBranch: currentBranch,
+        localBranches: branchResult.branches,
+        remoteBranches: branchResult.remoteBranches ?? [],
+      })
+      : [defaultBaseBranch];
+    const nextTargetBranch = nextTargetBranchOptions.includes(defaultBaseBranch)
+      ? defaultBaseBranch
+      : nextTargetBranchOptions[0] ?? defaultBaseBranch;
+    setTargetBranchOptions(nextTargetBranchOptions);
+    setTargetBranch(nextTargetBranch);
+    setLoadingTargetBranches(false);
+
     setChangedFiles(status.items);
-    const fallbackDraft = generateFallbackPRDraft(status.items);
+    const fallbackDraft = generateFallbackPullRequestDraft({
+      baseBranch: nextTargetBranch,
+      headBranch: currentBranch,
+      fileList: status.items.map((file) => `${file.code} ${file.path}`).join("\n"),
+    });
     const nextTitle = descResult?.ok && descResult.title?.trim()
       ? descResult.title.trim()
       : fallbackDraft.title;
@@ -370,6 +461,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     const runCommand = window.api?.terminal?.runCommand;
     const createPR = window.api?.sourceControl?.createPR;
     const openExternal = window.api?.shell?.openExternal;
+    const selectedTargetBranch = targetBranch.trim() || defaultBaseBranch;
 
     if (!runCommand || !createPR) {
       setInlineNotice({
@@ -501,12 +593,12 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     setInlineNotice({
       tone: "info",
       title: options.draft ? "Creating draft PR" : "Creating pull request",
-      description: "Submitting the prepared title and description to GitHub.",
+      description: `Submitting the prepared title and description to GitHub (target: ${selectedTargetBranch}).`,
     });
     const prResult = await createPR({
       title,
       body: prBody.trim() || undefined,
-      baseBranch,
+      baseBranch: selectedTargetBranch,
       draft: options.draft,
       cwd: workspaceCwd,
     });
@@ -665,6 +757,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const isCreateDisabled = isBusy || hasRespondingTask;
   const canContinueWorkspace = prStatus === "merged" || prStatus === "closed_unmerged";
   const isContinueDisabled = isBusy || continuingWorkspace || hasRespondingTask;
+  const effectiveTargetBranch = targetBranch.trim() || defaultBaseBranch;
   const createPrTooltip = hasRespondingTask
     ? "Pause or finish the running task before creating a pull request"
     : "Create a pull request on GitHub";
@@ -742,7 +835,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
                   #{prInfo?.pr?.number} {prInfo?.pr?.title}
                 </span>
                 <span className="text-[10px] font-normal text-muted-foreground">
-                  {currentBranch} &rarr; {prInfo?.pr?.baseRefName ?? baseBranch}
+                  {currentBranch} &rarr; {prInfo?.pr?.baseRefName ?? defaultBaseBranch}
                 </span>
               </DropdownMenuLabel>
 
@@ -815,6 +908,9 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           if (!open) {
             suggestionRequestIdRef.current += 1;
             setInlineNotice(null);
+            setLoadingTargetBranches(false);
+            setTargetBranch(defaultBaseBranch);
+            setTargetBranchOptions([]);
             setStep("idle");
           }
         }}
@@ -823,15 +919,35 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           <DialogHeader>
             <DialogTitle>Create Pull Request</DialogTitle>
             <DialogDescription>
-              <PullRequestBranchRoute currentBranch={currentBranch} baseBranch={baseBranch} />
+              <PullRequestBranchRoute currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
             </DialogDescription>
           </DialogHeader>
 
           {step === "loading" ? (
-            <CreatePrLoadingSplash currentBranch={currentBranch} baseBranch={baseBranch} />
+            <CreatePrLoadingSplash currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
           ) : (
             <form className="space-y-4" onSubmit={handleFormSubmit}>
               {inlineNotice ? <InlineNoticeBanner notice={inlineNotice} /> : null}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Target Branch
+                </label>
+                <CreateWorkspaceBranchPicker
+                  value={effectiveTargetBranch}
+                  defaultBranch={defaultBaseBranch}
+                  disabled={isDialogBusy}
+                  localBranches={targetBranchOptions}
+                  loading={loadingTargetBranches}
+                  remoteBranches={[]}
+                  onChange={(nextBranch) => {
+                    setTargetBranch(nextBranch);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Choose the branch this pull request will merge into.
+                </p>
+              </div>
 
               {/* PR Title */}
               <div className="space-y-2">
@@ -944,7 +1060,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         open={continueDialogOpen}
         sourceBranch={currentBranch}
         sourceWorkspaceName={currentBranch}
-        baseBranch={prInfo?.pr?.baseRefName ?? baseBranch}
+        baseBranch={prInfo?.pr?.baseRefName ?? defaultBaseBranch}
         prTitle={prInfo?.pr?.title}
         onOpenChange={setContinueDialogOpen}
         onContinue={handleContinueWorkspace}
