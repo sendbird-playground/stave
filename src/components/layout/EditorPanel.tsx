@@ -1,21 +1,28 @@
 import {
+  Code2,
   ChevronsDown,
   ChevronsUp,
   ChevronDown,
   ChevronRight,
+  Copy,
+  File,
   FilePlus,
+  FolderOpen,
   FolderPlus,
   FolderTree,
   GitBranch,
   Info,
   LoaderCircle,
   RefreshCcw,
+  SquareTerminal,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
-import { Badge, Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import { Badge, Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import { workspaceFsAdapter } from "@/lib/fs";
 import type { WorkspaceCreateEntryResult, WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
 import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
@@ -48,6 +55,32 @@ type PendingExplorerCreate =
   | { type: "file"; placeholder: string }
   | { type: "folder"; placeholder: string };
 
+function getParentDirectoryPath(args: { path: string }) {
+  return args.path.split("/").slice(0, -1).join("/");
+}
+
+function resolveWorkspaceAbsolutePath(args: { workspacePath?: string; relativePath: string }) {
+  const workspacePath = args.workspacePath?.trim();
+  if (!workspacePath) {
+    return null;
+  }
+
+  const normalizedWorkspacePath = workspacePath.replace(/[\\/]+$/, "") || workspacePath;
+  const normalizedRelativePath = args.relativePath
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/\/+/g, "/");
+
+  if (!normalizedRelativePath) {
+    return normalizedWorkspacePath;
+  }
+
+  const separator = normalizedWorkspacePath.includes("\\") ? "\\" : "/";
+  const joinedRelativePath = normalizedRelativePath.split("/").filter(Boolean).join(separator);
+  return `${normalizedWorkspacePath}${separator}${joinedRelativePath}`;
+}
+
 function ExplorerTreeRow(args: {
   entry: WorkspaceDirectoryEntry;
   depth: number;
@@ -55,32 +88,113 @@ function ExplorerTreeRow(args: {
   directoryStateByPath: Record<string, ExplorerDirectoryState>;
   onToggle: (path: string) => void;
   onOpenFile: (path: string) => void;
+  onStartCreateFile: (directoryPath: string) => void;
+  onStartCreateFolder: (directoryPath: string) => void;
+  onCopyRelativePath: (path: string) => void;
+  onCopyAbsolutePath: (path: string) => void;
+  onOpenInFinder: (path: string) => void;
+  onOpenInVSCode: (path: string) => void;
+  onOpenInTerminal: (path: string) => void;
+  onRefreshDirectory: (path: string) => void;
 }) {
-  const { entry, depth, expanded, directoryStateByPath, onToggle, onOpenFile } = args;
+  const {
+    entry,
+    depth,
+    expanded,
+    directoryStateByPath,
+    onToggle,
+    onOpenFile,
+    onStartCreateFile,
+    onStartCreateFolder,
+    onCopyRelativePath,
+    onCopyAbsolutePath,
+    onOpenInFinder,
+    onOpenInVSCode,
+    onOpenInTerminal,
+    onRefreshDirectory,
+  } = args;
   const isFolder = entry.type === "folder";
   const isOpen = isFolder && expanded.has(entry.path);
   const directoryState = isFolder ? directoryStateByPath[entry.path] : undefined;
   const childEntries = directoryState?.entries ?? [];
+  const parentDirectoryPath = isFolder ? entry.path : getParentDirectoryPath({ path: entry.path });
+  const terminalTargetPath = isFolder ? entry.path : parentDirectoryPath;
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => (isFolder ? onToggle(entry.path) : onOpenFile(entry.path))}
-        className="flex min-w-0 w-full items-center gap-1 rounded-sm px-1.5 py-1 text-left text-sm hover:bg-secondary/60"
-        style={{ paddingLeft: `${6 + depth * 14}px` }}
-      >
-        {isFolder ? (
-          isOpen
-            ? <ChevronDown className="size-3.5 text-muted-foreground" />
-            : <ChevronRight className="size-3.5 text-muted-foreground" />
-        ) : (
-          <span className="inline-block w-3.5" />
-        )}
-        <ExplorerEntryIcon entry={entry} isOpen={isOpen} />
-        <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-        {isFolder && directoryState?.status === "loading" ? <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
-      </button>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <button
+            type="button"
+            onClick={() => (isFolder ? onToggle(entry.path) : onOpenFile(entry.path))}
+            className="flex min-w-0 w-full items-center gap-1 rounded-sm px-1.5 py-1 text-left text-sm hover:bg-secondary/60"
+            style={{ paddingLeft: `${6 + depth * 14}px` }}
+          >
+            {isFolder ? (
+              isOpen
+                ? <ChevronDown className="size-3.5 text-muted-foreground" />
+                : <ChevronRight className="size-3.5 text-muted-foreground" />
+            ) : (
+              <span className="inline-block w-3.5" />
+            )}
+            <ExplorerEntryIcon entry={entry} isOpen={isOpen} />
+            <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+            {isFolder && directoryState?.status === "loading" ? <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-56">
+          {isFolder ? (
+            <ContextMenuItem onSelect={() => onToggle(entry.path)}>
+              {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+              {isOpen ? "Collapse folder" : "Expand folder"}
+            </ContextMenuItem>
+          ) : (
+            <ContextMenuItem onSelect={() => onOpenFile(entry.path)}>
+              <File className="size-4" />
+              Open file
+            </ContextMenuItem>
+          )}
+          <ContextMenuItem onSelect={() => onStartCreateFile(parentDirectoryPath)}>
+            <FilePlus className="size-4" />
+            New file here
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onStartCreateFolder(parentDirectoryPath)}>
+            <FolderPlus className="size-4" />
+            New folder here
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => onCopyRelativePath(entry.path)}>
+            <Copy className="size-4" />
+            Copy relative path
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onCopyAbsolutePath(entry.path)}>
+            <Copy className="size-4" />
+            Copy absolute path
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => onOpenInFinder(entry.path)}>
+            <FolderOpen className="size-4" />
+            Open in Finder
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onOpenInVSCode(entry.path)}>
+            <Code2 className="size-4" />
+            Open in VS Code
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onOpenInTerminal(terminalTargetPath)}>
+            <SquareTerminal className="size-4" />
+            Open in Terminal
+          </ContextMenuItem>
+          {isFolder ? (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => onRefreshDirectory(entry.path)}>
+                <RefreshCcw className="size-4" />
+                Refresh folder
+              </ContextMenuItem>
+            </>
+          ) : null}
+        </ContextMenuContent>
+      </ContextMenu>
       {isFolder && isOpen ? (
         <>
           {directoryState?.status === "error" ? (
@@ -108,6 +222,14 @@ function ExplorerTreeRow(args: {
               directoryStateByPath={directoryStateByPath}
               onToggle={onToggle}
               onOpenFile={onOpenFile}
+              onStartCreateFile={onStartCreateFile}
+              onStartCreateFolder={onStartCreateFolder}
+              onCopyRelativePath={onCopyRelativePath}
+              onCopyAbsolutePath={onCopyAbsolutePath}
+              onOpenInFinder={onOpenInFinder}
+              onOpenInVSCode={onOpenInVSCode}
+              onOpenInTerminal={onOpenInTerminal}
+              onRefreshDirectory={onRefreshDirectory}
             />
           ))}
         </>
@@ -407,8 +529,13 @@ export function EditorPanel() {
     }
 
     const timer = window.setTimeout(() => {
-      pendingExplorerCreateInputRef.current?.focus();
-      pendingExplorerCreateInputRef.current?.select();
+      const input = pendingExplorerCreateInputRef.current;
+      if (!input) {
+        return;
+      }
+      input.focus({ preventScroll: true });
+      const cursorPosition = input.value.length;
+      input.setSelectionRange(cursorPosition, cursorPosition);
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -630,6 +757,63 @@ export function EditorPanel() {
     }
   }
 
+  async function handleCopyExplorerPath(args: { path: string; mode: "relative" | "absolute" }) {
+    const pathToCopy = args.mode === "absolute"
+      ? resolveWorkspaceAbsolutePath({ workspacePath: workspaceCwd, relativePath: args.path })
+      : args.path;
+    if (!pathToCopy) {
+      toast.error("Workspace path unavailable");
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(pathToCopy);
+      toast.success(args.mode === "absolute" ? "Copied absolute path" : "Copied relative path");
+    } catch {
+      toast.error("Failed to copy path");
+    }
+  }
+
+  async function handleOpenExplorerPath(args: { path: string; target: "finder" | "vscode" | "terminal" }) {
+    const shellApi = window.api?.shell;
+    if (!shellApi) {
+      toast.error("Shell bridge unavailable");
+      return;
+    }
+
+    const absolutePath = resolveWorkspaceAbsolutePath({ workspacePath: workspaceCwd, relativePath: args.path });
+    if (!absolutePath) {
+      toast.error("Workspace path unavailable");
+      return;
+    }
+
+    const action = args.target === "finder"
+      ? shellApi.showInFinder
+      : args.target === "vscode"
+      ? shellApi.openInVSCode
+      : shellApi.openInTerminal;
+    if (!action) {
+      toast.error("Shell action unavailable");
+      return;
+    }
+
+    const result = await action({ path: absolutePath });
+    if (result.ok) {
+      return;
+    }
+
+    const actionLabel = args.target === "finder"
+      ? "open in Finder"
+      : args.target === "vscode"
+      ? "open in VS Code"
+      : "open in Terminal";
+    toast.error(`Failed to ${actionLabel}`, { description: result.stderr });
+  }
+
+  function handleRefreshExplorerDirectory(path: string) {
+    void loadExplorerDirectory({ directoryPath: path, force: true });
+  }
+
   async function handleExpandAllFolders() {
     if (!workspaceCwd) {
       setExplorerError("Workspace path unavailable.");
@@ -681,13 +865,44 @@ export function EditorPanel() {
     return result;
   }
 
-  function startExplorerCreate(type: PendingExplorerCreate["type"]) {
+  function startExplorerCreate(type: PendingExplorerCreate["type"], directoryPath = "") {
     setExplorerError("");
+    const normalizedDirectoryPath = normalizeRelativeInputPath({ value: directoryPath }) ?? "";
+    const pathPrefix = normalizedDirectoryPath ? `${normalizedDirectoryPath}/` : "";
+    const suggestedLeafPath = type === "file" ? "new-file.tsx" : "new-folder";
     setPendingExplorerCreate({
       type,
-      placeholder: type === "file" ? "src/components/new-file.tsx" : "src/components/new-folder",
+      placeholder: `${pathPrefix}${suggestedLeafPath}`,
     });
-    setPendingExplorerCreatePath("");
+    setPendingExplorerCreatePath(pathPrefix);
+  }
+
+  function handleStartExplorerFileCreate(directoryPath: string) {
+    startExplorerCreate("file", directoryPath);
+  }
+
+  function handleStartExplorerFolderCreate(directoryPath: string) {
+    startExplorerCreate("folder", directoryPath);
+  }
+
+  function handleCopyExplorerRelativePath(path: string) {
+    void handleCopyExplorerPath({ path, mode: "relative" });
+  }
+
+  function handleCopyExplorerAbsolutePath(path: string) {
+    void handleCopyExplorerPath({ path, mode: "absolute" });
+  }
+
+  function handleOpenExplorerInFinder(path: string) {
+    void handleOpenExplorerPath({ path, target: "finder" });
+  }
+
+  function handleOpenExplorerInVSCode(path: string) {
+    void handleOpenExplorerPath({ path, target: "vscode" });
+  }
+
+  function handleOpenExplorerInTerminal(path: string) {
+    void handleOpenExplorerPath({ path, target: "terminal" });
   }
 
   function cancelExplorerCreate() {
@@ -1078,6 +1293,14 @@ export function EditorPanel() {
                     directoryStateByPath={explorerDirectoryStateByPath}
                     onToggle={handleToggleExplorerFolder}
                     onOpenFile={handleOpenExplorerFile}
+                    onStartCreateFile={handleStartExplorerFileCreate}
+                    onStartCreateFolder={handleStartExplorerFolderCreate}
+                    onCopyRelativePath={handleCopyExplorerRelativePath}
+                    onCopyAbsolutePath={handleCopyExplorerAbsolutePath}
+                    onOpenInFinder={handleOpenExplorerInFinder}
+                    onOpenInVSCode={handleOpenExplorerInVSCode}
+                    onOpenInTerminal={handleOpenExplorerInTerminal}
+                    onRefreshDirectory={handleRefreshExplorerDirectory}
                   />
                 ))}
               </div>
