@@ -3,7 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { Eraser, Plus, SquareTerminal, Trash2, X } from "lucide-react";
-import { Button } from "@/components/ui";
+import {
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
 
@@ -23,7 +30,8 @@ const TERMINAL_POLL_INTERVAL_MS = 120;
 const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
 const TERMINAL_SESSION_BUFFER_CHAR_LIMIT = 200_000;
 const TERMINAL_TRANSCRIPT_CHAR_LIMIT = 300_000;
-const DEFAULT_TERMINAL_FONT_FAMILY = '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace';
+const DEFAULT_TERMINAL_FONT_FAMILY =
+  '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace';
 const DEFAULT_TERMINAL_FONT_SIZE = 13;
 const DEFAULT_TERMINAL_LINE_HEIGHT = 1.2;
 
@@ -40,18 +48,25 @@ function waitForAnimationFrames(count: number) {
   });
 }
 
-async function waitForTerminalFont(args: { fontFamily: string; fontSize: number }) {
+async function waitForTerminalFont(args: {
+  fontFamily: string;
+  fontSize: number;
+}) {
   if (typeof document === "undefined" || !("fonts" in document)) {
     return;
   }
 
   const fonts = document.fonts;
   const fontSpec = `${args.fontSize}px ${args.fontFamily}`;
-  const timeout = new Promise<void>((resolve) => window.setTimeout(resolve, 1200));
+  const timeout = new Promise<void>((resolve) =>
+    window.setTimeout(resolve, 1200),
+  );
 
   try {
     await Promise.race([
-      Promise.allSettled([fonts.ready, fonts.load(fontSpec)]).then(() => undefined),
+      Promise.allSettled([fonts.ready, fonts.load(fontSpec)]).then(
+        () => undefined,
+      ),
       timeout,
     ]);
   } catch {
@@ -69,7 +84,11 @@ function resolveTerminalTheme() {
   };
 }
 
-function appendTerminalText(existing: string, nextChunk: string, limit: number) {
+function appendTerminalText(
+  existing: string,
+  nextChunk: string,
+  limit: number,
+) {
   if (!nextChunk) {
     return existing;
   }
@@ -85,7 +104,11 @@ function appendTerminalText(existing: string, nextChunk: string, limit: number) 
     : combined.slice(-limit);
 }
 
-function appendTerminalInput(existing: string, nextChunk: string, limit: number) {
+function appendTerminalInput(
+  existing: string,
+  nextChunk: string,
+  limit: number,
+) {
   if (!nextChunk) {
     return existing;
   }
@@ -104,17 +127,22 @@ export function TerminalDock() {
     activeTaskId,
     activeWorkspaceId,
     workspaceCwd,
-  ] = useAppStore(useShallow((state) => [
-    state.layout.terminalDockHeight ?? 210,
-    state.settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
-    state.settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE,
-    state.settings.terminalLineHeight || DEFAULT_TERMINAL_LINE_HEIGHT,
-    state.isDarkMode,
-    state.setLayout,
-    state.activeTaskId,
-    state.activeWorkspaceId,
-    state.workspacePathById[state.activeWorkspaceId],
-  ] as const));
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.layout.terminalDockHeight ?? 210,
+          state.settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
+          state.settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE,
+          state.settings.terminalLineHeight || DEFAULT_TERMINAL_LINE_HEIGHT,
+          state.isDarkMode,
+          state.setLayout,
+          state.activeTaskId,
+          state.activeWorkspaceId,
+          state.workspacePathById[state.activeWorkspaceId],
+        ] as const,
+    ),
+  );
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -126,9 +154,14 @@ export function TerminalDock() {
   const creatingSessionRef = useRef(false);
   const transcriptFlushTimerRef = useRef<number | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
-  const lastResizeRef = useRef<{ cols: number; rows: number }>({ cols: 0, rows: 0 });
+  const lastResizeRef = useRef<{ cols: number; rows: number }>({
+    cols: 0,
+    rows: 0,
+  });
   const transcriptLoadedRef = useRef(false);
-  const workspaceTerminalStateRef = useRef<Record<string, WorkspaceTerminalState>>({});
+  const workspaceTerminalStateRef = useRef<
+    Record<string, WorkspaceTerminalState>
+  >({});
   const prevWorkspaceCwdRef = useRef<string | undefined>(undefined);
 
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
@@ -146,7 +179,10 @@ export function TerminalDock() {
 
     transcriptFlushTimerRef.current = window.setTimeout(() => {
       transcriptFlushTimerRef.current = null;
-      window.localStorage.setItem(TERMINAL_TRANSCRIPT_STORAGE_KEY, JSON.stringify(transcriptRef.current));
+      window.localStorage.setItem(
+        TERMINAL_TRANSCRIPT_STORAGE_KEY,
+        JSON.stringify(transcriptRef.current),
+      );
     }, TERMINAL_TRANSCRIPT_FLUSH_MS);
   }
 
@@ -179,19 +215,23 @@ export function TerminalDock() {
     pendingInputBySessionRef.current[sessionId] = "";
     writeInFlightBySessionRef.current[sessionId] = true;
 
-    void writeSession({ sessionId, input }).catch(() => {
-      pendingInputBySessionRef.current[sessionId] = appendTerminalInput(
-        input,
-        pendingInputBySessionRef.current[sessionId] ?? "",
-        TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
-      );
-      xtermRef.current?.writeln("\r\n[error] failed to write terminal input.");
-    }).finally(() => {
-      writeInFlightBySessionRef.current[sessionId] = false;
-      if (pendingInputBySessionRef.current[sessionId]) {
-        flushTerminalInput(sessionId);
-      }
-    });
+    void writeSession({ sessionId, input })
+      .catch(() => {
+        pendingInputBySessionRef.current[sessionId] = appendTerminalInput(
+          input,
+          pendingInputBySessionRef.current[sessionId] ?? "",
+          TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
+        );
+        xtermRef.current?.writeln(
+          "\r\n[error] failed to write terminal input.",
+        );
+      })
+      .finally(() => {
+        writeInFlightBySessionRef.current[sessionId] = false;
+        if (pendingInputBySessionRef.current[sessionId]) {
+          flushTerminalInput(sessionId);
+        }
+      });
   }
 
   useEffect(() => {
@@ -205,7 +245,9 @@ export function TerminalDock() {
     transcriptLoadedRef.current = true;
     const raw = window.localStorage.getItem(TERMINAL_TRANSCRIPT_STORAGE_KEY);
     try {
-      transcriptRef.current = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+      transcriptRef.current = raw
+        ? (JSON.parse(raw) as Record<string, string>)
+        : {};
     } catch {
       transcriptRef.current = {};
     }
@@ -215,7 +257,10 @@ export function TerminalDock() {
         window.clearTimeout(transcriptFlushTimerRef.current);
         transcriptFlushTimerRef.current = null;
       }
-      window.localStorage.setItem(TERMINAL_TRANSCRIPT_STORAGE_KEY, JSON.stringify(transcriptRef.current));
+      window.localStorage.setItem(
+        TERMINAL_TRANSCRIPT_STORAGE_KEY,
+        JSON.stringify(transcriptRef.current),
+      );
     };
   }, []);
 
@@ -244,7 +289,10 @@ export function TerminalDock() {
 
     const sendResize = () => {
       fitAddon.fit();
-      if (lastResizeRef.current.cols === terminal.cols && lastResizeRef.current.rows === terminal.rows) {
+      if (
+        lastResizeRef.current.cols === terminal.cols &&
+        lastResizeRef.current.rows === terminal.rows
+      ) {
         return;
       }
       lastResizeRef.current = {
@@ -254,7 +302,11 @@ export function TerminalDock() {
       const resizeSession = window.api?.terminal?.resizeSession;
       const sessionId = activeSessionIdRef.current;
       if (sessionId && resizeSession) {
-        void resizeSession({ sessionId, cols: terminal.cols, rows: terminal.rows });
+        void resizeSession({
+          sessionId,
+          cols: terminal.cols,
+          rows: terminal.rows,
+        });
       }
     };
 
@@ -325,7 +377,6 @@ export function TerminalDock() {
     xtermRef.current.options.theme = resolveTerminalTheme();
   }, [isDarkMode]);
 
-
   async function createSessionTab() {
     if (creatingSessionRef.current) return;
     creatingSessionRef.current = true;
@@ -342,7 +393,9 @@ export function TerminalDock() {
       const created = await createSession({ cwd: workspaceCwd, cols, rows });
       if (!created.ok || !created.sessionId) {
         setBridgeError("Failed to create terminal session.");
-        xtermRef.current?.writeln("\r\n[error] failed to create terminal session.");
+        xtermRef.current?.writeln(
+          "\r\n[error] failed to create terminal session.",
+        );
         return;
       }
       setBridgeError("");
@@ -370,7 +423,9 @@ export function TerminalDock() {
     delete writeInFlightBySessionRef.current[args.sessionId];
     setTabs((prev) => {
       const next = prev.filter((tab) => tab.id !== args.sessionId);
-      setActiveTabId((current) => (current === args.sessionId ? next.at(-1)?.id ?? null : current));
+      setActiveTabId((current) =>
+        current === args.sessionId ? (next.at(-1)?.id ?? null) : current,
+      );
       return next;
     });
   }
@@ -405,13 +460,17 @@ export function TerminalDock() {
     }
 
     // Restore saved state or start fresh for the new workspace.
-    const saved = workspaceCwd ? workspaceTerminalStateRef.current[workspaceCwd] : undefined;
+    const saved = workspaceCwd
+      ? workspaceTerminalStateRef.current[workspaceCwd]
+      : undefined;
     if (saved && saved.tabs.length > 0) {
       setTabs(saved.tabs);
       setActiveTabId(saved.activeTabId);
       sessionBufferRef.current = saved.sessionBuffers;
       xtermRef.current?.clear();
-      const buffer = saved.activeTabId ? saved.sessionBuffers[saved.activeTabId] ?? "" : "";
+      const buffer = saved.activeTabId
+        ? (saved.sessionBuffers[saved.activeTabId] ?? "")
+        : "";
       if (buffer.trim()) {
         xtermRef.current?.write(buffer);
       }
@@ -440,7 +499,7 @@ export function TerminalDock() {
   useEffect(() => {
     if (!terminalReady || !activeTaskId || tabs.length > 0) return;
     void createSessionTab();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTaskId, tabs.length, terminalReady]);
 
   useEffect(() => {
@@ -457,7 +516,12 @@ export function TerminalDock() {
       }
 
       const ids = tabs.map((tab) => tab.id);
-      const reads = await Promise.all(ids.map(async (sessionId) => [sessionId, await readSession({ sessionId })] as const));
+      const reads = await Promise.all(
+        ids.map(
+          async (sessionId) =>
+            [sessionId, await readSession({ sessionId })] as const,
+        ),
+      );
       let activeOutput = "";
       let transcriptChanged = false;
 
@@ -527,7 +591,11 @@ export function TerminalDock() {
   }
 
   return (
-    <div data-testid="terminal-dock" className="transition-[height] duration-200" style={{ height: `${terminalDockHeight}px` }}>
+    <div
+      data-testid="terminal-dock"
+      className="transition-[height] duration-200"
+      style={{ height: `${terminalDockHeight}px` }}
+    >
       <div className="grid h-full min-h-0 grid-cols-[1fr_156px] gap-1 overflow-hidden bg-card">
         <section className="min-h-0 overflow-hidden">
           <div className="flex h-9 items-center justify-between border-b border-border/80 px-3 text-sm">
@@ -563,44 +631,70 @@ export function TerminalDock() {
           </div>
         </section>
 
-        <aside className="min-h-0 border-l border-border/80 bg-background">
-          <div className="flex h-9 items-center justify-between border-b border-border/80 px-3 text-sm">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 rounded-md px-2"
-              onClick={() => void createSessionTab()}
-              title="New Terminal Session"
-              aria-label="new-terminal-session"
-            >
-              <Plus className="size-3.5" />
-            </Button>
-            <span className="text-muted-foreground">Sessions</span>
+        <aside className="min-h-0 border-l border-border/80 bg-muted/30">
+          <div className="flex h-9 items-center justify-between border-b border-border/80 px-2.5 text-sm">
+            <span className="text-xs font-medium tracking-wide text-muted-foreground">
+              Sessions
+            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+                    onClick={() => void createSessionTab()}
+                    aria-label="new-terminal-session"
+                  >
+                    <Plus className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">New session</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
-          <div className="max-h-[calc(100%-1.75rem)] space-y-1 overflow-auto p-1">
+          <div className="max-h-[calc(100%-2.25rem)] space-y-0.5 overflow-auto p-1">
             {bridgeError ? (
-              <p className="rounded-sm border border-destructive/30 bg-destructive/10 px-2 py-1 text-sm text-destructive">
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
                 {bridgeError}
               </p>
             ) : null}
             {tabs.map((tab) => (
-              <div
+              <button
                 key={tab.id}
-                className={[
-                  "flex items-center justify-between rounded-sm border px-1 py-1 text-sm",
-                  activeTabId === tab.id ? "border-primary/70 bg-secondary/80" : "border-border/70 bg-card",
-                ].join(" ")}
+                type="button"
+                className={cn(
+                  "group flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                  activeTabId === tab.id
+                    ? "bg-secondary/80 text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground",
+                )}
+                onClick={() => setActiveTabId(tab.id)}
               >
-                <button className="truncate text-left" onClick={() => setActiveTabId(tab.id)}>{tab.label}</button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto rounded p-0.5 text-muted-foreground"
-                  onClick={() => void closeSession({ sessionId: tab.id })}
+                <span className="truncate">{tab.label}</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-destructive/15 hover:text-destructive",
+                    activeTabId === tab.id
+                      ? "opacity-100"
+                      : "opacity-0 group-hover:opacity-100",
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void closeSession({ sessionId: tab.id });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.stopPropagation();
+                      void closeSession({ sessionId: tab.id });
+                    }
+                  }}
                 >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
+                  <Trash2 className="size-3" />
+                </span>
+              </button>
             ))}
           </div>
         </aside>
