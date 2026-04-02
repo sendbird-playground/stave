@@ -1,7 +1,9 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Brain, CheckCircle2, ChevronDown, Circle, Info, LoaderCircle, Wrench } from "lucide-react";
+import { Brain, Check, ChevronDown, Circle, LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/* ─── Data type (used by the `steps` prop shorthand) ─────────────── */
 
 export interface ChainOfThoughtStep {
   id: string;
@@ -11,6 +13,8 @@ export interface ChainOfThoughtStep {
   kind?: "thinking" | "tool" | "agent" | "system";
 }
 
+/* ─── Props ──────────────────────────────────────────────────────── */
+
 interface ChainOfThoughtProps extends HTMLAttributes<HTMLDivElement> {
   isStreaming?: boolean;
   defaultOpen?: boolean;
@@ -19,19 +23,22 @@ interface ChainOfThoughtProps extends HTMLAttributes<HTMLDivElement> {
   steps?: ChainOfThoughtStep[];
 }
 
+interface ChainOfThoughtStepProps extends HTMLAttributes<HTMLDivElement> {
+  title: string;
+  /** Always-visible description below the title (matches AI Elements API). */
+  description?: ReactNode;
+  status?: ChainOfThoughtStep["status"];
+  kind?: ChainOfThoughtStep["kind"];
+  defaultOpen?: boolean;
+  openWhen?: boolean;
+}
+
+/* ─── Context ────────────────────────────────────────────────────── */
+
 interface ChainOfThoughtContextValue {
   isStreaming: boolean;
   open: boolean;
   setOpen: (next: boolean) => void;
-}
-
-interface ChainOfThoughtStepProps extends HTMLAttributes<HTMLDivElement> {
-  title: string;
-  status?: ChainOfThoughtStep["status"];
-  kind?: ChainOfThoughtStep["kind"];
-  meta?: ReactNode;
-  defaultOpen?: boolean;
-  openWhen?: boolean;
 }
 
 const ChainOfThoughtContext = createContext<ChainOfThoughtContextValue | null>(null);
@@ -44,94 +51,19 @@ function useChainOfThoughtContext() {
   return context;
 }
 
-function StepIcon(args: { kind?: ChainOfThoughtStep["kind"]; status?: ChainOfThoughtStep["status"] }) {
+/* ─── Step icon (status-only, no kind styling) ───────────────────── */
+
+function StepIcon(args: { status?: ChainOfThoughtStep["status"] }) {
   if (args.status === "active") {
-    return <LoaderCircle className="size-3.5 animate-spin text-primary" />;
+    return <LoaderCircle className="size-4 animate-spin text-foreground" />;
   }
-  if (args.kind === "thinking") {
-    return args.status === "done"
-      ? <CheckCircle2 className="size-3.5 text-success" />
-      : <Brain className="size-3.5 text-muted-foreground" />;
+  if (args.status === "done") {
+    return <Check className="size-4 text-muted-foreground" />;
   }
-  if (args.kind === "tool") {
-    return args.status === "done"
-      ? <CheckCircle2 className="size-3.5 text-success" />
-      : <Wrench className="size-3.5 text-muted-foreground" />;
-  }
-  if (args.kind === "agent") {
-    return args.status === "done"
-      ? <CheckCircle2 className="size-3.5 text-success" />
-      : <Bot className="size-3.5 text-primary" />;
-  }
-  if (args.kind === "system") {
-    return <Info className="size-3.5 text-muted-foreground" />;
-  }
-  return args.status === "done"
-    ? <CheckCircle2 className="size-3.5 text-success" />
-    : <Circle className="size-3.5 text-muted-foreground" />;
+  return <Circle className="size-4 text-muted-foreground/50" />;
 }
 
-function getStatusLabel(status: ChainOfThoughtStep["status"]) {
-  switch (status) {
-    case "active":
-      return "Running";
-    case "done":
-      return "Done";
-    case "pending":
-      return "Pending";
-  }
-}
-
-function getStatusToneClasses(status: ChainOfThoughtStep["status"]) {
-  switch (status) {
-    case "active":
-      return "border-primary/25 bg-primary/10 text-primary";
-    case "done":
-      return "border-success/30 bg-success/10 text-success dark:bg-success/15";
-    case "pending":
-      return "border-border/60 bg-muted/50 text-muted-foreground";
-  }
-}
-
-function getStepSurfaceToneClasses(args: {
-  kind?: ChainOfThoughtStep["kind"];
-  status?: ChainOfThoughtStep["status"];
-}) {
-  const activeTone = args.status === "active" ? "ring-1 ring-primary/10" : "";
-  switch (args.kind) {
-    case "thinking":
-      return cn("border-primary/15 bg-primary/[0.035]", args.status === "active" && "border-primary/25 bg-primary/[0.06]", activeTone);
-    case "agent":
-      return cn("border-primary/15 bg-primary/[0.03]", activeTone);
-    case "tool":
-      return cn("border-border/60 bg-background/85", activeTone);
-    case "system":
-      return cn("border-border/50 bg-muted/10", activeTone);
-    default:
-      return cn("border-border/60 bg-background/80", activeTone);
-  }
-}
-
-function getStepIconWrapClasses(args: {
-  kind?: ChainOfThoughtStep["kind"];
-  status?: ChainOfThoughtStep["status"];
-}) {
-  if (args.status === "active") {
-    return "border-primary/20 bg-primary/10";
-  }
-  switch (args.kind) {
-    case "thinking":
-      return "border-primary/15 bg-primary/[0.08]";
-    case "agent":
-      return "border-primary/15 bg-primary/[0.08]";
-    case "tool":
-      return "border-border/60 bg-background";
-    case "system":
-      return "border-border/60 bg-muted/40";
-    default:
-      return "border-border/60 bg-background";
-  }
-}
+/* ─── Root ────────────────────────────────────────────────────────── */
 
 export function ChainOfThought({
   className,
@@ -151,9 +83,7 @@ export function ChainOfThought({
   }, [defaultOpen]);
 
   useEffect(() => {
-    if (openWhen) {
-      setOpen(true);
-    }
+    if (openWhen) setOpen(true);
   }, [openWhen]);
 
   useEffect(() => {
@@ -168,47 +98,34 @@ export function ChainOfThought({
   }, [collapseWhen]);
 
   const contextValue = useMemo(() => ({ isStreaming, open, setOpen }), [isStreaming, open]);
+
   const resolvedChildren = children ?? (
-    <ChainOfThoughtContent>
-      <ol className="space-y-2">
+    <>
+      <ChainOfThoughtTrigger />
+      <ChainOfThoughtContent>
         {(steps ?? []).map((step) => (
-          <li
+          <ChainOfThoughtStep
             key={step.id}
-            className={cn(
-              "flex items-start gap-2.5 rounded-sm",
-              "motion-safe:animate-cot-step-in",
-            )}
-          >
-            <div className={cn("mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border", getStepIconWrapClasses({
-              kind: step.kind,
-              status: step.status,
-            }))}>
-              <StepIcon kind={step.kind} status={step.status} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-foreground">{step.label}</p>
-              {step.detail ? <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">{step.detail}</p> : null}
-            </div>
-          </li>
+            title={step.label}
+            description={step.detail}
+            status={step.status}
+            kind={step.kind}
+          />
         ))}
-      </ol>
-    </ChainOfThoughtContent>
+      </ChainOfThoughtContent>
+    </>
   );
 
   return (
     <ChainOfThoughtContext.Provider value={contextValue}>
-      <section
-        className={cn(
-          "overflow-hidden rounded-lg border border-border/70 bg-muted/15 text-sm text-muted-foreground",
-          className,
-        )}
-        {...props}
-      >
+      <div className={cn("not-prose w-full", className)} {...props}>
         {resolvedChildren}
-      </section>
+      </div>
     </ChainOfThoughtContext.Provider>
   );
 }
+
+/* ─── Trigger ─────────────────────────────────────────────────────── */
 
 export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonElement>) {
   const { isStreaming, open, setOpen } = useChainOfThoughtContext();
@@ -216,34 +133,53 @@ export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonEleme
     <button
       type="button"
       className={cn(
-        "flex w-full items-center justify-between px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground",
+        "flex w-full items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground",
         args.className,
       )}
       onClick={() => setOpen(!open)}
       {...args}
     >
-      <span className="inline-flex items-center gap-1.5">
-        {isStreaming ? <LoaderCircle className="size-3 animate-spin text-primary" /> : <Brain className="size-3 text-muted-foreground" />}
-        Chain of Thought
+      {isStreaming ? (
+        <LoaderCircle className="size-4 animate-spin" />
+      ) : (
+        <Brain className="size-4" />
+      )}
+      <span className="font-medium">
+        {isStreaming ? "Thinking" : "Chain of Thought"}
       </span>
-      <ChevronDown className={cn("size-3 transition-transform", open ? "rotate-180" : "rotate-0")} />
+      <ChevronDown
+        className={cn(
+          "ml-auto size-4 transition-transform",
+          open ? "rotate-180" : "rotate-0",
+        )}
+      />
     </button>
   );
 }
 
+/* ─── Content container ───────────────────────────────────────────── */
+
 export function ChainOfThoughtContent(args: HTMLAttributes<HTMLDivElement>) {
   const { open } = useChainOfThoughtContext();
-  if (!open) {
-    return null;
-  }
-  return <div className={cn("border-t border-border/70 px-3 py-2.5", args.className)} {...args} />;
+  if (!open) return null;
+  return (
+    <div
+      className={cn(
+        "mt-3 [&>*:last-child_.cot-connector]:hidden",
+        args.className,
+      )}
+      {...args}
+    />
+  );
 }
+
+/* ─── Step ─────────────────────────────────────────────────────────── */
 
 export function ChainOfThoughtStep({
   title,
+  description,
   status = "pending",
   kind,
-  meta,
   defaultOpen = false,
   openWhen = false,
   className,
@@ -257,9 +193,7 @@ export function ChainOfThoughtStep({
   }, [defaultOpen]);
 
   useEffect(() => {
-    if (openWhen) {
-      setOpen(true);
-    }
+    if (openWhen) setOpen(true);
   }, [openWhen]);
 
   const hasContent = children != null;
@@ -267,44 +201,49 @@ export function ChainOfThoughtStep({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-md border shadow-sm",
-        getStepSurfaceToneClasses({ kind, status }),
+        "flex gap-3 text-sm",
+        status === "active" && "text-foreground",
+        status === "done" && "text-muted-foreground",
+        status === "pending" && "text-muted-foreground/50",
+        "motion-safe:animate-cot-step-in",
         className,
       )}
       {...props}
     >
-      <button
-        type="button"
-        className="flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left"
-        onClick={() => {
-          if (hasContent) {
-            setOpen((current) => !current);
-          }
-        }}
-      >
-        <div className="flex min-w-0 items-start gap-2.5">
-          <div className={cn("mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border", getStepIconWrapClasses({ kind, status }))}>
-            <StepIcon kind={kind} status={status} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">{title}</p>
-            {meta ? <div className="mt-1 text-xs text-muted-foreground">{meta}</div> : null}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 pl-2">
-          <span className={cn("inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-medium", getStatusToneClasses(status))}>
-            {getStatusLabel(status)}
-          </span>
-          {hasContent ? (
-            <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", open ? "rotate-180" : "rotate-0")} />
-          ) : null}
-        </div>
-      </button>
-      {hasContent && open ? (
-        <div className="border-t border-border/60 px-3 py-3">
-          {children}
-        </div>
-      ) : null}
+      {/* Icon column with vertical connector */}
+      <div className="relative mt-0.5 flex flex-col items-center">
+        <StepIcon status={status} />
+        <div className="cot-connector mt-1.5 w-px flex-1 bg-border" />
+      </div>
+
+      {/* Content column */}
+      <div className="min-w-0 flex-1 pb-4">
+        {hasContent ? (
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-left"
+            onClick={() => setOpen((prev) => !prev)}
+          >
+            <span>{title}</span>
+            <ChevronDown
+              className={cn(
+                "size-3 shrink-0 text-muted-foreground/70 transition-transform",
+                open && "rotate-180",
+              )}
+            />
+          </button>
+        ) : (
+          <p>{title}</p>
+        )}
+
+        {description != null ? (
+          <div className="mt-1 text-sm text-muted-foreground">{description}</div>
+        ) : null}
+
+        {hasContent && open ? (
+          <div className="mt-2">{children}</div>
+        ) : null}
+      </div>
     </div>
   );
 }
