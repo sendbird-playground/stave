@@ -1,5 +1,25 @@
+import type { ReactNode } from "react";
 import { useMemo } from "react";
-import { Check, CheckCircle2, Circle, LoaderCircle } from "lucide-react";
+import {
+  Bot,
+  Brain,
+  CheckCircle2,
+  Circle,
+  FileCode2,
+  FileText,
+  Globe,
+  Info,
+  ListTodo,
+  LoaderCircle,
+  Network,
+  Pencil,
+  Search,
+  ShieldCheck,
+  Terminal,
+  UserRound,
+  Wrench,
+  Zap,
+} from "lucide-react";
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -13,13 +33,14 @@ import {
   parseSubagentToolInput,
   parseTodoInput,
 } from "@/components/ai-elements";
+import type { TraceSummaryItem } from "@/components/ai-elements/chain-of-thought";
 import { ChangedFilesBlock, ImageAttachmentBlock, ReferencedFilesBlock } from "@/components/session/chat-panel-file-blocks";
 import { MessagePartRenderer, toToolDisplayName } from "@/components/session/chat-panel-message-parts";
 import { cn } from "@/lib/utils";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, CodeDiffPart } from "@/types/chat";
 import { buildAssistantTrace, joinReasoningText, type AssistantTraceEntry } from "./assistant-trace-builder";
 
-/* ─── Helpers ─────────────────────────────────────────────────────── */
+/* ─── Step status ────────────────────────────────────────────────── */
 
 function toStepStatus(args: { entry: AssistantTraceEntry; isStreaming: boolean }) {
   switch (args.entry.kind) {
@@ -47,6 +68,206 @@ function toStepStatus(args: { entry: AssistantTraceEntry; isStreaming: boolean }
     case "stave_processing":
       return args.isStreaming ? "active" as const : "done" as const;
   }
+}
+
+/* ─── Step icon mapping ──────────────────────────────────────────── */
+
+function getToolIcon(toolName: string): ReactNode {
+  switch (toolName.trim().toLowerCase()) {
+    case "bash": return <Terminal />;
+    case "read": return <FileText />;
+    case "write": return <FileText />;
+    case "edit": return <Pencil />;
+    case "glob": return <Search />;
+    case "grep": return <Search />;
+    case "websearch": return <Globe />;
+    case "webfetch": return <Globe />;
+    default: return <Wrench />;
+  }
+}
+
+function getEntryIcon(entry: AssistantTraceEntry): ReactNode | undefined {
+  switch (entry.kind) {
+    case "reasoning": return <Brain />;
+    case "tool": return getToolIcon(entry.part.toolName);
+    case "subagent": return <Bot />;
+    case "todo": return <ListTodo />;
+    case "diff": return <FileCode2 />;
+    case "system": return <Info />;
+    case "approval": return <ShieldCheck />;
+    case "user_input": return <UserRound />;
+    case "orchestration": return <Network />;
+    case "stave_processing": return <Zap />;
+    case "assistant_text": return undefined;
+  }
+}
+
+/* ─── Step summary chips ─────────────────────────────────────────── */
+
+function extractFileName(path: string): string {
+  const segments = path.split("/");
+  return segments[segments.length - 1] || path;
+}
+
+function getToolSummary(toolName: string, input: string): ReactNode {
+  try {
+    const parsed = JSON.parse(input) as Record<string, unknown>;
+    switch (toolName.trim().toLowerCase()) {
+      case "bash": {
+        const cmd = typeof parsed.command === "string"
+          ? (parsed.command.split("\n")[0] ?? "").trim().slice(0, 60) || null
+          : null;
+        return cmd ? (
+          <span className="ml-1 inline-flex max-w-52 items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
+            {cmd}
+          </span>
+        ) : null;
+      }
+      case "read":
+      case "write":
+      case "edit": {
+        const filePath = typeof parsed.file_path === "string" ? parsed.file_path : null;
+        return filePath ? (
+          <span className="ml-1 inline-flex max-w-52 items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
+            <FileText className="size-2.5 shrink-0" />
+            {extractFileName(filePath)}
+          </span>
+        ) : null;
+      }
+      case "glob": {
+        const pattern = typeof parsed.pattern === "string" ? parsed.pattern : null;
+        return pattern ? (
+          <span className="ml-1 inline-flex max-w-52 items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
+            {pattern}
+          </span>
+        ) : null;
+      }
+      case "grep": {
+        const pattern = typeof parsed.pattern === "string" ? parsed.pattern.slice(0, 40) : null;
+        return pattern ? (
+          <span className="ml-1 inline-flex max-w-52 items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
+            <Search className="size-2.5 shrink-0" />
+            {pattern}
+          </span>
+        ) : null;
+      }
+      case "websearch": {
+        const query = typeof parsed.query === "string" ? parsed.query.slice(0, 40) : null;
+        return query ? (
+          <span className="ml-1 inline-flex max-w-52 items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
+            <Globe className="size-2.5 shrink-0" />
+            {query}
+          </span>
+        ) : null;
+      }
+      case "webfetch": {
+        const url = typeof parsed.url === "string" ? parsed.url.slice(0, 50) : null;
+        return url ? (
+          <span className="ml-1 inline-flex max-w-52 items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
+            <Globe className="size-2.5 shrink-0" />
+            {url}
+          </span>
+        ) : null;
+      }
+      default: {
+        const desc = typeof parsed.description === "string" ? parsed.description.slice(0, 50) : null;
+        return desc ? (
+          <span className="ml-1 max-w-52 truncate text-xs text-muted-foreground/70">{desc}</span>
+        ) : null;
+      }
+    }
+  } catch {
+    return null;
+  }
+}
+
+function getEntrySummary(entry: AssistantTraceEntry): ReactNode {
+  switch (entry.kind) {
+    case "tool":
+      return getToolSummary(entry.part.toolName, entry.part.input);
+    case "subagent": {
+      const parsed = parseSubagentToolInput({ input: entry.part.input });
+      return parsed.subagentType ? (
+        <span className="ml-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium leading-none text-primary">
+          {parsed.subagentType}
+        </span>
+      ) : null;
+    }
+    case "diff":
+      return entry.parts.length > 1 ? (
+        <span className="ml-1 text-xs text-muted-foreground/70">{entry.parts.length} files</span>
+      ) : null;
+    default:
+      return null;
+  }
+}
+
+/* ─── Trace summary (collapsed trigger stats) ────────────────────── */
+
+const TOOL_CATEGORIES: Record<string, { label: string; iconKey: string }> = {
+  bash: { label: "commands", iconKey: "terminal" },
+  read: { label: "reads", iconKey: "file" },
+  write: { label: "edits", iconKey: "pencil" },
+  edit: { label: "edits", iconKey: "pencil" },
+  glob: { label: "searches", iconKey: "search" },
+  grep: { label: "searches", iconKey: "search" },
+  websearch: { label: "web", iconKey: "globe" },
+  webfetch: { label: "web", iconKey: "globe" },
+};
+
+const CATEGORY_ICONS: Record<string, ReactNode> = {
+  terminal: <Terminal />,
+  file: <FileText />,
+  pencil: <Pencil />,
+  search: <Search />,
+  globe: <Globe />,
+  wrench: <Wrench />,
+};
+
+function buildTraceSummary(entries: AssistantTraceEntry[]): TraceSummaryItem[] {
+  const buckets = new Map<string, { icon: ReactNode; count: number }>();
+
+  for (const entry of entries) {
+    switch (entry.kind) {
+      case "tool": {
+        const normalized = entry.part.toolName.trim().toLowerCase();
+        const cat = TOOL_CATEGORIES[normalized] ?? { label: "tools", iconKey: "wrench" };
+        const existing = buckets.get(cat.label);
+        if (existing) {
+          existing.count++;
+        } else {
+          buckets.set(cat.label, { icon: CATEGORY_ICONS[cat.iconKey] ?? <Wrench />, count: 1 });
+        }
+        break;
+      }
+      case "subagent": {
+        const existing = buckets.get("agents");
+        if (existing) {
+          existing.count++;
+        } else {
+          buckets.set("agents", { icon: <Bot />, count: 1 });
+        }
+        break;
+      }
+      case "diff": {
+        const existing = buckets.get("changes");
+        if (existing) {
+          existing.count += entry.parts.length;
+        } else {
+          buckets.set("changes", { icon: <FileCode2 />, count: entry.parts.length });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  return Array.from(buckets.entries()).map(([label, { icon, count }]) => ({
+    icon,
+    label,
+    count,
+  }));
 }
 
 /* ─── Step detail components (expanded content) ───────────────────── */
@@ -138,6 +359,8 @@ function AssistantTraceEntryView(args: {
 }) {
   const { entry, isStreaming, taskId, messageId } = args;
   const status = toStepStatus({ entry, isStreaming });
+  const icon = getEntryIcon(entry);
+  const summary = getEntrySummary(entry);
 
   switch (entry.kind) {
     case "reasoning": {
@@ -146,6 +369,9 @@ function AssistantTraceEntryView(args: {
         <ChainOfThoughtStep
           title={entry.isStreaming ? "Thinking" : "Reasoning"}
           status={status}
+          kind="thinking"
+          icon={icon}
+          summary={summary}
           defaultOpen={entry.isStreaming}
           openWhen={entry.isStreaming}
         >
@@ -156,12 +382,14 @@ function AssistantTraceEntryView(args: {
       );
     }
 
-    /* Assistant text is NOT an accordion - content is always visible. */
+    /* Assistant text — bullet point, content always visible (no accordion). */
     case "assistant_text":
       return (
         <div className="flex gap-3 text-sm text-muted-foreground motion-safe:animate-cot-step-in">
           <div className="relative mt-0.5 flex flex-col items-center">
-            <Check className="size-4" />
+            <span className="flex size-4 items-center justify-center" aria-hidden="true">
+              <span className="size-1.5 rounded-full bg-muted-foreground/50" />
+            </span>
             <div className="cot-connector mt-1.5 w-px flex-1 bg-border" />
           </div>
           <div className="min-w-0 flex-1 pb-4">
@@ -177,6 +405,8 @@ function AssistantTraceEntryView(args: {
         <ChainOfThoughtStep
           title={toToolDisplayName(entry.part.toolName)}
           status={status}
+          icon={icon}
+          summary={summary}
           defaultOpen={entry.part.state === "input-streaming"}
           openWhen={entry.part.state === "input-streaming"}
         >
@@ -190,6 +420,8 @@ function AssistantTraceEntryView(args: {
         <ChainOfThoughtStep
           title={parsed.description ?? parsed.subagentType ?? "Subagent"}
           status={status}
+          icon={icon}
+          summary={summary}
           defaultOpen={entry.part.state === "input-streaming"}
           openWhen={entry.part.state === "input-streaming"}
         >
@@ -208,6 +440,8 @@ function AssistantTraceEntryView(args: {
         <ChainOfThoughtStep
           title="Todo"
           status={status}
+          icon={icon}
+          summary={summary}
           defaultOpen={entry.part.state === "input-streaming"}
           openWhen={entry.part.state === "input-streaming"}
         >
@@ -220,6 +454,8 @@ function AssistantTraceEntryView(args: {
         <ChainOfThoughtStep
           title={entry.parts.length === 1 ? "Changed file" : `${entry.parts.length} changed files`}
           status={status}
+          icon={icon}
+          summary={summary}
           defaultOpen={entry.parts.some((p) => p.status === "pending")}
         >
           <ChangedFilesBlock parts={entry.parts} taskId={taskId} messageId={messageId} />
@@ -228,14 +464,14 @@ function AssistantTraceEntryView(args: {
 
     case "approval":
       return (
-        <ChainOfThoughtStep title={`Approval: ${entry.part.toolName}`} status={status} defaultOpen>
+        <ChainOfThoughtStep title={`Approval: ${entry.part.toolName}`} status={status} icon={icon} defaultOpen>
           <MessagePartRenderer part={entry.part} taskId={taskId} messageId={messageId} />
         </ChainOfThoughtStep>
       );
 
     case "user_input":
       return (
-        <ChainOfThoughtStep title={`Input: ${entry.part.toolName}`} status={status} defaultOpen>
+        <ChainOfThoughtStep title={`Input: ${entry.part.toolName}`} status={status} icon={icon} defaultOpen>
           <MessagePartRenderer part={entry.part} taskId={taskId} messageId={messageId} />
         </ChainOfThoughtStep>
       );
@@ -245,6 +481,7 @@ function AssistantTraceEntryView(args: {
         <ChainOfThoughtStep
           title={entry.part.content.split("\n").find(Boolean)?.trim() || "System"}
           status={status}
+          icon={icon}
           defaultOpen={entry.part.compactBoundary != null}
         >
           <MessagePartRenderer part={entry.part} taskId={taskId} messageId={messageId} />
@@ -253,14 +490,14 @@ function AssistantTraceEntryView(args: {
 
     case "orchestration":
       return (
-        <ChainOfThoughtStep title="Orchestration" status={status} defaultOpen={isStreaming}>
+        <ChainOfThoughtStep title="Orchestration" status={status} icon={icon} defaultOpen={isStreaming}>
           <OrchestrationCard part={entry.part} />
         </ChainOfThoughtStep>
       );
 
     case "stave_processing":
       return (
-        <ChainOfThoughtStep title="Execution routing" status={status} defaultOpen={isStreaming}>
+        <ChainOfThoughtStep title="Execution routing" status={status} icon={icon} defaultOpen={isStreaming}>
           <StaveProcessingCard part={entry.part} />
         </ChainOfThoughtStep>
       );
@@ -279,6 +516,11 @@ export function AssistantMessageBody(args: {
   const isActivelyStreaming = Boolean(message.isStreaming);
   const isStreaming = streamingEnabled && isActivelyStreaming;
   const trace = useMemo(() => buildAssistantTrace({ message }), [message]);
+  const summaryItems = useMemo(() => buildTraceSummary(trace.entries), [trace.entries]);
+  const allDiffParts = useMemo<CodeDiffPart[]>(
+    () => trace.entries.flatMap((entry) => entry.kind === "diff" ? entry.parts : []),
+    [trace.entries],
+  );
 
   if (
     !trace.showStreamingPlaceholder
@@ -298,11 +540,12 @@ export function AssistantMessageBody(args: {
           defaultOpen={isStreaming}
           openWhen={isStreaming}
           collapseWhen={!isStreaming}
+          summaryItems={summaryItems}
         >
           <ChainOfThoughtTrigger />
           <ChainOfThoughtContent>
             {trace.showStreamingPlaceholder ? (
-              <ChainOfThoughtStep title="Thinking" status="active" defaultOpen openWhen>
+              <ChainOfThoughtStep title="Thinking" status="active" kind="thinking" icon={<Brain />} defaultOpen openWhen>
                 <p className="text-sm text-muted-foreground">Thinking...</p>
               </ChainOfThoughtStep>
             ) : null}
@@ -329,6 +572,12 @@ export function AssistantMessageBody(args: {
               {part.text}
             </MessageResponse>
           ))}
+        </div>
+      ) : null}
+
+      {allDiffParts.length > 0 && !isStreaming ? (
+        <div className="mt-4">
+          <ChangedFilesBlock parts={allDiffParts} taskId={taskId} messageId={messageId} />
         </div>
       ) : null}
 

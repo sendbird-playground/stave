@@ -41,19 +41,34 @@ The UI follows `elements.ai-sdk.dev/components/chain-of-thought` as closely as p
 
 - **Root**: No outer border or background — just `not-prose w-full`.
 - **Trigger**: Simple row `[icon] label [chevron]`, text-muted-foreground, no card.
+  When streaming, the "Thinking" label uses a shimmer gradient animation.
+  When collapsed and not streaming, a summary row shows tool/agent/file counts below the trigger.
 - **Steps**: Flat flex rows `flex gap-3 text-sm` — NOT cards with borders/backgrounds.
-- **Step icons**: Status-only (spinner for active, checkmark for done, circle for pending).
-  No per-kind coloring, no icon wrappers, no status chips.
+- **Step icons**: Kind-specific icons for done/pending steps (Terminal for Bash, FileText for Read,
+  Pencil for Edit, Search for Grep/Glob, Globe for web, Bot for subagent, Brain for reasoning,
+  ListTodo for todo, FileCode2 for diffs, etc.). Active steps always show a spinner.
+- **Step summary chips**: After the step title, a brief summary is shown in a distinct style:
+  bash commands in a mono code chip, file names in bordered file chips, search patterns in
+  code chips, subagent types in primary-tinted badges.
 - **Connecting line**: Vertical 1px `bg-border` line between step icons; hidden on last step via `[&>*:last-child_.cot-connector]:hidden`.
 - **Step status colors**: `active → text-foreground`, `done → text-muted-foreground`, `pending → text-muted-foreground/50`.
 - **Expandable detail**: Steps with children show a subtle chevron next to the title; click to toggle.
-- **Assistant text steps**: Always visible (no accordion); rendered inline with a Check icon.
-- **No badges/chips**: No `Done`, `Running`, `Pending`, `toolUseId`, or item-number chips.
+  Expanded content animates in with `cot-step-in`.
+- **Assistant text steps**: Always visible (no accordion); rendered inline with a bullet-point dot
+  instead of an icon.
+- **No status chips**: No `Done`, `Running`, `Pending`, `toolUseId`, or item-number chips.
+
+### Collapsed summary
+
+When the Chain of Thought collapses after a turn completes, the trigger displays a compact
+summary of the work performed. Categories include commands, reads, edits, searches, web,
+agents, and file changes. Each category shows an icon and count, separated by dot dividers.
 
 ### Inline code & file links
 
 - Inline backtick code uses bordered chip style (border + subtle bg, like `inline-citation`).
 - File link chips (with line numbers) use full-opacity `border-border` for clear visibility against the white chat background.
+- Markdown bold uses `font-semibold` (600) instead of the browser default bold (700).
 
 ## Naming
 

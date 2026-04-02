@@ -112,6 +112,7 @@ export function MarkdownMessage({
 
   const components = useMemo(() => ({
     hr: () => <hr className="my-4 h-px border-0 bg-border first:mt-0 last:mb-0" />,
+    strong: ({ children }: { children?: ReactNode }) => <strong className="font-semibold">{children}</strong>,
     p: ({ children }: { children?: ReactNode }) => <p className="my-2 whitespace-pre-wrap first:mt-0 last:mb-0">{children}</p>,
     ul: ({ children }: { children?: ReactNode }) => (
       <ul className="my-2 ml-5 list-disc pl-1 marker:text-muted-foreground [&_ol]:my-1 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:my-1 [&_ul]:ml-5 [&_ul]:list-disc">
@@ -141,7 +142,7 @@ export function MarkdownMessage({
       return (
         <code
           className={cn(
-            "rounded-md border border-border/80 bg-muted/40 px-1.5 py-0.5 font-mono text-[0.9em]",
+            "mx-0.5 rounded-md border border-border/80 bg-muted/40 px-1.5 py-0.5 font-mono text-[0.9em]",
             resolveMessageSizeClass(messageCodeFontSizeRef.current),
           )}
         >

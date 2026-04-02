@@ -605,6 +605,9 @@ export function appendProviderEventToAssistant(args: {
     }
 
     const finalizedParts = args.message.parts.map((part) => {
+      if (part.type === "thinking" && part.isStreaming) {
+        return { ...part, isStreaming: false };
+      }
       if (part.type === "tool_use") {
         if (part.state === "input-available" || part.state === "input-streaming") {
           return { ...part, state: "output-available" as const };
