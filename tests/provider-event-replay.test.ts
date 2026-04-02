@@ -201,6 +201,30 @@ describe("appendProviderEventToAssistant", () => {
     const diffParts = message.parts.filter((p) => p.type === "code_diff");
     expect(diffParts).toHaveLength(3);
   });
+
+  test("stores thinking timestamps for the actual reasoning window", () => {
+    let message = createMessage();
+
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "thinking", text: "Inspecting...", isStreaming: true },
+    });
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "text", text: "Done." },
+    });
+
+    const thinkingPart = message.parts.find((part) => part.type === "thinking");
+    expect(thinkingPart).toBeDefined();
+    if (!thinkingPart || thinkingPart.type !== "thinking") {
+      throw new Error("expected thinking part");
+    }
+
+    expect(thinkingPart.isStreaming).toBe(false);
+    expect(typeof thinkingPart.startedAt).toBe("string");
+    expect(typeof thinkingPart.completedAt).toBe("string");
+    expect(Date.parse(thinkingPart.completedAt ?? "")).toBeGreaterThanOrEqual(Date.parse(thinkingPart.startedAt ?? ""));
+  });
 });
 
 describe("plan response replay", () => {

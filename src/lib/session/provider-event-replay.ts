@@ -39,6 +39,7 @@ function createThinkingPart(args: { text: string; isStreaming: boolean }): Think
     type: "thinking",
     text: args.text,
     isStreaming: args.isStreaming,
+    ...(args.isStreaming ? { startedAt: buildRecentTimestamp() } : {}),
   });
 }
 
@@ -104,6 +105,37 @@ function createUserInputPart(args: {
 
 function isAgentToolPart(part: MessagePart): part is ToolUsePart {
   return part.type === "tool_use" && part.toolName.trim().toLowerCase() === "agent";
+}
+
+function finalizeTrailingThinkingPart(args: { parts: MessagePart[]; completedAt?: string }): MessagePart[] {
+  const lastPart = args.parts.at(-1);
+  if (lastPart?.type !== "thinking" || !lastPart.isStreaming) {
+    return args.parts;
+  }
+
+  const completedAt = args.completedAt ?? buildRecentTimestamp();
+  return [
+    ...args.parts.slice(0, -1),
+    {
+      ...lastPart,
+      isStreaming: false,
+      completedAt: lastPart.completedAt ?? completedAt,
+    },
+  ];
+}
+
+function shouldFinalizeThinkingBeforeEvent(event: NormalizedProviderEvent) {
+  switch (event.type) {
+    case "thinking":
+    case "usage":
+    case "prompt_suggestions":
+    case "provider_conversation":
+    case "model_resolved":
+    case "done":
+      return false;
+    default:
+      return true;
+  }
 }
 
 /**
@@ -430,26 +462,34 @@ export function appendProviderEventToAssistant(args: {
     };
   }
 
+  let message = args.message;
+  if (shouldFinalizeThinkingBeforeEvent(args.event)) {
+    const finalizedParts = finalizeTrailingThinkingPart({ parts: message.parts });
+    if (finalizedParts !== message.parts) {
+      message = { ...message, parts: finalizedParts };
+    }
+  }
+
   if (args.event.type === "text") {
-    const lastPart = args.message.parts.at(-1);
+    const lastPart = message.parts.at(-1);
     const partsExcludingTrailingText = lastPart?.type === "text"
-      ? args.message.parts.slice(0, -1)
-      : args.message.parts;
+      ? message.parts.slice(0, -1)
+      : message.parts;
     const candidateText = lastPart?.type === "text"
       ? `${lastPart.text}${args.event.text}`
       : args.event.text;
 
     if (shouldSuppressStaveInternalText({
-      message: args.message,
+      message,
       candidateText,
       partsExcludingTrailingText,
     })) {
-      const nextContent = lastPart?.type === "text" && args.message.content.endsWith(lastPart.text)
-        ? args.message.content.slice(0, -lastPart.text.length)
-        : args.message.content;
+      const nextContent = lastPart?.type === "text" && message.content.endsWith(lastPart.text)
+        ? message.content.slice(0, -lastPart.text.length)
+        : message.content;
 
       return {
-        ...args.message,
+        ...message,
         content: nextContent,
         parts: partsExcludingTrailingText,
         isStreaming: true,
@@ -460,11 +500,11 @@ export function appendProviderEventToAssistant(args: {
   if (args.event.type === "subagent_progress") {
     const { toolUseId, content } = args.event;
     const updatedParts = appendSubagentProgressToPart({
-      parts: args.message.parts,
+      parts: message.parts,
       toolUseId,
       content,
     });
-    return { ...args.message, parts: updatedParts, isStreaming: true };
+    return { ...message, parts: updatedParts, isStreaming: true };
   }
 
   // Legacy: system events carrying "Subagent progress:" prefix from older stored
@@ -476,37 +516,37 @@ export function appendProviderEventToAssistant(args: {
     const stripped = args.event.content.trimStart().slice("Subagent progress:".length).trim();
     if (stripped) {
       const updatedParts = appendSubagentProgressToPart({
-        parts: args.message.parts,
+        parts: message.parts,
         toolUseId: undefined,
         content: stripped,
       });
-      return { ...args.message, parts: updatedParts, isStreaming: true };
+      return { ...message, parts: updatedParts, isStreaming: true };
     }
   }
 
   if (args.event.type === "tool_progress") {
     const { toolUseId, elapsedSeconds } = args.event;
-    const updatedParts = args.message.parts.map((part) => {
+    const updatedParts = message.parts.map((part) => {
       if (part.type === "tool_use" && part.toolUseId === toolUseId) {
         return { ...part, elapsedSeconds };
       }
       return part;
     });
-    return { ...args.message, parts: updatedParts };
+    return { ...message, parts: updatedParts };
   }
 
   if (args.event.type === "tool_result") {
     const toolResultEvent = args.event;
-    const updatedParts = args.message.parts.map((part) => mergeToolResultIntoPart({
+    const updatedParts = message.parts.map((part) => mergeToolResultIntoPart({
       part,
       event: toolResultEvent,
     }));
-    return { ...args.message, parts: updatedParts };
+    return { ...message, parts: updatedParts };
   }
 
   if (args.event.type === "plan_ready") {
     return {
-      ...args.message,
+      ...message,
       content: args.event.planText,
       isPlanResponse: true,
       planText: args.event.planText,
@@ -515,14 +555,14 @@ export function appendProviderEventToAssistant(args: {
 
   if (args.event.type === "model_resolved") {
     return {
-      ...args.message,
+      ...message,
       providerId: args.event.resolvedProviderId,
       model: args.event.resolvedModel,
     };
   }
 
   if (args.event.type === "provider_conversation") {
-    return args.message;
+    return message;
   }
 
   if (args.event.type === "stave:orchestration_processing") {
@@ -539,15 +579,15 @@ export function appendProviderEventToAssistant(args: {
       status: "executing",
     };
     return {
-      ...args.message,
-      parts: [...args.message.parts, progressPart],
+      ...message,
+      parts: [...message.parts, progressPart],
       isStreaming: true,
     };
   }
 
   if (args.event.type === "stave:subtask_started") {
     const { subtaskId } = args.event;
-    const updatedParts = args.message.parts.map((part) => {
+    const updatedParts = message.parts.map((part) => {
       if (part.type !== "orchestration_progress") {
         return part;
       }
@@ -558,12 +598,12 @@ export function appendProviderEventToAssistant(args: {
         ),
       };
     });
-    return { ...args.message, parts: updatedParts };
+    return { ...message, parts: updatedParts };
   }
 
   if (args.event.type === "stave:subtask_done") {
     const { subtaskId, success } = args.event;
-    const updatedParts = args.message.parts.map((part) => {
+    const updatedParts = message.parts.map((part) => {
       if (part.type !== "orchestration_progress") {
         return part;
       }
@@ -576,37 +616,37 @@ export function appendProviderEventToAssistant(args: {
         ),
       };
     });
-    return { ...args.message, parts: updatedParts };
+    return { ...message, parts: updatedParts };
   }
 
   if (args.event.type === "stave:synthesis_started") {
-    const updatedParts = args.message.parts.map((part) => {
+    const updatedParts = message.parts.map((part) => {
       if (part.type !== "orchestration_progress") {
         return part;
       }
       return { ...part, status: "synthesizing" as const };
     });
-    return { ...args.message, parts: updatedParts };
+    return { ...message, parts: updatedParts };
   }
 
   if (args.event.type === "done") {
     const completedAt = buildRecentTimestamp();
-    if (!hasRenderableAssistantContent({ message: args.message })) {
+    if (!hasRenderableAssistantContent({ message })) {
       return {
-        ...args.message,
+        ...message,
         content: "No response returned.",
         completedAt,
         isStreaming: false,
         parts: [
-          ...args.message.parts,
+          ...message.parts,
           { type: "system_event", content: "No response returned." },
         ],
       };
     }
 
-    const finalizedParts = args.message.parts.map((part) => {
+    const finalizedParts = message.parts.map((part) => {
       if (part.type === "thinking" && part.isStreaming) {
-        return { ...part, isStreaming: false };
+        return { ...part, isStreaming: false, completedAt: part.completedAt ?? completedAt };
       }
       if (part.type === "tool_use") {
         if (part.state === "input-available" || part.state === "input-streaming") {
@@ -623,7 +663,7 @@ export function appendProviderEventToAssistant(args: {
     const truncated = args.event.stop_reason === "max_tokens";
 
     return {
-      ...args.message,
+      ...message,
       completedAt,
       isStreaming: false,
       parts: truncated
@@ -634,10 +674,10 @@ export function appendProviderEventToAssistant(args: {
 
   const part = normalizeEventToPart({ event: args.event });
   if (!part) {
-    return args.message;
+    return message;
   }
 
-  const nextParts = [...args.message.parts];
+  const nextParts = [...message.parts];
   const lastPart = nextParts.at(-1);
 
   if (part.type === "text" && lastPart?.type === "text") {
@@ -650,6 +690,7 @@ export function appendProviderEventToAssistant(args: {
       ...lastPart,
       text: `${lastPart.text}${part.text}`,
       isStreaming: part.isStreaming,
+      ...(part.isStreaming ? {} : { completedAt: lastPart.completedAt ?? buildRecentTimestamp() }),
     };
   } else if (
     part.type === "tool_use"
@@ -715,8 +756,8 @@ export function appendProviderEventToAssistant(args: {
   const textAdd = args.event.type === "text" ? args.event.text : "";
 
   return {
-    ...args.message,
-    content: `${args.message.content}${textAdd}`,
+    ...message,
+    content: `${message.content}${textAdd}`,
     parts: nextParts,
     isStreaming: true,
   };

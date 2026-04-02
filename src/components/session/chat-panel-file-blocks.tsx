@@ -9,7 +9,9 @@ import {
   CodeBlockTitle,
 } from "@/components/ai-elements";
 import {
+  type FileChangeSummaryRow,
   isPendingDiffStatus,
+  parseFileChangeToolInput,
   summarizeDiffLineChanges,
 } from "@/components/session/chat-panel.utils";
 import { cn } from "@/lib/utils";
@@ -208,6 +210,75 @@ export function ChangedFilesBlock(args: { parts: CodeDiffPart[]; taskId: string;
       </div>
     </Card>
   );
+}
+
+function FileChangeStatusBadge(args: { status: FileChangeSummaryRow["status"] }) {
+  switch (args.status) {
+    case "applied":
+      return <Badge variant="success">applied</Badge>;
+    case "skipped":
+      return <Badge variant="warning">skipped</Badge>;
+    case "failed":
+      return <Badge variant="destructive">failed</Badge>;
+  }
+}
+
+export function FileChangeSummaryBlock(args: { rows: FileChangeSummaryRow[] }) {
+  const { rows } = args;
+  const openFileFromTree = useAppStore((state) => state.openFileFromTree);
+
+  const appliedCount = useMemo(
+    () => rows.filter((row) => row.status === "applied").length,
+    [rows],
+  );
+  const skippedCount = useMemo(
+    () => rows.filter((row) => row.status === "skipped").length,
+    [rows],
+  );
+  const failedCount = useMemo(
+    () => rows.filter((row) => row.status === "failed").length,
+    [rows],
+  );
+
+  return (
+    <Card className="gap-0 overflow-hidden p-0">
+      <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-sm font-medium">
+            {rows.length} {rows.length === 1 ? "file" : "files"} changed
+          </span>
+          {appliedCount > 0 ? <Badge variant="success">{appliedCount} applied</Badge> : null}
+          {skippedCount > 0 ? <Badge variant="warning">{skippedCount} skipped</Badge> : null}
+          {failedCount > 0 ? <Badge variant="destructive">{failedCount} failed</Badge> : null}
+        </div>
+      </div>
+      <div className="divide-y">
+        {rows.map((row, index) => (
+          <div key={`${row.filePath}-${index}`} className="flex items-center gap-2 px-3 py-2">
+            <span className="min-w-0 flex-1 truncate font-medium">{row.filePath}</span>
+            <FileChangeStatusBadge status={row.status} />
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="shrink-0"
+              onClick={() => void openFileFromTree({ filePath: row.filePath })}
+            >
+              Open
+            </Button>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+export function FileChangeToolBlock(args: { input: string }) {
+  const rows = useMemo(() => parseFileChangeToolInput(args.input), [args.input]);
+  if (rows.length === 0) {
+    return null;
+  }
+  return <FileChangeSummaryBlock rows={rows} />;
 }
 
 export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {

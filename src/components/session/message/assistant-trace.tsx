@@ -34,10 +34,16 @@ import {
   parseTodoInput,
 } from "@/components/ai-elements";
 import type { TraceSummaryItem } from "@/components/ai-elements/chain-of-thought";
-import { ChangedFilesBlock, ImageAttachmentBlock, ReferencedFilesBlock } from "@/components/session/chat-panel-file-blocks";
+import {
+  ChangedFilesBlock,
+  FileChangeSummaryBlock,
+  ImageAttachmentBlock,
+  ReferencedFilesBlock,
+} from "@/components/session/chat-panel-file-blocks";
 import { MessagePartRenderer, toToolDisplayName } from "@/components/session/chat-panel-message-parts";
+import { parseFileChangeToolInput } from "@/components/session/chat-panel.utils";
 import { cn } from "@/lib/utils";
-import type { ChatMessage, CodeDiffPart } from "@/types/chat";
+import type { ChatMessage, CodeDiffPart, ThinkingPart } from "@/types/chat";
 import { buildAssistantTrace, joinReasoningText, type AssistantTraceEntry } from "./assistant-trace-builder";
 
 /* ─── Step status ────────────────────────────────────────────────── */
@@ -51,7 +57,7 @@ function toStepStatus(args: { entry: AssistantTraceEntry; isStreaming: boolean }
     case "tool":
     case "subagent":
     case "todo":
-      return args.entry.part.state === "input-streaming"
+      return args.entry.part.state === "input-streaming" || args.entry.part.state === "input-available"
         ? "active" as const
         : args.entry.part.state === "output-available" || args.entry.part.state === "output-error"
           ? "done" as const
@@ -115,10 +121,10 @@ function getToolSummary(toolName: string, input: string): ReactNode {
     switch (toolName.trim().toLowerCase()) {
       case "bash": {
         const cmd = typeof parsed.command === "string"
-          ? (parsed.command.split("\n")[0] ?? "").trim().slice(0, 60) || null
+          ? (parsed.command.split("\n")[0] ?? "").trim().slice(0, 100) || null
           : null;
         return cmd ? (
-          <span className="ml-1 inline-flex max-w-52 items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
+          <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
             {cmd}
           </span>
         ) : null;
@@ -128,7 +134,7 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       case "edit": {
         const filePath = typeof parsed.file_path === "string" ? parsed.file_path : null;
         return filePath ? (
-          <span className="ml-1 inline-flex max-w-52 items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
             <FileText className="size-2.5 shrink-0" />
             {extractFileName(filePath)}
           </span>
@@ -137,42 +143,51 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       case "glob": {
         const pattern = typeof parsed.pattern === "string" ? parsed.pattern : null;
         return pattern ? (
-          <span className="ml-1 inline-flex max-w-52 items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
+          <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
             {pattern}
           </span>
         ) : null;
       }
       case "grep": {
-        const pattern = typeof parsed.pattern === "string" ? parsed.pattern.slice(0, 40) : null;
+        const pattern = typeof parsed.pattern === "string" ? parsed.pattern.slice(0, 80) : null;
         return pattern ? (
-          <span className="ml-1 inline-flex max-w-52 items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
             <Search className="size-2.5 shrink-0" />
             {pattern}
           </span>
         ) : null;
       }
       case "websearch": {
-        const query = typeof parsed.query === "string" ? parsed.query.slice(0, 40) : null;
+        const query = typeof parsed.query === "string" ? parsed.query.slice(0, 80) : null;
         return query ? (
-          <span className="ml-1 inline-flex max-w-52 items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
             <Globe className="size-2.5 shrink-0" />
             {query}
           </span>
         ) : null;
       }
       case "webfetch": {
-        const url = typeof parsed.url === "string" ? parsed.url.slice(0, 50) : null;
+        const url = typeof parsed.url === "string" ? parsed.url.slice(0, 80) : null;
         return url ? (
-          <span className="ml-1 inline-flex max-w-52 items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
             <Globe className="size-2.5 shrink-0" />
             {url}
           </span>
         ) : null;
       }
+      case "file_change": {
+        const rows = parseFileChangeToolInput(input);
+        return rows.length > 0 ? (
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
+            <FileCode2 className="size-2.5 shrink-0" />
+            {rows.length} {rows.length === 1 ? "file" : "files"}
+          </span>
+        ) : null;
+      }
       default: {
-        const desc = typeof parsed.description === "string" ? parsed.description.slice(0, 50) : null;
+        const desc = typeof parsed.description === "string" ? parsed.description.slice(0, 80) : null;
         return desc ? (
-          <span className="ml-1 max-w-52 truncate text-[0.75em] text-muted-foreground/70">{desc}</span>
+          <span className="ml-1 max-w-xs truncate text-[0.75em] text-muted-foreground/70">{desc}</span>
         ) : null;
       }
     }
@@ -349,6 +364,81 @@ function TodoStepDetail(args: { input: string }) {
   );
 }
 
+/* ─── Reasoning step (message-duration summary) ──────────────────── */
+
+function formatThinkingDuration(seconds: number): string {
+  const roundedSeconds = Math.max(1, Math.round(seconds));
+  if (roundedSeconds < 60) {
+    return `${roundedSeconds} second${roundedSeconds === 1 ? "" : "s"}`;
+  }
+
+  const minutes = Math.floor(roundedSeconds / 60);
+  const remainingSeconds = roundedSeconds % 60;
+  if (remainingSeconds === 0) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  return `${minutes} minute${minutes === 1 ? "" : "s"} ${remainingSeconds} second${remainingSeconds === 1 ? "" : "s"}`;
+}
+
+function toEpochMilliseconds(value?: string): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getReasoningDurationSeconds(parts: ThinkingPart[]): number | null {
+  const startedAt = parts.reduce<number | null>((firstTimestamp, part) => {
+    if (firstTimestamp !== null) {
+      return firstTimestamp;
+    }
+    return toEpochMilliseconds(part.startedAt);
+  }, null);
+  const completedAt = [...parts].reverse().reduce<number | null>((latestTimestamp, part) => {
+    if (latestTimestamp !== null) {
+      return latestTimestamp;
+    }
+    return toEpochMilliseconds(part.completedAt);
+  }, null);
+  if (startedAt === null || completedAt === null || completedAt < startedAt) {
+    return null;
+  }
+  return Math.max(1, Math.round((completedAt - startedAt) / 1000));
+}
+
+function ReasoningStepView(args: {
+  entry: Extract<AssistantTraceEntry, { kind: "reasoning" }>;
+  status: "active" | "done" | "pending";
+  icon: ReactNode;
+}) {
+  const { entry, status, icon } = args;
+  const durationSeconds = getReasoningDurationSeconds(entry.parts);
+
+  const durationSummary = !entry.isStreaming && durationSeconds !== null ? (
+    <span className="ml-1 text-xs text-muted-foreground/70">
+      Thought for {formatThinkingDuration(durationSeconds)}
+    </span>
+  ) : null;
+
+  const reasoningText = joinReasoningText(entry.parts);
+  return (
+    <ChainOfThoughtStep
+      title={entry.isStreaming ? "Thinking" : "Reasoning"}
+      status={status}
+      kind="thinking"
+      icon={icon}
+      summary={durationSummary}
+      defaultOpen={entry.isStreaming}
+      openWhen={entry.isStreaming}
+    >
+      <p className="whitespace-pre-wrap leading-[1.6] text-muted-foreground">
+        {reasoningText || "Thinking..."}
+      </p>
+    </ChainOfThoughtStep>
+  );
+}
+
 /* ─── Entry renderer ──────────────────────────────────────────────── */
 
 function AssistantTraceEntryView(args: {
@@ -363,24 +453,8 @@ function AssistantTraceEntryView(args: {
   const summary = getEntrySummary(entry);
 
   switch (entry.kind) {
-    case "reasoning": {
-      const reasoningText = joinReasoningText(entry.parts);
-      return (
-        <ChainOfThoughtStep
-          title={entry.isStreaming ? "Thinking" : "Reasoning"}
-          status={status}
-          kind="thinking"
-          icon={icon}
-          summary={summary}
-          defaultOpen={entry.isStreaming}
-          openWhen={entry.isStreaming}
-        >
-          <p className="whitespace-pre-wrap leading-[1.6] text-muted-foreground">
-            {reasoningText || "Thinking..."}
-          </p>
-        </ChainOfThoughtStep>
-      );
-    }
+    case "reasoning":
+      return <ReasoningStepView entry={entry} status={status} icon={icon} />;
 
     /* Assistant text — bullet point, content always visible (no accordion). */
     case "assistant_text":
@@ -416,9 +490,16 @@ function AssistantTraceEntryView(args: {
 
     case "subagent": {
       const parsed = parseSubagentToolInput({ input: entry.part.input });
+      const resolvedTitle = parsed.description ?? parsed.subagentType ?? "Subagent";
+      const titleContent = status === "active" ? (
+        <span className="bg-gradient-to-r from-foreground via-primary to-foreground bg-[length:200%_100%] bg-clip-text text-transparent motion-safe:animate-shimmer">
+          {resolvedTitle}
+        </span>
+      ) : undefined;
       return (
         <ChainOfThoughtStep
-          title={parsed.description ?? parsed.subagentType ?? "Subagent"}
+          title={resolvedTitle}
+          titleContent={titleContent}
           status={status}
           icon={icon}
           summary={summary}
@@ -521,6 +602,21 @@ export function AssistantMessageBody(args: {
     () => trace.entries.flatMap((entry) => entry.kind === "diff" ? entry.parts : []),
     [trace.entries],
   );
+  const fileChangeSummaryRows = useMemo(
+    () => trace.entries.flatMap((entry) => (
+      entry.kind === "tool" && entry.part.toolName.trim().toLowerCase() === "file_change"
+        ? parseFileChangeToolInput(entry.part.input)
+        : []
+    )),
+    [trace.entries],
+  );
+  const unresolvedFileChangeRows = useMemo(
+    () => {
+      const diffPaths = new Set(allDiffParts.map((part) => part.filePath));
+      return fileChangeSummaryRows.filter((row) => row.status !== "applied" || !diffPaths.has(row.filePath));
+    },
+    [allDiffParts, fileChangeSummaryRows],
+  );
 
   if (
     !trace.showStreamingPlaceholder
@@ -578,6 +674,12 @@ export function AssistantMessageBody(args: {
       {allDiffParts.length > 0 && !isStreaming ? (
         <div className="mt-4">
           <ChangedFilesBlock parts={allDiffParts} taskId={taskId} messageId={messageId} />
+        </div>
+      ) : null}
+
+      {unresolvedFileChangeRows.length > 0 && !isStreaming ? (
+        <div className="mt-4">
+          <FileChangeSummaryBlock rows={unresolvedFileChangeRows} />
         </div>
       ) : null}
 

@@ -9,6 +9,14 @@ export interface DiffLineChangeSummary {
   removed: number;
 }
 
+export type FileChangeStatus = "applied" | "skipped" | "failed";
+
+export interface FileChangeSummaryRow {
+  filePath: string;
+  status: FileChangeStatus;
+  error?: string;
+}
+
 export type MessagePartSegment =
   | { kind: "tools"; parts: MessagePart[]; startIndex: number }
   | { kind: "diffs"; parts: CodeDiffPart[]; startIndex: number }
@@ -82,6 +90,74 @@ export function summarizeDiffLineChanges(args: { oldContent: string; newContent:
     added: newWindow.length - sharedLineCount,
     removed: oldWindow.length - sharedLineCount,
   };
+}
+
+function getFileChangeStatusPriority(status: FileChangeStatus) {
+  switch (status) {
+    case "failed":
+      return 3;
+    case "skipped":
+      return 2;
+    case "applied":
+      return 1;
+  }
+}
+
+export function parseFileChangeToolInput(input: string): FileChangeSummaryRow[] {
+  try {
+    const parsed = JSON.parse(input) as {
+      appliedPaths?: unknown;
+      skippedPaths?: unknown;
+      failedPaths?: unknown;
+    };
+    const rows: FileChangeSummaryRow[] = [];
+
+    if (Array.isArray(parsed.appliedPaths)) {
+      rows.push(
+        ...parsed.appliedPaths
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          .map((filePath) => ({ filePath, status: "applied" as const })),
+      );
+    }
+
+    if (Array.isArray(parsed.skippedPaths)) {
+      rows.push(
+        ...parsed.skippedPaths
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          .map((filePath) => ({ filePath, status: "skipped" as const })),
+      );
+    }
+
+    if (Array.isArray(parsed.failedPaths)) {
+      rows.push(
+        ...parsed.failedPaths.flatMap((value) => {
+          if (!value || typeof value !== "object") {
+            return [];
+          }
+          const filePath = typeof value.path === "string" ? value.path.trim() : "";
+          if (!filePath) {
+            return [];
+          }
+          const error = typeof value.error === "string" && value.error.trim().length > 0
+            ? value.error
+            : undefined;
+          return [{ filePath, status: "failed" as const, ...(error ? { error } : {}) }];
+        }),
+      );
+    }
+
+    const dedupedRows = new Map<string, FileChangeSummaryRow>();
+    for (const row of rows) {
+      const existing = dedupedRows.get(row.filePath);
+      if (!existing || getFileChangeStatusPriority(row.status) > getFileChangeStatusPriority(existing.status)) {
+        dedupedRows.set(row.filePath, row);
+      }
+    }
+
+    return Array.from(dedupedRows.values());
+  } catch {
+    return [];
+  }
 }
 
 export function groupMessageParts(parts: MessagePart[]): MessagePartSegment[] {
