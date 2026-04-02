@@ -255,8 +255,8 @@ export interface AppSettings {
   smartSuggestions: boolean;
   chatSendPreview: boolean;
   chatStreamingEnabled: boolean;
-  messageFontSize: "base" | "lg" | "xl";
-  messageCodeFontSize: "base" | "lg" | "xl";
+  messageFontSize: number;
+  messageCodeFontSize: number;
   messageFontFamily: string;
   messageMonoFontFamily: string;
   messageKoreanFontFamily: string;
@@ -695,8 +695,8 @@ const defaultSettings: AppSettings = {
   smartSuggestions: true,
   chatSendPreview: true,
   chatStreamingEnabled: true,
-  messageFontSize: "lg",
-  messageCodeFontSize: "base",
+  messageFontSize: 18,
+  messageCodeFontSize: 14,
   messageFontFamily: "Geist Variable",
   messageMonoFontFamily: "JetBrains Mono",
   messageKoreanFontFamily: "Pretendard Variable",
@@ -5187,6 +5187,14 @@ export const useAppStore = create<AppState>()(
         delete raw.stavePreprocessorModel;
         delete raw.staveSupervisorModel;
         delete raw.staveOrchestrationEnabled;
+        // Migrate string font sizes ("base"/"lg"/"xl") to numeric pixel values.
+        const _legacyFontSizeMap: Record<string, number> = { base: 16, lg: 18, xl: 20 };
+        if (typeof raw.messageFontSize === "string") {
+          raw.messageFontSize = _legacyFontSizeMap[raw.messageFontSize] ?? 18;
+        }
+        if (typeof raw.messageCodeFontSize === "string") {
+          raw.messageCodeFontSize = _legacyFontSizeMap[raw.messageCodeFontSize] ?? 14;
+        }
         if (typeof raw.fastModeVisible === "boolean") {
           state.settings.claudeFastModeVisible ??= raw.fastModeVisible;
           state.settings.codexFastModeVisible ??= raw.fastModeVisible;

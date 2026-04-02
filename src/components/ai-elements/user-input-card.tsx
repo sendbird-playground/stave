@@ -55,7 +55,7 @@ export function UserInputCard(args: UserInputCardProps) {
   const isReady = questions.every((question) => Boolean(compiledAnswers[question.question]?.trim()));
 
   return (
-    <div className="rounded-md border bg-card p-3 text-sm">
+    <div className="rounded-md border bg-card p-3 text-[0.875em]">
       <p className="font-semibold text-foreground">Input requested: {toolName}</p>
       {state === "input-requested" ? (
         <>
@@ -65,8 +65,8 @@ export function UserInputCard(args: UserInputCardProps) {
               return (
                 <div key={question.question} className="space-y-2">
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{question.header}</p>
-                    <p className="mt-1 text-sm text-foreground">{question.question}</p>
+                    <p className="text-[0.75em] font-medium uppercase tracking-wide text-muted-foreground">{question.header}</p>
+                    <p className="mt-1 text-foreground">{question.question}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {question.options.map((option) => {
@@ -101,7 +101,7 @@ export function UserInputCard(args: UserInputCardProps) {
                       );
                     })}
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[0.75em] text-muted-foreground">
                     {question.multiSelect ? "Choose one or more options. Add custom text if needed." : "Choose one option or provide custom text."}
                   </p>
                   <Input
@@ -132,7 +132,7 @@ export function UserInputCard(args: UserInputCardProps) {
             </Button>
           </div>
           {disabledReason ? (
-            <p className="mt-2 text-xs text-muted-foreground">{disabledReason}</p>
+            <p className="mt-2 text-[0.75em] text-muted-foreground">{disabledReason}</p>
           ) : null}
         </>
       ) : state === "input-denied" ? (
@@ -141,9 +141,9 @@ export function UserInputCard(args: UserInputCardProps) {
         <div className="mt-3 space-y-2">
           {questions.map((question) => (
             <div key={question.question}>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{question.header}</p>
-              <p className="mt-1 text-sm text-foreground">{question.question}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{answers?.[question.question] ?? "No answer provided."}</p>
+              <p className="text-[0.75em] font-medium uppercase tracking-wide text-muted-foreground">{question.header}</p>
+              <p className="mt-1 text-foreground">{question.question}</p>
+              <p className="mt-1 text-muted-foreground">{answers?.[question.question] ?? "No answer provided."}</p>
             </div>
           ))}
         </div>

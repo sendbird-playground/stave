@@ -11,7 +11,7 @@ export function CompactingIndicator({ className, ...props }: HTMLAttributes<HTML
   return (
     <div
       className={cn(
-        "flex items-center gap-2 py-0.5 text-xs text-muted-foreground",
+        "flex items-center gap-2 py-0.5 text-[0.75em] text-muted-foreground",
         className,
       )}
       {...props}
@@ -54,7 +54,7 @@ export function ContextCompactedCheckpoint({
       role="separator"
       aria-label={`${label}${displayTrigger}`}
       className={cn(
-        "flex items-center gap-2 py-1 text-xs text-muted-foreground select-none",
+        "flex items-center gap-2 py-1 text-[0.75em] text-muted-foreground select-none",
         className,
       )}
       {...props}
@@ -74,7 +74,7 @@ export function ContextCompactedCheckpoint({
             type="button"
             variant="ghost"
             size="sm"
-            className="h-5 px-1.5 text-[11px]"
+            className="h-5 px-1.5 text-[0.6875em]"
             disabled={restoreDisabled || restorePending}
             onClick={onRestore}
             title={restoreDisabled ? "Restore unavailable for this checkpoint." : "Restore workspace to this checkpoint."}

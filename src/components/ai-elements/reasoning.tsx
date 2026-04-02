@@ -37,7 +37,7 @@ export function Reasoning({ className, isStreaming = false, defaultOpen = true, 
     <ReasoningContext.Provider value={contextValue}>
       <section
         className={cn(
-          "w-full overflow-hidden rounded-md border border-border/80 bg-secondary/30 text-sm text-muted-foreground",
+          "w-full overflow-hidden rounded-md border border-border/80 bg-secondary/30 text-[0.875em] text-muted-foreground",
           isStreaming && "min-w-[min(16rem,100%)]",
           className
         )}
@@ -53,7 +53,7 @@ export function ReasoningTrigger(args: ButtonHTMLAttributes<HTMLButtonElement>) 
     <button
       type="button"
       className={cn(
-        "flex w-full items-center gap-3 px-3 py-2 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground",
+        "flex w-full items-center gap-3 px-3 py-2 text-left font-medium text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground",
         args.className,
       )}
       onClick={() => setOpen(!open)}
@@ -82,5 +82,5 @@ export function ReasoningContent(args: HTMLAttributes<HTMLDivElement>) {
   if (!open) {
     return null;
   }
-  return <div className={cn("border-t border-border/80 px-3 py-2 whitespace-pre-wrap text-sm leading-relaxed", args.className)} {...args} />;
+  return <div className={cn("border-t border-border/80 px-3 py-2 whitespace-pre-wrap", args.className)} {...args} />;
 }

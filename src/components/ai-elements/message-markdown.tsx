@@ -15,21 +15,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export function resolveMessageSizeClass(size: "base" | "lg" | "xl") {
-  if (size === "xl") {
-    return "text-xl";
-  }
-  if (size === "lg") {
-    return "text-lg";
-  }
-  return "text-base";
-}
-
 export interface MarkdownMessageProps extends HTMLAttributes<HTMLDivElement> {
   content: string;
   isStreaming?: boolean;
-  messageFontSize: "base" | "lg" | "xl";
-  messageCodeFontSize: "base" | "lg" | "xl";
+  messageFontSize: number;
+  messageCodeFontSize: number;
   resolveFileLink?: (args: { href?: string }) => ResolvedWorkspaceFileLink | null;
   onFileLinkClick?: (args: { event: MouseEvent<HTMLAnchorElement>; href?: string }) => void | Promise<void>;
   renderBlockCode?: (args: { code: string; language?: string }) => ReactNode;
@@ -53,7 +43,7 @@ function MessageFileLink({ href, filePath, fileName, line, column, onClick }: Me
       data-message-file-link="true"
       aria-label={tooltipLabel}
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-0.5 align-middle text-sm font-medium text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-0.5 align-middle text-[0.875em] font-medium text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
       )}
       onClick={onClick}
     >
@@ -61,7 +51,7 @@ function MessageFileLink({ href, filePath, fileName, line, column, onClick }: Me
       <span aria-hidden="true" className="shrink-0 text-border">|</span>
       <span className="min-w-0 max-w-64 truncate">{fileName}</span>
       {locationLabel ? (
-        <span className="shrink-0 rounded-sm border border-border bg-background/70 px-1 py-0 text-[10px] leading-4 text-muted-foreground">
+        <span className="shrink-0 rounded-sm border border-border bg-background/70 px-1 py-0 text-[0.625em] leading-[1.4] text-muted-foreground">
           {locationLabel}
         </span>
       ) : null}
@@ -141,10 +131,8 @@ export function MarkdownMessage({
       }
       return (
         <code
-          className={cn(
-            "mx-0.5 rounded-md border border-border/80 bg-muted/40 px-1.5 py-0.5 font-mono text-[0.9em]",
-            resolveMessageSizeClass(messageCodeFontSizeRef.current),
-          )}
+          className="mx-0.5 rounded-md border border-border/80 bg-muted/40 px-1.5 py-0.5 font-mono"
+          style={{ fontSize: `${messageCodeFontSizeRef.current}px` }}
         >
           {children}
         </code>
@@ -179,7 +167,7 @@ export function MarkdownMessage({
       );
     },
     table: ({ children }: { children?: ReactNode }) => (
-      <Table className="my-3 w-full table-fixed border-separate border-spacing-0 rounded-md border border-border/70 bg-card text-sm">
+      <Table className="my-3 w-full table-fixed border-separate border-spacing-0 rounded-md border border-border/70 bg-card text-[0.875em]">
         {children}
       </Table>
     ),
@@ -201,11 +189,8 @@ export function MarkdownMessage({
 
   return (
     <div
-      className={cn(
-        resolveMessageSizeClass(messageFontSize),
-        "leading-7",
-        className,
-      )}
+      className={cn(className)}
+      style={{ fontSize: `${messageFontSize}px`, lineHeight: 1.6 }}
       data-streaming={isStreaming ? "true" : undefined}
       {...props}
     >

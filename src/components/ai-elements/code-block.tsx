@@ -71,7 +71,7 @@ export function CodeBlock({ code, language, showLineNumbers, className, children
   return (
     <CodeBlockContext.Provider value={{ code }}>
       <div
-        className={cn("my-2 overflow-hidden rounded-md border border-border/70 text-sm", className)}
+        className={cn("my-2 overflow-hidden rounded-md border border-border/70", className)}
         {...props}
       >
         {children}
@@ -109,11 +109,6 @@ export const CodeBlockContent = memo(function CodeBlockContent({ code, language 
   const cached = _highlightCache.get(cacheKey);
   const [html, setHtml] = useState<string | null>(cached ?? null);
   const messageCodeFontSize = useAppStore((state) => state.settings.messageCodeFontSize);
-  const codeSizeClass = messageCodeFontSize === "xl"
-    ? "text-xl"
-    : messageCodeFontSize === "lg"
-      ? "text-lg"
-      : "text-base";
 
   useEffect(() => {
     // Already cached – apply immediately and skip the async path.
@@ -152,10 +147,8 @@ export const CodeBlockContent = memo(function CodeBlockContent({ code, language 
   if (html) {
     return (
       <div
-        className={cn(
-          "overflow-x-auto font-mono [&>pre]:m-0 [&>pre]:overflow-visible [&>pre]:px-4 [&>pre]:py-3",
-          codeSizeClass,
-        )}
+        className="overflow-x-auto font-mono [&>pre]:m-0 [&>pre]:overflow-visible [&>pre]:px-4 [&>pre]:py-3"
+        style={{ fontSize: `${messageCodeFontSize}px` }}
         // Shiki output is sanitised — no user content reaches dangerouslySetInnerHTML
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: html }}
@@ -165,7 +158,10 @@ export const CodeBlockContent = memo(function CodeBlockContent({ code, language 
 
   // Fallback: plain text while highlighter loads
   return (
-    <pre className={cn("overflow-x-auto bg-editor px-4 py-3 font-mono text-editor-foreground", codeSizeClass)}>
+    <pre
+      className="overflow-x-auto bg-editor px-4 py-3 font-mono text-editor-foreground"
+      style={{ fontSize: `${messageCodeFontSize}px` }}
+    >
       <code>{code}</code>
     </pre>
   );
@@ -188,11 +184,11 @@ export function CodeBlockHeader({ className, ...props }: HTMLAttributes<HTMLDivE
 }
 
 export function CodeBlockTitle({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex items-center gap-2 text-sm text-muted-foreground", className)} {...props} />;
+  return <div className={cn("flex items-center gap-2 text-[0.875em] text-muted-foreground", className)} {...props} />;
 }
 
 export function CodeBlockFilename({ className, ...props }: HTMLAttributes<HTMLSpanElement>) {
-  return <span className={cn("font-mono text-sm", className)} {...props} />;
+  return <span className={cn("font-mono text-[0.875em]", className)} {...props} />;
 }
 
 export function CodeBlockActions({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
