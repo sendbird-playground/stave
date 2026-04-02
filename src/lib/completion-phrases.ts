@@ -106,10 +106,32 @@ const COMPLETION_PHRASES = [
 export type CompletionPhrase = (typeof COMPLETION_PHRASES)[number];
 
 /**
+ * Simple string → 32-bit integer hash (djb2).
+ * Deterministic and fast — no crypto needed.
+ */
+function hashString(str: string): number {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash + (str.charCodeAt(i) ?? 0)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+/**
  * Return a random completion phrase.
  * Stateless – each call picks independently.
  */
 export function getRandomCompletionPhrase(): string {
   const phrase = COMPLETION_PHRASES[Math.floor(Math.random() * COMPLETION_PHRASES.length)];
   return phrase ?? "Done";
+}
+
+/**
+ * Return a deterministic completion phrase for the given seed.
+ * Identical seeds always produce the same phrase, so the text stays
+ * stable across Virtuoso unmount/remount cycles.
+ */
+export function getSeededCompletionPhrase(seed: string): string {
+  const index = hashString(seed) % COMPLETION_PHRASES.length;
+  return COMPLETION_PHRASES[index] ?? "Done";
 }

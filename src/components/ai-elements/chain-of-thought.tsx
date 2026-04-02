@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Brain, Check, ChevronDown, Circle, LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getRandomCompletionPhrase } from "@/lib/completion-phrases";
+import { getRandomCompletionPhrase, getSeededCompletionPhrase } from "@/lib/completion-phrases";
 import { Shimmer } from "./shimmer";
 
 /* ─── Data type (used by the `steps` prop shorthand) ─────────────── */
@@ -33,6 +33,10 @@ interface ChainOfThoughtProps extends HTMLAttributes<HTMLDivElement> {
   steps?: ChainOfThoughtStep[];
   /** Summary items shown in the trigger when collapsed and not streaming. */
   summaryItems?: TraceSummaryItem[];
+  /** Stable seed for deterministic completion phrase selection.
+   *  When provided, the trigger phrase stays consistent across
+   *  Virtuoso unmount/remount cycles (e.g. message ID). */
+  seed?: string;
 }
 
 interface ChainOfThoughtStepProps extends HTMLAttributes<HTMLDivElement> {
@@ -60,6 +64,7 @@ interface ChainOfThoughtContextValue {
   open: boolean;
   setOpen: (next: boolean) => void;
   summaryItems: TraceSummaryItem[];
+  seed?: string;
 }
 
 const ChainOfThoughtContext = createContext<ChainOfThoughtContextValue | null>(null);
@@ -152,6 +157,7 @@ export function ChainOfThought({
   collapseWhen = false,
   steps,
   summaryItems = [],
+  seed,
   children,
   ...props
 }: ChainOfThoughtProps) {
@@ -178,8 +184,8 @@ export function ChainOfThought({
   }, [collapseWhen]);
 
   const contextValue = useMemo(
-    () => ({ isStreaming, open, setOpen, summaryItems }),
-    [isStreaming, open, summaryItems],
+    () => ({ isStreaming, open, setOpen, summaryItems, seed }),
+    [isStreaming, open, summaryItems, seed],
   );
 
   const resolvedChildren = children ?? (
@@ -211,13 +217,17 @@ export function ChainOfThought({
 /* ─── Trigger ─────────────────────────────────────────────────────── */
 
 export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonElement>) {
-  const { isStreaming, open, setOpen, summaryItems } = useChainOfThoughtContext();
+  const { isStreaming, open, setOpen, summaryItems, seed } = useChainOfThoughtContext();
   const showSummary = !open && !isStreaming && summaryItems.length > 0;
 
-  /* Pick a random completion phrase once per component instance.
-     useMemo with [] deps means the phrase is stable across re-renders
-     but unique per message (each message mounts its own trigger). */
-  const completionPhrase = useMemo(() => getRandomCompletionPhrase(), []);
+  /* Pick a completion phrase that is stable across Virtuoso unmount/remount
+     cycles. When a seed is provided (typically the message ID), use the
+     deterministic seeded variant so the same message always shows the same
+     phrase. Fall back to the random variant for non-virtual contexts. */
+  const completionPhrase = useMemo(
+    () => (seed ? getSeededCompletionPhrase(seed) : getRandomCompletionPhrase()),
+    [seed],
+  );
 
   return (
     <button

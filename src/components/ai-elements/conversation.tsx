@@ -590,6 +590,14 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       initialTopMostItemIndex={lastIndex >= 0 ? lastIndex : 0}
       customScrollParent={containerEl ?? undefined}
       style={{ height: "100%" }}
+      // Render items beyond the visible viewport to prevent the height-estimation
+      // feedback loop that causes scroll flickering. Without overscan, items at
+      // the viewport edge are aggressively mounted/unmounted — when the measured
+      // height differs from the estimate, the scroll position shifts, pushing the
+      // item out of view, which unmounts it (reverting to the estimate) and shifts
+      // back, creating an infinite flicker cycle.
+      increaseViewportBy={{ top: 400, bottom: 400 }}
+      defaultItemHeight={120}
       atBottomThreshold={AT_BOTTOM_THRESHOLD}
       atBottomStateChange={handleAtBottomChange}
       followOutput={followOutput}
