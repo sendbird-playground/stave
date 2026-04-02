@@ -14,6 +14,7 @@ import {
   CodeBlockTitle,
 } from "./code-block";
 import { MarkdownMessage } from "./message-markdown";
+import { MESSAGE_BODY_LINE_HEIGHT } from "./message-styles";
 
 interface MessageProps extends HTMLAttributes<HTMLDivElement> {
   from: "user" | "assistant";
@@ -75,7 +76,7 @@ export function MessageContent(props: HTMLAttributes<HTMLDivElement>) {
         "flex w-full flex-col gap-3 text-foreground",
         "group-[.is-user]:rounded-md group-[.is-user]:border group-[.is-user]:border-primary/35 group-[.is-user]:bg-primary/12 group-[.is-user]:px-4 group-[.is-user]:py-3"
       )}
-      style={{ fontSize: `${messageFontSize}px`, lineHeight: 1.6 }}
+      style={{ fontSize: `${messageFontSize}px`, lineHeight: MESSAGE_BODY_LINE_HEIGHT }}
       {...props}
     />
   );

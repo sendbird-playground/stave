@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { MESSAGE_BODY_LINE_HEIGHT } from "./message-styles";
 
 export interface MarkdownMessageProps extends HTMLAttributes<HTMLDivElement> {
   content: string;
@@ -190,7 +191,7 @@ export function MarkdownMessage({
   return (
     <div
       className={cn(className)}
-      style={{ fontSize: `${messageFontSize}px`, lineHeight: 1.6 }}
+      style={{ fontSize: `${messageFontSize}px`, lineHeight: MESSAGE_BODY_LINE_HEIGHT }}
       data-streaming={isStreaming ? "true" : undefined}
       {...props}
     >
