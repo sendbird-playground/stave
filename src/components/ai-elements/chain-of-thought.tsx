@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Brain, Check, ChevronDown, Circle, LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getRandomCompletionPhrase } from "@/lib/completion-phrases";
 import { Shimmer } from "./shimmer";
 
 /* ─── Data type (used by the `steps` prop shorthand) ─────────────── */
@@ -73,6 +74,10 @@ function useChainOfThoughtContext() {
 
 /* ─── Step icon (status + optional kind icon) ────────────────────── */
 
+/* Icon size token — em-based so icons scale with the step's font-size. */
+const ICON_SIZE = "size-[1.15em]";
+const ICON_CHILD = "[&>svg]:size-[1.15em]";
+
 function StepIcon(args: {
   status?: ChainOfThoughtStep["status"];
   kind?: ChainOfThoughtStep["kind"];
@@ -82,10 +87,10 @@ function StepIcon(args: {
   /* Bullet variant — small dot for text-only steps. */
   if (args.variant === "bullet") {
     return (
-      <span className="flex size-4 items-center justify-center" aria-hidden="true">
+      <span className={cn("flex items-center justify-center", ICON_SIZE)} aria-hidden="true">
         <span
           className={cn(
-            "size-1.5 rounded-full",
+            "size-[0.35em] rounded-full",
             args.status === "active" ? "bg-foreground" : "bg-muted-foreground/50",
           )}
         />
@@ -96,15 +101,24 @@ function StepIcon(args: {
   /* Active reasoning — pulse the kind icon instead of a generic spinner. */
   if (args.status === "active" && args.kind === "thinking" && args.icon) {
     return (
-      <span className="[&>svg]:size-4 text-foreground motion-safe:animate-thinking-shimmer">
+      <span className={cn(ICON_CHILD, "text-foreground motion-safe:animate-thinking-shimmer")}>
         {args.icon}
       </span>
     );
   }
 
-  /* Active state — generic spinner for tools, agents, etc. */
+  /* Active agent — keep the icon visible (title shimmer conveys activity). */
+  if (args.status === "active" && args.kind === "agent" && args.icon) {
+    return (
+      <span className={cn(ICON_CHILD, "text-foreground")}>
+        {args.icon}
+      </span>
+    );
+  }
+
+  /* Active state — generic spinner for tools, etc. */
   if (args.status === "active") {
-    return <LoaderCircle className="size-4 animate-spin text-foreground" />;
+    return <LoaderCircle className={cn(ICON_SIZE, "animate-spin text-foreground")} />;
   }
 
   /* Custom icon with status-driven colour. */
@@ -112,7 +126,7 @@ function StepIcon(args: {
     return (
       <span
         className={cn(
-          "[&>svg]:size-4",
+          ICON_CHILD,
           args.status === "done" ? "text-muted-foreground" : "text-muted-foreground/50",
         )}
       >
@@ -123,9 +137,9 @@ function StepIcon(args: {
 
   /* Default status-only fallback. */
   if (args.status === "done") {
-    return <Check className="size-4 text-muted-foreground" />;
+    return <Check className={cn(ICON_SIZE, "text-muted-foreground")} />;
   }
-  return <Circle className="size-4 text-muted-foreground/50" />;
+  return <Circle className={cn(ICON_SIZE, "text-muted-foreground/50")} />;
 }
 
 /* ─── Root ────────────────────────────────────────────────────────── */
@@ -200,54 +214,59 @@ export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonEleme
   const { isStreaming, open, setOpen, summaryItems } = useChainOfThoughtContext();
   const showSummary = !open && !isStreaming && summaryItems.length > 0;
 
-  return (
-    <div className="flex w-full flex-col gap-1.5">
-      <button
-        type="button"
-        className={cn(
-          "flex w-full items-center gap-2 text-[0.875em] text-muted-foreground transition-colors hover:text-foreground",
-          args.className,
-        )}
-        onClick={() => setOpen(!open)}
-        {...args}
-      >
-        {isStreaming ? (
-          <span className="inline-flex items-center gap-2 font-medium">
-            <Brain className="size-4" />
-            <Shimmer
-              as="span"
-              className="[--shimmer-base-color:var(--color-muted-foreground)] [--shimmer-highlight-color:var(--color-foreground)]"
-            >
-              Thinking
-            </Shimmer>
-          </span>
-        ) : (
-          <>
-            <Brain className="size-4" />
-            <span className="font-medium">Chain of Thought</span>
-          </>
-        )}
-        <ChevronDown
-          className={cn(
-            "ml-auto size-4 transition-transform",
-            open ? "rotate-180" : "rotate-0",
-          )}
-        />
-      </button>
+  /* Pick a random completion phrase once per component instance.
+     useMemo with [] deps means the phrase is stable across re-renders
+     but unique per message (each message mounts its own trigger). */
+  const completionPhrase = useMemo(() => getRandomCompletionPhrase(), []);
 
-      {/* Collapsed summary — tool/agent/file counts */}
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex w-full items-center gap-[0.5em] text-[0.875em] text-muted-foreground transition-colors hover:text-foreground",
+        args.className,
+      )}
+      onClick={() => setOpen(!open)}
+      {...args}
+    >
+      {isStreaming ? (
+        <span className="inline-flex items-center gap-[0.5em] font-medium">
+          <Brain className="size-[1.15em]" />
+          <Shimmer
+            as="span"
+            className="[--shimmer-base-color:var(--color-muted-foreground)]"
+          >
+            Thinking
+          </Shimmer>
+        </span>
+      ) : (
+        <>
+          <Brain className="size-[1.15em]" />
+          <span className="font-medium">{completionPhrase}</span>
+        </>
+      )}
+
+      {/* Collapsed summary — inline after the label */}
       {showSummary ? (
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-6 text-[0.75em] text-muted-foreground/70 motion-safe:animate-cot-step-in">
+        <span className="ml-auto flex items-center gap-x-[0.6em] text-[0.75em] text-muted-foreground/70 motion-safe:animate-cot-step-in">
           {summaryItems.map((item, index) => (
-            <span key={item.label} className="inline-flex items-center gap-1">
+            <span key={item.label} className="inline-flex items-center gap-[0.3em]">
               {index > 0 ? <span className="text-border" aria-hidden="true">·</span> : null}
-              <span className="[&>svg]:size-3">{item.icon}</span>
+              <span className="[&>svg]:size-[1.15em]">{item.icon}</span>
               <span>{item.count} {item.label}</span>
             </span>
           ))}
-        </div>
+        </span>
       ) : null}
-    </div>
+
+      <ChevronDown
+        className={cn(
+          "size-[1.15em] shrink-0 transition-transform",
+          showSummary ? "" : "ml-auto",
+          open ? "rotate-180" : "rotate-0",
+        )}
+      />
+    </button>
   );
 }
 
@@ -259,7 +278,7 @@ export function ChainOfThoughtContent(args: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "mt-3 [&>*:last-child_.cot-connector]:hidden",
+        "mt-[0.75em] [&>*:last-child_.cot-connector]:hidden",
         "motion-safe:animate-cot-content-in",
         args.className,
       )}
@@ -301,7 +320,7 @@ export function ChainOfThoughtStep({
   return (
     <div
       className={cn(
-        "flex gap-3 text-[0.875em]",
+        "flex gap-[0.7em] text-[0.875em]",
         status === "active" && "text-foreground",
         status === "done" && "text-muted-foreground",
         status === "pending" && "text-muted-foreground/50",
@@ -311,41 +330,41 @@ export function ChainOfThoughtStep({
       {...props}
     >
       {/* Icon column with vertical connector */}
-      <div className="relative mt-0.5 flex flex-col items-center">
+      <div className="relative mt-[0.1em] flex flex-col items-center">
         <StepIcon status={status} kind={kind} icon={icon} variant={variant} />
-        <div className="cot-connector mt-1.5 w-px flex-1 bg-border" />
+        <div className="cot-connector mt-[0.35em] w-px flex-1 bg-border" />
       </div>
 
       {/* Content column */}
-      <div className="min-w-0 flex-1 pb-4">
+      <div className="min-w-0 flex-1 pb-[1em]">
         {hasContent ? (
           <button
             type="button"
-            className="flex items-center gap-1.5 text-left"
+            className="flex items-center gap-[0.35em] text-left"
             onClick={() => setOpen((prev) => !prev)}
           >
             <span>{resolvedTitle}</span>
             {summary}
             <ChevronDown
               className={cn(
-                "size-3 shrink-0 text-muted-foreground/70 transition-transform",
+                "size-[0.85em] shrink-0 text-muted-foreground/70 transition-transform",
                 open && "rotate-180",
               )}
             />
           </button>
         ) : (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-[0.35em]">
             <span>{resolvedTitle}</span>
             {summary}
           </div>
         )}
 
         {description != null ? (
-          <div className="mt-1 text-muted-foreground">{description}</div>
+          <div className="mt-[0.25em] text-muted-foreground">{description}</div>
         ) : null}
 
         {hasContent && open ? (
-          <div className="mt-2 motion-safe:animate-cot-step-in">{children}</div>
+          <div className="mt-[0.5em] motion-safe:animate-cot-step-in">{children}</div>
         ) : null}
       </div>
     </div>

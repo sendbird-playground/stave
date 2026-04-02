@@ -131,7 +131,7 @@ function getToolSummary(toolName: string, input: string): ReactNode {
           ? (parsed.command.split("\n")[0] ?? "").trim().slice(0, 100) || null
           : null;
         return cmd ? (
-          <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
+          <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
             {cmd}
           </span>
         ) : null;
@@ -141,8 +141,8 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       case "edit": {
         const filePath = typeof parsed.file_path === "string" ? parsed.file_path : null;
         return filePath ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
-            <FileText className="size-2.5 shrink-0" />
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+            <FileText className="size-[0.85em] shrink-0" />
             {extractFileName(filePath)}
           </span>
         ) : null;
@@ -150,7 +150,7 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       case "glob": {
         const pattern = typeof parsed.pattern === "string" ? parsed.pattern : null;
         return pattern ? (
-          <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
+          <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
             {pattern}
           </span>
         ) : null;
@@ -158,8 +158,8 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       case "grep": {
         const pattern = typeof parsed.pattern === "string" ? parsed.pattern.slice(0, 80) : null;
         return pattern ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] leading-none text-muted-foreground">
-            <Search className="size-2.5 shrink-0" />
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
+            <Search className="size-[0.85em] shrink-0" />
             {pattern}
           </span>
         ) : null;
@@ -167,8 +167,8 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       case "websearch": {
         const query = typeof parsed.query === "string" ? parsed.query.slice(0, 80) : null;
         return query ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
-            <Globe className="size-2.5 shrink-0" />
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+            <Globe className="size-[0.85em] shrink-0" />
             {query}
           </span>
         ) : null;
@@ -176,8 +176,8 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       case "webfetch": {
         const url = typeof parsed.url === "string" ? parsed.url.slice(0, 80) : null;
         return url ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
-            <Globe className="size-2.5 shrink-0" />
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+            <Globe className="size-[0.85em] shrink-0" />
             {url}
           </span>
         ) : null;
@@ -185,8 +185,8 @@ function getToolSummary(toolName: string, input: string): ReactNode {
       case "file_change": {
         const rows = parseFileChangeToolInput(input);
         return rows.length > 0 ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground">
-            <FileCode2 className="size-2.5 shrink-0" />
+          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+            <FileCode2 className="size-[0.85em] shrink-0" />
             {rows.length} {rows.length === 1 ? "file" : "files"}
           </span>
         ) : null;
@@ -210,7 +210,7 @@ function getEntrySummary(entry: AssistantTraceEntry): ReactNode {
     case "subagent": {
       const parsed = parseSubagentToolInput({ input: entry.part.input });
       return parsed.subagentType ? (
-        <span className="ml-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium leading-none text-primary">
+        <span className="ml-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[0.85em] font-medium leading-none text-primary">
           {parsed.subagentType}
         </span>
       ) : null;
@@ -435,7 +435,7 @@ function ReasoningStepView(args: {
   const durationSeconds = getReasoningDurationSeconds(entry.parts);
 
   const durationSummary = !entry.isStreaming && durationSeconds !== null ? (
-    <span className="ml-1 text-xs text-muted-foreground/70">
+    <span className="ml-1 text-[0.85em] text-muted-foreground/70">
       Thought for {formatThinkingDuration(durationSeconds)}
     </span>
   ) : null;
@@ -513,7 +513,7 @@ function AssistantTraceEntryView(args: {
       const titleContent = status === "active" ? (
         <Shimmer
           as="span"
-          className="[--shimmer-base-color:var(--color-foreground)] [--shimmer-highlight-color:var(--color-primary)]"
+          className="[--shimmer-base-color:var(--color-foreground)]"
         >
           {resolvedTitle}
         </Shimmer>
@@ -523,6 +523,7 @@ function AssistantTraceEntryView(args: {
           title={resolvedTitle}
           titleContent={titleContent}
           status={status}
+          kind="agent"
           icon={icon}
           summary={summary}
           defaultOpen={entry.part.state === "input-streaming"}

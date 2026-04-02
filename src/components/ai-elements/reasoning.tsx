@@ -65,7 +65,7 @@ export function ReasoningTrigger(args: ButtonHTMLAttributes<HTMLButtonElement>) 
         {isStreaming ? (
           <Shimmer
             as="span"
-            className="leading-none [--shimmer-base-color:var(--color-muted-foreground)] [--shimmer-highlight-color:var(--color-foreground)]"
+            className="leading-none [--shimmer-base-color:var(--color-muted-foreground)]"
           >
             Thinking
           </Shimmer>

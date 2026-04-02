@@ -44,15 +44,14 @@ function MessageFileLink({ href, filePath, fileName, line, column, onClick }: Me
       data-message-file-link="true"
       aria-label={tooltipLabel}
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 py-0.5 align-middle text-[0.875em] font-medium text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+        "inline-flex max-w-full items-center gap-[0.3em] rounded-md border border-border/80 bg-muted/40 px-[0.45em] py-[0.1em] align-middle text-[0.8125em] font-medium leading-none text-foreground no-underline transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
       )}
       onClick={onClick}
     >
-      <WorkspaceFileIcon fileName={fileName} />
-      <span aria-hidden="true" className="shrink-0 text-border">|</span>
+      <WorkspaceFileIcon fileName={fileName} className="h-[1.1em] w-[0.9em]" />
       <span className="min-w-0 max-w-64 truncate">{fileName}</span>
       {locationLabel ? (
-        <span className="shrink-0 rounded-sm border border-border bg-background/70 px-1 py-0 text-[0.625em] leading-[1.4] text-muted-foreground">
+        <span className="shrink-0 rounded-sm border border-border bg-background/70 px-[0.4em] py-0 text-[0.625em] leading-[1.4] text-muted-foreground">
           {locationLabel}
         </span>
       ) : null}

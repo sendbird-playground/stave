@@ -1441,7 +1441,7 @@ function RulesSection() {
 }
 
 function ChatSection() {
-  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, reasoningDefaultExpanded, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
+  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningDefaultExpanded, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
     useShallow((state) => [
       state.settings.smartSuggestions,
       state.settings.chatSendPreview,
@@ -1451,6 +1451,7 @@ function ChatSection() {
       state.settings.messageFontFamily,
       state.settings.messageMonoFontFamily,
       state.settings.messageKoreanFontFamily,
+      state.settings.infoPanelScale,
       state.settings.reasoningDefaultExpanded,
       state.settings.claudeFastModeVisible,
       state.settings.codexFastModeVisible,
@@ -1524,6 +1525,22 @@ function ChatSection() {
               className="h-9 font-mono text-sm"
               onCommit={(nextValue) => updateSettings({ patch: { messageKoreanFontFamily: nextValue } })}
             />
+          </LabeledField>
+          <LabeledField
+            title="Information Panel Scale"
+            description="Zoom level for the workspace information panel. Affects text, icons, buttons, and spacing uniformly."
+          >
+            <div className="flex items-center gap-3">
+              <Slider
+                min={80}
+                max={130}
+                step={5}
+                value={[Math.round(infoPanelScale * 100)]}
+                onValueChange={([value]) => updateSettings({ patch: { infoPanelScale: (value ?? 100) / 100 } })}
+                className="flex-1"
+              />
+              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">{Math.round(infoPanelScale * 100)}%</span>
+            </div>
           </LabeledField>
           <LabeledField title="Smart Suggestions">
             <ChoiceButtons

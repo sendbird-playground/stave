@@ -260,6 +260,8 @@ export interface AppSettings {
   messageFontFamily: string;
   messageMonoFontFamily: string;
   messageKoreanFontFamily: string;
+  /** Zoom scale for the workspace information panel (0.8 – 1.3, default 1). */
+  infoPanelScale: number;
   reasoningDefaultExpanded: boolean;
   claudeFastModeVisible: boolean;
   codexFastModeVisible: boolean;
@@ -700,6 +702,7 @@ const defaultSettings: AppSettings = {
   messageFontFamily: "Geist Variable",
   messageMonoFontFamily: "JetBrains Mono",
   messageKoreanFontFamily: "Pretendard Variable",
+  infoPanelScale: 1,
   reasoningDefaultExpanded: false,
   claudeFastModeVisible: true,
   codexFastModeVisible: true,
