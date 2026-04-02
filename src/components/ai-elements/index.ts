@@ -24,6 +24,7 @@ export {
   CodeBlockTitle,
 } from "./code-block";
 export { Snippet } from "./snippet";
+export { Shimmer } from "./shimmer";
 export { Reasoning, ReasoningContent, ReasoningTrigger } from "./reasoning";
 export { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtStep, ChainOfThoughtTrigger, type ChainOfThoughtStep as ChainOfThoughtStepData, type TraceSummaryItem } from "./chain-of-thought";
 export { SubagentCard, parseSubagentToolInput } from "./subagent";

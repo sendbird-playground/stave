@@ -268,8 +268,8 @@
     transform-origin: top;
   }
 
-  .animate-shimmer {
-    animation: shimmer 2s linear infinite;
+  .animate-text-shimmer {
+    animation: text-shimmer 2s linear infinite;
   }
 
   .animate-thinking-shimmer {
@@ -530,13 +530,13 @@
   }
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: -200% center;
+@keyframes text-shimmer {
+  from {
+    background-position: 100% center;
   }
 
-  100% {
-    background-position: 200% center;
+  to {
+    background-position: 0% center;
   }
 }
 
