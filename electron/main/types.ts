@@ -17,6 +17,8 @@ export interface SourceControlStatusItem {
 export interface TerminalSession {
   pty: pty.IPty;
   output: string;
+  deliveryMode: "poll" | "push";
+  ownerWebContentsId: number | null;
 }
 
 export interface RootFileEntry {
