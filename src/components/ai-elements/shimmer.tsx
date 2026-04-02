@@ -27,7 +27,7 @@ function ShimmerComponent({
     () => ({
       animationDuration: `${duration}s`,
       backgroundImage: [
-        `linear-gradient(90deg, transparent calc(50% - ${resolvedSpread}), var(--shimmer-highlight-color, var(--color-background)), transparent calc(50% + ${resolvedSpread}))`,
+        `linear-gradient(90deg, transparent calc(50% - ${resolvedSpread}), var(--shimmer-highlight-color, color-mix(in srgb, var(--shimmer-base-color, var(--color-muted-foreground)), white 60%)), transparent calc(50% + ${resolvedSpread}))`,
         "linear-gradient(var(--shimmer-base-color, var(--color-muted-foreground)), var(--shimmer-base-color, var(--color-muted-foreground)))",
       ].join(", "),
       ...style,
@@ -39,7 +39,7 @@ function ShimmerComponent({
     <Component
       className={cn(
         "inline-block bg-[length:250%_100%] bg-clip-text bg-no-repeat text-transparent",
-        "[background-position:100%_center] [--shimmer-base-color:var(--color-muted-foreground)] [--shimmer-highlight-color:var(--color-background)]",
+        "[background-position:100%_center] [--shimmer-base-color:var(--color-muted-foreground)]",
         "animate-text-shimmer motion-reduce:animate-none",
         className,
       )}

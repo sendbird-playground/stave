@@ -397,24 +397,24 @@ function SectionHeader(props: {
       )}
     >
       <div className="group/section-row flex items-center">
-        <AccordionTrigger className="flex-1 gap-2 py-2 pr-1 pl-0 hover:no-underline [&>svg[data-slot=accordion-trigger-icon]]:hidden">
+        <AccordionTrigger className="flex-1 gap-2 py-2.5 pr-1 pl-0 hover:no-underline [&>svg[data-slot=accordion-trigger-icon]]:hidden">
           <div className="flex items-center gap-2 text-left">
-            <span className="relative flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+            <span className="relative flex size-[18px] shrink-0 items-center justify-center text-muted-foreground">
               {/* Section icon — visible by default, fades out on row hover */}
               <span className="flex items-center justify-center transition-all duration-150 group-hover/section-row:scale-75 group-hover/section-row:opacity-0">
                 {props.icon}
               </span>
               {/* Chevron — hidden by default, fades in on row hover */}
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <ChevronRight className="size-4 scale-75 opacity-0 transition-all duration-150 group-aria-expanded/accordion-trigger:hidden group-hover/section-row:scale-100 group-hover/section-row:opacity-100" />
-                <ChevronDown className="hidden size-4 scale-75 opacity-0 transition-all duration-150 group-aria-expanded/accordion-trigger:block group-hover/section-row:scale-100 group-hover/section-row:opacity-100" />
+                <ChevronRight className="size-[18px] scale-75 opacity-0 transition-all duration-150 group-aria-expanded/accordion-trigger:hidden group-hover/section-row:scale-100 group-hover/section-row:opacity-100" />
+                <ChevronDown className="hidden size-[18px] scale-75 opacity-0 transition-all duration-150 group-aria-expanded/accordion-trigger:block group-hover/section-row:scale-100 group-hover/section-row:opacity-100" />
               </span>
             </span>
-            <span className="text-[13px] font-medium text-foreground/80">
+            <span className="text-sm font-medium text-foreground/80">
               {props.title}
             </span>
             {props.count !== undefined && props.count > 0 ? (
-              <span className="text-[11px] tabular-nums text-muted-foreground/60">
+              <span className="text-xs tabular-nums text-muted-foreground/60">
                 {props.count}
               </span>
             ) : null}
@@ -426,7 +426,7 @@ function SectionHeader(props: {
           </div>
         ) : null}
       </div>
-      <AccordionContent className="pb-2.5 pt-0">
+      <AccordionContent className="pb-3 pt-0">
         {props.children}
       </AccordionContent>
     </AccordionItem>
@@ -447,15 +447,15 @@ function InlineLinkRow(props: {
   actions?: ReactNode;
 }) {
   return (
-    <div className="group/link-row flex items-center gap-2.5 rounded-md px-2 py-1.5">
-      <span className="flex size-5 shrink-0 items-center justify-center">
+    <div className="group/link-row flex items-center gap-2.5 rounded-md px-2 py-2">
+      <span className="flex size-6 shrink-0 items-center justify-center">
         {props.icon}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="min-w-0 truncate text-[13px] font-medium text-foreground hover:text-primary hover:underline"
+            className="min-w-0 truncate text-sm font-medium text-foreground hover:text-primary hover:underline"
             onClick={() => openExternalUrl(props.url)}
             title={props.label}
           >
@@ -464,7 +464,7 @@ function InlineLinkRow(props: {
           {props.badge}
         </div>
         {props.sublabel ? (
-          <p className="truncate text-[11px] text-muted-foreground/70">
+          <p className="truncate text-xs text-muted-foreground/70">
             {props.sublabel}
           </p>
         ) : null}
@@ -476,11 +476,11 @@ function InlineLinkRow(props: {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+                className="flex size-7 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
                 onClick={props.onRemove}
                 aria-label="Remove"
               >
-                <X className="size-3" />
+                <X className="size-3.5" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="left">Remove</TooltipContent>
@@ -503,24 +503,24 @@ function InlineUrlInput(props: {
   icon: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2 px-2 py-1">
-      <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground/50">
+    <div className="flex items-center gap-2 px-2 py-1.5">
+      <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground/50">
         {props.icon}
       </span>
       <Input
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
         placeholder={props.placeholder}
-        className="h-7 flex-1 border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0"
+        className="h-8 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
         autoFocus
       />
       <button
         type="button"
-        className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+        className="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
         onClick={props.onRemove}
         aria-label="Remove"
       >
-        <X className="size-3" />
+        <X className="size-3.5" />
       </button>
     </div>
   );
@@ -535,7 +535,7 @@ function GitHubPrStatusIcon(props: {
   className?: string;
 }) {
   const { status } = props;
-  const cls = cn("size-4 shrink-0", props.className);
+  const cls = cn("size-[18px] shrink-0", props.className);
 
   if (status === "merged") {
     return <GitMerge className={cn(cls, "text-[#8250df] dark:text-[#a371f7]")} />;
@@ -577,28 +577,28 @@ function GitHubPrRow(props: {
   const visual = PR_STATUS_VISUAL[props.status];
 
   return (
-    <div className="group/pr-row flex items-start gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-muted/50">
+    <div className="group/pr-row flex items-start gap-2.5 rounded-md px-2 py-2.5 transition-colors hover:bg-muted/50">
       <GitHubPrStatusIcon
         status={props.status}
-        className="mt-0.5 size-[15px]"
+        className="mt-0.5 size-4"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
           <button
             type="button"
-            className="min-w-0 text-left text-[13px] font-medium leading-snug text-foreground hover:text-primary hover:underline"
+            className="min-w-0 text-left text-sm font-medium leading-snug text-foreground hover:text-primary hover:underline"
             onClick={() => openExternalUrl(props.url)}
           >
             {props.title}
           </button>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] tabular-nums text-muted-foreground/70">
+          <span className="text-xs tabular-nums text-muted-foreground/70">
             #{props.number}
           </span>
           <Badge
             className={cn(
-              "h-[18px] rounded-full border px-1.5 py-0 text-[10px] font-medium leading-none",
+              "h-5 rounded-full border px-1.5 py-0 text-[11px] font-medium leading-none",
               PR_TONE_BADGE_CLASS[visual.tone],
             )}
           >
@@ -607,18 +607,18 @@ function GitHubPrRow(props: {
           {props.isCurrent ? (
             <Badge
               variant="outline"
-              className="h-[18px] rounded-full px-1.5 py-0 text-[10px] font-normal leading-none"
+              className="h-5 rounded-full px-1.5 py-0 text-[11px] font-normal leading-none"
             >
               Current branch
             </Badge>
           ) : null}
           {props.repo ? (
-            <span className="text-[11px] text-muted-foreground/60">
+            <span className="text-xs text-muted-foreground/60">
               {props.repo}
             </span>
           ) : null}
           {props.branch ? (
-            <span className="font-mono text-[10px] text-muted-foreground/50">
+            <span className="font-mono text-[11px] text-muted-foreground/50">
               {props.branch}
             </span>
           ) : null}
@@ -629,31 +629,31 @@ function GitHubPrRow(props: {
           <button
             type="button"
             className={cn(
-              "flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground",
+              "flex size-7 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground",
               props.loading && "animate-spin",
             )}
             onClick={props.onRefresh}
             aria-label="Refresh"
           >
-            <RefreshCcw className="size-3" />
+            <RefreshCcw className="size-3.5" />
           </button>
         ) : null}
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+          className="flex size-7 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-muted hover:text-foreground"
           onClick={() => openExternalUrl(props.url)}
           aria-label="Open on GitHub"
         >
-          <ExternalLink className="size-3" />
+          <ExternalLink className="size-3.5" />
         </button>
         {props.onRemove ? (
           <button
             type="button"
-            className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
+            className="flex size-7 items-center justify-center rounded-sm text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive"
             onClick={props.onRemove}
             aria-label="Remove"
           >
-            <X className="size-3" />
+            <X className="size-3.5" />
           </button>
         ) : null}
       </div>
@@ -679,11 +679,11 @@ function CustomFieldDatePicker(props: {
           type="button"
           variant="outline"
           className={cn(
-            "h-8 w-full justify-start text-left text-[13px] font-normal",
+            "h-9 w-full justify-start text-left text-sm font-normal",
             !props.value && "text-muted-foreground",
           )}
         >
-          <CalendarIcon className="mr-2 size-3.5" />
+          <CalendarIcon className="mr-2 size-4" />
           {isValid
             ? selected.toLocaleDateString(undefined, {
                 year: "numeric",
@@ -753,7 +753,7 @@ function SingleSelectOptionsInput(props: {
   return (
     <div className="space-y-1.5">
       <Input
-        className="h-8 text-[13px]"
+        className="h-9 text-sm"
         value={rawValue}
         onChange={(event) => setRawValue(event.target.value)}
         onBlur={(event) => commit(event.target.value)}
@@ -768,7 +768,7 @@ function SingleSelectOptionsInput(props: {
         value={hasValidSelection ? field.value : undefined}
         onValueChange={(value) => onFieldChange({ ...field, value })}
       >
-        <SelectTrigger className="h-8 w-full text-[13px]">
+        <SelectTrigger className="h-9 w-full text-sm">
           <SelectValue placeholder="Select" />
         </SelectTrigger>
         <SelectContent>
@@ -799,7 +799,7 @@ function renderCustomFieldInput(args: {
     case "textarea":
       return (
         <Textarea
-          className="min-h-16 text-[13px]"
+          className="min-h-20 text-sm"
           value={field.value}
           onChange={(event) =>
             onFieldChange({ ...field, value: event.target.value })
@@ -811,7 +811,7 @@ function renderCustomFieldInput(args: {
       return (
         <Input
           type="number"
-          className="h-8 text-[13px]"
+          className="h-9 text-sm"
           value={field.value ?? ""}
           onChange={(event) =>
             onFieldChange({
@@ -835,7 +835,7 @@ function renderCustomFieldInput(args: {
             }
             size="sm"
           />
-          <span className="text-[12px] text-muted-foreground">
+          <span className="text-[13px] text-muted-foreground">
             {field.value ? "Enabled" : "Disabled"}
           </span>
         </div>
@@ -851,7 +851,7 @@ function renderCustomFieldInput(args: {
       return (
         <div className="flex items-center gap-1.5">
           <Input
-            className="h-8 flex-1 text-[13px]"
+            className="h-9 flex-1 text-sm"
             value={field.value}
             onChange={(event) =>
               onFieldChange({ ...field, value: event.target.value })
@@ -861,11 +861,11 @@ function renderCustomFieldInput(args: {
           {isWorkspaceInfoUrl(field.value) ? (
             <button
               type="button"
-              className="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+              className="flex size-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
               onClick={() => openExternalUrl(field.value)}
               aria-label="Open link"
             >
-              <ExternalLink className="size-3.5" />
+              <ExternalLink className="size-4" />
             </button>
           ) : null}
         </div>
@@ -878,7 +878,7 @@ function renderCustomFieldInput(args: {
     default:
       return (
         <Input
-          className="h-8 text-[13px]"
+          className="h-9 text-sm"
           value={field.value}
           onChange={(event) =>
             onFieldChange({ ...field, value: event.target.value })
@@ -897,11 +897,11 @@ function AddButton(props: { onClick: () => void; label?: string }) {
   return (
     <button
       type="button"
-      className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+      className="flex size-7 items-center justify-center rounded-sm text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
       onClick={props.onClick}
       aria-label={props.label ?? "Add"}
     >
-      <Plus className="size-3.5" />
+      <Plus className="size-4" />
     </button>
   );
 }
@@ -912,7 +912,7 @@ function AddButton(props: { onClick: () => void; label?: string }) {
 
 function EmptyHint(props: { children: ReactNode }) {
   return (
-    <p className="px-2 py-1 text-[12px] text-muted-foreground/50">
+    <p className="px-2 py-1.5 text-[13px] text-muted-foreground/50">
       {props.children}
     </p>
   );
@@ -931,6 +931,7 @@ export function WorkspaceInformationPanel() {
     isDefaultWorkspace,
     prInfo,
     fetchWorkspacePrStatus,
+    infoPanelScale,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -944,6 +945,7 @@ export function WorkspaceInformationPanel() {
           Boolean(state.workspaceDefaultById[state.activeWorkspaceId]),
           state.workspacePrInfoById[state.activeWorkspaceId] ?? null,
           state.fetchWorkspacePrStatus,
+          state.settings.infoPanelScale,
         ] as const,
     ),
   );
@@ -1079,10 +1081,13 @@ export function WorkspaceInformationPanel() {
   ).length;
 
   return (
-    <div className="flex flex-col">
+    <div
+      className="flex flex-col origin-top-left"
+      style={infoPanelScale !== 1 ? { zoom: infoPanelScale } : undefined}
+    >
       {/* ── Panel header ─────────────────────────────────────── */}
-      <header className="px-3 pt-2 pb-2">
-        <h2 className="font-heading text-base font-medium text-foreground">
+      <header className="px-3 pt-3 pb-2.5">
+        <h2 className="font-heading text-lg font-medium text-foreground">
           Information
         </h2>
       </header>
@@ -1100,7 +1105,7 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="todo"
             title="Todos"
-            icon={<CheckCircle2 className="size-[15px]" />}
+            icon={<CheckCircle2 className="size-4" />}
             count={openTodoCount}
             first
             action={
@@ -1122,12 +1127,12 @@ export function WorkspaceInformationPanel() {
               {workspaceInformation.todos.map((todo) => (
                 <div
                   key={todo.id}
-                  className="group/todo flex items-center gap-1.5 rounded-md px-3 py-0.5 transition-colors hover:bg-muted/50"
+                  className="group/todo flex items-center gap-2 rounded-md px-3 py-1 transition-colors hover:bg-muted/50"
                 >
                   <button
                     type="button"
                     className={cn(
-                      "flex size-5 shrink-0 items-center justify-center rounded-sm transition-colors",
+                      "flex size-6 shrink-0 items-center justify-center rounded-sm transition-colors",
                       todo.completed
                         ? "text-primary"
                         : "text-muted-foreground/40 hover:text-muted-foreground",
@@ -1148,9 +1153,9 @@ export function WorkspaceInformationPanel() {
                     }
                   >
                     {todo.completed ? (
-                      <CheckCircle2 className="size-[15px]" />
+                      <CheckCircle2 className="size-4" />
                     ) : (
-                      <Circle className="size-[15px]" />
+                      <Circle className="size-4" />
                     )}
                   </button>
                   <Input
@@ -1166,14 +1171,14 @@ export function WorkspaceInformationPanel() {
                     }
                     placeholder="Todo item"
                     className={cn(
-                      "h-7 flex-1 border-0 bg-transparent px-1 text-[13px] shadow-none focus-visible:ring-0",
+                      "h-8 flex-1 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0",
                       todo.completed &&
                         "text-muted-foreground/50 line-through",
                     )}
                   />
                   <button
                     type="button"
-                    className="flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover/todo:opacity-100"
+                    className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover/todo:opacity-100"
                     onClick={() =>
                       patchWorkspaceInformation((current) => ({
                         ...current,
@@ -1182,7 +1187,7 @@ export function WorkspaceInformationPanel() {
                     }
                     aria-label="Remove todo"
                   >
-                    <X className="size-3" />
+                    <X className="size-3.5" />
                   </button>
                 </div>
               ))}
@@ -1193,10 +1198,10 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="note"
             title="Notes"
-            icon={<StickyNote className="size-[15px]" />}
+            icon={<StickyNote className="size-4" />}
           >
             <Textarea
-              className="min-h-20 resize-none text-[13px]"
+              className="min-h-24 resize-none text-sm"
               value={workspaceInformation.notes}
               onChange={(event) =>
                 patchWorkspaceInformation((current) => ({
@@ -1212,7 +1217,7 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="github"
             title="Pull Requests"
-            icon={<GitHubIcon className="size-[15px]" />}
+            icon={<GitHubIcon className="size-4" />}
             count={
               workspaceInformation.linkedPullRequests.length +
               (currentBranchPr ? 1 : 0)
@@ -1222,7 +1227,7 @@ export function WorkspaceInformationPanel() {
                 {!isDefaultWorkspace ? (
                   <button
                     type="button"
-                    className="flex size-6 items-center justify-center rounded-sm text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex size-7 items-center justify-center rounded-sm text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
                     onClick={() =>
                       void fetchWorkspacePrStatus({
                         workspaceId: activeWorkspaceId,
@@ -1230,7 +1235,7 @@ export function WorkspaceInformationPanel() {
                     }
                     aria-label="Refresh"
                   >
-                    <RefreshCcw className="size-3.5" />
+                    <RefreshCcw className="size-4" />
                   </button>
                 ) : null}
                 <AddButton
@@ -1275,7 +1280,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={item.id}
                       value={item.url}
-                      icon={<Link className="size-3.5" />}
+                      icon={<Link className="size-4" />}
                       placeholder="https://github.com/owner/repo/pull/123"
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1363,7 +1368,7 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="jira"
             title="Jira Issues"
-            icon={<JiraIcon className="size-[15px]" />}
+            icon={<JiraIcon className="size-4" />}
             count={workspaceInformation.jiraIssues.length}
             action={
               <AddButton
@@ -1398,7 +1403,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={issue.id}
                       value={issue.url}
-                      icon={<Link className="size-3.5" />}
+                      icon={<Link className="size-4" />}
                       placeholder="https://company.atlassian.net/browse/ABC-123"
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1433,14 +1438,14 @@ export function WorkspaceInformationPanel() {
                 return (
                   <InlineLinkRow
                     key={issue.id}
-                    icon={<Globe className="size-[15px] text-muted-foreground/70" />}
+                    icon={<Globe className="size-4 text-muted-foreground/70" />}
                     label={title}
                     sublabel={host ? `${host}${issueKey ? ` · ${issueKey}` : ""}` : issueKey}
                     badge={
                       issue.status.trim() ? (
                         <Badge
                           variant="outline"
-                          className="h-[18px] rounded-full px-1.5 py-0 text-[10px] font-normal leading-none"
+                          className="h-5 rounded-full px-2 py-0 text-[11px] font-normal leading-none"
                         >
                           {issue.status.trim()}
                         </Badge>
@@ -1466,7 +1471,7 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="confluence"
             title="Confluence"
-            icon={<ConfluenceIcon className="size-[15px]" />}
+            icon={<ConfluenceIcon className="size-4" />}
             count={(workspaceInformation.confluencePages ?? []).length}
             action={
               <AddButton
@@ -1504,7 +1509,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={page.id}
                       value={page.url}
-                      icon={<Link className="size-3.5" />}
+                      icon={<Link className="size-4" />}
                       placeholder="https://company.atlassian.net/wiki/spaces/..."
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1542,7 +1547,7 @@ export function WorkspaceInformationPanel() {
                   <InlineLinkRow
                     key={page.id}
                     icon={
-                      <Globe className="size-[15px] text-muted-foreground/70" />
+                      <Globe className="size-4 text-muted-foreground/70" />
                     }
                     label={title}
                     sublabel={
@@ -1570,7 +1575,7 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="figma"
             title="Figma"
-            icon={<FigmaIcon className="size-[15px]" />}
+            icon={<FigmaIcon className="size-4" />}
             count={workspaceInformation.figmaResources.length}
             action={
               <AddButton
@@ -1605,7 +1610,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={resource.id}
                       value={resource.url}
-                      icon={<Link className="size-3.5" />}
+                      icon={<Link className="size-4" />}
                       placeholder="https://www.figma.com/file/..."
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1641,7 +1646,7 @@ export function WorkspaceInformationPanel() {
                 return (
                   <InlineLinkRow
                     key={resource.id}
-                    icon={<Globe className="size-[15px] text-muted-foreground/70" />}
+                    icon={<Globe className="size-4 text-muted-foreground/70" />}
                     label={title}
                     sublabel={
                       host
@@ -1670,7 +1675,7 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="slack"
             title="Slack"
-            icon={<SlackIcon className="size-[15px]" />}
+            icon={<SlackIcon className="size-4" />}
             count={workspaceInformation.slackThreads?.length ?? 0}
             action={
               <AddButton
@@ -1704,7 +1709,7 @@ export function WorkspaceInformationPanel() {
                     <InlineUrlInput
                       key={thread.id}
                       value={thread.url}
-                      icon={<Link className="size-3.5" />}
+                      icon={<Link className="size-4" />}
                       placeholder="https://team.slack.com/archives/C.../p..."
                       onChange={(url) =>
                         patchWorkspaceInformation((current) => ({
@@ -1732,7 +1737,7 @@ export function WorkspaceInformationPanel() {
                 return (
                   <InlineLinkRow
                     key={thread.id}
-                    icon={<Hash className="size-[15px] text-muted-foreground/70" />}
+                    icon={<Hash className="size-4 text-muted-foreground/70" />}
                     label={label}
                     sublabel={host || undefined}
                     url={thread.url}
@@ -1755,7 +1760,7 @@ export function WorkspaceInformationPanel() {
           <SectionHeader
             value="custom"
             title="Custom Fields"
-            icon={<SlidersHorizontal className="size-[15px]" />}
+            icon={<SlidersHorizontal className="size-4" />}
             count={workspaceInformation.customFields.length}
             action={
               <AddButton
@@ -1791,7 +1796,7 @@ export function WorkspaceInformationPanel() {
                         }))
                       }
                       placeholder="Label"
-                      className="h-7 flex-1 border-0 bg-transparent px-1 text-[13px] font-medium shadow-none focus-visible:ring-0"
+                      className="h-8 flex-1 border-0 bg-transparent px-1 text-sm font-medium shadow-none focus-visible:ring-0"
                     />
                     <Select
                       value={field.type}
@@ -1804,7 +1809,7 @@ export function WorkspaceInformationPanel() {
                         )
                       }
                     >
-                      <SelectTrigger className="h-7 w-auto min-w-[5.5rem] border-0 bg-transparent text-[11px] text-muted-foreground shadow-none">
+                      <SelectTrigger className="h-8 w-auto min-w-[5.5rem] border-0 bg-transparent text-xs text-muted-foreground shadow-none">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1817,7 +1822,7 @@ export function WorkspaceInformationPanel() {
                     </Select>
                     <button
                       type="button"
-                      className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover/field:opacity-100"
+                      className="flex size-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover/field:opacity-100"
                       onClick={() =>
                         patchWorkspaceInformation((current) => ({
                           ...current,
@@ -1829,7 +1834,7 @@ export function WorkspaceInformationPanel() {
                       }
                       aria-label="Remove field"
                     >
-                      <X className="size-3" />
+                      <X className="size-3.5" />
                     </button>
                   </div>
                   {renderCustomFieldInput({
