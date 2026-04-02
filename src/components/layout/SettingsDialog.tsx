@@ -58,8 +58,8 @@ export function SettingsDialog(args: SettingsDialogProps) {
         onMouseDown={(event) => event.stopPropagation()}
       >
         <SidebarProvider
-          className="min-h-0 flex-1 items-start"
-          style={{ "--sidebar-width": "220px" } as React.CSSProperties}
+          className="h-full min-h-0 flex-1 items-start overflow-hidden"
+          style={{ "--sidebar-width": "220px", height: "100%", minHeight: 0 } as React.CSSProperties}
         >
           <Sidebar collapsible="none" className="border-r border-border/80 bg-sidebar/60">
             <SidebarContent className="pt-2">
