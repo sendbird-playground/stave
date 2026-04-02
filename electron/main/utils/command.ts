@@ -1,5 +1,9 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import {
+  hasSourceControlConflicts,
+  parseSourceControlStatusLines,
+} from "../../../src/lib/source-control-status";
 import { buildExecutableLookupEnv } from "../../providers/executable-path";
 import type { CommandResult, SourceControlStatusItem } from "../types";
 
@@ -90,21 +94,11 @@ export function runCommandArgs(args: {
 }
 
 export function parseStatusLines(args: { stdout: string }): SourceControlStatusItem[] {
-  return args.stdout
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter(Boolean)
-    .map((line) => ({
-      code: line.slice(0, 2).trim() || "??",
-      path: line.slice(3).trim(),
-    }));
+  return parseSourceControlStatusLines({ stdout: args.stdout });
 }
 
 export function hasConflictItems(args: { items: SourceControlStatusItem[] }) {
-  return args.items.some((item) => {
-    const code = item.code;
-    return code.includes("U") || code === "AA" || code === "DD";
-  });
+  return args.items.some((item) => hasSourceControlConflicts({ item }));
 }
 
 export function quotePath(args: { value: string }) {

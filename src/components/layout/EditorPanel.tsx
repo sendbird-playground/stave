@@ -17,25 +17,27 @@ import {
   SquareTerminal,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
-import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
+import { Badge, Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { workspaceFsAdapter } from "@/lib/fs";
 import type { WorkspaceCreateEntryResult, WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
 import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
+import { hasSourceControlStagedChanges, type SourceControlStatusItem } from "@/lib/source-control-status";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { ExplorerEntryIcon } from "./explorer-entry-icon";
 import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
-import { getExplorerExpandedPathsAfterCreate, normalizeRelativeInputPath } from "./editor-panel.utils";
-
-interface SourceControlItem {
-  code: string;
-  path: string;
-}
+import {
+  buildSourceControlSections,
+  buildSourceControlSummary,
+  getExplorerExpandedPathsAfterCreate,
+  normalizeRelativeInputPath,
+  type SourceControlItemViewModel,
+} from "./editor-panel.utils";
 
 interface SourceControlHistoryItem {
   hash: string;
@@ -236,6 +238,116 @@ function ExplorerTreeRow(args: {
   );
 }
 
+function SourceControlActionButton(args: {
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+  variant?: "destructive" | "ghost" | "outline" | "secondary";
+}) {
+  return (
+    <Button
+      type="button"
+      size="xs"
+      variant={args.variant ?? "ghost"}
+      className="h-6 rounded-md px-2 text-[11px]"
+      disabled={args.disabled}
+      onClick={args.onClick}
+    >
+      {args.label}
+    </Button>
+  );
+}
+
+function SourceControlRow(args: {
+  isScmBusy: boolean;
+  item: SourceControlItemViewModel;
+  onDiscard: (item: SourceControlStatusItem) => void;
+  onOpenDiff: (path: string) => void;
+  onStage: (item: SourceControlStatusItem) => void;
+  onUnstage: (item: SourceControlStatusItem) => void;
+}) {
+  const codeBadgeVariant = args.item.isConflict
+    ? "destructive"
+    : args.item.hasMixedChanges || args.item.hasUnstagedChanges
+      ? "warning"
+      : args.item.hasStagedChanges
+        ? "success"
+        : "outline";
+
+  return (
+    <div className="group rounded-xl border border-border/70 bg-background/80 px-3 py-2 shadow-xs transition-colors hover:border-border hover:bg-muted/20">
+      <button
+        type="button"
+        className="flex min-w-0 w-full items-start gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        onClick={() => args.onOpenDiff(args.item.item.path)}
+      >
+        <Badge
+          variant={codeBadgeVariant}
+          className="mt-0.5 min-w-8 justify-center rounded-md px-1.5 font-mono text-[11px]"
+        >
+          {args.item.displayCode}
+        </Badge>
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium">{args.item.fileName}</span>
+            {args.item.hasMixedChanges ? (
+              <Badge variant="outline" className="rounded-md px-1.5 text-[10px]">
+                partial
+              </Badge>
+            ) : null}
+            {args.item.isUntracked ? (
+              <Badge variant="outline" className="rounded-md px-1.5 text-[10px]">
+                new
+              </Badge>
+            ) : null}
+          </div>
+          <p className="truncate text-xs text-muted-foreground">
+            {args.item.pathDetail}
+          </p>
+        </div>
+      </button>
+
+      <div className="mt-0 flex max-h-0 items-center justify-between gap-2 overflow-hidden opacity-0 transition-all duration-150 group-hover:mt-2 group-hover:max-h-8 group-hover:opacity-100 group-focus-within:mt-2 group-focus-within:max-h-8 group-focus-within:opacity-100">
+        <p className="truncate text-[11px] text-muted-foreground">
+          {args.item.pathLabel}
+        </p>
+        <div className="flex shrink-0 items-center gap-1">
+          <SourceControlActionButton
+            label="Open"
+            disabled={args.isScmBusy}
+            onClick={() => args.onOpenDiff(args.item.item.path)}
+            variant="outline"
+          />
+          {args.item.canStage ? (
+            <SourceControlActionButton
+              label="Stage"
+              disabled={args.isScmBusy}
+              onClick={() => args.onStage(args.item.item)}
+              variant="secondary"
+            />
+          ) : null}
+          {args.item.canUnstage ? (
+            <SourceControlActionButton
+              label="Unstage"
+              disabled={args.isScmBusy}
+              onClick={() => args.onUnstage(args.item.item)}
+              variant="ghost"
+            />
+          ) : null}
+          {args.item.canDiscard ? (
+            <SourceControlActionButton
+              label="Discard"
+              disabled={args.isScmBusy}
+              onClick={() => args.onDiscard(args.item.item)}
+              variant="destructive"
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EditorPanel() {
   const [
     activeWorkspaceId,
@@ -270,7 +382,7 @@ export function EditorPanel() {
   const [commitMessage, setCommitMessage] = useState("");
 
   const [sourceBranch, setSourceBranch] = useState("unknown");
-  const [sourceItems, setSourceItems] = useState<SourceControlItem[]>([]);
+  const [sourceItems, setSourceItems] = useState<SourceControlStatusItem[]>([]);
   const [sourceHistory, setSourceHistory] = useState<SourceControlHistoryItem[]>([]);
   const [sourceError, setSourceError] = useState("");
   const [hasConflicts, setHasConflicts] = useState(false);
@@ -284,6 +396,25 @@ export function EditorPanel() {
   const explorerTree = explorerRootState?.entries ?? [];
   const isExplorerLoading = explorerRootState?.status === "loading";
   const filteredScmItems = sourceItems;
+  const sourceControlSections = useMemo(
+    () => buildSourceControlSections({ items: filteredScmItems }),
+    [filteredScmItems],
+  );
+  const sourceControlSummary = useMemo(
+    () => buildSourceControlSummary({ items: filteredScmItems }),
+    [filteredScmItems],
+  );
+  const canCommitStagedChanges = sourceControlSummary.committableCount > 0 && !hasConflicts;
+  const canUnstageAnyChanges = sourceControlSummary.stagedCount > 0;
+  const sourceControlHint = hasConflicts
+    ? "Resolve or discard conflicted files before treating the tree as clean."
+    : canCommitStagedChanges && sourceControlSummary.workingTreeCount > 0
+      ? "Commit will include staged changes only. Working-tree edits remain local."
+      : canCommitStagedChanges
+        ? "Staged changes are ready to commit."
+        : filteredScmItems.length > 0
+          ? "Stage files to prepare the next commit."
+          : "Working tree is clean.";
   const explorerProjectName = projectName?.trim() || "Project";
   const rightTab = sidebarOverlayTab;
 
@@ -410,29 +541,37 @@ export function EditorPanel() {
     return () => window.clearTimeout(timer);
   }, [pendingExplorerCreate]);
 
-  async function loadScmStatus() {
+  async function loadScmStatus(args?: { skipBusyState?: boolean }) {
     const getStatus = window.api?.sourceControl?.getStatus;
     if (!getStatus) {
       setSourceError("Source Control bridge unavailable. Use bun run dev:all or bun run dev:desktop.");
       return;
     }
 
-    setIsScmBusy(true);
-    const result = await getStatus({ cwd: workspaceCwd });
-    setSourceBranch(result.branch);
-    setSourceItems(result.items);
-    setHasConflicts(result.hasConflicts);
-    setSourceError(result.ok ? "" : result.stderr || "git status failed");
-
     const getHistory = window.api?.sourceControl?.getHistory;
-    if (getHistory) {
-      const historyResult = await getHistory({ cwd: workspaceCwd, limit: 15 });
-      if (historyResult.ok) {
-        setSourceHistory(historyResult.items);
-      }
+    if (!args?.skipBusyState) {
+      setIsScmBusy(true);
     }
 
-    setIsScmBusy(false);
+    try {
+      const [statusResult, historyResult] = await Promise.all([
+        getStatus({ cwd: workspaceCwd }),
+        getHistory ? getHistory({ cwd: workspaceCwd, limit: 15 }) : Promise.resolve(null),
+      ]);
+
+      setSourceBranch(statusResult.branch);
+      setSourceItems(statusResult.items);
+      setHasConflicts(statusResult.hasConflicts);
+      setSourceError(statusResult.ok ? "" : statusResult.stderr || "git status failed");
+
+      if (historyResult?.ok) {
+        setSourceHistory(historyResult.items);
+      }
+    } finally {
+      if (!args?.skipBusyState) {
+        setIsScmBusy(false);
+      }
+    }
   }
 
   useEffect(() => {
@@ -449,12 +588,38 @@ export function EditorPanel() {
     }
 
     setIsScmBusy(true);
-    const result = await stageAll({ cwd: workspaceCwd });
-    if (!result.ok) {
-      setSourceError(result.stderr || "git add failed");
+    try {
+      const result = await stageAll({ cwd: workspaceCwd });
+      if (!result.ok) {
+        setSourceError(result.stderr || "git add failed");
+      } else {
+        setSourceError("");
+      }
+      await loadScmStatus({ skipBusyState: true });
+    } finally {
+      setIsScmBusy(false);
     }
-    await loadScmStatus();
-    setIsScmBusy(false);
+  }
+
+  async function handleUnstageAll() {
+    const unstageAll = window.api?.sourceControl?.unstageAll;
+    if (!unstageAll) {
+      setSourceError("Source Control bridge unavailable.");
+      return;
+    }
+
+    setIsScmBusy(true);
+    try {
+      const result = await unstageAll({ cwd: workspaceCwd });
+      if (!result.ok) {
+        setSourceError(result.stderr || "git restore --staged failed");
+      } else {
+        setSourceError("");
+      }
+      await loadScmStatus({ skipBusyState: true });
+    } finally {
+      setIsScmBusy(false);
+    }
   }
 
   async function handleCommit() {
@@ -463,21 +628,35 @@ export function EditorPanel() {
       setSourceError("Source Control bridge unavailable.");
       return;
     }
+    if (hasConflicts) {
+      setSourceError("Resolve or discard conflicted files before committing.");
+      return;
+    }
+    if (!canCommitStagedChanges) {
+      setSourceError("Stage at least one change before committing.");
+      return;
+    }
 
     setIsScmBusy(true);
-    const result = await commit({ message: commitMessage, cwd: workspaceCwd });
-    if (!result.ok) {
-      setSourceError(result.stderr || "git commit failed");
-    } else {
-      setCommitMessage("");
-      setSourceError("");
+    try {
+      const result = await commit({ message: commitMessage, cwd: workspaceCwd });
+      if (!result.ok) {
+        setSourceError(result.stderr || "git commit failed");
+      } else {
+        setCommitMessage("");
+        setSourceError("");
+      }
+      await loadScmStatus({ skipBusyState: true });
+    } finally {
+      setIsScmBusy(false);
     }
-    await loadScmStatus();
-    setIsScmBusy(false);
   }
 
-  async function handleStageToggle(args: { item: SourceControlItem }) {
-    const isStaged = args.item.code[0] && args.item.code[0] !== "?" && args.item.code[0] !== " ";
+  async function handleStageAction(args: {
+    action: "stage" | "toggle" | "unstage";
+    item: SourceControlStatusItem;
+  }) {
+    const isStaged = hasSourceControlStagedChanges({ item: args.item });
     const stageFile = window.api?.sourceControl?.stageFile;
     const unstageFile = window.api?.sourceControl?.unstageFile;
     if (!stageFile || !unstageFile) {
@@ -486,15 +665,44 @@ export function EditorPanel() {
     }
 
     setIsScmBusy(true);
-    const result = isStaged
-      ? await unstageFile({ path: args.item.path, cwd: workspaceCwd })
-      : await stageFile({ path: args.item.path, cwd: workspaceCwd });
+    try {
+      const nextAction = args.action === "toggle"
+        ? (isStaged ? "unstage" : "stage")
+        : args.action;
+      const result = nextAction === "unstage"
+        ? await unstageFile({ path: args.item.path, cwd: workspaceCwd })
+        : await stageFile({ path: args.item.path, cwd: workspaceCwd });
 
-    if (!result.ok) {
-      setSourceError(result.stderr || "git stage toggle failed");
+      if (!result.ok) {
+        setSourceError(result.stderr || "git stage toggle failed");
+      } else {
+        setSourceError("");
+      }
+      await loadScmStatus({ skipBusyState: true });
+    } finally {
+      setIsScmBusy(false);
     }
-    await loadScmStatus();
-    setIsScmBusy(false);
+  }
+
+  async function handleDiscardChange(args: { item: SourceControlStatusItem }) {
+    const discardFile = window.api?.sourceControl?.discardFile;
+    if (!discardFile) {
+      setSourceError("Source Control bridge unavailable.");
+      return;
+    }
+
+    setIsScmBusy(true);
+    try {
+      const result = await discardFile({ path: args.item.path, cwd: workspaceCwd });
+      if (!result.ok) {
+        setSourceError(result.stderr || "git discard failed");
+      } else {
+        setSourceError("");
+      }
+      await loadScmStatus({ skipBusyState: true });
+    } finally {
+      setIsScmBusy(false);
+    }
   }
 
   async function handleSelectDiff(args: { path: string }) {
@@ -855,19 +1063,93 @@ export function EditorPanel() {
 
         {rightTab === "changes" ? (
           <div className="border-b border-border/80 p-2">
-            <Input
-              className="h-8 rounded-sm border-border/80 bg-background px-2 text-sm"
-              placeholder={`Message (Ctrl Enter to commit on "${sourceBranch}")`}
-              value={commitMessage}
-              onChange={(event) => setCommitMessage(event.target.value)}
-            />
-            <div className="mt-2 flex items-center gap-2">
-              <Button size="sm" className="h-8 flex-1 rounded-sm text-sm" disabled={isScmBusy} onClick={() => void handleCommit()}>
-                Commit
-              </Button>
-              <Button size="sm" variant="outline" className="h-8 rounded-sm text-sm" disabled={isScmBusy} onClick={() => void handleStageAll()}>
-                + Stage All
-              </Button>
+            <div className="space-y-2">
+              <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className="h-6 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal">
+                        <GitBranch className="size-3.5 text-muted-foreground" />
+                        <span className="truncate">{sourceBranch}</span>
+                      </Badge>
+                      <Badge variant={filteredScmItems.length > 0 ? "secondary" : "outline"} className="h-6 rounded-md px-2 font-normal">
+                        Changes {filteredScmItems.length}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sourceControlSummary.stagedCount > 0 ? (
+                        <Badge variant="success" className="rounded-md px-2 font-normal">
+                          Staged {sourceControlSummary.stagedCount}
+                        </Badge>
+                      ) : null}
+                      {sourceControlSummary.unstagedCount > 0 ? (
+                        <Badge variant="warning" className="rounded-md px-2 font-normal">
+                          Working Tree {sourceControlSummary.unstagedCount}
+                        </Badge>
+                      ) : null}
+                      {sourceControlSummary.untrackedCount > 0 ? (
+                        <Badge variant="outline" className="rounded-md px-2 font-normal">
+                          Untracked {sourceControlSummary.untrackedCount}
+                        </Badge>
+                      ) : null}
+                      {sourceControlSummary.conflictCount > 0 ? (
+                        <Badge variant="destructive" className="rounded-md px-2 font-normal">
+                          Conflicts {sourceControlSummary.conflictCount}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{sourceControlHint}</p>
+                  </div>
+                  {isScmBusy ? <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" /> : null}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Commit Staged Changes
+                </p>
+                <Input
+                  className="mt-2 h-9 rounded-md border-border/70 bg-background px-2 text-sm"
+                  placeholder={`Message for "${sourceBranch}"`}
+                  value={commitMessage}
+                  onChange={(event) => setCommitMessage(event.target.value)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && commitMessage.trim() && canCommitStagedChanges && !isScmBusy) {
+                      event.preventDefault();
+                      void handleCommit();
+                    }
+                  }}
+                  disabled={isScmBusy}
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="h-8 min-w-[112px] flex-1 rounded-md text-sm"
+                    disabled={isScmBusy || !commitMessage.trim() || !canCommitStagedChanges}
+                    onClick={() => void handleCommit()}
+                  >
+                    Commit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 rounded-md text-sm"
+                    disabled={isScmBusy || filteredScmItems.length === 0}
+                    onClick={() => void handleStageAll()}
+                  >
+                    Stage All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 rounded-md text-sm"
+                    disabled={isScmBusy || !canUnstageAnyChanges}
+                    onClick={() => void handleUnstageAll()}
+                  >
+                    Unstage All
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
@@ -1025,30 +1307,53 @@ export function EditorPanel() {
             </>
           ) : (
             <>
-              <p className="mb-1 text-sm text-muted-foreground">Branch: {sourceBranch} | Changes ({filteredScmItems.length})</p>
-              {hasConflicts ? <p className="mb-1 text-sm text-warning">Conflict detected.</p> : null}
-              {sourceError ? <p className="mb-1 text-sm text-destructive">{sourceError}</p> : null}
-              {!sourceError && filteredScmItems.length === 0 ? <p className="text-sm text-muted-foreground">No local changes.</p> : null}
-              <div className="space-y-1">
-                {filteredScmItems.map((item) => (
-                  <div key={`${item.code}:${item.path}`} className="rounded-sm border border-border/80 bg-muted/40 px-2 py-1 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <button type="button" className="min-w-0 truncate text-left hover:underline" onClick={() => void handleSelectDiff({ path: item.path })}>
-                        {item.path}
-                      </button>
-                      <div className="flex items-center gap-1">
-                        <span className="text-success">{item.code}</span>
-                        <button
-                          type="button"
-                          className="rounded-sm border border-border/80 px-1 py-0.5 text-sm hover:bg-secondary/60"
-                          disabled={isScmBusy}
-                          onClick={() => void handleStageToggle({ item })}
-                        >
-                          {(item.code[0] && item.code[0] !== "?" && item.code[0] !== " ") ? "unstage" : "stage"}
-                        </button>
-                      </div>
-                    </div>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">Branch: {sourceBranch} | Changes ({filteredScmItems.length})</p>
+                {hasConflicts ? (
+                  <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning dark:bg-warning/15">
+                    Conflict detected. Resolve, stage, or discard the affected files before committing.
                   </div>
+                ) : null}
+                {sourceError ? (
+                  <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {sourceError}
+                  </div>
+                ) : null}
+                {!sourceError && filteredScmItems.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-4">
+                    <p className="text-sm font-medium">No local changes.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      This workspace matches the checked-out branch.
+                    </p>
+                  </div>
+                ) : null}
+                {sourceControlSections.map((section) => (
+                  <section key={section.id} className="space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                          {section.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{section.description}</p>
+                      </div>
+                      <Badge variant={section.badgeVariant} className="mt-0.5 rounded-md px-2 font-normal">
+                        {section.items.length}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1.5">
+                      {section.items.map((item) => (
+                        <SourceControlRow
+                          key={`${item.displayCode}:${item.pathLabel}`}
+                          item={item}
+                          isScmBusy={isScmBusy}
+                          onOpenDiff={(path) => void handleSelectDiff({ path })}
+                          onStage={(sourceItem) => void handleStageAction({ action: "stage", item: sourceItem })}
+                          onUnstage={(sourceItem) => void handleStageAction({ action: "unstage", item: sourceItem })}
+                          onDiscard={(sourceItem) => void handleDiscardChange({ item: sourceItem })}
+                        />
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             </>
@@ -1058,12 +1363,16 @@ export function EditorPanel() {
         {rightTab === "changes" ? (
           <div className="border-t border-border/80 p-2">
             <p className="text-sm text-muted-foreground">Commit History ({sourceHistory.length})</p>
-            <div className="mt-1 max-h-24 space-y-1 overflow-auto">
-              {sourceHistory.length === 0 ? <p className="text-sm text-muted-foreground">Initial commit</p> : null}
+            <div className="mt-2 max-h-32 space-y-1.5 overflow-auto">
+              {sourceHistory.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-3">
+                  <p className="text-sm text-muted-foreground">Initial commit</p>
+                </div>
+              ) : null}
               {sourceHistory.map((item) => (
-                <div key={`${item.hash}:${item.subject}`} className="rounded-sm border border-border/80 bg-muted/40 px-2 py-1">
+                <div key={`${item.hash}:${item.subject}`} className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
                   <p className="truncate text-sm font-medium">{item.subject}</p>
-                  <p className="text-sm text-muted-foreground">{item.hash} · {item.relativeDate}</p>
+                  <p className="text-xs text-muted-foreground">{item.hash} · {item.relativeDate}</p>
                 </div>
               ))}
             </div>

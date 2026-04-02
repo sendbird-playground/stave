@@ -47,6 +47,34 @@ async function readWorkingTreeFile(args: { cwd?: string; filePath: string }) {
   }
 }
 
+async function discardSourceControlPath(args: { cwd?: string; path: string }) {
+  const paths = resolveSourceControlDiffPaths({ rawPath: args.path });
+  const pathspecArg = toGitPathspecArg(paths.pathspecs);
+  const restoreResult = await runCommand({
+    command: `git restore -- ${pathspecArg}`,
+    cwd: args.cwd,
+  });
+
+  if (restoreResult.ok) {
+    return restoreResult;
+  }
+
+  const cleanResult = await runCommand({
+    command: `git clean -f -- ${pathspecArg}`,
+    cwd: args.cwd,
+  });
+  if (cleanResult.ok) {
+    return cleanResult;
+  }
+
+  return {
+    ok: false,
+    code: cleanResult.code,
+    stdout: [restoreResult.stdout, cleanResult.stdout].filter(Boolean).join("\n"),
+    stderr: [restoreResult.stderr, cleanResult.stderr].filter(Boolean).join("\n").trim(),
+  };
+}
+
 const GITHUB_PR_JSON_FIELDS = [
   "number",
   "title",
@@ -240,19 +268,18 @@ export function registerScmHandlers() {
   ipcMain.handle(
     "scm:stage-file",
     async (_event, args: { path: string; cwd?: string }) => {
-      const safePath = quotePath({ value: args.path });
-      return runCommand({ command: `git add -- "${safePath}"`, cwd: args.cwd });
+      const paths = resolveSourceControlDiffPaths({ rawPath: args.path });
+      const pathspecArg = toGitPathspecArg(paths.pathspecs);
+      return runCommand({ command: `git add -- ${pathspecArg}`, cwd: args.cwd });
     },
   );
 
   ipcMain.handle(
     "scm:unstage-file",
     async (_event, args: { path: string; cwd?: string }) => {
-      const safePath = quotePath({ value: args.path });
-      return runCommand({
-        command: `git restore --staged -- "${safePath}"`,
-        cwd: args.cwd,
-      });
+      const paths = resolveSourceControlDiffPaths({ rawPath: args.path });
+      const pathspecArg = toGitPathspecArg(paths.pathspecs);
+      return runCommand({ command: `git restore --staged -- ${pathspecArg}`, cwd: args.cwd });
     },
   );
 
@@ -290,13 +317,8 @@ export function registerScmHandlers() {
 
   ipcMain.handle(
     "scm:discard-file",
-    async (_event, args: { path: string; cwd?: string }) => {
-      const safePath = quotePath({ value: args.path });
-      return runCommand({
-        command: `git restore -- "${safePath}"`,
-        cwd: args.cwd,
-      });
-    },
+    async (_event, args: { path: string; cwd?: string }) =>
+      discardSourceControlPath({ path: args.path, cwd: args.cwd }),
   );
 
   ipcMain.handle(

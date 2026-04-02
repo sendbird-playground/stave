@@ -3,6 +3,7 @@ import path from "node:path";
 import type { SandboxMode, ApprovalMode, ModelReasoningEffort } from "@openai/codex-sdk";
 import { parseWorktreePathByBranch } from "../src/lib/source-control-worktrees";
 import { buildSourceControlDiffPreview, resolveSourceControlDiffPaths } from "../src/lib/source-control-diff";
+import { hasSourceControlConflicts, parseSourceControlStatusLines } from "../src/lib/source-control-status";
 import type { BridgeEvent } from "../electron/providers/types";
 import { streamClaudeWithSdk } from "../electron/providers/claude-sdk-runtime";
 import { streamCodexWithSdk } from "../electron/providers/codex-sdk-runtime";
@@ -81,22 +82,10 @@ async function runCommand(args: { cmd: string; cwd?: string }): Promise<CommandR
   };
 }
 
-function parseStatusLines(stdout: string) {
-  return stdout
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter(Boolean)
-    .map((line) => ({
-      code: line.slice(0, 2).trim() || "??",
-      path: line.slice(3).trim(),
-    }));
-}
-
-function hasConflictItems(args: { items: Array<{ code: string; path: string }> }) {
-  return args.items.some((item) => {
-    const code = item.code;
-    return code.includes("U") || code === "AA" || code === "DD";
-  });
+function hasConflictItems(args: {
+  items: Array<{ code: string; path: string; indexStatus?: string; workingTreeStatus?: string }>;
+}) {
+  return args.items.some((item) => hasSourceControlConflicts({ item }));
 }
 
 function toGitPathspecArg(paths: string[]) {
@@ -129,6 +118,34 @@ async function readWorkingTreeFile(args: { cwd?: string; filePath: string }) {
   } catch {
     return "";
   }
+}
+
+async function discardSourceControlPath(args: { cwd?: string; path: string }) {
+  const paths = resolveSourceControlDiffPaths({ rawPath: args.path });
+  const pathspecArg = toGitPathspecArg(paths.pathspecs);
+  const restoreResult = await runCommand({
+    cmd: `git restore -- ${pathspecArg}`,
+    cwd: args.cwd,
+  });
+
+  if (restoreResult.ok) {
+    return restoreResult;
+  }
+
+  const cleanResult = await runCommand({
+    cmd: `git clean -f -- ${pathspecArg}`,
+    cwd: args.cwd,
+  });
+  if (cleanResult.ok) {
+    return cleanResult;
+  }
+
+  return {
+    ok: false,
+    code: cleanResult.code,
+    stdout: [restoreResult.stdout, cleanResult.stdout].filter(Boolean).join("\n"),
+    stderr: [restoreResult.stderr, cleanResult.stderr].filter(Boolean).join("\n").trim(),
+  };
 }
 
 const server = Bun.serve({
@@ -262,7 +279,7 @@ const server = Bun.serve({
         runCommand({ cmd: "git status --porcelain", cwd: body.cwd }),
         runCommand({ cmd: "git rev-parse --abbrev-ref HEAD", cwd: body.cwd }),
       ]);
-      const items = statusResult.ok ? parseStatusLines(statusResult.stdout) : [];
+      const items = statusResult.ok ? parseSourceControlStatusLines({ stdout: statusResult.stdout }) : [];
       return json({
         ok: statusResult.ok && branchResult.ok,
         branch: branchResult.ok ? branchResult.stdout.trim() : "unknown",
@@ -293,17 +310,19 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/scm/stage-file" && req.method === "POST") {
       const body = await readJson<{ cwd?: string; path: string }>(req);
-      return json(await runCommand({ cmd: `git add -- ${JSON.stringify(body.path)}`, cwd: body.cwd }));
+      const paths = resolveSourceControlDiffPaths({ rawPath: body.path });
+      return json(await runCommand({ cmd: `git add -- ${toGitPathspecArg(paths.pathspecs)}`, cwd: body.cwd }));
     }
 
     if (url.pathname === "/api/scm/unstage-file" && req.method === "POST") {
       const body = await readJson<{ cwd?: string; path: string }>(req);
-      return json(await runCommand({ cmd: `git restore --staged -- ${JSON.stringify(body.path)}`, cwd: body.cwd }));
+      const paths = resolveSourceControlDiffPaths({ rawPath: body.path });
+      return json(await runCommand({ cmd: `git restore --staged -- ${toGitPathspecArg(paths.pathspecs)}`, cwd: body.cwd }));
     }
 
     if (url.pathname === "/api/scm/discard-file" && req.method === "POST") {
       const body = await readJson<{ cwd?: string; path: string }>(req);
-      return json(await runCommand({ cmd: `git restore -- ${JSON.stringify(body.path)}`, cwd: body.cwd }));
+      return json(await discardSourceControlPath({ path: body.path, cwd: body.cwd }));
     }
 
     if (url.pathname === "/api/scm/diff" && req.method === "POST") {
