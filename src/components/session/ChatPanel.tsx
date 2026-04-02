@@ -290,7 +290,8 @@ function ChatPanelHeader() {
 const MemoizedChatPanelHeader = memo(ChatPanelHeader);
 
 function ChatPanelMessageList() {
-  const [activeTaskId, activeTurnId, chatStreamingEnabled, loadTaskMessages] = useAppStore(useShallow((state) => [
+  const [activeWorkspaceId, activeTaskId, activeTurnId, chatStreamingEnabled, loadTaskMessages] = useAppStore(useShallow((state) => [
+    state.activeWorkspaceId,
     state.activeTaskId,
     state.activeTurnIdsByTask[state.activeTaskId],
     state.settings.chatStreamingEnabled,
@@ -312,6 +313,7 @@ function ChatPanelMessageList() {
   );
   const autoScrollKey = `${visibleMessages.length}:${lastVisibleMessageScrollFingerprint}`;
   const forceScrollKey = latestVisibleMessageId;
+  const scrollContextKey = `${activeWorkspaceId}:${activeTaskId}`;
 
   useEffect(() => {
     if (!activeTurnId) {
@@ -328,8 +330,8 @@ function ChatPanelMessageList() {
       autoScrollKey={autoScrollKey}
       autoScrollBehavior="auto"
       forceScrollKey={forceScrollKey}
-      scrollScopeKey={activeTaskId}
-      forceScrollScopeKey={activeTaskId}
+      scrollScopeKey={scrollContextKey}
+      forceScrollScopeKey={scrollContextKey}
       withInnerLayout={visibleMessages.length === 0}
     >
       {hasOlderMessages ? (
@@ -372,11 +374,11 @@ function ChatPanelMessageList() {
         </Empty>
       ) : (
         <ConversationVirtualList
-          listKey={activeTaskId}
+          listKey={scrollContextKey}
           listRef={virtuosoRef}
           data={visibleMessages}
           forceScrollKey={forceScrollKey}
-          forceScrollScopeKey={activeTaskId}
+          forceScrollScopeKey={scrollContextKey}
           itemKey={(_, message) => message.id}
           itemContent={(index, message) => (
             <MessageRow
