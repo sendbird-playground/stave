@@ -92,6 +92,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - loads explorer folders on demand instead of materializing the full tree from `projectFiles`
   - caches loaded directory entries in memory for the active workspace until refresh, workspace switch, or add file/folder invalidation
   - keeps empty folders visible because directory entries now come from folder listings instead of file-only scans
+  - renders open file tabs with a stronger two-line filename and directory hierarchy plus diff/conflict state chips, so the strip feels aligned with task tabs without reusing the exact same visual treatment
 
 ### Store Behavior
 

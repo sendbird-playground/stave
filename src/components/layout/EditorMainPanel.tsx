@@ -450,9 +450,12 @@ export function EditorMainPanel() {
         />
 
         {activeTab ? (
-          <div className="flex min-w-0 items-center gap-1 border-b border-border/60 bg-editor px-3 py-1">
+          <div className="flex min-w-0 items-center gap-2 border-b border-border/60 bg-editor px-3 py-1.5">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/60 text-muted-foreground">
+              <FileCode2 className="size-3.5" />
+            </span>
             <span
-              className="truncate text-xs text-muted-foreground"
+              className="truncate text-[11px] font-medium text-muted-foreground"
               title={resolveAbsolutePath(activeTab.filePath)}
             >
               {resolveAbsolutePath(activeTab.filePath)}
