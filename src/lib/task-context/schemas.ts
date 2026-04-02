@@ -9,6 +9,8 @@ const ThinkingPartSchema = z.object({
   type: z.literal("thinking"),
   text: z.string(),
   isStreaming: z.boolean(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
 });
 
 const ToolUsePartSchema = z.object({

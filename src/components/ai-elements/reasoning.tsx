@@ -65,7 +65,7 @@ export function ReasoningTrigger(args: ButtonHTMLAttributes<HTMLButtonElement>) 
           className={cn(
             "bg-clip-text leading-none",
             isStreaming
-              ? "bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground bg-[length:200%_100%] text-transparent motion-safe:animate-pulse"
+              ? "bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground bg-[length:200%_100%] text-transparent motion-safe:animate-shimmer"
               : "text-muted-foreground",
           )}
         >

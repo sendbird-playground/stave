@@ -35,6 +35,8 @@ interface ChainOfThoughtProps extends HTMLAttributes<HTMLDivElement> {
 
 interface ChainOfThoughtStepProps extends HTMLAttributes<HTMLDivElement> {
   title: string;
+  /** Optional custom title node (for animated/gradient text etc.). */
+  titleContent?: ReactNode;
   /** Always-visible description below the title (matches AI Elements API). */
   description?: ReactNode;
   /** Inline summary chip displayed next to the title. */
@@ -209,9 +211,11 @@ export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonEleme
         {...args}
       >
         {isStreaming ? (
-          <span className="inline-flex items-center gap-2 font-medium motion-safe:animate-thinking-shimmer">
+          <span className="inline-flex items-center gap-2 font-medium">
             <Brain className="size-4" />
-            Thinking
+            <span className="bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground bg-[length:200%_100%] bg-clip-text text-transparent motion-safe:animate-shimmer">
+              Thinking
+            </span>
           </span>
         ) : (
           <>
@@ -264,6 +268,7 @@ export function ChainOfThoughtContent(args: HTMLAttributes<HTMLDivElement>) {
 
 export function ChainOfThoughtStep({
   title,
+  titleContent,
   description,
   summary,
   status = "pending",
@@ -287,6 +292,7 @@ export function ChainOfThoughtStep({
   }, [openWhen]);
 
   const hasContent = children != null;
+  const resolvedTitle = titleContent ?? title;
 
   return (
     <div
@@ -314,7 +320,7 @@ export function ChainOfThoughtStep({
             className="flex items-center gap-1.5 text-left"
             onClick={() => setOpen((prev) => !prev)}
           >
-            <span>{title}</span>
+            <span>{resolvedTitle}</span>
             {summary}
             <ChevronDown
               className={cn(
@@ -325,7 +331,7 @@ export function ChainOfThoughtStep({
           </button>
         ) : (
           <div className="flex items-center gap-1.5">
-            <span>{title}</span>
+            <span>{resolvedTitle}</span>
             {summary}
           </div>
         )}

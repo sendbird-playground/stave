@@ -46,6 +46,8 @@ export interface ThinkingPart extends MessagePartBase {
   type: "thinking";
   text: string;
   isStreaming: boolean;
+  startedAt?: string;
+  completedAt?: string;
 }
 
 export interface ToolUsePart extends MessagePartBase {

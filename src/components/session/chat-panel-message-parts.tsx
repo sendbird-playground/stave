@@ -30,7 +30,7 @@ import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { useAppStore } from "@/store/app.store";
 import type { MessagePart } from "@/types/chat";
-import { ChangedFilesBlock, ReferencedFilesBlock, ImageAttachmentBlock } from "./chat-panel-file-blocks";
+import { ChangedFilesBlock, FileChangeToolBlock, ReferencedFilesBlock, ImageAttachmentBlock } from "./chat-panel-file-blocks";
 
 export function toProviderStartCase(args: { providerId: "claude-code" | "codex" | "stave" }) {
   return args.providerId
@@ -122,6 +122,9 @@ export function MessagePartRenderer(args: {
             state={part.state}
           />
         );
+      }
+      if (part.toolName.trim().toLowerCase() === "file_change") {
+        return <FileChangeToolBlock input={part.input} />;
       }
       return (
         <Tool

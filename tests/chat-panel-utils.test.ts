@@ -8,6 +8,7 @@ import {
   groupMessageParts,
   hasVisibleMessagePartContent,
   isCodeDiffSummarySystemEvent,
+  parseFileChangeToolInput,
   isPendingDiffStatus,
   isSubagentProgressSystemEvent,
   shouldRenderInlineToolPart,
@@ -131,6 +132,30 @@ describe("summarizeDiffLineChanges", () => {
       added: 1,
       removed: 1,
     });
+  });
+});
+
+describe("parseFileChangeToolInput", () => {
+  test("extracts applied, skipped, and failed file rows", () => {
+    expect(parseFileChangeToolInput(JSON.stringify({
+      appliedPaths: ["src/a.ts"],
+      skippedPaths: ["dist/bundle.js"],
+      failedPaths: [{ path: "src/c.ts", error: "permission denied" }],
+    }))).toEqual([
+      { filePath: "src/a.ts", status: "applied" },
+      { filePath: "dist/bundle.js", status: "skipped" },
+      { filePath: "src/c.ts", status: "failed", error: "permission denied" },
+    ]);
+  });
+
+  test("deduplicates duplicate paths by keeping the highest-priority status", () => {
+    expect(parseFileChangeToolInput(JSON.stringify({
+      appliedPaths: ["src/a.ts"],
+      skippedPaths: ["src/a.ts"],
+      failedPaths: [{ path: "src/a.ts", error: "boom" }],
+    }))).toEqual([
+      { filePath: "src/a.ts", status: "failed", error: "boom" },
+    ]);
   });
 });
 
