@@ -1,3 +1,19 @@
+## [0.0.34](https://github.com/sendbird-playground/stave/compare/v0.0.33...v0.0.34) (2026-04-03)
+
+### Highlights
+
+* Added a stdio proxy transport for local MCP so sandboxed or subprocess-based hosts can connect without loopback HTTP access.
+* Upgraded Codex SDK to 0.118.0 and refreshed the related runtime, trace, prompt, and UI integration points.
+* Lowered Stave Auto supervisor defaults to Claude Sonnet, with Codex-only supervisor routing now using `gpt-5.4-mini`.
+* Refreshed the landing page screenshot and feature messaging to match the current app.
+
+### Features
+
+* **mcp:** add stdio proxy transport for local MCP ([#200](https://github.com/sendbird-playground/stave/issues/200)) ([c05c213](https://github.com/sendbird-playground/stave/commit/c05c2133339d9e7cd807c67d2a64d997e2fbffef))
+
+### Bug Fixes
+
+* **stave:** update provider defaults and supporting changes ([e4d62bd](https://github.com/sendbird-playground/stave/commit/e4d62bd253688eeb911aafdf4052b43eefd130b9))
 ## [0.0.33](https://github.com/sendbird-playground/stave/compare/v0.0.32...v0.0.33) (2026-04-02)
 
 ### Features
