@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolvePlanViewerInsets, resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
+import { resolvePlanViewerInsets, resolvePlanViewerLayout, resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
 
 describe("resolvePlanViewerState", () => {
   test("shows a completed Claude plan response in the viewer", () => {
@@ -282,6 +282,7 @@ describe("resolvePlanViewerInsets", () => {
       inputDockHeight: 76,
     })).toEqual({
       topOffset: null,
+      rightOffset: 16,
       bottomOffset: 84,
     });
   });
@@ -292,7 +293,60 @@ describe("resolvePlanViewerInsets", () => {
       inputDockHeight: 76,
     })).toEqual({
       topOffset: 12,
+      rightOffset: 16,
       bottomOffset: 84,
+    });
+  });
+});
+
+describe("resolvePlanViewerLayout", () => {
+  test("anchors the normal viewer to the bottom-right and grows leftward", () => {
+    expect(resolvePlanViewerLayout({
+      viewState: "normal",
+      inputDockHeight: 76,
+    })).toEqual({
+      wrapperClassName: "pointer-events-none absolute z-20",
+      wrapperStyle: {
+        right: 16,
+        bottom: 84,
+        width: "calc(100% - 32px)",
+        maxWidth: 672,
+      },
+      cardClassName: "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
+    });
+  });
+
+  test("anchors the expanded viewer to the same bottom-right origin above the input dock", () => {
+    expect(resolvePlanViewerLayout({
+      viewState: "expanded",
+      inputDockHeight: 76,
+    })).toEqual({
+      wrapperClassName: "pointer-events-none absolute z-20",
+      wrapperStyle: {
+        right: 16,
+        bottom: 84,
+        width: "calc(100% - 32px)",
+        height: "max(0px, calc(100% - 96px))",
+      },
+      cardClassName: "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg h-full w-full",
+    });
+  });
+
+  test("keeps the dragged minimized viewer at its explicit position", () => {
+    expect(resolvePlanViewerLayout({
+      viewState: "minimized",
+      inputDockHeight: 76,
+      dragPos: {
+        x: 120,
+        y: 48,
+      },
+    })).toEqual({
+      wrapperClassName: "pointer-events-none absolute z-20",
+      wrapperStyle: {
+        top: 48,
+        left: 120,
+      },
+      cardClassName: "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg w-72",
     });
   });
 });

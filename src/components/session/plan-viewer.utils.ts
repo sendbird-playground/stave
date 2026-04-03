@@ -1,7 +1,17 @@
+import type { CSSProperties } from "react";
 import type { ChatMessage } from "@/types/chat";
 
 const PLAN_VIEWER_COLLAPSED_GAP_PX = 8;
 const PLAN_VIEWER_EXPANDED_TOP_PX = 12;
+const PLAN_VIEWER_SIDE_GAP_PX = 16;
+const PLAN_VIEWER_NORMAL_MAX_WIDTH_PX = 672;
+
+export type PlanViewerViewState = "normal" | "minimized" | "expanded";
+
+interface PlanViewerDragPosition {
+  x: number;
+  y: number;
+}
 
 type PlanMessage = Pick<ChatMessage, "role" | "providerId" | "isPlanResponse" | "isStreaming" | "planText">;
 
@@ -54,6 +64,67 @@ export function resolvePlanViewerInsets(args: {
 
   return {
     topOffset: args.isExpanded ? PLAN_VIEWER_EXPANDED_TOP_PX : null,
+    rightOffset: PLAN_VIEWER_SIDE_GAP_PX,
     bottomOffset,
+  };
+}
+
+export function resolvePlanViewerLayout(args: {
+  viewState: PlanViewerViewState;
+  inputDockHeight: number;
+  dragPos?: PlanViewerDragPosition | null;
+}): {
+  wrapperClassName: string;
+  wrapperStyle: CSSProperties;
+  cardClassName: string;
+} {
+  const isExpanded = args.viewState === "expanded";
+  const isMinimized = args.viewState === "minimized";
+  const { topOffset, rightOffset, bottomOffset } = resolvePlanViewerInsets({
+    isExpanded,
+    inputDockHeight: args.inputDockHeight,
+  });
+
+  if (isMinimized && args.dragPos) {
+    return {
+      wrapperClassName: "pointer-events-none absolute z-20",
+      wrapperStyle: {
+        top: args.dragPos.y,
+        left: args.dragPos.x,
+      },
+      cardClassName: [
+        "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
+        "w-72",
+      ].join(" "),
+    };
+  }
+
+  const wrapperStyle: CSSProperties = isExpanded
+    ? {
+        right: rightOffset,
+        bottom: bottomOffset,
+        width: `calc(100% - ${rightOffset * 2}px)`,
+        height: `max(0px, calc(100% - ${bottomOffset + (topOffset ?? 0)}px))`,
+      }
+    : isMinimized
+      ? {
+          right: rightOffset,
+          bottom: bottomOffset,
+        }
+      : {
+          right: rightOffset,
+          bottom: bottomOffset,
+          width: `calc(100% - ${rightOffset * 2}px)`,
+          maxWidth: PLAN_VIEWER_NORMAL_MAX_WIDTH_PX,
+        };
+
+  return {
+    wrapperClassName: "pointer-events-none absolute z-20",
+    wrapperStyle,
+    cardClassName: [
+      "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
+      isExpanded ? "h-full w-full" : "",
+      isMinimized ? "w-72" : "",
+    ].filter(Boolean).join(" "),
   };
 }
