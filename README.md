@@ -30,6 +30,7 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 
 - desktop-first Claude and Codex workspace
 - task-oriented chat with approvals, user-input, tools, diffs, and plans
+- task-local prompt history navigation in the composer via `ArrowUp` / `ArrowDown`
 - Session Replay drawer for recent-turn inspection and request snapshots
 - `$skill-name` composer selector that resolves installed Claude and Codex skills across global, user, and workspace scopes
 - file and image attachments in the composer, including screenshot capture and clipboard image paste with inline preview

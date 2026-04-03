@@ -38,7 +38,7 @@ import {
   buildChatInputRuntimeStatusItems,
   buildCommandCatalogRuntimeOptions,
 } from "./chat-input.runtime";
-import { getLatestPromptSuggestions, mergePromptSuggestionWithDraft } from "./chat-input.utils";
+import { getLatestPromptSuggestions, getPromptHistoryEntries, mergePromptSuggestionWithDraft } from "./chat-input.utils";
 
 interface ChatInputProps {
   compact?: boolean;
@@ -200,6 +200,11 @@ function ChatInputComposer(args: ChatInputComposerProps) {
       part: pendingUserInputPart,
     };
   }, [pendingUserInputMessageId, pendingUserInputPart]);
+  const activeTaskMessages = useAppStore((state) => state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES);
+  const promptHistoryEntries = useMemo(
+    () => getPromptHistoryEntries(activeTaskMessages),
+    [activeTaskMessages],
+  );
   const [draftText, setDraftText] = useState(promptDraft.text);
   const draftTextRef = useRef(promptDraft.text);
   const syncedDraftRef = useRef({
@@ -354,6 +359,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           modelOptions={args.modelOptions}
           projectFiles={deferredProjectFiles}
           attachedFilePaths={promptDraft.attachedFilePaths}
+          promptHistoryEntries={promptHistoryEntries}
           commandPaletteItems={args.commandPaletteItems}
           commandPaletteProviderNote={args.commandPaletteProviderNote}
           skillsEnabled={args.skillsEnabled}

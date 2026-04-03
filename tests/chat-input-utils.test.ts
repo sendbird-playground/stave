@@ -1,5 +1,51 @@
 import { describe, expect, test } from "bun:test";
-import { getLatestPromptSuggestions, mergePromptSuggestionWithDraft } from "@/components/session/chat-input.utils";
+import {
+  getLatestPromptSuggestions,
+  getPromptHistoryEntries,
+  mergePromptSuggestionWithDraft,
+} from "@/components/session/chat-input.utils";
+
+describe("getPromptHistoryEntries", () => {
+  test("collects non-empty user prompts in chronological order", () => {
+    expect(getPromptHistoryEntries([
+      {
+        id: "m-1",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "first prompt",
+        parts: [],
+      },
+      {
+        id: "m-2",
+        role: "assistant",
+        model: "gpt-5.4",
+        providerId: "codex",
+        content: "response",
+        parts: [],
+      },
+      {
+        id: "m-3",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "",
+        parts: [],
+      },
+      {
+        id: "m-4",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "second prompt",
+        parts: [],
+      },
+    ])).toEqual([
+      "first prompt",
+      "second prompt",
+    ]);
+  });
+});
 
 describe("getLatestPromptSuggestions", () => {
   test("returns the latest assistant suggestions", () => {
