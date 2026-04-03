@@ -59,6 +59,8 @@ export function EditorMainPanel() {
     closeEditorTab,
     updateEditorContent,
     openFileFromTree,
+    pendingEditorSelection,
+    clearPendingEditorSelection,
     sendEditorContextToChat,
     toggleEditorDiffMode,
     saveActiveEditorTab,
@@ -88,6 +90,8 @@ export function EditorMainPanel() {
     state.closeEditorTab,
     state.updateEditorContent,
     state.openFileFromTree,
+    state.pendingEditorSelection,
+    state.clearPendingEditorSelection,
     state.sendEditorContextToChat,
     state.toggleEditorDiffMode,
     state.saveActiveEditorTab,
@@ -314,6 +318,36 @@ export function EditorMainPanel() {
     editor.focus();
     pendingEditorNavigationRef.current = null;
   }, [activeDiffSessionKey, activeTab, activeTabIsImage]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!pendingEditorSelection || !editor || !activeTab || activeTabIsImage || Boolean(activeDiffSessionKey)) {
+      return;
+    }
+    if (activeTab.id !== pendingEditorSelection.tabId) {
+      return;
+    }
+
+    const model = editor.getModel();
+    if (!model) {
+      return;
+    }
+    const lineNumber = Math.min(Math.max(1, pendingEditorSelection.line), model.getLineCount());
+    const maxColumn = model.getLineMaxColumn(lineNumber);
+    const column = Math.min(Math.max(1, pendingEditorSelection.column ?? 1), maxColumn);
+    const selection = {
+      startLineNumber: lineNumber,
+      startColumn: column,
+      endLineNumber: lineNumber,
+      endColumn: column,
+    };
+
+    editor.setSelection(selection);
+    editor.setPosition({ lineNumber, column });
+    editor.revealPositionInCenter({ lineNumber, column });
+    editor.focus();
+    clearPendingEditorSelection();
+  }, [activeDiffSessionKey, activeTab, activeTabIsImage, clearPendingEditorSelection, pendingEditorSelection]);
 
   useEffect(() => {
     if (activeTabIsImage || Boolean(activeDiffSessionKey)) {

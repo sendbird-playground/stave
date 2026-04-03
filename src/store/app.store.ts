@@ -406,6 +406,7 @@ interface AppState {
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   pendingCloseEditorTabId: string | null;
+  pendingEditorSelection: { tabId: string; line: number; column?: number } | null;
   projectName: string | null;
   projectFiles: string[];
   taskCheckpointById: Record<string, string>;
@@ -515,12 +516,13 @@ interface AppState {
   }) => void;
   resolveDiff: (args: { taskId: string; messageId: string; accepted: boolean; partIndex?: number }) => void;
   openDiffInEditor: (args: { editorTabId: string; filePath: string; oldContent: string; newContent: string }) => void;
-  openFileFromTree: (args: { filePath: string }) => Promise<void>;
+  openFileFromTree: (args: { filePath: string; line?: number; column?: number; fallbackContent?: string }) => Promise<void>;
   setActiveEditorTab: (args: { tabId: string }) => void;
   reorderEditorTabs: (args: { fromTabId: string; toTabId: string }) => void;
   closeEditorTab: (args: { tabId: string }) => void;
   requestCloseActiveEditorTab: () => void;
   clearPendingCloseEditorTab: () => void;
+  clearPendingEditorSelection: () => void;
   updateEditorContent: (args: { tabId: string; content: string }) => void;
   saveActiveEditorTab: () => Promise<{ ok: boolean; conflict?: boolean }>;
   checkOpenTabConflicts: () => Promise<void>;
@@ -1359,6 +1361,7 @@ export const useAppStore = create<AppState>()(
       editorTabs: [],
       activeEditorTabId: null,
       pendingCloseEditorTabId: null,
+      pendingEditorSelection: null,
       projectName: null,
       projectFiles: workspaceFsAdapter.getKnownFiles(),
       taskCheckpointById: {},
@@ -4768,7 +4771,20 @@ export const useAppStore = create<AppState>()(
           };
         });
       },
-      openFileFromTree: async ({ filePath }) => {
+      openFileFromTree: async ({ filePath, line, column, fallbackContent }) => {
+        const normalizedLine = typeof line === "number" && Number.isFinite(line)
+          ? Math.max(1, Math.floor(line))
+          : undefined;
+        const normalizedColumn = typeof column === "number" && Number.isFinite(column)
+          ? Math.max(1, Math.floor(column))
+          : undefined;
+        const pendingSelection = normalizedLine
+          ? {
+              tabId: `file:${filePath}`,
+              line: normalizedLine,
+              ...(normalizedColumn ? { column: normalizedColumn } : {}),
+            }
+          : null;
         const isImageFile = isImageFilePath({ filePath });
         let fileData = isImageFile ? null : await workspaceFsAdapter.readFile({ filePath });
         let imageData = isImageFile ? await workspaceFsAdapter.readFileDataUrl({ filePath }) : null;
@@ -4792,13 +4808,16 @@ export const useAppStore = create<AppState>()(
             return {
               activeEditorTabId: existing.id,
               layout: { ...state.layout, editorVisible: true, editorDiffMode: false },
+              pendingEditorSelection: pendingSelection,
               workspaceSnapshotVersion: state.activeEditorTabId !== existing.id
                 ? incrementWorkspaceSnapshotVersion(state)
                 : state.workspaceSnapshotVersion,
             };
           }
 
-          const fileContent = isImageFile ? imageData?.dataUrl ?? "" : fileData?.content ?? "";
+          const fileContent = isImageFile
+            ? imageData?.dataUrl ?? ""
+            : fileData?.content ?? fallbackContent ?? "";
           const baseRevision = isImageFile ? imageData?.revision ?? null : fileData?.revision ?? null;
           const nextTab: EditorTab = {
             id: tabId,
@@ -4817,6 +4836,7 @@ export const useAppStore = create<AppState>()(
             editorTabs: [...state.editorTabs, nextTab],
             activeEditorTabId: nextTab.id,
             layout: { ...state.layout, editorVisible: true, editorDiffMode: false },
+            pendingEditorSelection: pendingSelection,
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
@@ -4865,11 +4885,15 @@ export const useAppStore = create<AppState>()(
           if (closingIndex < 0) {
             return {};
           }
+          const nextPendingEditorSelection = state.pendingEditorSelection?.tabId === tabId
+            ? null
+            : state.pendingEditorSelection;
           const nextTabs = state.editorTabs.filter((tab) => tab.id !== tabId);
           if (nextTabs.length === 0) {
             return {
               editorTabs: [],
               activeEditorTabId: null,
+              pendingEditorSelection: null,
               layout: {
                 ...state.layout,
                 editorVisible: false,
@@ -4882,6 +4906,7 @@ export const useAppStore = create<AppState>()(
           if (state.activeEditorTabId !== tabId) {
             return {
               editorTabs: nextTabs,
+              pendingEditorSelection: nextPendingEditorSelection,
               workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
             };
           }
@@ -4893,6 +4918,7 @@ export const useAppStore = create<AppState>()(
           return {
             editorTabs: nextTabs,
             activeEditorTabId: fallbackTab?.id ?? null,
+            pendingEditorSelection: nextPendingEditorSelection,
             layout: {
               ...state.layout,
               editorDiffMode: isDiffTab,
@@ -4909,6 +4935,8 @@ export const useAppStore = create<AppState>()(
         }),
       clearPendingCloseEditorTab: () =>
         set({ pendingCloseEditorTabId: null }),
+      clearPendingEditorSelection: () =>
+        set({ pendingEditorSelection: null }),
       updateEditorContent: ({ tabId, content }) => {
         set((state) => {
           let changed = false;

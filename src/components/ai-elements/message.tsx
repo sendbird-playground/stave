@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes, MouseEvent, ReactNode } from
 import { createContext, useContext, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Paperclip, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getKnownFilePathSet, resolveWorkspaceFileLink } from "@/lib/message-file-links";
+import { getKnownFilePathSet, resolveWorkspaceFileLink, type ResolvedWorkspaceFileLink } from "@/lib/message-file-links";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { useAppStore } from "@/store/app.store";
 import { useShallow } from "zustand/react/shallow";
@@ -13,7 +13,7 @@ import {
   CodeBlockHeader,
   CodeBlockTitle,
 } from "./code-block";
-import { MarkdownMessage } from "./message-markdown";
+import { MarkdownMessage, MessageFileLink } from "./message-markdown";
 import { MESSAGE_BODY_LINE_HEIGHT } from "./message-styles";
 
 interface MessageProps extends HTMLAttributes<HTMLDivElement> {
@@ -96,22 +96,37 @@ export function MessageResponse({ isStreaming, ...props }: MessageResponseProps)
   ] as const));
   const content = typeof props.children === "string" ? props.children : "";
 
-  function resolveFileLink(args: { href?: string }) {
+  function resolveFileLink(args: { href?: string; allowUnknownPath?: boolean }) {
     return resolveWorkspaceFileLink({
       href: args.href,
       workspaceCwd,
       knownFilePaths: messageFilePathCache.knownFilePaths,
+      allowUnknownPaths: args.allowUnknownPath,
     });
   }
 
-  async function handleFileLinkClick(args: { event: MouseEvent<HTMLAnchorElement>; href?: string }) {
-    const resolved = resolveFileLink({ href: args.href });
+  async function openResolvedFileLink(args: { resolved: ResolvedWorkspaceFileLink; fallbackContent?: string }) {
+    await openFileFromTree({
+      filePath: args.resolved.filePath,
+      ...(args.resolved.line ? { line: args.resolved.line } : {}),
+      ...(args.resolved.column ? { column: args.resolved.column } : {}),
+      ...(args.fallbackContent ? { fallbackContent: args.fallbackContent } : {}),
+    });
+    setLayout({ patch: { editorVisible: true } });
+  }
+
+  async function handleFileLinkClick(args: {
+    event: MouseEvent<HTMLAnchorElement>;
+    href?: string;
+    resolvedFileLink?: ResolvedWorkspaceFileLink | null;
+    code?: string;
+  }) {
+    const resolved = args.resolvedFileLink ?? resolveFileLink({ href: args.href });
     if (!resolved) {
       return;
     }
     args.event.preventDefault();
-    await openFileFromTree({ filePath: resolved.filePath });
-    setLayout({ patch: { editorVisible: true } });
+    await openResolvedFileLink({ resolved, fallbackContent: args.code });
   }
 
   return (
@@ -122,10 +137,29 @@ export function MessageResponse({ isStreaming, ...props }: MessageResponseProps)
       messageCodeFontSize={messageCodeFontSize}
       resolveFileLink={resolveFileLink}
       onFileLinkClick={handleFileLinkClick}
-      renderBlockCode={({ code, language }) => (
+      renderBlockCode={({ code, language, fileHref, resolvedFileLink }) => (
         <CodeBlock code={code} language={language}>
           <CodeBlockHeader>
-            <CodeBlockTitle>{language ?? "code"}</CodeBlockTitle>
+            <CodeBlockTitle className="min-w-0 gap-2">
+              {resolvedFileLink ? (
+                <MessageFileLink
+                  href={fileHref ?? resolvedFileLink.filePath}
+                  filePath={resolvedFileLink.filePath}
+                  fileName={resolvedFileLink.fileName}
+                  line={resolvedFileLink.line}
+                  column={resolvedFileLink.column}
+                  onClick={(event) => void handleFileLinkClick({
+                    event,
+                    href: fileHref ?? resolvedFileLink.filePath,
+                    resolvedFileLink,
+                    code,
+                  })}
+                />
+              ) : null}
+              <span className="shrink-0">
+                {language ?? "code"}
+              </span>
+            </CodeBlockTitle>
             <CodeBlockActions>
               <CodeBlockCopyButton />
             </CodeBlockActions>
