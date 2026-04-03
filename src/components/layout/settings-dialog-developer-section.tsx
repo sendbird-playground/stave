@@ -356,20 +356,6 @@ export function DeveloperSection() {
           ) : null}
         </SettingsCard>
 
-        <SettingsCard
-          title="Session Replay UI"
-          description="Shows the Session Replay entry point for the active chat session."
-        >
-          <ChoiceButtons
-            value={settings.turnDiagnosticsVisible ? "on" : "off"}
-            onChange={(value) => updateSettings({ patch: { turnDiagnosticsVisible: value === "on" } })}
-            options={[
-              { value: "on", label: "On" },
-              { value: "off", label: "Off" },
-            ]}
-          />
-        </SettingsCard>
-
         <RepoMapCacheCard />
       </SectionStack>
     </>
@@ -1078,7 +1064,7 @@ function LocalMcpRequestLogCard() {
   return (
     <SettingsCard
       title="Local MCP Request Log"
-      description="Separate from Session Replay. Captures recent inbound requests to the embedded local MCP server."
+      description="Captures recent inbound requests to the embedded local MCP server."
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <span className="max-w-3xl text-sm text-muted-foreground">{state.detail}</span>

@@ -8,7 +8,7 @@ This document defines the renderer contract for assistant messages in Stave.
 - Keep AI Elements semantics recognizable in code and UI.
 - Show pre-answer execution flow as Chain of Thought.
 - Show the final assistant response below that Chain of Thought.
-- Avoid depending on Session Replay for normal message rendering.
+- Avoid depending on persisted turn inspection data for normal message rendering.
 
 ## Core Model
 
@@ -137,7 +137,7 @@ cross-session readability.
 
 ## Non-Goals
 
-- Session Replay is not a source of truth for normal chat rendering.
+- Persisted turn inspection data is not a source of truth for normal chat rendering.
 - Message rendering should not require replay lookups or diagnostics views.
 
 ## Performance Rules

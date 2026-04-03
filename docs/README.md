@@ -28,7 +28,6 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Shared skill management plan (2026-03-13)](future/shared-skill-management-plan-2026-03-13.md)
 - [Workspace PR Status](features/workspace-pr-status.md)
 - [Notifications](features/notifications.md)
-- [Session Replay](features/session-replay.md)
 - [Skill selector](features/skill-selector.md)
 - [Attachments](features/attachments.md)
 - [Language intelligence](features/language-intelligence.md)

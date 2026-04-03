@@ -21,7 +21,7 @@ When adding or renaming a normalized provider event:
 - update the matching Zod schema in `src/lib/providers/schemas.ts`
 - update emitters under `electron/providers/`
 - update replay handlers in `src/lib/session/provider-event-replay.ts`
-- verify diagnostics and replay utilities still render the event
+- verify downstream event consumers and tests still handle the event
 
 ## Window API Contract
 

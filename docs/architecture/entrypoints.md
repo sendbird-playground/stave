@@ -44,14 +44,14 @@ Read in this order:
 4. `electron/main/ipc/schemas.ts`
 5. matching producer and consumer call sites
 
-### Conversation replay and diagnostics
+### Conversation turn persistence
 
 Read in this order:
 
 1. `docs/architecture/conversation-flow.md`
 2. `src/lib/session/provider-event-replay.ts`
-3. `src/components/session/TurnDiagnosticsPanel.tsx`
-4. `docs/features/session-replay.md`
+3. `src/lib/db/turns.db.ts`
+4. `tests/turns-db.test.ts`
 
 ## Task Patterns
 
