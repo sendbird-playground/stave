@@ -127,17 +127,21 @@ function ThinkingPhraseLabelComponent({
   });
 
   return (
-    <Shimmer
+    <span
       key={`${animationStyle}:${phrase}`}
-      as="span"
       className={cn(
-        "leading-none [--shimmer-base-color:var(--color-muted-foreground)]",
+        "inline-flex",
         getAnimationClassName({ animationStyle, prefersReducedMotion }),
         className,
       )}
     >
-      {displayPhrase}
-    </Shimmer>
+      <Shimmer
+        as="span"
+        className="leading-none [--shimmer-base-color:var(--color-muted-foreground)]"
+      >
+        {displayPhrase}
+      </Shimmer>
+    </span>
   );
 }
 
