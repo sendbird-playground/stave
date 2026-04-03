@@ -7,12 +7,18 @@ export interface ResolvedWorkspaceFileLink {
 
 const knownFilePathSetCache = new WeakMap<readonly string[], Set<string>>();
 const FILE_PATH_SPECIAL_BASENAMES = new Set([
+  "brewfile",
+  "contributing",
   "dockerfile",
+  "gemfile",
+  "gitignore",
   "makefile",
   "readme",
   "license",
-  "gitignore",
   "gitattributes",
+  "jenkinsfile",
+  "justfile",
+  "procfile",
   "env",
 ]);
 
@@ -26,8 +32,24 @@ function trimTrailingPunctuation(value: string) {
   return value.replace(/[),.;:!?]+$/g, "");
 }
 
-function isLikelyWorkspaceFilePath(filePath: string) {
-  const normalized = filePath.trim();
+function hasFileLikeBaseName(filePath: string) {
+  const baseName = toBaseName(filePath);
+  if (!baseName || baseName === "." || baseName === "..") {
+    return false;
+  }
+
+  const hasExtension = /\.[a-z0-9_-]{1,16}$/i.test(baseName);
+  const isDotFile = /^\.[a-z0-9._-]+$/i.test(baseName);
+  const isSpecialBaseName = FILE_PATH_SPECIAL_BASENAMES.has(baseName.toLowerCase());
+
+  return hasExtension || isDotFile || isSpecialBaseName;
+}
+
+export function isLikelyWorkspaceFilePath(filePath: string) {
+  const normalized = trimTrailingPunctuation(stripLineSuffix(filePath.trim()))
+    .replaceAll("\\", "/")
+    .replace(/^\.\/+/, "")
+    .replace(/\/+$/, "");
   if (!normalized) {
     return false;
   }
@@ -40,18 +62,7 @@ function isLikelyWorkspaceFilePath(filePath: string) {
   if (normalized.startsWith("-")) {
     return false;
   }
-
-  const baseName = toBaseName(normalized);
-  if (!baseName || baseName === "." || baseName === "..") {
-    return false;
-  }
-
-  const hasFolderSegments = normalized.includes("/");
-  const hasExtension = /\.[a-z0-9_-]{1,16}$/i.test(baseName);
-  const isDotFile = /^\.[a-z0-9._-]+$/i.test(baseName);
-  const isSpecialBaseName = FILE_PATH_SPECIAL_BASENAMES.has(baseName.toLowerCase());
-
-  return hasFolderSegments || hasExtension || isDotFile || isSpecialBaseName;
+  return hasFileLikeBaseName(normalized);
 }
 
 function parseFileLinkLocation(href: string) {

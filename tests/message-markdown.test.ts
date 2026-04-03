@@ -80,6 +80,25 @@ describe("MarkdownMessage", () => {
     expect(html).toContain("NewPanel.tsx");
   });
 
+  test("keeps slash-delimited non-file inline code as code", () => {
+    const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "Track `owner/repo` separately.",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+      resolveFileLink: ({ href, allowUnknownPath }) => resolveWorkspaceFileLink({
+        href,
+        workspaceCwd: "/tmp/stave",
+        knownFilePaths,
+        allowUnknownPaths: allowUnknownPath,
+      }),
+    }));
+
+    expect(html).not.toContain('data-message-file-link="true"');
+    expect(html).toContain("<code");
+    expect(html).toContain("owner/repo");
+  });
+
   test("passes code-fence file metadata to the block renderer", () => {
     const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
     let captured: {
@@ -123,6 +142,48 @@ describe("MarkdownMessage", () => {
     });
   });
 
+  test("ignores non-file code-fence title metadata", () => {
+    const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
+    let captured: {
+      code: string;
+      language?: string;
+      fileHref?: string;
+      resolvedFilePath?: string;
+    } | null = null;
+
+    renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: [
+        "```txt title=owner/repo",
+        "hello",
+        "```",
+      ].join("\n"),
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+      resolveFileLink: ({ href, allowUnknownPath }) => resolveWorkspaceFileLink({
+        href,
+        workspaceCwd: "/tmp/stave",
+        knownFilePaths,
+        allowUnknownPaths: allowUnknownPath,
+      }),
+      renderBlockCode: ({ code, language, fileHref, resolvedFileLink }) => {
+        captured = {
+          code,
+          language,
+          fileHref,
+          resolvedFilePath: resolvedFileLink?.filePath,
+        };
+        return createElement("pre", null, code);
+      },
+    }));
+
+    expect(captured).toEqual({
+      code: "hello",
+      language: "txt",
+      fileHref: undefined,
+      resolvedFilePath: undefined,
+    });
+  });
+
   test("keeps repeated file references distinguishable with line labels", () => {
     const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
     const html = renderToStaticMarkup(createElement(MarkdownMessage, {
@@ -151,6 +212,25 @@ describe("MarkdownMessage", () => {
     }));
 
     expect(html).toContain('href="https://openai.com/"');
+    expect(html).toContain('target="_blank"');
+    expect(html).not.toContain('data-message-file-link="true"');
+  });
+
+  test("keeps slash-delimited non-file markdown links as anchors", () => {
+    const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "Track [repo](owner/repo) separately.",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+      resolveFileLink: ({ href, allowUnknownPath }) => resolveWorkspaceFileLink({
+        href,
+        workspaceCwd: "/tmp/stave",
+        knownFilePaths,
+        allowUnknownPaths: allowUnknownPath,
+      }),
+    }));
+
+    expect(html).toContain('href="owner/repo"');
     expect(html).toContain('target="_blank"');
     expect(html).not.toContain('data-message-file-link="true"');
   });
@@ -224,6 +304,17 @@ describe("resolveWorkspaceFileLink", () => {
       filePath: "src/new-file.tsx",
       fileName: "new-file.tsx",
     });
+  });
+
+  test("rejects slash-delimited unknown paths without a file-like basename", () => {
+    const resolved = resolveWorkspaceFileLink({
+      href: "owner/repo",
+      workspaceCwd: "/tmp/stave",
+      knownFilePaths: new Set(["src/App.tsx"]),
+      allowUnknownPaths: true,
+    });
+
+    expect(resolved).toBeNull();
   });
 
   test("keeps unknown-path mode strict for non-path strings", () => {
