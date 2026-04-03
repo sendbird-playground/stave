@@ -36,11 +36,14 @@ function createTextPart(args: { text: string; segmentId?: string }): TextPart {
 }
 
 function createThinkingPart(args: { text: string; isStreaming: boolean }): ThinkingPart {
+  const timestamp = buildRecentTimestamp();
   return sanitizeMessagePartPayload({
     type: "thinking",
     text: args.text,
     isStreaming: args.isStreaming,
-    ...(args.isStreaming ? { startedAt: buildRecentTimestamp() } : {}),
+    ...(args.isStreaming
+      ? { startedAt: timestamp }
+      : { startedAt: timestamp, completedAt: timestamp }),
   });
 }
 

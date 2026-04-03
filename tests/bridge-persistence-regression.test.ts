@@ -470,6 +470,140 @@ describe("workspace persistence fallback", () => {
       "ws-b",
     ]);
   });
+
+  test("latest task message loads do not overwrite newer in-memory message versions", async () => {
+    const localStorage = createMemoryStorage();
+    let resolvePage: ((value: {
+      ok: boolean;
+      page: {
+        messages: Array<{
+          id: string;
+          role: "user" | "assistant";
+          model: string;
+          providerId: "user" | "codex";
+          content: string;
+          isStreaming: boolean;
+          parts: Array<{ type: "text"; text: string }>;
+        }>;
+        totalCount: number;
+        limit: number;
+        offset: number;
+        hasMoreOlder: boolean;
+      };
+    }) => void) | null = null;
+
+    setWindowContext({
+      localStorage,
+      api: {
+        persistence: {
+          loadTaskMessages: async () => new Promise((resolve) => {
+            resolvePage = resolve as typeof resolvePage;
+          }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-20T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-main",
+      tasks: [{
+        id: "task-main",
+        title: "Main Task",
+        provider: "codex",
+        updatedAt: "2026-03-20T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      messagesByTask: {
+        "task-main": [],
+      },
+      messageCountByTask: {
+        "task-main": 2,
+      },
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-main": "/tmp/stave-project",
+      },
+      workspaceBranchById: {
+        "ws-main": "main",
+      },
+      workspaceDefaultById: {
+        "ws-main": true,
+      },
+    });
+
+    const loadingPromise = useAppStore.getState().loadTaskMessages({
+      taskId: "task-main",
+      mode: "latest",
+    });
+    await Bun.sleep(0);
+
+    useAppStore.setState((state) => ({
+      messagesByTask: {
+        ...state.messagesByTask,
+        "task-main": [
+          {
+            id: "task-main-m-1",
+            role: "user",
+            model: "user",
+            providerId: "user",
+            content: "keep going",
+            isStreaming: false,
+            parts: [{ type: "text", text: "keep going" }],
+          },
+          {
+            id: "task-main-m-2",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "## 변경\n\n- final summary",
+            isStreaming: false,
+            parts: [{ type: "text", text: "## 변경\n\n- final summary" }],
+          },
+        ],
+      },
+    }));
+
+    resolvePage?.({
+      ok: true,
+      page: {
+        messages: [
+          {
+            id: "task-main-m-1",
+            role: "user",
+            model: "user",
+            providerId: "user",
+            content: "keep going",
+            isStreaming: false,
+            parts: [{ type: "text", text: "keep going" }],
+          },
+          {
+            id: "task-main-m-2",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "progress only",
+            isStreaming: false,
+            parts: [{ type: "text", text: "progress only" }],
+          },
+        ],
+        totalCount: 2,
+        limit: 120,
+        offset: 0,
+        hasMoreOlder: false,
+      },
+    });
+
+    await loadingPromise;
+
+    const nextState = useAppStore.getState();
+    expect(nextState.messagesByTask["task-main"]?.at(-1)?.content).toBe("## 변경\n\n- final summary");
+  });
 });
 
 describe("workspace snapshot schema compatibility", () => {

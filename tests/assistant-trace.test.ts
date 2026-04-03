@@ -67,6 +67,16 @@ describe("deriveTraceToolSummary", () => {
     });
   });
 
+  test("uses a longer preview limit for bash summary chips", () => {
+    expect(deriveTraceToolSummary({
+      toolName: "bash",
+      input: "x".repeat(240),
+    })).toEqual({
+      kind: "command",
+      text: "x".repeat(200),
+    });
+  });
+
   test("normalizes Codex web_search aliases", () => {
     expect(normalizeTraceToolName("web_search")).toBe("websearch");
     expect(deriveTraceToolSummary({
@@ -75,6 +85,16 @@ describe("deriveTraceToolSummary", () => {
     })).toEqual({
       kind: "web",
       text: "step summary chip codex",
+    });
+  });
+
+  test("uses a longer preview limit for search and web summary chips", () => {
+    expect(deriveTraceToolSummary({
+      toolName: "web_search",
+      input: "q".repeat(190),
+    })).toEqual({
+      kind: "web",
+      text: "q".repeat(160),
     });
   });
 

@@ -226,6 +226,24 @@ describe("appendProviderEventToAssistant", () => {
     expect(Date.parse(thinkingPart.completedAt ?? "")).toBeGreaterThanOrEqual(Date.parse(thinkingPart.startedAt ?? ""));
   });
 
+  test("timestamps standalone non-streaming reasoning parts so duration chips can render", () => {
+    const message = appendProviderEventToAssistant({
+      message: createMessage(),
+      event: { type: "thinking", text: "Final reasoning block", isStreaming: false },
+    });
+
+    const thinkingPart = message.parts.find((part) => part.type === "thinking");
+    expect(thinkingPart).toBeDefined();
+    if (!thinkingPart || thinkingPart.type !== "thinking") {
+      throw new Error("expected thinking part");
+    }
+
+    expect(thinkingPart.isStreaming).toBe(false);
+    expect(typeof thinkingPart.startedAt).toBe("string");
+    expect(typeof thinkingPart.completedAt).toBe("string");
+    expect(Date.parse(thinkingPart.completedAt ?? "")).toBeGreaterThanOrEqual(Date.parse(thinkingPart.startedAt ?? ""));
+  });
+
   test("keeps separate text parts when provider text segment ids change", () => {
     let message = createMessage({
       parts: [

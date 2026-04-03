@@ -201,6 +201,8 @@ Codex-specific runtime controls come from the UI and runtime options:
 - provider timeout
 - debug stream logging
 
+New Codex defaults enable raw agent reasoning, request `detailed` reasoning summaries, and force reasoning-summary capability support to `enabled` unless the user changes those toggles.
+
 Stave now forwards an explicit `show_raw_agent_reasoning: false` override when the Codex UI toggle is off, so local CLI defaults or config files do not leave raw reasoning enabled unexpectedly.
 
 Codex threads are keyed by task/cwd plus the active sandbox, network, approval, model, reasoning, and web-search settings so Stave can preserve thread context without mixing incompatible runtime modes.
