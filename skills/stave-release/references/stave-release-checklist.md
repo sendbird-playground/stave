@@ -58,6 +58,8 @@ bunx --bun conventional-changelog-cli -p conventionalcommits -i CHANGELOG.md -s
 13. If the generated section drops or weakens validated PR `Changes` bullets, restore or merge them back into the top section.
 14. If it is still missing meaningful bullets, append a concise 3–7 bullet summary derived from the reviewed PR changes and actual diff.
    - Summarize user-visible or architecture-significant outcomes, not file lists.
+   - Keep the summary as flat outcome-focused bullets; do not use per-PR heading blocks such as `PR #123 — ...`.
+   - If needed, add PR links in a separate `References` section instead.
 15. Update `README.md` and other release-facing docs if the shipped behavior changed.
 16. Run verification:
     - minimum: `bun run typecheck`
@@ -97,6 +99,7 @@ If the original checkout was switched for any reason, check it back out before s
 - If the repo has no prior semver tags, stop and ask the user to create a baseline tag before proceeding.
 - If `package.json` already reflects the intended version, start from that state instead of bumping again.
 - If `conventional-changelog` output needs cleanup, make the smallest explicit post-generation fix.
+- Avoid release-note formatting that foregrounds per-PR headline blocks (`PR #... — ...`) unless the user explicitly requests that style.
 - If PR numbers are not discoverable from commit history, fall back to the underlying git diff and continue the release review from there.
 - If a PR has a usable `Changes` section but `conventional-changelog` does not reflect it, merge those bullets back into the generated top section before finishing.
 - If the PR already exists and missed files, push an additional commit to the same branch (do not force-push unless the user explicitly requests it).

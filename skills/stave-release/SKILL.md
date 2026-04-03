@@ -48,6 +48,8 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
    - Reconcile the top section with validated PR `Changes` bullets after generation. Do not let `conventional-changelog` overwrite useful `Changes` content that better describes the shipped work.
    - If it is empty, heading-only, or missing meaningful bullets, automatically append or restore a concise 3–7 bullet summary derived from the reviewed PR changes and actual diff since the previous tag:
      - Summarize user-visible or architecture-significant outcomes — not file lists.
+     - Use a flat outcome-first bullet list. Do not format this section as per-PR headings like `PR #123 — ...`.
+     - If PR traceability is needed, add a separate `References` list of PR links at the end instead of headline-style PR blocks.
    - Update `README.md` and any other release-facing docs that changed as part of the shipped behavior so docs and changelog stay aligned.
    - Review the generated notes before committing.
 
@@ -105,6 +107,7 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
 - Do not rely on commit titles alone when drafting release notes or the release PR summary; review the actual PR changes or underlying git diff.
 - Do not ignore a PR description `Changes` section when it exists and is consistent with the diff; treat it as a preferred summary source.
 - Do not let `conventional-changelog` overwrite validated `Changes` bullets from PR descriptions without reconciling them back into the final top section.
+- Do not default to release-note headings in the form `PR #... — ...`; prefer outcome-focused bullets and optional reference links.
 - Do not silently skip changelog review or release-facing doc updates when shipped behavior changed.
 - Do not skip reviewing the release PR diff after opening it.
 - Do not create a local semver tag before the PR is merged. Tag the merged `main` commit after merge.
