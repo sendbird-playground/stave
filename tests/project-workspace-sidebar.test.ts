@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { buildCollapsedWorkspaceEntries } from "../src/components/layout/ProjectWorkspaceSidebar.utils";
+import {
+  buildCollapsedWorkspaceEntries,
+  getWorkspaceArchiveButtonVisibilityClasses,
+  getWorkspaceRespondingCountVisibilityClasses,
+} from "../src/components/layout/ProjectWorkspaceSidebar.utils";
 
 describe("buildCollapsedWorkspaceEntries", () => {
   test("marks the first workspace of each later project for collapsed separators", () => {
@@ -80,5 +84,46 @@ describe("buildCollapsedWorkspaceEntries", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0]?.startsProjectGroup).toBeFalse();
+  });
+});
+
+describe("workspace archive action visibility", () => {
+  test("reveals the archive button on hover and keyboard focus-visible, not generic focus-within", () => {
+    const className = getWorkspaceArchiveButtonVisibilityClasses({
+      isClosing: false,
+    });
+
+    expect(className).toContain("group-hover/workspace-row:opacity-100");
+    expect(className).toContain(
+      "group-has-[:focus-visible]/workspace-row:opacity-100",
+    );
+    expect(className).not.toContain("group-focus-within");
+  });
+
+  test("hides the responding count with the same reveal rules", () => {
+    const className = getWorkspaceRespondingCountVisibilityClasses({
+      canArchiveWorkspace: true,
+      isClosing: false,
+    });
+
+    expect(className).toContain("group-hover/workspace-row:opacity-0");
+    expect(className).toContain(
+      "group-has-[:focus-visible]/workspace-row:opacity-0",
+    );
+  });
+
+  test("keeps the archive button visible and count hidden while closing", () => {
+    expect(
+      getWorkspaceArchiveButtonVisibilityClasses({
+        isClosing: true,
+      }),
+    ).toBe("pointer-events-auto opacity-100");
+
+    expect(
+      getWorkspaceRespondingCountVisibilityClasses({
+        canArchiveWorkspace: true,
+        isClosing: true,
+      }),
+    ).toBe("opacity-0");
   });
 });

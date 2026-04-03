@@ -42,6 +42,8 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import {
   buildCollapsedWorkspaceEntries,
+  getWorkspaceArchiveButtonVisibilityClasses,
+  getWorkspaceRespondingCountVisibilityClasses,
   type ProjectSidebarCollapsedProjectView,
 } from "@/components/layout/ProjectWorkspaceSidebar.utils";
 import { CreateWorkspaceDialog } from "@/components/layout/CreateWorkspaceDialog";
@@ -1083,7 +1085,7 @@ export function ProjectWorkspaceSidebar(args: {
                                                     }) => (
                                                       <div
                                                         className={cn(
-                                                          "group flex items-center gap-1 rounded-md transition-colors hover:bg-secondary/70",
+                                                          "group/workspace-row flex items-center gap-1 rounded-md transition-colors hover:bg-secondary/70",
                                                           isActive &&
                                                             "bg-primary/10 text-foreground ring-1 ring-primary/30 shadow-sm",
                                                           isDragging &&
@@ -1147,12 +1149,14 @@ export function ProjectWorkspaceSidebar(args: {
                                                               <span
                                                                 className={cn(
                                                                   "inline-flex min-w-7 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary transition-opacity",
-                                                                  canArchiveWorkspace
-                                                                    ? closingWorkspaceId ===
-                                                                        workspace.id
-                                                                      ? "opacity-0"
-                                                                      : "group-hover:opacity-0"
-                                                                    : "",
+                                                                  getWorkspaceRespondingCountVisibilityClasses(
+                                                                    {
+                                                                      canArchiveWorkspace,
+                                                                      isClosing:
+                                                                        closingWorkspaceId ===
+                                                                        workspace.id,
+                                                                    },
+                                                                  ),
                                                                 )}
                                                               >
                                                                 {
@@ -1174,10 +1178,13 @@ export function ProjectWorkspaceSidebar(args: {
                                                                       isResponding
                                                                         ? "absolute inset-0 m-auto"
                                                                         : "",
-                                                                      closingWorkspaceId ===
-                                                                        workspace.id
-                                                                        ? "opacity-100"
-                                                                        : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100",
+                                                                      getWorkspaceArchiveButtonVisibilityClasses(
+                                                                        {
+                                                                          isClosing:
+                                                                            closingWorkspaceId ===
+                                                                            workspace.id,
+                                                                        },
+                                                                      ),
                                                                     )}
                                                                     disabled={
                                                                       closingWorkspaceId ===
