@@ -337,8 +337,14 @@ export const playNotificationSound = createNotificationSoundPlayer();
 // Custom audio file playback
 // ---------------------------------------------------------------------------
 
-/** Short fade-in to eliminate click/pop artifacts at the start of playback. */
-const CUSTOM_AUDIO_FADE_IN_MS = 10;
+/**
+ * How far ahead (in seconds) to schedule the BufferSource start.
+ * The gain ramps from near-zero to full volume *within* this gap so that
+ * the audio buffer plays at full volume from its very first sample —
+ * eliminating both click/pop artifacts and the "clipped intro" problem
+ * caused by fading in during actual playback.
+ */
+const CUSTOM_AUDIO_SCHEDULE_AHEAD_SEC = 0.02;
 
 let cachedCustomBuffer: { dataUrl: string; buffer: AudioBuffer } | null = null;
 
@@ -392,16 +398,19 @@ export function createCustomNotificationSoundPlayer(args?: {
       source.buffer = buffer;
 
       const gainNode = audioContext.createGain();
-      // Zero the gain *immediately* so the default value (1.0) never leaks
-      // through if the source start and the automation land in the same
-      // render quantum (~128 samples).
+      // Zero the gain immediately so the default value (1.0) never leaks
+      // through before the automation takes effect.
       gainNode.gain.value = 0;
 
-      const startTime = audioContext.currentTime + 0.02;
-      const fadeInEnd = startTime + CUSTOM_AUDIO_FADE_IN_MS / 1000;
+      const scheduleTime = audioContext.currentTime;
+      const startTime = scheduleTime + CUSTOM_AUDIO_SCHEDULE_AHEAD_SEC;
 
-      gainNode.gain.setValueAtTime(0.0001, startTime);
-      gainNode.gain.linearRampToValueAtTime(volume, fadeInEnd);
+      // Ramp up to full volume *before* the buffer starts playing so the
+      // audio file is heard at full volume from its very first sample.
+      // Previously the ramp happened after source.start(), which silenced
+      // the beginning of the file.
+      gainNode.gain.setValueAtTime(0.0001, scheduleTime);
+      gainNode.gain.linearRampToValueAtTime(volume, startTime);
 
       source.connect(gainNode);
       gainNode.connect(audioContext.destination);

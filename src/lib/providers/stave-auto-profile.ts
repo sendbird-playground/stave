@@ -32,6 +32,9 @@ type StaveAutoSettingsLike = StaveAutoModelSettingsPatch & {
   staveAutoFastMode: boolean;
   claudeFastModeVisible: boolean;
   codexFastModeVisible: boolean;
+  promptSupervisorBreakdown?: string;
+  promptSupervisorSynthesis?: string;
+  promptPreprocessorClassifier?: string;
 };
 
 export const DEFAULT_STAVE_AUTO_MODEL_PRESET_ID: StaveAutoModelPresetId = "recommended";
@@ -180,6 +183,9 @@ export function buildStaveAutoProfileFromSettings(args: {
     claudeFastModeSupported: settings.claudeFastModeVisible,
     codexFastModeSupported: settings.codexFastModeVisible,
     fastMode: settings.staveAutoFastMode,
+    promptSupervisorBreakdown: settings.promptSupervisorBreakdown || undefined,
+    promptSupervisorSynthesis: settings.promptSupervisorSynthesis || undefined,
+    promptPreprocessorClassifier: settings.promptPreprocessorClassifier || undefined,
   };
 }
 

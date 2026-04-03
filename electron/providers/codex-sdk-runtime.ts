@@ -28,8 +28,8 @@ import {
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
 
-const SUPPORTED_CODEX_SDK_VERSION = "0.118.0-alpha.3";
-const SUPPORTED_CODEX_CLI_VERSION = "0.118.0-alpha.3";
+const SUPPORTED_CODEX_SDK_VERSION = "0.118.0";
+const SUPPORTED_CODEX_CLI_VERSION = "0.118.0";
 const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
@@ -331,7 +331,6 @@ export function resolveCodexExecutablePath(args: { explicitPath?: string } = {})
     `${homedir()}/.bun/bin/codex`,
     `${homedir()}/.local/bin/codex`,
     baseResolved,
-    resolveBundledCodexExecutablePath(),
   ].filter((value, index, arr) => value.length > 0 && arr.indexOf(value) === index);
 
   let selectedPath = baseResolved;
@@ -781,11 +780,20 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     const abortController = new AbortController();
     args.registerAbort?.(() => abortController.abort());
     const turnOptions: TurnOptions = { signal: abortController.signal };
-    const providerPrompt = buildProviderTurnPrompt({
+    let providerPrompt = buildProviderTurnPrompt({
       providerId: args.providerId,
       prompt: args.prompt,
       conversation: args.conversation,
     });
+
+    // Inject response-style guidance into the prompt for Codex (which has no
+    // separate system-prompt channel). Prepended so the model sees style rules
+    // before the actual user request.
+    const responseStyle = args.runtimeOptions?.responseStylePrompt?.trim();
+    if (responseStyle) {
+      providerPrompt = `<system>\n${responseStyle}\n</system>\n\n${providerPrompt}`;
+    }
+
     const streamed = await thread.runStreamed(providerPrompt, turnOptions);
 
     const codexDebug = args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";

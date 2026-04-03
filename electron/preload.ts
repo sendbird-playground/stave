@@ -219,7 +219,7 @@ contextBridge.exposeInMainWorld("api", {
         ok: boolean;
         message?: string;
       }>,
-    suggestPRDescription: (args: { cwd?: string; baseBranch?: string }) =>
+    suggestPRDescription: (args: { cwd?: string; baseBranch?: string; promptTemplate?: string }) =>
       ipcRenderer.invoke("provider:suggest-pr-description", args) as Promise<{
         ok: boolean;
         title?: string;
@@ -312,6 +312,10 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("fs:create-file", args),
     createDirectory: (args: { rootPath: string; directoryPath: string }) =>
       ipcRenderer.invoke("fs:create-directory", args),
+    deleteFile: (args: { rootPath: string; filePath: string }) =>
+      ipcRenderer.invoke("fs:delete-file", args),
+    deleteDirectory: (args: { rootPath: string; directoryPath: string }) =>
+      ipcRenderer.invoke("fs:delete-directory", args),
     readTypeDefs: (args: { rootPath: string; entryFilePath?: string }) =>
       ipcRenderer.invoke("fs:read-type-defs", args),
     readSourceFiles: (args: { rootPath: string; entryFilePath?: string }) =>
@@ -678,6 +682,7 @@ contextBridge.exposeInMainWorld("api", {
       filePath: string;
       language: string;
       maxTokens?: number;
+      systemPromptOverride?: string;
     }) =>
       ipcRenderer.invoke("inline-completion:request", args) as Promise<{
         ok: boolean;

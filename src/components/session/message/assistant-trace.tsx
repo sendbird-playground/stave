@@ -46,7 +46,13 @@ import { MessagePartRenderer, toToolDisplayName } from "@/components/session/cha
 import { parseFileChangeToolInput } from "@/components/session/chat-panel.utils";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, CodeDiffPart, ThinkingPart } from "@/types/chat";
-import { deriveTodoTraceItems, deriveTodoTraceStatus } from "./assistant-trace.utils";
+import {
+  deriveTodoTraceItems,
+  deriveTodoTraceStatus,
+  deriveTraceToolSummary,
+  normalizeTraceToolName,
+  type TraceToolSummary,
+} from "./assistant-trace.utils";
 import { buildAssistantTrace, joinReasoningText, type AssistantTraceEntry } from "./assistant-trace-builder";
 
 /* ─── Step status ────────────────────────────────────────────────── */
@@ -86,7 +92,7 @@ function toStepStatus(args: { entry: AssistantTraceEntry; isStreaming: boolean }
 /* ─── Step icon mapping ──────────────────────────────────────────── */
 
 function getToolIcon(toolName: string): ReactNode {
-  switch (toolName.trim().toLowerCase()) {
+  switch (normalizeTraceToolName(toolName)) {
     case "bash": return <Terminal />;
     case "read": return <FileText />;
     case "write": return <FileText />;
@@ -117,90 +123,57 @@ function getEntryIcon(entry: AssistantTraceEntry): ReactNode | undefined {
 
 /* ─── Step summary chips ─────────────────────────────────────────── */
 
-function extractFileName(path: string): string {
-  const segments = path.split("/");
-  return segments[segments.length - 1] || path;
+function renderTraceToolSummaryChip(summary: TraceToolSummary): ReactNode {
+  switch (summary.kind) {
+    case "command":
+      return (
+        <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
+          {summary.text}
+        </span>
+      );
+    case "file":
+      return (
+        <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+          <FileText className="size-[0.85em] shrink-0" />
+          {summary.text}
+        </span>
+      );
+    case "search":
+      return (
+        <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
+          <Search className="size-[0.85em] shrink-0" />
+          {summary.text}
+        </span>
+      );
+    case "web":
+      return (
+        <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+          <Globe className="size-[0.85em] shrink-0" />
+          {summary.text}
+        </span>
+      );
+    case "text":
+      return (
+        <span className="ml-1 max-w-xs truncate text-[0.75em] text-muted-foreground/70">
+          {summary.text}
+        </span>
+      );
+  }
 }
 
 function getToolSummary(toolName: string, input: string): ReactNode {
-  try {
-    const parsed = JSON.parse(input) as Record<string, unknown>;
-    switch (toolName.trim().toLowerCase()) {
-      case "bash": {
-        const cmd = typeof parsed.command === "string"
-          ? (parsed.command.split("\n")[0] ?? "").trim().slice(0, 100) || null
-          : null;
-        return cmd ? (
-          <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
-            {cmd}
-          </span>
-        ) : null;
-      }
-      case "read":
-      case "write":
-      case "edit": {
-        const filePath = typeof parsed.file_path === "string" ? parsed.file_path : null;
-        return filePath ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
-            <FileText className="size-[0.85em] shrink-0" />
-            {extractFileName(filePath)}
-          </span>
-        ) : null;
-      }
-      case "glob": {
-        const pattern = typeof parsed.pattern === "string" ? parsed.pattern : null;
-        return pattern ? (
-          <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
-            {pattern}
-          </span>
-        ) : null;
-      }
-      case "grep": {
-        const pattern = typeof parsed.pattern === "string" ? parsed.pattern.slice(0, 80) : null;
-        return pattern ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
-            <Search className="size-[0.85em] shrink-0" />
-            {pattern}
-          </span>
-        ) : null;
-      }
-      case "websearch": {
-        const query = typeof parsed.query === "string" ? parsed.query.slice(0, 80) : null;
-        return query ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
-            <Globe className="size-[0.85em] shrink-0" />
-            {query}
-          </span>
-        ) : null;
-      }
-      case "webfetch": {
-        const url = typeof parsed.url === "string" ? parsed.url.slice(0, 80) : null;
-        return url ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
-            <Globe className="size-[0.85em] shrink-0" />
-            {url}
-          </span>
-        ) : null;
-      }
-      case "file_change": {
-        const rows = parseFileChangeToolInput(input);
-        return rows.length > 0 ? (
-          <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
-            <FileCode2 className="size-[0.85em] shrink-0" />
-            {rows.length} {rows.length === 1 ? "file" : "files"}
-          </span>
-        ) : null;
-      }
-      default: {
-        const desc = typeof parsed.description === "string" ? parsed.description.slice(0, 80) : null;
-        return desc ? (
-          <span className="ml-1 max-w-xs truncate text-[0.75em] text-muted-foreground/70">{desc}</span>
-        ) : null;
-      }
-    }
-  } catch {
-    return null;
+  if (normalizeTraceToolName(toolName) === "file_change") {
+    const rows = parseFileChangeToolInput(input);
+    return rows.length > 0 ? (
+      <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+        <FileCode2 className="size-[0.85em] shrink-0" />
+        {rows.length} {rows.length === 1 ? "file" : "files"}
+      </span>
+    ) : null;
   }
+
+  const summary = deriveTraceToolSummary({ toolName, input });
+  return summary ? renderTraceToolSummaryChip(summary) : null;
 }
 
 function getEntrySummary(entry: AssistantTraceEntry): ReactNode {
@@ -260,7 +233,7 @@ function buildTraceSummary(entries: AssistantTraceEntry[]): TraceSummaryItem[] {
   for (const entry of entries) {
     switch (entry.kind) {
       case "tool": {
-        const normalized = entry.part.toolName.trim().toLowerCase();
+        const normalized = normalizeTraceToolName(entry.part.toolName);
         const cat = TOOL_CATEGORIES[normalized] ?? { label: "tools", iconKey: "wrench" };
         const existing = buckets.get(cat.label);
         if (existing) {
@@ -478,14 +451,14 @@ function AssistantTraceEntryView(args: {
     /* Assistant text — bullet point, content always visible (no accordion). */
     case "assistant_text":
       return (
-        <div className="flex gap-3 text-[0.875em] text-muted-foreground motion-safe:animate-cot-step-in">
-          <div className="relative mt-0.5 flex flex-col items-center">
-            <span className="flex size-4 items-center justify-center" aria-hidden="true">
-              <span className="size-1.5 rounded-full bg-muted-foreground/50" />
+        <div className="flex gap-[0.7em] text-[0.875em] text-muted-foreground motion-safe:animate-cot-step-in">
+          <div className="relative mt-[0.265em] flex flex-col items-center">
+            <span className="flex size-[1.15em] items-center justify-center" aria-hidden="true">
+              <span className="size-[0.35em] rounded-full bg-muted-foreground/50" />
             </span>
-            <div className="cot-connector mt-1.5 w-px flex-1 bg-border" />
+            <div className="cot-connector mt-[0.35em] w-px flex-1 bg-border" />
           </div>
-          <div className="min-w-0 flex-1 pb-4">
+          <div className="min-w-0 flex-1 pb-[1em]">
             {entry.parts.map((part, index) => (
               <MessageResponse key={`${entry.id}-${index}`}>{part.text}</MessageResponse>
             ))}

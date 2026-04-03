@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { getTodoProgress } from "@/components/ai-elements/todo";
-import { deriveTodoTraceStatus } from "@/components/session/message/assistant-trace.utils";
+import {
+  deriveTodoTraceStatus,
+  deriveTraceToolSummary,
+  normalizeTraceToolName,
+} from "@/components/session/message/assistant-trace.utils";
 
 describe("getTodoProgress", () => {
   test("summarizes todo counts from tool input", () => {
@@ -49,5 +53,38 @@ describe("deriveTodoTraceStatus", () => {
         ],
       }),
     })).toBe("done");
+  });
+});
+
+describe("deriveTraceToolSummary", () => {
+  test("supports raw Codex bash command strings", () => {
+    expect(deriveTraceToolSummary({
+      toolName: "bash",
+      input: "rg -n \"summary chip\" src/components/session/message/assistant-trace.tsx",
+    })).toEqual({
+      kind: "command",
+      text: "rg -n \"summary chip\" src/components/session/message/assistant-trace.tsx",
+    });
+  });
+
+  test("normalizes Codex web_search aliases", () => {
+    expect(normalizeTraceToolName("web_search")).toBe("websearch");
+    expect(deriveTraceToolSummary({
+      toolName: "web_search",
+      input: "step summary chip codex",
+    })).toEqual({
+      kind: "web",
+      text: "step summary chip codex",
+    });
+  });
+
+  test("extracts file names from generic MCP-style JSON payloads", () => {
+    expect(deriveTraceToolSummary({
+      toolName: "mcp:filesystem/read_text_file",
+      input: JSON.stringify({ path: "/tmp/project/src/App.tsx" }),
+    })).toEqual({
+      kind: "file",
+      text: "App.tsx",
+    });
   });
 });

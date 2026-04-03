@@ -24,6 +24,18 @@ interface SubtaskSpec {
 function buildSupervisorBreakdownPrompt(args: {
   profile: StaveAutoProfile;
 }) {
+  // Use custom prompt template if the user configured one.
+  const customPrompt = args.profile.promptSupervisorBreakdown?.trim();
+  if (customPrompt) {
+    const providerNote = args.profile.allowCrossProviderWorkers
+      ? "Cross-provider workers are allowed."
+      : "Avoid plans that require mixing providers; prefer fewer, broader subtasks.";
+    // Resolve dynamic placeholders inside the user-supplied template.
+    return customPrompt
+      .replace(/\{maxSubtasks\}/g, String(args.profile.maxSubtasks))
+      .replace(/\{providerNote\}/g, providerNote);
+  }
+
   const providerNote = args.profile.allowCrossProviderWorkers
     ? "Cross-provider workers are allowed."
     : "Avoid plans that require mixing providers; prefer fewer, broader subtasks.";
@@ -53,9 +65,13 @@ Rules:
 - Use "verify" only when an explicit validation/review step is helpful`;
 }
 
-const SUPERVISOR_SYNTHESIS_PROMPT = `You are the Stave Auto synthesis supervisor.
+const DEFAULT_SUPERVISOR_SYNTHESIS_PROMPT = `You are the Stave Auto synthesis supervisor.
 Multiple workers completed focused subtasks. Produce one coherent final response.
 Be concise and avoid repeating every intermediate detail verbatim.`;
+
+function resolveSynthesisPrompt(profile: StaveAutoProfile) {
+  return profile.promptSupervisorSynthesis?.trim() || DEFAULT_SUPERVISOR_SYNTHESIS_PROMPT;
+}
 
 const VALID_ROLES = new Set<StaveWorkerRole>(["plan", "analyze", "implement", "verify", "general"]);
 
@@ -472,7 +488,7 @@ export async function runOrchestrator(args: {
       providerId: supervisorProvider,
       prompt: buildSingleTurnPrompt({
         providerId: supervisorProvider,
-        systemPrompt: SUPERVISOR_SYNTHESIS_PROMPT,
+        systemPrompt: resolveSynthesisPrompt(args.profile),
         prompt: synthesisPrompt,
       }),
       cwd: args.baseArgs.cwd,
@@ -481,7 +497,7 @@ export async function runOrchestrator(args: {
       runtimeOptions: buildSingleTurnRuntimeOptions({
         providerId: supervisorProvider,
         model: supervisorModel,
-        systemPrompt: SUPERVISOR_SYNTHESIS_PROMPT,
+        systemPrompt: resolveSynthesisPrompt(args.profile),
         timeoutMs: 60_000,
       }),
     });

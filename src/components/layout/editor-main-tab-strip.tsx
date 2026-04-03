@@ -1,6 +1,6 @@
-import { AlertTriangle, FileCode2, X } from "lucide-react";
+import { FileCode2, X } from "lucide-react";
 import type { DragEvent } from "react";
-import { Badge, Button } from "@/components/ui";
+import { Button } from "@/components/ui";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -11,20 +11,8 @@ import {
 import { cn } from "@/lib/utils";
 import type { EditorTab } from "@/types/chat";
 
-function isChatDiffTab(tab: { id: string; kind?: "text" | "image"; originalContent?: string } | null) {
-  return Boolean(tab && tab.kind !== "image" && !tab.id.startsWith("file:") && tab.originalContent != null);
-}
-
 function formatTabLabel(filePath: string) {
   return filePath.split("/").filter(Boolean).at(-1) ?? filePath;
-}
-
-function formatTabDirectory(filePath: string) {
-  const segments = filePath.split("/").filter(Boolean);
-  if (segments.length <= 1) {
-    return "Workspace root";
-  }
-  return segments.slice(0, -1).join(" / ");
 }
 
 export function EditorMainTabStrip(args: {
@@ -49,7 +37,7 @@ export function EditorMainTabStrip(args: {
 
   return (
     <div
-      className="tab-strip-scroll min-w-0 w-full max-w-full flex items-end gap-1 overflow-x-auto border-b border-border/70 bg-editor/65 px-2 pt-2"
+      className="tab-strip-scroll min-w-0 w-full max-w-full flex items-stretch overflow-x-auto border-b border-success/30 bg-editor/65"
       onWheel={(event) => {
         if (event.deltaY !== 0) {
           event.currentTarget.scrollLeft += event.deltaY;
@@ -59,8 +47,6 @@ export function EditorMainTabStrip(args: {
     >
       {args.editorTabs.map((tab) => {
         const isActive = tab.id === args.activeEditorTabId;
-        const isDiffTab = isChatDiffTab(tab);
-        const directoryLabel = formatTabDirectory(tab.filePath);
         const closeButtonClassName = isActive
           ? "opacity-100"
           : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100";
@@ -83,76 +69,48 @@ export function EditorMainTabStrip(args: {
                 }}
                 onDrop={(event) => args.onTabDrop(event, tab.id)}
                 className={cn(
-                  "group relative -mb-px flex h-[54px] shrink-0 items-stretch overflow-hidden rounded-t-lg border px-2 py-0 transition-[background-color,border-color,box-shadow,color,opacity] duration-150",
+                  "group relative flex h-8 shrink-0 items-stretch overflow-hidden px-2 transition-[background-color,color,opacity] duration-150",
                   isActive
-                    ? "border-border/80 border-b-editor bg-editor-tab-active text-editor-foreground shadow-[0_12px_28px_-24px_rgba(15,23,42,0.85)]"
-                    : "border-transparent border-b-border/80 bg-editor-tab/95 text-muted-foreground hover:border-border/70 hover:bg-editor-muted/90 hover:text-editor-foreground",
+                    ? "bg-editor-tab-active text-editor-foreground"
+                    : "bg-transparent text-muted-foreground hover:bg-editor-muted/60 hover:text-editor-foreground",
                   args.draggingTabId === tab.id && "opacity-70",
-                  args.dropTargetTabId === tab.id && args.draggingTabId && args.draggingTabId !== tab.id && "ring-1 ring-primary/60 ring-inset",
+                  args.dropTargetTabId === tab.id && args.draggingTabId && args.draggingTabId !== tab.id && "ring-1 ring-success/60 ring-inset",
                 )}
               >
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-2.5 py-2 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                   title={tab.filePath}
                   onClick={() => args.onActivateTab(tab.id)}
                 >
-                  <span
+                  <FileCode2
                     className={cn(
-                      "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors",
-                      isActive
-                        ? "border-primary/20 bg-primary/10 text-primary"
-                        : "border-border/60 bg-background/50 text-muted-foreground group-hover:border-border/80 group-hover:text-editor-foreground",
+                      "size-3.5 shrink-0 transition-colors",
+                      isActive ? "text-success" : "text-muted-foreground group-hover:text-editor-foreground",
                     )}
-                  >
-                    <FileCode2 className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-medium leading-tight">{formatTabLabel(tab.filePath)}</span>
-                      {tab.isDirty ? <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden="true" /> : null}
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
-                      <span className="truncate">{directoryLabel}</span>
-                      {isDiffTab ? (
-                        <Badge
-                          variant="outline"
-                          className="h-4 shrink-0 rounded-sm border-primary/20 bg-primary/10 px-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-primary"
-                        >
-                          Diff
-                        </Badge>
-                      ) : null}
-                      {tab.hasConflict ? (
-                        <Badge
-                          variant="outline"
-                          className="h-4 shrink-0 gap-1 rounded-sm border-warning/30 bg-warning/10 px-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-warning-foreground"
-                        >
-                          <AlertTriangle className="size-2.5" />
-                          Conflict
-                        </Badge>
-                      ) : null}
-                    </span>
-                  </span>
+                  />
+                  <span className="truncate text-xs font-medium leading-tight">{formatTabLabel(tab.filePath)}</span>
+                  {tab.isDirty ? <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden="true" /> : null}
                 </button>
-                <div className="flex items-start py-2">
+                <div className="flex items-center pl-1">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     aria-label={`close-${tab.filePath}`}
                     className={cn(
-                      "mt-0.5 size-6 rounded-md p-0 text-muted-foreground transition-[opacity,color,background-color] duration-150 hover:bg-editor-muted hover:text-editor-foreground",
+                      "size-5 rounded-sm p-0 text-muted-foreground transition-[opacity,color,background-color] duration-150 hover:bg-editor-muted hover:text-editor-foreground",
                       closeButtonClassName,
                     )}
                     onClick={() => args.onRequestCloseTab(tab.id)}
                   >
-                    <X className="size-3.5" />
+                    <X className="size-3" />
                   </Button>
                 </div>
                 <span
                   className={cn(
-                    "pointer-events-none absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-primary transition-opacity duration-150",
-                    isActive ? "opacity-100" : "opacity-0 group-hover:opacity-60",
+                    "pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-success transition-opacity duration-150",
+                    isActive ? "opacity-100" : "opacity-0 group-hover:opacity-40",
                   )}
                 />
               </div>

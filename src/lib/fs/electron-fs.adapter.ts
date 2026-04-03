@@ -1,6 +1,7 @@
 import type { RepoMapSnapshot } from "@/lib/fs/repo-map.types";
 import type {
   WorkspaceCreateEntryResult,
+  WorkspaceDeleteEntryResult,
   WorkspaceDirectoryEntry,
   WorkspaceFileData,
   WorkspaceFsAdapter,
@@ -194,6 +195,50 @@ export class ElectronFsAdapter implements WorkspaceFsAdapter {
     };
   }
 
+  async deleteFile(args: { filePath: string }): Promise<WorkspaceDeleteEntryResult> {
+    if (!this.rootPath) {
+      return { ok: false, stderr: "Workspace root unavailable." };
+    }
+    const deleteFile = window.api?.fs?.deleteFile;
+    if (!deleteFile) {
+      return { ok: false, stderr: "Filesystem bridge unavailable." };
+    }
+
+    const result = await deleteFile({
+      rootPath: this.rootPath,
+      filePath: args.filePath,
+    });
+    if (result.ok) {
+      this.forgetKnownFile(args.filePath);
+    }
+    return {
+      ok: result.ok,
+      stderr: result.stderr,
+    };
+  }
+
+  async deleteDirectory(args: { directoryPath: string }): Promise<WorkspaceDeleteEntryResult> {
+    if (!this.rootPath) {
+      return { ok: false, stderr: "Workspace root unavailable." };
+    }
+    const deleteDirectory = window.api?.fs?.deleteDirectory;
+    if (!deleteDirectory) {
+      return { ok: false, stderr: "Filesystem bridge unavailable." };
+    }
+
+    const result = await deleteDirectory({
+      rootPath: this.rootPath,
+      directoryPath: args.directoryPath,
+    });
+    if (result.ok) {
+      this.forgetKnownDirectory(args.directoryPath);
+    }
+    return {
+      ok: result.ok,
+      stderr: result.stderr,
+    };
+  }
+
   getKnownFiles(): string[] {
     return this.knownFiles;
   }
@@ -212,5 +257,15 @@ export class ElectronFsAdapter implements WorkspaceFsAdapter {
       return;
     }
     this.knownFiles = [...this.knownFiles, filePath].sort();
+  }
+
+  private forgetKnownFile(filePath: string) {
+    this.knownFiles = this.knownFiles.filter((knownFilePath) => knownFilePath !== filePath);
+  }
+
+  private forgetKnownDirectory(directoryPath: string) {
+    const normalizedDirectoryPath = directoryPath.replace(/\/+$/, "");
+    const directoryPrefix = `${normalizedDirectoryPath}/`;
+    this.knownFiles = this.knownFiles.filter((knownFilePath) => !knownFilePath.startsWith(directoryPrefix));
   }
 }

@@ -77,6 +77,7 @@ export function buildCodexPromptFromConversation(args: {
   return buildLegacyPromptFromCanonicalRequest({
     request: args.conversation,
     includeHistory: shouldIncludeHistory(args.conversation),
+    includeSkillContext: true,
   }) || args.fallbackPrompt;
 }
 

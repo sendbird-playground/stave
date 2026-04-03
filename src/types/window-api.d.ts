@@ -139,6 +139,7 @@ interface WindowProviderApi {
   suggestPRDescription?: (args: {
     cwd?: string;
     baseBranch?: string;
+    promptTemplate?: string;
   }) => Promise<{ ok: boolean; title?: string; body?: string }>;
 }
 
@@ -211,6 +212,20 @@ interface WindowFsApi {
   }) => Promise<{
     ok: boolean;
     alreadyExists?: boolean;
+    stderr?: string;
+  }>;
+  deleteFile?: (args: {
+    rootPath: string;
+    filePath: string;
+  }) => Promise<{
+    ok: boolean;
+    stderr?: string;
+  }>;
+  deleteDirectory?: (args: {
+    rootPath: string;
+    directoryPath: string;
+  }) => Promise<{
+    ok: boolean;
     stderr?: string;
   }>;
   readTypeDefs?: (args: {
@@ -963,6 +978,7 @@ interface WindowInlineCompletionApi {
     filePath: string;
     language: string;
     maxTokens?: number;
+    systemPromptOverride?: string;
   }) => Promise<{ ok: boolean; text: string; error?: string }>;
   abort?: () => Promise<{ ok: boolean }>;
   available?: () => Promise<{ ok: boolean; available: boolean }>;

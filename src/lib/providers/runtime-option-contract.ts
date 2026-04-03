@@ -128,6 +128,9 @@ export const PROVIDER_RUNTIME_OPTION_KEYS = [
   "codexExperimentalPlanMode",
   "codexResumeThreadId",
   "staveAuto",
+  "responseStylePrompt",
+  "promptPrDescription",
+  "promptInlineCompletion",
 ] as const satisfies readonly (keyof ProviderRuntimeOptions)[];
 
 export type ProviderRuntimeOptionKey = (typeof PROVIDER_RUNTIME_OPTION_KEYS)[number];

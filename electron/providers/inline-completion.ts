@@ -8,6 +8,7 @@ interface InlineCompletionRequest {
   filePath: string;
   language: string;
   maxTokens?: number;
+  systemPromptOverride?: string;
 }
 
 interface InlineCompletionResult {
@@ -87,19 +88,21 @@ function buildCompletionPrompt(args: InlineCompletionRequest) {
   const lastPrefixLine = prefix.split("\n").pop() ?? "";
   const prefill = lastPrefixLine.trimEnd();
 
+  const systemPrompt = args.systemPromptOverride?.trim() || [
+    "You are a code completion engine embedded in an IDE.",
+    "You receive a file snippet with a [HOLE] marker where the cursor is.",
+    "",
+    "Use ALL provided context to produce the best completion:",
+    "- Language & filename: match the file's idioms, naming conventions, and style.",
+    "- Imports: use only symbols that are already imported or available in scope. Do not invent new imports.",
+    "- Prefix (code before [HOLE]): continue the pattern, indentation, and logic established above the cursor.",
+    "- Suffix (code after [HOLE]): ensure the completion connects seamlessly to the code that follows. Do not repeat the suffix.",
+    "",
+    "Output ONLY the raw code that replaces [HOLE]. No markdown. No backticks. No explanation. No prose.",
+  ].join("\n");
+
   return {
-    system: [
-      "You are a code completion engine embedded in an IDE.",
-      "You receive a file snippet with a [HOLE] marker where the cursor is.",
-      "",
-      "Use ALL provided context to produce the best completion:",
-      "- Language & filename: match the file's idioms, naming conventions, and style.",
-      "- Imports: use only symbols that are already imported or available in scope. Do not invent new imports.",
-      "- Prefix (code before [HOLE]): continue the pattern, indentation, and logic established above the cursor.",
-      "- Suffix (code after [HOLE]): ensure the completion connects seamlessly to the code that follows. Do not repeat the suffix.",
-      "",
-      "Output ONLY the raw code that replaces [HOLE]. No markdown. No backticks. No explanation. No prose.",
-    ].join("\n"),
+    system: systemPrompt,
     user,
     prefill,
   };

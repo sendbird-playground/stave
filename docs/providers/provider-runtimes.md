@@ -181,11 +181,11 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 
 ## Supported Codex baseline
 
-- Codex SDK: `@openai/codex-sdk@0.118.0-alpha.3`
-- Codex CLI baseline: `0.118.0-alpha.3`
+- Codex SDK: `@openai/codex-sdk@0.118.0`
+- Codex CLI baseline: `0.118.0`
 - Current Stave-supported Codex model IDs: `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
 
-Stave prefers an explicit/user-installed Codex CLI when available, but can also fall back to the bundled SDK binary. A user-configured binary path still takes precedence over auto-discovery.
+Stave requires a user-installed Codex CLI (`codex` ≥ 0.118.0). The bundled SDK binary fallback has been removed — users must have Codex CLI available in their PATH or configured via `STAVE_CODEX_CLI_PATH`. A user-configured binary path still takes precedence over auto-discovery.
 
 ## Executable path resolution
 

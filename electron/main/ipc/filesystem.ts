@@ -6,6 +6,8 @@ import path from "node:path";
 import {
   FilesystemCreateDirectoryArgsSchema,
   FilesystemCreateFileArgsSchema,
+  FilesystemDeleteDirectoryArgsSchema,
+  FilesystemDeleteFileArgsSchema,
   FilesystemDirectoryArgsSchema,
   FilesystemFileArgsSchema,
   FilesystemInspectArgsSchema,
@@ -288,6 +290,61 @@ export function registerFilesystemHandlers() {
         ok: true as const,
         revision: revisionFromStat({ size: nextStat.size, mtimeMs: nextStat.mtimeMs }),
       };
+    } catch (error) {
+      return { ok: false as const, stderr: String(error) };
+    }
+  });
+
+  ipcMain.handle("fs:delete-file", async (_event, args: unknown) => {
+    const parsed = FilesystemDeleteFileArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid file delete request." };
+    }
+
+    const absolutePath = resolveRootFilePath(parsed.data);
+    if (!absolutePath) {
+      return { ok: false, stderr: "Invalid file path." };
+    }
+
+    try {
+      const existingStat = await statIfExists(absolutePath);
+      if (!existingStat) {
+        return { ok: false as const, stderr: "File does not exist." };
+      }
+      if (!existingStat.isFile()) {
+        return { ok: false as const, stderr: "A folder exists at this path." };
+      }
+
+      await fs.unlink(absolutePath);
+      return { ok: true as const };
+    } catch (error) {
+      return { ok: false as const, stderr: String(error) };
+    }
+  });
+
+  ipcMain.handle("fs:delete-directory", async (_event, args: unknown) => {
+    const parsed = FilesystemDeleteDirectoryArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid directory delete request." };
+    }
+
+    const absolutePath = resolveRootDirectoryPath(parsed.data);
+    const rootPath = path.resolve(parsed.data.rootPath);
+    if (!absolutePath || path.resolve(absolutePath) === rootPath) {
+      return { ok: false, stderr: "Invalid directory path." };
+    }
+
+    try {
+      const existingStat = await statIfExists(absolutePath);
+      if (!existingStat) {
+        return { ok: false as const, stderr: "Folder does not exist." };
+      }
+      if (!existingStat.isDirectory()) {
+        return { ok: false as const, stderr: "A file exists at this path." };
+      }
+
+      await fs.rm(absolutePath, { recursive: true, force: false });
+      return { ok: true as const };
     } catch (error) {
       return { ok: false as const, stderr: String(error) };
     }

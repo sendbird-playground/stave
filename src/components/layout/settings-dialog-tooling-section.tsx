@@ -170,6 +170,38 @@ function InfoRow(args: {
   );
 }
 
+function PathRow(args: { label: string; value: string | null }) {
+  if (!args.value) {
+    return (
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-muted-foreground">{args.label}</span>
+        <span className="text-foreground">-</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-between gap-2 text-sm">
+      <span className="shrink-0 text-muted-foreground">{args.label}</span>
+      <div className="flex min-w-0 items-center gap-1">
+        <span className="min-w-0 truncate font-mono text-xs text-foreground">
+          {args.value}
+        </span>
+        <button
+          type="button"
+          className="shrink-0 text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+          onClick={() => {
+            void copyTextToClipboard(args.value!).then(() => {
+              toast.success("Path copied");
+            });
+          }}
+        >
+          <Copy className="size-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ToolCard(args: {
   tool: ToolingStatusEntry;
   canOpenTerminal: boolean;
@@ -182,12 +214,12 @@ function ToolCard(args: {
   return (
     <div className="rounded-xl border border-border/80 bg-background/80 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-lg border border-border/80 bg-muted/30 text-muted-foreground">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-muted/30 text-muted-foreground">
               <ToolIcon id={args.tool.id} />
             </span>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <p className="text-sm font-semibold text-foreground">
                 {args.tool.label}
               </p>
@@ -204,18 +236,20 @@ function ToolCard(args: {
             label={ToolStateLabel(args.tool.state)}
           />
           <AuthBadge tool={args.tool} />
+          {args.tool.version ? (
+            <Badge
+              variant="secondary"
+              className="h-6 border border-border/60 bg-muted/40 px-2.5 font-mono text-xs font-normal tracking-normal text-muted-foreground"
+            >
+              {args.tool.version}
+            </Badge>
+          ) : null}
         </div>
       </div>
 
       <div className="mt-4 space-y-2">
         <InfoRow label="Summary" value={args.tool.summary} />
-        <InfoRow label="Version" value={args.tool.version} monospace />
-        <InfoRow
-          label="Executable"
-          value={args.tool.executablePath}
-          monospace
-        />
-        <InfoRow label="Auth Detail" value={args.tool.authDetail} />
+        <PathRow label="Executable" value={args.tool.executablePath} />
       </div>
 
       {args.tool.detail ? (
@@ -469,7 +503,7 @@ export function ToolingSection() {
                   {workspace?.summary
                     ?? "Open a workspace to inspect origin/main sync status."}
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="break-all text-sm text-muted-foreground">
                   {workspaceCwd ?? "No active workspace path is selected."}
                 </p>
               </div>
@@ -621,7 +655,7 @@ export function ToolingSection() {
           description="These checks mirror the native binaries and auth surfaces Stave uses for provider turns, PR actions, and terminal-backed workflows."
         >
           {snapshot ? (
-            <div className="grid gap-3 xl:grid-cols-2">
+            <div className="grid gap-3">
               {snapshot.tools.map((tool) => (
                 <ToolCard
                   key={tool.id}
