@@ -117,7 +117,7 @@ export function MarkdownMessage({
     li: ({ children }: { children?: ReactNode }) => <li className="my-1 marker:text-muted-foreground [&>p]:my-0">{children}</li>,
     code: ({ className: codeClassName, children }: { className?: string; children?: ReactNode }) => {
       const lang = /language-(\w+)/.exec(codeClassName ?? "")?.[1];
-      const text = String(children);
+      const text = String(children ?? "");
       const isBlock = Boolean(lang) || text.includes("\n");
       if (isBlock) {
         const renderFn = renderBlockCodeRef.current;
@@ -129,6 +129,22 @@ export function MarkdownMessage({
         }
         return <pre><code>{text.replace(/\n$/, "")}</code></pre>;
       }
+
+      const inlineHref = text.trim();
+      const resolvedFileLink = inlineHref ? resolveFileLinkRef.current?.({ href: inlineHref }) : null;
+      if (resolvedFileLink) {
+        return (
+          <MessageFileLink
+            href={inlineHref}
+            filePath={resolvedFileLink.filePath}
+            fileName={resolvedFileLink.fileName}
+            line={resolvedFileLink.line}
+            column={resolvedFileLink.column}
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href: inlineHref })}
+          />
+        );
+      }
+
       return (
         <code
           className="mx-0.5 rounded-md border border-border/80 bg-muted/40 px-1.5 py-0.5 font-mono"
