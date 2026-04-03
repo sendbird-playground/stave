@@ -18,6 +18,7 @@ function cloneMessagePart(part: MessagePart): MessagePart {
       return {
         type: "text",
         text: part.text,
+        ...(part.segmentId ? { segmentId: part.segmentId } : {}),
       };
     case "thinking":
       return {
@@ -121,6 +122,21 @@ function cloneContextPart(part: FileContextPart | CanonicalRetrievedContextPart 
   return sanitizeFileContextPayload({ ...part });
 }
 
+function deriveCanonicalMessageContent(message: ChatMessage) {
+  const responseBoundaryIndex = message.parts.reduce((lastIndex, part, index) => {
+    if (part.type === "text" || part.type === "file_context" || part.type === "image_context") {
+      return lastIndex;
+    }
+    return index;
+  }, -1);
+
+  const trailingText = message.parts
+    .flatMap((part, index) => part.type === "text" && index > responseBoundaryIndex ? [part.text] : [])
+    .join("");
+
+  return trailingText.trim().length > 0 ? trailingText : message.content;
+}
+
 export function toCanonicalConversationMessage(args: {
   message: ChatMessage;
 }): CanonicalConversationMessage {
@@ -130,7 +146,7 @@ export function toCanonicalConversationMessage(args: {
     role: sanitizedMessage.role,
     providerId: sanitizedMessage.providerId,
     model: sanitizedMessage.model,
-    content: sanitizedMessage.content,
+    content: deriveCanonicalMessageContent(sanitizedMessage),
     parts: sanitizedMessage.parts.map((part) => cloneMessagePart(part)),
     isPlanResponse: sanitizedMessage.isPlanResponse,
     planText: sanitizedMessage.planText,

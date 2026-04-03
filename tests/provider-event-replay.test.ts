@@ -3,7 +3,7 @@ import {
   appendProviderEventToAssistant,
   replayProviderEventsToTaskState,
 } from "@/lib/session/provider-event-replay";
-import type { ChatMessage, OrchestrationProgressPart, StaveProcessingPart } from "@/types/chat";
+import type { ChatMessage, OrchestrationProgressPart, StaveProcessingPart, TextPart } from "@/types/chat";
 
 function createMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
   return {
@@ -224,6 +224,39 @@ describe("appendProviderEventToAssistant", () => {
     expect(typeof thinkingPart.startedAt).toBe("string");
     expect(typeof thinkingPart.completedAt).toBe("string");
     expect(Date.parse(thinkingPart.completedAt ?? "")).toBeGreaterThanOrEqual(Date.parse(thinkingPart.startedAt ?? ""));
+  });
+
+  test("keeps separate text parts when provider text segment ids change", () => {
+    let message = createMessage({
+      parts: [
+        { type: "tool_use", toolUseId: "todo-1", toolName: "TodoWrite", input: "{\"todos\":[]}", state: "input-streaming" },
+      ],
+    });
+
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "text", text: "Inspecting the layout.", segmentId: "msg-1" },
+    });
+    message = appendProviderEventToAssistant({
+      message,
+      event: {
+        type: "tool",
+        toolUseId: "todo-1",
+        toolName: "TodoWrite",
+        input: "{\"todos\":[{\"content\":\"Inspecting layout\",\"status\":\"completed\"}]}",
+        state: "output-available",
+      },
+    });
+    message = appendProviderEventToAssistant({
+      message,
+      event: { type: "text", text: "## Result\n\nFinal answer.", segmentId: "msg-2" },
+    });
+
+    const textParts = message.parts.filter((part): part is TextPart => part.type === "text");
+    expect(textParts).toEqual([
+      { type: "text", text: "Inspecting the layout.", segmentId: "msg-1" },
+      { type: "text", text: "## Result\n\nFinal answer.", segmentId: "msg-2" },
+    ]);
   });
 });
 

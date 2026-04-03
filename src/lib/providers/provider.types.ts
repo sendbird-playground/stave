@@ -143,7 +143,7 @@ export interface CanonicalConversationRequest {
 
 export type NormalizedProviderEvent =
   | { type: "thinking"; text: string; isStreaming?: boolean }
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; segmentId?: string }
   | { type: "provider_conversation"; providerId: ProviderId; nativeConversationId: string }
   | {
     type: "usage";

@@ -117,7 +117,7 @@ describe("mapCodexItemEvent", () => {
       },
     } as const);
     expect(events).toEqual([
-      { type: "text", text: "<proposed_plan>\nShip the fix.\n</proposed_plan>" },
+      { type: "text", text: "<proposed_plan>\nShip the fix.\n</proposed_plan>", segmentId: "plan-test-1" },
       { type: "plan_ready", planText: "Ship the fix." },
     ]);
   });
@@ -147,7 +147,7 @@ describe("mapCodexItemEvent", () => {
 
     const started = mapCodexItemEvent({ lifecycle: "item.started", item });
     expect(started).toEqual([
-      { type: "text", text: "Step 1 done" },
+      { type: "text", text: "Step 1 done", segmentId: "plan-stream-1" },
     ]);
 
     const updated = mapCodexItemEvent({
@@ -155,7 +155,7 @@ describe("mapCodexItemEvent", () => {
       item: { ...item, plan_markdown: "Step 1 done\nStep 2 done" },
     });
     expect(updated).toEqual([
-      { type: "text", text: "\nStep 2 done" },
+      { type: "text", text: "\nStep 2 done", segmentId: "plan-stream-1" },
     ]);
 
     const completed = mapCodexItemEvent({
@@ -188,7 +188,7 @@ describe("mapCodexItemEvent", () => {
         text: "Just a regular message.",
       },
     } as const)).toEqual([
-      { type: "text", text: "Just a regular message." },
+      { type: "text", text: "Just a regular message.", segmentId: "plain-msg-1" },
     ]);
   });
 });

@@ -32,8 +32,50 @@ same `ChatMessage.parts` shape before UI rendering.
 - Individual steps inside `ChainOfThought` may still be opened and closed independently.
 - `MessageResponse` renders only the final text response area below the trace.
 - Earlier assistant text that appears before later tool or system activity remains inside `ChainOfThought` as a trace step instead of being promoted to the final response.
+- Provider text segments must preserve their original item boundaries so in-place tool updates cannot merge commentary text into the final response block.
 - The normal assistant shell is bubbleless so AI Elements composition can stay close
   to the upstream pattern.
+
+### Provider text boundaries
+
+Stave replays normalized provider events into `message.parts`. That replay layer
+may merge adjacent `text` events, so provider adapters must preserve any
+boundary that matters to final rendering.
+
+This rule became explicit after a Codex markdown corruption bug:
+
+- Codex can emit multiple top-level `agent_message` items in one turn.
+- Stave originally flattened all of them into plain `text` deltas.
+- `TodoWrite` updates are applied in place, so a later final response could end
+  up adjacent to an earlier commentary text part.
+- Replay then merged those text parts and the renderer treated the combined text
+  as one markdown block.
+
+The current invariant is:
+
+- replay may only merge adjacent text parts when they share the same
+  provider-supplied logical segment boundary
+- Codex uses `segmentId = item.id` for `agent_message` and `plan` text deltas
+- providers that cannot yet supply such a boundary must be treated as
+  potentially merge-unsafe
+
+Claude currently avoids the same failure mode mostly because its dominant text
+path is different:
+
+- streamed `content_block_delta.text_delta` events arrive first
+- the later assembled `assistant` text is deduplicated when streaming was
+  already seen
+- most progress/status updates render as structured `system`, `tool`, or
+  `subagent_progress` events instead of extra assistant text segments
+
+That does not make Claude boundary-safe by definition. If a future Claude SDK
+change starts emitting multiple unrelated bare text sequences in one turn,
+mirror the Codex investigation:
+
+1. inspect the normalized `text` events emitted by the Claude adapter
+2. check whether replay is merging adjacent text parts without a source
+   boundary
+3. add a Claude-side segment marker before changing renderer logic
 
 ## Visual Style (AI Elements alignment)
 

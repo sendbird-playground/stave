@@ -27,10 +27,11 @@ function buildRecentTimestamp() {
   return new Date().toISOString();
 }
 
-function createTextPart(args: { text: string }): TextPart {
+function createTextPart(args: { text: string; segmentId?: string }): TextPart {
   return sanitizeMessagePartPayload({
     type: "text",
     text: args.text,
+    ...(args.segmentId ? { segmentId: args.segmentId } : {}),
   });
 }
 
@@ -304,7 +305,7 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
     case "thinking":
       return createThinkingPart({ text: event.text, isStreaming: event.isStreaming ?? false });
     case "text":
-      return createTextPart({ text: event.text });
+      return createTextPart({ text: event.text, segmentId: event.segmentId });
     case "provider_conversation":
       return null;
     case "tool":
@@ -680,7 +681,20 @@ export function appendProviderEventToAssistant(args: {
   const nextParts = [...message.parts];
   const lastPart = nextParts.at(-1);
 
-  if (part.type === "text" && lastPart?.type === "text") {
+  // Text-part merging is intentionally conservative. Codex can emit multiple
+  // top-level agent_message items in one turn, and replay used to collapse
+  // commentary plus the final response into one markdown block after an
+  // in-place TodoWrite update. Only merge when the provider preserved the same
+  // logical text segment boundary.
+  const canMergeTextParts =
+    part.type === "text"
+    && lastPart?.type === "text"
+    && (
+      (part.segmentId == null && lastPart.segmentId == null)
+      || part.segmentId === lastPart.segmentId
+    );
+
+  if (canMergeTextParts) {
     nextParts[nextParts.length - 1] = {
       ...lastPart,
       text: `${lastPart.text}${part.text}`,
