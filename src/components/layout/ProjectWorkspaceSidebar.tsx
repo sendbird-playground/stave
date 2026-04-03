@@ -42,10 +42,14 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import {
   buildCollapsedWorkspaceEntries,
+  buildVisibleWorkspaceShortcutTargets,
+  getWorkspaceShortcutLabel,
   getWorkspaceArchiveButtonVisibilityClasses,
   getWorkspaceRespondingCountVisibilityClasses,
+  WORKSPACE_SHORTCUT_COUNT,
   type ProjectSidebarCollapsedProjectView,
 } from "@/components/layout/ProjectWorkspaceSidebar.utils";
+import { isEditableShortcutTarget } from "@/components/layout/app-shell.shortcuts";
 import { CreateWorkspaceDialog } from "@/components/layout/CreateWorkspaceDialog";
 import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
 import { MemoryUsagePopover } from "@/components/layout/ResourcesPopover";
@@ -56,6 +60,8 @@ import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import {
   Button,
   Card,
+  Kbd,
+  KbdGroup,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -135,6 +141,7 @@ function formatWorkspaceName(name: string, branch?: string) {
 }
 
 const IS_MAC = window.api?.platform === "darwin";
+const shortcutModifierSymbol = IS_MAC ? "\u2318" : "Ctrl";
 const DEFAULT_COLLAPSED_PROJECT_SIDEBAR_WIDTH = 64;
 /** Height reserved at the top of the collapsed sidebar for macOS traffic-light buttons. */
 const MAC_TRAFFIC_LIGHT_CLEARANCE = 40;
@@ -376,6 +383,25 @@ export function ProjectWorkspaceSidebar(args: {
       }),
     [activeWorkspaceId, projects],
   );
+  const workspaceShortcutTargets = useMemo(
+    () =>
+      buildVisibleWorkspaceShortcutTargets({
+        collapsed: args.collapsed,
+        collapsedByProjectPath,
+        projects,
+      }),
+    [args.collapsed, collapsedByProjectPath, projects],
+  );
+  const workspaceShortcutLabels = useMemo(
+    () =>
+      new Map(
+        workspaceShortcutTargets.map((target, index) => [
+          `${target.projectPath}:${target.workspaceId}`,
+          getWorkspaceShortcutLabel(index) ?? "",
+        ]),
+      ),
+    [workspaceShortcutTargets],
+  );
   const projectSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
@@ -484,6 +510,43 @@ export function ProjectWorkspaceSidebar(args: {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const hasMod = event.ctrlKey || event.metaKey;
+      if (!hasMod || event.altKey || event.shiftKey) {
+        return;
+      }
+
+      if (isEditableShortcutTarget(event.target)) {
+        return;
+      }
+
+      const shortcutIndex = Number.parseInt(event.key, 10) - 1;
+      if (
+        Number.isNaN(shortcutIndex)
+        || shortcutIndex < 0
+        || shortcutIndex >= WORKSPACE_SHORTCUT_COUNT
+      ) {
+        return;
+      }
+
+      const nextWorkspace = workspaceShortcutTargets[shortcutIndex];
+      if (!nextWorkspace) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      void handleProjectWorkspaceOpen({
+        projectPath: nextWorkspace.projectPath,
+        workspaceId: nextWorkspace.workspaceId,
+      });
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleProjectWorkspaceOpen, workspaceShortcutTargets]);
 
   function getWorkspaceRuntimeState(workspaceId: string) {
     return workspaceId === activeWorkspaceId
@@ -700,6 +763,7 @@ export function ProjectWorkspaceSidebar(args: {
               <div className="flex flex-col items-center gap-2">
                 {collapsedWorkspaceEntries.map((entry) => {
                   const entryKey = `${entry.projectPath}:${entry.workspaceId}`;
+                  const shortcutLabel = workspaceShortcutLabels.get(entryKey);
                   const workspaceBusy = busyWorkspaceKey === entryKey;
                   const respondingTaskCount = getWorkspaceRespondingTaskCount(
                     entry.workspaceId,
@@ -768,6 +832,16 @@ export function ProjectWorkspaceSidebar(args: {
                             <p className="text-xs text-muted-foreground">
                               {entry.projectName}
                             </p>
+                            {shortcutLabel ? (
+                              <KbdGroup className="pt-1">
+                                <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">
+                                  {shortcutModifierSymbol}
+                                </Kbd>
+                                <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">
+                                  {shortcutLabel}
+                                </Kbd>
+                              </KbdGroup>
+                            ) : null}
                           </div>
                         </TooltipContent>
                       </Tooltip>
@@ -1043,6 +1117,10 @@ export function ProjectWorkspaceSidebar(args: {
                                           <div className="space-y-1">
                                             {project.workspaces.map(
                                               (workspace) => {
+                                                const workspaceShortcutLabel =
+                                                  workspaceShortcutLabels.get(
+                                                    `${project.projectPath}:${workspace.id}`,
+                                                  );
                                                 const workspaceBusy =
                                                   busyWorkspaceKey ===
                                                   `${project.projectPath}:${workspace.id}`;
@@ -1141,6 +1219,16 @@ export function ProjectWorkspaceSidebar(args: {
                                                               workspace.branch,
                                                             )}
                                                           </span>
+                                                          {workspaceShortcutLabel ? (
+                                                            <KbdGroup className="shrink-0 opacity-60">
+                                                              <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">
+                                                                {shortcutModifierSymbol}
+                                                              </Kbd>
+                                                              <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">
+                                                                {workspaceShortcutLabel}
+                                                              </Kbd>
+                                                            </KbdGroup>
+                                                          ) : null}
                                                         </button>
                                                         {(isResponding ||
                                                           canArchiveWorkspace) ? (

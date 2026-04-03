@@ -23,6 +23,7 @@ Replace the legacy workspace/task shell with a three-part layout:
 
 - Task tabs belong to the selected workspace, not the left project list.
 - `Cmd/Ctrl+N` should create a new task in the selected workspace, and `Cmd/Ctrl+W` should archive the currently selected task.
+- `Cmd/Ctrl+1..9` should select the first nine visible workspaces in sidebar order from top to bottom.
 - Task tab close should confirm before archiving.
 - Project delete removes the project from Stave's list only.
 - Workspace rows show a responding indicator if any child task is actively running, including inactive workspaces.
@@ -71,7 +72,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - shows a wave indicator plus the count of responding tasks when any task in that workspace is responding, then swaps that trailing slot to `Archive` on hover for archivable workspaces
   - uses stronger visual emphasis for the selected workspace while keeping project rows neutral
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
-  - shows workspace shortcuts in the collapsed rail and includes the parent project name in the tooltip
+  - assigns `Cmd/Ctrl+1..9` to the first nine visible workspaces in sidebar order and shows those shortcuts in the expanded list plus collapsed-rail tooltips
 - `SettingsDialog`
   - includes a `Projects` section with a dedicated project menu and a single detail panel for the selected project
   - keeps repository workspace defaults, git metadata, close action, and project removal inside that selected-project panel instead of the main sidebar row

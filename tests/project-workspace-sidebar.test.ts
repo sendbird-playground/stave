@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildCollapsedWorkspaceEntries,
+  buildVisibleWorkspaceShortcutTargets,
   getWorkspaceArchiveButtonVisibilityClasses,
+  getWorkspaceShortcutLabel,
   getWorkspaceRespondingCountVisibilityClasses,
+  WORKSPACE_SHORTCUT_COUNT,
 } from "../src/components/layout/ProjectWorkspaceSidebar.utils";
 
 describe("buildCollapsedWorkspaceEntries", () => {
@@ -125,5 +128,88 @@ describe("workspace archive action visibility", () => {
         isClosing: true,
       }),
     ).toBe("opacity-0");
+  });
+});
+
+describe("workspace shortcut targets", () => {
+  const projects = [
+    {
+      projectPath: "/tmp/project-a",
+      projectName: "project-a",
+      workspaces: [
+        { id: "ws-1", name: "Default Workspace", isDefault: true, branch: "main" },
+        { id: "ws-2", name: "feature/a", isDefault: false, branch: "feature/a" },
+      ],
+      activeWorkspaceId: "ws-1",
+      isCurrent: true,
+    },
+    {
+      projectPath: "/tmp/project-b",
+      projectName: "project-b",
+      workspaces: [
+        { id: "ws-3", name: "Default Workspace", isDefault: true, branch: "main" },
+        { id: "ws-4", name: "feature/b", isDefault: false, branch: "feature/b" },
+      ],
+      activeWorkspaceId: "ws-3",
+      isCurrent: false,
+    },
+  ] as const;
+
+  test("uses only expanded and visible workspace rows for shortcut order", () => {
+    const targets = buildVisibleWorkspaceShortcutTargets({
+      collapsed: false,
+      collapsedByProjectPath: {
+        "/tmp/project-a": false,
+        "/tmp/project-b": true,
+      },
+      projects: [...projects],
+    });
+
+    expect(targets).toEqual([
+      { projectPath: "/tmp/project-a", workspaceId: "ws-1" },
+      { projectPath: "/tmp/project-a", workspaceId: "ws-2" },
+    ]);
+  });
+
+  test("uses the collapsed rail order when the sidebar is collapsed", () => {
+    const targets = buildVisibleWorkspaceShortcutTargets({
+      collapsed: true,
+      collapsedByProjectPath: {
+        "/tmp/project-a": true,
+        "/tmp/project-b": true,
+      },
+      projects: [...projects],
+    });
+
+    expect(targets).toEqual([
+      { projectPath: "/tmp/project-a", workspaceId: "ws-1" },
+      { projectPath: "/tmp/project-a", workspaceId: "ws-2" },
+      { projectPath: "/tmp/project-b", workspaceId: "ws-3" },
+      { projectPath: "/tmp/project-b", workspaceId: "ws-4" },
+    ]);
+  });
+
+  test("limits workspace shortcut targets and labels to one through nine", () => {
+    const targets = buildVisibleWorkspaceShortcutTargets({
+      collapsed: true,
+      collapsedByProjectPath: {},
+      projects: [{
+        projectPath: "/tmp/project-a",
+        projectName: "project-a",
+        workspaces: Array.from({ length: 12 }, (_, index) => ({
+          id: `ws-${index + 1}`,
+          name: `workspace-${index + 1}`,
+          isDefault: index === 0,
+          branch: `branch-${index + 1}`,
+        })),
+        activeWorkspaceId: "ws-1",
+        isCurrent: true,
+      }],
+    });
+
+    expect(targets).toHaveLength(WORKSPACE_SHORTCUT_COUNT);
+    expect(getWorkspaceShortcutLabel(0)).toBe("1");
+    expect(getWorkspaceShortcutLabel(WORKSPACE_SHORTCUT_COUNT - 1)).toBe("9");
+    expect(getWorkspaceShortcutLabel(WORKSPACE_SHORTCUT_COUNT)).toBeNull();
   });
 });

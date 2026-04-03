@@ -13,6 +13,8 @@ export interface ProjectSidebarCollapsedProjectView {
   isCurrent: boolean;
 }
 
+export const WORKSPACE_SHORTCUT_COUNT = 9;
+
 const WORKSPACE_ROW_ACTION_REVEAL_CLASSES =
   "group-hover/workspace-row:pointer-events-auto group-hover/workspace-row:opacity-100 group-has-[:focus-visible]/workspace-row:pointer-events-auto group-has-[:focus-visible]/workspace-row:opacity-100";
 
@@ -25,6 +27,11 @@ export interface CollapsedWorkspaceEntry {
   branch?: string;
   isActive: boolean;
   startsProjectGroup: boolean;
+}
+
+export interface WorkspaceShortcutTarget {
+  projectPath: string;
+  workspaceId: string;
 }
 
 export function buildCollapsedWorkspaceEntries(args: {
@@ -51,6 +58,41 @@ export function buildCollapsedWorkspaceEntries(args: {
 
     return entries;
   }, []);
+}
+
+export function buildVisibleWorkspaceShortcutTargets(args: {
+  collapsed: boolean;
+  collapsedByProjectPath: Record<string, boolean>;
+  projects: ProjectSidebarCollapsedProjectView[];
+}): WorkspaceShortcutTarget[] {
+  const targets: WorkspaceShortcutTarget[] = [];
+
+  for (const project of args.projects) {
+    if (!args.collapsed && args.collapsedByProjectPath[project.projectPath]) {
+      continue;
+    }
+
+    for (const workspace of project.workspaces) {
+      targets.push({
+        projectPath: project.projectPath,
+        workspaceId: workspace.id,
+      });
+
+      if (targets.length >= WORKSPACE_SHORTCUT_COUNT) {
+        return targets;
+      }
+    }
+  }
+
+  return targets;
+}
+
+export function getWorkspaceShortcutLabel(index: number): string | null {
+  if (index < 0 || index >= WORKSPACE_SHORTCUT_COUNT) {
+    return null;
+  }
+
+  return String(index + 1);
 }
 
 export function getWorkspaceArchiveButtonVisibilityClasses(args: {

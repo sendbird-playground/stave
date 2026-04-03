@@ -57,8 +57,13 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
     () => [
       {
         title: "Tasks",
-        description: "Create, switch, and jump between conversations.",
+        description: "Create conversations and move around the current workspace.",
         shortcuts: [
+          {
+            label: "Select workspace",
+            description: "Jump to the first nine visible workspaces in the sidebar, from top to bottom.",
+            sequences: [[modifierLabel, "1-9"]],
+          },
           {
             label: "New task",
             description: "Start a fresh task in the selected workspace.",
@@ -78,11 +83,6 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
             label: "Previous task",
             description: "Move selection to the previous task.",
             sequences: [[modifierLabel, "Shift", "K"], [modifierLabel, "Shift", "ArrowUp"]],
-          },
-          {
-            label: "Quick jump",
-            description: "Jump straight to active tasks 1 through 0.",
-            sequences: [[modifierLabel, "1-0"]],
           },
         ],
       },
@@ -198,7 +198,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           </div>
           <DrawerFooter className="border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
             <p className="text-sm text-muted-foreground">
-              Task quick jump works on the active task list, and the quick open / guide shortcuts are ignored while typing in inputs.
+              Workspace quick jump follows the sidebar's top-to-bottom order, and the quick open / guide shortcuts are ignored while typing in inputs.
             </p>
             <DrawerClose asChild>
               <Button variant="outline">Close</Button>
