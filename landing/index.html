@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Stave is an agentic coding desktop that runs Claude and Codex in one workspace. Task-based sessions, approval flows, diff review, and session replay for repeatable AI-driven development."
+      content="Stave is a local-first AI coding workspace for Claude and Codex. Isolated task workspaces, repo-map context, built-in editor and terminal, an information panel, session replay, notifications, skills, and customizable themes."
     />
-    <title>Stave — Agentic Coding Desktop</title>
+    <title>Stave — Local-First AI Coding Workspace</title>
     <link rel="icon" href="./assets/stave-logo-light.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -76,13 +76,14 @@
         <div class="hero__content" data-reveal>
           <div class="badge">
             <span class="badge__dot"></span>
-            <span class="mono">Agentic Coding Desktop</span>
+            <span class="mono">Local-first AI coding workspace</span>
           </div>
-          <h1>Run Claude &amp; Codex<br/>in one workspace</h1>
+          <h1>Claude &amp; Codex,<br/>inside a real dev workspace</h1>
           <p class="hero__lead">
-            Task-based sessions, approval-gated execution, inline diff review,
-            and session replay &mdash; all in a single desktop app built for
-            repeatable AI-driven development.
+            Stave gives Claude and Codex the rest of your workflow too:
+            isolated task workspaces, repo-map context, a built-in editor and
+            terminal, an information panel, session replay, notifications, and
+            local-first persistence.
           </p>
           <div class="hero__actions">
             <a
@@ -107,8 +108,9 @@
           </div>
           <ul class="hero__meta">
             <li><span class="mono">Desktop-first</span></li>
-            <li><span class="mono">Claude + Codex</span></li>
-            <li><span class="mono">Task-oriented</span></li>
+            <li><span class="mono">Workspaces + worktrees</span></li>
+            <li><span class="mono">Repo-map context</span></li>
+            <li><span class="mono">Info panel</span></li>
             <li><span class="mono">Local-first</span></li>
           </ul>
         </div>
@@ -132,11 +134,11 @@
       <section id="overview" class="section">
         <div class="section__header" data-reveal>
           <p class="label mono">What is Stave</p>
-          <h2>One loop for the entire AI coding cycle</h2>
+          <h2>An AI workspace, not just an AI chat</h2>
           <p class="section__desc">
-            Stave doesn't split your editor and your agent into separate windows.
-            Execution, approval, change review, and session replay all live in one
-            continuous loop.
+            Chat, code, task context, and operational visibility stay in one
+            place so you can keep momentum without juggling terminals, browser
+            tabs, or branch state by hand.
           </p>
         </div>
 
@@ -145,30 +147,33 @@
             <div class="bento__icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             </div>
-            <h3>Controlled agent execution</h3>
+            <h3>Task-oriented workspaces</h3>
             <p>
-              See approval requests, plan proposals, and tool traces inside each
-              session. Intervene only when you need to.
+              Each task keeps its own chat history, branch context, and optional
+              git worktree. Import existing worktrees or spin up isolated
+              experiments without context bleed.
             </p>
           </article>
           <article class="bento__card">
             <div class="bento__icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 22h2a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="M14 2v5h5"/><circle cx="8" cy="16" r="6"/><path d="M9.5 17.5 8 16.25V14"/></svg>
             </div>
-            <h3>Branch &amp; worktree isolation</h3>
+            <h3>Information panel</h3>
             <p>
-              Task tabs and worktree flows let you run experiments, implementations,
-              and reviews in parallel.
+              Pin Jira, Figma, Confluence, and Slack links beside notes, todos,
+              PRs, and structured fields so task context stays attached to the
+              workspace.
             </p>
           </article>
           <article class="bento__card">
             <div class="bento__icon">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </div>
-            <h3>Session replay</h3>
+            <h3>Replay + notifications</h3>
             <p>
-              Replay request/response snapshots from recent turns to quickly trace
-              what went right or wrong.
+              Inspect recent turns, request snapshots, and approval events in
+              Session Replay, then jump back from durable notifications when
+              something needs attention.
             </p>
           </article>
         </div>
@@ -178,47 +183,49 @@
       <section id="workflow" class="section">
         <div class="section__header" data-reveal>
           <p class="label mono">How it works</p>
-          <h2>Four steps, one loop</h2>
+          <h2>From context to iteration</h2>
         </div>
 
         <ol class="steps" data-reveal data-reveal-delay="100">
           <li class="step">
             <div class="step__num mono">01</div>
             <div class="step__body">
-              <h3>Create a task</h3>
+              <h3>Open a project</h3>
               <p>
-                Isolate each unit of work as a task. Attach files, images, or any
-                context the agent needs.
+                Stave keeps project, workspace, and task state together and can
+                import existing branch-backed worktrees when you start.
               </p>
             </div>
           </li>
           <li class="step">
             <div class="step__num mono">02</div>
             <div class="step__body">
-              <h3>Run Claude or Codex</h3>
+              <h3>Attach context</h3>
               <p>
-                Pick a model and permission policy, then execute. Track approval
-                requests and plan events in real time.
+                Drop files and images, let repo-map prewarm codebase context,
+                and pin Jira, Figma, Confluence, or Slack URLs in the workspace
+                information panel.
               </p>
             </div>
           </li>
           <li class="step">
             <div class="step__num mono">03</div>
             <div class="step__body">
-              <h3>Review diffs</h3>
+              <h3>Run Claude or Codex</h3>
               <p>
-                Open changes inline in the built-in editor. Add follow-up
-                instructions to refine the output.
+                Chat, edit, and run terminal commands in one layout. Use
+                approvals, plans, and follow-up turns without leaving the
+                workspace.
               </p>
             </div>
           </li>
           <li class="step">
             <div class="step__num mono">04</div>
             <div class="step__body">
-              <h3>Replay &amp; iterate</h3>
+              <h3>Replay and continue</h3>
               <p>
-                Re-watch turn snapshots to understand decisions, then kick off the
-                next task seamlessly.
+                Use Session Replay and notifications to inspect what happened,
+                jump back into the right task, and keep the loop moving.
               </p>
             </div>
           </li>
@@ -229,7 +236,7 @@
       <section id="features" class="section">
         <div class="section__header" data-reveal>
           <p class="label mono">Core features</p>
-          <h2>Everything you need, nothing you don't</h2>
+          <h2>Built for real task flow, not just chat</h2>
         </div>
 
         <div class="features-grid" data-reveal data-reveal-delay="100">
@@ -242,38 +249,52 @@
           </article>
           <article class="feature">
             <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
-              Approval &amp; plan events
-            </h3>
-            <p>Gate agent actions behind explicit approvals. Review execution plans before they run.</p>
-          </article>
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Session replay drawer
-            </h3>
-            <p>Step through recent turns to replay request/response pairs and trace issues fast.</p>
-          </article>
-          <article class="feature">
-            <h3>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m8.66-14.5-5.2 3m-6.92 4-5.2 3m14.84 0-5.2-3M3.34 7.5l5.2 3"/></svg>
-              Workspace + worktree
+              Task workspaces
             </h3>
-            <p>Isolate branches into separate workspaces. Run parallel implementations and compare side by side.</p>
+            <p>Keep task history isolated and switch across workspaces without losing branch or provider context.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 3-3 3 3"/><path d="M7 3v11"/><path d="m20 18-3 3-3-3"/><path d="M17 21V10"/><path d="M3 14c0-1.657 1.343-3 3-3h4"/><path d="M21 10c0 1.657-1.343 3-3 3h-4"/></svg>
+              Repo-map context
+            </h3>
+            <p>Prewarm repo awareness in the background so the first turn starts with codebase context instead of manual copy-paste.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l1.92-1.92a5 5 0 0 0-7.07-7.07L11.3 5.64"/><path d="M14 11a5 5 0 0 0-7.54-.54L4.54 12.38a5 5 0 0 0 7.07 7.07l1.09-1.09"/></svg>
+              Information panel
+            </h3>
+            <p>Store Jira, Figma, Confluence, and Slack URLs next to PRs, notes, todos, saved plans, and custom fields.</p>
           </article>
           <article class="feature">
             <h3>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
               Monaco + terminal
             </h3>
-            <p>Chat, code, and run commands without switching windows. Everything docks into one layout.</p>
+            <p>Edit code with TypeScript IntelliSense, run commands, and inspect source control from the same window.</p>
           </article>
           <article class="feature">
             <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
-              Local persistence
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v12"/><path d="M17.196 9A3 3 0 1 0 12 6.999 3 3 0 1 0 6.804 9"/><path d="M6 9h12"/><path d="M6 9v7a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9"/></svg>
+              Skills system
             </h3>
-            <p>SQLite-backed storage keeps session state and work history on your machine. No cloud dependency.</p>
+            <p>Use <span class="mono">$skill-name</span> in the composer to trigger reusable workflows across global, user, and workspace scopes.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Session Replay + notifications
+            </h3>
+            <p>Inspect recent turns, request snapshots, and approval events, then jump back from durable read/unread notifications.</p>
+          </article>
+          <article class="feature">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M18.36 5.64 16.24 7.76"/><path d="M21 12h-3"/><path d="m18.36 18.36-2.12-2.12"/><path d="M12 21v-3"/><path d="m5.64 18.36 2.12-2.12"/><path d="M3 12h3"/><path d="m5.64 5.64 2.12 2.12"/><circle cx="12" cy="12" r="3"/></svg>
+              Themes + local-first
+            </h3>
+            <p>Built-in light/dark modes, curated presets, and installable custom themes, with SQLite-backed persistence that stays on your machine.</p>
           </article>
         </div>
       </section>
@@ -281,9 +302,10 @@
       <!-- CTA -->
       <section class="section cta" data-reveal>
         <div class="cta__inner">
-          <h2>Ready to try Stave?</h2>
+          <h2>Looking for early users</h2>
           <p>
-            Check out the install guide, browse releases, or read the source.
+            If you try Stave, I'd love feedback on rough edges, missing
+            workflows, bugs, or anything that breaks the flow.
           </p>
           <div class="cta__actions">
             <a
@@ -299,11 +321,11 @@
             </a>
             <a
               class="btn btn--outline btn--lg"
-              href="https://github.com/sendbird-playground/stave/releases"
+              href="https://github.com/sendbird-playground/stave"
               target="_blank"
               rel="noreferrer"
             >
-              View Releases
+              View GitHub Repo
             </a>
           </div>
         </div>

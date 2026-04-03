@@ -37,8 +37,9 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - always-visible top-bar quick open for searching workspace files, with `Cmd/Ctrl+P` focusing it
 - generated repo-map cache with background pre-warming for first-turn codebase context injection
 - redesigned project, workspace, and task shell with a collapsible project sidebar, workspace task tabs, and a right-side activity rail
-- workspace-scoped information panel for Jira and Figma links, PR references, notes, todos, saved plans, and custom structured fields
+- workspace-scoped information panel for Jira, Figma, Confluence, and Slack links, PR references, notes, todos, saved plans, and custom structured fields
 - top-bar notification center with durable read/unread history for task completions and approval requests
+- built-in light/dark modes, curated theme presets, and user-installable custom theme JSON support
 - recent-project switching that preserves each project's own workspace list and last active workspace
 - automatic import of existing branch-backed git worktrees when a project opens
 - optional repo-scoped post-create workspace bootstrap command for new git worktrees, such as `bun install` or `npm install`
