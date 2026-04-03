@@ -50,6 +50,10 @@ import {
   DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
   DEFAULT_PROMPT_INLINE_COMPLETION,
 } from "@/lib/providers/prompt-defaults";
+import {
+  THINKING_PHRASE_ANIMATION_OPTIONS,
+  normalizeThinkingPhraseAnimationStyle,
+} from "@/lib/thinking-phrases";
 import { DeveloperSection } from "./settings-dialog-developer-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
 import { ToolingSection } from "./settings-dialog-tooling-section";
@@ -1441,7 +1445,7 @@ function RulesSection() {
 }
 
 function ChatSection() {
-  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningDefaultExpanded, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
+  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningDefaultExpanded, thinkingPhraseAnimationStyle, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
     useShallow((state) => [
       state.settings.smartSuggestions,
       state.settings.chatSendPreview,
@@ -1453,6 +1457,7 @@ function ChatSection() {
       state.settings.messageKoreanFontFamily,
       state.settings.infoPanelScale,
       state.settings.reasoningDefaultExpanded,
+      state.settings.thinkingPhraseAnimationStyle,
       state.settings.claudeFastModeVisible,
       state.settings.codexFastModeVisible,
     ] as const),
@@ -1586,6 +1591,28 @@ function ChatSection() {
                 { value: "off", label: "Collapsed" },
               ]}
             />
+          </LabeledField>
+          <LabeledField
+            title="Reasoning Phrase Animation"
+            description="Animation used when the rotating in-progress thinking phrase changes while streaming."
+          >
+            <Select
+              value={thinkingPhraseAnimationStyle}
+              onValueChange={(value) => updateSettings({
+                patch: { thinkingPhraseAnimationStyle: normalizeThinkingPhraseAnimationStyle(value) },
+              })}
+            >
+              <SelectTrigger className="w-full bg-background">
+                <SelectValue placeholder="Select animation" />
+              </SelectTrigger>
+              <SelectContent>
+                {THINKING_PHRASE_ANIMATION_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}{option.value === "soft" ? " (Recommended)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </LabeledField>
           <LabeledField
             title="Show Fast Mode Toggle (Claude)"

@@ -2,8 +2,7 @@ import type { ButtonHTMLAttributes, HTMLAttributes } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Brain, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRotatingThinkingPhrase } from "@/lib/thinking-phrases";
-import { Shimmer } from "./shimmer";
+import { ThinkingPhraseLabel } from "./thinking-phrase";
 
 interface ReasoningProps extends HTMLAttributes<HTMLDivElement> {
   isStreaming?: boolean;
@@ -51,7 +50,6 @@ export function Reasoning({ className, isStreaming = false, defaultOpen = true, 
 
 export function ReasoningTrigger(args: ButtonHTMLAttributes<HTMLButtonElement>) {
   const { isStreaming, open, setOpen } = useReasoningContext();
-  const thinkingPhrase = useRotatingThinkingPhrase(isStreaming);
   return (
     <button
       type="button"
@@ -65,12 +63,7 @@ export function ReasoningTrigger(args: ButtonHTMLAttributes<HTMLButtonElement>) 
       <span className="inline-flex min-w-0 flex-1 items-center gap-2">
         <Brain className="size-4 shrink-0 text-muted-foreground" />
         {isStreaming ? (
-          <Shimmer
-            as="span"
-            className="leading-none [--shimmer-base-color:var(--color-muted-foreground)]"
-          >
-            {thinkingPhrase}
-          </Shimmer>
+          <ThinkingPhraseLabel active={isStreaming} />
         ) : (
           <span className="leading-none text-muted-foreground">Reasoning</span>
         )}
