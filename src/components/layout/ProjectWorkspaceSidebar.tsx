@@ -53,12 +53,12 @@ import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
 import { MemoryUsagePopover } from "@/components/layout/ResourcesPopover";
 import { StaveAppMenuButton } from "@/components/layout/StaveAppMenuButton";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
+import { WorkspaceShortcutChip } from "@/components/layout/WorkspaceShortcutChip";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import {
+  Badge,
   Button,
-  Kbd,
-  KbdGroup,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -755,14 +755,11 @@ export function ProjectWorkspaceSidebar(args: {
                               {entry.projectName}
                             </p>
                             {shortcutLabel ? (
-                              <KbdGroup className="pt-1">
-                                <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">
-                                  {shortcutModifierSymbol}
-                                </Kbd>
-                                <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">
-                                  {shortcutLabel}
-                                </Kbd>
-                              </KbdGroup>
+                              <WorkspaceShortcutChip
+                                modifier={shortcutModifierSymbol}
+                                label={shortcutLabel}
+                                className="mt-1 h-4 px-1 text-[10px]"
+                              />
                             ) : null}
                           </div>
                         </TooltipContent>
@@ -1141,87 +1138,93 @@ export function ProjectWorkspaceSidebar(args: {
                                                               workspace.branch,
                                                             )}
                                                           </span>
-                                                          {workspaceShortcutLabel ? (
-                                                            <KbdGroup className="shrink-0 opacity-60">
-                                                              <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">
-                                                                {shortcutModifierSymbol}
-                                                              </Kbd>
-                                                              <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">
-                                                                {workspaceShortcutLabel}
-                                                              </Kbd>
-                                                            </KbdGroup>
-                                                          ) : null}
                                                         </button>
-                                                        {(isResponding ||
+                                                        {(workspaceShortcutLabel ||
+                                                          isResponding ||
                                                           canArchiveWorkspace) ? (
-                                                          <div className="relative flex h-7 min-w-7 shrink-0 items-center justify-center pr-1">
-                                                            {isResponding ? (
-                                                              <span
-                                                                className={cn(
-                                                                  "inline-flex min-w-7 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary transition-opacity",
-                                                                  getWorkspaceRespondingCountVisibilityClasses(
-                                                                    {
-                                                                      canArchiveWorkspace,
-                                                                      isClosing:
-                                                                        closingWorkspaceId ===
-                                                                        workspace.id,
-                                                                    },
-                                                                  ),
-                                                                )}
-                                                              >
-                                                                {
-                                                                  respondingTaskCount
-                                                                }
-                                                              </span>
-                                                            ) : null}
-                                                            {canArchiveWorkspace ? (
-                                                              <Tooltip>
-                                                                <TooltipTrigger
-                                                                  asChild
-                                                                >
-                                                                  <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
+                                                          <div className="flex shrink-0 items-center gap-1 pr-1">
+                                                            {(isResponding ||
+                                                              canArchiveWorkspace) ? (
+                                                              <div className="relative flex h-7 min-w-7 items-center justify-center">
+                                                                {isResponding ? (
+                                                                  <Badge
+                                                                    variant="outline"
                                                                     className={cn(
-                                                                      "h-7 w-7 rounded-md p-0 text-muted-foreground transition-opacity hover:text-destructive focus-visible:text-destructive",
-                                                                      isResponding
-                                                                        ? "absolute inset-0 m-auto"
-                                                                        : "",
-                                                                      getWorkspaceArchiveButtonVisibilityClasses(
+                                                                      "min-w-7 justify-center rounded-sm border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-primary transition-opacity",
+                                                                      getWorkspaceRespondingCountVisibilityClasses(
                                                                         {
+                                                                          canArchiveWorkspace,
                                                                           isClosing:
                                                                             closingWorkspaceId ===
                                                                             workspace.id,
                                                                         },
                                                                       ),
                                                                     )}
-                                                                    disabled={
-                                                                      closingWorkspaceId ===
-                                                                      workspace.id
-                                                                    }
-                                                                    onClick={() =>
-                                                                      setWorkspaceToClose(
-                                                                        {
-                                                                          id: workspace.id,
-                                                                          name: workspace.name,
-                                                                        },
-                                                                      )
-                                                                    }
-                                                                    aria-label={`archive-workspace-${workspace.id}`}
                                                                   >
-                                                                    {closingWorkspaceId ===
-                                                                    workspace.id ? (
-                                                                      <LoaderCircle className="size-3.5 animate-spin" />
-                                                                    ) : (
-                                                                      <Archive className="size-3.5" />
-                                                                    )}
-                                                                  </Button>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent side="right">
-                                                                  Archive
-                                                                </TooltipContent>
-                                                              </Tooltip>
+                                                                    {
+                                                                      respondingTaskCount
+                                                                    }
+                                                                  </Badge>
+                                                                ) : null}
+                                                                {canArchiveWorkspace ? (
+                                                                  <Tooltip>
+                                                                    <TooltipTrigger
+                                                                      asChild
+                                                                    >
+                                                                      <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className={cn(
+                                                                          "h-7 w-7 rounded-md p-0 text-muted-foreground transition-opacity hover:text-destructive focus-visible:text-destructive",
+                                                                          isResponding
+                                                                            ? "absolute inset-0 m-auto"
+                                                                            : "",
+                                                                          getWorkspaceArchiveButtonVisibilityClasses(
+                                                                            {
+                                                                              isClosing:
+                                                                                closingWorkspaceId ===
+                                                                                workspace.id,
+                                                                            },
+                                                                          ),
+                                                                        )}
+                                                                        disabled={
+                                                                          closingWorkspaceId ===
+                                                                          workspace.id
+                                                                        }
+                                                                        onClick={() =>
+                                                                          setWorkspaceToClose(
+                                                                            {
+                                                                              id: workspace.id,
+                                                                              name: workspace.name,
+                                                                            },
+                                                                          )
+                                                                        }
+                                                                        aria-label={`archive-workspace-${workspace.id}`}
+                                                                      >
+                                                                        {closingWorkspaceId ===
+                                                                        workspace.id ? (
+                                                                          <LoaderCircle className="size-3.5 animate-spin" />
+                                                                        ) : (
+                                                                          <Archive className="size-3.5" />
+                                                                        )}
+                                                                      </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent side="right">
+                                                                      Archive
+                                                                    </TooltipContent>
+                                                                  </Tooltip>
+                                                                ) : null}
+                                                              </div>
+                                                            ) : null}
+                                                            {workspaceShortcutLabel ? (
+                                                              <WorkspaceShortcutChip
+                                                                modifier={shortcutModifierSymbol}
+                                                                label={
+                                                                  workspaceShortcutLabel
+                                                                }
+                                                                className="shrink-0 opacity-60"
+                                                              />
                                                             ) : null}
                                                           </div>
                                                         ) : null}
