@@ -19,6 +19,19 @@ function getScopeLabel(scope: "local" | "remote") {
   return scope === "remote" ? "Remote" : "Local";
 }
 
+function getSearchPlaceholder(args: { hasLocalBranches: boolean; hasRemoteBranches: boolean }) {
+  if (args.hasLocalBranches && args.hasRemoteBranches) {
+    return "Search local and remote branches...";
+  }
+  if (args.hasRemoteBranches) {
+    return "Search remote branches...";
+  }
+  if (args.hasLocalBranches) {
+    return "Search local branches...";
+  }
+  return "Search branches...";
+}
+
 export function CreateWorkspaceBranchPicker({
   defaultBranch,
   disabled = false,
@@ -33,6 +46,7 @@ export function CreateWorkspaceBranchPicker({
   const [highlightedValue, setHighlightedValue] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<VirtuosoHandle | null>(null);
+  const highlightSourceRef = useRef<"auto" | "keyboard" | "pointer">("auto");
   const deferredQuery = useDeferredValue(query);
 
   const rows = useMemo(() => buildCreateWorkspaceBranchPickerRows({
@@ -41,6 +55,9 @@ export function CreateWorkspaceBranchPicker({
     query: deferredQuery,
     remoteBranches,
   }), [defaultBranch, deferredQuery, localBranches, remoteBranches]);
+  const hasLocalBranches = localBranches.length > 0;
+  const hasRemoteBranches = remoteBranches.length > 0;
+  const showScopeBadges = hasLocalBranches && hasRemoteBranches;
   const visibleValues = useMemo(() => rows.flatMap((row) => (
     row.type === "option" ? [row.option.value] : []
   )), [rows]);
@@ -51,6 +68,7 @@ export function CreateWorkspaceBranchPicker({
   useEffect(() => {
     if (!open) {
       setQuery("");
+      highlightSourceRef.current = "auto";
       setHighlightedValue(null);
       return;
     }
@@ -67,6 +85,7 @@ export function CreateWorkspaceBranchPicker({
       return;
     }
 
+    highlightSourceRef.current = "auto";
     setHighlightedValue((current) => {
       if (current && visibleValues.includes(current)) {
         return current;
@@ -80,6 +99,9 @@ export function CreateWorkspaceBranchPicker({
 
   useEffect(() => {
     if (!open || highlightedRowIndex < 0) {
+      return;
+    }
+    if (highlightSourceRef.current === "pointer") {
       return;
     }
 
@@ -100,6 +122,7 @@ export function CreateWorkspaceBranchPicker({
       ? (direction > 0 ? 0 : visibleValues.length - 1)
       : (currentIndex + direction + visibleValues.length) % visibleValues.length;
 
+    highlightSourceRef.current = "keyboard";
     setHighlightedValue(visibleValues[nextIndex] ?? null);
   }
 
@@ -156,11 +179,11 @@ export function CreateWorkspaceBranchPicker({
           <span className="ml-auto flex items-center gap-2">
             {loading ? (
               <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-            ) : (
+            ) : showScopeBadges ? (
               <span className="rounded border border-border/70 bg-background/80 px-1.5 py-px text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 {getScopeLabel(selectedScope)}
               </span>
-            )}
+            ) : null}
             <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
           </span>
         </button>
@@ -178,7 +201,7 @@ export function CreateWorkspaceBranchPicker({
             <Input
               ref={searchInputRef}
               value={query}
-              placeholder="Search local and remote branches..."
+              placeholder={getSearchPlaceholder({ hasLocalBranches, hasRemoteBranches })}
               className="h-9 border-border/70 bg-background/80 pl-9"
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={handleSearchKeyDown}
@@ -228,13 +251,21 @@ export function CreateWorkspaceBranchPicker({
                       !isHighlighted && "hover:bg-accent/60"
                     )}
                     onMouseDown={(event) => event.preventDefault()}
-                    onMouseEnter={() => setHighlightedValue(row.option.value)}
+                    onMouseEnter={() => {
+                      if (row.option.value === highlightedValue) {
+                        return;
+                      }
+                      highlightSourceRef.current = "pointer";
+                      setHighlightedValue(row.option.value);
+                    }}
                     onClick={() => handleSelect(row.option.value)}
                   >
                     <span className="min-w-0 flex-1 truncate">{row.option.value}</span>
-                    <span className="rounded border border-border/70 bg-background/80 px-1.5 py-px text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                      {getScopeLabel(row.option.scope)}
-                    </span>
+                    {showScopeBadges ? (
+                      <span className="rounded border border-border/70 bg-background/80 px-1.5 py-px text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                        {getScopeLabel(row.option.scope)}
+                      </span>
+                    ) : null}
                     <span className="flex size-4 items-center justify-center text-foreground">
                       {isSelected ? <Check className="size-4" /> : null}
                     </span>

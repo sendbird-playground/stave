@@ -43,6 +43,7 @@ import {
   isReasonablePullRequestTitle,
   resolvePullRequestTitle,
 } from "@/lib/source-control-pr";
+import { buildCreatePrTargetBranchOptions } from "@/components/layout/TopBarOpenPR.utils";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import { useAppStore } from "@/store/app.store";
 import {
@@ -146,14 +147,19 @@ function CreatePrLoadingSplash(props: { currentBranch?: string; baseBranch: stri
   );
 }
 
-function PullRequestBranchRoute(props: { currentBranch?: string; baseBranch: string }) {
+function PullRequestBranchFields(props: {
+  currentBranch?: string;
+  defaultBranch: string;
+  disabled?: boolean;
+  loading?: boolean;
+  onTargetBranchChange: (branch: string) => void;
+  targetBranch: string;
+  targetBranchOptions: string[];
+}) {
   const headBranch = props.currentBranch?.trim() || "HEAD";
 
   return (
-    <div
-      className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2"
-      aria-label={`Pull request from ${headBranch} to ${props.baseBranch}`}
-    >
+    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <div className="min-w-0 space-y-1">
         <p className="pl-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           From Branch
@@ -167,82 +173,22 @@ function PullRequestBranchRoute(props: { currentBranch?: string; baseBranch: str
         </Badge>
       </div>
 
-      <div className="flex h-7 items-center justify-center pb-px text-muted-foreground">
-        <ChevronRight className="size-4" />
-      </div>
-
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0 space-y-2">
         <p className="pl-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           Target Branch
         </p>
-        <Badge
-          variant="secondary"
-          className="h-7 max-w-full justify-start gap-1 rounded-md border border-border/60 bg-secondary/70 px-2 font-normal"
-        >
-          <GitBranch className="size-3.5 text-muted-foreground" />
-          <span className="truncate">{props.baseBranch}</span>
-        </Badge>
+        <CreateWorkspaceBranchPicker
+          value={props.targetBranch}
+          defaultBranch={props.defaultBranch}
+          disabled={props.disabled}
+          localBranches={[]}
+          loading={props.loading}
+          remoteBranches={props.targetBranchOptions}
+          onChange={props.onTargetBranchChange}
+        />
       </div>
     </div>
   );
-}
-
-function normalizeRemoteBranchName(branch: string) {
-  const trimmed = branch.trim();
-  if (!trimmed) {
-    return "";
-  }
-  const slashIndex = trimmed.indexOf("/");
-  if (slashIndex < 0 || slashIndex === trimmed.length - 1) {
-    return trimmed;
-  }
-  return trimmed.slice(slashIndex + 1);
-}
-
-function buildCreatePrTargetBranchOptions(args: {
-  defaultBranch: string;
-  headBranch?: string;
-  localBranches: string[];
-  remoteBranches: string[];
-}) {
-  const headBranch = args.headBranch?.trim();
-  const seen = new Set<string>();
-  const branches: string[] = [];
-
-  const push = (branch: string) => {
-    const trimmed = branch.trim();
-    if (!trimmed || trimmed === headBranch || seen.has(trimmed)) {
-      return;
-    }
-    seen.add(trimmed);
-    branches.push(trimmed);
-  };
-
-  for (const branch of args.localBranches) {
-    push(branch);
-  }
-  for (const branch of args.remoteBranches) {
-    push(normalizeRemoteBranchName(branch));
-  }
-
-  const normalizedDefaultBranch = args.defaultBranch.trim() || "main";
-  const priorityByBranch = new Map<string, number>(
-    [normalizedDefaultBranch, "main", "master"].map((branch, index) => [branch, index]),
-  );
-
-  const prioritizedBranches = [...branches].sort((left, right) => {
-    const leftPriority = priorityByBranch.get(left) ?? Number.MAX_SAFE_INTEGER;
-    const rightPriority = priorityByBranch.get(right) ?? Number.MAX_SAFE_INTEGER;
-    if (leftPriority !== rightPriority) {
-      return leftPriority - rightPriority;
-    }
-    return left.localeCompare(right);
-  });
-
-  if (prioritizedBranches.length > 0) {
-    return prioritizedBranches;
-  }
-  return [normalizedDefaultBranch];
 }
 
 // ---------------------------------------------------------------------------
@@ -421,7 +367,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       ? buildCreatePrTargetBranchOptions({
         defaultBranch: defaultBaseBranch,
         headBranch: currentBranch,
-        localBranches: branchResult.branches,
         remoteBranches: branchResult.remoteBranches ?? [],
       })
       : [defaultBaseBranch];
@@ -924,33 +869,24 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
               Create a pull request from {currentBranch ?? "HEAD"} into {effectiveTargetBranch}
             </DialogDescription>
           </DialogHeader>
-          <PullRequestBranchRoute currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
 
           {step === "loading" ? (
             <CreatePrLoadingSplash currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
           ) : (
             <form className="space-y-4" onSubmit={handleFormSubmit}>
-              {inlineNotice ? <InlineNoticeBanner notice={inlineNotice} /> : null}
+              <PullRequestBranchFields
+                currentBranch={currentBranch}
+                defaultBranch={defaultBaseBranch}
+                disabled={isDialogBusy}
+                loading={loadingTargetBranches}
+                targetBranch={effectiveTargetBranch}
+                targetBranchOptions={targetBranchOptions}
+                onTargetBranchChange={(nextBranch) => {
+                  setTargetBranch(nextBranch);
+                }}
+              />
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Target Branch
-                </label>
-                <CreateWorkspaceBranchPicker
-                  value={effectiveTargetBranch}
-                  defaultBranch={defaultBaseBranch}
-                  disabled={isDialogBusy}
-                  localBranches={targetBranchOptions}
-                  loading={loadingTargetBranches}
-                  remoteBranches={[]}
-                  onChange={(nextBranch) => {
-                    setTargetBranch(nextBranch);
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Choose the branch this pull request will merge into.
-                </p>
-              </div>
+              {inlineNotice ? <InlineNoticeBanner notice={inlineNotice} /> : null}
 
               {/* PR Title */}
               <div className="space-y-2">
