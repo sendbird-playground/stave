@@ -22,6 +22,10 @@ export type StaveRouteTarget = {
   reason: string;
 };
 
+type BuildStaveResolvedArgsOptions = {
+  forceCodexPlanMode?: boolean;
+};
+
 const PLAN_PATTERNS: RegExp[] = [
   /\b(plan|approach|strategy|before\s+implement|how\s+should\s+i\s+(approach|structure))\b/i,
   /(설계|계획|전략|어떻게\s*할까|방향|구조\s*설계)/,
@@ -110,6 +114,22 @@ export function resolveStaveTarget(args: {
   };
 }
 
+export function resolveForcedStavePlanTarget(args: {
+  profile: StaveAutoProfile;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): StaveRouteTarget | null {
+  if (args.runtimeOptions?.claudePermissionMode !== "plan") {
+    return null;
+  }
+
+  const model = args.profile.planModel;
+  return {
+    providerId: resolveStaveProviderForModel({ model }),
+    model,
+    reason: `Plan mode forced -> ${model}`,
+  };
+}
+
 /**
  * Skill fast-path: when the request contains skill_context in contextParts,
  * bypass the preprocessor entirely and route directly to the appropriate model
@@ -168,6 +188,7 @@ export function resolveSkillFastPath(args: {
 export function buildStaveResolvedArgs(
   args: StreamTurnArgs,
   target: StaveRouteTarget,
+  options: BuildStaveResolvedArgsOptions = {},
 ): StreamTurnArgs {
   const resolvedConversation = args.conversation
     ? {
@@ -185,6 +206,9 @@ export function buildStaveResolvedArgs(
     runtimeOptions: {
       ...args.runtimeOptions,
       model: target.model,
+      ...(options.forceCodexPlanMode && target.providerId === "codex"
+        ? { codexExperimentalPlanMode: true }
+        : {}),
     },
     ...(resolvedConversation !== undefined ? { conversation: resolvedConversation } : {}),
   };

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildStaveResolvedArgs, resolveSkillFastPath, resolveStaveTarget } from "../electron/providers/stave-router";
+import {
+  buildStaveResolvedArgs,
+  resolveForcedStavePlanTarget,
+  resolveSkillFastPath,
+  resolveStaveTarget,
+} from "../electron/providers/stave-router";
 import type { StreamTurnArgs } from "../electron/providers/types";
 import type { CanonicalConversationRequest } from "../src/lib/providers/provider.types";
 import type { SkillPromptContext } from "../src/lib/skills/types";
@@ -631,6 +636,37 @@ describe("resolveSkillFastPath", () => {
   });
 });
 
+describe("resolveForcedStavePlanTarget", () => {
+  test("returns null when Claude plan mode is not active", () => {
+    expect(resolveForcedStavePlanTarget({
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+      runtimeOptions: { claudePermissionMode: "acceptEdits" },
+    })).toBeNull();
+  });
+
+  test("forces the profile plan model when Stave is in plan mode", () => {
+    expect(resolveForcedStavePlanTarget({
+      profile: DEFAULT_STAVE_AUTO_PROFILE,
+      runtimeOptions: { claudePermissionMode: "plan" },
+    })).toEqual({
+      providerId: "claude-code",
+      model: "opusplan",
+      reason: "Plan mode forced -> opusplan",
+    });
+  });
+
+  test("can force a Codex plan model when the active profile uses one", () => {
+    expect(resolveForcedStavePlanTarget({
+      profile: customProfile({ planModel: "gpt-5.4" }),
+      runtimeOptions: { claudePermissionMode: "plan" },
+    })).toEqual({
+      providerId: "codex",
+      model: "gpt-5.4",
+      reason: "Plan mode forced -> gpt-5.4",
+    });
+  });
+});
+
 // ── buildStaveResolvedArgs ────────────────────────────────────────────────────
 
 describe("buildStaveResolvedArgs", () => {
@@ -716,5 +752,24 @@ describe("buildStaveResolvedArgs", () => {
     const resolved = buildStaveResolvedArgs(args, codexTarget);
     expect(resolved.providerId).toBe("codex");
     expect(resolved.runtimeOptions?.model).toBe("gpt-5.4");
+  });
+
+  test("can force Codex experimental plan mode for Stave plan routing", () => {
+    const codexTarget = {
+      providerId: "codex" as const,
+      model: "gpt-5.4",
+      reason: "forced plan",
+    };
+    const args = minimalArgs({
+      providerId: "stave",
+      runtimeOptions: {
+        claudePermissionMode: "plan",
+        codexExperimentalPlanMode: false,
+      },
+    });
+    const resolved = buildStaveResolvedArgs(args, codexTarget, {
+      forceCodexPlanMode: true,
+    });
+    expect(resolved.runtimeOptions?.codexExperimentalPlanMode).toBe(true);
   });
 });
