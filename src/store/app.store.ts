@@ -303,6 +303,10 @@ export interface AppSettings {
   subagentsProfile: string;
   skillsEnabled: boolean;
   skillsAutoSuggest: boolean;
+  commandPaletteShowRecent: boolean;
+  commandPalettePinnedCommandIds: string[];
+  commandPaletteHiddenCommandIds: string[];
+  commandPaletteRecentCommandIds: string[];
   commandPolicy: "confirm" | "auto-safe";
   commandAllowlist: string;
   customCommands: string;
@@ -757,6 +761,10 @@ const defaultSettings: AppSettings = {
   subagentsProfile: "default",
   skillsEnabled: true,
   skillsAutoSuggest: true,
+  commandPaletteShowRecent: true,
+  commandPalettePinnedCommandIds: [],
+  commandPaletteHiddenCommandIds: [],
+  commandPaletteRecentCommandIds: [],
   commandPolicy: "confirm",
   commandAllowlist: "bun,git,rg",
   customCommands: "/stave:clear = @clear\n/stave:meow = Meow from {provider} ({model})",
@@ -5217,6 +5225,18 @@ export const useAppStore = create<AppState>()(
         state.settings.notificationSoundMode = normalizeNotificationSoundMode(
           raw.notificationSoundMode,
         );
+        state.settings.commandPaletteShowRecent = typeof raw.commandPaletteShowRecent === "boolean"
+          ? raw.commandPaletteShowRecent
+          : defaultSettings.commandPaletteShowRecent;
+        state.settings.commandPalettePinnedCommandIds = Array.isArray(raw.commandPalettePinnedCommandIds)
+          ? raw.commandPalettePinnedCommandIds.filter((value: unknown): value is string => typeof value === "string")
+          : defaultSettings.commandPalettePinnedCommandIds;
+        state.settings.commandPaletteHiddenCommandIds = Array.isArray(raw.commandPaletteHiddenCommandIds)
+          ? raw.commandPaletteHiddenCommandIds.filter((value: unknown): value is string => typeof value === "string")
+          : defaultSettings.commandPaletteHiddenCommandIds;
+        state.settings.commandPaletteRecentCommandIds = Array.isArray(raw.commandPaletteRecentCommandIds)
+          ? raw.commandPaletteRecentCommandIds.filter((value: unknown): value is string => typeof value === "string")
+          : defaultSettings.commandPaletteRecentCommandIds;
         if (typeof raw.staveModelPlanner === "string" && typeof raw.staveAutoPlanModel !== "string") {
           raw.staveAutoPlanModel = raw.staveModelPlanner;
         }

@@ -29,8 +29,6 @@ import {
   Settings,
 } from "lucide-react";
 import {
-  Suspense,
-  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -55,11 +53,10 @@ import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
 import { MemoryUsagePopover } from "@/components/layout/ResourcesPopover";
 import { StaveAppMenuButton } from "@/components/layout/StaveAppMenuButton";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
-import type { SectionId } from "@/components/layout/settings-dialog-sections";
+import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import {
   Button,
-  Card,
   Kbd,
   KbdGroup,
   Tooltip,
@@ -73,17 +70,6 @@ import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage } from "@/types/chat";
-
-const loadSettingsDialog = () =>
-  import("@/components/layout/SettingsDialog").then((module) => ({
-    default: module.SettingsDialog,
-  }));
-const SettingsDialog = lazy(() => loadSettingsDialog());
-const loadKeyboardShortcutsDrawer = () =>
-  import("@/components/layout/KeyboardShortcutsDrawer").then((module) => ({
-    default: module.KeyboardShortcutsDrawer,
-  }));
-const KeyboardShortcutsDrawer = lazy(() => loadKeyboardShortcutsDrawer());
 
 type ProjectSidebarView = ProjectSidebarCollapsedProjectView;
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -217,6 +203,13 @@ export function ProjectWorkspaceSidebar(args: {
   width: number;
   collapsed: boolean;
   animate?: boolean;
+  onOpenCommandPalette: () => void;
+  onOpenKeyboardShortcuts: () => void;
+  onOpenSettings: (options?: {
+    projectPath?: string | null;
+    section?: SectionId;
+  }) => void;
+  onPreloadSettings: () => void;
 }) {
   const [collapsedByProjectPath, setCollapsedByProjectPath] = useState<
     Record<string, boolean>
@@ -233,13 +226,6 @@ export function ProjectWorkspaceSidebar(args: {
   const [closingWorkspaceId, setClosingWorkspaceId] = useState<string | null>(
     null,
   );
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsInitialSection, setSettingsInitialSection] =
-    useState<SectionId>("general");
-  const [settingsInitialProjectPath, setSettingsInitialProjectPath] = useState<
-    string | null
-  >(null);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [
     currentProjectPath,
     currentProjectName,
@@ -448,69 +434,6 @@ export function ProjectWorkspaceSidebar(args: {
     return () => clearInterval(interval);
   }, [fetchAllWorkspacePrStatuses]);
 
-  const handleOpenSettings = useCallback((options?: {
-    projectPath?: string | null;
-    section?: SectionId;
-  }) => {
-    void loadSettingsDialog();
-    setSettingsInitialSection(options?.section ?? "general");
-    setSettingsInitialProjectPath(options?.projectPath ?? null);
-    setSettingsOpen(true);
-  }, []);
-
-  const handlePreloadSettings = useCallback(() => {
-    void loadSettingsDialog();
-  }, []);
-
-  const handleSettingsOpenChange = useCallback((options: { open: boolean }) => {
-    setSettingsOpen(options.open);
-    if (!options.open) {
-      setSettingsInitialSection("general");
-      setSettingsInitialProjectPath(null);
-    }
-  }, []);
-
-  function OverlayLoadingFallback(overlayArgs: { title: string }) {
-    return (
-      <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]">
-        <Card className="w-full max-w-md border-border/80 bg-background/95 p-6 shadow-2xl">
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Loading {overlayArgs.title.toLowerCase()}...
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const hasMod = event.ctrlKey || event.metaKey;
-      if (!hasMod || event.altKey || event.shiftKey || event.code !== "Slash") {
-        return;
-      }
-
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          Boolean(
-            target.closest(
-              "input, textarea, select, [role='textbox'], [contenteditable='true']",
-            ),
-          ))
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      setShortcutsOpen(true);
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const hasMod = event.ctrlKey || event.metaKey;
@@ -547,7 +470,6 @@ export function ProjectWorkspaceSidebar(args: {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleProjectWorkspaceOpen, workspaceShortcutTargets]);
-
   function getWorkspaceRuntimeState(workspaceId: string) {
     return workspaceId === activeWorkspaceId
       ? null
@@ -1074,10 +996,10 @@ export function ProjectWorkspaceSidebar(args: {
                                                 size="sm"
                                                 className="h-7 w-7 rounded-md p-0"
                                                 disabled={projectBusy}
-                                                onMouseEnter={handlePreloadSettings}
-                                                onFocus={handlePreloadSettings}
+                                                onMouseEnter={args.onPreloadSettings}
+                                                onFocus={args.onPreloadSettings}
                                                 onClick={() =>
-                                                  handleOpenSettings({
+                                                  args.onOpenSettings({
                                                     section: "projects",
                                                     projectPath:
                                                       project.projectPath,
@@ -1343,9 +1265,9 @@ export function ProjectWorkspaceSidebar(args: {
                       size="sm"
                       className="h-10 w-10 rounded-md p-0"
                       aria-label="open-settings"
-                      onMouseEnter={handlePreloadSettings}
-                      onFocus={handlePreloadSettings}
-                      onClick={() => handleOpenSettings()}
+                      onMouseEnter={args.onPreloadSettings}
+                      onFocus={args.onPreloadSettings}
+                      onClick={() => args.onOpenSettings()}
                     >
                       <Settings className="size-4" />
                     </Button>
@@ -1355,7 +1277,12 @@ export function ProjectWorkspaceSidebar(args: {
               </div>
             ) : (
               <div className="flex items-center justify-between">
-                <StaveAppMenuButton compact />
+                <StaveAppMenuButton
+                  compact
+                  onOpenCommandPalette={args.onOpenCommandPalette}
+                  onOpenKeyboardShortcuts={args.onOpenKeyboardShortcuts}
+                  onOpenSettings={() => args.onOpenSettings()}
+                />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -1363,9 +1290,9 @@ export function ProjectWorkspaceSidebar(args: {
                       size="sm"
                       className="h-8 w-8 rounded-md p-0"
                       aria-label="open-settings"
-                      onMouseEnter={handlePreloadSettings}
-                      onFocus={handlePreloadSettings}
-                      onClick={() => handleOpenSettings()}
+                      onMouseEnter={args.onPreloadSettings}
+                      onFocus={args.onPreloadSettings}
+                      onClick={() => args.onOpenSettings()}
                     >
                       <Settings className="size-3.5" />
                     </Button>
@@ -1419,26 +1346,6 @@ export function ProjectWorkspaceSidebar(args: {
           await createProject({});
         }}
       />
-      {shortcutsOpen ? (
-        <Suspense
-          fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}
-        >
-          <KeyboardShortcutsDrawer
-            open={shortcutsOpen}
-            onOpenChange={setShortcutsOpen}
-          />
-        </Suspense>
-      ) : null}
-      {settingsOpen ? (
-        <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
-          <SettingsDialog
-            open={settingsOpen}
-            initialSection={settingsInitialSection}
-            initialProjectPath={settingsInitialProjectPath}
-            onOpenChange={handleSettingsOpenChange}
-          />
-        </Suspense>
-      ) : null}
     </>
   );
 }
