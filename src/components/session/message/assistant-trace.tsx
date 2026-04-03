@@ -636,22 +636,19 @@ export function AssistantMessageBody(args: {
           seed={messageId}
         >
           <ChainOfThoughtTrigger />
-          <ChainOfThoughtContent>
-            {trace.showStreamingPlaceholder ? (
-              <ChainOfThoughtStep title="Thinking" status="active" kind="thinking" icon={<Brain />} defaultOpen openWhen>
-                <p className="text-muted-foreground">Thinking...</p>
-              </ChainOfThoughtStep>
-            ) : null}
-            {trace.entries.map((entry) => (
-              <AssistantTraceEntryView
-                key={entry.id}
-                entry={entry}
-                isStreaming={isStreaming}
-                taskId={taskId}
-                messageId={messageId}
-              />
-            ))}
-          </ChainOfThoughtContent>
+          {trace.entries.length > 0 ? (
+            <ChainOfThoughtContent>
+              {trace.entries.map((entry) => (
+                <AssistantTraceEntryView
+                  key={entry.id}
+                  entry={entry}
+                  isStreaming={isStreaming}
+                  taskId={taskId}
+                  messageId={messageId}
+                />
+              ))}
+            </ChainOfThoughtContent>
+          ) : null}
         </ChainOfThought>
       ) : null}
 
