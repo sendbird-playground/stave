@@ -16,13 +16,13 @@ function resolveProviderIdForModel(model: string): ProviderId {
 function SubtaskStatusIcon({ status }: { status: OrchestrationSubtaskState["status"] }) {
   switch (status) {
     case "pending":
-      return <Circle className="size-3.5 text-muted-foreground" />;
+      return <Circle className="size-[1.15em] text-muted-foreground" />;
     case "running":
-      return <Loader2 className="size-3.5 animate-spin text-primary" />;
+      return <Loader2 className="size-[1.15em] animate-spin text-primary" />;
     case "done":
-      return <Check className="size-3.5 text-green-500" />;
+      return <Check className="size-[1.15em] text-green-500" />;
     case "error":
-      return <X className="size-3.5 text-destructive" />;
+      return <X className="size-[1.15em] text-destructive" />;
   }
 }
 
@@ -61,14 +61,14 @@ export function OrchestrationCard({ className, part }: OrchestrationCardProps) {
       >
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 text-[0.875em] font-semibold text-foreground">
-            <Network className="size-3.5 text-primary" />
+            <Network className="size-[1.15em] text-primary" />
             Orchestrated
           </span>
           <Badge variant="secondary">{subtasks.length} {subtasks.length === 1 ? "subtask" : "subtasks"}</Badge>
         </div>
         <span className="inline-flex shrink-0 items-center gap-2">
           {getOrchestrationStatusBadge(status)}
-          <ChevronDown className={cn("size-3.5 transition-transform", open ? "rotate-180" : "rotate-0")} />
+          <ChevronDown className={cn("size-[1.15em] transition-transform", open ? "rotate-180" : "rotate-0")} />
         </span>
       </button>
 
@@ -82,7 +82,7 @@ export function OrchestrationCard({ className, part }: OrchestrationCardProps) {
               <SubtaskStatusIcon status={subtask.status} />
               <ModelIcon
                 providerId={resolveProviderIdForModel(subtask.model)}
-                className="size-3.5 shrink-0"
+                className="size-[1.15em] shrink-0"
               />
               <span className="min-w-[9rem] shrink-0 text-[0.75em] font-medium text-muted-foreground">
                 {subtask.model}

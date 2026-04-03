@@ -1,6 +1,7 @@
 import type { RepoMapSnapshot } from "@/lib/fs/repo-map.types";
 import type {
   WorkspaceCreateEntryResult,
+  WorkspaceDeleteEntryResult,
   WorkspaceDirectoryEntry,
   WorkspaceFileData,
   WorkspaceFsAdapter,
@@ -284,6 +285,86 @@ export class BrowserFsAdapter implements WorkspaceFsAdapter {
     }
   }
 
+  async deleteFile(args: { filePath: string }): Promise<WorkspaceDeleteEntryResult> {
+    const normalizedFilePath = normalizeHandlePath({ value: args.filePath });
+    if (!normalizedFilePath || !this.rootHandle) {
+      return { ok: false, stderr: "Invalid file path." };
+    }
+
+    const pathSegments = normalizedFilePath.split("/");
+    const fileName = pathSegments[pathSegments.length - 1];
+    if (!fileName) {
+      return { ok: false, stderr: "Invalid file path." };
+    }
+
+    const parentPath = pathSegments.slice(0, -1).join("/");
+
+    try {
+      const parentHandle = await this.resolveDirectoryHandle({ directoryPath: parentPath });
+      if (!parentHandle) {
+        return { ok: false, stderr: "Parent folder not found." };
+      }
+
+      try {
+        await parentHandle.getFileHandle(fileName);
+      } catch (error) {
+        if (isDomException(error, "TypeMismatchError")) {
+          return { ok: false, stderr: "A folder exists at this path." };
+        }
+        if (isDomException(error, "NotFoundError")) {
+          return { ok: false, stderr: "File not found." };
+        }
+        return { ok: false, stderr: String(error) };
+      }
+
+      await parentHandle.removeEntry(fileName);
+      this.forgetFilePath(normalizedFilePath);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, stderr: String(error) };
+    }
+  }
+
+  async deleteDirectory(args: { directoryPath: string }): Promise<WorkspaceDeleteEntryResult> {
+    const normalizedDirectoryPath = normalizeHandlePath({ value: args.directoryPath });
+    if (!normalizedDirectoryPath || !this.rootHandle) {
+      return { ok: false, stderr: "Invalid folder path." };
+    }
+
+    const pathSegments = normalizedDirectoryPath.split("/");
+    const directoryName = pathSegments[pathSegments.length - 1];
+    if (!directoryName) {
+      return { ok: false, stderr: "Invalid folder path." };
+    }
+
+    const parentPath = pathSegments.slice(0, -1).join("/");
+
+    try {
+      const parentHandle = await this.resolveDirectoryHandle({ directoryPath: parentPath });
+      if (!parentHandle) {
+        return { ok: false, stderr: "Parent folder not found." };
+      }
+
+      try {
+        await parentHandle.getDirectoryHandle(directoryName);
+      } catch (error) {
+        if (isDomException(error, "TypeMismatchError")) {
+          return { ok: false, stderr: "A file exists at this path." };
+        }
+        if (isDomException(error, "NotFoundError")) {
+          return { ok: false, stderr: "Folder not found." };
+        }
+        return { ok: false, stderr: String(error) };
+      }
+
+      await parentHandle.removeEntry(directoryName, { recursive: true });
+      this.forgetDirectoryPath(normalizedDirectoryPath);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, stderr: String(error) };
+    }
+  }
+
   getKnownFiles(): string[] {
     return [...this.fileHandleMap.keys()].sort();
   }
@@ -386,6 +467,30 @@ export class BrowserFsAdapter implements WorkspaceFsAdapter {
           break;
         }
       }
+    }
+  }
+
+  private forgetFilePath(filePath: string) {
+    this.fileHandleMap.delete(filePath);
+  }
+
+  private forgetDirectoryPath(directoryPath: string) {
+    const directoryPrefix = `${directoryPath}/`;
+
+    for (const filePath of [...this.fileHandleMap.keys()]) {
+      if (filePath.startsWith(directoryPrefix)) {
+        this.fileHandleMap.delete(filePath);
+      }
+    }
+
+    for (const knownDirectoryPath of [...this.directoryHandleMap.keys()]) {
+      if (knownDirectoryPath === directoryPath || knownDirectoryPath.startsWith(directoryPrefix)) {
+        this.directoryHandleMap.delete(knownDirectoryPath);
+      }
+    }
+
+    if (this.rootHandle) {
+      this.directoryHandleMap.set("", this.rootHandle);
     }
   }
 }

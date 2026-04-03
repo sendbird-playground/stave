@@ -1,5 +1,6 @@
 import type { Monaco } from "@monaco-editor/react";
 import type { editor as MonacoEditorApi, IDisposable, IPosition } from "monaco-editor";
+import { useAppStore } from "@/store/app.store";
 
 export interface InlineCompletionSettings {
   enabled: boolean;
@@ -556,11 +557,13 @@ export function configureInlineCompletions(args: {
             }
 
             console.debug("[inline-comp] requesting completion");
+            const systemPromptOverride = useAppStore.getState().settings.promptInlineCompletion || undefined;
             const promise = requestFn({
               prefix,
               suffix,
               filePath,
               language,
+              systemPromptOverride,
             });
             inFlightRequest = {
               key: requestKey,

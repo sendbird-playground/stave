@@ -390,10 +390,12 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     const branchPromise = listBranches
       ? listBranches({ cwd: workspaceCwd }).catch(() => undefined)
       : Promise.resolve(undefined);
+    const promptPrDescription = useAppStore.getState().settings.promptPrDescription || undefined;
     const descPromise = suggestPRDescription
       ? suggestPRDescription({
         cwd: workspaceCwd,
         baseBranch: defaultBaseBranch,
+        promptTemplate: promptPrDescription,
       }).catch(() => undefined)
       : undefined;
 

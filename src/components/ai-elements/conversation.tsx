@@ -199,6 +199,10 @@ export function ConversationContent(props: ConversationContentProps) {
       // updates (streaming) keep pinning to the bottom.
       stickToBottomRef.current = true;
       wrappedSetStickToBottom(true);
+      // Flush the container toward the bottom immediately so the user
+      // doesn't see the stale scroll position from the previous scope
+      // while Virtuoso finishes its initial item measurement.
+      scrollToBottom({ behavior: "auto" });
       return;
     }
     if (stickToBottomRef.current) {
@@ -507,11 +511,17 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     if (savedIndex == null || savedIndex < 0 || savedIndex >= props.data.length) {
       if (listScopeChanged) {
         // On scope change Virtuoso remounts and uses initialTopMostItemIndex
-        // to start near the bottom. Defer restoreToBottom so Virtuoso
-        // finishes its initial item measurement before we issue scroll
-        // commands — otherwise we race against its layout pipeline and
-        // end up with a stale scrollHeight.
+        // to start near the bottom. The container's scrollTop is stale from
+        // the previous scope — flush it immediately so Virtuoso's initial
+        // layout doesn't inherit the wrong position.
         stickToBottomRef.current = true;
+        if (containerEl) {
+          containerEl.scrollTop = containerEl.scrollHeight;
+        }
+        // Defer a precise restoreToBottom so Virtuoso finishes its initial
+        // item measurement before we issue scroll commands — otherwise we
+        // race against its layout pipeline and end up with a stale
+        // scrollHeight.
         const timerId = window.setTimeout(() => {
           restoreToBottom("list-scope-change");
         }, 60);

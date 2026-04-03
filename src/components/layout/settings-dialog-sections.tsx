@@ -42,6 +42,14 @@ import {
   normalizeProjectWorkspaceRootNodeModulesSymlinkPreference,
   type RecentProjectState,
 } from "@/store/project.utils";
+import {
+  DEFAULT_PROMPT_RESPONSE_STYLE,
+  DEFAULT_PROMPT_PR_DESCRIPTION,
+  DEFAULT_PROMPT_SUPERVISOR_BREAKDOWN,
+  DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS,
+  DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
+  DEFAULT_PROMPT_INLINE_COMPLETION,
+} from "@/lib/providers/prompt-defaults";
 import { DeveloperSection } from "./settings-dialog-developer-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
 import { ToolingSection } from "./settings-dialog-tooling-section";
@@ -62,21 +70,22 @@ export const settingsSections = [
   { id: "theme", label: "Design", icon: Palette },
   { id: "chat", label: "Chat", icon: Bot },
   { id: "providers", label: "Providers", icon: Wrench },
-  { id: "tooling", label: "Tooling", icon: Shield },
-  { id: "subagents", label: "Subagent", icon: Wrench },
+  { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "skills", label: "Skills", icon: SearchCheck },
   { id: "commands", label: "Command", icon: KeyRound },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "editor", label: "Editor", icon: Code2 },
+  { id: "tooling", label: "Tooling", icon: Shield },
   { id: "developer", label: "Developer", icon: Wrench },
 ] as const;
 
 export type SectionId = (typeof settingsSections)[number]["id"];
 
 export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
-  { label: "Workspace", ids: ["general", "projects", "theme", "editor", "terminal", "tooling"] },
-  { label: "Agents", ids: ["chat", "providers"] },
-  { label: "Automation", ids: ["subagents", "skills", "commands", "developer"] },
+  { label: "Workspace", ids: ["general", "projects"] },
+  { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
+  { label: "Providers", ids: ["providers", "prompts", "skills", "commands"] },
+  { label: "System", ids: ["tooling", "developer"] },
 ];
 
 function formatThemeTokenLabel(token: ThemeTokenName) {
@@ -679,7 +688,6 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
 
 function GeneralSection() {
   const [
-    language,
     confirmBeforeClose,
     notificationSoundEnabled,
     notificationSoundPreset,
@@ -689,7 +697,6 @@ function GeneralSection() {
     notificationSoundCustomAudioName,
   ] = useAppStore(
     useShallow((state) => [
-      state.settings.language,
       state.settings.confirmBeforeClose,
       state.settings.notificationSoundEnabled,
       state.settings.notificationSoundPreset,
@@ -757,13 +764,6 @@ function GeneralSection() {
         description="Global preferences for the app window and reserved future defaults."
       />
       <SectionStack>
-        <SettingsCard title="Language" description="Reserved for future localization support.">
-          <DraftInput
-            className="h-10 rounded-md border-border/80 bg-background"
-            value={language}
-            onCommit={(nextValue) => updateSettings({ patch: { language: nextValue } })}
-          />
-        </SettingsCard>
         <SettingsCard
           title="Window Behavior"
           description="Control how the app handles the close shortcut."
@@ -1461,9 +1461,9 @@ function ChatSection() {
 
   return (
     <>
-      <SectionHeading title="Chat" description="Adjust how the compose box and message stream behave." />
+      <SectionHeading title="Chat" description="Typography and behavior defaults for the chat message surface." />
       <SectionStack>
-        <SettingsCard title="Chat Defaults" description="These apply to the shared chat surface across tasks.">
+        <SettingsCard title="Typography" description="Font sizes and families applied to the shared chat surface.">
           <LabeledField
             title="Message Font Size"
             description="Prose font size for chat messages. Line height scales proportionally."
@@ -1481,7 +1481,7 @@ function ChatSection() {
             </div>
           </LabeledField>
           <LabeledField
-            title="Message Code Font Size"
+            title="Code Font Size"
             description="Font size for inline code and code blocks in chat messages."
           >
             <div className="flex items-center gap-3">
@@ -1497,7 +1497,7 @@ function ChatSection() {
             </div>
           </LabeledField>
           <LabeledField
-            title="Message Font Family"
+            title="Font Family"
             description="Base sans-serif font for chat messages. Falls back to the Korean font, then sans-serif."
           >
             <DraftInput
@@ -1507,7 +1507,7 @@ function ChatSection() {
             />
           </LabeledField>
           <LabeledField
-            title="Message Mono Font Family"
+            title="Mono Font Family"
             description="Monospace font for inline code and code blocks in messages."
           >
             <DraftInput
@@ -1542,6 +1542,8 @@ function ChatSection() {
               <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">{Math.round(infoPanelScale * 100)}%</span>
             </div>
           </LabeledField>
+        </SettingsCard>
+        <SettingsCard title="Behavior" description="Toggle chat features and display preferences.">
           <LabeledField title="Smart Suggestions">
             <ChoiceButtons
               value={smartSuggestions ? "on" : "off"}
@@ -1574,7 +1576,7 @@ function ChatSection() {
           </LabeledField>
           <LabeledField
             title="Reasoning Expanded by Default"
-            description="When enabled, thinking/reasoning blocks in messages are expanded by default. When disabled, they start collapsed."
+            description="When enabled, thinking/reasoning blocks start expanded. When disabled, they start collapsed."
           >
             <ChoiceButtons
               value={reasoningDefaultExpanded ? "on" : "off"}
@@ -1617,68 +1619,13 @@ function ChatSection() {
   );
 }
 
-function PermissionsSection() {
-  const permissionMode = useAppStore((state) => state.settings.permissionMode);
-  const updateSettings = useAppStore((state) => state.updateSettings);
-
-  return (
-    <>
-      <SectionHeading title="Permissions" description="Choose the baseline approval policy used for new tasks." />
-      <SectionStack>
-        <SettingsCard title="Permission Defaults" description="This sets the general Stave-side permission mode.">
-          <ChoiceButtons
-            value={permissionMode}
-            onChange={(value) => updateSettings({ patch: { permissionMode: value } })}
-            options={[
-              { value: "require-approval", label: "Require Approval" },
-              { value: "auto-safe", label: "Auto Approve Safe" },
-            ]}
-          />
-        </SettingsCard>
-      </SectionStack>
-    </>
-  );
-}
-
-function SubagentsSection() {
-  const [subagentsEnabled, subagentsProfile] = useAppStore(
-    useShallow((state) => [state.settings.subagentsEnabled, state.settings.subagentsProfile] as const),
-  );
-  const updateSettings = useAppStore((state) => state.updateSettings);
-
-  return (
-    <>
-      <SectionHeading title="Subagent" description="Default behavior for skill and helper-agent delegation." />
-      <SectionStack>
-        <SettingsCard title="Subagent Defaults" description="Control whether subagents are offered by default and which profile they use.">
-          <LabeledField title="Enabled">
-            <ChoiceButtons
-              value={subagentsEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { subagentsEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField title="Profile">
-            <DraftInput
-              className="h-10 rounded-md border-border/80 bg-background"
-              value={subagentsProfile}
-              onCommit={(nextValue) => updateSettings({ patch: { subagentsProfile: nextValue } })}
-            />
-          </LabeledField>
-        </SettingsCard>
-      </SectionStack>
-    </>
-  );
-}
-
 function SkillsSection() {
-  const [skillsEnabled, skillsAutoSuggest, skillCatalog, activeWorkspaceId, projectPath, workspacePathById] = useAppStore(
+  const [skillsEnabled, skillsAutoSuggest, subagentsEnabled, subagentsProfile, skillCatalog, activeWorkspaceId, projectPath, workspacePathById] = useAppStore(
     useShallow((state) => [
       state.settings.skillsEnabled,
       state.settings.skillsAutoSuggest,
+      state.settings.subagentsEnabled,
+      state.settings.subagentsProfile,
       state.skillCatalog,
       state.activeWorkspaceId,
       state.projectPath,
@@ -1731,9 +1678,9 @@ function SkillsSection() {
 
   return (
     <>
-      <SectionHeading title="Skills" description="Configure discovery and auto-suggestion of installed skills." />
+      <SectionHeading title="Skills" description="Configure skill discovery, subagent delegation, and automatic prompting." />
       <SectionStack>
-        <SettingsCard title="Skills Defaults" description="These settings control skill suggestions and automatic prompting.">
+        <SettingsCard title="Skills" description="Control skill suggestions and automatic prompting.">
           <LabeledField title="Enabled">
             <ChoiceButtons
               value={skillsEnabled ? "on" : "off"}
@@ -1752,6 +1699,25 @@ function SkillsSection() {
                 { value: "on", label: "On" },
                 { value: "off", label: "Off" },
               ]}
+            />
+          </LabeledField>
+        </SettingsCard>
+        <SettingsCard title="Subagent" description="Control whether subagents are offered by default and which profile they use.">
+          <LabeledField title="Enabled">
+            <ChoiceButtons
+              value={subagentsEnabled ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { subagentsEnabled: value === "on" } })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
+          <LabeledField title="Profile">
+            <DraftInput
+              className="h-10 rounded-md border-border/80 bg-background"
+              value={subagentsProfile}
+              onCommit={(nextValue) => updateSettings({ patch: { subagentsProfile: nextValue } })}
             />
           </LabeledField>
         </SettingsCard>
@@ -1919,40 +1885,6 @@ function CommandsSection() {
               value={customCommands}
               onCommit={(nextValue) => updateSettings({ patch: { customCommands: nextValue } })}
               placeholder="/stave:clear = @clear&#10;/stave:hello = Hello from {provider} ({model})&#10;/stave:stats = Users: {user_count}, Assistant: {assistant_count}"
-            />
-          </LabeledField>
-        </SettingsCard>
-      </SectionStack>
-    </>
-  );
-}
-
-function ReviewSection() {
-  const [reviewStrictMode, reviewChecklistPreset] = useAppStore(
-    useShallow((state) => [state.settings.reviewStrictMode, state.settings.reviewChecklistPreset] as const),
-  );
-  const updateSettings = useAppStore((state) => state.updateSettings);
-
-  return (
-    <>
-      <SectionHeading title="Review" description="Review-mode defaults used for code and change review flows." />
-      <SectionStack>
-        <SettingsCard title="Review Defaults" description="Tighten review output or switch to a different checklist preset.">
-          <LabeledField title="Strict Mode">
-            <ChoiceButtons
-              value={reviewStrictMode ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { reviewStrictMode: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField title="Checklist Preset">
-            <DraftInput
-              className="h-10 rounded-md border-border/80 bg-background"
-              value={reviewChecklistPreset}
-              onCommit={(nextValue) => updateSettings({ patch: { reviewChecklistPreset: nextValue } })}
             />
           </LabeledField>
         </SettingsCard>
@@ -2181,8 +2113,6 @@ export function SettingsDialogSectionContent(args: {
       return <ChatSection />;
     case "tooling":
       return <ToolingSection />;
-    case "subagents":
-      return <SubagentsSection />;
     case "skills":
       return <SkillsSection />;
     case "commands":
@@ -2191,9 +2121,170 @@ export function SettingsDialogSectionContent(args: {
       return <EditorSection />;
     case "providers":
       return <ProvidersSection />;
+    case "prompts":
+      return <PromptsSection />;
     case "developer":
       return <DeveloperSection />;
     default:
       return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Prompts section – customisable AI prompt templates
+// ---------------------------------------------------------------------------
+
+interface PromptFieldProps {
+  title: string;
+  description: string;
+  value: string;
+  defaultValue: string;
+  onCommit: (value: string) => void;
+}
+
+function PromptField({ title, description, value, defaultValue, onCommit }: PromptFieldProps) {
+  const [draft, setDraft] = useState(value);
+  const isDefault = draft === defaultValue;
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  function handleBlur() {
+    if (draft !== value) {
+      onCommit(draft);
+    }
+  }
+
+  function handleReset() {
+    setDraft(defaultValue);
+    onCommit(defaultValue);
+  }
+
+  return (
+    <LabeledField title={title} description={description}>
+      <Textarea
+        className="min-h-[120px] resize-y font-mono text-xs leading-relaxed"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={handleBlur}
+        placeholder="(empty = disabled)"
+      />
+      <div className="flex items-center justify-between">
+        <p className={cn("text-xs", isDefault ? "text-muted-foreground" : "text-primary")}>
+          {isDefault ? "Using default" : "Customised"}
+        </p>
+        {!isDefault && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={handleReset}
+          >
+            <RefreshCcw className="size-3" />
+            Reset to default
+          </Button>
+        )}
+      </div>
+    </LabeledField>
+  );
+}
+
+function PromptsSection() {
+  const [
+    promptResponseStyle,
+    promptPrDescription,
+    promptSupervisorBreakdown,
+    promptSupervisorSynthesis,
+    promptPreprocessorClassifier,
+    promptInlineCompletion,
+  ] = useAppStore(
+    useShallow((state) => [
+      state.settings.promptResponseStyle,
+      state.settings.promptPrDescription,
+      state.settings.promptSupervisorBreakdown,
+      state.settings.promptSupervisorSynthesis,
+      state.settings.promptPreprocessorClassifier,
+      state.settings.promptInlineCompletion,
+    ] as const),
+  );
+  const updateSettings = useAppStore((state) => state.updateSettings);
+
+  return (
+    <>
+      <SectionHeading
+        title="Prompts"
+        description="Customise the AI prompts used by Stave for automated features. Each field has a sensible default; leave empty to disable."
+      />
+
+      <SectionStack>
+        <SettingsCard
+          title="Response Style"
+          description="Formatting guidance injected into every Claude and Codex turn. Controls how the model structures its answers — headings, bullet lists, conciseness, etc."
+        >
+          <PromptField
+            title="Response Formatting Rules"
+            description="Appended to the system prompt (Claude) or prepended to the user prompt (Codex). Empty disables the injection."
+            value={promptResponseStyle}
+            defaultValue={DEFAULT_PROMPT_RESPONSE_STYLE}
+            onCommit={(v) => updateSettings({ patch: { promptResponseStyle: v } })}
+          />
+        </SettingsCard>
+
+        <SettingsCard
+          title="Pull Request Description"
+          description="Template used when Stave auto-generates a PR title and body from the branch diff."
+        >
+          <PromptField
+            title="PR Description Prompt"
+            description="The instruction part of the prompt. Branch context (diff, commit log, file list) is appended automatically."
+            value={promptPrDescription}
+            defaultValue={DEFAULT_PROMPT_PR_DESCRIPTION}
+            onCommit={(v) => updateSettings({ patch: { promptPrDescription: v } })}
+          />
+        </SettingsCard>
+
+        <SettingsCard
+          title="Stave Auto — Orchestration"
+          description="Prompts used by the Stave meta-provider for task breakdown and result synthesis."
+        >
+          <PromptField
+            title="Supervisor Breakdown"
+            description="Instructs the supervisor how to decompose a request into subtasks. Use {maxSubtasks} and {providerNote} placeholders for dynamic values."
+            value={promptSupervisorBreakdown}
+            defaultValue={DEFAULT_PROMPT_SUPERVISOR_BREAKDOWN}
+            onCommit={(v) => updateSettings({ patch: { promptSupervisorBreakdown: v } })}
+          />
+          <PromptField
+            title="Supervisor Synthesis"
+            description="Instructs the supervisor how to merge subtask results into a final response."
+            value={promptSupervisorSynthesis}
+            defaultValue={DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS}
+            onCommit={(v) => updateSettings({ patch: { promptSupervisorSynthesis: v } })}
+          />
+          <PromptField
+            title="Preprocessor Classifier"
+            description="Classifies user intent for direct routing vs orchestration. Use {orchestrationGuidance} for mode-aware phrasing."
+            value={promptPreprocessorClassifier}
+            defaultValue={DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER}
+            onCommit={(v) => updateSettings({ patch: { promptPreprocessorClassifier: v } })}
+          />
+        </SettingsCard>
+
+        <SettingsCard
+          title="Inline Code Completion"
+          description="System prompt for the FIM (fill-in-the-middle) code completion engine in the editor."
+        >
+          <PromptField
+            title="Completion System Prompt"
+            description="Controls how the model generates code completions. Must instruct the model to output raw code only."
+            value={promptInlineCompletion}
+            defaultValue={DEFAULT_PROMPT_INLINE_COMPLETION}
+            onCommit={(v) => updateSettings({ patch: { promptInlineCompletion: v } })}
+          />
+        </SettingsCard>
+      </SectionStack>
+    </>
+  );
 }

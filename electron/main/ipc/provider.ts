@@ -387,6 +387,7 @@ export function registerProviderHandlers() {
       baseBranch,
       headBranch,
       guideContent,
+      promptTemplate: parsed.data.promptTemplate,
     });
     const mergedDraft = mergePullRequestDraft({
       fallbackTitle: fallbackDraft.title,

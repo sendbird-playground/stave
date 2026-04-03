@@ -29,10 +29,18 @@ export type ExecutionProcessing =
 
 function buildPreprocessorSystemPrompt(args: {
   orchestrationMode: StaveAutoProfile["orchestrationMode"];
+  customPrompt?: string;
 }) {
+  // Allow user-supplied override.  The {orchestrationGuidance} placeholder is
+  // resolved dynamically so the user can still reference the mode.
   const orchestrationGuidance = args.orchestrationMode === "aggressive"
     ? 'Bias toward "orchestrate" when the work naturally splits into analysis + implementation + verification.'
     : 'Use "orchestrate" only when the request genuinely benefits from multiple specialised steps.';
+
+  const custom = args.customPrompt?.trim();
+  if (custom) {
+    return custom.replace(/\{orchestrationGuidance\}/g, orchestrationGuidance);
+  }
 
   return `You are the Stave Auto classifier for an AI coding assistant.
 Classify the user's request into one of these direct intents:
@@ -204,6 +212,7 @@ export async function runPreprocessor(args: {
   try {
     const systemPrompt = buildPreprocessorSystemPrompt({
       orchestrationMode: args.profile.orchestrationMode,
+      customPrompt: args.profile.promptPreprocessorClassifier,
     });
     events = await args.runTurnBatch({
       providerId: preprocessorProviderId,

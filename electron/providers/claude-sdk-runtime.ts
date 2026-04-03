@@ -234,6 +234,7 @@ function buildClaudeDenyPermissionResult(args: {
 export function buildClaudeSystemPrompt(args: {
   cwd: string;
   baseSystemPrompt?: string;
+  responseStylePrompt?: string;
 }) {
   const workspacePrompt = [
     "Stave workspace context:",
@@ -243,12 +244,17 @@ export function buildClaudeSystemPrompt(args: {
     "If the user explicitly asks to access a path outside the workspace root, keep the exact requested path and request approval instead of guessing a nearby absolute path.",
   ].join("\n");
 
+  const parts: string[] = [];
   const baseSystemPrompt = args.baseSystemPrompt?.trim();
-  if (!baseSystemPrompt) {
-    return workspacePrompt;
+  if (baseSystemPrompt) {
+    parts.push(baseSystemPrompt);
   }
-
-  return `${baseSystemPrompt}\n\n${workspacePrompt}`;
+  const responseStyle = args.responseStylePrompt?.trim();
+  if (responseStyle) {
+    parts.push(responseStyle);
+  }
+  parts.push(workspacePrompt);
+  return parts.join("\n\n");
 }
 
 function extractClaudeTerminalIssue(args: { stdoutTail: string }) {
@@ -1241,6 +1247,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     const claudeSystemPrompt = buildClaudeSystemPrompt({
       cwd: runtimeCwd,
       baseSystemPrompt: args.runtimeOptions?.claudeSystemPrompt,
+      responseStylePrompt: args.runtimeOptions?.responseStylePrompt,
     });
     const providerPrompt = buildProviderTurnPrompt({
       providerId: args.providerId,
@@ -1591,6 +1598,7 @@ export async function suggestClaudePRDescription(args: {
   baseBranch: string;
   headBranch: string;
   guideContent?: string;
+  promptTemplate?: string;
 }): Promise<{ ok: boolean; title?: string; body?: string }> {
   try {
     const mod = await import("@anthropic-ai/claude-agent-sdk");
@@ -1601,25 +1609,14 @@ export async function suggestClaudePRDescription(args: {
 
     const claudeExecutablePath = resolveClaudeExecutablePath();
 
+    // Use user-provided prompt template or fall back to the built-in default.
+    const { DEFAULT_PROMPT_PR_DESCRIPTION } = await import(
+      "../../src/lib/providers/prompt-defaults"
+    );
+    const baseTemplate = args.promptTemplate?.trim() || DEFAULT_PROMPT_PR_DESCRIPTION;
+
     const prPrompt = [
-      "You are a pull request description generator. Generate a PR title and body for a GitHub pull request.",
-      "",
-      "Output format — return EXACTLY this structure with no extra commentary:",
-      "TITLE: <one-line PR title, 70 chars or fewer, imperative mood>",
-      "BODY:",
-      "## Summary",
-      "<1-3 concise bullet points describing what this PR does>",
-      "",
-      "## Changes",
-      "<bulleted list of key changes>",
-      "",
-      "Rules:",
-      "- PR title should follow Conventional Commits style: <type>(<optional scope>): <short description>",
-      "- Allowed types: feat, fix, refactor, style, docs, test, build, ci, chore, perf, revert",
-      "- If the recent commit log already includes a conventional commit title, reuse the same type and scope in the PR title",
-      "- Keep the description part lowercase; do not capitalize the first word after ': '",
-      "- Keep the summary focused on the 'why', changes on the 'what'",
-      "- Use imperative mood",
+      baseTemplate,
       "",
       `Base branch: ${args.baseBranch}`,
       `Head branch: ${args.headBranch}`,

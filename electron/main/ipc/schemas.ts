@@ -35,6 +35,7 @@ export const SuggestPRDescriptionArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),
     baseBranch: z.string().max(200).optional(),
+    promptTemplate: z.string().max(10_000).optional(),
   })
   .strict();
 
@@ -221,9 +222,15 @@ export const RuntimeOptionsObjectSchema = z
         claudeFastModeSupported: z.boolean().optional(),
         codexFastModeSupported: z.boolean().optional(),
         fastMode: z.boolean().optional(),
+        promptSupervisorBreakdown: z.string().max(10_000).optional(),
+        promptSupervisorSynthesis: z.string().max(10_000).optional(),
+        promptPreprocessorClassifier: z.string().max(10_000).optional(),
       })
       .strict()
       .optional(),
+    responseStylePrompt: z.string().max(10_000).optional(),
+    promptPrDescription: z.string().max(10_000).optional(),
+    promptInlineCompletion: z.string().max(10_000).optional(),
   })
   .strict();
 
@@ -737,6 +744,10 @@ export const FilesystemCreateDirectoryArgsSchema = z
   .strict();
 
 export const FilesystemCreateFileArgsSchema = FilesystemFileArgsSchema;
+
+export const FilesystemDeleteDirectoryArgsSchema = FilesystemCreateDirectoryArgsSchema;
+
+export const FilesystemDeleteFileArgsSchema = FilesystemFileArgsSchema;
 
 export const FilesystemWriteFileArgsSchema = FilesystemFileArgsSchema.extend({
   content: z.string(),

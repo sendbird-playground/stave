@@ -50,6 +50,14 @@ import {
 } from "@/lib/providers/canonical-request";
 import { getDefaultModelForProvider, listProviderIds } from "@/lib/providers/model-catalog";
 import {
+  DEFAULT_PROMPT_RESPONSE_STYLE,
+  DEFAULT_PROMPT_PR_DESCRIPTION,
+  DEFAULT_PROMPT_SUPERVISOR_BREAKDOWN,
+  DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS,
+  DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
+  DEFAULT_PROMPT_INLINE_COMPLETION,
+} from "@/lib/providers/prompt-defaults";
+import {
   buildStaveAutoModelSettingsPatch,
   DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
 } from "@/lib/providers/stave-auto-profile";
@@ -349,6 +357,21 @@ export interface AppSettings {
   codexExperimentalPlanMode: boolean;
   /** Legacy key name: when true, automatically approve provider tool prompts without user interaction. */
   planAutoApprove: boolean;
+  // ---------------------------------------------------------------------------
+  // Customisable AI prompt templates (Settings → Prompts)
+  // ---------------------------------------------------------------------------
+  /** Response formatting guidance injected into both Claude and Codex turns. Empty = disabled. */
+  promptResponseStyle: string;
+  /** Prompt template for AI-generated PR descriptions. */
+  promptPrDescription: string;
+  /** System prompt for Stave Auto orchestration breakdown. */
+  promptSupervisorBreakdown: string;
+  /** Prompt for Stave Auto synthesis. */
+  promptSupervisorSynthesis: string;
+  /** System prompt for Stave Auto intent classifier. */
+  promptPreprocessorClassifier: string;
+  /** System prompt for inline code completion. */
+  promptInlineCompletion: string;
 }
 
 interface AppState {
@@ -778,6 +801,12 @@ const defaultSettings: AppSettings = {
   codexFastMode: true,
   codexExperimentalPlanMode: false,
   planAutoApprove: false,
+  promptResponseStyle: DEFAULT_PROMPT_RESPONSE_STYLE,
+  promptPrDescription: DEFAULT_PROMPT_PR_DESCRIPTION,
+  promptSupervisorBreakdown: DEFAULT_PROMPT_SUPERVISOR_BREAKDOWN,
+  promptSupervisorSynthesis: DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS,
+  promptPreprocessorClassifier: DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
+  promptInlineCompletion: DEFAULT_PROMPT_INLINE_COMPLETION,
 };
 
 function createDefaultProviderAvailability() {

@@ -15,16 +15,18 @@ import {
   LoaderCircle,
   RefreshCcw,
   SquareTerminal,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
+import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { Badge, Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { workspaceFsAdapter } from "@/lib/fs";
-import type { WorkspaceCreateEntryResult, WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
+import type { WorkspaceCreateEntryResult, WorkspaceDeleteEntryResult, WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
 import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
 import { hasSourceControlStagedChanges, type SourceControlStatusItem } from "@/lib/source-control-status";
 import { cn } from "@/lib/utils";
@@ -55,8 +57,26 @@ type PendingExplorerCreate =
   | { type: "file"; placeholder: string }
   | { type: "folder"; placeholder: string };
 
+interface PendingExplorerDelete {
+  type: "file" | "folder";
+  path: string;
+  name: string;
+  affectedTabIds: string[];
+  dirtyTabCount: number;
+}
+
 function getParentDirectoryPath(args: { path: string }) {
   return args.path.split("/").slice(0, -1).join("/");
+}
+
+function isAffectedByExplorerDelete(args: {
+  candidatePath: string;
+  targetPath: string;
+  targetType: "file" | "folder";
+}) {
+  return args.targetType === "file"
+    ? args.candidatePath === args.targetPath
+    : args.candidatePath === args.targetPath || args.candidatePath.startsWith(`${args.targetPath}/`);
 }
 
 function resolveWorkspaceAbsolutePath(args: { workspacePath?: string; relativePath: string }) {
@@ -96,6 +116,8 @@ function ExplorerTreeRow(args: {
   onOpenInVSCode: (path: string) => void;
   onOpenInTerminal: (path: string) => void;
   onRefreshDirectory: (path: string) => void;
+  onRequestDeleteFile: (path: string, name: string) => void;
+  onRequestDeleteFolder: (path: string, name: string) => void;
 }) {
   const {
     entry,
@@ -112,6 +134,8 @@ function ExplorerTreeRow(args: {
     onOpenInVSCode,
     onOpenInTerminal,
     onRefreshDirectory,
+    onRequestDeleteFile,
+    onRequestDeleteFolder,
   } = args;
   const isFolder = entry.type === "folder";
   const isOpen = isFolder && expanded.has(entry.path);
@@ -193,6 +217,14 @@ function ExplorerTreeRow(args: {
               </ContextMenuItem>
             </>
           ) : null}
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            variant="destructive"
+            onSelect={() => (isFolder ? onRequestDeleteFolder(entry.path, entry.name) : onRequestDeleteFile(entry.path, entry.name))}
+          >
+            <Trash2 className="size-4" />
+            {isFolder ? "Delete folder" : "Delete file"}
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
       {isFolder && isOpen ? (
@@ -230,6 +262,8 @@ function ExplorerTreeRow(args: {
               onOpenInVSCode={onOpenInVSCode}
               onOpenInTerminal={onOpenInTerminal}
               onRefreshDirectory={onRefreshDirectory}
+              onRequestDeleteFile={onRequestDeleteFile}
+              onRequestDeleteFolder={onRequestDeleteFolder}
             />
           ))}
         </>
@@ -360,6 +394,7 @@ export function EditorPanel() {
     openDiffInEditor,
     setLayout,
     refreshProjectFiles,
+    closeEditorTab,
   ] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
     state.hasHydratedWorkspaces,
@@ -371,14 +406,17 @@ export function EditorPanel() {
     state.openDiffInEditor,
     state.setLayout,
     state.refreshProjectFiles,
+    state.closeEditorTab,
   ] as const));
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [explorerDirectoryStateByPath, setExplorerDirectoryStateByPath] = useState<Record<string, ExplorerDirectoryState>>({});
   const [explorerError, setExplorerError] = useState("");
   const [pendingExplorerCreate, setPendingExplorerCreate] = useState<PendingExplorerCreate | null>(null);
+  const [pendingExplorerDelete, setPendingExplorerDelete] = useState<PendingExplorerDelete | null>(null);
   const [pendingExplorerCreatePath, setPendingExplorerCreatePath] = useState("");
   const [isCreatingExplorerEntry, setIsCreatingExplorerEntry] = useState(false);
+  const [isDeletingExplorerEntry, setIsDeletingExplorerEntry] = useState(false);
   const [commitMessage, setCommitMessage] = useState("");
 
   const [sourceBranch, setSourceBranch] = useState("unknown");
@@ -413,8 +451,8 @@ export function EditorPanel() {
       : canCommitStagedChanges
         ? "Staged changes are ready to commit."
         : filteredScmItems.length > 0
-          ? "Stage files to prepare the next commit."
-          : "Working tree is clean.";
+      ? "Stage files to prepare the next commit."
+      : "Working tree is clean.";
   const explorerProjectName = projectName?.trim() || "Project";
   const rightTab = sidebarOverlayTab;
 
@@ -509,8 +547,10 @@ export function EditorPanel() {
     setExpandedFolders(new Set());
     setExplorerError("");
     setPendingExplorerCreate(null);
+    setPendingExplorerDelete(null);
     setPendingExplorerCreatePath("");
     setIsCreatingExplorerEntry(false);
+    setIsDeletingExplorerEntry(false);
   }, [activeWorkspaceId, workspaceCwd]);
 
   useEffect(() => {
@@ -865,6 +905,32 @@ export function EditorPanel() {
     return result;
   }
 
+  async function runExplorerDeleteOperation(args: {
+    execute: () => Promise<WorkspaceDeleteEntryResult>;
+    fallbackError: string;
+  }) {
+    let result = await args.execute();
+
+    if (!result.ok && workspaceCwd) {
+      await workspaceFsAdapter.setRoot?.({
+        rootPath: workspaceCwd,
+        rootName: explorerProjectName,
+        files: workspaceFsAdapter.getKnownFiles(),
+      });
+      result = await args.execute();
+    }
+
+    if (!result.ok) {
+      const message = result.stderr || args.fallbackError;
+      setExplorerError(message);
+      toast.error(args.fallbackError, { description: message });
+      return null;
+    }
+
+    setExplorerError("");
+    return result;
+  }
+
   function startExplorerCreate(type: PendingExplorerCreate["type"], directoryPath = "") {
     setExplorerError("");
     const normalizedDirectoryPath = normalizeRelativeInputPath({ value: directoryPath }) ?? "";
@@ -912,6 +978,86 @@ export function EditorPanel() {
 
     setPendingExplorerCreate(null);
     setPendingExplorerCreatePath("");
+  }
+
+  function requestExplorerDelete(args: Omit<PendingExplorerDelete, "affectedTabIds" | "dirtyTabCount">) {
+    const affectedTabs = useAppStore.getState().editorTabs.filter((tab) => isAffectedByExplorerDelete({
+      candidatePath: tab.filePath,
+      targetPath: args.path,
+      targetType: args.type,
+    }));
+    setExplorerError("");
+    setPendingExplorerDelete({
+      ...args,
+      affectedTabIds: affectedTabs.map((tab) => tab.id),
+      dirtyTabCount: affectedTabs.filter((tab) => tab.isDirty).length,
+    });
+  }
+
+  function handleRequestDeleteExplorerFile(path: string, name: string) {
+    requestExplorerDelete({ type: "file", path, name });
+  }
+
+  function handleRequestDeleteExplorerFolder(path: string, name: string) {
+    requestExplorerDelete({ type: "folder", path, name });
+  }
+
+  function cancelExplorerDelete() {
+    if (isDeletingExplorerEntry) {
+      return;
+    }
+
+    setPendingExplorerDelete(null);
+  }
+
+  async function confirmExplorerDelete() {
+    if (!pendingExplorerDelete || isDeletingExplorerEntry) {
+      return;
+    }
+
+    const deleteRequest = pendingExplorerDelete;
+    const nextExpandedPaths = deleteRequest.type === "folder"
+      ? [...expandedFolders].filter((path) => !isAffectedByExplorerDelete({
+        candidatePath: path,
+        targetPath: deleteRequest.path,
+        targetType: "folder",
+      }))
+      : [...expandedFolders];
+
+    setIsDeletingExplorerEntry(true);
+    try {
+      const result = await runExplorerDeleteOperation({
+        execute: () => (
+          deleteRequest.type === "file"
+            ? workspaceFsAdapter.deleteFile({ filePath: deleteRequest.path })
+            : workspaceFsAdapter.deleteDirectory({ directoryPath: deleteRequest.path })
+        ),
+        fallbackError: deleteRequest.type === "file"
+          ? "Failed to delete file."
+          : "Failed to delete folder.",
+      });
+      if (!result) {
+        setPendingExplorerDelete(null);
+        return;
+      }
+
+      setPendingExplorerDelete(null);
+
+      for (const tabId of deleteRequest.affectedTabIds) {
+        closeEditorTab({ tabId });
+      }
+
+      await Promise.all([
+        refreshProjectFiles(),
+        reloadExplorer({ expandedPaths: nextExpandedPaths }),
+      ]);
+
+      toast.success(deleteRequest.type === "file" ? "Deleted file" : "Deleted folder", {
+        description: deleteRequest.path,
+      });
+    } finally {
+      setIsDeletingExplorerEntry(false);
+    }
   }
 
   async function submitExplorerCreate() {
@@ -1301,6 +1447,8 @@ export function EditorPanel() {
                     onOpenInVSCode={handleOpenExplorerInVSCode}
                     onOpenInTerminal={handleOpenExplorerInTerminal}
                     onRefreshDirectory={handleRefreshExplorerDirectory}
+                    onRequestDeleteFile={handleRequestDeleteExplorerFile}
+                    onRequestDeleteFolder={handleRequestDeleteExplorerFolder}
                   />
                 ))}
               </div>
@@ -1379,6 +1527,29 @@ export function EditorPanel() {
           </div>
         ) : null}
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingExplorerDelete)}
+        title={pendingExplorerDelete?.type === "folder" ? "Delete Folder" : "Delete File"}
+        description={pendingExplorerDelete
+          ? [
+              pendingExplorerDelete.type === "folder"
+                ? `Delete "${pendingExplorerDelete.name}" and all of its contents from disk?`
+                : `Delete "${pendingExplorerDelete.name}" from disk?`,
+              pendingExplorerDelete.affectedTabIds.length > 0
+                ? pendingExplorerDelete.dirtyTabCount > 0
+                  ? `${pendingExplorerDelete.affectedTabIds.length} open tab(s) will be closed, including ${pendingExplorerDelete.dirtyTabCount} with unsaved changes.`
+                  : `${pendingExplorerDelete.affectedTabIds.length} open tab(s) will be closed.`
+                : null,
+            ].filter(Boolean).join(" ")
+          : ""
+        }
+        confirmLabel={pendingExplorerDelete?.type === "folder" ? "Delete Folder" : "Delete File"}
+        loading={isDeletingExplorerEntry}
+        onCancel={cancelExplorerDelete}
+        onConfirm={() => {
+          void confirmExplorerDelete();
+        }}
+      />
     </aside>
   );
 }

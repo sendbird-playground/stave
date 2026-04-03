@@ -1,6 +1,7 @@
 import type { RepoMapSnapshot } from "@/lib/fs/repo-map.types";
 import type {
   WorkspaceCreateEntryResult,
+  WorkspaceDeleteEntryResult,
   WorkspaceDirectoryEntry,
   WorkspaceFileData,
   WorkspaceFsAdapter,
@@ -47,6 +48,14 @@ export class UnavailableFsAdapter implements WorkspaceFsAdapter {
   }
 
   async createDirectory(_args: { directoryPath: string }): Promise<WorkspaceCreateEntryResult> {
+    return { ok: false, stderr: "Filesystem unavailable." };
+  }
+
+  async deleteFile(_args: { filePath: string }): Promise<WorkspaceDeleteEntryResult> {
+    return { ok: false, stderr: "Filesystem unavailable." };
+  }
+
+  async deleteDirectory(_args: { directoryPath: string }): Promise<WorkspaceDeleteEntryResult> {
     return { ok: false, stderr: "Filesystem unavailable." };
   }
 

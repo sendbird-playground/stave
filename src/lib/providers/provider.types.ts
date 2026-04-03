@@ -102,6 +102,10 @@ export interface StaveAutoProfile {
   claudeFastModeSupported?: boolean;
   codexFastModeSupported?: boolean;
   fastMode?: boolean;
+  // ---- Prompt overrides for orchestration / classification ----
+  promptSupervisorBreakdown?: string;
+  promptSupervisorSynthesis?: string;
+  promptPreprocessorClassifier?: string;
 }
 
 export interface CanonicalSkillContextPart {
@@ -221,6 +225,13 @@ export interface ProviderRuntimeOptions {
   codexResumeThreadId?: string;
   /** Stave Auto profile used by the meta-provider for direct routing and orchestration. */
   staveAuto?: StaveAutoProfile;
+  // ---- Customisable AI prompt overrides ----
+  /** Response formatting guidance injected into both Claude and Codex. */
+  responseStylePrompt?: string;
+  /** Custom prompt template for AI-generated PR descriptions. */
+  promptPrDescription?: string;
+  /** Custom system prompt for inline code completion. */
+  promptInlineCompletion?: string;
 }
 
 export interface ProviderAdapter {

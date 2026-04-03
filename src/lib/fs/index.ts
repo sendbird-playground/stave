@@ -85,6 +85,24 @@ class DynamicWorkspaceFsAdapter implements WorkspaceFsAdapter {
     return delegate.createDirectory(args);
   }
 
+  async deleteFile(args: Parameters<WorkspaceFsAdapter["deleteFile"]>[0]) {
+    const delegate = await this.prepareDelegate();
+    const result = await delegate.deleteFile(args);
+    if (result.ok) {
+      this.rootState.files = delegate.getKnownFiles();
+    }
+    return result;
+  }
+
+  async deleteDirectory(args: Parameters<WorkspaceFsAdapter["deleteDirectory"]>[0]) {
+    const delegate = await this.prepareDelegate();
+    const result = await delegate.deleteDirectory(args);
+    if (result.ok) {
+      this.rootState.files = delegate.getKnownFiles();
+    }
+    return result;
+  }
+
   getKnownFiles() {
     const delegateFiles = this.resolveDelegate().getKnownFiles();
     return delegateFiles.length > 0 ? delegateFiles : this.rootState.files;

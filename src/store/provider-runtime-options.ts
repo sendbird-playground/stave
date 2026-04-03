@@ -53,6 +53,12 @@ type RuntimeSettings = Pick<
   | "staveAutoMaxParallelSubtasks"
   | "staveAutoAllowCrossProviderWorkers"
   | "staveAutoFastMode"
+  | "promptResponseStyle"
+  | "promptPrDescription"
+  | "promptSupervisorBreakdown"
+  | "promptSupervisorSynthesis"
+  | "promptPreprocessorClassifier"
+  | "promptInlineCompletion"
 >;
 
 export function normalizeCodexApprovalPolicy(args: {
@@ -161,5 +167,8 @@ export function buildProviderRuntimeOptions(args: {
     staveAuto: buildStaveAutoProfileFromSettings({
       settings,
     }),
+    responseStylePrompt: settings.promptResponseStyle || undefined,
+    promptPrDescription: settings.promptPrDescription || undefined,
+    promptInlineCompletion: settings.promptInlineCompletion || undefined,
   };
 }
