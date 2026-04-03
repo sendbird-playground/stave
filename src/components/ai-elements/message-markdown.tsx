@@ -3,7 +3,11 @@ import { useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WorkspaceFileIcon } from "@/components/layout/explorer-entry-icon";
-import { formatFileLinkLocation, type ResolvedWorkspaceFileLink } from "@/lib/message-file-links";
+import {
+  formatFileLinkLocation,
+  isLikelyWorkspaceFilePath,
+  type ResolvedWorkspaceFileLink,
+} from "@/lib/message-file-links";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -74,17 +78,7 @@ function isLikelyCodeFenceFilePath(value: string) {
   if (!normalized) {
     return false;
   }
-  if (/\s/.test(normalized) || /[<>|*?]/.test(normalized) || normalized.startsWith("-")) {
-    return false;
-  }
-  const withoutLineLocation = normalized
-    .replace(/#L\d+(?:C\d+)?$/i, "")
-    .replace(/:\d+(?::\d+)?$/, "");
-  const baseName = withoutLineLocation.split("/").filter(Boolean).at(-1) ?? withoutLineLocation;
-  const hasPathSeparator = withoutLineLocation.includes("/");
-  const hasExtension = /\.[a-z0-9_-]{1,16}$/i.test(baseName);
-  const isDotFile = /^\.[a-z0-9._-]+$/i.test(baseName);
-  return hasPathSeparator || hasExtension || isDotFile;
+  return isLikelyWorkspaceFilePath(normalized);
 }
 
 function parseCodeFenceMetaForFilePath(meta?: string | null) {
