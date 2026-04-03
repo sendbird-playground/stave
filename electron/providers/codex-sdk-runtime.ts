@@ -749,7 +749,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
         pendingMessageText: pendingPlanMessageText,
         latestTodoPlanText,
       });
-      const text = pendingPlanMessageText?.trim() ?? "";
+      const rawText = pendingPlanMessageText?.trim() ?? "";
       pendingPlanMessageText = null;
 
       if (asPlanReady) {
@@ -759,8 +759,18 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
         return;
       }
 
-      if (text) {
-        emitBridgeEvent({ type: "text", text });
+      // Even on an early flush (intermediate event arrived before
+      // turn.completed), if the buffered text contains <proposed_plan>
+      // tags we must emit plan_ready so the plan viewer gets the correct
+      // content and the chat body isn't garbled with raw XML tags.
+      const extractedPlan = rawText ? extractProposedPlan(rawText) : null;
+      if (extractedPlan) {
+        emitBridgeEvent({ type: "plan_ready", planText: extractedPlan });
+        return;
+      }
+
+      if (rawText) {
+        emitBridgeEvent({ type: "text", text: rawText });
       }
     };
     // Clear any stale delta-tracking state from a previous aborted turn.
