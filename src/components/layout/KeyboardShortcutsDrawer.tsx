@@ -117,6 +117,11 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
             sequences: [[modifierLabel, "P"]],
           },
           {
+            label: "Open command palette",
+            description: "Open the global Stave command launcher for IDE actions and settings.",
+            sequences: [[modifierLabel, "Shift", "P"]],
+          },
+          {
             label: "Dialog primary action",
             description: "Run Save/Create/Open/Confirm in the active dialog. Use modifier+Enter in multiline fields.",
             sequences: [["Enter"], [modifierLabel, "Enter"]],
@@ -125,11 +130,6 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
             label: "Save file",
             description: "Save the active editor tab.",
             sequences: [[modifierLabel, "S"]],
-          },
-          {
-            label: "Switch provider",
-            description: "Flip the current task between Claude and Codex.",
-            sequences: [[modifierLabel, "Shift", "P"]],
           },
           {
             label: "Stop active turn",
@@ -198,7 +198,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           </div>
           <DrawerFooter className="border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
             <p className="text-sm text-muted-foreground">
-              Workspace quick jump follows the sidebar's top-to-bottom order, and the quick open / guide shortcuts are ignored while typing in inputs.
+              Workspace quick jump follows the sidebar's top-to-bottom order. Quick open and shortcut guide are ignored while typing in inputs, while the command palette stays globally available.
             </p>
             <DrawerClose asChild>
               <Button variant="outline">Close</Button>

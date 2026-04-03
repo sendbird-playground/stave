@@ -1,28 +1,20 @@
-import { Home, Keyboard, LoaderCircle, Moon, RefreshCw, Settings, Sun } from "lucide-react";
-import { Suspense, lazy, useCallback, useState } from "react";
-import { createPortal } from "react-dom";
+import { Command, Home, Keyboard, Moon, RefreshCw, Settings, Sun } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui";
+import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui";
 import { STAVE_LOGO_URL } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
-const loadSettingsDialog = () =>
-  import("@/components/layout/SettingsDialog").then((module) => ({
-    default: module.SettingsDialog,
-  }));
-const SettingsDialog = lazy(() => loadSettingsDialog());
-const loadKeyboardShortcutsDrawer = () =>
-  import("@/components/layout/KeyboardShortcutsDrawer").then((module) => ({
-    default: module.KeyboardShortcutsDrawer,
-  }));
-const KeyboardShortcutsDrawer = lazy(() => loadKeyboardShortcutsDrawer());
-
-export function StaveAppMenuButton(args?: { compact?: boolean; className?: string }) {
+export function StaveAppMenuButton(args?: {
+  compact?: boolean;
+  className?: string;
+  onOpenCommandPalette?: () => void;
+  onOpenKeyboardShortcuts?: () => void;
+  onOpenSettings?: () => void;
+}) {
   const compact = args?.compact ?? false;
   const [open, setOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [clearTaskSelection, projectPath, isDarkMode, setDarkMode, refreshProjectFiles] = useAppStore(
     useShallow((state) => [
       state.clearTaskSelection,
@@ -41,28 +33,14 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
     setDarkMode({ enabled: !isDarkMode });
   }, [isDarkMode, setDarkMode]);
 
-  const handleOpenShortcuts = useCallback(() => {
-    void loadKeyboardShortcutsDrawer();
-    setShortcutsOpen(true);
-  }, []);
-
-  const handleOpenSettings = useCallback(() => {
-    void loadSettingsDialog();
-    setSettingsOpen(true);
-  }, []);
-
-  function OverlayLoadingFallback(args: { title: string }) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]">
-        <Card className="w-full max-w-md border-border/80 bg-background/95 p-6 shadow-2xl">
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            Loading {args.title.toLowerCase()}...
-          </div>
-        </Card>
-      </div>
-    );
-  }
+  const modifierLabel = useMemo(
+    () => (
+      typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
+        ? "Cmd"
+        : "Ctrl"
+    ),
+    [],
+  );
 
   return (
     <>
@@ -94,6 +72,11 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
             <Home className="size-4 text-muted-foreground" />
             Home
           </DropdownMenuItem>
+          <DropdownMenuItem className="gap-2" onSelect={args?.onOpenCommandPalette}>
+            <Command className="size-4 text-muted-foreground" />
+            Command Palette
+            <DropdownMenuShortcut>{modifierLabel}+Shift+P</DropdownMenuShortcut>
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           {projectPath ? (
             <DropdownMenuItem className="gap-2" onSelect={handleRefreshProjectFiles}>
@@ -109,32 +92,16 @@ export function StaveAppMenuButton(args?: { compact?: boolean; className?: strin
             )}
             {isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onSelect={handleOpenShortcuts}>
+          <DropdownMenuItem className="gap-2" onSelect={args?.onOpenKeyboardShortcuts}>
             <Keyboard className="size-4 text-muted-foreground" />
             Keyboard shortcuts
           </DropdownMenuItem>
-          <DropdownMenuItem className="gap-2" onSelect={handleOpenSettings}>
+          <DropdownMenuItem className="gap-2" onSelect={args?.onOpenSettings}>
             <Settings className="size-4 text-muted-foreground" />
             Settings
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {shortcutsOpen
-        ? createPortal(
-            <Suspense fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}>
-              <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-            </Suspense>,
-            document.body,
-          )
-        : null}
-      {settingsOpen
-        ? createPortal(
-            <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
-              <SettingsDialog open={settingsOpen} onOpenChange={({ open }) => setSettingsOpen(open)} />
-            </Suspense>,
-            document.body,
-          )
-        : null}
     </>
   );
 }

@@ -31,6 +31,8 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - desktop-first Claude and Codex workspace
 - task-oriented chat with approvals, user-input, tools, diffs, and plans
 - task-local prompt history navigation in the composer via `ArrowUp` / `ArrowDown`
+- global command palette on `Cmd/Ctrl+Shift+P` for IDE actions, separate from chat slash commands
+- Session Replay drawer for recent-turn inspection and request snapshots
 - `$skill-name` composer selector that resolves installed Claude and Codex skills across global, user, and workspace scopes
 - file and image attachments in the composer, including screenshot capture and clipboard image paste with inline preview
 - Monaco editor with workspace-backed TypeScript IntelliSense, optional LSP-backed TypeScript/JavaScript and Python support, docked terminal, and source-control actions
@@ -241,6 +243,7 @@ Stable project documentation now lives under `docs/`.
 - [Provider runtimes](docs/providers/provider-runtimes.md)
 - [Remote Stave control roadmap](docs/future/remote-stave-control-roadmap-2026-03-31.md)
 - [Notifications](docs/features/notifications.md)
+- [Command Palette](docs/features/command-palette.md)
 - [Codex native plan roadmap](docs/future/codex-native-plan-mode-roadmap-2026-03-31.md)
 - [Skill selector](docs/features/skill-selector.md)
 - [Attachments](docs/features/attachments.md)

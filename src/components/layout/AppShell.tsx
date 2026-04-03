@@ -1,24 +1,35 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { GlobalCommandPalette } from "@/components/layout/GlobalCommandPalette";
 import { TopBar } from "@/components/layout/TopBar";
 import { ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
 import { ChatArea } from "@/components/session/ChatArea";
 import { TerminalDock } from "@/components/layout/TerminalDock";
-import { Toaster } from "@/components/ui";
+import { Card, Toaster } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
-import { getNextProviderId } from "@/lib/providers/model-catalog";
 import { RenderProfiler } from "@/lib/render-profiler";
 import { MIN_EDITOR_PANEL_WIDTH, WORKSPACE_SIDEBAR_MIN_WIDTH, useAppStore } from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
 import { isEditableShortcutTarget, shouldAbortTaskOnEscape } from "@/components/layout/app-shell.shortcuts";
+import type { SectionId } from "@/components/layout/settings-dialog.schema";
 
 const EditorPanel = lazy(() =>
   import("@/components/layout/EditorPanel").then((module) => ({
     default: module.EditorPanel,
   }))
 );
+const loadSettingsDialog = () =>
+  import("@/components/layout/SettingsDialog").then((module) => ({
+    default: module.SettingsDialog,
+  }));
+const SettingsDialog = lazy(() => loadSettingsDialog());
+const loadKeyboardShortcutsDrawer = () =>
+  import("@/components/layout/KeyboardShortcutsDrawer").then((module) => ({
+    default: module.KeyboardShortcutsDrawer,
+  }));
+const KeyboardShortcutsDrawer = lazy(() => loadKeyboardShortcutsDrawer());
 
 type ResizableLayoutKey =
   | "workspaceSidebarWidth"
@@ -38,25 +49,71 @@ function clampPanelWidth(value: number, min: number, max: number) {
 export function AppShell() {
   const [
     projectPath,
+    projectName,
+    tasks,
+    activeTaskId,
+    activeTurnIdsByTask,
+    workspaces,
+    activeWorkspaceId,
+    workspaceBranchById,
+    workspaceDefaultById,
+    workspacePathById,
+    recentProjects,
     workspaceSidebarWidth,
     workspaceSidebarCollapsed,
     editorVisible,
     editorPanelWidth,
     sidebarOverlayVisible,
+    sidebarOverlayTab,
     explorerPanelWidth,
     terminalDocked,
     terminalDockHeight,
+    activeEditorTabId,
+    settings,
+    createTask,
+    selectTask,
+    clearTaskSelection,
+    setTaskProvider,
+    saveActiveEditorTab,
+    refreshProjectFiles,
+    refreshWorkspaces,
+    openProject,
+    switchWorkspace,
+    abortTaskTurn,
     setLayout,
   ] = useAppStore(useShallow((state) => [
     state.projectPath,
+    state.projectName,
+    state.tasks,
+    state.activeTaskId,
+    state.activeTurnIdsByTask,
+    state.workspaces,
+    state.activeWorkspaceId,
+    state.workspaceBranchById,
+    state.workspaceDefaultById,
+    state.workspacePathById,
+    state.recentProjects,
     state.layout.workspaceSidebarWidth,
     state.layout.workspaceSidebarCollapsed,
     state.layout.editorVisible,
     state.layout.editorPanelWidth,
     state.layout.sidebarOverlayVisible,
+    state.layout.sidebarOverlayTab,
     state.layout.explorerPanelWidth,
     state.layout.terminalDocked,
     state.layout.terminalDockHeight ?? 210,
+    state.activeEditorTabId,
+    state.settings,
+    state.createTask,
+    state.selectTask,
+    state.clearTaskSelection,
+    state.setTaskProvider,
+    state.saveActiveEditorTab,
+    state.refreshProjectFiles,
+    state.refreshWorkspaces,
+    state.openProject,
+    state.switchWorkspace,
+    state.abortTaskTurn,
     state.setLayout,
   ] as const));
   const hasProject = Boolean(projectPath);
@@ -66,6 +123,11 @@ export function AppShell() {
   const resizeFrameRef = useRef<number | null>(null);
   const [zoomHudPercent, setZoomHudPercent] = useState<number | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<SectionId>("general");
+  const [settingsInitialProjectPath, setSettingsInitialProjectPath] = useState<string | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const [contentRowWidth, setContentRowWidth] = useState(0);
   const [isLargeViewport, setIsLargeViewport] = useState(() =>
@@ -76,6 +138,35 @@ export function AppShell() {
     const input = document.querySelector<HTMLInputElement>("[data-file-search-input]");
     input?.focus();
     input?.select();
+  }, []);
+  const handlePreloadSettings = useCallback(() => {
+    void loadSettingsDialog();
+  }, []);
+  const handleOpenSettings = useCallback((options?: {
+    projectPath?: string | null;
+    section?: SectionId;
+  }) => {
+    handlePreloadSettings();
+    setSettingsInitialSection(options?.section ?? "general");
+    setSettingsInitialProjectPath(options?.projectPath ?? null);
+    setSettingsOpen(true);
+  }, [handlePreloadSettings]);
+  const handleSettingsOpenChange = useCallback((options: { open: boolean }) => {
+    setSettingsOpen(options.open);
+    if (!options.open) {
+      setSettingsInitialSection("general");
+      setSettingsInitialProjectPath(null);
+    }
+  }, []);
+  const handlePreloadKeyboardShortcuts = useCallback(() => {
+    void loadKeyboardShortcutsDrawer();
+  }, []);
+  const handleOpenKeyboardShortcuts = useCallback(() => {
+    handlePreloadKeyboardShortcuts();
+    setShortcutsOpen(true);
+  }, [handlePreloadKeyboardShortcuts]);
+  const handleOpenCommandPalette = useCallback(() => {
+    setCommandPaletteOpen(true);
   }, []);
 
   function flushPendingLayoutPatch() {
@@ -107,6 +198,21 @@ export function AppShell() {
       pendingLayoutPatchRef.current = null;
       setLayout({ patch });
     });
+  }
+
+  function OverlayLoadingFallback(args: { title: string }) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]">
+        <Card className="w-full max-w-md border-border/80 bg-background/95 p-6 shadow-2xl">
+          <div className="text-sm text-muted-foreground">
+            Loading
+            {" "}
+            {args.title.toLowerCase()}
+            ...
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   useEffect(() => {
@@ -167,13 +273,20 @@ export function AppShell() {
       const store = useAppStore.getState();
       const hasMod = event.ctrlKey || event.metaKey;
 
-      if (hasMod && !event.shiftKey && event.key.toLowerCase() === "p") {
+      if (hasMod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
         if (!store.projectPath?.trim()) {
           return;
         }
         event.preventDefault();
         event.stopPropagation();
         handleFocusFileSearch();
+        return;
+      }
+
+      if (hasMod && !event.altKey && event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        event.stopPropagation();
+        handleOpenCommandPalette();
         return;
       }
 
@@ -193,6 +306,12 @@ export function AppShell() {
         })) {
           store.abortTaskTurn({ taskId: store.activeTaskId });
         }
+        return;
+      }
+
+      if (event.code === "Slash" && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        handleOpenKeyboardShortcuts();
         return;
       }
 
@@ -228,17 +347,6 @@ export function AppShell() {
         return;
       }
 
-      if (event.shiftKey && event.key.toLowerCase() === "p") {
-        event.preventDefault();
-        const activeTask = store.tasks.find((task) => task.id === store.activeTaskId);
-        if (!activeTask) {
-          return;
-        }
-        const nextProvider = getNextProviderId({ providerId: activeTask.provider });
-        store.setTaskProvider({ taskId: activeTask.id, provider: nextProvider });
-        return;
-      }
-
       if (event.shiftKey && (event.key.toLowerCase() === "j" || event.key === "ArrowDown")) {
         event.preventDefault();
         const currentIndex = store.tasks.findIndex((task) => task.id === store.activeTaskId);
@@ -263,7 +371,7 @@ export function AppShell() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleFocusFileSearch]);
+  }, [handleFocusFileSearch, handleOpenCommandPalette, handleOpenKeyboardShortcuts]);
 
   useEffect(() => () => {
     if (resizeFrameRef.current !== null) {
@@ -402,6 +510,140 @@ export function AppShell() {
   }
 
   const showOverlayRightPanel = overlayRightPanelMode !== null;
+  const modifierLabel = useMemo<"Cmd" | "Ctrl">(
+    () => (
+      typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
+        ? "Cmd"
+        : "Ctrl"
+    ),
+    [],
+  );
+  const activeWorkspacePath = workspacePathById[activeWorkspaceId] ?? projectPath;
+  const commandPaletteContext = useMemo(() => ({
+    activeEditorTabId,
+    activeTaskId,
+    hasActiveTurn: Boolean(activeTaskId && activeTurnIdsByTask[activeTaskId]),
+    layout: {
+      editorVisible,
+      sidebarOverlayTab,
+      sidebarOverlayVisible,
+      terminalDocked,
+      workspaceSidebarCollapsed,
+    },
+    modifierLabel,
+    preferences: {
+      hiddenIds: settings.commandPaletteHiddenCommandIds,
+      pinnedIds: settings.commandPalettePinnedCommandIds,
+      recentIds: settings.commandPaletteRecentCommandIds,
+      showRecent: settings.commandPaletteShowRecent,
+    },
+    projectPath,
+    projects: (() => {
+      const remembered = recentProjects.map((project) => ({
+        isCurrent: project.projectPath === projectPath,
+        projectName: project.projectName,
+        projectPath: project.projectPath,
+      }));
+      if (!projectPath || remembered.some((project) => project.projectPath === projectPath)) {
+        return remembered;
+      }
+      return [
+        {
+          isCurrent: true,
+          projectName: projectName ?? "Current project",
+          projectPath,
+        },
+        ...remembered,
+      ];
+    })(),
+    tasks: tasks.map((task) => ({
+      id: task.id,
+      isActive: task.id === activeTaskId,
+      isResponding: Boolean(activeTurnIdsByTask[task.id]),
+      provider: task.provider,
+      title: task.title,
+    })),
+    workspacePath: activeWorkspacePath ?? null,
+    workspaces: workspaces.map((workspace) => ({
+      id: workspace.id,
+      isActive: workspace.id === activeWorkspaceId,
+      isDefault: Boolean(workspaceDefaultById[workspace.id]),
+      name: workspace.name,
+      branch: workspaceBranchById[workspace.id],
+      path: workspacePathById[workspace.id],
+    })),
+    commands: {
+      clearTaskSelection: () => clearTaskSelection(),
+      createTask: () => createTask({ title: "" }),
+      focusFileSearch: handleFocusFileSearch,
+      openInTerminal: async (path: string) => {
+        await window.api?.shell?.openInTerminal?.({ path });
+      },
+      openInVSCode: async (path: string) => {
+        await window.api?.shell?.openInVSCode?.({ path });
+      },
+      openKeyboardShortcuts: handleOpenKeyboardShortcuts,
+      openProject: (nextProjectPath: string) => openProject({ projectPath: nextProjectPath }),
+      openSettings: handleOpenSettings,
+      refreshProjectFiles: () => refreshProjectFiles(),
+      refreshWorkspaces: () => refreshWorkspaces(),
+      revealInFileManager: async (path: string) => {
+        await window.api?.shell?.showInFinder?.({ path });
+      },
+      saveActiveEditor: () => saveActiveEditorTab().then(() => undefined),
+      selectTask: (taskId: string) => selectTask({ taskId }),
+      setTaskProvider: (taskId: string, provider: "claude-code" | "codex" | "stave") => setTaskProvider({ taskId, provider }),
+      showOverlayTab: (tab: "explorer" | "changes" | "information") => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: tab } }),
+      stopActiveTurn: () => abortTaskTurn({ taskId: activeTaskId }),
+      switchWorkspace: (workspaceId: string) => switchWorkspace({ workspaceId }),
+      toggleChangesPanel: () => {
+        const currentLayout = useAppStore.getState().layout;
+        const nextVisible = !(currentLayout.sidebarOverlayVisible && currentLayout.sidebarOverlayTab === "changes");
+        setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "changes" } });
+      },
+      toggleEditor: () => setLayout({ patch: { editorVisible: !useAppStore.getState().layout.editorVisible } }),
+      toggleTerminal: () => setLayout({ patch: { terminalDocked: !useAppStore.getState().layout.terminalDocked } }),
+      toggleWorkspaceSidebar: () => setLayout({ patch: { workspaceSidebarCollapsed: !useAppStore.getState().layout.workspaceSidebarCollapsed } }),
+    },
+  }), [
+    abortTaskTurn,
+    activeEditorTabId,
+    activeTaskId,
+    activeTurnIdsByTask,
+    activeWorkspaceId,
+    activeWorkspacePath,
+    clearTaskSelection,
+    createTask,
+    editorVisible,
+    handleFocusFileSearch,
+    handleOpenKeyboardShortcuts,
+    handleOpenSettings,
+    modifierLabel,
+    openProject,
+    projectPath,
+    projectName,
+    recentProjects,
+    refreshProjectFiles,
+    refreshWorkspaces,
+    saveActiveEditorTab,
+    selectTask,
+    setLayout,
+    setTaskProvider,
+    settings.commandPaletteHiddenCommandIds,
+    settings.commandPalettePinnedCommandIds,
+    settings.commandPaletteRecentCommandIds,
+    settings.commandPaletteShowRecent,
+    sidebarOverlayVisible,
+    sidebarOverlayTab,
+    tasks,
+    terminalDocked,
+    workspaceBranchById,
+    workspaceDefaultById,
+    workspacePathById,
+    workspaceSidebarCollapsed,
+    workspaces,
+    switchWorkspace,
+  ]);
 
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
@@ -425,8 +667,36 @@ export function AppShell() {
           void window.api?.window?.close?.();
         }}
       />
+      <GlobalCommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        runtimeContext={commandPaletteContext}
+      />
+      {shortcutsOpen ? (
+        <Suspense fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}>
+          <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        </Suspense>
+      ) : null}
+      {settingsOpen ? (
+        <Suspense fallback={<OverlayLoadingFallback title="Settings" />}>
+          <SettingsDialog
+            open={settingsOpen}
+            initialSection={settingsInitialSection}
+            initialProjectPath={settingsInitialProjectPath}
+            onOpenChange={handleSettingsOpenChange}
+          />
+        </Suspense>
+      ) : null}
       <RenderProfiler id="ProjectWorkspaceSidebar">
-        <ProjectWorkspaceSidebar width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)} collapsed={workspaceSidebarCollapsed} animate={!sidebarResizing} />
+        <ProjectWorkspaceSidebar
+          width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)}
+          collapsed={workspaceSidebarCollapsed}
+          animate={!sidebarResizing}
+          onOpenCommandPalette={handleOpenCommandPalette}
+          onOpenKeyboardShortcuts={handleOpenKeyboardShortcuts}
+          onOpenSettings={handleOpenSettings}
+          onPreloadSettings={handlePreloadSettings}
+        />
       </RenderProfiler>
       {!workspaceSidebarCollapsed ? (
         <div

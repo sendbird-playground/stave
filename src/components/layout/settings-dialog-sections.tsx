@@ -1,6 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
-import { Bot, Check, ChevronDown, ChevronRight, Code2, Cog, Contrast, FileAudio, Folder, Globe, KeyRound, Monitor, Moon, Palette, RefreshCcw, ScrollText, SearchCheck, Shield, Sun, TerminalSquare, Trash2, Upload, Wrench, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Contrast, FileAudio, Folder, Globe, Monitor, Moon, RefreshCcw, Sun, Trash2, Upload, X } from "lucide-react";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
+import {
+  COMMAND_PALETTE_GROUP_LABELS,
+  getCommandPaletteCoreCommands,
+} from "@/components/layout/command-palette-registry";
+import { settingsSectionGroups, settingsSections, type SectionId } from "@/components/layout/settings-dialog.schema";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Button, Slider, Textarea } from "@/components/ui";
@@ -67,30 +72,6 @@ import {
   SectionStack,
   SettingsCard,
 } from "./settings-dialog.shared";
-
-export const settingsSections = [
-  { id: "general", label: "General", icon: Cog },
-  { id: "projects", label: "Projects", icon: Folder },
-  { id: "theme", label: "Design", icon: Palette },
-  { id: "chat", label: "Chat", icon: Bot },
-  { id: "providers", label: "Providers", icon: Wrench },
-  { id: "prompts", label: "Prompts", icon: ScrollText },
-  { id: "skills", label: "Skills", icon: SearchCheck },
-  { id: "commands", label: "Command", icon: KeyRound },
-  { id: "terminal", label: "Terminal", icon: TerminalSquare },
-  { id: "editor", label: "Editor", icon: Code2 },
-  { id: "tooling", label: "Tooling", icon: Shield },
-  { id: "developer", label: "Developer", icon: Wrench },
-] as const;
-
-export type SectionId = (typeof settingsSections)[number]["id"];
-
-export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
-  { label: "Workspace", ids: ["general", "projects"] },
-  { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
-  { label: "Providers", ids: ["providers", "prompts", "skills", "commands"] },
-  { label: "System", ids: ["tooling", "developer"] },
-];
 
 function formatThemeTokenLabel(token: ThemeTokenName) {
   return token
@@ -1871,6 +1852,152 @@ function SkillsSection() {
   );
 }
 
+function CommandPaletteSection() {
+  const [
+    commandPaletteShowRecent,
+    commandPalettePinnedCommandIds,
+    commandPaletteHiddenCommandIds,
+    commandPaletteRecentCommandIds,
+  ] = useAppStore(
+    useShallow((state) => [
+      state.settings.commandPaletteShowRecent,
+      state.settings.commandPalettePinnedCommandIds,
+      state.settings.commandPaletteHiddenCommandIds,
+      state.settings.commandPaletteRecentCommandIds,
+    ] as const),
+  );
+  const updateSettings = useAppStore((state) => state.updateSettings);
+  const commands = useMemo(() => getCommandPaletteCoreCommands(), []);
+
+  function togglePinnedCommand(commandId: string) {
+    const isPinned = commandPalettePinnedCommandIds.includes(commandId);
+    updateSettings({
+      patch: {
+        commandPalettePinnedCommandIds: isPinned
+          ? commandPalettePinnedCommandIds.filter((id) => id !== commandId)
+          : [...commandPalettePinnedCommandIds, commandId],
+        commandPaletteHiddenCommandIds: commandPaletteHiddenCommandIds.filter((id) => id !== commandId),
+      },
+    });
+  }
+
+  function toggleHiddenCommand(commandId: string) {
+    const isHidden = commandPaletteHiddenCommandIds.includes(commandId);
+    updateSettings({
+      patch: {
+        commandPaletteHiddenCommandIds: isHidden
+          ? commandPaletteHiddenCommandIds.filter((id) => id !== commandId)
+          : [...commandPaletteHiddenCommandIds, commandId],
+        commandPalettePinnedCommandIds: commandPalettePinnedCommandIds.filter((id) => id !== commandId),
+        commandPaletteRecentCommandIds: isHidden
+          ? commandPaletteRecentCommandIds
+          : commandPaletteRecentCommandIds.filter((id) => id !== commandId),
+      },
+    });
+  }
+
+  return (
+    <>
+      <SectionHeading title="Command Palette" description="Configure the global command launcher opened with Cmd/Ctrl+Shift+P. This is separate from slash commands in the chat input." />
+      <SectionStack>
+        <SettingsCard title="Behavior" description="Pinned commands appear first, hidden commands stay out of the palette, and recent history can be shown as its own section.">
+          <LabeledField title="Recent Commands">
+            <ChoiceButtons
+              value={commandPaletteShowRecent ? "show" : "hide"}
+              onChange={(value) => updateSettings({ patch: { commandPaletteShowRecent: value === "show" } })}
+              options={[
+                { value: "show", label: "Show" },
+                { value: "hide", label: "Hide" },
+              ]}
+            />
+          </LabeledField>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => updateSettings({ patch: { commandPaletteRecentCommandIds: [] } })}
+              disabled={commandPaletteRecentCommandIds.length === 0}
+            >
+              Clear Recent History
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => updateSettings({
+                patch: {
+                  commandPalettePinnedCommandIds: [],
+                  commandPaletteHiddenCommandIds: [],
+                  commandPaletteRecentCommandIds: [],
+                  commandPaletteShowRecent: true,
+                },
+              })}
+              disabled={
+                commandPalettePinnedCommandIds.length === 0
+                && commandPaletteHiddenCommandIds.length === 0
+                && commandPaletteRecentCommandIds.length === 0
+                && commandPaletteShowRecent
+              }
+            >
+              Reset Palette Settings
+            </Button>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard title="Command Visibility" description="Pin the core actions you use most, or hide the ones you never want in the global palette.">
+          <div className="space-y-2">
+            {commands.map((command) => {
+              const isPinned = commandPalettePinnedCommandIds.includes(command.id);
+              const isHidden = commandPaletteHiddenCommandIds.includes(command.id);
+
+              return (
+                <div key={command.id} className="rounded-lg border border-border/70 bg-card/60 p-3">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-foreground">{command.title}</p>
+                        <Badge variant="outline">{COMMAND_PALETTE_GROUP_LABELS[command.group]}</Badge>
+                        {command.shortcut ? <Badge variant="secondary">{command.shortcut}</Badge> : null}
+                        {isPinned ? <Badge>Pinned</Badge> : null}
+                        {isHidden ? <Badge variant="destructive">Hidden</Badge> : null}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{command.description}</p>
+                      <p className="font-mono text-[11px] text-muted-foreground">{command.id}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button
+                        variant={isPinned ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => togglePinnedCommand(command.id)}
+                      >
+                        {isPinned ? "Unpin" : "Pin"}
+                      </Button>
+                      <Button
+                        variant={isHidden ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => toggleHiddenCommand(command.id)}
+                      >
+                        {isHidden ? "Show" : "Hide"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </SettingsCard>
+
+        <SettingsCard title="Programmatic Contributors" description="The palette is backed by a registry so internal modules can add commands without coupling to the dialog component.">
+          <p className="text-sm leading-6 text-muted-foreground">
+            Use
+            {" "}
+            <code>registerCommandPaletteContributor()</code>
+            {" "}
+            to inject additional commands. Core Stave commands are customizable here; dynamic workspace/task entries and future contributed commands inherit the same execution surface automatically.
+          </p>
+        </SettingsCard>
+      </SectionStack>
+    </>
+  );
+}
+
 function CommandsSection() {
   const [commandPolicy, commandAllowlist, customCommands] = useAppStore(
     useShallow((state) => [
@@ -1883,9 +2010,9 @@ function CommandsSection() {
 
   return (
     <>
-      <SectionHeading title="Command" description="Control Stave-local slash commands and provider passthrough behavior." />
+      <SectionHeading title="Slash Commands" description="Control Stave-local slash commands and provider passthrough behavior in the chat input." />
       <SectionStack>
-        <SettingsCard title="Command Defaults" description="`/stave:*` commands are handled locally by Stave. Claude-native commands are validated against the current SDK catalog before passthrough; Codex slash commands are still forwarded unchanged.">
+        <SettingsCard title="Slash Command Defaults" description="`/stave:*` commands are handled locally by Stave. Claude-native commands are validated against the current SDK catalog before passthrough; Codex slash commands are still forwarded unchanged.">
           <LabeledField title="Command Policy">
             <ChoiceButtons
               value={commandPolicy}
@@ -2142,6 +2269,8 @@ export function SettingsDialogSectionContent(args: {
       return <ToolingSection />;
     case "skills":
       return <SkillsSection />;
+    case "commandPalette":
+      return <CommandPaletteSection />;
     case "commands":
       return <CommandsSection />;
     case "editor":

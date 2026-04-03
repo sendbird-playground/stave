@@ -20,7 +20,8 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { SettingsDialogSectionContent, settingsSectionGroups, settingsSections, type SectionId } from "./settings-dialog-sections";
+import { settingsSectionGroups, settingsSections, type SectionId } from "./settings-dialog.schema";
+import { SettingsDialogSectionContent } from "./settings-dialog-sections";
 
 interface SettingsDialogProps {
   open: boolean;
