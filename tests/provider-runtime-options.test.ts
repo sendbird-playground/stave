@@ -28,7 +28,7 @@ const settings = {
   codexExperimentalPlanMode: false,
   codexFastModeVisible: true,
   staveAutoClassifierModel: "claude-haiku-4-5",
-  staveAutoSupervisorModel: "claude-opus-4-6",
+  staveAutoSupervisorModel: "claude-sonnet-4-6",
   staveAutoPlanModel: "claude-opus-4-6",
   staveAutoAnalyzeModel: "claude-sonnet-4-6",
   staveAutoImplementModel: "gpt-5.4",

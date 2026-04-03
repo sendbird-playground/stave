@@ -54,7 +54,7 @@ export function SettingsDialog(args: SettingsDialogProps) {
       onMouseDown={() => onOpenChange({ open: false })}
     >
       <Card
-        className="animate-dropdown-in flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border-border/80 bg-background shadow-2xl"
+        className="animate-dropdown-in flex h-[92vh] w-full max-w-6xl flex-col gap-0 overflow-hidden rounded-2xl border-border/80 bg-background py-0 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <SidebarProvider
@@ -125,7 +125,7 @@ export function SettingsDialog(args: SettingsDialogProps) {
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-auto px-5 py-2">
+            <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
               <div className="mx-auto max-w-4xl">
                 <SettingsDialogSectionContent
                   sectionId={activeSection}

@@ -297,7 +297,7 @@ const VirtualListContainer = forwardRef(function VirtualListContainer(
     <div
       ref={ref}
       className={cn("mx-auto w-full max-w-6xl px-3 pt-4 sm:px-5 sm:pt-5", className)}
-      style={withExtraPaddingBottom(style, VIRTUAL_LIST_BOTTOM_GAP)}
+      style={style}
       {...rest}
     />
   );
@@ -305,7 +305,7 @@ const VirtualListContainer = forwardRef(function VirtualListContainer(
 
 function VirtualListItem(props: ComponentPropsWithoutRef<"div">) {
   const { className, ...rest } = props;
-  return <div className={cn("pb-3 last:pb-0", className)} {...rest} />;
+  return <div className={cn("pb-3 last:pb-6", className)} {...rest} />;
 }
 
 interface ConversationVirtualListProps<T> {

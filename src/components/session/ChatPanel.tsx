@@ -143,7 +143,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                 <MessageAction
                   key="elapsed-action"
                   label="Elapsed time"
-                  className="pointer-events-none h-7 cursor-default rounded-sm px-2 text-sm font-normal text-muted-foreground opacity-100"
+                  className="pointer-events-none h-7 cursor-default rounded-sm px-2 text-sm font-normal text-muted-foreground opacity-100 gap-1.5"
                 >
                   {showRespondingWave ? (
                     <WaveIndicator className={cn("size-3.5", toProviderWaveToneClass({ providerId: message.providerId, model: message.model }))} animate />

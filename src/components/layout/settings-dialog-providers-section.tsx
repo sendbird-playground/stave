@@ -162,7 +162,7 @@ function StaveAutoCard() {
           ]}
         />
       </LabeledField>
-      <LabeledField title="Supervisor Model" description="Used for orchestration planning and synthesis. Default: claude-opus-4-6.">
+      <LabeledField title="Supervisor Model" description="Used for orchestration planning and synthesis. Default: claude-sonnet-4-6.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
           list="stave-auto-model-options"

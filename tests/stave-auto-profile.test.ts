@@ -50,10 +50,17 @@ describe("stave auto profile presets", () => {
     expect(detectStaveAutoModelPreset({ settings: custom })).toBeNull();
   });
 
+  test("lowers supervisor defaults across the built-in presets", () => {
+    expect(buildStaveAutoModelSettingsPatch({ presetId: "recommended" }).staveAutoSupervisorModel).toBe("claude-sonnet-4-6");
+    expect(buildStaveAutoModelSettingsPatch({ presetId: "recommended-1m" }).staveAutoSupervisorModel).toBe("claude-sonnet-4-6[1m]");
+    expect(buildStaveAutoModelSettingsPatch({ presetId: "claude-only" }).staveAutoSupervisorModel).toBe("claude-sonnet-4-6");
+    expect(buildStaveAutoModelSettingsPatch({ presetId: "codex-only" }).staveAutoSupervisorModel).toBe("gpt-5.4-mini");
+  });
+
   test("recommended-1m preset uses [1m] models for supervisor, analyze and general", () => {
     const patch = buildStaveAutoModelSettingsPatch({ presetId: "recommended-1m" });
 
-    expect(patch.staveAutoSupervisorModel).toBe("claude-opus-4-6[1m]");
+    expect(patch.staveAutoSupervisorModel).toBe("claude-sonnet-4-6[1m]");
     expect(patch.staveAutoAnalyzeModel).toBe("claude-opus-4-6[1m]");
     expect(patch.staveAutoGeneralModel).toBe("claude-sonnet-4-6[1m]");
 

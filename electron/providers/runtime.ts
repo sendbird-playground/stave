@@ -134,7 +134,7 @@ function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runt
     setCachedAvailability("codex", false);
     return {
       available: false,
-      detail: "Codex executable not found from runtime override, env vars, login-shell PATH, home-bin candidates, or bundled SDK binary.",
+      detail: "Codex executable not found from runtime override, env vars, login-shell PATH, or home-bin candidates.",
     };
   }
 

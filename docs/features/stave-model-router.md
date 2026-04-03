@@ -65,7 +65,7 @@ Urgency signals that trigger `fastMode: true`: *빠르게, 빨리, quick, fast, 
 
 When the Pre-processor judges that the request genuinely requires multiple specialised agents (e.g. "analyse the auth module, then rewrite it, then add tests"), it returns `strategy: "orchestrate"`. The Orchestrator takes over:
 
-1. **Supervisor decompose** — The Supervisor model (default `claude-opus-4-6`) breaks the request into 1–`staveAutoMaxSubtasks` role-based subtasks with `dependsOn` edges.
+1. **Supervisor decompose** — The Supervisor model (default `claude-sonnet-4-6`) breaks the request into 1–`staveAutoMaxSubtasks` role-based subtasks with `dependsOn` edges.
 2. **Parallel execution** — Subtasks are grouped by topological level; independent subtasks run in parallel up to `staveAutoMaxParallelSubtasks`. Prior results are injected into subsequent prompts via `{subtask-id}` placeholders.
 3. **Supervisor synthesise** — The Supervisor merges all worker outputs into a single coherent response streamed back to the user.
 
@@ -97,16 +97,17 @@ Stave Auto now uses presets plus role-based settings under **Settings → Provid
 
 | Preset | Summary |
 |---|---|
-| `Recommended` | Current mixed default. Uses Claude for classifier/planning/analysis, Codex for implementation, and `gpt-5.4` for verify. |
-| `Claude Only` | Keeps every role on Claude models only. |
-| `Codex Only` | Keeps every role on Codex models only, using `gpt-5.4-mini` for lightweight classifier/general/quick-edit work and `gpt-5.3-codex` for implementation. |
+| `Recommended` | Current mixed default. Uses Claude for classifier/planning/analysis, Sonnet for supervisor, Codex for implementation, and `gpt-5.4` for verify. |
+| `Recommended (1M)` | Same as Recommended, but switches supervisor, analyze, and general to the `[1m]` variants. |
+| `Claude Only` | Keeps every role on Claude models only, with supervisor on Claude Sonnet. |
+| `Codex Only` | Keeps every role on Codex models only, using `gpt-5.4-mini` for lightweight classifier/general/quick-edit/supervisor work and `gpt-5.3-codex` for implementation. |
 
 ### Role settings
 
 | Setting | Default | Description |
 |---|---|---|
 | `staveAutoClassifierModel` | `claude-haiku-4-5` | Lightweight classifier for direct vs orchestration |
-| `staveAutoSupervisorModel` | `claude-opus-4-6` | Decompose/synthesise orchestration runs |
+| `staveAutoSupervisorModel` | `claude-sonnet-4-6` | Decompose/synthesise orchestration runs |
 | `staveAutoPlanModel` | `opusplan` | Planning-only requests |
 | `staveAutoAnalyzeModel` | `claude-opus-4-6` | Debug/review/explanation/root cause |
 | `staveAutoImplementModel` | `gpt-5.3-codex` | Implement/build/patch/refactor |

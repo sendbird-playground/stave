@@ -479,7 +479,7 @@ async function inspectCodexStatus(args: { codexPathOverride?: string }) {
       state: "error",
       available: false,
       summary: "Codex CLI is unavailable.",
-      detail: "Stave cannot start Codex turns until the local `codex` executable is resolved from your login shell PATH, configured override, or bundled SDK binary.",
+      detail: "Stave cannot start Codex turns until the local `codex` executable is resolved from your login shell PATH or configured override.",
       version: null,
       executablePath: null,
       authState: "unauthenticated",

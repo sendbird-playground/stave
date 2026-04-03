@@ -1,9 +1,6 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
 import type { Thread, ThreadEvent, ThreadItem, TurnCompletedEvent, TurnOptions } from "@openai/codex-sdk";
-import {
-  resolveExecutablePath,
-  toAsarUnpackedPath,
-} from "./executable-path";
+import { resolveExecutablePath } from "./executable-path";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -16,7 +13,6 @@ import {
 } from "../../src/lib/providers/codex-runtime-options";
 import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import {
   buildRuntimeProcessEnv,
@@ -34,7 +30,6 @@ const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
 ] as const;
-const moduleRequire = createRequire(import.meta.url);
 
 function resolveSandboxMode(args: {
   runtimeValue?: "read-only" | "workspace-write" | "danger-full-access";
@@ -112,7 +107,7 @@ function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }
     : null;
   return {
     taskId: args.taskId ?? "default",
-    executablePath: args.executablePath || "<sdk-default>",
+    executablePath: args.executablePath || "<unresolved>",
     supportedSdkVersion: SUPPORTED_CODEX_SDK_VERSION,
     supportedCliVersion: SUPPORTED_CODEX_CLI_VERSION,
     versionProbe: versionProbe
@@ -239,78 +234,6 @@ function isExecutableFile(args: { path: string }) {
     return true;
   } catch {
     return false;
-  }
-}
-
-function resolveCodexTargetTriple() {
-  const { platform, arch } = process;
-  if (platform === "linux" || platform === "android") {
-    if (arch === "x64") {
-      return {
-        targetTriple: "x86_64-unknown-linux-musl",
-        platformPackage: "@openai/codex-linux-x64",
-      } as const;
-    }
-    if (arch === "arm64") {
-      return {
-        targetTriple: "aarch64-unknown-linux-musl",
-        platformPackage: "@openai/codex-linux-arm64",
-      } as const;
-    }
-    return null;
-  }
-  if (platform === "darwin") {
-    if (arch === "x64") {
-      return {
-        targetTriple: "x86_64-apple-darwin",
-        platformPackage: "@openai/codex-darwin-x64",
-      } as const;
-    }
-    if (arch === "arm64") {
-      return {
-        targetTriple: "aarch64-apple-darwin",
-        platformPackage: "@openai/codex-darwin-arm64",
-      } as const;
-    }
-    return null;
-  }
-  if (platform === "win32") {
-    if (arch === "x64") {
-      return {
-        targetTriple: "x86_64-pc-windows-msvc",
-        platformPackage: "@openai/codex-win32-x64",
-      } as const;
-    }
-    if (arch === "arm64") {
-      return {
-        targetTriple: "aarch64-pc-windows-msvc",
-        platformPackage: "@openai/codex-win32-arm64",
-      } as const;
-    }
-  }
-  return null;
-}
-
-function resolveBundledCodexExecutablePath() {
-  const resolvedTarget = resolveCodexTargetTriple();
-  if (!resolvedTarget) {
-    return "";
-  }
-
-  try {
-    const codexPackageJsonPath = moduleRequire.resolve("@openai/codex/package.json");
-    const codexRequire = createRequire(codexPackageJsonPath);
-    const platformPackageJsonPath = codexRequire.resolve(`${resolvedTarget.platformPackage}/package.json`);
-    const vendorRoot = path.join(path.dirname(platformPackageJsonPath), "vendor");
-    const binaryName = process.platform === "win32" ? "codex.exe" : "codex";
-    return toAsarUnpackedPath(path.join(
-      vendorRoot,
-      resolvedTarget.targetTriple,
-      "codex",
-      binaryName,
-    ));
-  } catch {
-    return "";
   }
 }
 
@@ -758,10 +681,22 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
       explicitPath: args.runtimeOptions?.codexPathOverride,
     });
     diagnostics = buildCodexDiagnostics({ executablePath: codexExecutablePath ?? "", taskId: args.taskId });
+    if (!codexExecutablePath) {
+      const unavailableEvents: BridgeEvent[] = [
+        {
+          type: "error",
+          message: "Codex runtime failure: Codex CLI not found in runtime override, STAVE_CODEX_CLI_PATH, login-shell PATH, or home-bin candidates. Install `codex` or configure a Codex path override.",
+          recoverable: true,
+        },
+        { type: "done" },
+      ];
+      unavailableEvents.forEach((event) => args.onEvent?.(event));
+      return unavailableEvents;
+    }
 
     const codexConfig = buildCodexConfigOverrides({ runtimeOptions: args.runtimeOptions });
     const codex = new CodexCtor({
-      ...(codexExecutablePath ? { codexPathOverride: codexExecutablePath } : {}),
+      codexPathOverride: codexExecutablePath,
       env: buildCodexEnv({ executablePath: codexExecutablePath }),
       ...(codexConfig ? { config: codexConfig } : {}),
     });

@@ -43,7 +43,7 @@ export const STAVE_AUTO_MODEL_PRESETS = [
   {
     id: "recommended",
     label: "Recommended",
-    description: "Balanced Claude + Codex mix. Verify uses GPT-5.4.",
+    description: "Balanced Claude + Codex mix. Supervisor uses Sonnet. Verify uses GPT-5.4.",
   },
   {
     id: "recommended-1m",
@@ -53,12 +53,12 @@ export const STAVE_AUTO_MODEL_PRESETS = [
   {
     id: "claude-only",
     label: "Claude Only",
-    description: "Keep every Stave Auto role on Claude models only.",
+    description: "Keep every Stave Auto role on Claude models only, with supervisor on Sonnet.",
   },
   {
     id: "codex-only",
     label: "Codex Only",
-    description: "Use GPT-5.4 Mini for lightweight Codex roles and keep heavy work on GPT-5.4 / GPT-5.3-Codex.",
+    description: "Use GPT-5.4 Mini for lightweight classifier/supervisor/general/quick-edit roles and keep heavy work on GPT-5.4 / GPT-5.3-Codex.",
   },
 ] as const satisfies ReadonlyArray<{
   id: StaveAutoModelPresetId;
@@ -69,7 +69,7 @@ export const STAVE_AUTO_MODEL_PRESETS = [
 const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAutoModelProfile> = {
   recommended: {
     classifierModel: "claude-haiku-4-5",
-    supervisorModel: "claude-opus-4-6",
+    supervisorModel: "claude-sonnet-4-6",
     planModel: "opusplan",
     analyzeModel: "claude-opus-4-6",
     implementModel: "gpt-5.3-codex",
@@ -79,7 +79,7 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAuto
   },
   "recommended-1m": {
     classifierModel: "claude-haiku-4-5",
-    supervisorModel: "claude-opus-4-6[1m]",
+    supervisorModel: "claude-sonnet-4-6[1m]",
     planModel: "opusplan",
     analyzeModel: "claude-opus-4-6[1m]",
     implementModel: "gpt-5.3-codex",
@@ -89,7 +89,7 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAuto
   },
   "claude-only": {
     classifierModel: "claude-haiku-4-5",
-    supervisorModel: "claude-opus-4-6",
+    supervisorModel: "claude-sonnet-4-6",
     planModel: "opusplan",
     analyzeModel: "claude-opus-4-6",
     implementModel: "claude-sonnet-4-6",
@@ -99,7 +99,7 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAuto
   },
   "codex-only": {
     classifierModel: "gpt-5.4-mini",
-    supervisorModel: "gpt-5.4",
+    supervisorModel: "gpt-5.4-mini",
     planModel: "gpt-5.4",
     analyzeModel: "gpt-5.4",
     implementModel: "gpt-5.3-codex",
