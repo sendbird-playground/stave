@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from "reac
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
-import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, KbdSeparator, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
+import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getProviderConversationLabel, listProviderConversations } from "@/lib/providers/provider-conversations";
@@ -14,18 +14,10 @@ import type { ChatMessage } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
-const TASK_SHORTCUT_COUNT = 10;
 
 const isMacPlatform =
   typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent);
 const shortcutModifierSymbol = isMacPlatform ? "\u2318" : "Ctrl";
-
-function getTaskShortcutLabel(index: number): string | null {
-  if (index < 0 || index >= TASK_SHORTCUT_COUNT) {
-    return null;
-  }
-  return index === TASK_SHORTCUT_COUNT - 1 ? "0" : String(index + 1);
-}
 
 function TaskHistoryDrawer(args: {
   open: boolean;
@@ -113,7 +105,6 @@ function useTaskRespondingState(args: {
 
 const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
   task: TaskItem;
-  index: number;
   isActive: boolean;
   draggingTaskId: string | null;
   dropTargetTaskId: string | null;
@@ -132,7 +123,6 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
     fallbackProviderId: args.task.provider,
   });
   const isManaged = isTaskManaged(args.task);
-  const shortcutLabel = getTaskShortcutLabel(args.index);
   const buttonVisibility = args.isActive
     ? "opacity-100"
     : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150";
@@ -176,12 +166,6 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
           <Badge variant="secondary" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
             Managed
           </Badge>
-        ) : null}
-        {shortcutLabel != null ? (
-          <KbdGroup className="ml-1 shrink-0 opacity-60">
-            <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutModifierSymbol}</Kbd>
-            <Kbd className="h-4 min-w-4 px-0.5 text-[10px]">{shortcutLabel}</Kbd>
-          </KbdGroup>
         ) : null}
       </button>
       <TooltipProvider>
@@ -294,54 +278,6 @@ export function WorkspaceTaskTabs() {
     return () => window.clearTimeout(handle);
   }, [copiedSessionIdKey, taskToViewSession]);
 
-  // Keyboard shortcuts: Cmd/Ctrl + 1-9,0 to switch tabs
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const hasMod = event.ctrlKey || event.metaKey;
-      if (!hasMod || event.shiftKey || event.altKey) {
-        return;
-      }
-
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          (Boolean(
-            target.closest(
-              "input, textarea, select, [role='textbox'], [contenteditable='true']"
-            )
-          ) &&
-            !target.closest("[data-prompt-input-root]")))
-      ) {
-        return;
-      }
-
-      const shortcutIndex =
-        event.key === "0"
-          ? TASK_SHORTCUT_COUNT - 1
-          : Number.parseInt(event.key, 10) - 1;
-      if (
-        Number.isNaN(shortcutIndex) ||
-        shortcutIndex < 0 ||
-        shortcutIndex >= TASK_SHORTCUT_COUNT
-      ) {
-        return;
-      }
-
-      const nextTask = visibleTasks[shortcutIndex];
-      if (!nextTask) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      selectTask({ taskId: nextTask.id });
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [visibleTasks, selectTask]);
-
   function handleRenameConfirm() {
     if (!taskToRename) {
       return;
@@ -386,12 +322,11 @@ export function WorkspaceTaskTabs() {
         <div className="flex min-w-0 w-full items-stretch">
           <div className="min-w-0 flex-1 overflow-x-auto">
             <div className="flex h-full min-w-max items-stretch">
-              {visibleTasks.map((task, index) => {
+              {visibleTasks.map((task) => {
                 return (
                   <WorkspaceTaskTab
                     key={task.id}
                     task={task}
-                    index={index}
                     isActive={task.id === activeTaskId}
                     draggingTaskId={draggingTaskId}
                     dropTargetTaskId={dropTargetTaskId}
