@@ -18,6 +18,14 @@ export const WORKSPACE_SHORTCUT_COUNT = 9;
 const WORKSPACE_ROW_ACTION_REVEAL_CLASSES =
   "group-hover/workspace-row:pointer-events-auto group-hover/workspace-row:opacity-100 group-has-[:focus-visible]/workspace-row:pointer-events-auto group-has-[:focus-visible]/workspace-row:opacity-100";
 
+function getWorkspaceHoverActionVisibilityClasses(args: {
+  isClosing: boolean;
+}) {
+  return args.isClosing
+    ? "pointer-events-auto opacity-100"
+    : `pointer-events-none opacity-0 ${WORKSPACE_ROW_ACTION_REVEAL_CLASSES}`;
+}
+
 export interface CollapsedWorkspaceEntry {
   projectPath: string;
   projectName: string;
@@ -49,10 +57,8 @@ export function buildCollapsedWorkspaceEntries(args: {
         workspaceName: workspace.name,
         isDefault: workspace.isDefault,
         branch: workspace.branch,
-        isActive:
-          project.isCurrent && workspace.id === args.activeWorkspaceId,
-        startsProjectGroup:
-          startsAfterPreviousProject && workspaceIndex === 0,
+        isActive: project.isCurrent && workspace.id === args.activeWorkspaceId,
+        startsProjectGroup: startsAfterPreviousProject && workspaceIndex === 0,
       });
     }
 
@@ -98,16 +104,20 @@ export function getWorkspaceShortcutLabel(index: number): string | null {
 export function getWorkspaceArchiveButtonVisibilityClasses(args: {
   isClosing: boolean;
 }) {
-  return args.isClosing
-    ? "pointer-events-auto opacity-100"
-    : `pointer-events-none opacity-0 ${WORKSPACE_ROW_ACTION_REVEAL_CLASSES}`;
+  return getWorkspaceHoverActionVisibilityClasses(args);
+}
+
+export function getWorkspaceShortcutVisibilityClasses(args: {
+  isClosing: boolean;
+}) {
+  return getWorkspaceHoverActionVisibilityClasses(args);
 }
 
 export function getWorkspaceRespondingCountVisibilityClasses(args: {
-  canArchiveWorkspace: boolean;
+  hasHoverActions: boolean;
   isClosing: boolean;
 }) {
-  if (!args.canArchiveWorkspace) {
+  if (!args.hasHoverActions) {
     return "";
   }
 
