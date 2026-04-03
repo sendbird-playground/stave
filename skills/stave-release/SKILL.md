@@ -1,6 +1,6 @@
 ---
 name: stave-release
-description: Release workflow for the Stave repository that bumps the patch version, reviews the actual PR changes in the release scope instead of relying on commit titles alone, generates release notes with `conventional-changelog`, and opens a pull request against `main` from a dedicated temporary release worktree so the user's original checkout stays on its original branch. Use when the user asks to cut the next patch release, ship the current changes as a versioned release, or prepare a release PR. After the PR merges, the repository's GitHub Actions workflow builds and publishes the release artifacts automatically.
+description: Release workflow for the Stave repository that bumps the patch version, reviews the actual PR changes and PR description `Changes` sections in the release scope instead of relying on commit titles alone, generates release notes with `conventional-changelog`, and opens a pull request against `main` from a dedicated temporary release worktree so the user's original checkout stays on its original branch. Use when the user asks to cut the next patch release, ship the current changes as a versioned release, or prepare a release PR. After the PR merges, the repository's GitHub Actions workflow builds and publishes the release artifacts automatically.
 ---
 
 # Stave Release
@@ -36,13 +36,17 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
      - `git diff --name-only <prev-tag>..HEAD`
      - `git diff <prev-tag>..HEAD` for important hunks
    - When commit subjects or merge commits expose PR numbers, inspect the matching PRs with `gh pr view <number> --json title,body,files,url` and `gh pr diff <number>`.
+   - If a matching PR body contains a `Changes` section, treat those bullets as the preferred human-written summary source for that PR. Use PR titles only as a fallback when no usable `Changes` section exists.
    - Use this review to identify user-visible outcomes, risky migrations, doc impacts, and anything the release PR body must call out.
+   - Deduplicate PR `Changes` bullets against the actual diff before carrying them into release notes.
    - If the reviewed changes contain unexpected or unrelated work, stop and surface that before continuing.
 
 5. Generate release notes.
    - Run: `bunx --bun conventional-changelog-cli -p conventionalcommits -i CHANGELOG.md -s`
+   - Treat `conventional-changelog` output as a draft baseline, not the final authority.
    - Inspect the newly generated top section against the reviewed PR changes and actual diff, not just commit subjects.
-   - If it is empty, heading-only, or missing meaningful bullets, automatically append a concise 3–7 bullet summary derived from the reviewed PR changes and actual diff since the previous tag:
+   - Reconcile the top section with validated PR `Changes` bullets after generation. Do not let `conventional-changelog` overwrite useful `Changes` content that better describes the shipped work.
+   - If it is empty, heading-only, or missing meaningful bullets, automatically append or restore a concise 3–7 bullet summary derived from the reviewed PR changes and actual diff since the previous tag:
      - Summarize user-visible or architecture-significant outcomes — not file lists.
    - Update `README.md` and any other release-facing docs that changed as part of the shipped behavior so docs and changelog stay aligned.
    - Review the generated notes before committing.
@@ -99,6 +103,8 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
 - Do not create a non-Conventional commit.
 - Do not hand-write release notes when `conventional-changelog` is the required path.
 - Do not rely on commit titles alone when drafting release notes or the release PR summary; review the actual PR changes or underlying git diff.
+- Do not ignore a PR description `Changes` section when it exists and is consistent with the diff; treat it as a preferred summary source.
+- Do not let `conventional-changelog` overwrite validated `Changes` bullets from PR descriptions without reconciling them back into the final top section.
 - Do not silently skip changelog review or release-facing doc updates when shipped behavior changed.
 - Do not skip reviewing the release PR diff after opening it.
 - Do not create a local semver tag before the PR is merged. Tag the merged `main` commit after merge.

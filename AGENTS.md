@@ -35,7 +35,7 @@ The repository-local copy of this skill lives at `skills/stave-release/SKILL.md`
 
 - Use `$stave-release`.
 - Generate or refresh `CHANGELOG.md` with `bunx --bun conventional-changelog-cli -p conventionalcommits -i CHANGELOG.md -s` instead of hand-writing release sections.
-- Review the actual PR changes in the release scope when preparing release notes or the release PR summary. Do not rely on commit titles alone.
+- Review the actual PR changes and any PR description `Changes` sections in the release scope when preparing release notes or the release PR summary. Do not rely on commit titles alone.
 - Keep release tags in `vX.Y.Z` form. Incremental `conventional-changelog` generation depends on semver tags.
 - If the repo has no prior semver release tag, stop and report that the release flow needs a baseline tag before incremental changelog generation is safe.
 - Use the repository release skill flow to create a release branch, open a PR against `main`, and keep the original checkout clean.
