@@ -8,7 +8,15 @@ import { filterCommandPaletteItems, getSlashCommandSearchQuery } from "@/lib/com
 import { getActiveSkillTokenMatch, replaceSkillToken } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
-import { getAcceptedCommandPaletteItem, getAcceptedPaletteItem, getNextCommandSelectionIndex, NO_COMMAND_SELECTION } from "./prompt-input.utils";
+import {
+  getAcceptedCommandPaletteItem,
+  getAcceptedPaletteItem,
+  getNextCommandSelectionIndex,
+  isPromptHistoryBoundaryReached,
+  navigatePromptHistory,
+  NO_COMMAND_SELECTION,
+  NO_PROMPT_HISTORY_SELECTION,
+} from "./prompt-input.utils";
 import { ModelSelector, type ModelSelectorOption } from "./model-selector";
 import { PromptInputRuntimeBar, type PromptInputRuntimeControl, type PromptInputRuntimeStatusItem } from "./prompt-input-runtime-bar";
 import { PermissionModeSelector, cyclePermissionMode, type PermissionModeValue } from "./permission-mode-selector";
@@ -22,6 +30,7 @@ interface PromptInputProps {
   modelOptions: readonly ModelSelectorOption[];
   attachedFilePaths: string[];
   attachments?: Attachment[];
+  promptHistoryEntries?: readonly string[];
   permissionMode?: PermissionModeValue;
   runtimeQuickControls?: readonly PromptInputRuntimeControl[];
   runtimeStatusItems?: readonly PromptInputRuntimeStatusItem[];
@@ -69,6 +78,7 @@ export function PromptInput(args: PromptInputProps) {
     modelOptions,
     attachedFilePaths,
     attachments,
+    promptHistoryEntries,
     permissionMode,
     runtimeQuickControls,
     runtimeStatusItems,
@@ -105,6 +115,8 @@ export function PromptInput(args: PromptInputProps) {
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(NO_COMMAND_SELECTION);
   const [dismissedSkillToken, setDismissedSkillToken] = useState<string | null>(null);
   const [selectedSkillIndex, setSelectedSkillIndex] = useState(NO_COMMAND_SELECTION);
+  const [selectedPromptHistoryIndex, setSelectedPromptHistoryIndex] = useState(NO_PROMPT_HISTORY_SELECTION);
+  const [draftBeforeHistory, setDraftBeforeHistory] = useState("");
   const [caretIndex, setCaretIndex] = useState(value.length);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const textareaAutosizeFrameRef = useRef<number | null>(null);
@@ -112,6 +124,10 @@ export function PromptInput(args: PromptInputProps) {
   const wasTurnActiveRef = useRef(Boolean(isTurnActive));
   const interactionsDisabled = Boolean(disabled || isTurnActive);
   const maxTextareaHeight = 240;
+  const normalizedPromptHistoryEntries = useMemo(
+    () => (promptHistoryEntries ?? []).filter((entry) => entry.trim().length > 0),
+    [promptHistoryEntries],
+  );
   const commandQuery = useMemo(() => getSlashCommandSearchQuery(value), [value]);
   const deferredCommandQuery = useDeferredValue(commandQuery);
   const activeSkillToken = useMemo(() => (
@@ -255,6 +271,25 @@ export function PromptInput(args: PromptInputProps) {
   }, [isTurnActive]);
 
   useEffect(() => {
+    setSelectedPromptHistoryIndex(NO_PROMPT_HISTORY_SELECTION);
+    setDraftBeforeHistory("");
+  }, [focusToken]);
+
+  useEffect(() => {
+    if (selectedPromptHistoryIndex === NO_PROMPT_HISTORY_SELECTION) {
+      return;
+    }
+    if (normalizedPromptHistoryEntries.length === 0) {
+      setSelectedPromptHistoryIndex(NO_PROMPT_HISTORY_SELECTION);
+      setDraftBeforeHistory("");
+      return;
+    }
+    if (selectedPromptHistoryIndex >= normalizedPromptHistoryEntries.length) {
+      setSelectedPromptHistoryIndex(normalizedPromptHistoryEntries.length - 1);
+    }
+  }, [normalizedPromptHistoryEntries.length, selectedPromptHistoryIndex]);
+
+  useEffect(() => {
     if (dismissedCommandQuery && commandQuery !== dismissedCommandQuery) {
       setDismissedCommandQuery(null);
     }
@@ -322,6 +357,8 @@ export function PromptInput(args: PromptInputProps) {
       return;
     }
     await onSubmit({ text: nextText, filePaths: attachedFilePaths });
+    setSelectedPromptHistoryIndex(NO_PROMPT_HISTORY_SELECTION);
+    setDraftBeforeHistory("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -363,6 +400,54 @@ export function PromptInput(args: PromptInputProps) {
       textarea.focus();
       textarea.setSelectionRange(nextCaretIndex, nextCaretIndex);
     });
+  }
+
+  function applyPromptHistoryNavigation(direction: "previous" | "next") {
+    const textarea = textareaRef.current;
+    const shouldUseBoundaryCheck = selectedPromptHistoryIndex === NO_PROMPT_HISTORY_SELECTION;
+
+    if (shouldUseBoundaryCheck) {
+      if (!textarea) {
+        return false;
+      }
+      const selectionStart = textarea.selectionStart ?? 0;
+      const selectionEnd = textarea.selectionEnd ?? selectionStart;
+      const boundaryReached = isPromptHistoryBoundaryReached({
+        value,
+        selectionStart,
+        selectionEnd,
+        direction,
+      });
+      if (!boundaryReached) {
+        return false;
+      }
+    }
+
+    const navigation = navigatePromptHistory({
+      entries: normalizedPromptHistoryEntries,
+      selectedIndex: selectedPromptHistoryIndex,
+      direction,
+      draftBeforeHistory,
+      currentValue: value,
+    });
+    if (!navigation) {
+      return false;
+    }
+
+    onValueChange(navigation.value);
+    setSelectedPromptHistoryIndex(navigation.selectedIndex);
+    setDraftBeforeHistory(navigation.draftBeforeHistory);
+    const nextCaretIndex = navigation.value.length;
+    setCaretIndex(nextCaretIndex);
+    window.requestAnimationFrame(() => {
+      const nextTextarea = textareaRef.current;
+      if (!nextTextarea) {
+        return;
+      }
+      nextTextarea.focus();
+      nextTextarea.setSelectionRange(nextCaretIndex, nextCaretIndex);
+    });
+    return true;
   }
 
   function renderSkillScopeIcon(scope: SkillCatalogEntry["scope"]) {
@@ -527,6 +612,21 @@ export function PromptInput(args: PromptInputProps) {
                   event.preventDefault();
                   setDismissedCommandQuery(commandQuery);
                   return;
+                }
+                if (
+                  activePalette === null
+                  && (event.key === "ArrowUp" || event.key === "ArrowDown")
+                  && !event.shiftKey
+                  && !event.altKey
+                  && !event.ctrlKey
+                  && !event.metaKey
+                  && !event.nativeEvent.isComposing
+                ) {
+                  const consumed = applyPromptHistoryNavigation(event.key === "ArrowUp" ? "previous" : "next");
+                  if (consumed) {
+                    event.preventDefault();
+                    return;
+                  }
                 }
                 if (event.key === "Tab" && event.shiftKey && permissionMode && onPermissionModeChange) {
                   event.preventDefault();

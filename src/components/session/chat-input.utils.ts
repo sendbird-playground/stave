@@ -1,5 +1,21 @@
 import type { ChatMessage } from "@/types/chat";
 
+export function getPromptHistoryEntries(messages: ChatMessage[]) {
+  const entries: string[] = [];
+
+  for (const message of messages) {
+    if (message.role !== "user" || message.providerId !== "user") {
+      continue;
+    }
+    if (!message.content.trim()) {
+      continue;
+    }
+    entries.push(message.content);
+  }
+
+  return entries;
+}
+
 export function getLatestPromptSuggestions(messages: ChatMessage[]) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
