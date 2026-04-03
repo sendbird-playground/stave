@@ -10,11 +10,16 @@ Use this when:
 - the bot and Stave run on the same machine
 - you want the bot to create workspaces, run tasks, and answer approvals through Stave
 
-This is not a remote internet-facing setup. The server is loopback-only.
+This is not a remote internet-facing setup. Stave's embedded server is loopback-only, and the app also publishes a companion stdio proxy path for hosts that cannot reach `127.0.0.1` directly.
 
 ## What Stave Exposes
 
-When Local MCP is enabled, Stave exposes a localhost MCP endpoint that can:
+When Local MCP is enabled, Stave exposes:
+
+- a localhost MCP endpoint for same-machine clients that can reach loopback directly
+- a stdio proxy script for clients such as Codex exec hosts that need a subprocess transport instead of direct loopback HTTP
+
+Both transports provide the same tools and task flows:
 
 - register a project in Stave
 - create a git-worktree workspace
@@ -55,14 +60,19 @@ Stave also writes a machine-readable manifest for local tools:
 - `~/.stave/local-mcp.json`
 - `<Stave userData>/stave-local-mcp.json`
 
-The manifest includes the URL and token a local client needs.
+The manifest includes:
+
+- `url` and `token` for loopback HTTP clients
+- `stdioProxyScript` for subprocess-based clients that should launch `node <stdioProxyScript>`
 
 ## Typical `agentize` Flow
 
 1. Start Stave
 2. Enable `Local MCP Server` in Settings if needed
 3. Let `agentize` read `~/.stave/local-mcp.json`
-4. Connect to the `url` from the manifest using `Authorization: Bearer <token>`
+4. Choose the transport:
+   - if the host can reach loopback HTTP directly, connect to the manifest `url` with `Authorization: Bearer <token>`
+   - if the host cannot reach `127.0.0.1` directly, launch `node <stdioProxyScript>` and use it as the MCP stdio server
 5. Call tools in this order:
    - `stave_register_project`
    - `stave_create_workspace`
@@ -79,7 +89,8 @@ The manifest includes the URL and token a local client needs.
   "mode": "local-only",
   "url": "http://127.0.0.1:43127/mcp",
   "healthUrl": "http://127.0.0.1:43127/health",
-  "token": "your-token-here"
+  "token": "your-token-here",
+  "stdioProxyScript": "/Applications/Stave.app/Contents/Resources/app.asar.unpacked/out/main/stave-mcp-stdio-proxy.mjs"
 }
 ```
 
@@ -124,6 +135,7 @@ These responses continue the same Stave turn. They do not create a new task.
 - check `Local MCP Request Log` for recent inbound requests and response codes
 - confirm the bot is using the current token
 - confirm the bot is using the current manifest URL after any restart or token rotation
+- if the bot runs in a sandbox or host that cannot reach `127.0.0.1`, switch it to `node <stdioProxyScript>` instead of direct HTTP
 
 ### The port changes between launches
 
