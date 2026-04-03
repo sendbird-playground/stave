@@ -137,6 +137,7 @@ interface ChatInputComposerProps {
   isEmpty: boolean;
   activeTaskId: string;
   activeProvider: ModelSelectorOption["providerId"];
+  workspaceCwd?: string;
   providerSelectionTarget: string;
   isTurnActive: boolean;
   selectedModelOption: ModelSelectorOption;
@@ -162,7 +163,6 @@ interface ChatInputComposerProps {
 function ChatInputComposer(args: ChatInputComposerProps) {
   const [focusNonce, setFocusNonce] = useState(0);
   const [
-    projectFiles,
     promptDraft,
     promptFocusNonce,
     clearPromptDraft,
@@ -172,7 +172,6 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     abortTaskTurn,
     resolveUserInput,
   ] = useAppStore(useShallow((state) => [
-    state.projectFiles,
     state.promptDraftByTask[args.providerSelectionTarget] ?? EMPTY_PROMPT_DRAFT,
     state.promptFocusNonce,
     state.clearPromptDraft,
@@ -208,8 +207,6 @@ function ChatInputComposer(args: ChatInputComposerProps) {
   });
   const draftSaveTimerRef = useRef<number | null>(null);
   const draftSaveIdleRef = useRef<number | null>(null);
-  const deferredProjectFiles = useDeferredValue(projectFiles);
-
   useEffect(() => {
     if (promptFocusNonce === 0) return;
     setFocusNonce((current) => current + 1);
@@ -264,6 +261,26 @@ function ChatInputComposer(args: ChatInputComposerProps) {
       patch,
     });
   }
+
+  const filePicker = window.api?.fs?.pickFiles;
+  const workspaceRootPath = args.workspaceCwd?.trim() || undefined;
+  const handleOpenFileSelector = workspaceRootPath && filePicker
+    ? async () => {
+        const result = await filePicker({ rootPath: workspaceRootPath });
+        if (!result.ok || result.filePaths.length === 0) {
+          return;
+        }
+
+        const currentFilePaths = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachedFilePaths ?? [];
+        const nextFilePaths = [...currentFilePaths];
+        for (const filePath of result.filePaths) {
+          if (!nextFilePaths.includes(filePath)) {
+            nextFilePaths.push(filePath);
+          }
+        }
+        updateNonTextPromptDraft({ attachedFilePaths: nextFilePaths });
+      }
+    : undefined;
 
   function schedulePromptDraftSave(nextDraft: { taskId: string; text: string }) {
     cancelPendingDraftSave();
@@ -352,7 +369,6 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           isTurnActive={args.isTurnActive}
           selectedModel={args.selectedModelOption}
           modelOptions={args.modelOptions}
-          projectFiles={deferredProjectFiles}
           attachedFilePaths={promptDraft.attachedFilePaths}
           commandPaletteItems={args.commandPaletteItems}
           commandPaletteProviderNote={args.commandPaletteProviderNote}
@@ -409,22 +425,9 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           attachments={promptDraft.attachments}
           onAttachFilesChange={({ filePaths }) =>
             updateNonTextPromptDraft({ attachedFilePaths: filePaths })}
+          onOpenFileSelector={handleOpenFileSelector}
           onAttachmentsChange={({ attachments }) =>
             updateNonTextPromptDraft({ attachments })}
-          onCaptureScreenshot={window.api?.capture?.screenshot ? async () => {
-            const result = await window.api!.capture!.screenshot();
-            if (!result.ok || !result.dataUrl) {
-              return;
-            }
-            const imageAttachment: Attachment = {
-              kind: "image",
-              id: crypto.randomUUID(),
-              dataUrl: result.dataUrl,
-              label: "Screenshot",
-            };
-            const current = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachments ?? [];
-            updateNonTextPromptDraft({ attachments: [...current, imageAttachment] });
-          } : undefined}
           onSubmit={async ({ text, filePaths }) => {
             cancelPendingDraftSave();
             for (const fp of filePaths) {
@@ -945,6 +948,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       isEmpty={isEmpty}
       activeTaskId={activeTaskId}
       activeProvider={activeProvider}
+      workspaceCwd={workspaceCwd}
       providerSelectionTarget={providerSelectionTarget}
       isTurnActive={isTurnActive}
       selectedModelOption={selectedModelOption}

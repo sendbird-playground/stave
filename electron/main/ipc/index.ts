@@ -7,7 +7,6 @@ import { registerMetricsHandlers } from "./metrics";
 import { registerPersistenceHandlers } from "./persistence";
 import { registerProviderHandlers } from "./provider";
 import { registerScmHandlers } from "./scm";
-import { registerScreenshotHandlers } from "./screenshot";
 import { registerSkillsHandlers } from "./skills";
 import { registerTerminalHandlers } from "./terminal";
 import { registerToolingHandlers } from "./tooling";
@@ -24,7 +23,6 @@ export function registerHandlers() {
   registerSkillsHandlers();
   registerLspHandlers();
   registerEslintHandlers();
-  registerScreenshotHandlers();
   registerInlineCompletionHandlers();
   registerMetricsHandlers();
   registerLocalMcpHandlers();
