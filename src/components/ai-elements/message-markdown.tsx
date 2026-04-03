@@ -21,12 +21,22 @@ export interface MarkdownMessageProps extends HTMLAttributes<HTMLDivElement> {
   isStreaming?: boolean;
   messageFontSize: number;
   messageCodeFontSize: number;
-  resolveFileLink?: (args: { href?: string }) => ResolvedWorkspaceFileLink | null;
-  onFileLinkClick?: (args: { event: MouseEvent<HTMLAnchorElement>; href?: string }) => void | Promise<void>;
-  renderBlockCode?: (args: { code: string; language?: string }) => ReactNode;
+  resolveFileLink?: (args: { href?: string; allowUnknownPath?: boolean }) => ResolvedWorkspaceFileLink | null;
+  onFileLinkClick?: (args: {
+    event: MouseEvent<HTMLAnchorElement>;
+    href?: string;
+    resolvedFileLink?: ResolvedWorkspaceFileLink | null;
+    code?: string;
+  }) => void | Promise<void>;
+  renderBlockCode?: (args: {
+    code: string;
+    language?: string;
+    fileHref?: string;
+    resolvedFileLink?: ResolvedWorkspaceFileLink | null;
+  }) => ReactNode;
 }
 
-interface MessageFileLinkProps {
+export interface MessageFileLinkProps {
   href?: string;
   filePath: string;
   fileName: string;
@@ -35,7 +45,94 @@ interface MessageFileLinkProps {
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }
 
-function MessageFileLink({ href, filePath, fileName, line, column, onClick }: MessageFileLinkProps) {
+interface MarkdownCodeNodeLike {
+  data?: {
+    meta?: unknown;
+  };
+  properties?: Record<string, unknown>;
+}
+
+function toOptionalString(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeCodeFencePathCandidate(value: string) {
+  const normalized = value
+    .trim()
+    .replace(/^["'`]+/, "")
+    .replace(/["'`]+$/, "")
+    .replace(/[),.;:!?]+$/g, "");
+  return normalized.length > 0 ? normalized : null;
+}
+
+function isLikelyCodeFenceFilePath(value: string) {
+  const normalized = normalizeCodeFencePathCandidate(value);
+  if (!normalized) {
+    return false;
+  }
+  if (/\s/.test(normalized) || /[<>|*?]/.test(normalized) || normalized.startsWith("-")) {
+    return false;
+  }
+  const withoutLineLocation = normalized
+    .replace(/#L\d+(?:C\d+)?$/i, "")
+    .replace(/:\d+(?::\d+)?$/, "");
+  const baseName = withoutLineLocation.split("/").filter(Boolean).at(-1) ?? withoutLineLocation;
+  const hasPathSeparator = withoutLineLocation.includes("/");
+  const hasExtension = /\.[a-z0-9_-]{1,16}$/i.test(baseName);
+  const isDotFile = /^\.[a-z0-9._-]+$/i.test(baseName);
+  return hasPathSeparator || hasExtension || isDotFile;
+}
+
+function parseCodeFenceMetaForFilePath(meta?: string | null) {
+  if (!meta) {
+    return null;
+  }
+
+  const explicitMatch = meta.match(/(?:^|\s)(?:file|path|filename|title)\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s]+))/i);
+  const explicitCandidate = explicitMatch?.[1] ?? explicitMatch?.[2] ?? explicitMatch?.[3] ?? null;
+  if (explicitCandidate && isLikelyCodeFenceFilePath(explicitCandidate)) {
+    return normalizeCodeFencePathCandidate(explicitCandidate);
+  }
+
+  for (const rawToken of meta.split(/\s+/)) {
+    const token = normalizeCodeFencePathCandidate(rawToken);
+    if (!token) {
+      continue;
+    }
+    if (isLikelyCodeFenceFilePath(token)) {
+      return token;
+    }
+  }
+
+  return null;
+}
+
+function extractCodeFenceMeta(args: { node?: MarkdownCodeNodeLike; props: Record<string, unknown> }) {
+  const candidates: unknown[] = [
+    args.props.metastring,
+    args.props["data-meta"],
+    args.props.meta,
+    args.node?.data?.meta,
+    args.node?.properties?.metastring,
+    args.node?.properties?.["data-meta"],
+    args.node?.properties?.meta,
+  ];
+
+  for (const candidate of candidates) {
+    const value = toOptionalString(candidate);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+export function MessageFileLink({ href, filePath, fileName, line, column, onClick }: MessageFileLinkProps) {
   const locationLabel = formatFileLinkLocation({ line, column });
   const tooltipLabel = locationLabel ? `Open ${filePath} (reference ${locationLabel})` : `Open ${filePath}`;
   const link = (
@@ -115,23 +212,56 @@ export function MarkdownMessage({
       </ol>
     ),
     li: ({ children }: { children?: ReactNode }) => <li className="my-1 marker:text-muted-foreground [&>p]:my-0">{children}</li>,
-    code: ({ className: codeClassName, children }: { className?: string; children?: ReactNode }) => {
-      const lang = /language-(\w+)/.exec(codeClassName ?? "")?.[1];
+    code: (rawCodeProps: unknown) => {
+      const {
+        className: codeClassName,
+        children,
+        node,
+        ...codeProps
+      } = (rawCodeProps ?? {}) as {
+        className?: string;
+        children?: ReactNode;
+        node?: MarkdownCodeNodeLike;
+        metastring?: string;
+        meta?: string;
+        "data-meta"?: string;
+      };
+      const languageToken = /language-([^\s]+)/.exec(codeClassName ?? "")?.[1];
+      const languageFromClassName = languageToken && !isLikelyCodeFenceFilePath(languageToken)
+        ? languageToken
+        : undefined;
+      const fileHrefFromClassName = languageToken && isLikelyCodeFenceFilePath(languageToken)
+        ? normalizeCodeFencePathCandidate(languageToken)
+        : null;
+      const meta = extractCodeFenceMeta({ node, props: codeProps });
+      const fileHrefFromMeta = parseCodeFenceMetaForFilePath(meta);
       const text = String(children ?? "");
-      const isBlock = Boolean(lang) || text.includes("\n");
+      const code = text.replace(/\n$/, "");
+      const fileHref = fileHrefFromMeta ?? fileHrefFromClassName ?? undefined;
+      const isBlock = Boolean(languageFromClassName) || Boolean(fileHref) || text.includes("\n");
       if (isBlock) {
+        const resolvedFileLink = fileHref
+          ? resolveFileLinkRef.current?.({ href: fileHref, allowUnknownPath: true }) ?? null
+          : null;
         const renderFn = renderBlockCodeRef.current;
         if (renderFn) {
           return renderFn({
-            code: text.replace(/\n$/, ""),
-            language: lang,
+            code,
+            language: languageFromClassName,
+            fileHref,
+            resolvedFileLink,
           });
         }
-        return <pre><code>{text.replace(/\n$/, "")}</code></pre>;
+        return <pre><code>{code}</code></pre>;
       }
 
       const inlineHref = text.trim();
-      const resolvedFileLink = inlineHref ? resolveFileLinkRef.current?.({ href: inlineHref }) : null;
+      const resolvedFileLink = inlineHref
+        ? (
+          resolveFileLinkRef.current?.({ href: inlineHref })
+          ?? (inlineHref.includes("/") ? resolveFileLinkRef.current?.({ href: inlineHref, allowUnknownPath: true }) : null)
+        )
+        : null;
       if (resolvedFileLink) {
         return (
           <MessageFileLink
@@ -140,7 +270,11 @@ export function MarkdownMessage({
             fileName={resolvedFileLink.fileName}
             line={resolvedFileLink.line}
             column={resolvedFileLink.column}
-            onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href: inlineHref })}
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({
+              event,
+              href: inlineHref,
+              resolvedFileLink,
+            })}
           />
         );
       }
@@ -156,7 +290,8 @@ export function MarkdownMessage({
     },
     pre: ({ children }: { children?: ReactNode }) => <>{children}</>,
     a: ({ href, children }: { href?: string; children?: ReactNode }) => {
-      const resolvedFileLink = resolveFileLinkRef.current?.({ href });
+      const resolvedFileLink = resolveFileLinkRef.current?.({ href })
+        ?? (href && href.includes("/") ? resolveFileLinkRef.current?.({ href, allowUnknownPath: true }) : null);
       if (resolvedFileLink) {
         return (
           <MessageFileLink
@@ -165,7 +300,11 @@ export function MarkdownMessage({
             fileName={resolvedFileLink.fileName}
             line={resolvedFileLink.line}
             column={resolvedFileLink.column}
-            onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href })}
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({
+              event,
+              href,
+              resolvedFileLink,
+            })}
           />
         );
       }

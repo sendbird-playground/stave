@@ -62,6 +62,67 @@ describe("MarkdownMessage", () => {
     expect(html).toContain("L42");
   });
 
+  test("upgrades slash-based inline file references even before project indexing catches up", () => {
+    const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "Create `src/components/new/NewPanel.tsx` from this block.",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+      resolveFileLink: ({ href, allowUnknownPath }) => resolveWorkspaceFileLink({
+        href,
+        workspaceCwd: "/tmp/stave",
+        knownFilePaths,
+        allowUnknownPaths: allowUnknownPath,
+      }),
+    }));
+
+    expect(html).toContain('data-message-file-link="true"');
+    expect(html).toContain("NewPanel.tsx");
+  });
+
+  test("passes code-fence file metadata to the block renderer", () => {
+    const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
+    let captured: {
+      code: string;
+      language?: string;
+      fileHref?: string;
+      resolvedFilePath?: string;
+    } | null = null;
+
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: [
+        "```tsx path=src/components/session/ChatPanel.tsx",
+        "export const value = 1;",
+        "```",
+      ].join("\n"),
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+      resolveFileLink: ({ href, allowUnknownPath }) => resolveWorkspaceFileLink({
+        href,
+        workspaceCwd: "/tmp/stave",
+        knownFilePaths,
+        allowUnknownPaths: allowUnknownPath,
+      }),
+      renderBlockCode: ({ code, language, fileHref, resolvedFileLink }) => {
+        captured = {
+          code,
+          language,
+          fileHref,
+          resolvedFilePath: resolvedFileLink?.filePath,
+        };
+        return createElement("pre", null, code);
+      },
+    }));
+
+    expect(html).toContain("export const value = 1;");
+    expect(captured).toEqual({
+      code: "export const value = 1;",
+      language: "tsx",
+      fileHref: "src/components/session/ChatPanel.tsx",
+      resolvedFilePath: "src/components/session/ChatPanel.tsx",
+    });
+  });
+
   test("keeps repeated file references distinguishable with line labels", () => {
     const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
     const html = renderToStaticMarkup(createElement(MarkdownMessage, {
@@ -149,6 +210,30 @@ describe("resolveWorkspaceFileLink", () => {
       line: 27,
       column: 3,
     });
+  });
+
+  test("allows unknown relative paths when requested", () => {
+    const resolved = resolveWorkspaceFileLink({
+      href: "src/new-file.tsx",
+      workspaceCwd: "/tmp/stave",
+      knownFilePaths: new Set(["src/App.tsx"]),
+      allowUnknownPaths: true,
+    });
+
+    expect(resolved).toEqual({
+      filePath: "src/new-file.tsx",
+      fileName: "new-file.tsx",
+    });
+  });
+
+  test("keeps unknown-path mode strict for non-path strings", () => {
+    const resolved = resolveWorkspaceFileLink({
+      href: "npm run dev",
+      workspaceCwd: "/tmp/stave",
+      allowUnknownPaths: true,
+    });
+
+    expect(resolved).toBeNull();
   });
 });
 

@@ -70,6 +70,8 @@ agents, and file changes. Each category shows an icon and count, separated by do
 - File link chips (with line numbers) use full-opacity `border-border` for clear visibility against the white chat background.
 - Prefer markdown links for workspace file references so the renderer can promote them to file chips.
 - As a compatibility fallback, inline code spans that resolve to known workspace file paths are also promoted to file chips.
+- Code fences that include file metadata (for example `path=src/App.tsx`) pass that file reference to the block renderer so headers can surface a file chip.
+- File chips with `L<line>` (and optional `C<column>`) open the editor tab and reveal that exact location.
 - Markdown bold uses `font-semibold` (600) instead of the browser default bold (700).
 
 ## Naming

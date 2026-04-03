@@ -6,11 +6,52 @@ export interface ResolvedWorkspaceFileLink {
 }
 
 const knownFilePathSetCache = new WeakMap<readonly string[], Set<string>>();
+const FILE_PATH_SPECIAL_BASENAMES = new Set([
+  "dockerfile",
+  "makefile",
+  "readme",
+  "license",
+  "gitignore",
+  "gitattributes",
+  "env",
+]);
 
 function stripLineSuffix(href: string) {
   return href
     .replace(/#L\d+(?:C\d+)?$/i, "")
     .replace(/:\d+(?::\d+)?$/, "");
+}
+
+function trimTrailingPunctuation(value: string) {
+  return value.replace(/[),.;:!?]+$/g, "");
+}
+
+function isLikelyWorkspaceFilePath(filePath: string) {
+  const normalized = filePath.trim();
+  if (!normalized) {
+    return false;
+  }
+  if (/[`"'[\]{}()<>|*?]/.test(normalized)) {
+    return false;
+  }
+  if (/\s/.test(normalized)) {
+    return false;
+  }
+  if (normalized.startsWith("-")) {
+    return false;
+  }
+
+  const baseName = toBaseName(normalized);
+  if (!baseName || baseName === "." || baseName === "..") {
+    return false;
+  }
+
+  const hasFolderSegments = normalized.includes("/");
+  const hasExtension = /\.[a-z0-9_-]{1,16}$/i.test(baseName);
+  const isDotFile = /^\.[a-z0-9._-]+$/i.test(baseName);
+  const isSpecialBaseName = FILE_PATH_SPECIAL_BASENAMES.has(baseName.toLowerCase());
+
+  return hasFolderSegments || hasExtension || isDotFile || isSpecialBaseName;
 }
 
 function parseFileLinkLocation(href: string) {
@@ -59,6 +100,7 @@ export function resolveWorkspaceFileLink(args: {
   href?: string;
   workspaceCwd?: string;
   knownFilePaths?: ReadonlySet<string>;
+  allowUnknownPaths?: boolean;
 }): ResolvedWorkspaceFileLink | null {
   const raw = args.href?.trim();
   if (!raw || raw.startsWith("#")) {
@@ -79,7 +121,7 @@ export function resolveWorkspaceFileLink(args: {
   const withoutQuery = decoded.split("?")[0] ?? decoded;
   const location = parseFileLinkLocation(withoutQuery);
   const withoutFragment = withoutQuery.split("#")[0] ?? withoutQuery;
-  const normalized = stripLineSuffix(withoutFragment)
+  const normalized = stripLineSuffix(trimTrailingPunctuation(withoutFragment))
     .replaceAll("\\", "/")
     .replace(/^\.\/+/, "")
     .replace(/\/+$/, "");
@@ -107,6 +149,10 @@ export function resolveWorkspaceFileLink(args: {
   }
 
   if (args.knownFilePaths && args.knownFilePaths.size > 0 && !args.knownFilePaths.has(filePath)) {
+    if (!args.allowUnknownPaths || !isLikelyWorkspaceFilePath(filePath)) {
+      return null;
+    }
+  } else if ((!args.knownFilePaths || args.knownFilePaths.size === 0) && args.allowUnknownPaths && !isLikelyWorkspaceFilePath(filePath)) {
     return null;
   }
 
