@@ -52,7 +52,7 @@ export function GlobalCommandPalette(args: GlobalCommandPaletteProps) {
         <div className="shrink-0 border-b border-border/70 px-1 pb-1">
           <CommandInput autoFocus placeholder="Type a command or search settings, tasks, and workspaces..." />
         </div>
-        <CommandList className="min-h-0 flex-1 px-2 pb-2">
+        <CommandList className="min-h-0 max-h-none flex-1 px-2 pb-3">
           <CommandEmpty className="px-4 py-10 text-left">
             <p className="text-sm font-medium text-foreground">No matching command.</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -115,11 +115,6 @@ export function GlobalCommandPalette(args: GlobalCommandPaletteProps) {
             </CommandGroup>
           ))}
         </CommandList>
-        <div className="shrink-0 border-t border-border/70 px-4 py-3 text-xs text-muted-foreground">
-          Palette commands run IDE actions.
-          {" "}
-          <span className="text-foreground">Slash commands remain separate in the chat input.</span>
-        </div>
       </Command>
     </CommandDialog>
   );
