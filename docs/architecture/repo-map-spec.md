@@ -72,7 +72,7 @@ Phase 2 is shipped with:
 - first-turn retrieved-context injection from the warmed in-memory cache via synchronous `Map.get` (no IPC, no blocking)
 - Codex session-start hook awareness of the latest repo-map cache
 
-This phase does not yet add repo-map results to quick-open or Session Replay UI.
+This phase does not yet add repo-map results to quick-open or any dedicated turn-inspection UI.
 
 ## Data Model
 

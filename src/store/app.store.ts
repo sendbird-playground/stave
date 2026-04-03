@@ -335,7 +335,6 @@ export interface AppSettings {
   /** Original file name of the uploaded custom audio, for display purposes. */
   notificationSoundCustomAudioName: string | null;
   providerDebugStream: boolean;
-  turnDiagnosticsVisible: boolean;
   providerTimeoutMs: number;
   claudePermissionMode: ClaudePermissionMode;
   /** Stores the permission mode that was active before entering plan mode, so it can be restored when plan mode is exited. */
@@ -788,7 +787,6 @@ const defaultSettings: AppSettings = {
   notificationSoundCustomAudioData: null,
   notificationSoundCustomAudioName: null,
   providerDebugStream: false,
-  turnDiagnosticsVisible: true,
   providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
   claudePermissionMode: "acceptEdits",
   claudePermissionModeBeforePlan: null,

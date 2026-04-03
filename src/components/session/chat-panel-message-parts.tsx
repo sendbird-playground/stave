@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
-import { Check, Clock3, Copy } from "lucide-react";
-import { Badge, Button, Card, TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
+import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 import {
   type ChainOfThoughtStepData as ChainOfThoughtStep,
   CompactingIndicator,
@@ -23,7 +22,6 @@ import {
 import {
   shouldAutoOpenToolPart,
   shouldRenderInlineSystemEvent,
-  summarizeReplayOnlyToolParts,
 } from "@/components/session/chat-panel.utils";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
@@ -234,56 +232,6 @@ export function MessagePartRenderer(args: {
     case "thinking":
       return null;
   }
-}
-
-export function BackgroundActionsSummary(args: { parts: MessagePart[]; onOpenReplay?: () => void }) {
-  const summary = useMemo(() => summarizeReplayOnlyToolParts(args.parts), [args.parts]);
-
-  if (summary.totalActions === 0) {
-    return null;
-  }
-
-  const statusLabel = summary.activeActions > 0
-    ? `${summary.activeActions} running`
-    : summary.failedActions > 0
-    ? `${summary.failedActions} with issues`
-    : null;
-
-  return (
-    <Card className="border-dashed border-border/80 bg-muted/20 p-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {summary.byTool.slice(0, 5).map((item) => (
-          <Badge key={item.toolName} variant="outline">
-            {toToolDisplayName(item.toolName)} x{item.count}
-          </Badge>
-        ))}
-        {statusLabel ? (
-          <Badge variant="destructive">
-            {statusLabel}
-          </Badge>
-        ) : null}
-        {args.onOpenReplay ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="outline"
-                  className="ml-auto"
-                  aria-label="Open Session Replay"
-                  onClick={args.onOpenReplay}
-                >
-                  <Clock3 className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Open Session Replay</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : null}
-      </div>
-    </Card>
-  );
 }
 
 export function isSubagentProgressSystemEvent(content: string): boolean {

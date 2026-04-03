@@ -148,5 +148,5 @@ Stave emits its own meta-events (prefixed `stave:`) alongside the provider's nat
 
 - The Stave provider does not expose a native command catalog. Use `claude-code` or `codex` directly if you need provider-specific slash commands.
 - Orchestration adds latency proportional to the number of subtasks × model round-trips. For time-sensitive work, prefer direct mode or disable orchestration in settings.
-- Per-task routing history is not persisted; diagnostics panels show the resolved provider and model that was actually used for each turn.
+- Per-task routing history is not exposed in a dedicated turn-inspection UI; the transcript still shows the routing card for each assistant turn.
 - The Pre-processor timeout is 10 seconds. On slow networks, frequent Pre-processor timeouts will cause all turns to fall back to regex routing.
