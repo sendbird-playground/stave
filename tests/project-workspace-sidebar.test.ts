@@ -4,6 +4,7 @@ import {
   buildVisibleWorkspaceShortcutTargets,
   getWorkspaceArchiveButtonVisibilityClasses,
   getWorkspaceShortcutLabel,
+  getWorkspaceShortcutVisibilityClasses,
   getWorkspaceRespondingCountVisibilityClasses,
   WORKSPACE_SHORTCUT_COUNT,
 } from "../src/components/layout/ProjectWorkspaceSidebar.utils";
@@ -36,23 +37,27 @@ describe("buildCollapsedWorkspaceEntries", () => {
         {
           projectPath: "/tmp/project-b",
           projectName: "project-b",
-          workspaces: [{
-            id: "ws-3",
-            name: "Default Workspace",
-            isDefault: true,
-            branch: "main",
-          }],
+          workspaces: [
+            {
+              id: "ws-3",
+              name: "Default Workspace",
+              isDefault: true,
+              branch: "main",
+            },
+          ],
           activeWorkspaceId: "ws-3",
           isCurrent: true,
         },
       ],
     });
 
-    expect(entries.map((entry) => ({
-      workspaceId: entry.workspaceId,
-      startsProjectGroup: entry.startsProjectGroup,
-      isActive: entry.isActive,
-    }))).toEqual([
+    expect(
+      entries.map((entry) => ({
+        workspaceId: entry.workspaceId,
+        startsProjectGroup: entry.startsProjectGroup,
+        isActive: entry.isActive,
+      })),
+    ).toEqual([
       { workspaceId: "ws-1", startsProjectGroup: false, isActive: false },
       { workspaceId: "ws-2", startsProjectGroup: false, isActive: false },
       { workspaceId: "ws-3", startsProjectGroup: true, isActive: true },
@@ -73,12 +78,14 @@ describe("buildCollapsedWorkspaceEntries", () => {
         {
           projectPath: "/tmp/project-b",
           projectName: "project-b",
-          workspaces: [{
-            id: "ws-2",
-            name: "Default Workspace",
-            isDefault: true,
-            branch: "main",
-          }],
+          workspaces: [
+            {
+              id: "ws-2",
+              name: "Default Workspace",
+              isDefault: true,
+              branch: "main",
+            },
+          ],
           activeWorkspaceId: "ws-2",
           isCurrent: true,
         },
@@ -90,7 +97,19 @@ describe("buildCollapsedWorkspaceEntries", () => {
   });
 });
 
-describe("workspace archive action visibility", () => {
+describe("workspace hover action visibility", () => {
+  test("reveals the shortcut chip on hover and keyboard focus-visible, not generic focus-within", () => {
+    const className = getWorkspaceShortcutVisibilityClasses({
+      isClosing: false,
+    });
+
+    expect(className).toContain("group-hover/workspace-row:opacity-100");
+    expect(className).toContain(
+      "group-has-[:focus-visible]/workspace-row:opacity-100",
+    );
+    expect(className).not.toContain("group-focus-within");
+  });
+
   test("reveals the archive button on hover and keyboard focus-visible, not generic focus-within", () => {
     const className = getWorkspaceArchiveButtonVisibilityClasses({
       isClosing: false,
@@ -103,9 +122,27 @@ describe("workspace archive action visibility", () => {
     expect(className).not.toContain("group-focus-within");
   });
 
-  test("hides the responding count with the same reveal rules", () => {
+  test("keeps the shortcut chip visible while closing", () => {
+    expect(
+      getWorkspaceShortcutVisibilityClasses({
+        isClosing: true,
+      }),
+    ).toBe("pointer-events-auto opacity-100");
+  });
+
+  test("keeps the archive button visible while closing", () => {
+    expect(
+      getWorkspaceArchiveButtonVisibilityClasses({
+        isClosing: true,
+      }),
+    ).toBe("pointer-events-auto opacity-100");
+  });
+});
+
+describe("workspace responding count visibility", () => {
+  test("hides the responding count with the same reveal rules when hover actions exist", () => {
     const className = getWorkspaceRespondingCountVisibilityClasses({
-      canArchiveWorkspace: true,
+      hasHoverActions: true,
       isClosing: false,
     });
 
@@ -115,16 +152,19 @@ describe("workspace archive action visibility", () => {
     );
   });
 
-  test("keeps the archive button visible and count hidden while closing", () => {
-    expect(
-      getWorkspaceArchiveButtonVisibilityClasses({
-        isClosing: true,
-      }),
-    ).toBe("pointer-events-auto opacity-100");
-
+  test("keeps the responding count visible when no hover actions exist", () => {
     expect(
       getWorkspaceRespondingCountVisibilityClasses({
-        canArchiveWorkspace: true,
+        hasHoverActions: false,
+        isClosing: false,
+      }),
+    ).toBe("");
+  });
+
+  test("keeps the responding count hidden while closing", () => {
+    expect(
+      getWorkspaceRespondingCountVisibilityClasses({
+        hasHoverActions: true,
         isClosing: true,
       }),
     ).toBe("opacity-0");
@@ -137,8 +177,18 @@ describe("workspace shortcut targets", () => {
       projectPath: "/tmp/project-a",
       projectName: "project-a",
       workspaces: [
-        { id: "ws-1", name: "Default Workspace", isDefault: true, branch: "main" },
-        { id: "ws-2", name: "feature/a", isDefault: false, branch: "feature/a" },
+        {
+          id: "ws-1",
+          name: "Default Workspace",
+          isDefault: true,
+          branch: "main",
+        },
+        {
+          id: "ws-2",
+          name: "feature/a",
+          isDefault: false,
+          branch: "feature/a",
+        },
       ],
       activeWorkspaceId: "ws-1",
       isCurrent: true,
@@ -147,8 +197,18 @@ describe("workspace shortcut targets", () => {
       projectPath: "/tmp/project-b",
       projectName: "project-b",
       workspaces: [
-        { id: "ws-3", name: "Default Workspace", isDefault: true, branch: "main" },
-        { id: "ws-4", name: "feature/b", isDefault: false, branch: "feature/b" },
+        {
+          id: "ws-3",
+          name: "Default Workspace",
+          isDefault: true,
+          branch: "main",
+        },
+        {
+          id: "ws-4",
+          name: "feature/b",
+          isDefault: false,
+          branch: "feature/b",
+        },
       ],
       activeWorkspaceId: "ws-3",
       isCurrent: false,
@@ -193,18 +253,20 @@ describe("workspace shortcut targets", () => {
     const targets = buildVisibleWorkspaceShortcutTargets({
       collapsed: true,
       collapsedByProjectPath: {},
-      projects: [{
-        projectPath: "/tmp/project-a",
-        projectName: "project-a",
-        workspaces: Array.from({ length: 12 }, (_, index) => ({
-          id: `ws-${index + 1}`,
-          name: `workspace-${index + 1}`,
-          isDefault: index === 0,
-          branch: `branch-${index + 1}`,
-        })),
-        activeWorkspaceId: "ws-1",
-        isCurrent: true,
-      }],
+      projects: [
+        {
+          projectPath: "/tmp/project-a",
+          projectName: "project-a",
+          workspaces: Array.from({ length: 12 }, (_, index) => ({
+            id: `ws-${index + 1}`,
+            name: `workspace-${index + 1}`,
+            isDefault: index === 0,
+            branch: `branch-${index + 1}`,
+          })),
+          activeWorkspaceId: "ws-1",
+          isCurrent: true,
+        },
+      ],
     });
 
     expect(targets).toHaveLength(WORKSPACE_SHORTCUT_COUNT);
