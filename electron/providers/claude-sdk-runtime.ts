@@ -794,6 +794,13 @@ export function mapClaudeMessageToEvents(args: {
         input?: unknown;
       };
       if (b.type === "text" && b.text) {
+        // Claude text currently has no Stave segmentId equivalent. That is
+        // acceptable today because streamed text is usually followed by a
+        // duplicate assembled assistant message that we suppress later, rather
+        // than multiple distinct top-level assistant text items like Codex.
+        // If markdown sections ever start collapsing together for Claude,
+        // compare this path with the Codex segmentId handling before touching
+        // renderer code.
         events.push({ type: "text", text: b.text });
         continue;
       }
@@ -846,6 +853,7 @@ export function mapClaudeMessageToEvents(args: {
         return [{ type: "thinking", text: streamEvent.delta.thinking, isStreaming: true }];
       }
       if (streamEvent.delta?.type === "text_delta" && streamEvent.delta.text) {
+        // Keep this in sync with the assistant text-block note above.
         return [{ type: "text", text: streamEvent.delta.text }];
       }
       return [];

@@ -75,6 +75,20 @@ Claude event mapping:
 - `status: compacting` -> `system` (`Compacting conversation context…`)
 - stream or runtime failures -> `error`
 
+Claude text-boundary note:
+
+- Claude usually streams text through `stream_event.content_block_delta` and
+  then emits a later assembled `assistant` message.
+- Stave drops the later assembled text/thinking when streamed deltas were
+  already observed, which avoids the most common duplicate-text merge path.
+- Unlike Codex, Claude does not currently attach a Stave `segmentId` to text
+  events.
+- If Claude ever starts surfacing multiple unrelated text sequences in one
+  assistant turn, inspect `mapClaudeMessageToEvents(...)` and
+  `provider-event-replay.ts` before blaming the markdown renderer. The likely
+  fix is to preserve a provider-side text boundary, not to special-case markdown
+  parsing.
+
 Claude-specific runtime controls come from the UI and runtime options:
 
 - permission mode
@@ -136,6 +150,17 @@ Codex event mapping:
 - todo list -> `tool`
 - file changes -> diff events
 - failures -> `error`
+
+Codex text-boundary note:
+
+- Codex can emit multiple top-level `agent_message` items in one turn, including
+  commentary-like text before the final response.
+- Stave now preserves those boundaries with `segmentId = item.id` on normalized
+  text events for `agent_message` and `plan`.
+- Replay merges adjacent text parts only when the `segmentId` matches.
+- This rule prevents in-place `TodoWrite` updates from causing an earlier
+  commentary block and a later final response block to collapse into one
+  markdown segment.
 
 Experimental Codex plan mode:
 

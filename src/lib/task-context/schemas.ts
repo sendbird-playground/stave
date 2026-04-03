@@ -3,6 +3,7 @@ import type { WorkspaceShell, WorkspaceSnapshot } from "@/lib/db/workspaces.db";
 const TextPartSchema = z.object({
   type: z.literal("text"),
   text: z.string(),
+  segmentId: z.string().optional(),
 });
 
 const ThinkingPartSchema = z.object({

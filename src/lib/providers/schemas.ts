@@ -9,6 +9,7 @@ const ThinkingEventSchema = z.object({
 const TextEventSchema = z.object({
   type: z.literal("text"),
   text: z.string(),
+  segmentId: z.string().optional(),
 });
 
 const ProviderConversationEventSchema = z.object({

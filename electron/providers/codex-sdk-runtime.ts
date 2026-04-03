@@ -385,7 +385,7 @@ export function mapCodexItemEvent(args: {
       const delta = planText.slice(prev);
       if (!delta) return [];
       codexItemTextLength.set(itemId, planText.length);
-      return [{ type: "text", text: delta }];
+      return [{ type: "text", text: delta, segmentId: itemId || undefined }];
     }
 
     case "agent_message": {
@@ -404,13 +404,13 @@ export function mapCodexItemEvent(args: {
           // then emit plan_ready so the plan viewer picks it up.
           const delta = full.slice(prev);
           const events: BridgeEvent[] = [];
-          if (delta) events.push({ type: "text", text: delta });
+          if (delta) events.push({ type: "text", text: delta, segmentId: itemId || undefined });
           events.push({ type: "plan_ready", planText: proposedPlan });
           return events;
         }
 
         const delta = full.slice(prev);
-        return delta ? [{ type: "text", text: delta }] : [];
+        return delta ? [{ type: "text", text: delta, segmentId: itemId || undefined }] : [];
       }
       // item.started / item.updated — emit delta for streaming.
       const full = item.text ?? "";
@@ -421,7 +421,7 @@ export function mapCodexItemEvent(args: {
       const delta = full.slice(prev);
       if (!delta) return [];
       codexItemTextLength.set(itemId, full.length);
-      return [{ type: "text", text: delta }];
+      return [{ type: "text", text: delta, segmentId: itemId || undefined }];
     }
     case "reasoning": {
       if (lifecycle === "item.completed") {

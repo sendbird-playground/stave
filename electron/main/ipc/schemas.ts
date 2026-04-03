@@ -264,6 +264,7 @@ const CanonicalMessagePartSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("text"),
       text: z.string().max(500_000),
+      segmentId: z.string().max(200).optional(),
     })
     .strict(),
   z

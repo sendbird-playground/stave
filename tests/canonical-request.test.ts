@@ -102,6 +102,33 @@ describe("canonical request builder", () => {
     expect(prompt).toContain("Add a migration plan.");
   });
 
+  test("prefers the trailing response text over accumulated assistant commentary", () => {
+    const request = buildCanonicalConversationRequest({
+      providerId: "codex",
+      model: "gpt-5.4",
+      history: [{
+        id: "assistant-commentary",
+        role: "assistant",
+        model: "gpt-5.4",
+        providerId: "codex",
+        content: "Inspecting the renderer.Final answer.",
+        parts: [
+          { type: "text", text: "Inspecting the renderer.", segmentId: "commentary-1" },
+          { type: "tool_use", toolUseId: "todo-1", toolName: "TodoWrite", input: "{\"todos\":[]}", state: "output-available" },
+          { type: "text", text: "Final answer.", segmentId: "final-1" },
+        ],
+      }],
+      userInput: "Continue.",
+      mode: "chat",
+    });
+
+    expect(request.history[0]?.content).toBe("Final answer.");
+
+    const prompt = buildLegacyPromptFromCanonicalRequest({ request });
+    expect(prompt).toContain("assistant: Final answer.");
+    expect(prompt).not.toContain("assistant: Inspecting the renderer.Final answer.");
+  });
+
   test("marks skill-only invocations explicitly instead of serializing an empty current input", () => {
     const request = buildCanonicalConversationRequest({
       providerId: "claude-code",

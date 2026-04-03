@@ -40,6 +40,8 @@ export interface MessagePartBase {
 export interface TextPart extends MessagePartBase {
   type: "text";
   text: string;
+  /** Preserves provider-side text item boundaries across streamed deltas. */
+  segmentId?: string;
 }
 
 export interface ThinkingPart extends MessagePartBase {
