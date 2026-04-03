@@ -151,6 +151,13 @@ interface WindowFsApi {
     files: string[];
     stderr?: string;
   }>;
+  pickFiles?: (args: {
+    rootPath: string;
+  }) => Promise<{
+    ok: boolean;
+    filePaths: string[];
+    stderr?: string;
+  }>;
   resolvePath?: (args: { inputPath: string }) => Promise<{
     ok: boolean;
     rootPath?: string;
@@ -967,10 +974,6 @@ interface WindowMetricsApi {
   getAppMetrics?: () => Promise<AppMetricsResult>;
 }
 
-interface WindowCaptureApi {
-  screenshot: () => Promise<{ ok: boolean; dataUrl: string }>;
-}
-
 interface WindowInlineCompletionApi {
   request?: (args: {
     prefix: string;
@@ -997,7 +1000,6 @@ interface WindowApi {
   tooling?: WindowToolingApi;
   sourceControl?: WindowSourceControlApi;
   metrics?: WindowMetricsApi;
-  capture?: WindowCaptureApi;
   inlineCompletion?: WindowInlineCompletionApi;
   window?: {
     minimize?: () => Promise<void>;

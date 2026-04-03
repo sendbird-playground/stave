@@ -11,6 +11,7 @@ import {
   FilesystemDirectoryArgsSchema,
   FilesystemFileArgsSchema,
   FilesystemInspectArgsSchema,
+  FilesystemPickFilesArgsSchema,
   FilesystemRepoMapArgsSchema,
   FilesystemRootArgsSchema,
   FilesystemWriteFileArgsSchema,
@@ -56,6 +57,45 @@ export function registerFilesystemHandlers() {
       return { ok: true, rootPath, rootName: path.basename(rootPath), files };
     } catch (error) {
       return { ok: false, files: [], stderr: String(error) };
+    }
+  });
+
+  ipcMain.handle("fs:pick-files", async (_event, args: unknown) => {
+    const parsed = FilesystemPickFilesArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, filePaths: [], stderr: "Invalid file picker request." };
+    }
+    try {
+      const rootPath = path.resolve(parsed.data.rootPath);
+      const rootRealPath = await fs.realpath(rootPath);
+      const selected = await dialog.showOpenDialog({
+        defaultPath: rootPath,
+        properties: ["openFile", "multiSelections"],
+      });
+      if (selected.canceled || selected.filePaths.length === 0) {
+        return { ok: false as const, filePaths: [], stderr: "No file selected." };
+      }
+
+      const filePaths: string[] = [];
+      for (const selectedPath of selected.filePaths) {
+        const absolutePath = path.resolve(selectedPath);
+        const candidateRealPath = await fs.realpath(absolutePath);
+        const relativeRealPath = path.relative(rootRealPath, candidateRealPath);
+        if (!relativeRealPath || relativeRealPath.startsWith("..") || path.isAbsolute(relativeRealPath)) {
+          continue;
+        }
+
+        const relativePath = path.relative(rootPath, absolutePath);
+        if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+          continue;
+        }
+
+        filePaths.push(relativePath.replaceAll("\\", "/"));
+      }
+
+      return { ok: true as const, filePaths: [...new Set(filePaths)] };
+    } catch (error) {
+      return { ok: false as const, filePaths: [], stderr: String(error) };
     }
   });
 

@@ -1,7 +1,7 @@
-import { Brain, Camera, Check, ClipboardCheck, FilePlus2, FolderOpen, Globe2, OctagonX, Plus, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
+import { Brain, ClipboardCheck, FolderOpen, Globe2, OctagonX, Paperclip, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
 import type { Attachment, UserInputPart } from "@/types/chat";
 import { type FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
+import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
 import { filterCommandPaletteItems, getSlashCommandSearchQuery } from "@/lib/commands";
@@ -20,7 +20,6 @@ interface PromptInputProps {
   focusToken?: string;
   selectedModel: ModelSelectorOption;
   modelOptions: readonly ModelSelectorOption[];
-  projectFiles: string[];
   attachedFilePaths: string[];
   attachments?: Attachment[];
   permissionMode?: PermissionModeValue;
@@ -35,8 +34,8 @@ interface PromptInputProps {
   onBlur?: () => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
   onAttachFilesChange: (args: { filePaths: string[] }) => void;
+  onOpenFileSelector?: () => void;
   onAttachmentsChange?: (args: { attachments: Attachment[] }) => void;
-  onCaptureScreenshot?: () => void;
   onPermissionModeChange?: (value: PermissionModeValue) => void;
   fastMode?: boolean;
   onFastModeChange?: (enabled: boolean) => void;
@@ -68,7 +67,6 @@ export function PromptInput(args: PromptInputProps) {
     value,
     selectedModel,
     modelOptions,
-    projectFiles,
     attachedFilePaths,
     attachments,
     permissionMode,
@@ -83,8 +81,8 @@ export function PromptInput(args: PromptInputProps) {
     onBlur,
     onModelSelect,
     onAttachFilesChange,
+    onOpenFileSelector,
     onAttachmentsChange,
-    onCaptureScreenshot,
     onPermissionModeChange,
     fastMode,
     onFastModeChange,
@@ -102,10 +100,7 @@ export function PromptInput(args: PromptInputProps) {
     () => (attachments ?? []).filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image"),
     [attachments],
   );
-  const screenshotAvailable = Boolean(onCaptureScreenshot);
   const [imagePreviewSrc, setImagePreviewSrc] = useState<{ dataUrl: string; label: string } | null>(null);
-  const [attachOpen, setAttachOpen] = useState(false);
-  const [fileFilter, setFileFilter] = useState("");
   const [dismissedCommandQuery, setDismissedCommandQuery] = useState<string | null>(null);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(NO_COMMAND_SELECTION);
   const [dismissedSkillToken, setDismissedSkillToken] = useState<string | null>(null);
@@ -128,7 +123,6 @@ export function PromptInput(args: PromptInputProps) {
       : null
   ), [caretIndex, skillsEnabled, value]);
   const deferredSkillQuery = useDeferredValue(activeSkillToken?.query ?? "");
-  const deferredFileFilter = useDeferredValue(fileFilter);
   const filteredCommandItems = useMemo(() => filterCommandPaletteItems({
     items: commandPaletteItems ?? [],
     query: deferredCommandQuery,
@@ -321,17 +315,6 @@ export function PromptInput(args: PromptInputProps) {
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [activePalette, selectedCommandIndex, selectedSkillIndex]);
-
-  const filteredFiles = useMemo(() => {
-    if (!attachOpen) {
-      return [];
-    }
-    const normalized = deferredFileFilter.trim().toLowerCase();
-    if (!normalized) {
-      return projectFiles.slice(0, 120);
-    }
-    return projectFiles.filter((path) => path.toLowerCase().includes(normalized)).slice(0, 120);
-  }, [attachOpen, deferredFileFilter, projectFiles]);
 
   async function submitCurrentMessage() {
     const nextText = value.trim();
@@ -567,7 +550,7 @@ export function PromptInput(args: PromptInputProps) {
                 event.preventDefault();
                 void submitCurrentMessage();
               }}
-              placeholder="Use / for commands, $ for skills, @ to search files (Enter to send)"
+              placeholder="Use / for commands, $ for skills (Enter to send)"
               className="min-h-[104px] max-h-[240px] resize-none overflow-y-auto rounded-lg border-border/70 bg-background text-lg leading-8 md:text-lg"
             />
           </div>
@@ -793,44 +776,6 @@ export function PromptInput(args: PromptInputProps) {
           ))}
         </div>
       ) : null}
-      {attachOpen ? (
-        <div className="animate-dropdown-in rounded-sm border border-border/80 bg-popover p-2">
-          <Input
-            value={fileFilter}
-            disabled={interactionsDisabled}
-            onChange={(event) => setFileFilter(event.target.value)}
-            placeholder="Find file to attach"
-            className="h-9 rounded-md border-border/80 bg-background px-3 text-sm"
-          />
-          <div className="mt-2 max-h-40 space-y-1 overflow-auto">
-            {filteredFiles.map((filePath) => {
-              const isSelected = attachedFilePaths.includes(filePath);
-              return (
-                <button
-                  type="button"
-                  key={filePath}
-                  disabled={interactionsDisabled}
-                  onClick={() => {
-                    onAttachFilesChange({
-                      filePaths: isSelected
-                        ? attachedFilePaths.filter((p) => p !== filePath)
-                        : [...attachedFilePaths, filePath],
-                    });
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/70",
-                    isSelected && "bg-secondary/80",
-                  )}
-                >
-                  {isSelected ? <Check className="size-3.5 shrink-0 text-foreground" /> : <span className="size-3.5 shrink-0" />}
-                  {filePath}
-                </button>
-              );
-            })}
-            {filteredFiles.length === 0 ? <p className="px-2 py-1.5 text-sm text-muted-foreground">No matching files.</p> : null}
-          </div>
-        </div>
-      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <ModelSelector
@@ -963,38 +908,22 @@ export function PromptInput(args: PromptInputProps) {
         </div>
         <div className="flex items-center gap-2">
           <Tooltip>
-            <DropdownMenu>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={interactionsDisabled}
-                    className={cn(
-                      "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
-                      attachOpen && "bg-secondary/90 text-foreground",
-                    )}
-                    aria-label="Attach file or capture screenshot"
-                  >
-                    <Plus className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="top">Attach file or screenshot</TooltipContent>
-              <DropdownMenuContent side="top" align="end">
-                <DropdownMenuItem onClick={() => setAttachOpen((prev) => !prev)}>
-                  <FilePlus2 className="mr-2 size-3.5" />
-                  Attach file
-                </DropdownMenuItem>
-                {screenshotAvailable ? (
-                  <DropdownMenuItem onClick={() => onCaptureScreenshot?.()}>
-                    <Camera className="mr-2 size-3.5" />
-                    Screenshot
-                  </DropdownMenuItem>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={interactionsDisabled || !onOpenFileSelector}
+                onClick={() => {
+                  void onOpenFileSelector?.();
+                }}
+                className="h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60"
+                aria-label="Attach files"
+              >
+                <Paperclip className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Attach files</TooltipContent>
           </Tooltip>
           {isTurnActive ? (
             <Tooltip>

@@ -290,6 +290,8 @@ contextBridge.exposeInMainWorld("api", {
   },
   fs: {
     pickRoot: () => ipcRenderer.invoke("fs:pick-root"),
+    pickFiles: (args: { rootPath: string }) =>
+      ipcRenderer.invoke("fs:pick-files", args),
     resolvePath: (args: { inputPath: string }) =>
       ipcRenderer.invoke("fs:resolve-path", args),
     listFiles: (args: { rootPath: string }) =>
@@ -666,13 +668,6 @@ contextBridge.exposeInMainWorld("api", {
           arrayBuffers: number;
         };
         uptimeSeconds: number;
-      }>,
-  },
-  capture: {
-    screenshot: () =>
-      ipcRenderer.invoke("screenshot:capture") as Promise<{
-        ok: boolean;
-        dataUrl: string;
       }>,
   },
   inlineCompletion: {

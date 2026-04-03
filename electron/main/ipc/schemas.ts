@@ -714,6 +714,8 @@ export const FilesystemRootArgsSchema = z
   })
   .strict();
 
+export const FilesystemPickFilesArgsSchema = FilesystemRootArgsSchema;
+
 export const FilesystemRepoMapArgsSchema = FilesystemRootArgsSchema.extend({
   refresh: z.boolean().optional(),
 }).strict();
