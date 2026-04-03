@@ -9,7 +9,12 @@ import {
   resolveCodexExecutablePath,
   streamCodexWithSdk,
 } from "./codex-sdk-runtime";
-import { buildStaveResolvedArgs, resolveSkillFastPath, type StaveRouteTarget } from "./stave-router";
+import {
+  buildStaveResolvedArgs,
+  resolveForcedStavePlanTarget,
+  resolveSkillFastPath,
+  type StaveRouteTarget,
+} from "./stave-router";
 import { runPreprocessor } from "./stave-preprocessor";
 import { getCachedAvailability, setCachedAvailability } from "./stave-availability";
 import { runOrchestrator } from "./stave-orchestrator";
@@ -223,6 +228,64 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       "gpt-5.3-codex": "claude-haiku-4-5",
       "opusplan": "claude-opus-4-6",
     };
+
+    const forcedPlanTarget = resolveForcedStavePlanTarget({
+      profile,
+      runtimeOptions: args.runtimeOptions,
+    });
+    if (forcedPlanTarget != null) {
+      let chosenModel = forcedPlanTarget.model;
+      const forcedPlanProvider = resolveStaveProviderForModel({ model: chosenModel });
+      const forcedPlanProviderAvail = getCachedAvailability(forcedPlanProvider);
+      if (forcedPlanProviderAvail === false) {
+        const fallback = MODEL_FALLBACK[chosenModel];
+        if (fallback) {
+          chosenModel = fallback;
+        }
+      }
+
+      const resolvedTarget: StaveRouteTarget = {
+        providerId: resolveStaveProviderForModel({ model: chosenModel }),
+        model: chosenModel,
+        reason: forcedPlanTarget.reason,
+      };
+
+      const resolvedArgs = buildStaveResolvedArgs(args, resolvedTarget, {
+        forceCodexPlanMode: true,
+      });
+
+      const claudeFastSupported = profile.claudeFastModeSupported !== false;
+      const codexFastSupported = profile.codexFastModeSupported !== false;
+      if (profile.fastMode) {
+        resolvedArgs.runtimeOptions = {
+          ...resolvedArgs.runtimeOptions,
+          ...(claudeFastSupported ? { claudeFastMode: true } : {}),
+          ...(codexFastSupported ? { codexFastMode: true } : {}),
+        };
+      }
+
+      const fastModeApplied =
+        resolvedTarget.providerId === "codex"
+          ? (resolvedArgs.runtimeOptions?.codexFastMode ?? false)
+          : (resolvedArgs.runtimeOptions?.claudeFastMode ?? false);
+
+      args.onEvent?.({
+        type: "stave:execution_processing",
+        strategy: "direct",
+        model: chosenModel,
+        reason: forcedPlanTarget.reason,
+        fastModeRequested: profile.fastMode ?? false,
+        fastModeApplied,
+      });
+
+      args.onEvent?.({
+        type: "model_resolved",
+        resolvedProviderId: resolvedTarget.providerId,
+        resolvedModel: resolvedTarget.model,
+      });
+
+      return runProviderTurn(resolvedArgs);
+    }
 
     // ── Skill fast-path: bypass preprocessor when skill_context is present ──
     // Skills carry an explicit provider preference — no classifier needed.

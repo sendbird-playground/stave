@@ -8,9 +8,12 @@ High-level flow:
 
 1. The renderer submits a turn with `providerId: "stave"`.
 2. `electron/providers/runtime.ts` detects the `stave` provider and builds the active `staveAuto` profile from settings.
-3. `electron/providers/stave-preprocessor.ts` asks a lightweight classifier to return either `strategy: "direct"` with an intent (`plan`, `analyze`, `implement`, `quick_edit`, `general`) or `strategy: "orchestrate"`.
-4. For direct execution, Stave resolves the configured model for that intent from the profile, emits `stave:execution_processing`, rewrites the `StreamTurnArgs`, and re-enters the normal provider runtime.
-5. For orchestration, `electron/providers/stave-orchestrator.ts` asks the supervisor to produce role-based subtasks (`plan`, `analyze`, `implement`, `verify`, `general`), resolves each role to a configured model, executes subtasks, then synthesises the result.
+3. If the task is in Stave plan mode (`claudePermissionMode: "plan"`), Stave bypasses classifier / skill fast-path / orchestration and routes the turn directly to the profile `planModel`.
+4. Otherwise, `electron/providers/stave-preprocessor.ts` asks a lightweight classifier to return either `strategy: "direct"` with an intent (`plan`, `analyze`, `implement`, `quick_edit`, `general`) or `strategy: "orchestrate"`.
+5. For direct execution, Stave resolves the configured model for that intent from the profile, emits `stave:execution_processing`, rewrites the `StreamTurnArgs`, and re-enters the normal provider runtime.
+6. For orchestration, `electron/providers/stave-orchestrator.ts` asks the supervisor to produce role-based subtasks (`plan`, `analyze`, `implement`, `verify`, `general`), resolves each role to a configured model, executes subtasks, then synthesises the result.
+
+When Stave plan mode resolves to a Codex-family `planModel`, Stave also forces `codexExperimentalPlanMode: true` on the rewritten direct turn so the underlying Codex runtime still gets `read-only` sandboxing plus `approvalPolicy = never`.
 
 ### Direct intent table
 
