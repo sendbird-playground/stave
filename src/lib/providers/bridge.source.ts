@@ -1,5 +1,12 @@
 import type { ProviderEventSource, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
 
+type PushStreamPayload = {
+  streamId: string;
+  event: unknown;
+  sequence?: number;
+  done: boolean;
+};
+
 function hasAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   if (!value || typeof value !== "object") {
     return false;
@@ -91,9 +98,12 @@ async function* fromPushStream(args: {
   }
 
   const queue: unknown[] = [];
-  const pending: Array<{ streamId: string; event: unknown; done: boolean }> = [];
+  const pending: PushStreamPayload[] = [];
+  const bufferedBySequence = new Map<number, PushStreamPayload>();
   let done = false;
   let targetStreamId: string | null = null;
+  let nextSequence = 1;
+  let doneSequence: number | null = null;
   let wake: (() => void) | null = null;
   const wakeUp = () => {
     if (!wake) {
@@ -104,6 +114,39 @@ async function* fromPushStream(args: {
     resolver();
   };
 
+  const ingestPayload = (payload: PushStreamPayload) => {
+    const sequence = payload.sequence;
+    if (typeof sequence !== "number" || !Number.isFinite(sequence)) {
+      queue.push(payload.event);
+      if (payload.done) {
+        done = true;
+      }
+      wakeUp();
+      return;
+    }
+
+    if (sequence < nextSequence || bufferedBySequence.has(sequence)) {
+      return;
+    }
+
+    bufferedBySequence.set(sequence, payload);
+    if (payload.done) {
+      doneSequence = sequence;
+    }
+
+    while (bufferedBySequence.has(nextSequence)) {
+      const nextPayload = bufferedBySequence.get(nextSequence)!;
+      bufferedBySequence.delete(nextSequence);
+      queue.push(nextPayload.event);
+      nextSequence += 1;
+    }
+
+    if (doneSequence !== null && nextSequence > doneSequence) {
+      done = true;
+    }
+    wakeUp();
+  };
+
   const unsubscribe = subscribeStreamEvents((payload) => {
     if (!targetStreamId) {
       pending.push(payload);
@@ -112,11 +155,7 @@ async function* fromPushStream(args: {
     if (payload.streamId !== targetStreamId) {
       return;
     }
-    queue.push(payload.event);
-    if (payload.done) {
-      done = true;
-    }
-    wakeUp();
+    ingestPayload(payload);
   });
 
   try {
@@ -140,10 +179,7 @@ async function* fromPushStream(args: {
       if (item.streamId !== targetStreamId) {
         continue;
       }
-      queue.push(item.event);
-      if (item.done) {
-        done = true;
-      }
+      ingestPayload(item);
     }
     pending.length = 0;
     wakeUp();

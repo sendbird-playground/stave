@@ -49,3 +49,4 @@ export {
   messagesToMarkdown,
 } from "./conversation";
 export { CompactingIndicator, ContextCompactedCheckpoint } from "./checkpoint";
+export { ThinkingAnimatedText, ThinkingPhraseLabel } from "./thinking-phrase";

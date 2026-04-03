@@ -1575,7 +1575,7 @@ function ChatSection() {
           </LabeledField>
           <LabeledField
             title="Reasoning Phrase Animation"
-            description="Animation used when the rotating in-progress thinking phrase changes while streaming."
+            description="Animation used for in-progress reasoning labels while streaming, including the rotating phrase and the Thinking label in the reasoning step."
           >
             <Select
               value={thinkingPhraseAnimationStyle}

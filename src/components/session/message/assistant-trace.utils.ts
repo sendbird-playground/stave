@@ -8,6 +8,9 @@ export type TraceToolSummary =
   | { kind: "web"; text: string }
   | { kind: "text"; text: string };
 
+const TRACE_SUMMARY_MAX_LENGTH = 160;
+const TRACE_COMMAND_SUMMARY_MAX_LENGTH = 200;
+
 const TRACE_TOOL_NAME_ALIASES: Record<string, string> = {
   web_search: "websearch",
   web_fetch: "webfetch",
@@ -79,7 +82,7 @@ export function deriveTraceToolSummary(args: {
     case "bash": {
       const command = getTrimmedPreview(
         getStringField(parsed, ["command"]) ?? args.input,
-        100,
+        TRACE_COMMAND_SUMMARY_MAX_LENGTH,
       );
       return command ? { kind: "command", text: command } : null;
     }
@@ -93,21 +96,21 @@ export function deriveTraceToolSummary(args: {
     case "grep": {
       const pattern = getTrimmedPreview(
         getStringField(parsed, ["pattern"]) ?? args.input,
-        80,
+        TRACE_SUMMARY_MAX_LENGTH,
       );
       return pattern ? { kind: "search", text: pattern } : null;
     }
     case "websearch": {
       const query = getTrimmedPreview(
         getStringField(parsed, ["query", "q"]) ?? args.input,
-        80,
+        TRACE_SUMMARY_MAX_LENGTH,
       );
       return query ? { kind: "web", text: query } : null;
     }
     case "webfetch": {
       const url = getTrimmedPreview(
         getStringField(parsed, ["url", "ref_id"]) ?? args.input,
-        80,
+        TRACE_SUMMARY_MAX_LENGTH,
       );
       return url ? { kind: "web", text: url } : null;
     }
@@ -118,26 +121,26 @@ export function deriveTraceToolSummary(args: {
       }
 
       const patternValue = getStringField(parsed, ["pattern"]);
-      const pattern = patternValue ? getTrimmedPreview(patternValue, 80) : null;
+      const pattern = patternValue ? getTrimmedPreview(patternValue, TRACE_SUMMARY_MAX_LENGTH) : null;
       if (pattern) {
         return { kind: "search", text: pattern };
       }
 
       const queryValue = getStringField(parsed, ["query", "q"]);
-      const query = queryValue ? getTrimmedPreview(queryValue, 80) : null;
+      const query = queryValue ? getTrimmedPreview(queryValue, TRACE_SUMMARY_MAX_LENGTH) : null;
       if (query) {
         return { kind: "web", text: query };
       }
 
       const urlValue = getStringField(parsed, ["url", "ref_id"]);
-      const url = urlValue ? getTrimmedPreview(urlValue, 80) : null;
+      const url = urlValue ? getTrimmedPreview(urlValue, TRACE_SUMMARY_MAX_LENGTH) : null;
       if (url) {
         return { kind: "web", text: url };
       }
 
       const description = getTrimmedPreview(
         getStringField(parsed, ["description", "prompt", "command"]) ?? getFirstStringField(parsed) ?? args.input,
-        80,
+        TRACE_SUMMARY_MAX_LENGTH,
       );
       return description ? { kind: "text", text: description } : null;
     }

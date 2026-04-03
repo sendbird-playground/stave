@@ -100,4 +100,59 @@ describe("codex provider bridge normalization", () => {
       { type: "done" },
     ]);
   });
+
+  test("reorders out-of-order push events by sequence before yielding them", async () => {
+    let listener: ((payload: {
+      streamId: string;
+      event: unknown;
+      sequence: number;
+      done: boolean;
+    }) => void) | null = null;
+
+    setWindowApi({
+      provider: {
+        subscribeStreamEvents: (cb: typeof listener) => {
+          listener = cb;
+          return () => {
+            listener = null;
+          };
+        },
+        startPushTurn: async () => {
+          queueMicrotask(() => {
+            listener?.({
+              streamId: "codex-stream-2",
+              event: { type: "text", text: "final summary" },
+              sequence: 2,
+              done: false,
+            });
+            listener?.({
+              streamId: "codex-stream-2",
+              event: { type: "done" },
+              sequence: 3,
+              done: true,
+            });
+            listener?.({
+              streamId: "codex-stream-2",
+              event: { type: "text", text: "progress update" },
+              sequence: 1,
+              done: false,
+            });
+          });
+          return { ok: true, streamId: "codex-stream-2", turnId: "turn-2" };
+        },
+      },
+    });
+
+    const adapter = getProviderAdapter({ providerId: "codex" });
+    const events: Array<{ type: string; text?: string }> = [];
+    for await (const event of adapter.runTurn({ prompt: "hello" })) {
+      events.push(event as { type: string; text?: string });
+    }
+
+    expect(events).toEqual([
+      { type: "text", text: "progress update" },
+      { type: "text", text: "final summary" },
+      { type: "done" },
+    ]);
+  });
 });

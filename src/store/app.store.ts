@@ -814,9 +814,9 @@ const defaultSettings: AppSettings = {
   codexPathOverride: "",
   codexModelReasoningEffort: "medium",
   codexWebSearchMode: "disabled",
-  codexShowRawAgentReasoning: false,
-  codexReasoningSummary: "auto",
-  codexSupportsReasoningSummaries: "auto",
+  codexShowRawAgentReasoning: true,
+  codexReasoningSummary: "detailed",
+  codexSupportsReasoningSummaries: "enabled",
   codexFastMode: true,
   codexExperimentalPlanMode: false,
   planAutoApprove: undefined,
@@ -884,7 +884,15 @@ function mergeTaskMessagePage(args: {
   mode: "latest" | "older";
 }) {
   if (args.mode === "latest") {
-    return args.pageMessages;
+    const currentById = new Map(args.currentMessages.map((message) => [message.id, message] as const));
+    const merged = args.pageMessages.map((message) => currentById.get(message.id) ?? message);
+    const seen = new Set(merged.map((message) => message.id));
+    for (const message of args.currentMessages) {
+      if (!seen.has(message.id)) {
+        merged.push(message);
+      }
+    }
+    return merged;
   }
 
   const seen = new Set(args.currentMessages.map((message) => message.id));
@@ -1302,7 +1310,7 @@ export const useAppStore = create<AppState>()(
                 },
                 messageCountByTask: {
                   ...state.messageCountByTask,
-                  [args.taskId]: page.totalCount,
+                  [args.taskId]: Math.max(page.totalCount, nextMessages.length),
                 },
                 taskMessagesLoadingByTask: nextLoadingState,
               };
@@ -1318,7 +1326,7 @@ export const useAppStore = create<AppState>()(
                   },
                   messageCountByTask: {
                     ...targetSession.messageCountByTask,
-                    [args.taskId]: page.totalCount,
+                    [args.taskId]: Math.max(page.totalCount, nextMessages.length),
                   },
                 },
               },

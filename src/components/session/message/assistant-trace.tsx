@@ -30,6 +30,7 @@ import {
   OrchestrationCard,
   Shimmer,
   StaveProcessingCard,
+  ThinkingAnimatedText,
   ToolInput,
   ToolOutput,
   parseSubagentToolInput,
@@ -127,34 +128,34 @@ function renderTraceToolSummaryChip(summary: TraceToolSummary): ReactNode {
   switch (summary.kind) {
     case "command":
       return (
-        <span className="ml-1 inline-flex max-w-xs items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
+        <span className="ml-1 inline-flex max-w-2xl items-center truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
           {summary.text}
         </span>
       );
     case "file":
       return (
-        <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+        <span className="ml-1 inline-flex max-w-2xl items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
           <FileText className="size-[0.85em] shrink-0" />
           {summary.text}
         </span>
       );
     case "search":
       return (
-        <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
+        <span className="ml-1 inline-flex max-w-2xl items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] leading-none text-muted-foreground">
           <Search className="size-[0.85em] shrink-0" />
           {summary.text}
         </span>
       );
     case "web":
       return (
-        <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+        <span className="ml-1 inline-flex max-w-2xl items-center gap-1 truncate rounded bg-muted/60 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
           <Globe className="size-[0.85em] shrink-0" />
           {summary.text}
         </span>
       );
     case "text":
       return (
-        <span className="ml-1 max-w-xs truncate text-[0.75em] text-muted-foreground/70">
+        <span className="ml-1 max-w-2xl truncate text-[0.75em] text-muted-foreground/70">
           {summary.text}
         </span>
       );
@@ -165,7 +166,7 @@ function getToolSummary(toolName: string, input: string): ReactNode {
   if (normalizeTraceToolName(toolName) === "file_change") {
     const rows = parseFileChangeToolInput(input);
     return rows.length > 0 ? (
-      <span className="ml-1 inline-flex max-w-xs items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
+      <span className="ml-1 inline-flex max-w-2xl items-center gap-1 truncate rounded border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[0.85em] leading-none text-muted-foreground">
         <FileCode2 className="size-[0.85em] shrink-0" />
         {rows.length} {rows.length === 1 ? "file" : "files"}
       </span>
@@ -416,7 +417,16 @@ function ReasoningStepView(args: {
   const reasoningText = joinReasoningText(entry.parts);
   return (
     <ChainOfThoughtStep
-      title={entry.isStreaming ? "Thinking" : "Reasoning"}
+      title="Reasoning"
+      titleContent={(
+        <ThinkingAnimatedText
+          text={entry.isStreaming ? "Thinking" : "Reasoning"}
+          active={entry.isStreaming}
+          replayWhileActive={entry.isStreaming}
+          settleOnStop
+          className="font-medium leading-none"
+        />
+      )}
       status={status}
       kind="thinking"
       icon={icon}
