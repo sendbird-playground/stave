@@ -18,7 +18,7 @@ export const WORKSPACE_SHORTCUT_COUNT = 9;
 const WORKSPACE_ROW_ACTION_REVEAL_CLASSES =
   "group-hover/workspace-row:pointer-events-auto group-hover/workspace-row:opacity-100 group-has-[:focus-visible]/workspace-row:pointer-events-auto group-has-[:focus-visible]/workspace-row:opacity-100";
 
-function getWorkspaceHoverActionVisibilityClasses(args: {
+export function getWorkspaceHoverActionVisibilityClasses(args: {
   isClosing: boolean;
 }) {
   return args.isClosing
@@ -99,18 +99,6 @@ export function getWorkspaceShortcutLabel(index: number): string | null {
   }
 
   return String(index + 1);
-}
-
-export function getWorkspaceArchiveButtonVisibilityClasses(args: {
-  isClosing: boolean;
-}) {
-  return getWorkspaceHoverActionVisibilityClasses(args);
-}
-
-export function getWorkspaceShortcutVisibilityClasses(args: {
-  isClosing: boolean;
-}) {
-  return getWorkspaceHoverActionVisibilityClasses(args);
 }
 
 export function getWorkspaceRespondingCountVisibilityClasses(args: {

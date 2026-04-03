@@ -15,7 +15,6 @@ import {
 import { ContinueWorkspaceDialog } from "@/components/layout/ContinueWorkspaceDialog";
 import { CreateWorkspaceBranchPicker } from "@/components/layout/CreateWorkspaceBranchPicker";
 import {
-  Badge,
   Button,
   DropdownMenu,
   DropdownMenuContent,
@@ -160,17 +159,14 @@ function PullRequestBranchFields(props: {
 
   return (
     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-      <div className="min-w-0 space-y-1">
+      <div className="min-w-0 space-y-2">
         <p className="pl-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           From Branch
         </p>
-        <Badge
-          variant="outline"
-          className="h-7 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal"
-        >
-          <GitBranch className="size-3.5 text-muted-foreground" />
+        <div className="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background/80 px-3 text-sm shadow-xs">
+          <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{headBranch}</span>
-        </Badge>
+        </div>
       </div>
 
       <div className="min-w-0 space-y-2">
