@@ -13,6 +13,9 @@ export interface ProjectSidebarCollapsedProjectView {
   isCurrent: boolean;
 }
 
+const WORKSPACE_ROW_ACTION_REVEAL_CLASSES =
+  "group-hover/workspace-row:pointer-events-auto group-hover/workspace-row:opacity-100 group-has-[:focus-visible]/workspace-row:pointer-events-auto group-has-[:focus-visible]/workspace-row:opacity-100";
+
 export interface CollapsedWorkspaceEntry {
   projectPath: string;
   projectName: string;
@@ -48,4 +51,25 @@ export function buildCollapsedWorkspaceEntries(args: {
 
     return entries;
   }, []);
+}
+
+export function getWorkspaceArchiveButtonVisibilityClasses(args: {
+  isClosing: boolean;
+}) {
+  return args.isClosing
+    ? "pointer-events-auto opacity-100"
+    : `pointer-events-none opacity-0 ${WORKSPACE_ROW_ACTION_REVEAL_CLASSES}`;
+}
+
+export function getWorkspaceRespondingCountVisibilityClasses(args: {
+  canArchiveWorkspace: boolean;
+  isClosing: boolean;
+}) {
+  if (!args.canArchiveWorkspace) {
+    return "";
+  }
+
+  return args.isClosing
+    ? "opacity-0"
+    : "group-hover/workspace-row:opacity-0 group-has-[:focus-visible]/workspace-row:opacity-0";
 }
