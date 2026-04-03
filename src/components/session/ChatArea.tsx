@@ -4,7 +4,6 @@ import { ChatInput } from "@/components/session/ChatInput";
 import { ChatPanel } from "@/components/session/ChatPanel";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { PlanViewer } from "@/components/session/PlanViewer";
-import { TaskAutoApproval } from "@/components/session/TaskAutoApproval";
 import { Button, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
 import { isTaskManaged } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
@@ -168,7 +167,7 @@ export function ChatArea() {
           <RenderProfiler id="PlanViewer">
             <PlanViewer inputDockHeight={chatInputDockHeight} />
           </RenderProfiler>
-          <div ref={chatInputDockRef} className="relative z-10 shrink-0">
+          <div ref={chatInputDockRef} className="relative z-30 shrink-0">
             <RenderProfiler id="ChatInput" thresholdMs={8}>
               <ChatInput />
             </RenderProfiler>
@@ -178,7 +177,6 @@ export function ChatArea() {
 
   return (
     <div {...sessionAreaProps}>
-      <TaskAutoApproval />
       {content}
     </div>
   );

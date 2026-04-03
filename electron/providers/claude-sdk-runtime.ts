@@ -1302,6 +1302,16 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
             });
           }
 
+          // In plan mode the CLI already enforces read-only tool boundaries,
+          // so we can auto-approve without prompting the user.
+          if (args.runtimeOptions?.claudePermissionMode === "plan") {
+            return buildClaudeApprovalPermissionResult({
+              approved: true,
+              normalizedInput,
+              denialMessage: `User denied permission for ${toolName}.`,
+            });
+          }
+
           const approvalEvent: BridgeEvent = {
             type: "approval",
             toolName,

@@ -356,8 +356,12 @@ export interface AppSettings {
   codexSupportsReasoningSummaries: "auto" | "enabled" | "disabled";
   codexFastMode: boolean;
   codexExperimentalPlanMode: boolean;
-  /** Legacy key name: when true, automatically approve provider tool prompts without user interaction. */
-  planAutoApprove: boolean;
+  /**
+   * @deprecated No longer used. Plan-mode auto-approval is now handled at the
+   * SDK runtime level via `canUseTool`. Kept temporarily so persisted settings
+   * deserialise without errors; will be removed in a future cleanup pass.
+   */
+  planAutoApprove?: boolean;
   // ---------------------------------------------------------------------------
   // Customisable AI prompt templates (Settings → Prompts)
   // ---------------------------------------------------------------------------
@@ -803,7 +807,7 @@ const defaultSettings: AppSettings = {
   codexSupportsReasoningSummaries: "auto",
   codexFastMode: true,
   codexExperimentalPlanMode: false,
-  planAutoApprove: false,
+  planAutoApprove: undefined,
   promptResponseStyle: DEFAULT_PROMPT_RESPONSE_STYLE,
   promptPrDescription: DEFAULT_PROMPT_PR_DESCRIPTION,
   promptSupervisorBreakdown: DEFAULT_PROMPT_SUPERVISOR_BREAKDOWN,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import { ArrowRightCircle, ClipboardCheck, Copy, Minus, Maximize2 } from "lucide-react";
 import { Button, Textarea, WaveIndicator } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
@@ -22,11 +22,30 @@ interface PlanViewerProps {
 
 const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
 
+interface DragState {
+  pointerId: number;
+  startMouseX: number;
+  startMouseY: number;
+  startPosX: number;
+  startPosY: number;
+  containerWidth: number;
+  containerHeight: number;
+  cardWidth: number;
+  cardHeight: number;
+  /** True once movement exceeds the activation threshold. */
+  active: boolean;
+}
+
 export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const [revising, setRevising] = useState(false);
   const [revisionText, setRevisionText] = useState("");
   const [viewState, setViewState] = useState<ViewState>("normal");
   const [copied, setCopied] = useState(false);
+  /** Absolute pixel position of the minimised pill within the chat content div. */
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+
+  const outerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<DragState | null>(null);
 
   const [activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, sendUserMessage, createTask, updatePromptDraft] = useAppStore(
     useShallow((state) => [
@@ -92,7 +111,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     : null;
   const replyNotice = managedNotice ?? planReplyNotice;
 
-  // Reset view state when a new plan arrives so it opens fully
+  // Reset view state when a new plan arrives so it opens fully.
   useEffect(() => {
     if (isPlanPending) {
       setViewState("normal");
@@ -101,6 +120,13 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
       setCopied(false);
     }
   }, [isPlanPending]);
+
+  // Clear drag position whenever the viewer is not minimised.
+  useEffect(() => {
+    if (viewState !== "minimized") {
+      setDragPos(null);
+    }
+  }, [viewState]);
 
   const handleApprove = useCallback(() => {
     if (isManagedTask || !canReplyToPlan) {
@@ -145,10 +171,6 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     updatePromptDraft,
   ]);
 
-  if (!isPlanPreparing && !isPlanPending) {
-    return null;
-  }
-
   function handleCopy() {
     if (planText) {
       void copyTextToClipboard(planText);
@@ -176,33 +198,115 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     setRevisionText("");
   }
 
+  // ---------------------------------------------------------------------------
+  // Drag logic for the minimised pill
+  // ---------------------------------------------------------------------------
+
+  const onHeaderPointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if (dragRef.current !== null) return; // already dragging
+    const outer = outerRef.current;
+    if (!outer) return;
+    const containerRect = outer.parentElement?.getBoundingClientRect();
+    if (!containerRect) return;
+    const outerRect = outer.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      // Use stored position if we have it, otherwise derive from current render.
+      startPosX: dragPos?.x ?? (outerRect.left - containerRect.left),
+      startPosY: dragPos?.y ?? (outerRect.top - containerRect.top),
+      containerWidth: containerRect.width,
+      containerHeight: containerRect.height,
+      cardWidth: outer.offsetWidth,
+      cardHeight: outer.offsetHeight,
+      active: false,
+    };
+  }, [dragPos]);
+
+  const onHeaderPointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    const state = dragRef.current;
+    if (!state) return;
+    const dx = e.clientX - state.startMouseX;
+    const dy = e.clientY - state.startMouseY;
+    // Activate drag only after a small movement threshold to preserve button clicks.
+    if (!state.active) {
+      if (Math.abs(dx) + Math.abs(dy) < 4) return;
+      state.active = true;
+      e.currentTarget.setPointerCapture(state.pointerId);
+    }
+    const newX = Math.max(0, Math.min(state.containerWidth - state.cardWidth, state.startPosX + dx));
+    const newY = Math.max(0, Math.min(state.containerHeight - state.cardHeight, state.startPosY + dy));
+    setDragPos({ x: newX, y: newY });
+  }, []);
+
+  const onHeaderPointerUp = useCallback((_e: PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Layout computation
+  // ---------------------------------------------------------------------------
+
   const isMinimized = viewState === "minimized";
   const isExpanded = viewState === "expanded";
-  const { topOffset, bottomOffset } = resolvePlanViewerInsets({
-    isExpanded,
-    inputDockHeight,
-  });
-  const viewerStyle = isExpanded
-    ? { top: topOffset ?? 0, bottom: bottomOffset }
-    : { bottom: bottomOffset };
+
+  // bottomOffset keeps the viewer above the chat input dock.
+  const { bottomOffset } = resolvePlanViewerInsets({ isExpanded: false, inputDockHeight });
+
+  let outerWrapperClass: string;
+  let outerWrapperStyle: React.CSSProperties;
+
+  if (isExpanded) {
+    // Fill ~90 % of the chat area (5 % inset on every side).
+    outerWrapperClass = "pointer-events-none absolute z-20";
+    outerWrapperStyle = { inset: "5%" };
+  } else if (isMinimized && dragPos !== null) {
+    // Freely positioned after the user has dragged the pill.
+    outerWrapperClass = "pointer-events-none absolute z-20";
+    outerWrapperStyle = { top: dragPos.y, left: dragPos.x };
+  } else if (isMinimized) {
+    // Default minimised position: bottom-right corner above the input dock.
+    outerWrapperClass = "pointer-events-none absolute z-20";
+    outerWrapperStyle = { right: "1rem", bottom: bottomOffset };
+  } else {
+    // Normal: full-width strip pinned to the bottom.
+    outerWrapperClass = "pointer-events-none absolute left-0 right-0 z-20 px-3 sm:px-4";
+    outerWrapperStyle = { bottom: bottomOffset };
+  }
+
+  const innerCardClass = [
+    "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
+    isExpanded ? "h-full" : "",
+    isMinimized ? "w-72" : (!isExpanded ? "mx-auto max-w-6xl" : ""),
+  ].filter(Boolean).join(" ");
+
+  if (!isPlanPreparing && !isPlanPending) {
+    return null;
+  }
 
   return (
-    <div
-      className="pointer-events-none absolute left-0 right-0 z-20 px-3 sm:px-4"
-      style={viewerStyle}
-    >
-      <div
-        className={[
-          "pointer-events-auto mx-auto flex max-w-6xl min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
-          isExpanded ? "h-full" : "",
-        ].join(" ")}
-      >
+    <div ref={outerRef} className={outerWrapperClass} style={outerWrapperStyle}>
+      <div className={innerCardClass}>
         {/* Header */}
         <div className="flex shrink-0 items-center gap-2 border-b border-border/80 px-4 py-2.5">
-          <ClipboardCheck className="size-4 text-primary" />
-          <p className="flex-1 text-sm font-medium">
-            {isPlanPreparing ? "Preparing plan\u2026" : `Review ${providerLabel}'s Plan`}
-          </p>
+          {/* Drag handle: title area only — buttons remain independently clickable */}
+          <div
+            className={[
+              "flex min-w-0 flex-1 select-none items-center gap-2 overflow-hidden",
+              isMinimized ? "cursor-grab" : "",
+            ].join(" ")}
+            onPointerDown={isMinimized ? onHeaderPointerDown : undefined}
+            onPointerMove={isMinimized ? onHeaderPointerMove : undefined}
+            onPointerUp={isMinimized ? onHeaderPointerUp : undefined}
+            onPointerCancel={isMinimized ? onHeaderPointerUp : undefined}
+          >
+            <ClipboardCheck className="size-4 shrink-0 text-primary" />
+            <p className="flex-1 truncate text-sm font-medium">
+              {isPlanPreparing ? "Preparing plan\u2026" : `Review ${providerLabel}'s Plan`}
+            </p>
+          </div>
           {isPlanPreparing ? (
             <WaveIndicator className="text-primary" />
           ) : (
