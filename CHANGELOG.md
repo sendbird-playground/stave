@@ -1,3 +1,32 @@
+## [0.0.35](https://github.com/sendbird-playground/stave/compare/v0.0.34...v0.0.35) (2026-04-03)
+
+### Highlights
+
+* Added a global command palette (`Cmd/Ctrl+Shift+P`) with centralized command discovery and execution.
+* Expanded message/file-link UX by promoting file references from inline code and code-fence metadata into navigable file chips.
+* Added workspace scripts execution and plan-mode auto-approval flow, while removing the older task auto-approval UI path.
+* Hardened provider event replay and routing behavior with segment boundary preservation, proposed-plan tag stripping, and explicit plan-mode routing.
+* Improved sidebar and workspace productivity with prompt history navigation, workspace keyboard shortcuts, and cleaner hover/shortcut interactions.
+* Refined thinking/reasoning presentation with replayable animated text behavior and settings-driven animation style controls.
+* Removed legacy Session Replay and diagnostics panels to simplify the chat surface.
+
+### Features
+
+* **command-palette:** add global command palette on Cmd/Ctrl+Shift+P ([#221](https://github.com/sendbird-playground/stave/issues/221)) ([77b1288](https://github.com/sendbird-playground/stave/commit/77b12889aa8be16b9dba5bec4700b0296aa7709d))
+* **message:** extract file paths from code fence metadata ([#210](https://github.com/sendbird-playground/stave/issues/210)) ([be29fc8](https://github.com/sendbird-playground/stave/commit/be29fc8165d93b732a6f4a6ea598e9552ae5c476))
+* promote inline code file references to file chips ([#208](https://github.com/sendbird-playground/stave/issues/208)) ([330744c](https://github.com/sendbird-playground/stave/commit/330744cc9fb75d681aee9564ab63fece3b3acc90))
+* **prompt-input:** add prompt history navigation in composer ([#209](https://github.com/sendbird-playground/stave/issues/209)) ([4a6ff19](https://github.com/sendbird-playground/stave/commit/4a6ff1951962d7620c5512e0d5b31e03c3f13f7c))
+* **providers:** add segmentId to preserve provider text boundaries ([#215](https://github.com/sendbird-playground/stave/issues/215)) ([e6fd05c](https://github.com/sendbird-playground/stave/commit/e6fd05c6412ad2e921bfde3ce3e2e911354f1413))
+* **scripts:** add workspace scripts with plan mode auto-approval ([#211](https://github.com/sendbird-playground/stave/issues/211)) ([a828b58](https://github.com/sendbird-playground/stave/commit/a828b58615703e3a39ea3ebb33d420f575d14619))
+* **shortcuts:** add workspace selection keyboard shortcuts ([#217](https://github.com/sendbird-playground/stave/issues/217)) ([314f450](https://github.com/sendbird-playground/stave/commit/314f450cdbf7abce3863cfbe06448fb93b54dfd2))
+* **sidebar:** show workspace shortcut on row hover ([#226](https://github.com/sendbird-playground/stave/issues/226)) ([3e669d0](https://github.com/sendbird-playground/stave/commit/3e669d0dd4bf38fcf098ac0d970708a11e589582))
+* **stave:** short-circuit routing for plan mode ([#206](https://github.com/sendbird-playground/stave/issues/206)) ([c09c3d7](https://github.com/sendbird-playground/stave/commit/c09c3d78eefd1cc2e6d577c5dc0e7eae7e692874))
+* **thinking:** add replayable animated text component ([#230](https://github.com/sendbird-playground/stave/issues/230)) ([25b155c](https://github.com/sendbird-playground/stave/commit/25b155ce5a2c68b82ba86dd91d9c6f6eb946a4f9))
+
+### Bug Fixes
+
+* **continue:** command palette style ([#224](https://github.com/sendbird-playground/stave/issues/224)) ([dffe828](https://github.com/sendbird-playground/stave/commit/dffe828074e1fb08eddde850f752c1407d5104fc))
+* strip proposed_plan tags from chat messages ([#220](https://github.com/sendbird-playground/stave/issues/220)) ([dd5895c](https://github.com/sendbird-playground/stave/commit/dd5895c361cb19828ad115bf5cf978a5b03e9385))
 ## [0.0.34](https://github.com/sendbird-playground/stave/compare/v0.0.33...v0.0.34) (2026-04-03)
 
 ### Highlights
