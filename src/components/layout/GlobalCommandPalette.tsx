@@ -45,9 +45,14 @@ export function GlobalCommandPalette(args: GlobalCommandPaletteProps) {
       description="Run workspace commands, switch context, and open settings."
       className="max-w-2xl border-border/80 bg-background/95 p-0 shadow-2xl"
     >
-      <Command key={args.open ? "open" : "closed"} className="bg-transparent">
-        <CommandInput autoFocus placeholder="Type a command or search settings, tasks, and workspaces..." />
-        <CommandList className="max-h-[65vh]">
+      <Command
+        key={args.open ? "open" : "closed"}
+        className="flex h-[min(84vh,44rem)] min-h-0 flex-col bg-transparent"
+      >
+        <div className="shrink-0 border-b border-border/70 px-1 pb-1">
+          <CommandInput autoFocus placeholder="Type a command or search settings, tasks, and workspaces..." />
+        </div>
+        <CommandList className="min-h-0 flex-1 px-2 pb-2">
           <CommandEmpty className="px-4 py-10 text-left">
             <p className="text-sm font-medium text-foreground">No matching command.</p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -55,7 +60,7 @@ export function GlobalCommandPalette(args: GlobalCommandPaletteProps) {
             </p>
           </CommandEmpty>
           {sections.map((section) => (
-            <CommandGroup key={section.key} heading={section.title}>
+            <CommandGroup key={section.key} heading={section.title} className="py-1">
               {section.items.map((action) => {
                 const Icon = action.icon;
                 return (
@@ -79,7 +84,7 @@ export function GlobalCommandPalette(args: GlobalCommandPaletteProps) {
                       });
                       void action.run();
                     }}
-                    className="items-start gap-3 px-3 py-3"
+                    className="items-start gap-3 rounded-lg px-3 py-3"
                   >
                     {Icon ? (
                       <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-background/70 text-muted-foreground">
@@ -110,7 +115,7 @@ export function GlobalCommandPalette(args: GlobalCommandPaletteProps) {
             </CommandGroup>
           ))}
         </CommandList>
-        <div className="border-t border-border/70 px-4 py-3 text-xs text-muted-foreground">
+        <div className="shrink-0 border-t border-border/70 px-4 py-3 text-xs text-muted-foreground">
           Palette commands run IDE actions.
           {" "}
           <span className="text-foreground">Slash commands remain separate in the chat input.</span>
