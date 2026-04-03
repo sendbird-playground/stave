@@ -289,6 +289,78 @@ describe("plan response replay", () => {
     });
   });
 
+  test("strips <proposed_plan> tags from prior streaming text when plan_ready arrives", () => {
+    // Simulates the Codex plan bug: streaming deltas include raw
+    // <proposed_plan> tags, then plan_ready follows.
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "text", text: "Analyzing the codebase.\n\n<proposed_plan>\n## Plan\n- Step 1\n</proposed_plan>" },
+        { type: "plan_ready", planText: "## Plan\n- Step 1" },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "o3",
+    });
+
+    // The prior message should have its <proposed_plan> tags stripped.
+    expect(replayed.messages).toHaveLength(2);
+    expect(replayed.messages[0]).toMatchObject({
+      content: "Analyzing the codebase.",
+    });
+    expect(replayed.messages[0]?.content).not.toContain("<proposed_plan>");
+    // Plan message should have clean plan text.
+    expect(replayed.messages[1]).toMatchObject({
+      content: "## Plan\n- Step 1",
+      isPlanResponse: true,
+      planText: "## Plan\n- Step 1",
+    });
+  });
+
+  test("replaces message entirely when only <proposed_plan> tags exist (no preamble)", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "text", text: "<proposed_plan>\n## Plan\n- Fix it\n</proposed_plan>" },
+        { type: "plan_ready", planText: "## Plan\n- Fix it" },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "o3",
+    });
+
+    // When the streamed text is ONLY the plan block, the cleaned message
+    // is empty so plan_ready replaces it instead of creating a separate one.
+    expect(replayed.messages).toHaveLength(1);
+    expect(replayed.messages[0]).toMatchObject({
+      content: "## Plan\n- Fix it",
+      isPlanResponse: true,
+      planText: "## Plan\n- Fix it",
+    });
+  });
+
+  test("handles partial <proposed_plan> tag from streaming cut-off", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "text", text: "Analysis done.\n\n<proposed_plan>\n## Plan\n- Do X" },
+        { type: "plan_ready", planText: "## Plan\n- Do X\n- Do Y" },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "o3",
+    });
+
+    expect(replayed.messages).toHaveLength(2);
+    expect(replayed.messages[0]).toMatchObject({
+      content: "Analysis done.",
+    });
+    expect(replayed.messages[0]?.content).not.toContain("<proposed_plan>");
+  });
+
   test("stores a standalone plan response when plan_ready arrives first", () => {
     const replayed = replayProviderEventsToTaskState({
       taskId: "task-1",

@@ -412,6 +412,43 @@ function createStreamingAssistantMessage(args: {
   };
 }
 
+/**
+ * Strip `<proposed_plan>…</proposed_plan>` (and any incomplete open-tag
+ * suffix) from a string so raw XML plan tags never leak into the chat UI.
+ * Text before and after the block is preserved.
+ */
+function stripProposedPlanBlock(text: string): string {
+  const openTag = "<proposed_plan>";
+  const closeTag = "</proposed_plan>";
+  const openIdx = text.indexOf(openTag);
+  if (openIdx === -1) return text;
+  const closeIdx = text.indexOf(closeTag, openIdx);
+  if (closeIdx === -1) {
+    // Partial tag (streaming cut-off) — strip from open tag onwards.
+    return text.slice(0, openIdx).trimEnd();
+  }
+  const before = text.slice(0, openIdx).trimEnd();
+  const after = text.slice(closeIdx + closeTag.length).trimStart();
+  return before + (after ? `\n\n${after}` : "");
+}
+
+/**
+ * Remove `<proposed_plan>` blocks from a ChatMessage's `content` and its
+ * text parts so the streamed assistant message no longer shows garbled XML
+ * once the plan is promoted to a dedicated plan message.
+ */
+function stripPlanTagsFromMessage(message: ChatMessage): ChatMessage {
+  const content = stripProposedPlanBlock(message.content);
+  const parts = message.parts
+    .map((part) => {
+      if (part.type !== "text") return part;
+      const cleaned = stripProposedPlanBlock(part.text);
+      return cleaned ? { ...part, text: cleaned } : null;
+    })
+    .filter((p): p is MessagePart => p != null);
+  return { ...message, content, parts };
+}
+
 function createPlanAssistantMessage(args: {
   taskId: string;
   count: number;
@@ -822,9 +859,12 @@ export function replayProviderEventsToTaskState(args: {
     }
 
     if (event.type === "plan_ready") {
+      // Strip raw <proposed_plan> tags that leaked into the streaming
+      // message so the prior assistant bubble isn't garbled.
+      const cleanedTarget = stripPlanTagsFromMessage(target);
       const shouldAppendSeparatePlanMessage =
-        !target.isPlanResponse
-        && hasRenderableAssistantContent({ message: target });
+        !cleanedTarget.isPlanResponse
+        && hasRenderableAssistantContent({ message: cleanedTarget });
 
       if (shouldAppendSeparatePlanMessage) {
         const planMessage = createPlanAssistantMessage({
@@ -835,10 +875,15 @@ export function replayProviderEventsToTaskState(args: {
           planText: event.planText,
         });
 
-        current = [...current, planMessage];
+        current = [...current.slice(0, -1), cleanedTarget, planMessage];
         changed = true;
         continue;
       }
+
+      // Prior message was empty after cleaning (or was already a plan
+      // response) — let appendProviderEventToAssistant replace it below.
+      target = cleanedTarget;
+      current = [...current.slice(0, -1), cleanedTarget];
     }
 
     const updated = appendProviderEventToAssistant({
