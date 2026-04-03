@@ -64,4 +64,15 @@ describe("buildCreateWorkspaceBranchPickerRows", () => {
       { type: "option", key: "local:feature/alpha", option: { value: "feature/alpha", scope: "local" } },
     ]);
   });
+
+  test("hides scope labels when only one branch scope is present", () => {
+    expect(buildCreateWorkspaceBranchPickerRows({
+      defaultBranch: "main",
+      localBranches: [],
+      remoteBranches: ["origin/main", "origin/release"],
+    })).toEqual([
+      { type: "option", key: "remote:origin/main", option: { value: "origin/main", scope: "remote" } },
+      { type: "option", key: "remote:origin/release", option: { value: "origin/release", scope: "remote" } },
+    ]);
+  });
 });

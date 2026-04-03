@@ -139,16 +139,19 @@ export function buildCreateWorkspaceBranchPickerRows(args: {
     .filter((branch) => matchesQuery(branch, query));
   const prioritizedLocalBranches = prioritizeBranches(localBranches, localCandidates)
     .filter((branch) => matchesQuery(branch, query));
+  const hasBothScopes = prioritizedRemoteBranches.length > 0 && prioritizedLocalBranches.length > 0;
 
   const rows: CreateWorkspaceBranchPickerRow[] = [];
 
   if (prioritizedRemoteBranches.length > 0) {
-    rows.push({
-      type: "label",
-      key: "remote-label",
-      label: "Remote branches",
-      scope: "remote",
-    });
+    if (hasBothScopes) {
+      rows.push({
+        type: "label",
+        key: "remote-label",
+        label: "Remote branches",
+        scope: "remote",
+      });
+    }
     for (const branch of prioritizedRemoteBranches) {
       rows.push({
         type: "option",
@@ -162,12 +165,14 @@ export function buildCreateWorkspaceBranchPickerRows(args: {
   }
 
   if (prioritizedLocalBranches.length > 0) {
-    rows.push({
-      type: "label",
-      key: "local-label",
-      label: "Local branches",
-      scope: "local",
-    });
+    if (hasBothScopes) {
+      rows.push({
+        type: "label",
+        key: "local-label",
+        label: "Local branches",
+        scope: "local",
+      });
+    }
     for (const branch of prioritizedLocalBranches) {
       rows.push({
         type: "option",
