@@ -84,6 +84,7 @@ The UI follows `elements.ai-sdk.dev/components/chain-of-thought` as closely as p
 - **Root**: No outer border or background — just `not-prose w-full`.
 - **Trigger**: Simple row `[icon] label [chevron]`, text-muted-foreground, no card.
   When streaming, the "Thinking" label uses a shimmer gradient animation.
+  The rotating phrase swap animation is user-selectable in Settings → Chat, with a soft fade as the default.
   When collapsed and not streaming, a summary row shows tool/agent/file counts below the trigger.
 - **Steps**: Flat flex rows `flex gap-3 text-sm` — NOT cards with borders/backgrounds.
 - **Step icons**: Kind-specific icons for done/pending steps (Terminal for Bash, FileText for Read,

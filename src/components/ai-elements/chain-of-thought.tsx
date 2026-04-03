@@ -3,8 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { Brain, Check, ChevronDown, Circle, LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getRandomCompletionPhrase, getSeededCompletionPhrase } from "@/lib/completion-phrases";
-import { useRotatingThinkingPhrase } from "@/lib/thinking-phrases";
-import { Shimmer } from "./shimmer";
+import { ThinkingPhraseLabel } from "./thinking-phrase";
 
 /* ─── Data type (used by the `steps` prop shorthand) ─────────────── */
 
@@ -221,9 +220,6 @@ export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonEleme
   const { isStreaming, open, setOpen, summaryItems, seed } = useChainOfThoughtContext();
   const showSummary = !open && !isStreaming && summaryItems.length > 0;
 
-  /* Rotating thinking phrase — cycles every 3 s while streaming. */
-  const thinkingPhrase = useRotatingThinkingPhrase(isStreaming);
-
   /* Pick a completion phrase that is stable across Virtuoso unmount/remount
      cycles. When a seed is provided (typically the message ID), use the
      deterministic seeded variant so the same message always shows the same
@@ -246,12 +242,7 @@ export function ChainOfThoughtTrigger(args: ButtonHTMLAttributes<HTMLButtonEleme
       {isStreaming ? (
         <span className="inline-flex items-center gap-[0.5em] font-medium">
           <Brain className="size-[1.15em]" />
-          <Shimmer
-            as="span"
-            className="[--shimmer-base-color:var(--color-muted-foreground)]"
-          >
-            {thinkingPhrase}
-          </Shimmer>
+          <ThinkingPhraseLabel active={isStreaming} />
         </span>
       ) : (
         <>

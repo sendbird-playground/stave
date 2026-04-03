@@ -59,6 +59,10 @@ import {
   normalizeResponseStylePrompt,
 } from "@/lib/providers/prompt-defaults";
 import {
+  normalizeThinkingPhraseAnimationStyle,
+  type ThinkingPhraseAnimationStyle,
+} from "@/lib/thinking-phrases";
+import {
   buildStaveAutoModelSettingsPatch,
   DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
 } from "@/lib/providers/stave-auto-profile";
@@ -272,6 +276,7 @@ export interface AppSettings {
   /** Zoom scale for the workspace information panel (0.8 – 1.3, default 1). */
   infoPanelScale: number;
   reasoningDefaultExpanded: boolean;
+  thinkingPhraseAnimationStyle: ThinkingPhraseAnimationStyle;
   claudeFastModeVisible: boolean;
   codexFastModeVisible: boolean;
   modelClaude: string;
@@ -734,6 +739,7 @@ const defaultSettings: AppSettings = {
   messageKoreanFontFamily: "Pretendard Variable",
   infoPanelScale: 1,
   reasoningDefaultExpanded: false,
+  thinkingPhraseAnimationStyle: "soft",
   claudeFastModeVisible: true,
   codexFastModeVisible: true,
   modelClaude: getDefaultModelForProvider({ providerId: "claude-code" }),
@@ -5265,6 +5271,9 @@ export const useAppStore = create<AppState>()(
           state.settings.codexFastModeVisible ??= raw.fastModeVisible;
           delete raw.fastModeVisible;
         }
+        state.settings.thinkingPhraseAnimationStyle = normalizeThinkingPhraseAnimationStyle(
+          state.settings.thinkingPhraseAnimationStyle,
+        );
         state.settings.promptResponseStyle = normalizeResponseStylePrompt(state.settings.promptResponseStyle);
         const legacyProjectInitCommand = normalizeProjectWorkspaceInitCommand({
           value: raw.newWorkspaceInitCommand,
