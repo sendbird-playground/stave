@@ -2,9 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   buildCollapsedWorkspaceEntries,
   buildVisibleWorkspaceShortcutTargets,
-  getWorkspaceArchiveButtonVisibilityClasses,
+  getWorkspaceHoverActionVisibilityClasses,
   getWorkspaceShortcutLabel,
-  getWorkspaceShortcutVisibilityClasses,
   getWorkspaceRespondingCountVisibilityClasses,
   WORKSPACE_SHORTCUT_COUNT,
 } from "../src/components/layout/ProjectWorkspaceSidebar.utils";
@@ -98,8 +97,8 @@ describe("buildCollapsedWorkspaceEntries", () => {
 });
 
 describe("workspace hover action visibility", () => {
-  test("reveals the shortcut chip on hover and keyboard focus-visible, not generic focus-within", () => {
-    const className = getWorkspaceShortcutVisibilityClasses({
+  test("reveals hover actions on hover and keyboard focus-visible, not generic focus-within", () => {
+    const className = getWorkspaceHoverActionVisibilityClasses({
       isClosing: false,
     });
 
@@ -110,29 +109,9 @@ describe("workspace hover action visibility", () => {
     expect(className).not.toContain("group-focus-within");
   });
 
-  test("reveals the archive button on hover and keyboard focus-visible, not generic focus-within", () => {
-    const className = getWorkspaceArchiveButtonVisibilityClasses({
-      isClosing: false,
-    });
-
-    expect(className).toContain("group-hover/workspace-row:opacity-100");
-    expect(className).toContain(
-      "group-has-[:focus-visible]/workspace-row:opacity-100",
-    );
-    expect(className).not.toContain("group-focus-within");
-  });
-
-  test("keeps the shortcut chip visible while closing", () => {
+  test("keeps hover actions visible while closing", () => {
     expect(
-      getWorkspaceShortcutVisibilityClasses({
-        isClosing: true,
-      }),
-    ).toBe("pointer-events-auto opacity-100");
-  });
-
-  test("keeps the archive button visible while closing", () => {
-    expect(
-      getWorkspaceArchiveButtonVisibilityClasses({
+      getWorkspaceHoverActionVisibilityClasses({
         isClosing: true,
       }),
     ).toBe("pointer-events-auto opacity-100");
