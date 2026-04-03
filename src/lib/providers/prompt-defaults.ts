@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 // Response style – injected into both Claude and Codex system/user prompts
 // ---------------------------------------------------------------------------
-export const DEFAULT_PROMPT_RESPONSE_STYLE = [
+export const LEGACY_DEFAULT_PROMPT_RESPONSE_STYLE = [
   "Response formatting rules:",
   "- Be concise. Do not repeat what the user already knows.",
   "- Use markdown headers (##, ###) to organize long responses into clear sections.",
@@ -17,6 +17,27 @@ export const DEFAULT_PROMPT_RESPONSE_STYLE = [
   "- Put code in fenced code blocks with the correct language tag.",
   "- When referencing files, use inline code for paths and filenames.",
 ].join("\n");
+
+export const DEFAULT_PROMPT_RESPONSE_STYLE = [
+  "Response formatting rules:",
+  "- Be concise. Do not repeat what the user already knows.",
+  "- Use markdown headers (##, ###) to organize long responses into clear sections.",
+  "- Use bullet lists for multiple items instead of run-on paragraphs.",
+  '- Avoid meta-narration ("I will now...", "Let me...") -- go straight to the answer.',
+  "- Put code in fenced code blocks with the correct language tag.",
+  "- When referencing files, use markdown links instead of inline code so file chips can render.",
+  "- Put the file path in the link target, for example `[src/App.tsx](src/App.tsx)` or `[app.store.ts](src/store/app.store.ts#L5161)`.",
+].join("\n");
+
+function normalizePromptTemplateValue(value: string) {
+  return value.replaceAll("\r\n", "\n").trim();
+}
+
+export function normalizeResponseStylePrompt(value: string) {
+  return normalizePromptTemplateValue(value) === normalizePromptTemplateValue(LEGACY_DEFAULT_PROMPT_RESPONSE_STYLE)
+    ? DEFAULT_PROMPT_RESPONSE_STYLE
+    : value;
+}
 
 // ---------------------------------------------------------------------------
 // PR description generator

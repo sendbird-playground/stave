@@ -43,6 +43,25 @@ describe("MarkdownMessage", () => {
     expect(html).toContain("L42");
   });
 
+  test("upgrades inline code workspace file references into file chips", () => {
+    const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "Check `src/components/session/ChatPanel.tsx#L42` for the fix.",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+      resolveFileLink: ({ href }) => resolveWorkspaceFileLink({
+        href,
+        workspaceCwd: "/tmp/stave",
+        knownFilePaths,
+      }),
+    }));
+
+    expect(html).toContain('data-message-file-link="true"');
+    expect(html).toContain('aria-label="Open src/components/session/ChatPanel.tsx (reference L42)"');
+    expect(html).toContain("ChatPanel.tsx");
+    expect(html).toContain("L42");
+  });
+
   test("keeps repeated file references distinguishable with line labels", () => {
     const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
     const html = renderToStaticMarkup(createElement(MarkdownMessage, {
@@ -100,6 +119,20 @@ describe("resolveWorkspaceFileLink", () => {
       fileName: "App.tsx",
       line: 18,
       column: 4,
+    });
+  });
+
+  test("returns workspace-relative file metadata for relative file links", () => {
+    const resolved = resolveWorkspaceFileLink({
+      href: "src/App.tsx#L27",
+      workspaceCwd: "/tmp/stave",
+      knownFilePaths: new Set(["src/App.tsx"]),
+    });
+
+    expect(resolved).toEqual({
+      filePath: "src/App.tsx",
+      fileName: "App.tsx",
+      line: 27,
     });
   });
 

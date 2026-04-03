@@ -56,6 +56,7 @@ import {
   DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS,
   DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
   DEFAULT_PROMPT_INLINE_COMPLETION,
+  normalizeResponseStylePrompt,
 } from "@/lib/providers/prompt-defaults";
 import {
   buildStaveAutoModelSettingsPatch,
@@ -5232,6 +5233,7 @@ export const useAppStore = create<AppState>()(
           state.settings.codexFastModeVisible ??= raw.fastModeVisible;
           delete raw.fastModeVisible;
         }
+        state.settings.promptResponseStyle = normalizeResponseStylePrompt(state.settings.promptResponseStyle);
         const legacyProjectInitCommand = normalizeProjectWorkspaceInitCommand({
           value: raw.newWorkspaceInitCommand,
         });
