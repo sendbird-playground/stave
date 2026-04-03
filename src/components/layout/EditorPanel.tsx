@@ -13,12 +13,15 @@ import {
   GitBranch,
   Info,
   LoaderCircle,
+  Minus,
+  Plus,
   RefreshCcw,
+  RotateCcw,
   SquareTerminal,
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
@@ -31,7 +34,7 @@ import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
 import { hasSourceControlStagedChanges, type SourceControlStatusItem } from "@/lib/source-control-status";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import { ExplorerEntryIcon } from "./explorer-entry-icon";
+import { ExplorerEntryIcon, WorkspaceFileIcon } from "./explorer-entry-icon";
 import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
 import {
   buildSourceControlSections,
@@ -274,20 +277,29 @@ function ExplorerTreeRow(args: {
 
 function SourceControlActionButton(args: {
   disabled?: boolean;
+  icon: ReactNode;
   label: string;
   onClick: () => void;
-  variant?: "destructive" | "ghost" | "outline" | "secondary";
+  tone?: "default" | "destructive" | "success";
 }) {
+  const toneClassName = args.tone === "destructive"
+    ? "text-destructive hover:bg-destructive/10 hover:text-destructive"
+    : args.tone === "success"
+      ? "text-success hover:bg-success/10 hover:text-success"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground";
+
   return (
     <Button
       type="button"
-      size="xs"
-      variant={args.variant ?? "ghost"}
-      className="h-6 rounded-md px-2 text-[11px]"
+      size="icon-xs"
+      variant="ghost"
+      aria-label={args.label}
+      title={args.label}
+      className={cn("size-6 rounded-sm border border-transparent p-0 transition-colors", toneClassName)}
       disabled={args.disabled}
       onClick={args.onClick}
     >
-      {args.label}
+      {args.icon}
     </Button>
   );
 }
@@ -295,90 +307,126 @@ function SourceControlActionButton(args: {
 function SourceControlRow(args: {
   isScmBusy: boolean;
   item: SourceControlItemViewModel;
+  onCopyPath: (path: string) => void;
   onDiscard: (item: SourceControlStatusItem) => void;
   onOpenDiff: (path: string) => void;
   onStage: (item: SourceControlStatusItem) => void;
   onUnstage: (item: SourceControlStatusItem) => void;
 }) {
-  const codeBadgeVariant = args.item.isConflict
-    ? "destructive"
+  const statusClassName = args.item.isConflict
+    ? "text-destructive"
     : args.item.hasMixedChanges || args.item.hasUnstagedChanges
-      ? "warning"
+      ? "text-warning"
       : args.item.hasStagedChanges
-        ? "success"
-        : "outline";
+        ? "text-success"
+        : "text-muted-foreground";
 
   return (
-    <div className="group rounded-xl border border-border/70 bg-background/80 px-3 py-2 shadow-xs transition-colors hover:border-border hover:bg-muted/20">
-      <button
-        type="button"
-        className="flex min-w-0 w-full items-start gap-2.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        onClick={() => args.onOpenDiff(args.item.item.path)}
-      >
-        <Badge
-          variant={codeBadgeVariant}
-          className="mt-0.5 min-w-8 justify-center rounded-md px-1.5 font-mono text-[11px]"
-        >
-          {args.item.displayCode}
-        </Badge>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{args.item.fileName}</span>
-            {args.item.hasMixedChanges ? (
-              <Badge variant="outline" className="rounded-md px-1.5 text-[10px]">
-                partial
-              </Badge>
-            ) : null}
-            {args.item.isUntracked ? (
-              <Badge variant="outline" className="rounded-md px-1.5 text-[10px]">
-                new
-              </Badge>
-            ) : null}
-          </div>
-          <p className="truncate text-xs text-muted-foreground">
-            {args.item.pathDetail}
-          </p>
-        </div>
-      </button>
-
-      <div className="mt-0 flex max-h-0 items-center justify-between gap-2 overflow-hidden opacity-0 transition-all duration-150 group-hover:mt-2 group-hover:max-h-8 group-hover:opacity-100 group-focus-within:mt-2 group-focus-within:max-h-8 group-focus-within:opacity-100">
-        <p className="truncate text-[11px] text-muted-foreground">
-          {args.item.pathLabel}
-        </p>
-        <div className="flex shrink-0 items-center gap-1">
-          <SourceControlActionButton
-            label="Open"
-            disabled={args.isScmBusy}
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="group flex items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 transition-colors hover:bg-muted/30 focus-within:bg-muted/30">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             onClick={() => args.onOpenDiff(args.item.item.path)}
-            variant="outline"
-          />
-          {args.item.canStage ? (
-            <SourceControlActionButton
-              label="Stage"
-              disabled={args.isScmBusy}
-              onClick={() => args.onStage(args.item.item)}
-              variant="secondary"
-            />
-          ) : null}
-          {args.item.canUnstage ? (
-            <SourceControlActionButton
-              label="Unstage"
-              disabled={args.isScmBusy}
-              onClick={() => args.onUnstage(args.item.item)}
-              variant="ghost"
-            />
-          ) : null}
-          {args.item.canDiscard ? (
-            <SourceControlActionButton
-              label="Discard"
-              disabled={args.isScmBusy}
-              onClick={() => args.onDiscard(args.item.item)}
-              variant="destructive"
-            />
-          ) : null}
+          >
+            <WorkspaceFileIcon fileName={args.item.fileName} className="h-4 w-[14px]" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium">{args.item.fileName}</span>
+                {args.item.hasMixedChanges ? (
+                  <Badge variant="outline" className="rounded-md px-1.5 text-[10px]">
+                    partial
+                  </Badge>
+                ) : null}
+                {args.item.isUntracked ? (
+                  <Badge variant="outline" className="rounded-md px-1.5 text-[10px]">
+                    new
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {args.item.pathDetail}
+              </p>
+            </div>
+          </button>
+
+          <div className="relative flex h-6 w-[84px] shrink-0 items-center justify-end">
+            <span
+              className={cn(
+                "pointer-events-none absolute inset-0 flex items-center justify-end pr-1 font-mono text-[11px] font-medium transition-opacity duration-150 group-hover:opacity-0 group-focus-within:opacity-0",
+                statusClassName,
+              )}
+            >
+              {args.item.displayCode}
+            </span>
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+              {args.item.canStage ? (
+                <SourceControlActionButton
+                  label="Stage"
+                  disabled={args.isScmBusy}
+                  icon={<Plus className="size-3.5" />}
+                  onClick={() => args.onStage(args.item.item)}
+                  tone="success"
+                />
+              ) : null}
+              {args.item.canUnstage ? (
+                <SourceControlActionButton
+                  label="Unstage"
+                  disabled={args.isScmBusy}
+                  icon={<Minus className="size-3.5" />}
+                  onClick={() => args.onUnstage(args.item.item)}
+                  tone="default"
+                />
+              ) : null}
+              {args.item.canDiscard ? (
+                <SourceControlActionButton
+                  label="Discard"
+                  disabled={args.isScmBusy}
+                  icon={<RotateCcw className="size-3.5" />}
+                  onClick={() => args.onDiscard(args.item.item)}
+                  tone="destructive"
+                />
+              ) : null}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem onSelect={() => args.onOpenDiff(args.item.item.path)}>
+          <File className="size-4" />
+          Open Changes
+        </ContextMenuItem>
+        {(args.item.canStage || args.item.canUnstage || args.item.canDiscard) ? <ContextMenuSeparator /> : null}
+        {args.item.canStage ? (
+          <ContextMenuItem disabled={args.isScmBusy} onSelect={() => args.onStage(args.item.item)}>
+            <Plus className="size-4" />
+            Stage
+          </ContextMenuItem>
+        ) : null}
+        {args.item.canUnstage ? (
+          <ContextMenuItem disabled={args.isScmBusy} onSelect={() => args.onUnstage(args.item.item)}>
+            <Minus className="size-4" />
+            Unstage
+          </ContextMenuItem>
+        ) : null}
+        {args.item.canDiscard ? (
+          <ContextMenuItem
+            variant="destructive"
+            disabled={args.isScmBusy}
+            onSelect={() => args.onDiscard(args.item.item)}
+          >
+            <RotateCcw className="size-4" />
+            Discard
+          </ContextMenuItem>
+        ) : null}
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => args.onCopyPath(args.item.pathLabel)}>
+          <Copy className="size-4" />
+          Copy path
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -809,6 +857,15 @@ export function EditorPanel() {
     try {
       await copyTextToClipboard(pathToCopy);
       toast.success(args.mode === "absolute" ? "Copied absolute path" : "Copied relative path");
+    } catch {
+      toast.error("Failed to copy path");
+    }
+  }
+
+  async function handleCopySourceControlPath(path: string) {
+    try {
+      await copyTextToClipboard(path);
+      toast.success("Copied relative path");
     } catch {
       toast.error("Failed to copy path");
     }
@@ -1494,6 +1551,7 @@ export function EditorPanel() {
                           key={`${item.displayCode}:${item.pathLabel}`}
                           item={item}
                           isScmBusy={isScmBusy}
+                          onCopyPath={(path) => void handleCopySourceControlPath(path)}
                           onOpenDiff={(path) => void handleSelectDiff({ path })}
                           onStage={(sourceItem) => void handleStageAction({ action: "stage", item: sourceItem })}
                           onUnstage={(sourceItem) => void handleStageAction({ action: "unstage", item: sourceItem })}
