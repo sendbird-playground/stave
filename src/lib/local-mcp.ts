@@ -16,6 +16,14 @@ export interface StaveLocalMcpManifest {
   pid: number;
   appVersion: string;
   startedAt: string;
+  /**
+   * Absolute path to the compiled stdio proxy script.
+   * Consumers (e.g. Agentize) that cannot reach the 127.0.0.1 loopback
+   * endpoint directly — such as Codex — should spawn:
+   *   node <stdioProxyScript>
+   * and use it as a stdio-transport MCP server instead.
+   */
+  stdioProxyScript: string;
 }
 
 export interface StaveLocalMcpStatus {

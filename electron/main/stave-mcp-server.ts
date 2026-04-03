@@ -486,6 +486,16 @@ export async function startStaveMcpServer() {
     throw new Error("Failed to resolve local MCP server address.");
   }
 
+  // In production the main process lives inside an ASAR archive
+  // (app.getAppPath() → ".../app.asar").  The proxy script is unpacked to the
+  // parallel ".asar.unpacked" directory so it can be executed by `node`.
+  // In development app.getAppPath() already points to the project root where
+  // out/main/stave-mcp-stdio-proxy.mjs is written by the build step.
+  const appPath = app.getAppPath().endsWith(".asar")
+    ? app.getAppPath().replace(/\.asar$/, ".asar.unpacked")
+    : app.getAppPath();
+  const stdioProxyScript = path.join(appPath, "out", "main", "stave-mcp-stdio-proxy.mjs");
+
   const manifest: StaveLocalMcpManifest = {
     version: 1,
     name: "stave-local-mcp",
@@ -498,6 +508,7 @@ export async function startStaveMcpServer() {
     pid: process.pid,
     appVersion: app.getVersion(),
     startedAt: new Date().toISOString(),
+    stdioProxyScript,
   };
 
   await writeManifest(manifest);

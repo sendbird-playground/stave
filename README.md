@@ -44,7 +44,7 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 - automatic import of existing branch-backed git worktrees when a project opens
 - optional repo-scoped post-create workspace bootstrap command for new git worktrees, such as `bun install` or `npm install`
 - optional repo-scoped reuse of the repository root `node_modules` via workspace-local symlink for faster worktree startup
-- local-only packaged-app MCP automation surface for same-machine bots and helpers, with Settings-managed port/token control and a separate inbound request log
+- local-only packaged-app MCP automation surface for same-machine bots and helpers, with loopback HTTP plus a manifest-advertised stdio proxy for Codex-style hosts, Settings-managed port/token control, and a separate inbound request log
 - SQLite-backed local persistence for projects, workspaces, tasks, messages, turns, and notifications
 
 ## Stack
