@@ -4,10 +4,12 @@ import {
   buildCodexConfigOverrides,
   buildCodexTodoPlanText,
   extractProposedPlan,
+  looksLikeCodexPlanText,
   mapCodexItemEvent,
   resolveApprovalPolicy,
   resolveCodexResumeThreadFallback,
   resolveCodexPlanReadyText,
+  shouldBufferCompletedCodexPlanCandidate,
 } from "../electron/providers/codex-sdk-runtime";
 
 describe("mapCodexItemEvent", () => {
@@ -240,11 +242,11 @@ describe("resolveCodexPlanReadyText", () => {
     })).toBe("## Final Plan\n- ship it");
   });
 
-  test("prefers the final pending message when available", () => {
+  test("prefers a structured final pending message when available", () => {
     expect(resolveCodexPlanReadyText({
-      pendingMessageText: "Ship the patch.",
+      pendingMessageText: "## Final Plan\n- Ship the patch.",
       latestTodoPlanText: "## Draft Plan\n- [ ] ignored",
-    })).toBe("Ship the patch.");
+    })).toBe("## Final Plan\n- Ship the patch.");
   });
 
   test("extracts proposed plan text from tagged final messages", () => {
@@ -258,6 +260,56 @@ describe("resolveCodexPlanReadyText", () => {
       pendingMessageText: null,
       latestTodoPlanText: "## Draft Plan\n- [ ] step 1",
     })).toBe("## Draft Plan\n- [ ] step 1");
+  });
+
+  test("falls back to the todo-list plan when the final message is plain commentary", () => {
+    expect(resolveCodexPlanReadyText({
+      pendingMessageText: "Let me know if you want me to revise it.",
+      latestTodoPlanText: "## Draft Plan\n- [ ] inspect\n- [ ] patch",
+    })).toBe("## Draft Plan\n- [ ] inspect\n- [ ] patch");
+  });
+});
+
+describe("looksLikeCodexPlanText", () => {
+  test("accepts multiline and list-style plan text", () => {
+    expect(looksLikeCodexPlanText("## Plan\n- Inspect\n- Patch")).toBe(true);
+    expect(looksLikeCodexPlanText("Inspect the codebase.\nThen patch the runtime.")).toBe(true);
+  });
+
+  test("rejects a short one-line sign-off", () => {
+    expect(looksLikeCodexPlanText("Let me know if you want changes.")).toBe(false);
+  });
+});
+
+describe("shouldBufferCompletedCodexPlanCandidate", () => {
+  test("buffers the final completed agent message in plan mode even without plan tags", () => {
+    expect(shouldBufferCompletedCodexPlanCandidate({
+      planMode: true,
+      lifecycle: "item.completed",
+      itemType: "agent_message",
+      text: "1. Inspect\n2. Patch",
+    })).toBe(true);
+  });
+
+  test("ignores non-final or empty agent messages", () => {
+    expect(shouldBufferCompletedCodexPlanCandidate({
+      planMode: true,
+      lifecycle: "item.updated",
+      itemType: "agent_message",
+      text: "1. Inspect\n2. Patch",
+    })).toBe(false);
+    expect(shouldBufferCompletedCodexPlanCandidate({
+      planMode: true,
+      lifecycle: "item.completed",
+      itemType: "agent_message",
+      text: "   ",
+    })).toBe(false);
+    expect(shouldBufferCompletedCodexPlanCandidate({
+      planMode: false,
+      lifecycle: "item.completed",
+      itemType: "agent_message",
+      text: "1. Inspect\n2. Patch",
+    })).toBe(false);
   });
 });
 
