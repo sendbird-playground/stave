@@ -5,6 +5,7 @@ import type {
   PersistenceLocalMcpRequestLog,
   PersistenceLocalMcpRequestLogCreateInput,
   PersistenceLocalMcpRequestLogPage,
+  PersistenceTaskRow,
   PersistenceTaskMessagesPage,
   PersistenceWorkspaceShell,
   PersistenceProjectRegistryEntry,
@@ -36,6 +37,16 @@ interface WorkspaceMessageRow {
   is_streaming: number;
   parts_json: string;
   message_json: string | null;
+}
+
+interface WorkspaceTaskRow {
+  id: string;
+  workspace_id: string;
+  title: string;
+  provider: "claude-code" | "codex" | "stave";
+  updated_at: string;
+  unread: number;
+  archived_at: string | null;
 }
 
 interface TaskMessageCountRow {
@@ -406,6 +417,31 @@ export class SqliteStore {
     };
   }
 
+  private mapWorkspaceTaskRow(args: {
+    workspaceId: string;
+    row: WorkspaceTaskRow;
+  }): PersistenceTaskRow {
+    const prefix = `${args.workspaceId}:`;
+    return {
+      id: args.row.id.startsWith(prefix) ? args.row.id.slice(prefix.length) : args.row.id,
+      title: args.row.title,
+      provider: args.row.provider,
+      updatedAt: args.row.updated_at,
+      unread: args.row.unread === 1,
+      archivedAt: args.row.archived_at,
+    };
+  }
+
+  listWorkspaceTasks(args: { workspaceId: string }): PersistenceTaskRow[] {
+    const rows = this.db.prepare(`
+      SELECT id, workspace_id, title, provider, updated_at, unread, archived_at
+      FROM tasks
+      WHERE workspace_id = ?
+      ORDER BY updated_at DESC, id DESC
+    `).all(args.workspaceId) as WorkspaceTaskRow[];
+    return rows.map((row) => this.mapWorkspaceTaskRow({ workspaceId: args.workspaceId, row }));
+  }
+
   private insertTaskMessages(args: {
     workspaceId: string;
     taskId: string;
@@ -706,7 +742,45 @@ export class SqliteStore {
 
   loadWorkspaceShell(args: { workspaceId: string }): PersistenceWorkspaceShell | null {
     const payloadEntry = this.readWorkspacePayload(args);
-    return payloadEntry?.shell ?? null;
+    if (!payloadEntry) {
+      return null;
+    }
+
+    const persistedTasks = this.listWorkspaceTasks({ workspaceId: args.workspaceId });
+    if (persistedTasks.length === 0) {
+      return payloadEntry.shell;
+    }
+
+    const shellTaskIds = new Set(payloadEntry.shell.tasks.map((task) => task.id));
+    const missingTasks = persistedTasks.filter((task) => !shellTaskIds.has(task.id));
+    if (missingTasks.length === 0) {
+      return payloadEntry.shell;
+    }
+
+    const countRows = this.db.prepare(`
+      SELECT task_id, COUNT(*) AS count
+      FROM messages
+      WHERE workspace_id = ?
+      GROUP BY task_id
+    `).all(args.workspaceId) as TaskMessageCountRow[];
+    const countByTask = new Map(countRows.map((row) => [row.task_id, row.count] as const));
+    const mergedTasks = [...payloadEntry.shell.tasks, ...missingTasks];
+    const activeTaskId = mergedTasks.some((task) => task.id === payloadEntry.shell.activeTaskId)
+      ? payloadEntry.shell.activeTaskId
+      : (mergedTasks[0]?.id ?? "");
+    const mergedMessageCountByTask = {
+      ...payloadEntry.shell.messageCountByTask,
+      ...Object.fromEntries(
+        missingTasks.map((task) => [task.id, countByTask.get(task.id) ?? 0] as const),
+      ),
+    };
+
+    return {
+      ...payloadEntry.shell,
+      activeTaskId,
+      tasks: mergedTasks,
+      messageCountByTask: mergedMessageCountByTask,
+    };
   }
 
   loadTaskMessagesPage(args: {
@@ -773,11 +847,15 @@ export class SqliteStore {
     if ("messagesByTask" in payloadEntry.payload) {
       return payloadEntry.payload as PersistenceWorkspaceSnapshot;
     }
-    const { messageCountByTask: _messageCountByTask, ...shell } = payloadEntry.shell;
+    const shell = this.loadWorkspaceShell(args);
+    if (!shell) {
+      return null;
+    }
+    const { messageCountByTask: _messageCountByTask, ...shellWithoutCounts } = shell;
     return {
-      ...shell,
+      ...shellWithoutCounts,
       messagesByTask: Object.fromEntries(
-        payloadEntry.shell.tasks.map((task) => [
+        shell.tasks.map((task) => [
           task.id,
           this.loadAllTaskMessages({ workspaceId: args.workspaceId, taskId: task.id }),
         ] as const),
@@ -814,12 +892,10 @@ export class SqliteStore {
     const now = new Date().toISOString();
     const tx = this.db.transaction(() => {
       const existingPayloadEntry = this.readWorkspacePayload({ workspaceId: args.id });
-      const existingTaskIds = new Set(existingPayloadEntry?.shell.tasks.map((task) => task.id) ?? []);
       const nextTaskIds = new Set(args.snapshot.tasks.map((task) => task.id));
       const providedTaskIds = new Set(
         Object.keys(args.snapshot.messagesByTask).filter((taskId) => nextTaskIds.has(taskId)),
       );
-      const removedTaskIds = [...existingTaskIds].filter((taskId) => !nextTaskIds.has(taskId));
       const preservedLegacyTaskIds = existingPayloadEntry && "messagesByTask" in existingPayloadEntry.payload
         ? args.snapshot.tasks
             .map((task) => task.id)
@@ -834,15 +910,17 @@ export class SqliteStore {
           updated_at = excluded.updated_at
       `).run(args.id, args.name, now);
 
-      this.db.prepare(`
-        DELETE FROM tasks WHERE workspace_id = ?
-      `).run(args.id);
-
       for (const task of args.snapshot.tasks) {
         const persistedTaskRowId = `${args.id}:${task.id}`;
         this.db.prepare(`
           INSERT INTO tasks (id, workspace_id, title, provider, updated_at, unread, archived_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            provider = excluded.provider,
+            updated_at = excluded.updated_at,
+            unread = excluded.unread,
+            archived_at = excluded.archived_at
         `).run(
           persistedTaskRowId,
           args.id,
@@ -852,10 +930,6 @@ export class SqliteStore {
           task.unread ? 1 : 0,
           task.archivedAt ?? null,
         );
-      }
-
-      for (const taskId of removedTaskIds) {
-        this.db.prepare("DELETE FROM messages WHERE workspace_id = ? AND task_id = ?").run(args.id, taskId);
       }
 
       if (existingPayloadEntry && "messagesByTask" in existingPayloadEntry.payload) {
@@ -905,6 +979,48 @@ export class SqliteStore {
           updated_at = excluded.updated_at,
           snapshot_json = excluded.snapshot_json
       `).run(args.id, args.name, now, snapshotJson);
+    });
+
+    tx();
+  }
+
+  removeTaskFromWorkspace(args: { workspaceId: string; taskId: string }) {
+    const tx = this.db.transaction(() => {
+      const persistedTaskRowId = `${args.workspaceId}:${args.taskId}`;
+      this.db.prepare("DELETE FROM messages WHERE workspace_id = ? AND task_id = ?").run(args.workspaceId, args.taskId);
+      this.db.prepare("DELETE FROM tasks WHERE id = ? AND workspace_id = ?").run(persistedTaskRowId, args.workspaceId);
+
+      const payloadEntry = this.readWorkspacePayload({ workspaceId: args.workspaceId });
+      if (!payloadEntry) {
+        return;
+      }
+      const nextTasks = payloadEntry.shell.tasks.filter((task) => task.id !== args.taskId);
+      const nextActiveTaskId = payloadEntry.shell.activeTaskId === args.taskId
+        ? (nextTasks[0]?.id ?? "")
+        : payloadEntry.shell.activeTaskId;
+      const { [args.taskId]: _removedMessageCount, ...remainingMessageCount } = payloadEntry.shell.messageCountByTask ?? {};
+      const { [args.taskId]: _removedPromptDraft, ...remainingPromptDraftByTask } = payloadEntry.shell.promptDraftByTask ?? {};
+      const { [args.taskId]: _removedProviderSession, ...remainingProviderSessionByTask } = payloadEntry.shell.providerSessionByTask ?? {};
+
+      const nextShell: PersistenceWorkspaceShell = {
+        ...payloadEntry.shell,
+        activeTaskId: nextActiveTaskId,
+        tasks: nextTasks,
+        messageCountByTask: remainingMessageCount,
+        promptDraftByTask: remainingPromptDraftByTask,
+        providerSessionByTask: remainingProviderSessionByTask,
+      };
+
+      this.db.prepare(`
+        UPDATE workspaces
+        SET snapshot_json = ?, updated_at = ?
+        WHERE id = ?
+      `).run(JSON.stringify(nextShell), new Date().toISOString(), args.workspaceId);
+      this.db.prepare(`
+        UPDATE workspace_meta
+        SET updated_at = ?
+        WHERE id = ?
+      `).run(new Date().toISOString(), args.workspaceId);
     });
 
     tx();

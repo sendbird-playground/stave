@@ -1070,6 +1070,84 @@ describe("workspace store hydration ordering", () => {
     expect(nextState.workspacePathById[importedWorkspace?.id ?? ""]).toBe("/tmp/stave-project/.stave/workspaces/feature__perf");
   });
 
+  test("refreshWorkspaces does not overwrite an already persisted imported worktree with an empty snapshot", async () => {
+    const localStorage = createMemoryStorage();
+    const upsertCalls: Array<{ id: string; name: string; snapshot: unknown }> = [];
+    const { buildImportedWorktreeWorkspaceId } = await import("../src/store/project.utils");
+    const importedWorkspaceId = buildImportedWorktreeWorkspaceId({
+      projectPath: "/tmp/stave-project",
+      worktreePath: "/tmp/stave-project/.stave/workspaces/feature__perf",
+    });
+
+    setWindowContext({
+      localStorage,
+      api: {
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [
+              { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
+              { id: importedWorkspaceId, name: "feature/perf", updatedAt: "2026-03-10T00:10:00.000Z" },
+            ],
+          }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
+          upsertWorkspace: async (args: { id: string; name: string; snapshot: unknown }) => {
+            upsertCalls.push(args);
+            return { ok: true };
+          },
+        },
+        terminal: {
+          runCommand: async ({ command }: { cwd?: string; command: string }) => {
+            if (command === "git worktree prune") {
+              return { ok: true, code: 0, stdout: "", stderr: "" };
+            }
+            if (command === "git worktree list --porcelain") {
+              return {
+                ok: true,
+                code: 0,
+                stdout: [
+                  "worktree /tmp/stave-project",
+                  "HEAD abc123",
+                  "branch refs/heads/main",
+                  "",
+                  "worktree /tmp/stave-project/.stave/workspaces/feature__perf",
+                  "HEAD def456",
+                  "branch refs/heads/feature/perf",
+                ].join("\n"),
+                stderr: "",
+              };
+            }
+            return { ok: false, code: 1, stdout: "", stderr: `Unexpected command: ${command}` };
+          },
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: { "ws-main": "/tmp/stave-project" },
+      workspaceBranchById: { "ws-main": "main" },
+      workspaceDefaultById: { "ws-main": true },
+    });
+
+    await useAppStore.getState().refreshWorkspaces();
+
+    const nextState = useAppStore.getState();
+    const importedWorkspace = nextState.workspaces.find((workspace) => workspace.id === importedWorkspaceId);
+    expect(upsertCalls).toHaveLength(0);
+    expect(importedWorkspace).not.toBeUndefined();
+    expect(importedWorkspace?.name).toBe("feature/perf");
+    expect(nextState.workspaceBranchById[importedWorkspaceId]).toBe("feature/perf");
+    expect(nextState.workspacePathById[importedWorkspaceId]).toBe("/tmp/stave-project/.stave/workspaces/feature__perf");
+  });
+
   test("flushActiveWorkspaceSnapshot is blocked until workspace hydration completes", async () => {
     const localStorage = createMemoryStorage();
     const upsertCalls: Array<unknown> = [];
@@ -1169,6 +1247,52 @@ describe("workspace store hydration ordering", () => {
               { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
               { id: "ws-alt", name: "Alt", updatedAt: "2026-03-10T00:00:01.000Z" },
             ],
+          }),
+          loadWorkspaceShell: async ({ workspaceId }: { workspaceId: string }) => ({
+            ok: true,
+            shell: workspaceId === "ws-main"
+              ? {
+                  activeTaskId: "task-main",
+                  tasks: [
+                    {
+                      id: "task-main",
+                      title: "Main Task",
+                      provider: "codex",
+                      updatedAt: "2026-03-10T00:00:00.000Z",
+                      unread: false,
+                    },
+                    {
+                      id: "task-keep",
+                      title: "Keep Task",
+                      provider: "claude-code",
+                      updatedAt: "2026-03-09T23:59:00.000Z",
+                      unread: false,
+                    },
+                  ],
+                  promptDraftByTask: {},
+                  providerSessionByTask: {},
+                  messageCountByTask: {
+                    "task-main": 0,
+                    "task-keep": 1,
+                  },
+                }
+              : (
+                workspaceId === "ws-alt"
+                  ? {
+                      activeTaskId: "task-alt",
+                      tasks: [{
+                        id: "task-alt",
+                        title: "Alt Task",
+                        provider: "claude-code",
+                        updatedAt: "2026-03-10T00:00:01.000Z",
+                        unread: false,
+                      }],
+                      promptDraftByTask: {},
+                      providerSessionByTask: {},
+                      messageCountByTask: { "task-alt": 0 },
+                    }
+                  : null
+              ),
           }),
           loadWorkspace: async ({ workspaceId }: { workspaceId: string }) => ({
             ok: true,
@@ -1291,11 +1415,14 @@ describe("workspace store hydration ordering", () => {
         activeTaskId: "task-main",
       },
     });
-    expect((upsertCalls[0] as {
+    const persistedSnapshot = (upsertCalls[0] as {
       snapshot: {
+        tasks: Array<{ id: string }>;
         messagesByTask: Record<string, Array<{ content: string }>>;
       };
-    }).snapshot.messagesByTask["task-main"]?.at(-1)?.content).toBe(
+    }).snapshot;
+    expect(persistedSnapshot.tasks.map((task) => task.id)).toEqual(["task-main", "task-keep"]);
+    expect(persistedSnapshot.messagesByTask["task-main"]?.at(-1)?.content).toBe(
       "Task 1 kept updating after the workspace switch."
     );
 

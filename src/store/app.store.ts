@@ -1800,6 +1800,9 @@ export const useAppStore = create<AppState>()(
           return;
         }
         const projectPath = state.projectPath;
+        const persistedRowsById = new Map(
+          (await listWorkspaceSummaries()).map((workspace) => [workspace.id, workspace] as const),
+        );
 
         // Prune and list current git worktrees.
         await runner({ cwd: projectPath, command: "git worktree prune" });
@@ -1860,21 +1863,24 @@ export const useAppStore = create<AppState>()(
             projectPath,
             worktreePath: worktree.path,
           });
+          const persistedWorkspace = persistedRowsById.get(workspaceId);
 
-          // Persist an empty snapshot so the workspace is available immediately.
-          await persistWorkspaceSnapshot({
-            workspaceId,
-            workspaceName,
-            activeTaskId: "",
-            tasks: [],
-            messagesByTask: {},
-            promptDraftByTask: {},
-            editorTabs: [],
-            activeEditorTabId: null,
-            providerSessionByTask: {},
-          });
+          // Only create a fresh empty snapshot for true first-time workspaces.
+          if (!persistedWorkspace) {
+            await persistWorkspaceSnapshot({
+              workspaceId,
+              workspaceName,
+              activeTaskId: "",
+              tasks: [],
+              messagesByTask: {},
+              promptDraftByTask: {},
+              editorTabs: [],
+              activeEditorTabId: null,
+              providerSessionByTask: {},
+            });
+          }
 
-          newRows.push({
+          newRows.push(persistedWorkspace ?? {
             id: workspaceId,
             name: workspaceName,
             updatedAt: new Date().toISOString(),
