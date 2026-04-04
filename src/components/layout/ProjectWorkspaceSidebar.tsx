@@ -642,7 +642,7 @@ export function ProjectWorkspaceSidebar(args: {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-10 w-10 rounded-md bg-background/70 p-0 hover:bg-secondary/70"
+                      className="h-10 w-10 rounded-md bg-background/35 p-0 hover:bg-background/50"
                       onClick={() => setOpenPathDialogOpen(true)}
                       aria-label="open-project"
                     >
@@ -777,11 +777,11 @@ export function ProjectWorkspaceSidebar(args: {
           </div>
         ) : null}
         {!args.collapsed ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1.5">
             <TooltipProvider>
               <div
                 className={cn(
-                  "sidebar-liquid-panel mb-3 flex items-center justify-between rounded-lg border border-sidebar-border/60 px-3",
+                  "mb-1.5 flex items-center justify-between border-b border-sidebar-border/45 px-2",
                   PANEL_BAR_HEIGHT_CLASS,
                 )}
               >
@@ -795,7 +795,7 @@ export function ProjectWorkspaceSidebar(args: {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 rounded-md p-0"
+                        className="h-8 w-8 rounded-md p-0 text-muted-foreground hover:bg-background/20 hover:text-foreground"
                         onClick={() => setOpenPathDialogOpen(true)}
                         aria-label="open-project"
                       >
@@ -811,7 +811,7 @@ export function ProjectWorkspaceSidebar(args: {
                         variant="ghost"
                         size="sm"
                         className={cn(
-                          "h-8 w-8 rounded-md p-0",
+                          "h-8 w-8 rounded-md p-0 text-muted-foreground hover:bg-background/20 hover:text-foreground",
                           reorderMode &&
                             "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
                         )}
@@ -866,7 +866,7 @@ export function ProjectWorkspaceSidebar(args: {
                               {({ dragHandle, isDragging }) => (
                                 <section
                                   className={cn(
-                                    "sidebar-liquid-panel rounded-xl border border-sidebar-border/60 transition-colors",
+                                    "sidebar-liquid-panel rounded-[20px] border border-sidebar-border/35 transition-colors",
                                     isDragging && "ring-1 ring-primary/20",
                                   )}
                                 >
@@ -874,7 +874,7 @@ export function ProjectWorkspaceSidebar(args: {
                                     {dragHandle}
                                     <div
                                       className={cn(
-                                        "group/project-row flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary/70 focus-within:bg-secondary/70",
+                                        "group/project-row flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-background/20 focus-within:bg-background/20",
                                       )}
                                     >
                                       <Tooltip>
@@ -1023,7 +1023,7 @@ export function ProjectWorkspaceSidebar(args: {
                                     </div>
                                   </div>
                                   {!collapsed ? (
-                                    <div className="border-t border-border/60 px-1.5 py-1.5">
+                                    <div className="border-t border-sidebar-border/35 px-1.5 py-1.5">
                                       <DndContext
                                         sensors={workspaceSensors}
                                         collisionDetection={closestCenter}
@@ -1093,11 +1093,11 @@ export function ProjectWorkspaceSidebar(args: {
                                                     }) => (
                                                       <div
                                                         className={cn(
-                                                          "group/workspace-row flex items-center gap-1 rounded-md transition-colors hover:bg-secondary/70",
+                                                          "group/workspace-row flex items-center gap-1 rounded-md transition-colors hover:bg-background/16",
                                                           isActive &&
-                                                            "bg-primary/10 text-foreground ring-1 ring-primary/30 shadow-sm",
+                                                            "bg-background/20 text-foreground ring-1 ring-primary/25 shadow-sm backdrop-blur-sm",
                                                           isDragging &&
-                                                            "bg-secondary/40",
+                                                            "bg-background/20",
                                                         )}
                                                       >
                                                         {dragHandle}

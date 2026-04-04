@@ -315,18 +315,38 @@
     isolation: isolate;
     overflow: hidden;
     background:
+      radial-gradient(
+        140% 120% at 0% 0%,
+        color-mix(in oklab, var(--primary) 22%, transparent) 0%,
+        transparent 56%
+      ),
+      radial-gradient(
+        96% 88% at 100% 8%,
+        color-mix(in oklab, var(--provider-codex) 22%, transparent) 0%,
+        transparent 52%
+      ),
+      radial-gradient(
+        92% 92% at 18% 100%,
+        color-mix(in oklab, var(--provider-claude) 18%, transparent) 0%,
+        transparent 46%
+      ),
+      radial-gradient(
+        72% 72% at 86% 78%,
+        color-mix(in oklab, var(--chart-2) 18%, transparent) 0%,
+        transparent 42%
+      ),
       linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--sidebar) 78%, white 22%) 0%,
-        color-mix(in oklab, var(--sidebar) 68%, transparent) 18%,
-        color-mix(in oklab, var(--sidebar) 82%, transparent) 100%
+        160deg,
+        color-mix(in oklab, var(--sidebar) 70%, white 20%) 0%,
+        color-mix(in oklab, var(--sidebar) 58%, transparent) 45%,
+        color-mix(in oklab, var(--sidebar) 74%, black 4%) 100%
       );
     box-shadow:
       inset -1px 0 0 color-mix(in oklab, white 24%, transparent),
       inset 0 1px 0 color-mix(in oklab, white 42%, transparent),
-      16px 0 34px -28px color-mix(in oklab, var(--foreground) 20%, transparent);
-    backdrop-filter: blur(30px) saturate(170%);
-    -webkit-backdrop-filter: blur(30px) saturate(170%);
+      18px 0 36px -28px color-mix(in oklab, var(--foreground) 24%, transparent);
+    backdrop-filter: blur(34px) saturate(165%);
+    -webkit-backdrop-filter: blur(34px) saturate(165%);
   }
 
   .sidebar-liquid-glass::before {
@@ -337,22 +357,23 @@
     pointer-events: none;
     background:
       radial-gradient(
-        circle at top left,
-        color-mix(in oklab, white 60%, transparent) 0%,
-        transparent 42%
+        circle at 10% 10%,
+        color-mix(in oklab, white 58%, transparent) 0%,
+        transparent 28%
       ),
-      radial-gradient(
-        circle at 18% 78%,
-        color-mix(in oklab, var(--primary) 12%, transparent) 0%,
-        transparent 36%
+      linear-gradient(
+        130deg,
+        transparent 0 16%,
+        color-mix(in oklab, white 14%, transparent) 34%,
+        transparent 56%
       ),
       linear-gradient(
         180deg,
-        color-mix(in oklab, white 18%, transparent) 0%,
-        transparent 32%,
+        color-mix(in oklab, white 16%, transparent) 0%,
+        transparent 34%,
         color-mix(in oklab, black 8%, transparent) 100%
       );
-    opacity: 0.92;
+    opacity: 0.88;
   }
 
   .sidebar-liquid-glass::after {
@@ -361,9 +382,18 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
+    background:
+      linear-gradient(
+        120deg,
+        color-mix(in oklab, white 12%, transparent) 0%,
+        transparent 24%,
+        transparent 72%,
+        color-mix(in oklab, white 10%, transparent) 100%
+      );
     box-shadow:
       inset 0 0 0 1px color-mix(in oklab, white 18%, transparent),
       inset 0 1px 0 color-mix(in oklab, white 52%, transparent);
+    opacity: 0.7;
   }
 
   .sidebar-liquid-glass > * {
@@ -378,14 +408,14 @@
     background:
       linear-gradient(
         180deg,
-        color-mix(in oklab, var(--sidebar) 58%, white 18%) 0%,
-        color-mix(in oklab, var(--sidebar) 52%, transparent) 100%
+        color-mix(in oklab, var(--sidebar) 26%, white 14%) 0%,
+        color-mix(in oklab, var(--sidebar) 16%, transparent) 100%
       );
     box-shadow:
-      inset 0 1px 0 color-mix(in oklab, white 38%, transparent),
-      0 16px 28px -24px color-mix(in oklab, var(--foreground) 32%, transparent);
-    backdrop-filter: blur(24px) saturate(150%);
-    -webkit-backdrop-filter: blur(24px) saturate(150%);
+      inset 0 1px 0 color-mix(in oklab, white 34%, transparent),
+      0 12px 24px -22px color-mix(in oklab, var(--foreground) 28%, transparent);
+    backdrop-filter: blur(20px) saturate(145%);
+    -webkit-backdrop-filter: blur(20px) saturate(145%);
   }
 
   .sidebar-liquid-panel::before {
@@ -397,15 +427,20 @@
     background:
       linear-gradient(
         180deg,
-        color-mix(in oklab, white 20%, transparent) 0%,
-        transparent 42%
+        color-mix(in oklab, white 16%, transparent) 0%,
+        transparent 36%
       ),
       radial-gradient(
         circle at top left,
-        color-mix(in oklab, white 16%, transparent) 0%,
-        transparent 48%
+        color-mix(in oklab, white 18%, transparent) 0%,
+        transparent 52%
+      ),
+      radial-gradient(
+        circle at 100% 100%,
+        color-mix(in oklab, var(--primary) 10%, transparent) 0%,
+        transparent 42%
       );
-    opacity: 0.9;
+    opacity: 0.84;
   }
 
   .sidebar-liquid-panel::after {
@@ -415,8 +450,8 @@
     z-index: 0;
     pointer-events: none;
     box-shadow:
-      inset 0 0 0 1px color-mix(in oklab, white 14%, transparent),
-      inset 0 1px 0 color-mix(in oklab, white 34%, transparent);
+      inset 0 0 0 1px color-mix(in oklab, white 12%, transparent),
+      inset 0 1px 0 color-mix(in oklab, white 28%, transparent);
   }
 
   .sidebar-liquid-panel > * {
@@ -427,59 +462,89 @@
   /* ── Dark-mode glassmorphism overrides ─────────────────────── */
   :is(.dark) .sidebar-liquid-glass {
     background:
+      radial-gradient(
+        132% 118% at 0% 0%,
+        color-mix(in oklab, var(--primary) 16%, transparent) 0%,
+        transparent 54%
+      ),
+      radial-gradient(
+        98% 88% at 100% 10%,
+        color-mix(in oklab, var(--provider-codex) 18%, transparent) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        94% 90% at 20% 100%,
+        color-mix(in oklab, var(--provider-claude) 14%, transparent) 0%,
+        transparent 44%
+      ),
+      radial-gradient(
+        72% 72% at 84% 78%,
+        color-mix(in oklab, var(--chart-2) 14%, transparent) 0%,
+        transparent 42%
+      ),
       linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--sidebar) 92%, white 4%) 0%,
-        color-mix(in oklab, var(--sidebar) 88%, transparent) 18%,
-        color-mix(in oklab, var(--sidebar) 94%, transparent) 100%
+        165deg,
+        color-mix(in oklab, var(--sidebar) 90%, white 3%) 0%,
+        color-mix(in oklab, var(--sidebar) 84%, transparent) 44%,
+        color-mix(in oklab, var(--sidebar) 94%, black 12%) 100%
       );
     box-shadow:
       inset -1px 0 0 color-mix(in oklab, white 6%, transparent),
       inset 0 1px 0 color-mix(in oklab, white 8%, transparent),
-      16px 0 34px -28px color-mix(in oklab, black 30%, transparent);
-    backdrop-filter: blur(30px) saturate(120%);
-    -webkit-backdrop-filter: blur(30px) saturate(120%);
+      18px 0 36px -28px color-mix(in oklab, black 34%, transparent);
+    backdrop-filter: blur(34px) saturate(125%);
+    -webkit-backdrop-filter: blur(34px) saturate(125%);
   }
 
   :is(.dark) .sidebar-liquid-glass::before {
     background:
       radial-gradient(
-        circle at top left,
-        color-mix(in oklab, white 7%, transparent) 0%,
-        transparent 50%
+        circle at 10% 10%,
+        color-mix(in oklab, white 10%, transparent) 0%,
+        transparent 28%
       ),
-      radial-gradient(
-        circle at 18% 78%,
-        color-mix(in oklab, var(--primary) 6%, transparent) 0%,
-        transparent 36%
+      linear-gradient(
+        132deg,
+        transparent 0 16%,
+        color-mix(in oklab, white 7%, transparent) 34%,
+        transparent 58%
       ),
       linear-gradient(
         180deg,
         color-mix(in oklab, white 4%, transparent) 0%,
-        transparent 40%,
+        transparent 42%,
         color-mix(in oklab, black 6%, transparent) 100%
       );
-    opacity: 0.6;
+    opacity: 0.56;
   }
 
   :is(.dark) .sidebar-liquid-glass::after {
+    background:
+      linear-gradient(
+        120deg,
+        color-mix(in oklab, white 4%, transparent) 0%,
+        transparent 26%,
+        transparent 72%,
+        color-mix(in oklab, white 4%, transparent) 100%
+      );
     box-shadow:
       inset 0 0 0 1px color-mix(in oklab, white 6%, transparent),
       inset 0 1px 0 color-mix(in oklab, white 10%, transparent);
+    opacity: 0.6;
   }
 
   :is(.dark) .sidebar-liquid-panel {
     background:
       linear-gradient(
         180deg,
-        color-mix(in oklab, var(--sidebar) 88%, white 4%) 0%,
-        color-mix(in oklab, var(--sidebar) 86%, transparent) 100%
+        color-mix(in oklab, var(--sidebar) 42%, white 3%) 0%,
+        color-mix(in oklab, var(--sidebar) 28%, transparent) 100%
       );
     box-shadow:
       inset 0 1px 0 color-mix(in oklab, white 8%, transparent),
-      0 16px 28px -24px color-mix(in oklab, black 28%, transparent);
-    backdrop-filter: blur(24px) saturate(120%);
-    -webkit-backdrop-filter: blur(24px) saturate(120%);
+      0 12px 24px -22px color-mix(in oklab, black 30%, transparent);
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
   }
 
   :is(.dark) .sidebar-liquid-panel::before {
@@ -487,14 +552,19 @@
       linear-gradient(
         180deg,
         color-mix(in oklab, white 4%, transparent) 0%,
-        transparent 50%
+        transparent 40%
       ),
       radial-gradient(
         circle at top left,
         color-mix(in oklab, white 4%, transparent) 0%,
-        transparent 50%
+        transparent 54%
+      ),
+      radial-gradient(
+        circle at 100% 100%,
+        color-mix(in oklab, var(--primary) 8%, transparent) 0%,
+        transparent 44%
       );
-    opacity: 0.5;
+    opacity: 0.48;
   }
 
   :is(.dark) .sidebar-liquid-panel::after {

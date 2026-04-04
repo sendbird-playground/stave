@@ -11,12 +11,14 @@ Replace the legacy workspace/task shell with a three-part layout:
 ### Implemented Layout
 
 - The left project list is full-height and reaches the top edge of the app shell.
+- The left sidebar uses theme-reactive gradient artwork behind translucent project and workspace panels instead of a flat fill.
 - The top bar now applies only to the main work area, not the left project list.
 - The top bar shows the selected workspace path for the current workspace.
 - The top bar exposes an always-visible quick-open file search input, and `Cmd/Ctrl+P` focuses it from anywhere outside text inputs.
 - Everything below the top bar is now a two-column region: a left workspace column and the right rail.
 - The left workspace column contains the selected workspace's task tab strip plus the main chat/editor surface.
 - The right rail spans the full region below the top bar, so the task tabs share row width with the rail.
+- The `Projects` strip is a flat row aligned to the task-tab height instead of a separate rounded card.
 - Below `lg`, the rail remains visible in a compact form and editor or explorer/changes still occupy a dedicated right-side panel column beneath the top bar, so the task tabs and main workspace shrink to make room.
 
 ### Confirmed UX Decisions
@@ -65,12 +67,13 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - hosts the Stave app menu in a compact top-left header beside the collapse control
   - can collapse into a narrow rail
   - keeps the top-left header aligned to the same height as the main top bar
-  - shows a compact `Projects` header with `Open Project` and reorder controls in expanded mode
+  - shows a compact flat `Projects` header with `Open Project` and reorder controls in expanded mode
   - provides `Open Project`, hover-revealed per-project workspace creation, and direct project-settings entry points
   - keeps project order stable instead of re-sorting by recent selection
   - exposes dedicated drag handles for project and workspace reordering only while reorder mode is enabled
   - shows a wave indicator plus the count of responding tasks when any task in that workspace is responding, then swaps that trailing slot to `Archive` on hover for archivable workspaces
   - uses stronger visual emphasis for the selected workspace while keeping project rows neutral
+  - lets the sidebar background pattern show through project/workspace containers with restrained liquid-glass translucency
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
   - assigns `Cmd/Ctrl+1..9` to the first nine visible workspaces in sidebar order and shows those shortcuts in the expanded list plus collapsed-rail tooltips
 - `SettingsDialog`
