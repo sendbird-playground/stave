@@ -262,3 +262,7 @@ This applies to `useAppStore(...)`, `useStore(...)`, and any equivalent hook bui
 When behavior, architecture, UX, settings, or release-facing details change, review `README.md` and the relevant files under `docs/` before finishing.
 
 If a code change or commit would leave `README.md` or `docs/` stale, update the documentation in the same piece of work.
+
+User-facing feature documentation under `docs/features/` must start from `docs/templates/feature-guide-template.md`.
+
+When adding or materially changing a feature, create or update the matching guide in `docs/features/`, keep it aligned with `docs/features/README.md`, and link it from `docs/README.md` in the same change.

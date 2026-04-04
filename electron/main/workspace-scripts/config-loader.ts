@@ -13,64 +13,15 @@ import {
 import {
   resolveAutomationConfigFromTiers,
 } from "../../../src/lib/workspace-scripts/config";
+import {
+  AutomationsConfigSchema,
+  AutomationsLocalConfigSchema,
+} from "../../../src/lib/workspace-scripts/schemas";
 import type {
   ResolvedWorkspaceAutomationsConfig,
   WorkspaceAutomationsConfig,
   WorkspaceAutomationsLocalConfig,
 } from "../../../src/lib/workspace-scripts/types";
-
-const TargetSchema = z.object({
-  label: z.string().optional(),
-  cwd: z.enum(["workspace", "project"]).optional(),
-  executionMode: z.enum(["default", "spotlight"]).optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  shell: z.string().optional(),
-});
-
-const ActionSchema = z.object({
-  label: z.string().optional(),
-  description: z.string().optional(),
-  commands: z.array(z.string()).default([]),
-  target: z.string().optional(),
-  timeoutMs: z.number().int().positive().optional(),
-  enabled: z.boolean().optional(),
-});
-
-const ServiceSchema = ActionSchema.extend({
-  restartOnRun: z.boolean().optional(),
-});
-
-const HookRefSchema = z.union([
-  z.string(),
-  z.object({
-    ref: z.string(),
-    kind: z.enum(["action", "service"]).optional(),
-    blocking: z.boolean().optional(),
-  }),
-]);
-
-const HooksSchema = z.object({
-  "workspace.created": z.array(HookRefSchema).optional(),
-  "workspace.archiving": z.array(HookRefSchema).optional(),
-  "pr.beforeOpen": z.array(HookRefSchema).optional(),
-  "pr.afterOpen": z.array(HookRefSchema).optional(),
-});
-
-export const AutomationsConfigSchema = z.object({
-  version: z.literal(2),
-  actions: z.record(z.string(), ActionSchema).optional(),
-  services: z.record(z.string(), ServiceSchema).optional(),
-  hooks: HooksSchema.optional(),
-  targets: z.record(z.string(), TargetSchema).optional(),
-});
-
-export const AutomationsLocalConfigSchema = z.object({
-  version: z.literal(2),
-  actions: z.record(z.string(), ActionSchema.partial()).optional(),
-  services: z.record(z.string(), ServiceSchema.partial()).optional(),
-  hooks: HooksSchema.optional(),
-  targets: z.record(z.string(), TargetSchema.partial()).optional(),
-});
 
 async function readJsonFile<T>(filePath: string, schema: z.ZodType<T>): Promise<T | null> {
   try {
