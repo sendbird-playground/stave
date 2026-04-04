@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   Empty,
-  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -23,6 +22,7 @@ import type {
 } from "@/lib/workspace-scripts/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { WorkspaceAutomationsManager } from "./WorkspaceAutomationsManager";
 
 interface AutomationUiState {
   running: boolean;
@@ -397,127 +397,135 @@ export function WorkspaceAutomationsPanel() {
   return (
     <div className="h-full overflow-auto px-2 py-2">
       <div className="space-y-3">
-      <Card size="sm" className="border border-border/70 bg-background/80">
-        <CardContent className="pt-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <p className="text-xs leading-5 text-muted-foreground">
-                Run workspace actions and services, inspect hook wiring, and test spotlight-style flows.
-              </p>
+        <WorkspaceAutomationsManager
+          projectPath={projectPath ?? workspacePath}
+          workspacePath={workspacePath}
+          resolvedConfig={config}
+          onSaved={loadConfig}
+        />
+
+        <Card size="sm" className="border border-border/70 bg-background/80">
+          <CardContent className="pt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Effective Runtime</p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Run the merged action/service set for this workspace and verify how hooks resolve after changes.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-md"
+                onClick={() => void loadConfig()}
+                disabled={configState.status === "loading"}
+              >
+                <RefreshCcw className={cn("mr-1 size-4", configState.status === "loading" && "animate-spin")} />
+                Refresh
+              </Button>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 rounded-md"
-              onClick={() => void loadConfig()}
-              disabled={configState.status === "loading"}
-            >
-              <RefreshCcw className={cn("mr-1 size-4", configState.status === "loading" && "animate-spin")} />
-              Refresh
-            </Button>
+            {configState.error ? (
+              <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+                {configState.error}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {configState.status === "loading" ? (
+          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+            Loading automation config...
           </div>
-          {configState.error ? (
-            <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive">
-              {configState.error}
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+        ) : null}
 
-      {configState.status === "loading" ? (
-        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-          Loading automation config...
-        </div>
-      ) : null}
+        {configState.status === "ready" && config && config.actions.length === 0 && config.services.length === 0 && hookEntries.length === 0 ? (
+          <Empty className="border border-dashed border-border/70 bg-muted/15">
+            <EmptyHeader>
+              <EmptyMedia>
+                <Zap className="size-4" />
+              </EmptyMedia>
+              <EmptyTitle>No automations configured</EmptyTitle>
+              <EmptyDescription>Use the manager above to create `.stave/automations.json` for the project or workspace.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : null}
 
-      {configState.status === "ready" && config && config.actions.length === 0 && config.services.length === 0 && hookEntries.length === 0 ? (
-        <Empty className="border border-dashed border-border/70 bg-muted/15">
-          <EmptyHeader>
-            <EmptyMedia>
-              <Zap className="size-4" />
-            </EmptyMedia>
-            <EmptyTitle>No automations configured</EmptyTitle>
-            <EmptyDescription>Add `.stave/automations.json` in the project or workspace to enable this panel.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : null}
+        {config?.actions.length ? (
+          <Card size="sm" className="border border-border/70 bg-background/80">
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground">Actions</p>
+                <Badge variant="outline" className="rounded-sm">
+                  {config.actions.length}
+                </Badge>
+              </div>
+              {config.actions.map((entry) => (
+                <AutomationEntryRow
+                  key={automationEntryKey(entry)}
+                  automationId={entry.id}
+                  automationKind={entry.kind}
+                  label={entry.label}
+                  description={entry.description}
+                  targetLabel={entry.target.label}
+                  executionMode={entry.target.executionMode}
+                  state={entryStateByKey[automationEntryKey(entry)]}
+                  onRun={runEntry}
+                  onStop={stopEntry}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
 
-      {config?.actions.length ? (
-        <Card size="sm" className="border border-border/70 bg-background/80">
-          <CardContent className="space-y-3 pt-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-foreground">Actions</p>
-              <Badge variant="outline" className="rounded-sm">
-                {config.actions.length}
-              </Badge>
-            </div>
-            {config.actions.map((entry) => (
-              <AutomationEntryRow
-                key={automationEntryKey(entry)}
-                automationId={entry.id}
-                automationKind={entry.kind}
-                label={entry.label}
-                description={entry.description}
-                targetLabel={entry.target.label}
-                executionMode={entry.target.executionMode}
-                state={entryStateByKey[automationEntryKey(entry)]}
-                onRun={runEntry}
-                onStop={stopEntry}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
+        {config?.services.length ? (
+          <Card size="sm" className="border border-border/70 bg-background/80">
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground">Services</p>
+                <Badge variant="outline" className="rounded-sm">
+                  {config.services.length}
+                </Badge>
+              </div>
+              {config.services.map((entry) => (
+                <AutomationEntryRow
+                  key={automationEntryKey(entry)}
+                  automationId={entry.id}
+                  automationKind={entry.kind}
+                  label={entry.label}
+                  description={entry.description}
+                  targetLabel={entry.target.label}
+                  executionMode={entry.target.executionMode}
+                  state={entryStateByKey[automationEntryKey(entry)]}
+                  onRun={runEntry}
+                  onStop={stopEntry}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
 
-      {config?.services.length ? (
-        <Card size="sm" className="border border-border/70 bg-background/80">
-          <CardContent className="space-y-3 pt-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-foreground">Services</p>
-              <Badge variant="outline" className="rounded-sm">
-                {config.services.length}
-              </Badge>
-            </div>
-            {config.services.map((entry) => (
-              <AutomationEntryRow
-                key={automationEntryKey(entry)}
-                automationId={entry.id}
-                automationKind={entry.kind}
-                label={entry.label}
-                description={entry.description}
-                targetLabel={entry.target.label}
-                executionMode={entry.target.executionMode}
-                state={entryStateByKey[automationEntryKey(entry)]}
-                onRun={runEntry}
-                onStop={stopEntry}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {hookEntries.length ? (
-        <Card size="sm" className="border border-border/70 bg-background/80">
-          <CardContent className="space-y-3 pt-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-foreground">Hooks</p>
-              <Badge variant="outline" className="rounded-sm">
-                {hookEntries.length}
-              </Badge>
-            </div>
-            {hookEntries.map(([trigger, refs]) => (
-              <HookRow
-                key={trigger}
-                trigger={trigger}
-                refs={refs}
-                onRun={runHook}
-                running={Boolean(runningHooks[trigger])}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
+        {hookEntries.length ? (
+          <Card size="sm" className="border border-border/70 bg-background/80">
+            <CardContent className="space-y-3 pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground">Hooks</p>
+                <Badge variant="outline" className="rounded-sm">
+                  {hookEntries.length}
+                </Badge>
+              </div>
+              {hookEntries.map(([trigger, refs]) => (
+                <HookRow
+                  key={trigger}
+                  trigger={trigger}
+                  refs={refs}
+                  onRun={runHook}
+                  running={Boolean(runningHooks[trigger])}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
     </div>
   );
