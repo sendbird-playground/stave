@@ -4,10 +4,13 @@
 
 export {
   resolveAutomationsForWorkspace,
-  AutomationsConfigSchema,
-  AutomationsLocalConfigSchema,
   type ResolveAutomationsArgs,
 } from "./config-loader";
+
+export {
+  AutomationsConfigSchema,
+  AutomationsLocalConfigSchema,
+} from "../../../src/lib/workspace-scripts/schemas";
 
 export {
   cleanupAllAutomationProcesses,
