@@ -16,6 +16,8 @@ import {
 import { resolveRootFilePath } from "../utils/filesystem";
 import { CreatePRArgsSchema, GetPrStatusByUrlArgsSchema } from "./schemas";
 
+const GIT_STATUS_PORCELAIN_ALL_UNTRACKED = "git status --porcelain --untracked-files=all";
+
 function toGitPathspecArg(paths: string[]) {
   return paths
     .map((filePath) => `"${quotePath({ value: filePath })}"`)
@@ -216,7 +218,9 @@ async function fetchGitHubPrStatus(args: { cwd?: string; target?: string }) {
 export function registerScmHandlers() {
   ipcMain.handle("scm:status", async (_event, args: { cwd?: string }) => {
     const statusResult = await runCommand({
-      command: "git status --porcelain",
+      // Expand untracked directories into file entries so the Changes panel
+      // always opens concrete files instead of placeholder folder rows.
+      command: GIT_STATUS_PORCELAIN_ALL_UNTRACKED,
       cwd: args.cwd,
     });
     const branchResult = await runCommand({
