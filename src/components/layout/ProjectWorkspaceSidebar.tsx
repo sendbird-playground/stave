@@ -614,7 +614,7 @@ export function ProjectWorkspaceSidebar(args: {
         data-testid="project-workspace-sidebar"
         data-sidebar-artwork={sidebarArtworkMode}
         className={cn(
-          "sidebar-liquid-glass hidden h-full shrink-0 overflow-hidden text-sidebar-foreground lg:flex lg:flex-col",
+          "sidebar-liquid-glass z-40 hidden h-full shrink-0 overflow-hidden text-sidebar-foreground lg:flex lg:flex-col",
           resolveSidebarArtworkClass({ mode: sidebarArtworkMode }),
           args.collapsed && "border-r border-sidebar-border/60",
         )}
