@@ -576,7 +576,32 @@ export function PromptInput(args: PromptInputProps) {
       ) : null}
       <Popover open={activePalette !== null} modal={false}>
         <PopoverAnchor asChild>
-          <div>
+          <div className="space-y-2">
+            {!isPromptInputFocused && !interactionsDisabled ? (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={focusComposer}
+                  className={cn(
+                    PROMPT_TOOLBAR_BUTTON,
+                    "h-8 gap-2 border border-border/60 bg-background/70 text-foreground hover:bg-background",
+                  )}
+                >
+                  <span>Focus</span>
+                  <KbdGroup>
+                    <Kbd>{modifierLabel}</Kbd>
+                    <Kbd>L</Kbd>
+                  </KbdGroup>
+                  <span className="text-xs text-muted-foreground">or</span>
+                  <KbdGroup>
+                    <Kbd>{modifierLabel}</Kbd>
+                    <Kbd>J</Kbd>
+                  </KbdGroup>
+                </Button>
+              </div>
+            ) : null}
             <Textarea
               ref={textareaRef}
               value={value}
@@ -987,32 +1012,12 @@ export function PromptInput(args: PromptInputProps) {
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          {!isPromptInputFocused && !interactionsDisabled ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={focusComposer}
-              className={cn(PROMPT_TOOLBAR_BUTTON, "gap-2 border border-border/60 bg-background/70 text-foreground hover:bg-background")}
-            >
-              <span>Focus</span>
-              <KbdGroup>
-                <Kbd>{modifierLabel}</Kbd>
-                <Kbd>L</Kbd>
-              </KbdGroup>
-              <span className="text-xs text-muted-foreground">or</span>
-              <KbdGroup>
-                <Kbd>{modifierLabel}</Kbd>
-                <Kbd>J</Kbd>
-              </KbdGroup>
-            </Button>
-          ) : null}
           <ModelSelector
             value={selectedModel}
             options={modelOptions}
             recommendedOptions={recommendedModelOptions}
             disabled={interactionsDisabled}
-            openToken={modelSelectorOpenNonce}
+            openToken={modelSelectorOpenNonce > 0 ? modelSelectorOpenNonce : undefined}
             onSelect={({ selection }) => onModelSelect({ selection })}
           />
           {onFastModeChange ? (

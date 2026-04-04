@@ -13,8 +13,19 @@ export interface ModelSelectorOption {
   available: boolean;
 }
 
+export function shouldOpenModelSelector(args: {
+  openToken?: string | number;
+  disabled?: boolean;
+  lastHandledOpenToken?: string | number;
+}) {
+  if (args.openToken === undefined || args.disabled) {
+    return false;
+  }
+  return args.openToken !== args.lastHandledOpenToken;
+}
+
 export const DEFAULT_RECOMMENDED_MODEL_SELECTOR_KEYS = [
-  "claude-code:opusplan",
+  "claude-code:claude-opus-4-6",
   "codex:gpt-5.4",
   "stave:stave-auto",
 ] as const;

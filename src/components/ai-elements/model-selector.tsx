@@ -1,5 +1,5 @@
 import { ChevronDown, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Command,
   CommandEmpty,
@@ -20,7 +20,7 @@ import {
 import { getProviderLabel, listProviderIds } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { ModelIcon } from "./model-icon";
-import type { ModelSelectorOption } from "./model-selector.utils";
+import { shouldOpenModelSelector, type ModelSelectorOption } from "./model-selector.utils";
 
 export {
   buildModelSelectorOption,
@@ -56,10 +56,18 @@ export function ModelSelector(args: ModelSelectorProps) {
     onSelect,
   } = args;
   const [open, setOpen] = useState(false);
+  const handledOpenTokenRef = useRef<string | number | undefined>(undefined);
+  const recommendedOptionKeys = useMemo(
+    () => new Set(recommendedOptions.map((option) => option.key)),
+    [recommendedOptions],
+  );
 
   const groupedOptions = useMemo(() => {
     const groups: Record<string, ModelSelectorOption[]> = {};
     for (const option of options) {
+      if (recommendedOptionKeys.has(option.key)) {
+        continue;
+      }
       const bucket = groups[option.providerId] ?? [];
       bucket.push(option);
       groups[option.providerId] = bucket;
@@ -67,7 +75,7 @@ export function ModelSelector(args: ModelSelectorProps) {
     return listProviderIds()
       .map((providerId) => [providerId, groups[providerId] ?? []] as const)
       .filter(([, providerOptions]) => providerOptions.length > 0);
-  }, [options]);
+  }, [options, recommendedOptionKeys]);
 
   const renderOption = (option: ModelSelectorOption) => (
     <CommandItem
@@ -90,9 +98,14 @@ export function ModelSelector(args: ModelSelectorProps) {
   );
 
   useEffect(() => {
-    if (openToken === undefined || disabled) {
+    if (!shouldOpenModelSelector({
+      openToken,
+      disabled,
+      lastHandledOpenToken: handledOpenTokenRef.current,
+    })) {
       return;
     }
+    handledOpenTokenRef.current = openToken;
     setOpen(true);
   }, [disabled, openToken]);
 
