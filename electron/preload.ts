@@ -579,6 +579,9 @@ contextBridge.exposeInMainWorld("api", {
       workspacePath: string;
       workspaceName: string;
       branch: string;
+      taskId?: string;
+      taskTitle?: string;
+      turnId?: string;
     }) =>
       ipcRenderer.invoke("workspace-automations:run-hook", args) as Promise<{
         ok: boolean;

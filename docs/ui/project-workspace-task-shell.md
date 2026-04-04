@@ -117,7 +117,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
 - `moveProjectInList()` and `moveWorkspaceInProjectList()` allow explicit sidebar ordering without auto-reordering on selection.
 - `reorderTasks()` persists manual task ordering within the active, archived, or all-task filter views.
 - `restoreTask()` re-activates archived tasks from workspace task history.
-- Workspace automations now run from `.stave/automations.json`, with config editing in `Settings > Projects`, a right-rail runtime panel for actions, services, and hooks, and hook entry points for workspace creation, workspace archiving, and PR creation flows.
+- Workspace automations now run from `.stave/automations.json`, with config editing in `Settings > Projects`, a right-rail runtime panel for actions, services, and hooks, and hook entry points for task creation, task archiving, turn start/completion, PR creation flows, plus legacy workspace triggers for older configs.
 
 ### Files Changed
 

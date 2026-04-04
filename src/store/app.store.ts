@@ -26,6 +26,7 @@ import {
   buildWorkspaceContinueSummaryFilePath,
   buildWorkspaceContinueSummaryMarkdown,
 } from "@/lib/workspace-continue";
+import type { AutomationTrigger } from "@/lib/workspace-scripts";
 import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import {
   isNotificationUnread,
@@ -951,6 +952,58 @@ function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspa
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => {
+      const resolveAutomationHookWorkspaceContext = (workspaceId: string) => {
+        const state = get();
+        const projectPath = state.projectPath;
+        const workspacePath = state.workspacePathById[workspaceId];
+        const branch = state.workspaceBranchById[workspaceId];
+        if (!projectPath || !workspacePath || !branch) {
+          return null;
+        }
+        const workspaceName = state.workspaces.find((workspace) => workspace.id === workspaceId)?.name ?? branch;
+        return {
+          workspaceId,
+          projectPath,
+          workspacePath,
+          workspaceName,
+          branch,
+        };
+      };
+
+      const runAutomationHookInBackground = (args: {
+        workspaceId: string;
+        trigger: AutomationTrigger;
+        taskId?: string;
+        taskTitle?: string;
+        turnId?: string;
+      }) => {
+        const runAutomationHook = window.api?.automations?.runHook;
+        const context = resolveAutomationHookWorkspaceContext(args.workspaceId);
+        if (!runAutomationHook || !context) {
+          return;
+        }
+
+        void runAutomationHook({
+          ...context,
+          trigger: args.trigger,
+          ...(args.taskId ? { taskId: args.taskId } : {}),
+          ...(args.taskTitle ? { taskTitle: args.taskTitle } : {}),
+          ...(args.turnId ? { turnId: args.turnId } : {}),
+        }).then((result) => {
+          if (!result.ok && result.summary?.failures.length) {
+            console.warn("[workspace-automations] hook failures", {
+              trigger: args.trigger,
+              failures: result.summary.failures,
+            });
+          }
+        }).catch((error) => {
+          console.warn("[workspace-automations] hook failed", {
+            trigger: args.trigger,
+            error: String(error),
+          });
+        });
+      };
+
       const activateProject = async (args: {
         projectRootPath: string;
         projectName: string;
@@ -3294,21 +3347,22 @@ export const useAppStore = create<AppState>()(
       },
       createTask: ({ title }) => {
         const trimmed = (title ?? "").trim();
+        const stateBefore = get();
+        const workspaceId = stateBefore.activeWorkspaceId;
+        if (!workspaceId || !stateBefore.workspaces.some((workspace) => workspace.id === workspaceId)) {
+          return;
+        }
+        const nextTask: Task = {
+          id: crypto.randomUUID(),
+          title: trimmed.length > 0 ? trimmed : "New Task",
+          provider: stateBefore.draftProvider,
+          updatedAt: buildRecentTimestamp(),
+          unread: false,
+          archivedAt: null,
+          controlMode: "interactive",
+          controlOwner: "stave",
+        };
         set((state) => {
-          const hasActiveWorkspace = state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId);
-          if (!hasActiveWorkspace || !state.activeWorkspaceId) {
-            return {};
-          }
-          const nextTask: Task = {
-            id: crypto.randomUUID(),
-            title: trimmed.length > 0 ? trimmed : "New Task",
-            provider: state.draftProvider,
-            updatedAt: buildRecentTimestamp(),
-            unread: false,
-            archivedAt: null,
-            controlMode: "interactive",
-            controlOwner: "stave",
-          };
           return {
             tasks: [nextTask, ...state.tasks],
             activeTaskId: nextTask.id,
@@ -3330,10 +3384,16 @@ export const useAppStore = create<AppState>()(
             },
             taskWorkspaceIdById: {
               ...state.taskWorkspaceIdById,
-              [nextTask.id]: state.activeWorkspaceId,
+              [nextTask.id]: workspaceId,
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
+        });
+        runAutomationHookInBackground({
+          workspaceId,
+          trigger: "task.created",
+          taskId: nextTask.id,
+          taskTitle: nextTask.title,
         });
       },
       renameTask: ({ taskId, title }) => {
@@ -3698,12 +3758,14 @@ export const useAppStore = create<AppState>()(
         });
       },
       archiveTask: ({ taskId }) => {
-        const activeTurnId = get().activeTurnIdsByTask[taskId];
+        const stateBefore = get();
+        const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
+        const targetTask = stateBefore.tasks.find((task) => task.id === taskId) ?? null;
+        const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
+        if (!targetTask || isTaskArchived(targetTask) || isManagedTaskReadOnly({ state: stateBefore, taskId })) {
+          return;
+        }
         set((state) => {
-          const targetTask = state.tasks.find((task) => task.id === taskId);
-          if (!targetTask || isTaskArchived(targetTask) || isManagedTaskReadOnly({ state, taskId })) {
-            return {};
-          }
           const interrupted = state.activeTurnIdsByTask[taskId]
             ? interruptActiveTaskTurns({
                 tasks: [targetTask],
@@ -3749,6 +3811,14 @@ export const useAppStore = create<AppState>()(
           }
         }
         void window.api?.provider?.cleanupTask?.({ taskId });
+        if (workspaceId) {
+          runAutomationHookInBackground({
+            workspaceId,
+            trigger: "task.archiving",
+            taskId,
+            taskTitle: targetTask.title,
+          });
+        }
       },
       setTaskProvider: ({ taskId, provider }) => {
         set((state) => {
@@ -4485,7 +4555,25 @@ export const useAppStore = create<AppState>()(
                 void persistNotifications(notificationsToPersist);
               }
             }
+            if (applied.turnCompleted) {
+              const completedTask = latestState.tasks.find((task) => task.id === resolvedTaskId) ?? null;
+              runAutomationHookInBackground({
+                workspaceId: taskWorkspaceId,
+                trigger: "turn.completed",
+                taskId: resolvedTaskId,
+                taskTitle: completedTask?.title,
+                turnId,
+              });
+            }
           },
+        });
+
+        runAutomationHookInBackground({
+          workspaceId: taskWorkspaceId,
+          trigger: "turn.started",
+          taskId: resolvedTaskId,
+          taskTitle: task?.title,
+          turnId,
         });
 
         runProviderTurn({

@@ -156,6 +156,7 @@ export function applyPendingProviderEventsToStoreState(args: {
         statePatch: {} as WorkspaceRuntimeStatePatch,
         persistInactiveWorkspaceSession: null,
         updatedSession: null,
+        turnCompleted: false,
       };
     }
 
@@ -174,6 +175,7 @@ export function applyPendingProviderEventsToStoreState(args: {
         statePatch: {} as WorkspaceRuntimeStatePatch,
         persistInactiveWorkspaceSession: null,
         updatedSession: null,
+        turnCompleted: false,
       };
     }
 
@@ -187,6 +189,7 @@ export function applyPendingProviderEventsToStoreState(args: {
       },
       persistInactiveWorkspaceSession: null,
       updatedSession: applied.session,
+      turnCompleted: applied.turnCompleted,
     };
   }
 
@@ -197,6 +200,7 @@ export function applyPendingProviderEventsToStoreState(args: {
       statePatch: {} as WorkspaceRuntimeStatePatch,
       persistInactiveWorkspaceSession: null,
       updatedSession: null,
+      turnCompleted: false,
     };
   }
 
@@ -214,6 +218,7 @@ export function applyPendingProviderEventsToStoreState(args: {
       statePatch: {} as WorkspaceRuntimeStatePatch,
       persistInactiveWorkspaceSession: null,
       updatedSession: null,
+      turnCompleted: false,
     };
   }
 
@@ -250,5 +255,6 @@ export function applyPendingProviderEventsToStoreState(args: {
         }
       : null,
     updatedSession: applied.session,
+    turnCompleted: applied.turnCompleted,
   };
 }

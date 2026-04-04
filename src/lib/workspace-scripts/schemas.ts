@@ -38,6 +38,10 @@ export const AutomationHookRefSchema = z.union([
 ]);
 
 export const AutomationHooksSchema = z.object({
+  "task.created": z.array(AutomationHookRefSchema).optional(),
+  "task.archiving": z.array(AutomationHookRefSchema).optional(),
+  "turn.started": z.array(AutomationHookRefSchema).optional(),
+  "turn.completed": z.array(AutomationHookRefSchema).optional(),
   "workspace.created": z.array(AutomationHookRefSchema).optional(),
   "workspace.archiving": z.array(AutomationHookRefSchema).optional(),
   "pr.beforeOpen": z.array(AutomationHookRefSchema).optional(),

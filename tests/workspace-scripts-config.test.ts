@@ -128,7 +128,7 @@ describe("resolveAutomationsFromConfig", () => {
         },
       },
       hooks: {
-        "workspace.created": ["bootstrap"],
+        "task.created": ["bootstrap"],
         "pr.beforeOpen": [{ ref: "app", kind: "service", blocking: false }],
       },
     };
@@ -147,9 +147,9 @@ describe("resolveAutomationsFromConfig", () => {
       name: "stave-desktop",
       noTls: false,
     });
-    expect(getAutomationHooksForTrigger(resolved ?? null, "workspace.created")).toEqual([
+    expect(getAutomationHooksForTrigger(resolved ?? null, "task.created")).toEqual([
       {
-        trigger: "workspace.created",
+        trigger: "task.created",
         automationId: "bootstrap",
         automationKind: "action",
         blocking: true,

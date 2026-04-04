@@ -7,7 +7,7 @@
 
 ## When To Use It
 
-- Use this when a workspace needs repeatable setup commands, dev services, or PR/workspace lifecycle automation.
+- Use this when a workspace needs repeatable setup commands, dev services, or task/turn/PR lifecycle automation.
 - Use it when you want teammates to share the same automation entry points through the Stave UI.
 - Use manual JSON editing instead when you need custom `targets` or advanced `.stave/automations.local.json` overrides.
 
@@ -24,7 +24,7 @@
 2. Select the project, then use `Automation Manager`.
 3. Choose `Project Config` or `Workspace Config`.
 4. Add an `Action` or `Service`, fill in the id, target, and commands, then save.
-5. Add hook links if the automation should run from `workspace.created`, `workspace.archiving`, `pr.beforeOpen`, or `pr.afterOpen`.
+5. Add hook links if the automation should run from `task.created`, `task.archiving`, `turn.started`, `turn.completed`, `pr.beforeOpen`, or `pr.afterOpen`.
 6. Open the right rail `Automation` tab to run the entry and verify the merged runtime for the current workspace.
 
 ## Interface Walkthrough
@@ -119,12 +119,12 @@ Minimal shared config example:
     }
   },
   "hooks": {
-    "workspace.created": [
-      {
-        "ref": "bootstrap",
-        "kind": "action"
-      }
-    ]
+      "task.created": [
+        {
+          "ref": "bootstrap",
+          "kind": "action"
+        }
+      ]
   }
 }
 ```
@@ -135,6 +135,7 @@ Minimal shared config example:
 - The GUI does not edit `targets`.
 - The GUI does not edit `.stave/automations.local.json`.
 - Orbit services require `Workspace` as the target.
+- Legacy `workspace.created` and `workspace.archiving` hooks remain supported for older configs, but new automation flows should prefer task and turn triggers.
 - If you need custom target definitions, per-developer overrides, or unsupported JSON fields, edit the file manually.
 - When both workspace and project shared configs exist, the workspace shared config wins for the active workspace.
 

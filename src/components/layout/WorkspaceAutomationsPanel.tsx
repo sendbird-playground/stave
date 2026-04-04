@@ -15,6 +15,7 @@ import {
 } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
+import { AUTOMATION_TRIGGER_METADATA } from "@/lib/workspace-scripts";
 import type {
   AutomationKind,
   AutomationTrigger,
@@ -54,7 +55,7 @@ function appendLog(current: string, chunk: string) {
 }
 
 function sourceLabel(event: WorkspaceAutomationEventEnvelope) {
-  return event.source.kind === "hook" ? `Hook · ${event.source.trigger}` : "Manual";
+  return event.source.kind === "hook" ? `Hook · ${AUTOMATION_TRIGGER_METADATA[event.source.trigger].label}` : "Manual";
 }
 
 function openExternalUrl(url: string) {
@@ -67,16 +68,23 @@ function HookRow(props: {
   onRun: (trigger: AutomationTrigger) => Promise<void>;
   running: boolean;
 }) {
+  const triggerMeta = AUTOMATION_TRIGGER_METADATA[props.trigger];
   return (
     <div className="rounded-lg border border-border/70 bg-background/80 p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium text-foreground">{props.trigger}</p>
+            <p className="text-sm font-medium text-foreground">{triggerMeta.label}</p>
+            {triggerMeta.legacy ? (
+              <Badge variant="secondary" className="rounded-sm px-2 py-0">
+                Legacy
+              </Badge>
+            ) : null}
             <Badge variant="outline" className="rounded-sm px-2 py-0">
               {props.refs.length} linked
             </Badge>
           </div>
+          <p className="text-xs text-muted-foreground">{triggerMeta.description}</p>
           <div className="flex flex-wrap gap-1.5">
             {props.refs.map((ref) => (
               <Badge
@@ -205,22 +213,33 @@ export function WorkspaceAutomationsPanel(props: {
 }) {
   const [
     activeWorkspaceId,
+    activeTaskId,
     projectPath,
     workspacePath,
     workspaceBranch,
     workspaces,
+    tasks,
+    activeTurnIdsByTask,
   ] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
+    state.activeTaskId,
     state.projectPath,
     state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? "",
     state.workspaceBranchById[state.activeWorkspaceId] ?? "",
     state.workspaces,
+    state.tasks,
+    state.activeTurnIdsByTask,
   ] as const));
 
   const workspaceName = useMemo(
     () => (workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.name ?? workspaceBranch) || "workspace",
     [activeWorkspaceId, workspaceBranch, workspaces],
   );
+  const activeTask = useMemo(
+    () => tasks.find((task) => task.id === activeTaskId) ?? null,
+    [activeTaskId, tasks],
+  );
+  const activeTurnId = activeTaskId ? activeTurnIdsByTask[activeTaskId] : undefined;
 
   const [configState, setConfigState] = useState<{
     status: "idle" | "loading" | "ready" | "error";
@@ -274,7 +293,7 @@ export function WorkspaceAutomationsPanel(props: {
           runId: status.runId,
           sessionId: status.sessionId,
           log: "",
-          sourceLabel: status.source?.kind === "hook" ? `Hook · ${status.source.trigger}` : "Manual",
+          sourceLabel: status.source?.kind === "hook" ? `Hook · ${AUTOMATION_TRIGGER_METADATA[status.source.trigger].label}` : "Manual",
         };
       });
     }
@@ -393,6 +412,7 @@ export function WorkspaceAutomationsPanel(props: {
       toast.error("Automation bridge unavailable");
       return;
     }
+    const triggerMeta = AUTOMATION_TRIGGER_METADATA[trigger];
     setRunningHooks((current) => ({ ...current, [trigger]: true }));
     try {
       const result = await api({
@@ -402,6 +422,9 @@ export function WorkspaceAutomationsPanel(props: {
         workspacePath,
         workspaceName,
         branch: workspaceBranch || workspaceName,
+        ...(activeTask?.id ? { taskId: activeTask.id } : {}),
+        ...(activeTask?.title ? { taskTitle: activeTask.title } : {}),
+        ...(activeTurnId ? { turnId: activeTurnId } : {}),
       });
       if (!result.ok) {
         toast.error("Hook execution failed", {
@@ -410,12 +433,12 @@ export function WorkspaceAutomationsPanel(props: {
         return;
       }
       toast.success("Hook executed", {
-        description: `${result.summary?.executedEntries ?? 0} automation(s) ran for ${trigger}.`,
+        description: `${result.summary?.executedEntries ?? 0} automation(s) ran for ${triggerMeta.label}.`,
       });
     } finally {
       setRunningHooks((current) => ({ ...current, [trigger]: false }));
     }
-  }, [activeWorkspaceId, projectPath, workspaceBranch, workspaceName, workspacePath]);
+  }, [activeTask, activeTurnId, activeWorkspaceId, projectPath, workspaceBranch, workspaceName, workspacePath]);
 
   const config = configState.config;
   const hookEntries = config
