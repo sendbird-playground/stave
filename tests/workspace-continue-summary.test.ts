@@ -3,6 +3,7 @@ import {
   buildWorkspaceContinueSummaryFilePath,
   buildWorkspaceContinueSummaryMarkdown,
 } from "../src/lib/workspace-continue";
+import { buildContinueWorkspaceBranchName } from "../src/store/project.utils";
 
 const originalWindow = globalThis.window;
 
@@ -38,6 +39,22 @@ afterEach(() => {
 });
 
 describe("workspace continue summary helpers", () => {
+  test("builds a continue workspace branch name from the source branch and UTC timestamp", () => {
+    expect(buildContinueWorkspaceBranchName({
+      sourceBranch: "feature/pr-status",
+      date: new Date("2026-04-04T16:45:12.000Z"),
+    })).toBe("feature/pr-status--continue--20260404-164512");
+
+    expect(buildContinueWorkspaceBranchName({
+      sourceBranch: " Feature PR Status ",
+      date: new Date("2026-04-04T16:45:12.000Z"),
+    })).toBe("feature-pr-status--continue--20260404-164512");
+
+    expect(buildContinueWorkspaceBranchName({
+      date: new Date("2026-04-04T16:45:12.000Z"),
+    })).toBe("follow-up--continue--20260404-164512");
+  });
+
   test("builds a stable summary file path and markdown brief", () => {
     const filePath = buildWorkspaceContinueSummaryFilePath({
       sourceBranch: "feature/pr-status",
@@ -120,8 +137,8 @@ describe("continueWorkspaceFromSummary", () => {
         fs: {
           pickRoot: async () => ({
             ok: true,
-            rootPath: "/tmp/stave-project/.stave/workspaces/continue__pr-status",
-            rootName: "continue/pr-status",
+            rootPath: "/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512",
+            rootName: "feature/pr-status--continue--20260404-164512",
             files: [],
           }),
           listFiles: async () => ({
@@ -230,7 +247,7 @@ describe("continueWorkspaceFromSummary", () => {
     });
 
     const result = await useAppStore.getState().continueWorkspaceFromSummary({
-      name: "continue/pr-status",
+      name: "feature/pr-status--continue--20260404-164512",
     });
 
     expect(result).toMatchObject({
@@ -243,7 +260,7 @@ describe("continueWorkspaceFromSummary", () => {
       "git diff --stat \"main\"...HEAD",
       "git diff --name-only \"main\"...HEAD",
       "mkdir -p .stave/workspaces",
-      "git worktree add -b \"continue/pr-status\" \"/tmp/stave-project/.stave/workspaces/continue__pr-status\" \"main\"",
+      "git worktree add -b \"feature/pr-status--continue--20260404-164512\" \"/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512\" \"main\"",
     ]);
 
     expect(createdDirectories).toEqual([".stave/context"]);

@@ -216,8 +216,25 @@ export function sanitizeBranchName(args: { value: string }) {
     .trim()
     .toLowerCase()
     .replaceAll(/[^a-z0-9._/-]+/g, "-")
-    .replaceAll(/-+/g, "-")
     .replaceAll(/^\-|\-$/g, "");
+}
+
+function padTimestampSegment(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+export function formatUtcCompactTimestamp(args?: { date?: Date }) {
+  const date = args?.date ?? new Date();
+  return [
+    `${date.getUTCFullYear()}${padTimestampSegment(date.getUTCMonth() + 1)}${padTimestampSegment(date.getUTCDate())}`,
+    `${padTimestampSegment(date.getUTCHours())}${padTimestampSegment(date.getUTCMinutes())}${padTimestampSegment(date.getUTCSeconds())}`,
+  ].join("-");
+}
+
+export function buildContinueWorkspaceBranchName(args: { sourceBranch?: string; date?: Date }) {
+  const normalizedSourceBranch = sanitizeBranchName({ value: args.sourceBranch ?? "" });
+  const sourceBranch = normalizedSourceBranch || "follow-up";
+  return `${sourceBranch}--continue--${formatUtcCompactTimestamp({ date: args.date })}`;
 }
 
 export function toWorkspaceFolderName(args: { branch: string }) {

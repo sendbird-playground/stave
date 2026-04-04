@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { buildContinueWorkspaceBranchName } from "@/store/project.utils";
 
 interface ContinueWorkspaceDialogProps {
   open: boolean;
@@ -21,9 +22,7 @@ interface ContinueWorkspaceDialogProps {
 }
 
 function buildSuggestedWorkspaceName(sourceBranch?: string) {
-  const trimmed = sourceBranch?.trim() ?? "";
-  const leaf = trimmed.split("/").map((part) => part.trim()).filter(Boolean).at(-1) ?? "follow-up";
-  return `continue/${leaf}`;
+  return buildContinueWorkspaceBranchName({ sourceBranch });
 }
 
 export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
@@ -110,7 +109,7 @@ export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
               <Input
                 autoFocus
                 value={workspaceName}
-                placeholder="continue/follow-up"
+                placeholder="feature/follow-up--continue--20260404-164512"
                 onChange={(event) => setWorkspaceName(event.target.value)}
                 className="h-10 rounded-sm border-border/80 bg-background"
               />
