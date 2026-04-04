@@ -833,7 +833,7 @@ export function EditorPanel(props: EditorPanelProps) {
       className="h-full min-w-0 w-full overflow-hidden"
     >
       <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card">
-        <RightRailPanelShell panelId={rightTab} title={rightTab === "changes" ? "Source Control" : undefined}>
+        <RightRailPanelShell panelId={rightTab}>
           {rightTab === "explorer" ? (
             <WorkspaceExplorerPanel
               projectName={explorerProjectName}

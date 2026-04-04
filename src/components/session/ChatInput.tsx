@@ -1,5 +1,5 @@
-import { PromptInput, Suggestion, Suggestions } from "@/components/ai-elements";
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { PromptInput } from "@/components/ai-elements";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ModelSelectorOption } from "@/components/ai-elements/model-selector";
 import { type PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
 import type { PromptInputRuntimeControl, PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
@@ -94,44 +94,6 @@ const INACTIVE_STAVE_SETTINGS = [
   true,
   2,
 ] as const;
-interface ChatInputSuggestionsProps {
-  activeTaskId: string;
-  isTurnActive: boolean;
-  onSelectSuggestion: (suggestion: string) => void;
-}
-
-const ChatInputSuggestions = memo(function ChatInputSuggestions(args: ChatInputSuggestionsProps) {
-  const activeMessages = useAppStore((state) => {
-    if (args.isTurnActive || !args.activeTaskId) {
-      return EMPTY_MESSAGES;
-    }
-    return state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES;
-  });
-  const promptSuggestions = useMemo(() => getLatestPromptSuggestions(activeMessages), [activeMessages]);
-
-  if (args.isTurnActive || promptSuggestions.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="mb-4">
-      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-        Suggestions
-      </p>
-      <Suggestions aria-label="Suggestions">
-        {promptSuggestions.map((suggestion) => (
-          <Suggestion
-            key={suggestion}
-            onClick={args.onSelectSuggestion}
-            suggestion={suggestion}
-            title={suggestion}
-          />
-        ))}
-      </Suggestions>
-    </div>
-  );
-});
-
 interface ChatInputComposerProps {
   compact?: boolean;
   isEmpty: boolean;
@@ -203,6 +165,10 @@ function ChatInputComposer(args: ChatInputComposerProps) {
   const promptHistoryEntries = useMemo(
     () => getPromptHistoryEntries(activeTaskMessages),
     [activeTaskMessages],
+  );
+  const promptSuggestions = useMemo(
+    () => (args.isTurnActive ? [] : getLatestPromptSuggestions(activeTaskMessages)),
+    [activeTaskMessages, args.isTurnActive],
   );
   const [draftText, setDraftText] = useState(promptDraft.text);
   const draftTextRef = useRef(promptDraft.text);
@@ -349,23 +315,6 @@ function ChatInputComposer(args: ChatInputComposerProps) {
       )}
     >
       <div className={cn("mx-auto max-w-6xl")}>
-        <ChatInputSuggestions
-          activeTaskId={args.activeTaskId}
-          isTurnActive={args.isTurnActive}
-          onSelectSuggestion={(suggestion) => {
-            const nextText = mergePromptSuggestionWithDraft({
-              currentDraft: draftTextRef.current,
-              suggestion,
-            });
-            draftTextRef.current = nextText;
-            setDraftText(nextText);
-            commitPromptDraftText({
-              taskId: args.providerSelectionTarget,
-              text: nextText,
-            });
-            setFocusNonce((current) => current + 1);
-          }}
-        />
         <PromptInput
           focusToken={`${args.providerSelectionTarget}:${focusNonce}`}
           value={draftText}
@@ -376,6 +325,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           modelOptions={args.modelOptions}
           attachedFilePaths={promptDraft.attachedFilePaths}
           promptHistoryEntries={promptHistoryEntries}
+          promptSuggestions={promptSuggestions}
           commandPaletteItems={args.commandPaletteItems}
           commandPaletteProviderNote={args.commandPaletteProviderNote}
           skillsEnabled={args.skillsEnabled}
@@ -388,6 +338,19 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               taskId: args.providerSelectionTarget,
               text: value,
             });
+          }}
+          onSuggestionSelect={(suggestion) => {
+            const nextText = mergePromptSuggestionWithDraft({
+              currentDraft: draftTextRef.current,
+              suggestion,
+            });
+            draftTextRef.current = nextText;
+            setDraftText(nextText);
+            commitPromptDraftText({
+              taskId: args.providerSelectionTarget,
+              text: nextText,
+            });
+            setFocusNonce((current) => current + 1);
           }}
           onModelSelect={(selectionArgs) => {
             commitCurrentDraftText();

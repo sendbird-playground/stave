@@ -607,7 +607,7 @@ export function EditorMainPanel() {
                   <div className="flex flex-col gap-1">
                     <EmptyTitle className="text-2xl font-semibold">Open a file</EmptyTitle>
                     <EmptyDescription className="max-w-md text-sm">
-                      Open a file from the Explorer or Changes panel to start editing.
+                      Open a file from the Explorer or Source Control panel to start editing.
                     </EmptyDescription>
                   </div>
                 </EmptyHeader>

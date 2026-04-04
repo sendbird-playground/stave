@@ -290,21 +290,21 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
   },
   {
     id: "view.toggle-changes-panel",
-    title: "Toggle Changes Panel",
-    description: "Show or hide the changes overlay panel.",
+    title: "Toggle Source Control Panel",
+    description: "Show or hide the source control overlay panel.",
     group: "view",
     icon: Layers3,
-    keywords: ["changes", "diff", "git"],
+    keywords: ["source control", "changes", "diff", "git"],
     shortcut: (modifierLabel) => `${modifierLabel}+B`,
     build: (args) => ({
       id: "view.toggle-changes-panel",
       title: args.layout.sidebarOverlayVisible && args.layout.sidebarOverlayTab === "changes"
-        ? "Hide Changes Panel"
-        : "Show Changes Panel",
-      subtitle: "Toggle the changes overlay on the right rail.",
+        ? "Hide Source Control Panel"
+        : "Show Source Control Panel",
+      subtitle: "Toggle the source control overlay on the right rail.",
       group: "view",
       icon: Layers3,
-      keywords: ["changes", "diff", "git"],
+      keywords: ["source control", "changes", "diff", "git"],
       shortcut: `${args.modifierLabel}+B`,
       run: args.commands.toggleChangesPanel,
       source: "core",
