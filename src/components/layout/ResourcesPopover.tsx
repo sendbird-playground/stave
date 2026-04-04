@@ -176,7 +176,11 @@ export function MemoryUsagePopover({ collapsed }: { collapsed?: boolean }) {
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        {!open && <TooltipContent side="right">Memory Usage</TooltipContent>}
+        {!open && (
+          <TooltipContent side={collapsed ? "right" : "bottom"}>
+            Memory Usage
+          </TooltipContent>
+        )}
       </Tooltip>
 
       <PopoverContent
