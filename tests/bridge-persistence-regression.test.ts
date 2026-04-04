@@ -137,7 +137,7 @@ describe("workspace persistence fallback", () => {
     expect(loaded?.activeTaskId).toBe("task-1");
     expect(loaded?.tasks).toHaveLength(1);
     expect(loaded?.promptDraftByTask).toEqual({});
-    expect(loaded?.providerConversationByTask).toEqual({});
+    expect(loaded?.providerSessionByTask).toEqual({});
   });
 
   test("supports notification history without electron persistence bridge", async () => {
@@ -273,7 +273,7 @@ describe("workspace persistence fallback", () => {
       tasks: [],
       messagesByTask: {},
       promptDraftByTask: {},
-      providerConversationByTask: {},
+      providerSessionByTask: {},
     };
     await upsertWorkspace({
       id: extraWorkspaceId,
@@ -397,7 +397,7 @@ describe("workspace persistence fallback", () => {
               tasks: [],
               messagesByTask: {},
               promptDraftByTask: {},
-              providerConversationByTask: {},
+              providerSessionByTask: {},
             },
           }),
         },
@@ -692,7 +692,7 @@ describe("workspace snapshot schema compatibility", () => {
       todos: [],
       customFields: [],
     });
-    expect(loaded?.providerConversationByTask).toEqual({});
+    expect(loaded?.providerSessionByTask).toEqual({});
     expect(loaded?.editorTabs).toEqual([]);
     expect(loaded?.activeEditorTabId).toBeNull();
   });
@@ -736,7 +736,7 @@ describe("workspace snapshot schema compatibility", () => {
                 },
               ],
             },
-            providerConversationByTask: {
+            providerSessionByTask: {
               "task-2": {
                 "claude-code": "session-live-2",
               },
@@ -758,7 +758,7 @@ describe("workspace snapshot schema compatibility", () => {
     expect(loaded?.messagesByTask["task-2"]?.[0]?.promptSuggestions).toEqual([
       "Open a PR with these changes",
     ]);
-    expect(loaded?.providerConversationByTask).toEqual({
+    expect(loaded?.providerSessionByTask).toEqual({
       "task-2": {
         "claude-code": "session-live-2",
       },
@@ -821,7 +821,7 @@ describe("workspace store hydration ordering", () => {
                   text: "draft from db",
                 },
               },
-              providerConversationByTask: {
+              providerSessionByTask: {
                 "task-db": {
                   codex: "thread-db-1",
                 },
@@ -849,7 +849,7 @@ describe("workspace store hydration ordering", () => {
       tasks: [],
       messagesByTask: {},
       promptDraftByTask: {},
-      providerConversationByTask: {},
+      providerSessionByTask: {},
       hasHydratedWorkspaces: false,
     });
 
@@ -862,7 +862,7 @@ describe("workspace store hydration ordering", () => {
     expect(nextState.tasks.map((task) => task.id)).toEqual(["task-db"]);
     expect(nextState.messagesByTask["task-db"]?.[0]?.content).toBe("loaded from db");
     expect(nextState.promptDraftByTask["task-db"]?.text).toBe("draft from db");
-    expect(nextState.providerConversationByTask["task-db"]).toEqual({ codex: "thread-db-1" });
+    expect(nextState.providerSessionByTask["task-db"]).toEqual({ codex: "thread-db-1" });
   });
 
   test("hydrateWorkspaces appends an interruption note for incomplete turns from a previous app session", async () => {
@@ -901,7 +901,7 @@ describe("workspace store hydration ordering", () => {
                 ],
               },
               promptDraftByTask: {},
-              providerConversationByTask: {},
+              providerSessionByTask: {},
             },
           }),
           listLatestWorkspaceTurns: async () => ({
@@ -1184,7 +1184,7 @@ describe("workspace store hydration ordering", () => {
                   }],
                   messagesByTask: { "task-alt": [] },
                   promptDraftByTask: {},
-                  providerConversationByTask: {},
+                  providerSessionByTask: {},
                 }
               : null,
           }),
@@ -1235,8 +1235,8 @@ describe("workspace store hydration ordering", () => {
       messagesByTask: { "task-main": [] },
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
-      nativeConversationReadyByTask: {},
-      providerConversationByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
     });
 
     useAppStore.getState().sendUserMessage({
@@ -1361,7 +1361,7 @@ describe("workspace store hydration ordering", () => {
                   }],
                   messagesByTask: { "task-alt": [] },
                   promptDraftByTask: {},
-                  providerConversationByTask: {},
+                  providerSessionByTask: {},
                 }
               : null,
           }),
@@ -1412,8 +1412,8 @@ describe("workspace store hydration ordering", () => {
       messagesByTask: { "task-main": [] },
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
-      nativeConversationReadyByTask: {},
-      providerConversationByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
     });
 
     useAppStore.getState().sendUserMessage({

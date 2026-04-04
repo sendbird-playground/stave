@@ -30,7 +30,7 @@ export interface StreamTurnArgs {
 export type BridgeEvent =
   | { type: "thinking"; text: string; isStreaming?: boolean }
   | { type: "text"; text: string; segmentId?: string }
-  | { type: "provider_conversation"; providerId: ProviderId; nativeConversationId: string }
+  | { type: "provider_session"; providerId: ProviderId; nativeSessionId: string }
   | {
     type: "usage";
     inputTokens: number;

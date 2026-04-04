@@ -491,7 +491,7 @@ const CanonicalConversationRequestSchema = z
     contextParts: z.array(CanonicalContextPartSchema).max(200),
     resume: z
       .object({
-        nativeConversationId: z.string().max(200).optional(),
+        nativeSessionId: z.string().max(200).optional(),
       })
       .strict()
       .optional(),

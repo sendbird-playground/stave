@@ -17,7 +17,7 @@ import {
   closeWorkspacePersistence,
   loadProjectRegistrySnapshot,
   saveProjectRegistrySnapshot,
-  type TaskProviderConversationState,
+  type TaskProviderSessionState,
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
 import type { CanonicalRetrievedContextPart, ClaudeSettingSource, NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
@@ -426,8 +426,8 @@ interface AppState {
   skillCatalog: SkillCatalogState;
   notifications: AppNotification[];
   activeTurnIdsByTask: Record<string, string | undefined>;
-  nativeConversationReadyByTask: Record<string, boolean>;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  nativeSessionReadyByTask: Record<string, boolean>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
   taskWorkspaceIdById: Record<string, string>;
   hydrateProjectRegistry: () => Promise<void>;
@@ -1065,7 +1065,7 @@ export const useAppStore = create<AppState>()(
             promptDraftByTask: empty.promptDraftByTask,
             editorTabs: empty.editorTabs,
             activeEditorTabId: empty.activeEditorTabId,
-            providerConversationByTask: empty.providerConversationByTask,
+            providerSessionByTask: empty.providerSessionByTask,
           });
           workspaceState = buildWorkspaceSessionState({
             snapshot: createWorkspaceSnapshot({
@@ -1075,7 +1075,7 @@ export const useAppStore = create<AppState>()(
               promptDraftByTask: empty.promptDraftByTask,
               editorTabs: empty.editorTabs,
               activeEditorTabId: empty.activeEditorTabId,
-              providerConversationByTask: empty.providerConversationByTask,
+              providerSessionByTask: empty.providerSessionByTask,
             }),
           });
         }
@@ -1400,8 +1400,8 @@ export const useAppStore = create<AppState>()(
       },
       notifications: [],
       activeTurnIdsByTask: {},
-      nativeConversationReadyByTask: {},
-      providerConversationByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
       workspaceRuntimeCacheById: {},
       taskWorkspaceIdById: {},
       hydrateProjectRegistry: async () => {
@@ -1487,7 +1487,7 @@ export const useAppStore = create<AppState>()(
             promptDraftByTask: {},
             editorTabs: [],
             activeEditorTabId: null,
-            providerConversationByTask: {},
+            providerSessionByTask: {},
           });
           initialRows = await listWorkspaceSummaries();
         }
@@ -1679,7 +1679,7 @@ export const useAppStore = create<AppState>()(
                   promptDraftByTask: {},
                   editorTabs: [],
                   activeEditorTabId: null,
-                  providerConversationByTask: {},
+                  providerSessionByTask: {},
                 });
               }
 
@@ -1871,7 +1871,7 @@ export const useAppStore = create<AppState>()(
             promptDraftByTask: {},
             editorTabs: [],
             activeEditorTabId: null,
-            providerConversationByTask: {},
+            providerSessionByTask: {},
           });
 
           newRows.push({
@@ -2014,7 +2014,7 @@ export const useAppStore = create<AppState>()(
           workspaceInformation: state.workspaceInformation,
           editorTabs: state.editorTabs,
           activeEditorTabId: state.activeEditorTabId,
-          providerConversationByTask: state.providerConversationByTask,
+          providerSessionByTask: state.providerSessionByTask,
         });
 
         if (sync) {
@@ -2039,7 +2039,7 @@ export const useAppStore = create<AppState>()(
           workspaceInformation: state.workspaceInformation,
           editorTabs: state.editorTabs,
           activeEditorTabId: state.activeEditorTabId,
-          providerConversationByTask: state.providerConversationByTask,
+          providerSessionByTask: state.providerSessionByTask,
         });
 
         set((current) => {
@@ -2094,8 +2094,8 @@ export const useAppStore = create<AppState>()(
             activeTaskId: refreshedSession.activeTaskId,
             workspaceInformation: refreshedSession.workspaceInformation,
             activeTurnIdsByTask: refreshedSession.activeTurnIdsByTask,
-            providerConversationByTask: refreshedSession.providerConversationByTask,
-            nativeConversationReadyByTask: refreshedSession.nativeConversationReadyByTask,
+            providerSessionByTask: refreshedSession.providerSessionByTask,
+            nativeSessionReadyByTask: refreshedSession.nativeSessionReadyByTask,
             workspaceRuntimeCacheById: {
               ...state.workspaceRuntimeCacheById,
               [workspaceId]: refreshedSession,
@@ -2356,7 +2356,7 @@ export const useAppStore = create<AppState>()(
           promptDraftByTask: empty.promptDraftByTask,
           editorTabs: empty.editorTabs,
           activeEditorTabId: empty.activeEditorTabId,
-          providerConversationByTask: empty.providerConversationByTask,
+          providerSessionByTask: empty.providerSessionByTask,
         });
         await persistWorkspaceSnapshot({
           workspaceId,
@@ -2367,7 +2367,7 @@ export const useAppStore = create<AppState>()(
           promptDraftByTask: snapshot.promptDraftByTask ?? {},
           editorTabs: snapshot.editorTabs ?? [],
           activeEditorTabId: snapshot.activeEditorTabId ?? null,
-          providerConversationByTask: snapshot.providerConversationByTask ?? {},
+          providerSessionByTask: snapshot.providerSessionByTask ?? {},
         });
         const workspaceState = buildWorkspaceSessionState({ snapshot });
 
@@ -3267,12 +3267,12 @@ export const useAppStore = create<AppState>()(
               ...state.messageCountByTask,
               [nextTask.id]: 0,
             },
-            nativeConversationReadyByTask: {
-              ...state.nativeConversationReadyByTask,
+            nativeSessionReadyByTask: {
+              ...state.nativeSessionReadyByTask,
               [nextTask.id]: false,
             },
-            providerConversationByTask: {
-              ...state.providerConversationByTask,
+            providerSessionByTask: {
+              ...state.providerSessionByTask,
               [nextTask.id]: {},
             },
             taskWorkspaceIdById: {
@@ -3389,12 +3389,12 @@ export const useAppStore = create<AppState>()(
               ...state.messageCountByTask,
               [duplicatedTask.id]: duplicatedMessages.length,
             },
-            nativeConversationReadyByTask: {
-              ...state.nativeConversationReadyByTask,
+            nativeSessionReadyByTask: {
+              ...state.nativeSessionReadyByTask,
               [duplicatedTask.id]: false,
             },
-            providerConversationByTask: {
-              ...state.providerConversationByTask,
+            providerSessionByTask: {
+              ...state.providerSessionByTask,
               [duplicatedTask.id]: {},
             },
             taskWorkspaceIdById: {
@@ -3716,11 +3716,11 @@ export const useAppStore = create<AppState>()(
                 : task
             ),
             draftProvider: provider,
-            nativeConversationReadyByTask: {
-              ...state.nativeConversationReadyByTask,
+            nativeSessionReadyByTask: {
+              ...state.nativeSessionReadyByTask,
               // stave has no native conversation ID of its own; treat as not ready
               [taskId]: provider !== "stave" && Boolean(
-                (state.providerConversationByTask[taskId] as Record<string, string | undefined>)?.[provider]?.trim(),
+                (state.providerSessionByTask[taskId] as Record<string, string | undefined>)?.[provider]?.trim(),
               ),
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
@@ -4064,12 +4064,12 @@ export const useAppStore = create<AppState>()(
               ...nextState.messageCountByTask,
               [seededTaskId]: nextState.messageCountByTask[seededTaskId] ?? 0,
             },
-            nativeConversationReadyByTask: {
-              ...nextState.nativeConversationReadyByTask,
+            nativeSessionReadyByTask: {
+              ...nextState.nativeSessionReadyByTask,
               [seededTaskId]: false,
             },
-            providerConversationByTask: {
-              ...nextState.providerConversationByTask,
+            providerSessionByTask: {
+              ...nextState.providerSessionByTask,
               [seededTaskId]: {},
             },
             taskWorkspaceIdById: {
@@ -4167,15 +4167,15 @@ export const useAppStore = create<AppState>()(
 
         if (commandResult.kind === "local-response") {
           const responseText = commandResult.response ?? "";
-          const shouldClearProviderConversation = commandResult.action === "clear";
+          const shouldClearProviderSession = commandResult.action === "clear";
           set((nextState) =>
             buildLocalCommandResponseState({
               tasks: nextState.tasks,
               messagesByTask: nextState.messagesByTask,
               messageCountByTask: nextState.messageCountByTask,
               activeTurnIdsByTask: nextState.activeTurnIdsByTask,
-              nativeConversationReadyByTask: nextState.nativeConversationReadyByTask,
-              providerConversationByTask: nextState.providerConversationByTask,
+              nativeSessionReadyByTask: nextState.nativeSessionReadyByTask,
+              providerSessionByTask: nextState.providerSessionByTask,
               taskWorkspaceIdById: nextState.taskWorkspaceIdById,
               workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
               taskId: resolvedTaskId,
@@ -4184,10 +4184,10 @@ export const useAppStore = create<AppState>()(
               activeModel,
               content,
               responseText,
-              shouldClearProviderConversation,
+              shouldClearProviderSession,
             })
           );
-          if (shouldClearProviderConversation) {
+          if (shouldClearProviderSession) {
             void window.api?.provider?.cleanupTask?.({ taskId: resolvedTaskId });
           }
 
@@ -4292,7 +4292,7 @@ export const useAppStore = create<AppState>()(
         }
         // ─────────────────────────────────────────────────────────────────────
 
-        const providerConversation = state.providerConversationByTask[resolvedTaskId];
+        const providerSession = state.providerSessionByTask[resolvedTaskId];
 
         // ── Repo-map context injection ─────────────────────────────────────────
         // On the first turn of a task, inject the pre-generated repo-map summary
@@ -4326,7 +4326,7 @@ export const useAppStore = create<AppState>()(
           fileContexts,
           imageContexts,
           skillContexts: skillSelection.selectedSkills,
-          nativeConversationId: providerConversation?.[provider] ?? null,
+          nativeSessionId: providerSession?.[provider] ?? null,
           retrievedContextParts,
         });
         const prompt = normalizedPrompt;
@@ -4388,7 +4388,7 @@ export const useAppStore = create<AppState>()(
                 workspaceInformation: persistedInactiveWorkspaceSession.session.workspaceInformation,
                 editorTabs: persistedInactiveWorkspaceSession.session.editorTabs,
                 activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
-                providerConversationByTask: persistedInactiveWorkspaceSession.session.providerConversationByTask,
+                providerSessionByTask: persistedInactiveWorkspaceSession.session.providerSessionByTask,
               });
             }
             const nextPlanReady = pendingEvents
@@ -4451,7 +4451,7 @@ export const useAppStore = create<AppState>()(
               claudePermissionMode: resolvedPromptDraftRuntimeState.claudePermissionMode,
               codexExperimentalPlanMode: resolvedPromptDraftRuntimeState.codexExperimentalPlanMode,
             },
-            providerConversation,
+            providerSession,
           }),
           onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
         });

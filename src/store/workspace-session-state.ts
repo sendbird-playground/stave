@@ -1,6 +1,6 @@
 import { type PersistedTurnSummary } from "@/lib/db/turns.db";
 import {
-  type TaskProviderConversationState,
+  type TaskProviderSessionState,
   type WorkspaceShell,
   type WorkspaceSnapshot,
   upsertWorkspace,
@@ -25,8 +25,8 @@ export interface WorkspaceSessionState {
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
-  nativeConversationReadyByTask: Record<string, boolean>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
+  nativeSessionReadyByTask: Record<string, boolean>;
 }
 
 export function createEmptyWorkspaceState() {
@@ -39,20 +39,20 @@ export function createEmptyWorkspaceState() {
     workspaceInformation: createEmptyWorkspaceInformation(),
     editorTabs: [] as EditorTab[],
     activeEditorTabId: null as string | null,
-    providerConversationByTask: {} as Record<string, TaskProviderConversationState>,
+    providerSessionByTask: {} as Record<string, TaskProviderSessionState>,
   };
 }
 
-export function buildNativeConversationReadyByTask(args: {
+export function buildNativeSessionReadyByTask(args: {
   tasks: Task[];
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
   const next: Record<string, boolean> = {};
 
   for (const task of args.tasks) {
-    const providerConversation = args.providerConversationByTask[task.id];
+    const providerSession = args.providerSessionByTask[task.id];
     // stave has no native conversation of its own; treat as not ready
-    next[task.id] = task.provider !== "stave" && Boolean(providerConversation?.[task.provider]?.trim());
+    next[task.id] = task.provider !== "stave" && Boolean(providerSession?.[task.provider]?.trim());
   }
 
   return next;
@@ -205,7 +205,7 @@ export function buildWorkspaceSessionState(args: {
 }): WorkspaceSessionState {
   const empty = createEmptyWorkspaceState();
   const tasks = (args.snapshot?.tasks ?? empty.tasks).map(normalizeTaskControl);
-  const providerConversationByTask = args.snapshot?.providerConversationByTask ?? empty.providerConversationByTask;
+  const providerSessionByTask = args.snapshot?.providerSessionByTask ?? empty.providerSessionByTask;
   const messagesByTask = args.appendInterruptedNotices
     ? appendInterruptedTurnNotices({
         messagesByTask: args.snapshot?.messagesByTask ?? empty.messagesByTask,
@@ -236,10 +236,10 @@ export function buildWorkspaceSessionState(args: {
     editorTabs,
     activeEditorTabId,
     activeTurnIdsByTask,
-    providerConversationByTask,
-    nativeConversationReadyByTask: buildNativeConversationReadyByTask({
+    providerSessionByTask,
+    nativeSessionReadyByTask: buildNativeSessionReadyByTask({
       tasks,
-      providerConversationByTask,
+      providerSessionByTask,
     }),
   };
 }
@@ -253,7 +253,7 @@ export function buildWorkspaceSessionStateFromShell(args: {
 }): WorkspaceSessionState {
   const empty = createEmptyWorkspaceState();
   const tasks = (args.shell?.tasks ?? empty.tasks).map(normalizeTaskControl);
-  const providerConversationByTask = args.shell?.providerConversationByTask ?? empty.providerConversationByTask;
+  const providerSessionByTask = args.shell?.providerSessionByTask ?? empty.providerSessionByTask;
   const loadedMessagesByTask = args.messagesByTask ?? empty.messagesByTask;
   const messagesByTask = args.appendInterruptedNotices
     ? appendInterruptedTurnNotices({
@@ -289,10 +289,10 @@ export function buildWorkspaceSessionStateFromShell(args: {
     editorTabs,
     activeEditorTabId,
     activeTurnIdsByTask,
-    providerConversationByTask,
-    nativeConversationReadyByTask: buildNativeConversationReadyByTask({
+    providerSessionByTask,
+    nativeSessionReadyByTask: buildNativeSessionReadyByTask({
       tasks,
-      providerConversationByTask,
+      providerSessionByTask,
     }),
   };
 }
@@ -305,7 +305,7 @@ export function createWorkspaceSnapshot(args: {
   workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
   return {
     activeTaskId: args.activeTaskId,
@@ -315,7 +315,7 @@ export function createWorkspaceSnapshot(args: {
     workspaceInformation: args.workspaceInformation ?? createEmptyWorkspaceInformation(),
     editorTabs: args.editorTabs,
     activeEditorTabId: args.activeEditorTabId,
-    providerConversationByTask: args.providerConversationByTask,
+    providerSessionByTask: args.providerSessionByTask,
   };
 }
 
@@ -329,7 +329,7 @@ export async function persistWorkspaceSnapshot(args: {
   workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
   await upsertWorkspace({
     id: args.workspaceId,
@@ -342,7 +342,7 @@ export async function persistWorkspaceSnapshot(args: {
       workspaceInformation: args.workspaceInformation,
       editorTabs: args.editorTabs,
       activeEditorTabId: args.activeEditorTabId,
-      providerConversationByTask: args.providerConversationByTask,
+      providerSessionByTask: args.providerSessionByTask,
     }),
   });
 }

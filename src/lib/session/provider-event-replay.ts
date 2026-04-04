@@ -1,4 +1,4 @@
-import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
+import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
 import { sanitizeMessagePartPayload } from "@/lib/file-context-sanitization";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import {
@@ -133,7 +133,7 @@ function shouldFinalizeThinkingBeforeEvent(event: NormalizedProviderEvent) {
     case "thinking":
     case "usage":
     case "prompt_suggestions":
-    case "provider_conversation":
+    case "provider_session":
     case "model_resolved":
     case "done":
       return false;
@@ -309,7 +309,7 @@ function normalizeEventToPart(args: { event: NormalizedProviderEvent }): Message
       return createThinkingPart({ text: event.text, isStreaming: event.isStreaming ?? false });
     case "text":
       return createTextPart({ text: event.text, segmentId: event.segmentId });
-    case "provider_conversation":
+    case "provider_session":
       return null;
     case "tool":
       return createToolPart({
@@ -602,7 +602,7 @@ export function appendProviderEventToAssistant(args: {
     };
   }
 
-  if (args.event.type === "provider_conversation") {
+  if (args.event.type === "provider_session") {
     return message;
   }
 
@@ -824,26 +824,26 @@ export function replayProviderEventsToTaskState(args: {
   provider: ProviderId;
   model: string;
   turnId?: string;
-  nativeConversationReady?: boolean;
-  providerConversation?: TaskProviderConversationState;
+  nativeSessionReady?: boolean;
+  providerSession?: TaskProviderSessionState;
 }) {
   let current = args.messages;
   let nextActiveTurnId = args.turnId;
-  let nextNativeConversationReady = args.nativeConversationReady ?? false;
-  let nextProviderConversation = args.providerConversation;
+  let nextNativeSessionReady = args.nativeSessionReady ?? false;
+  let nextProviderSession = args.providerSession;
   let changed = false;
 
   for (const event of args.events) {
-    if (event.type === "provider_conversation") {
-      if (nextProviderConversation?.[event.providerId] !== event.nativeConversationId) {
-        nextProviderConversation = {
-          ...nextProviderConversation,
-          [event.providerId]: event.nativeConversationId,
+    if (event.type === "provider_session") {
+      if (nextProviderSession?.[event.providerId] !== event.nativeSessionId) {
+        nextProviderSession = {
+          ...nextProviderSession,
+          [event.providerId]: event.nativeSessionId,
         };
         changed = true;
       }
-      if (!nextNativeConversationReady) {
-        nextNativeConversationReady = true;
+      if (!nextNativeSessionReady) {
+        nextNativeSessionReady = true;
         changed = true;
       }
       continue;
@@ -901,9 +901,9 @@ export function replayProviderEventsToTaskState(args: {
       event.type !== "system"
       && event.type !== "error"
       && event.type !== "done"
-      && !nextNativeConversationReady
+      && !nextNativeSessionReady
     ) {
-      nextNativeConversationReady = true;
+      nextNativeSessionReady = true;
     }
 
     if (event.type === "done") {
@@ -915,7 +915,7 @@ export function replayProviderEventsToTaskState(args: {
     changed,
     messages: current,
     activeTurnId: nextActiveTurnId,
-    nativeConversationReady: nextNativeConversationReady,
-    providerConversation: nextProviderConversation,
+    nativeSessionReady: nextNativeSessionReady,
+    providerSession: nextProviderSession,
   };
 }

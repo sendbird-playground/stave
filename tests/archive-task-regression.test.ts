@@ -99,8 +99,8 @@ describe("archive task regression", () => {
         "task-1": "turn-1",
       },
       promptDraftByTask: {},
-      nativeConversationReadyByTask: {},
-      providerConversationByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
     });
 
     useAppStore.getState().archiveTask({ taskId: "task-1" });

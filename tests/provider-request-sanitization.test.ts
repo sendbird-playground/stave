@@ -70,8 +70,8 @@ describe("provider request sanitization", () => {
         "task-1": [],
       },
       activeTurnIdsByTask: {},
-      nativeConversationReadyByTask: {},
-      providerConversationByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
     });
 
     const oversizedImagePayload = `data:image/svg+xml;base64,${"z".repeat(MAX_FILE_CONTEXT_CONTENT_CHARS + 64)}`;
@@ -178,8 +178,8 @@ describe("provider request sanitization", () => {
         ],
       },
       activeTurnIdsByTask: {},
-      nativeConversationReadyByTask: {},
-      providerConversationByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
     });
 
     useAppStore.getState().sendUserMessage({
@@ -271,8 +271,8 @@ describe("provider request sanitization", () => {
         ],
       },
       activeTurnIdsByTask: {},
-      nativeConversationReadyByTask: {},
-      providerConversationByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
     });
 
     useAppStore.getState().sendUserMessage({

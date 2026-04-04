@@ -59,7 +59,7 @@ describe("canonical request builder", () => {
         language: "ts",
         instruction: "Focus on the provider request path.",
       }],
-      nativeConversationId: "thread_123",
+      nativeSessionId: "thread_123",
     });
 
     expect(request.target).toEqual({
@@ -79,7 +79,7 @@ describe("canonical request builder", () => {
       },
     ]);
     expect(request.resume).toEqual({
-      nativeConversationId: "thread_123",
+      nativeSessionId: "thread_123",
     });
   });
 

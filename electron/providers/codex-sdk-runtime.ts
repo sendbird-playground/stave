@@ -5,7 +5,7 @@ import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
   buildProviderTurnPrompt,
-  resolveProviderResumeConversationId,
+  resolveProviderResumeSessionId,
 } from "../../src/lib/providers/provider-request-translators";
 import {
   resolveEffectiveCodexApprovalPolicy,
@@ -165,32 +165,9 @@ function buildThreadKey(args: {
   cwd: string;
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
-  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode ? "plan1" : "plan0";
-  const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccessEnabled
-    ?? parseBooleanEnv({
-      value: process.env.STAVE_CODEX_NETWORK_ACCESS,
-      fallback: true,
-    });
-  const sandboxMode = resolveSandboxMode({
-    runtimeValue: args.runtimeOptions?.codexSandboxMode,
-    envValue: process.env.STAVE_CODEX_SANDBOX_MODE?.trim(),
-    planMode: experimentalPlanMode === "plan1",
-    fallback: "workspace-write",
-  });
-  const approvalPolicy = resolveApprovalPolicy({
-    runtimeValue: args.runtimeOptions?.codexApprovalPolicy,
-    envValue: process.env.STAVE_CODEX_APPROVAL_POLICY?.trim(),
-    planMode: experimentalPlanMode === "plan1",
-    fallback: "on-request",
-  });
-  const skipGitRepoCheck = args.runtimeOptions?.codexSkipGitRepoCheck ? "nogit1" : "nogit0";
-  const model = args.runtimeOptions?.model?.trim() || "model-default";
-  const modelReasoningEffort = args.runtimeOptions?.codexModelReasoningEffort ?? "effort-default";
-  const webSearchMode = args.runtimeOptions?.codexWebSearchMode ?? "websearch-default";
-  const reasoningSummary = args.runtimeOptions?.codexReasoningSummary ?? "summary-auto";
-  const supportsReasoningSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries ?? "supports-auto";
-  const showRawAgentReasoning = args.runtimeOptions?.codexShowRawAgentReasoning ? "raw1" : "raw0";
-  return `${args.taskId ?? "default"}:${args.cwd}:${sandboxMode}:${skipGitRepoCheck}:${networkAccessEnabled ? "net1" : "net0"}:${approvalPolicy ?? "approval-default"}:${model}:${modelReasoningEffort}:${webSearchMode}:${reasoningSummary}:${supportsReasoningSummaries}:${showRawAgentReasoning}:${experimentalPlanMode}`;
+  const model = args.runtimeOptions?.model?.trim() || "default";
+  const mode = args.runtimeOptions?.codexExperimentalPlanMode ? "plan" : "chat";
+  return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}`;
 }
 
 function resolveThreadId(args: { threadKey: string; fallbackThreadId?: string }) {
@@ -203,6 +180,28 @@ function rememberThreadId(args: { threadKey: string; threadId?: string }) {
     return;
   }
   threadIdByTask.set(args.threadKey, nextThreadId);
+}
+
+export function resolveCodexResumeThreadFallback(args: {
+  conversation?: StreamTurnArgs["conversation"];
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  return resolveProviderResumeSessionId({
+    conversation: args.conversation,
+    fallbackResumeId: args.runtimeOptions?.codexResumeThreadId,
+  });
+}
+
+export function buildCodexThreadStartedEvents(args: { threadId?: string }): BridgeEvent[] {
+  const threadId = args.threadId?.trim();
+  if (!threadId) {
+    return [];
+  }
+  return [{
+    type: "provider_session",
+    providerId: "codex",
+    nativeSessionId: threadId,
+  }];
 }
 
 function parseVersionFromStdout(args: { stdout: string }) {
@@ -616,12 +615,10 @@ function ensureThread(args: {
   }
   const resumeThreadId = resolveThreadId({
     threadKey,
-    fallbackThreadId: experimentalPlanMode
-      ? undefined
-      : resolveProviderResumeConversationId({
-        conversation: args.conversation,
-        fallbackResumeId: args.runtimeOptions?.codexResumeThreadId,
-      }),
+    fallbackThreadId: resolveCodexResumeThreadFallback({
+      conversation: args.conversation,
+      runtimeOptions: args.runtimeOptions,
+    }),
   });
   const threadOptions = {
     ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
@@ -888,13 +885,9 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
             threadKey,
             threadId: threadEvent.thread_id,
           });
-          if (!codexExperimentalPlanMode) {
-            emitBridgeEvent({
-              type: "provider_conversation",
-              providerId: "codex",
-              nativeConversationId: threadEvent.thread_id,
-            });
-          }
+          emitBridgeEvents(buildCodexThreadStartedEvents({
+            threadId: threadEvent.thread_id,
+          }));
           break;
         default:
           if (codexDebug) {

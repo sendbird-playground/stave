@@ -1,4 +1,4 @@
-import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
+import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
 import {
   resolveEffectiveCodexApprovalPolicy,
   resolveEffectiveCodexSandboxMode,
@@ -99,9 +99,9 @@ export function buildProviderRuntimeOptions(args: {
   provider: ProviderId;
   model: string;
   settings: RuntimeSettings;
-  providerConversation?: TaskProviderConversationState | null;
+  providerSession?: TaskProviderSessionState | null;
 }): ProviderRuntimeOptions {
-  const { providerConversation, settings } = args;
+  const { providerSession, settings } = args;
   const claudeTaskBudgetTokens = normalizeClaudeTaskBudgetTokens({
     value: settings.claudeTaskBudgetTokens,
   });
@@ -129,15 +129,15 @@ export function buildProviderRuntimeOptions(args: {
     claudeFastMode: settings.claudeFastMode,
     ...(args.provider === "stave"
       ? {
-          ...(providerConversation?.["claude-code"]?.trim()
-            ? { claudeResumeSessionId: providerConversation["claude-code"] }
+          ...(providerSession?.["claude-code"]?.trim()
+            ? { claudeResumeSessionId: providerSession["claude-code"] }
             : {}),
-          ...(providerConversation?.codex?.trim()
-            ? { codexResumeThreadId: providerConversation.codex }
+          ...(providerSession?.codex?.trim()
+            ? { codexResumeThreadId: providerSession.codex }
             : {}),
         }
-      : args.provider === "claude-code" && providerConversation?.["claude-code"]?.trim()
-        ? { claudeResumeSessionId: providerConversation["claude-code"] }
+      : args.provider === "claude-code" && providerSession?.["claude-code"]?.trim()
+        ? { claudeResumeSessionId: providerSession["claude-code"] }
         : {}),
     codexSandboxMode: resolveEffectiveCodexSandboxMode({
       sandboxMode: settings.codexSandboxMode,
@@ -161,8 +161,8 @@ export function buildProviderRuntimeOptions(args: {
     codexSupportsReasoningSummaries: settings.codexSupportsReasoningSummaries,
     codexFastMode: settings.codexFastMode,
     codexExperimentalPlanMode: settings.codexExperimentalPlanMode,
-    ...(args.provider === "codex" && providerConversation?.codex?.trim()
-      ? { codexResumeThreadId: providerConversation.codex }
+    ...(args.provider === "codex" && providerSession?.codex?.trim()
+      ? { codexResumeThreadId: providerSession.codex }
       : {}),
     staveAuto: buildStaveAutoProfileFromSettings({
       settings,

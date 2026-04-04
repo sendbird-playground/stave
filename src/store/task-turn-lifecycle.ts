@@ -1,4 +1,4 @@
-import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
+import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 import {
@@ -33,7 +33,7 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
   workspaceName: string;
   applyInterruptedState: (args: {
     messagesByTask: Record<string, ChatMessage[]>;
@@ -82,7 +82,7 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
     workspaceInformation: args.workspaceInformation,
     editorTabs: args.editorTabs,
     activeEditorTabId: args.activeEditorTabId,
-    providerConversationByTask: args.providerConversationByTask,
+    providerSessionByTask: args.providerSessionByTask,
   });
 
   return interrupted.interruptedTaskIds;

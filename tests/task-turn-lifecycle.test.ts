@@ -86,7 +86,7 @@ describe("interruptWorkspaceTurnsBeforeTransition", () => {
         "task-a": "turn-a",
         "task-b": "turn-b",
       },
-      providerConversationByTask: {},
+      providerSessionByTask: {},
       workspaceName: "Main",
       applyInterruptedState: (args) => {
         appliedStates.push(args);

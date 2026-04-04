@@ -174,7 +174,7 @@ export function buildCanonicalConversationRequest(args: {
     mimeType: string;
   }>;
   skillContexts?: SkillPromptContext[];
-  nativeConversationId?: string | null;
+  nativeSessionId?: string | null;
   retrievedContextParts?: CanonicalRetrievedContextPart[];
 }): CanonicalConversationRequest {
   const contextParts: CanonicalConversationRequest["contextParts"] = [];
@@ -229,8 +229,8 @@ export function buildCanonicalConversationRequest(args: {
         : [],
     },
     contextParts,
-    resume: args.nativeConversationId?.trim()
-      ? { nativeConversationId: args.nativeConversationId.trim() }
+    resume: args.nativeSessionId?.trim()
+      ? { nativeSessionId: args.nativeSessionId.trim() }
       : undefined,
   };
 }

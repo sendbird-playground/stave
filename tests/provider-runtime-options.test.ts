@@ -58,7 +58,7 @@ describe("buildProviderRuntimeOptions", () => {
         codexSandboxMode: "danger-full-access",
         codexExperimentalPlanMode: true,
       },
-      providerConversation: null,
+      providerSession: null,
     })).toMatchObject({
       model: "gpt-5.4",
       codexApprovalPolicy: "never",
@@ -72,7 +72,7 @@ describe("buildProviderRuntimeOptions", () => {
       provider: "stave",
       model: "stave-auto",
       settings,
-      providerConversation: {
+      providerSession: {
         "claude-code": "claude-session-1",
         codex: "codex-thread-1",
       },
@@ -90,7 +90,7 @@ describe("buildProviderRuntimeOptions", () => {
       provider: "claude-code",
       model: "claude-sonnet-4-6",
       settings,
-      providerConversation: {
+      providerSession: {
         "claude-code": "claude-session-1",
         codex: "codex-thread-1",
       },
@@ -103,7 +103,7 @@ describe("buildProviderRuntimeOptions", () => {
       provider: "codex",
       model: "gpt-5.4",
       settings,
-      providerConversation: {
+      providerSession: {
         "claude-code": "claude-session-1",
         codex: "codex-thread-1",
       },

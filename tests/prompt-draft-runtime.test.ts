@@ -67,7 +67,7 @@ describe("prompt-draft runtime state", () => {
             },
           },
         },
-        providerConversationByTask: {},
+        providerSessionByTask: {},
         editorTabs: [],
         activeEditorTabId: null,
       },

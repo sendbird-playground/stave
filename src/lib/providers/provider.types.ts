@@ -137,14 +137,14 @@ export interface CanonicalConversationRequest {
   input: CanonicalConversationMessage & { role: "user" };
   contextParts: Array<FileContextPart | CanonicalRetrievedContextPart | ImageContextPart | CanonicalSkillContextPart>;
   resume?: {
-    nativeConversationId?: string;
+    nativeSessionId?: string;
   };
 }
 
 export type NormalizedProviderEvent =
   | { type: "thinking"; text: string; isStreaming?: boolean }
   | { type: "text"; text: string; segmentId?: string }
-  | { type: "provider_conversation"; providerId: ProviderId; nativeConversationId: string }
+  | { type: "provider_session"; providerId: ProviderId; nativeSessionId: string }
   | {
     type: "usage";
     inputTokens: number;

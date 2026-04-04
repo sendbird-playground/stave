@@ -1,5 +1,5 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
-import { buildProviderTurnPrompt, resolveProviderResumeConversationId } from "../../src/lib/providers/provider-request-translators";
+import { buildProviderTurnPrompt, resolveProviderResumeSessionId } from "../../src/lib/providers/provider-request-translators";
 import {
   MAX_PROVIDER_APPROVAL_DESCRIPTION_CHARS,
   sanitizeTextField,
@@ -731,9 +731,9 @@ export function mapClaudeMessageToEvents(args: {
     }
     if (sysMsg.subtype === "init" && typeof sysMsg.session_id === "string" && sysMsg.session_id.trim()) {
       return [{
-        type: "provider_conversation",
+        type: "provider_session",
         providerId: "claude-code",
-        nativeConversationId: sysMsg.session_id,
+        nativeSessionId: sysMsg.session_id,
       }];
     }
     if (sysMsg.subtype === "compact_boundary") {
@@ -1247,7 +1247,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
 
     const existingSessionId = resolveSessionId({
       taskId: args.taskId,
-      fallbackSessionId: resolveProviderResumeConversationId({
+      fallbackSessionId: resolveProviderResumeSessionId({
         conversation: args.conversation,
         fallbackResumeId: args.runtimeOptions?.claudeResumeSessionId,
       }),
