@@ -3,6 +3,7 @@ import {
   type TaskProviderSessionState,
   type WorkspaceShell,
   type WorkspaceSnapshot,
+  loadWorkspaceShell,
   upsertWorkspace,
 } from "@/lib/db/workspaces.db";
 import { normalizeTaskControl } from "@/lib/tasks";
@@ -331,18 +332,48 @@ export async function persistWorkspaceSnapshot(args: {
   activeEditorTabId: string | null;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
+  const persistedShell = await loadWorkspaceShell({ workspaceId: args.workspaceId });
+  const nextTaskIds = new Set(args.tasks.map((task) => task.id));
+  const preservedTasks = (persistedShell?.tasks ?? []).filter((task) => !nextTaskIds.has(task.id));
+  const mergedTasks = preservedTasks.length > 0
+    ? [...args.tasks, ...preservedTasks]
+    : args.tasks;
+  const mergedTaskIds = new Set(mergedTasks.map((task) => task.id));
+  const mergedActiveTaskId = mergedTaskIds.has(args.activeTaskId)
+    ? args.activeTaskId
+    : (
+      persistedShell?.activeTaskId && mergedTaskIds.has(persistedShell.activeTaskId)
+        ? persistedShell.activeTaskId
+        : (mergedTasks[0]?.id ?? "")
+    );
+  const mergedPromptDraftByTask = {
+    ...(persistedShell?.promptDraftByTask ?? {}),
+    ...args.promptDraftByTask,
+  };
+  const mergedProviderSessionByTask = {
+    ...(persistedShell?.providerSessionByTask ?? {}),
+    ...args.providerSessionByTask,
+  };
+
+  if (preservedTasks.length > 0) {
+    console.warn("[persistence] shrink guard preserved missing tasks during workspace snapshot persist", {
+      workspaceId: args.workspaceId,
+      taskIds: preservedTasks.map((task) => task.id),
+    });
+  }
+
   await upsertWorkspace({
     id: args.workspaceId,
     name: args.workspaceName,
     snapshot: createWorkspaceSnapshot({
-      activeTaskId: args.activeTaskId,
-      tasks: args.tasks,
+      activeTaskId: mergedActiveTaskId,
+      tasks: mergedTasks,
       messagesByTask: args.messagesByTask,
-      promptDraftByTask: args.promptDraftByTask,
+      promptDraftByTask: mergedPromptDraftByTask,
       workspaceInformation: args.workspaceInformation,
       editorTabs: args.editorTabs,
       activeEditorTabId: args.activeEditorTabId,
-      providerSessionByTask: args.providerSessionByTask,
+      providerSessionByTask: mergedProviderSessionByTask,
     }),
   });
 }

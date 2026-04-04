@@ -331,6 +331,178 @@ describe("SqliteStore", () => {
     store.close();
   });
 
+  nativeSqliteTest("keeps tasks and messages when a later snapshot omits existing tasks", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+
+    store.upsertWorkspace({
+      id: "ws-1",
+      name: "Workspace One",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [
+          {
+            id: "task-1",
+            title: "Task One",
+            provider: "claude-code",
+            updatedAt: "2026-03-06T00:00:00.000Z",
+            unread: false,
+          },
+          {
+            id: "task-2",
+            title: "Task Two",
+            provider: "codex",
+            updatedAt: "2026-03-06T00:10:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-1": [
+            {
+              id: "m-1",
+              role: "user",
+              model: "user",
+              providerId: "user",
+              content: "hello",
+              isStreaming: false,
+              parts: [{ type: "text", text: "hello" }],
+            },
+          ],
+          "task-2": [
+            {
+              id: "m-2",
+              role: "assistant",
+              model: "gpt-5.4",
+              providerId: "codex",
+              content: "keep me",
+              isStreaming: false,
+              parts: [{ type: "text", text: "keep me" }],
+            },
+          ],
+        },
+      },
+    });
+
+    store.upsertWorkspace({
+      id: "ws-1",
+      name: "Workspace One",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [
+          {
+            id: "task-1",
+            title: "Task One",
+            provider: "claude-code",
+            updatedAt: "2026-03-06T00:20:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-1": [
+            {
+              id: "m-1",
+              role: "user",
+              model: "user",
+              providerId: "user",
+              content: "hello",
+              isStreaming: false,
+              parts: [{ type: "text", text: "hello" }],
+            },
+            {
+              id: "m-3",
+              role: "assistant",
+              model: "claude-opus-4-6",
+              providerId: "claude-code",
+              content: "updated",
+              isStreaming: false,
+              parts: [{ type: "text", text: "updated" }],
+            },
+          ],
+        },
+      },
+    });
+
+    const persistedTasks = store.listWorkspaceTasks({ workspaceId: "ws-1" });
+    const shell = store.loadWorkspaceShell({ workspaceId: "ws-1" });
+    const taskTwoMessages = store.loadTaskMessagesPage({
+      workspaceId: "ws-1",
+      taskId: "task-2",
+      limit: 10,
+      offset: 0,
+    });
+    const snapshot = store.loadWorkspaceSnapshot({ workspaceId: "ws-1" });
+
+    expect(persistedTasks.map((task) => task.id)).toEqual(["task-1", "task-2"]);
+    expect(shell?.tasks.map((task) => task.id)).toEqual(["task-1", "task-2"]);
+    expect(taskTwoMessages?.messages.map((message) => message.id)).toEqual(["m-2"]);
+    expect(snapshot?.tasks.map((task) => task.id)).toEqual(["task-1", "task-2"]);
+
+    store.close();
+  });
+
+  nativeSqliteTest("removes task state only through explicit task removal", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+
+    store.upsertWorkspace({
+      id: "ws-1",
+      name: "Workspace One",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [
+          {
+            id: "task-1",
+            title: "Task One",
+            provider: "claude-code",
+            updatedAt: "2026-03-06T00:00:00.000Z",
+            unread: false,
+          },
+          {
+            id: "task-2",
+            title: "Task Two",
+            provider: "codex",
+            updatedAt: "2026-03-06T00:10:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-1": [],
+          "task-2": [
+            {
+              id: "m-2",
+              role: "assistant",
+              model: "gpt-5.4",
+              providerId: "codex",
+              content: "remove me",
+              isStreaming: false,
+              parts: [{ type: "text", text: "remove me" }],
+            },
+          ],
+        },
+      },
+    });
+
+    store.removeTaskFromWorkspace({ workspaceId: "ws-1", taskId: "task-2" });
+
+    const persistedTasks = store.listWorkspaceTasks({ workspaceId: "ws-1" });
+    const shell = store.loadWorkspaceShell({ workspaceId: "ws-1" });
+    const taskTwoMessages = store.loadTaskMessagesPage({
+      workspaceId: "ws-1",
+      taskId: "task-2",
+      limit: 10,
+      offset: 0,
+    });
+    const snapshot = store.loadWorkspaceSnapshot({ workspaceId: "ws-1" });
+
+    expect(persistedTasks.map((task) => task.id)).toEqual(["task-1"]);
+    expect(shell?.tasks.map((task) => task.id)).toEqual(["task-1"]);
+    expect(taskTwoMessages?.messages).toEqual([]);
+    expect(snapshot?.tasks.map((task) => task.id)).toEqual(["task-1"]);
+    expect(snapshot?.messagesByTask["task-2"]).toBeUndefined();
+
+    store.close();
+  });
+
   nativeSqliteTest("keeps request snapshots in the journal without inflating visible event counts", async () => {
     const SqliteStore = await loadSqliteStore();
     const store = new SqliteStore({ dbPath });
