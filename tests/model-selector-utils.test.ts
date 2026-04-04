@@ -3,6 +3,7 @@ import {
   buildModelSelectorOptions,
   buildRecommendedModelSelectorOptions,
   buildModelSelectorValue,
+  shouldOpenModelSelector,
 } from "@/components/ai-elements/model-selector.utils";
 
 describe("model selector utils", () => {
@@ -59,9 +60,31 @@ describe("model selector utils", () => {
     });
 
     expect(buildRecommendedModelSelectorOptions({ options }).map((option) => option.key)).toEqual([
-      "claude-code:opusplan",
+      "claude-code:claude-opus-4-6",
       "codex:gpt-5.4",
       "stave:stave-auto",
     ]);
+  });
+
+  test("opens the selector only for a new open token", () => {
+    expect(shouldOpenModelSelector({
+      openToken: 1,
+      disabled: false,
+      lastHandledOpenToken: undefined,
+    })).toBe(true);
+
+    expect(shouldOpenModelSelector({
+      openToken: 1,
+      disabled: false,
+      lastHandledOpenToken: 1,
+    })).toBe(false);
+  });
+
+  test("does not open the selector while interactions are disabled", () => {
+    expect(shouldOpenModelSelector({
+      openToken: 2,
+      disabled: true,
+      lastHandledOpenToken: undefined,
+    })).toBe(false);
   });
 });
