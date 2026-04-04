@@ -404,6 +404,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     const runCommand = window.api?.terminal?.runCommand;
     const createPR = window.api?.sourceControl?.createPR;
     const openExternal = window.api?.shell?.openExternal;
+    const runAutomationHook = window.api?.automations?.runHook;
     const selectedTargetBranch = targetBranch.trim() || defaultBaseBranch;
 
     if (!runCommand || !createPR) {
@@ -513,6 +514,34 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       });
     }
 
+    if (runAutomationHook && activeWorkspaceId && projectPath) {
+      setStep("action");
+      setInlineNotice({
+        tone: "info",
+        title: "Running PR preflight",
+        description: "Executing configured `pr.beforeOpen` automations before push and PR creation.",
+      });
+      const hookResult = await runAutomationHook({
+        workspaceId: activeWorkspaceId,
+        trigger: "pr.beforeOpen",
+        projectPath,
+        workspacePath: workspaceCwd,
+        workspaceName: currentBranch ?? "workspace",
+        branch: currentBranch ?? selectedTargetBranch,
+      });
+      if (!hookResult.ok) {
+        setInlineNotice({
+          tone: "error",
+          title: "PR preflight failed",
+          description: hookResult.error
+            ?? hookResult.summary?.failures.map((failure) => `${failure.automationId}: ${failure.message}`).join(" ")
+            ?? "Configured pre-open automations failed.",
+        });
+        setStep("ready");
+        return;
+      }
+    }
+
     // Step 2: Push
     setStep("pushing");
     setInlineNotice({
@@ -566,6 +595,24 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
     // Refresh PR status to pick up the new PR
     fetchStatus();
+
+    if (runAutomationHook && activeWorkspaceId && projectPath) {
+      const hookResult = await runAutomationHook({
+        workspaceId: activeWorkspaceId,
+        trigger: "pr.afterOpen",
+        projectPath,
+        workspacePath: workspaceCwd,
+        workspaceName: currentBranch ?? "workspace",
+        branch: currentBranch ?? selectedTargetBranch,
+      });
+      if (!hookResult.ok) {
+        toast.warning("Post-PR automations reported failures", {
+          description: hookResult.error
+            ?? hookResult.summary?.failures.map((failure) => `${failure.automationId}: ${failure.message}`).join(" ")
+            ?? "Configured `pr.afterOpen` automations failed.",
+        });
+      }
+    }
 
     if (prResult.prUrl && openExternal) {
       try {

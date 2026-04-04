@@ -49,6 +49,65 @@ export const CreatePRArgsSchema = z
   })
   .strict();
 
+const AutomationKindSchema = z.union([z.literal("action"), z.literal("service")]);
+const AutomationTriggerSchema = z.union([
+  z.literal("workspace.created"),
+  z.literal("workspace.archiving"),
+  z.literal("pr.beforeOpen"),
+  z.literal("pr.afterOpen"),
+]);
+
+export const WorkspaceAutomationsGetConfigArgsSchema = z
+  .object({
+    projectPath: z.string().min(1).max(4096),
+    workspacePath: z.string().min(1).max(4096),
+    userOverridePath: z.string().max(4096).optional(),
+  })
+  .strict();
+
+export const WorkspaceAutomationsGetStatusArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+  })
+  .strict();
+
+export const WorkspaceAutomationsRunEntryArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+    automationId: z.string().min(1).max(200),
+    automationKind: AutomationKindSchema,
+    projectPath: z.string().min(1).max(4096),
+    workspacePath: z.string().min(1).max(4096),
+    workspaceName: z.string().min(1).max(200),
+    branch: z.string().min(1).max(200),
+  })
+  .strict();
+
+export const WorkspaceAutomationsStopEntryArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+    automationId: z.string().min(1).max(200),
+    automationKind: AutomationKindSchema,
+  })
+  .strict();
+
+export const WorkspaceAutomationsRunHookArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+    trigger: AutomationTriggerSchema,
+    projectPath: z.string().min(1).max(4096),
+    workspacePath: z.string().min(1).max(4096),
+    workspaceName: z.string().min(1).max(200),
+    branch: z.string().min(1).max(200),
+  })
+  .strict();
+
+export const WorkspaceAutomationsStopAllArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+  })
+  .strict();
+
 export const GetPrStatusByUrlArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),

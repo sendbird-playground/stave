@@ -1,26 +1,23 @@
 // ---------------------------------------------------------------------------
-// Workspace Lifecycle Scripts – Electron Main Process Public API
+// Workspace Automations – Electron Main Public API
 // ---------------------------------------------------------------------------
 
 export {
-  resolveScriptsForWorkspace,
-  BaseConfigSchema,
-  LocalConfigSchema,
-  type ResolveScriptsArgs,
+  resolveAutomationsForWorkspace,
+  AutomationsConfigSchema,
+  AutomationsLocalConfigSchema,
+  type ResolveAutomationsArgs,
 } from "./config-loader";
 
 export {
-  runFinitePhase,
-  runLongRunningPhase,
-  stopPhase,
-  getPhaseStatus,
-  getAllPhaseStatuses,
-  cleanupAllScriptProcesses,
-  type RunPhaseArgs,
-  type RunLongRunningPhaseArgs,
-  type PhaseStatus,
+  cleanupAllAutomationProcesses,
+  getAutomationStatuses,
+  runAutomationEntry,
+  runAutomationHook,
+  stopAllWorkspaceAutomationProcesses,
+  stopAutomationEntry,
 } from "./executor";
 
 export {
-  type WorkspaceScriptProcess,
+  type WorkspaceAutomationProcess,
 } from "./state";

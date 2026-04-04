@@ -2450,6 +2450,26 @@ export const useAppStore = create<AppState>()(
           }
         }
 
+        const runAutomationHook = window.api?.automations?.runHook;
+        if (runAutomationHook) {
+          const automationResult = await runAutomationHook({
+            workspaceId,
+            trigger: "workspace.created",
+            projectPath: current.projectPath,
+            workspacePath,
+            workspaceName: branchName,
+            branch: branchName,
+          });
+          if (automationResult.summary?.totalEntries) {
+            creationNotices.push({
+              level: automationResult.ok ? "success" : "warning",
+              message: automationResult.ok
+                ? `Ran ${automationResult.summary.executedEntries} workspace create automation${automationResult.summary.executedEntries === 1 ? "" : "s"}.`
+                : `Workspace create automations reported failures. ${automationResult.summary.failures.map((failure) => `${failure.automationId}: ${failure.message}`).join(" ")}`,
+            });
+          }
+        }
+
         try {
           files = await workspaceFsAdapter.listFiles();
         } catch {
@@ -2673,6 +2693,24 @@ export const useAppStore = create<AppState>()(
         const workspaceBranch = state.workspaceBranchById[workspaceId];
         const projectPath = state.projectPath;
         const runner = window.api?.terminal?.runCommand;
+        const runAutomationHook = window.api?.automations?.runHook;
+        const stopWorkspaceAutomations = window.api?.automations?.stopAll;
+        if (runAutomationHook && projectPath && workspacePath && workspaceBranch) {
+          const hookResult = await runAutomationHook({
+            workspaceId,
+            trigger: "workspace.archiving",
+            projectPath,
+            workspacePath,
+            workspaceName: workspace?.name ?? workspaceBranch,
+            branch: workspaceBranch,
+          });
+          if (!hookResult.ok && hookResult.summary?.failures.length) {
+            console.warn("[workspace-automations] archive hook failures", hookResult.summary.failures);
+          }
+        }
+        if (stopWorkspaceAutomations) {
+          await stopWorkspaceAutomations({ workspaceId });
+        }
         if (runner && projectPath && workspacePath) {
           const removeResult = await runner({
             cwd: projectPath,

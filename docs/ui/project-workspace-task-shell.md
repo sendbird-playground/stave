@@ -84,6 +84,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
+  - exposes a dedicated Automation panel for workspace actions, services, hook inspection, and spotlight-style controls
   - exposes a workspace information panel with shared accordion sections, a distinct summary card, URL-first Jira/Figma/GitHub integrations, notes, todos, saved plans, and custom structured fields
   - surfaces workspace-level plan history from markdown files under `.stave/context/plans`, while still showing legacy `.stave/plans` files
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`
@@ -105,6 +106,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
 - `moveProjectInList()` and `moveWorkspaceInProjectList()` allow explicit sidebar ordering without auto-reordering on selection.
 - `reorderTasks()` persists manual task ordering within the active, archived, or all-task filter views.
 - `restoreTask()` re-activates archived tasks from workspace task history.
+- Workspace automations now run from `.stave/automations.json`, with hook entry points for workspace creation, workspace archiving, and PR creation flows.
 
 ### Files Changed
 
@@ -125,6 +127,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
 - Task archive from tab close should preserve history.
 - Project removal should not touch filesystem data.
 - Explorer / editor / terminal actions should still work from the right rail.
+- Automation actions and services should be runnable from the right rail, and PR/workspace lifecycle hooks should execute without blocking unrelated flows unless configured to fail the action.
 - Workspace information should persist across workspace switches and app restart.
 - On narrow widths, task tabs should stay visible while the compact rail remains pinned and right-side panels reduce the remaining workspace width from the top of the shell.
 - Explorer refresh should invalidate cached folder entries and repopulate the currently expanded folders.

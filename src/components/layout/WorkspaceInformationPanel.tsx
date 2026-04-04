@@ -1082,18 +1082,11 @@ export function WorkspaceInformationPanel() {
 
   return (
     <div
-      className="flex flex-col origin-top-left"
+      className="flex h-full min-h-0 flex-col overflow-auto origin-top-left"
       style={infoPanelScale !== 1 ? { zoom: infoPanelScale } : undefined}
     >
-      {/* ── Panel header ─────────────────────────────────────── */}
-      <header className="px-3 pt-3 pb-2.5">
-        <h2 className="font-heading text-lg font-medium text-foreground">
-          Information
-        </h2>
-      </header>
-
       {/* ── Accordion sections ───────────────────────────────── */}
-      <div className="px-2">
+      <div className="px-2 py-2">
         <Accordion
           type="multiple"
           value={openSections}

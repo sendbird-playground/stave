@@ -23,6 +23,14 @@ import type {
   ToolingStatusRequest,
   ToolingStatusSnapshot,
 } from "../src/lib/tooling-status";
+import type {
+  AutomationKind,
+  AutomationTrigger,
+  ResolvedWorkspaceAutomationsConfig,
+  WorkspaceAutomationEventEnvelope,
+  WorkspaceAutomationHookRunSummary,
+  WorkspaceAutomationStatusEntry,
+} from "../src/lib/workspace-scripts/types";
 
 interface ProviderSlashCommand {
   name: string;
@@ -97,6 +105,18 @@ ipcRenderer.on(
   "terminal:session-output",
   (_event, payload: TerminalSessionOutputPayload) => {
     for (const subscriber of terminalSessionOutputSubscribers) {
+      subscriber(payload);
+    }
+  },
+);
+
+const workspaceAutomationEventSubscribers = new Set<
+  (payload: WorkspaceAutomationEventEnvelope) => void
+>();
+ipcRenderer.on(
+  "workspace-automations:event",
+  (_event, payload: WorkspaceAutomationEventEnvelope) => {
+    for (const subscriber of workspaceAutomationEventSubscribers) {
       subscriber(payload);
     }
   },
@@ -508,6 +528,74 @@ contextBridge.exposeInMainWorld("api", {
         "tooling:sync-origin-main",
         args,
       ) as Promise<SyncOriginMainResult>,
+  },
+  automations: {
+    getConfig: (args: {
+      projectPath: string;
+      workspacePath: string;
+      userOverridePath?: string;
+    }) =>
+      ipcRenderer.invoke("workspace-automations:get-config", args) as Promise<{
+        ok: boolean;
+        error?: string;
+        config: ResolvedWorkspaceAutomationsConfig | null;
+      }>,
+    getStatus: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("workspace-automations:get-status", args) as Promise<{
+        ok: boolean;
+        error?: string;
+        statuses: WorkspaceAutomationStatusEntry[];
+      }>,
+    runEntry: (args: {
+      workspaceId: string;
+      automationId: string;
+      automationKind: AutomationKind;
+      projectPath: string;
+      workspacePath: string;
+      workspaceName: string;
+      branch: string;
+    }) =>
+      ipcRenderer.invoke("workspace-automations:run-entry", args) as Promise<{
+        ok: boolean;
+        runId?: string;
+        sessionId?: string;
+        exitCode?: number;
+        alreadyRunning?: boolean;
+        error?: string;
+      }>,
+    stopEntry: (args: {
+      workspaceId: string;
+      automationId: string;
+      automationKind: AutomationKind;
+    }) =>
+      ipcRenderer.invoke("workspace-automations:stop-entry", args) as Promise<{
+        ok: boolean;
+        error?: string;
+      }>,
+    runHook: (args: {
+      workspaceId: string;
+      trigger: AutomationTrigger;
+      projectPath: string;
+      workspacePath: string;
+      workspaceName: string;
+      branch: string;
+    }) =>
+      ipcRenderer.invoke("workspace-automations:run-hook", args) as Promise<{
+        ok: boolean;
+        error?: string;
+        summary: WorkspaceAutomationHookRunSummary | null;
+      }>,
+    stopAll: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("workspace-automations:stop-all", args) as Promise<{
+        ok: boolean;
+        error?: string;
+      }>,
+    subscribeEvents: (listener: (payload: WorkspaceAutomationEventEnvelope) => void) => {
+      workspaceAutomationEventSubscribers.add(listener);
+      return () => {
+        workspaceAutomationEventSubscribers.delete(listener);
+      };
+    },
   },
   sourceControl: {
     getStatus: (args: { cwd?: string }) =>
