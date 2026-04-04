@@ -701,7 +701,7 @@ export function AppShell() {
       </RenderProfiler>
       {!workspaceSidebarCollapsed ? (
         <div
-          className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
+          className="group relative hidden w-[9px] -mx-[4px] z-50 shrink-0 cursor-col-resize lg:block"
           onMouseDown={(event) => {
             event.preventDefault();
             setSidebarResizing(true);
