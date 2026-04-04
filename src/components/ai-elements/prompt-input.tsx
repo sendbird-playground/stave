@@ -29,6 +29,7 @@ interface PromptInputProps {
   focusToken?: string;
   selectedModel: ModelSelectorOption;
   modelOptions: readonly ModelSelectorOption[];
+  recommendedModelOptions?: readonly ModelSelectorOption[];
   attachedFilePaths: string[];
   attachments?: Attachment[];
   promptHistoryEntries?: readonly string[];
@@ -49,6 +50,9 @@ interface PromptInputProps {
   onOpenFileSelector?: () => void;
   onAttachmentsChange?: (args: { attachments: Attachment[] }) => void;
   onPermissionModeChange?: (value: PermissionModeValue) => void;
+  effortLabel?: string;
+  effortValue?: string;
+  onEffortCycle?: () => void;
   fastMode?: boolean;
   onFastModeChange?: (enabled: boolean) => void;
   planMode?: boolean;
@@ -87,6 +91,7 @@ export function PromptInput(args: PromptInputProps) {
     value,
     selectedModel,
     modelOptions,
+    recommendedModelOptions,
     attachedFilePaths,
     attachments,
     promptHistoryEntries,
@@ -107,6 +112,9 @@ export function PromptInput(args: PromptInputProps) {
     onOpenFileSelector,
     onAttachmentsChange,
     onPermissionModeChange,
+    effortLabel,
+    effortValue,
+    onEffortCycle,
     fastMode,
     onFastModeChange,
     planMode,
@@ -915,6 +923,7 @@ export function PromptInput(args: PromptInputProps) {
           <ModelSelector
             value={selectedModel}
             options={modelOptions}
+            recommendedOptions={recommendedModelOptions}
             disabled={interactionsDisabled}
             onSelect={({ selection }) => onModelSelect({ selection })}
           />
@@ -995,6 +1004,30 @@ export function PromptInput(args: PromptInputProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{`Thinking: ${thinkingMode ?? "adaptive"}`}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          {onEffortCycle && effortLabel ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={interactionsDisabled}
+                  onClick={() => onEffortCycle()}
+                  className={cn(
+                    PROMPT_TOOLBAR_BUTTON,
+                    (effortValue === "medium" || effortValue === "high" || effortValue === "xhigh" || effortValue === "max")
+                      ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                      : undefined,
+                    interactionsDisabled && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <Sparkles className="size-3.5" />
+                  <span>{effortLabel}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{`Effort: ${effortLabel} — click to cycle`}</TooltipContent>
             </Tooltip>
           ) : null}
           {hasControlsDrawerContent ? (

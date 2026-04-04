@@ -175,15 +175,6 @@ export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): 
           patch: { claudeThinkingMode: value as typeof args.claudeThinkingMode },
         }),
       },
-      {
-        id: "effort",
-        label: "Effort",
-        value: args.claudeEffort,
-        options: CLAUDE_EFFORT_OPTIONS,
-        onSelect: (value: string) => args.updateSettings({
-          patch: { claudeEffort: value as typeof args.claudeEffort },
-        }),
-      },
     ];
   }
 
@@ -198,15 +189,6 @@ export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): 
       }),
     },
     {
-      id: "effort",
-      label: "Effort",
-      value: args.codexModelReasoningEffort,
-      options: CODEX_EFFORT_OPTIONS,
-      onSelect: (value: string) => args.updateSettings({
-        patch: { codexModelReasoningEffort: value as typeof args.codexModelReasoningEffort },
-      }),
-    },
-    {
       id: "web-search",
       label: "Web Search",
       value: args.codexWebSearchMode,
@@ -216,6 +198,40 @@ export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): 
       }),
     },
   ];
+}
+
+const CLAUDE_EFFORT_CYCLE_ORDER = CLAUDE_EFFORT_OPTIONS.map((option) => option.value);
+const CODEX_EFFORT_CYCLE_ORDER = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "minimal",
+] as const satisfies readonly AppSettings["codexModelReasoningEffort"][];
+
+function cycleOptionValue<T extends string>(args: {
+  current: T;
+  order: readonly T[];
+}) {
+  const index = args.order.indexOf(args.current);
+  if (index < 0) {
+    return args.order[0];
+  }
+  return args.order[(index + 1) % args.order.length] ?? args.order[0];
+}
+
+export function cycleClaudeEffortValue(current: AppSettings["claudeEffort"]) {
+  return cycleOptionValue({
+    current,
+    order: CLAUDE_EFFORT_CYCLE_ORDER,
+  });
+}
+
+export function cycleCodexEffortValue(current: AppSettings["codexModelReasoningEffort"]) {
+  return cycleOptionValue({
+    current,
+    order: CODEX_EFFORT_CYCLE_ORDER,
+  });
 }
 
 export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): PromptInputRuntimeStatusItem[] {

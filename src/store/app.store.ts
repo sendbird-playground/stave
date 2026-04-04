@@ -806,7 +806,7 @@ const defaultSettings: AppSettings = {
   notificationSoundCustomAudioName: null,
   providerDebugStream: false,
   providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
-  claudePermissionMode: "acceptEdits",
+  claudePermissionMode: "auto",
   claudePermissionModeBeforePlan: null,
   claudeAllowDangerouslySkipPermissions: false,
   claudeSandboxEnabled: false,
