@@ -1,0 +1,62 @@
+import { describe, expect, test } from "bun:test";
+import { collectClipboardFiles, partitionClipboardFiles } from "../src/components/ai-elements/prompt-input.clipboard";
+
+function createFile(args: {
+  name: string;
+  type: string;
+  path?: string;
+}) {
+  const file = new File(["content"], args.name, { type: args.type });
+  if (args.path) {
+    Object.defineProperty(file, "path", {
+      value: args.path,
+      configurable: true,
+    });
+  }
+  return file;
+}
+
+describe("collectClipboardFiles", () => {
+  test("includes files from clipboard items and files", () => {
+    const textFile = createFile({ name: "notes.txt", type: "text/plain", path: "/repo/notes.txt" });
+    const imageFile = createFile({ name: "capture.png", type: "image/png" });
+
+    const files = collectClipboardFiles({
+      items: [
+        {
+          getAsFile: () => textFile,
+        },
+      ],
+      files: [imageFile],
+    });
+
+    expect(files).toEqual([textFile, imageFile]);
+  });
+
+  test("dedupes the same clipboard file across items and file list", () => {
+    const textFile = createFile({ name: "notes.txt", type: "text/plain", path: "/repo/notes.txt" });
+
+    const files = collectClipboardFiles({
+      items: [
+        {
+          getAsFile: () => textFile,
+        },
+      ],
+      files: [textFile],
+    });
+
+    expect(files).toEqual([textFile]);
+  });
+});
+
+describe("partitionClipboardFiles", () => {
+  test("separates images from non-image files", () => {
+    const imageFile = createFile({ name: "capture.png", type: "image/png" });
+    const textFile = createFile({ name: "notes.txt", type: "text/plain" });
+
+    expect(partitionClipboardFiles([imageFile, textFile])).toEqual({
+      imageFiles: [imageFile],
+      nonImageFiles: [textFile],
+    });
+  });
+});

@@ -12,6 +12,9 @@ function createContext(
   return {
     activeEditorTabId: "editor-1",
     activeTaskId: "task-1",
+    activeWorkspaceBranch: "feature/command-palette",
+    activeWorkspaceIsDefault: false,
+    activeWorkspacePrStatus: "no_pr",
     hasActiveTurn: true,
     layout: {
       editorVisible: true,
@@ -72,8 +75,11 @@ function createContext(
     ],
     commands: {
       clearTaskSelection: () => {},
+      createPullRequest: () => {},
       createTask: () => {},
+      continueWorkspace: () => {},
       focusFileSearch: () => {},
+      openLatestCompletedTurnTask: async () => {},
       openInTerminal: async () => {},
       openInVSCode: async () => {},
       openKeyboardShortcuts: () => {},
@@ -90,6 +96,7 @@ function createContext(
       switchWorkspace: async () => {},
       toggleChangesPanel: () => {},
       toggleEditor: () => {},
+      toggleInformationPanel: () => {},
       toggleTerminal: () => {},
       toggleWorkspaceSidebar: () => {},
     },
@@ -103,12 +110,27 @@ describe("command palette registry", () => {
     const navigation = groups.find((group) => group.key === "navigation");
     const task = groups.find((group) => group.key === "task");
     const provider = groups.find((group) => group.key === "provider");
+    const view = groups.find((group) => group.key === "view");
 
     expect(navigation?.items.some((item) => item.id === "navigation.quick-open-file")).toBe(true);
+    expect(navigation?.items.some((item) => item.id === "navigation.latest-completed-turn-task")).toBe(true);
     expect(navigation?.items.some((item) => item.id === "task.select.task-2")).toBe(true);
     expect(navigation?.items.some((item) => item.id === "workspace.select.ws-feature")).toBe(true);
+    expect(task?.items.some((item) => item.id === "task.create-pr")).toBe(true);
     expect(task?.items.some((item) => item.id === "task.stop-active-turn")).toBe(true);
     expect(provider?.items.some((item) => item.id === "provider.set.codex")).toBe(true);
+    expect(view?.items.some((item) => item.id === "view.show-information")).toBe(true);
+    expect(view?.items.some((item) => item.id === "view.show-explorer" && item.shortcut === "Cmd+E")).toBe(true);
+  });
+
+  test("shows continue workspace only for completed PR branches", () => {
+    const groups = buildCommandPaletteGroups(createContext({
+      activeWorkspacePrStatus: "merged",
+    }));
+    const task = groups.find((group) => group.key === "task");
+
+    expect(task?.items.some((item) => item.id === "task.continue-workspace")).toBe(true);
+    expect(task?.items.some((item) => item.id === "task.create-pr")).toBe(false);
   });
 
   test("applies pinned, hidden, and recent preferences in presentation order", () => {

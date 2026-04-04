@@ -4,10 +4,14 @@ import { GlobalCommandPalette } from "@/components/layout/GlobalCommandPalette";
 import { TopBar } from "@/components/layout/TopBar";
 import { ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
+import { resolveLatestCompletedTurnTarget } from "@/components/layout/command-palette-navigation";
+import { dispatchTopBarPrAction } from "@/components/layout/top-bar-pr-events";
 import { ChatArea } from "@/components/session/ChatArea";
 import { TerminalDock } from "@/components/layout/TerminalDock";
-import { Card, Toaster } from "@/components/ui";
+import { Card, Toaster, toast } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
+import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
+import { isTaskArchived } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
 import { MIN_EDITOR_PANEL_WIDTH, WORKSPACE_SIDEBAR_MIN_WIDTH, useAppStore } from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
@@ -15,6 +19,7 @@ import { RightRail } from "@/components/layout/RightRail";
 import { isEditableShortcutTarget, shouldAbortTaskOnEscape } from "@/components/layout/app-shell.shortcuts";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import type { RightRailPanelId } from "@/lib/right-rail-panels";
+import type { WorkspacePrStatus } from "@/lib/pr-status";
 
 const EditorPanel = lazy(() =>
   import("@/components/layout/EditorPanel").then((module) => ({
@@ -59,6 +64,7 @@ export function AppShell() {
     workspaceBranchById,
     workspaceDefaultById,
     workspacePathById,
+    workspacePrInfoById,
     recentProjects,
     workspaceSidebarWidth,
     workspaceSidebarCollapsed,
@@ -93,6 +99,7 @@ export function AppShell() {
     state.workspaceBranchById,
     state.workspaceDefaultById,
     state.workspacePathById,
+    state.workspacePrInfoById,
     state.recentProjects,
     state.layout.workspaceSidebarWidth,
     state.layout.workspaceSidebarCollapsed,
@@ -168,6 +175,60 @@ export function AppShell() {
   }, [handlePreloadKeyboardShortcuts]);
   const handleOpenCommandPalette = useCallback(() => {
     setCommandPaletteOpen(true);
+  }, []);
+  const handleCreatePullRequest = useCallback(() => {
+    dispatchTopBarPrAction("create-pr");
+  }, []);
+  const handleContinueWorkspace = useCallback(() => {
+    dispatchTopBarPrAction("continue");
+  }, []);
+  const handleOpenLatestCompletedTurnTask = useCallback(async () => {
+    const stateBefore = useAppStore.getState();
+    if (stateBefore.workspaces.length === 0) {
+      toast.message("No workspaces available");
+      return;
+    }
+
+    try {
+      const turnsByWorkspaceId = Object.fromEntries(
+        await Promise.all(
+          stateBefore.workspaces.map(async (workspace) => ([
+            workspace.id,
+            await listLatestWorkspaceTurns({ workspaceId: workspace.id }),
+          ] as const)),
+        ),
+      );
+      const latestTarget = resolveLatestCompletedTurnTarget({ turnsByWorkspaceId });
+
+      if (!latestTarget) {
+        toast.message("No completed turns yet");
+        return;
+      }
+
+      if (stateBefore.activeWorkspaceId !== latestTarget.workspaceId) {
+        await stateBefore.switchWorkspace({ workspaceId: latestTarget.workspaceId });
+      }
+
+      const stateAfter = useAppStore.getState();
+      const targetTask = stateAfter.tasks.find((task) => task.id === latestTarget.taskId);
+      if (!targetTask) {
+        toast.error("Unable to open the latest completed task", {
+          description: "The task for the newest completed turn is no longer available.",
+        });
+        return;
+      }
+
+      if (isTaskArchived(targetTask)) {
+        stateAfter.restoreTask({ taskId: latestTarget.taskId });
+        return;
+      }
+
+      stateAfter.selectTask({ taskId: latestTarget.taskId });
+    } catch (error) {
+      toast.error("Unable to find the latest completed turn", {
+        description: error instanceof Error ? error.message : "Turn history could not be loaded.",
+      });
+    }
   }, []);
 
   function flushPendingLayoutPatch() {
@@ -323,7 +384,13 @@ export function AppShell() {
         return;
       }
 
-      if (event.key.toLowerCase() === "b") {
+      if (!event.shiftKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        store.setLayout({ patch: { workspaceSidebarCollapsed: !store.layout.workspaceSidebarCollapsed } });
+        return;
+      }
+
+      if (event.shiftKey && event.key.toLowerCase() === "b") {
         event.preventDefault();
         const nextVisible = !(store.layout.sidebarOverlayVisible && store.layout.sidebarOverlayTab === "changes");
         store.setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "changes" } });
@@ -331,6 +398,19 @@ export function AppShell() {
       }
 
       if (event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        store.setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "explorer" } });
+        return;
+      }
+
+      if (event.key.toLowerCase() === "i") {
+        event.preventDefault();
+        const nextVisible = !(store.layout.sidebarOverlayVisible && store.layout.sidebarOverlayTab === "information");
+        store.setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "information" } });
+        return;
+      }
+
+      if (event.code === "Backslash" && !event.shiftKey) {
         event.preventDefault();
         store.setLayout({ patch: { editorVisible: !store.layout.editorVisible } });
         return;
@@ -520,9 +600,14 @@ export function AppShell() {
     [],
   );
   const activeWorkspacePath = workspacePathById[activeWorkspaceId] ?? projectPath;
+  const activeWorkspaceIsDefault = Boolean(workspaceDefaultById[activeWorkspaceId]);
+  const activeWorkspacePrStatus: WorkspacePrStatus = workspacePrInfoById[activeWorkspaceId]?.derived ?? "no_pr";
   const commandPaletteContext = useMemo(() => ({
     activeEditorTabId,
     activeTaskId,
+    activeWorkspaceBranch: workspaceBranchById[activeWorkspaceId],
+    activeWorkspaceIsDefault,
+    activeWorkspacePrStatus,
     hasActiveTurn: Boolean(activeTaskId && activeTurnIdsByTask[activeTaskId]),
     layout: {
       editorVisible,
@@ -575,8 +660,11 @@ export function AppShell() {
     })),
     commands: {
       clearTaskSelection: () => clearTaskSelection(),
+      createPullRequest: handleCreatePullRequest,
       createTask: () => createTask({ title: "" }),
+      continueWorkspace: handleContinueWorkspace,
       focusFileSearch: handleFocusFileSearch,
+      openLatestCompletedTurnTask: handleOpenLatestCompletedTurnTask,
       openInTerminal: async (path: string) => {
         await window.api?.shell?.openInTerminal?.({ path });
       },
@@ -603,6 +691,11 @@ export function AppShell() {
         setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "changes" } });
       },
       toggleEditor: () => setLayout({ patch: { editorVisible: !useAppStore.getState().layout.editorVisible } }),
+      toggleInformationPanel: () => {
+        const currentLayout = useAppStore.getState().layout;
+        const nextVisible = !(currentLayout.sidebarOverlayVisible && currentLayout.sidebarOverlayTab === "information");
+        setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "information" } });
+      },
       toggleTerminal: () => setLayout({ patch: { terminalDocked: !useAppStore.getState().layout.terminalDocked } }),
       toggleWorkspaceSidebar: () => setLayout({ patch: { workspaceSidebarCollapsed: !useAppStore.getState().layout.workspaceSidebarCollapsed } }),
     },
@@ -610,13 +703,18 @@ export function AppShell() {
     abortTaskTurn,
     activeEditorTabId,
     activeTaskId,
-    activeTurnIdsByTask,
     activeWorkspaceId,
+    activeWorkspaceIsDefault,
+    activeWorkspacePrStatus,
+    activeTurnIdsByTask,
     activeWorkspacePath,
     clearTaskSelection,
+    handleContinueWorkspace,
+    handleCreatePullRequest,
     createTask,
     editorVisible,
     handleFocusFileSearch,
+    handleOpenLatestCompletedTurnTask,
     handleOpenKeyboardShortcuts,
     handleOpenSettings,
     modifierLabel,
@@ -641,6 +739,7 @@ export function AppShell() {
     workspaceBranchById,
     workspaceDefaultById,
     workspacePathById,
+    workspacePrInfoById,
     workspaceSidebarCollapsed,
     workspaces,
     switchWorkspace,

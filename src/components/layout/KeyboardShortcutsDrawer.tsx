@@ -91,14 +91,29 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
         description: "Control the shell layout without leaving the keyboard.",
         shortcuts: [
           {
-            label: "Toggle side panel",
-            description: "Show or hide the explorer and changes panel.",
+            label: "Toggle workspace sidebar",
+            description: "Collapse or expand the left project and workspace list.",
             sequences: [[modifierLabel, "B"]],
+          },
+          {
+            label: "Source control panel",
+            description: "Show or hide the source control overlay on the right rail.",
+            sequences: [[modifierLabel, "Shift", "B"]],
+          },
+          {
+            label: "Open explorer panel",
+            description: "Open the explorer overlay on the right rail.",
+            sequences: [[modifierLabel, "E"]],
+          },
+          {
+            label: "Toggle information panel",
+            description: "Show or hide the workspace information panel.",
+            sequences: [[modifierLabel, "I"]],
           },
           {
             label: "Toggle editor",
             description: "Show or hide the editor panel.",
-            sequences: [[modifierLabel, "E"]],
+            sequences: [[modifierLabel, "\\"]],
           },
           {
             label: "Toggle terminal",
@@ -112,6 +127,16 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
         description: "Common task and editor commands.",
         shortcuts: [
           {
+            label: "Focus prompt composer",
+            description: "Move focus back to the chat prompt when the composer is not already focused.",
+            sequences: [[modifierLabel, "L"], [modifierLabel, "J"]],
+          },
+          {
+            label: "Open model selector",
+            description: "Open the prompt model picker from the keyboard.",
+            sequences: [["Alt", "P"]],
+          },
+          {
             label: "Quick open file",
             description: "Search the active workspace files and open a file in the editor.",
             sequences: [[modifierLabel, "P"]],
@@ -120,6 +145,11 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
             label: "Open command palette",
             description: "Open the global Stave command launcher for IDE actions and settings.",
             sequences: [[modifierLabel, "Shift", "P"]],
+          },
+          {
+            label: "Toggle plan mode",
+            description: "Switch the active prompt between normal and plan mode while focused in the composer.",
+            sequences: [["Shift", "Tab"]],
           },
           {
             label: "Dialog primary action",
@@ -198,7 +228,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           </div>
           <DrawerFooter className="border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
             <p className="text-sm text-muted-foreground">
-              Workspace quick jump follows the sidebar's top-to-bottom order. Quick open and shortcut guide are ignored while typing in inputs, while the command palette stays globally available.
+              Workspace quick jump follows the sidebar's top-to-bottom order. Quick open and the shortcut guide are ignored while typing in inputs, the command palette stays globally available, and plan mode toggle applies in the composer.
             </p>
             <DrawerClose asChild>
               <Button variant="outline">Close</Button>

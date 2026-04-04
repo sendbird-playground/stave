@@ -8,13 +8,14 @@ Users can attach project files to a message using the file picker button in the 
 
 - The file picker opens the OS file dialog scoped to the current workspace.
 - Selected files appear as removable chips above the toolbar.
+- Clipboard file paste also works when the runtime exposes pasted files through `clipboardData.items` or `clipboardData.files`.
 - On send, Stave opens each attached file through the editor tab system, reads its content and language, and forwards the result as `fileContexts` alongside the user message.
 
 ## Image attachments
 
 Images can be attached in two ways:
 
-1. **Clipboard paste** — paste an image from the system clipboard (`Cmd/Ctrl+V`) directly into the prompt textarea. The `onPaste` handler detects `image/*` items in `clipboardData`, reads each file as a data URL via `FileReader`, and appends them as image attachments. Text-only pastes are unaffected.
+1. **Clipboard paste** — paste images or copied workspace files from the system clipboard (`Cmd/Ctrl+V`) directly into the prompt textarea. The `onPaste` handler inspects both `clipboardData.items` and `clipboardData.files`, converts `image/*` files into image attachments, and routes non-image files to the workspace file attachment flow. Text-only pastes are unaffected.
 2. **Multiple images** — clipboard paste can add multiple images. Each image receives a unique `crypto.randomUUID()` identifier.
 
 Attached images appear as small thumbnails with a remove button. Clicking a thumbnail opens a full-screen preview overlay.
@@ -56,4 +57,5 @@ These are passed to `sendUserMessage()` alongside `fileContexts` and the text co
 
 - File picking requires the Electron runtime (`window.api.fs.pickFiles`).
 - Clipboard paste works in both Electron and browser runtimes since it uses standard `ClipboardEvent` and `FileReader` APIs.
-- The `onAttachmentsChange` callback must be provided for image features to activate. If absent, paste is a no-op.
+- The `onAttachmentsChange` callback must be provided for image features to activate.
+- Workspace file paste requires Electron to provide pasted files with a usable absolute path; otherwise users should use the file picker.

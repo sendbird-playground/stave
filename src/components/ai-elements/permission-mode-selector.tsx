@@ -72,7 +72,7 @@ export function PermissionModeSelector(args: PermissionModeSelectorProps) {
         )}
         onClick={() => setOpen((prev) => !prev)}
         disabled={disabled}
-        title="Permission mode (Shift+Tab to cycle)"
+        title="Permission mode"
       >
         <Shield className="size-3.5 text-muted-foreground" />
         <span>{current?.label ?? value}</span>

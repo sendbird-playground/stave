@@ -1,5 +1,5 @@
 import { ChevronDown, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Command,
   CommandEmpty,
@@ -39,6 +39,7 @@ interface ModelSelectorProps {
   className?: string;
   triggerClassName?: string;
   menuClassName?: string;
+  openToken?: string | number;
   onSelect: (args: { selection: ModelSelectorOption }) => void;
 }
 
@@ -51,6 +52,7 @@ export function ModelSelector(args: ModelSelectorProps) {
     className,
     triggerClassName,
     menuClassName,
+    openToken,
     onSelect,
   } = args;
   const [open, setOpen] = useState(false);
@@ -87,6 +89,13 @@ export function ModelSelector(args: ModelSelectorProps) {
     </CommandItem>
   );
 
+  useEffect(() => {
+    if (openToken === undefined || disabled) {
+      return;
+    }
+    setOpen(true);
+  }, [disabled, openToken]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <div className={cn("relative", className)}>
@@ -99,6 +108,7 @@ export function ModelSelector(args: ModelSelectorProps) {
               triggerClassName,
             )}
             disabled={disabled}
+            title="Open model selector (Alt+P)"
           >
             <span className="flex min-w-0 items-center gap-1.5">
               <ModelIcon providerId={value.providerId} model={value.model} className="size-3.5" />
