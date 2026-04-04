@@ -8,6 +8,7 @@ import type { WorkspaceCreateEntryResult, WorkspaceDeleteEntryResult, WorkspaceD
 import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
 import { hasSourceControlStagedChanges, type SourceControlStatusItem } from "@/lib/source-control-status";
 import { useAppStore } from "@/store/app.store";
+import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import { RightRailPanelShell } from "./RightRailPanelShell";
 import { WorkspaceAutomationsPanel } from "./WorkspaceAutomationsPanel";
 import { WorkspaceChangesPanel } from "./WorkspaceChangesPanel";
@@ -43,6 +44,13 @@ interface PendingExplorerDelete {
   name: string;
   affectedTabIds: string[];
   dirtyTabCount: number;
+}
+
+interface EditorPanelProps {
+  onOpenSettings?: (options?: {
+    projectPath?: string | null;
+    section?: SectionId;
+  }) => void;
 }
 
 function getParentDirectoryPath(args: { path: string }) {
@@ -81,7 +89,7 @@ function resolveWorkspaceAbsolutePath(args: { workspacePath?: string; relativePa
   return `${normalizedWorkspacePath}${separator}${joinedRelativePath}`;
 }
 
-export function EditorPanel() {
+export function EditorPanel(props: EditorPanelProps) {
   const [
     activeWorkspaceId,
     hasHydratedWorkspaces,
@@ -885,7 +893,9 @@ export function EditorPanel() {
           ) : null}
 
           {rightTab === "information" ? <WorkspaceInformationPanel /> : null}
-          {rightTab === "automation" ? <WorkspaceAutomationsPanel /> : null}
+          {rightTab === "automation" ? (
+            <WorkspaceAutomationsPanel onOpenSettings={props.onOpenSettings} />
+          ) : null}
         </RightRailPanelShell>
       </div>
       <ConfirmDialog

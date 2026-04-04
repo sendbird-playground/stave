@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
 import { Check, ChevronDown, ChevronRight, Contrast, FileAudio, Folder, Globe, Monitor, Moon, RefreshCcw, Sun, Trash2, Upload, X } from "lucide-react";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import {
@@ -62,9 +62,11 @@ import {
   THINKING_PHRASE_ANIMATION_OPTIONS,
   normalizeThinkingPhraseAnimationStyle,
 } from "@/lib/thinking-phrases";
+import type { ResolvedWorkspaceAutomationsConfig } from "@/lib/workspace-scripts/types";
 import { DeveloperSection } from "./settings-dialog-developer-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
 import { ToolingSection } from "./settings-dialog-tooling-section";
+import { WorkspaceAutomationsManager } from "./WorkspaceAutomationsManager";
 import {
   ChoiceButtons,
   DraftInput,
@@ -170,6 +172,13 @@ function ProjectSettingsPanel(args: {
   const setProjectWorkspaceUseRootNodeModulesSymlink = useAppStore(
     (state) => state.setProjectWorkspaceUseRootNodeModulesSymlink,
   );
+  const [currentProjectPath, activeWorkspaceId, workspacePathById] = useAppStore(
+    useShallow((state) => [
+      state.projectPath,
+      state.activeWorkspaceId,
+      state.workspacePathById,
+    ] as const),
+  );
   const projectWorkspaceInitCommand = normalizeProjectWorkspaceInitCommand({
     value: args.project.newWorkspaceInitCommand,
   });
@@ -177,6 +186,10 @@ function ProjectSettingsPanel(args: {
     normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
       value: args.project.newWorkspaceUseRootNodeModulesSymlink,
     });
+  const automationWorkspacePath = args.isCurrent
+    ? workspacePathById[activeWorkspaceId] ?? currentProjectPath ?? args.project.projectPath
+    : args.project.projectPath;
+  const [resolvedAutomationConfig, setResolvedAutomationConfig] = useState<ResolvedWorkspaceAutomationsConfig | null>(null);
   const [repositoryRefreshNonce, setRepositoryRefreshNonce] = useState(0);
   const [repositoryState, setRepositoryState] = useState<{
     status: "idle" | "loading" | "ready" | "error";
@@ -189,6 +202,24 @@ function ProjectSettingsPanel(args: {
     remotes: [],
     detail: "Refreshing repository metadata...",
   });
+
+  const loadResolvedAutomationConfig = useCallback(async () => {
+    const getConfig = window.api?.automations?.getConfig;
+    if (!getConfig || !args.project.projectPath || !automationWorkspacePath) {
+      setResolvedAutomationConfig(null);
+      return;
+    }
+
+    const result = await getConfig({
+      projectPath: args.project.projectPath,
+      workspacePath: automationWorkspacePath,
+    });
+    setResolvedAutomationConfig(result.ok ? result.config : null);
+  }, [args.project.projectPath, automationWorkspacePath]);
+
+  useEffect(() => {
+    void loadResolvedAutomationConfig();
+  }, [loadResolvedAutomationConfig]);
 
   useEffect(() => {
     const runCommand = window.api?.terminal?.runCommand;
@@ -287,8 +318,8 @@ function ProjectSettingsPanel(args: {
               {args.project.projectName}
             </h4>
             <p className="text-sm text-muted-foreground">
-              Review repository-specific workspace defaults, git metadata, and
-              removal actions for this project.
+              Review repository-specific workspace defaults, git metadata,
+              automation config, and removal actions for this project.
             </p>
           </div>
           <p className="font-mono text-xs text-muted-foreground break-all">
@@ -446,6 +477,13 @@ function ProjectSettingsPanel(args: {
           </div>
         </div>
       </SettingsCard>
+
+      <WorkspaceAutomationsManager
+        projectPath={args.project.projectPath}
+        workspacePath={automationWorkspacePath}
+        resolvedConfig={resolvedAutomationConfig}
+        onSaved={loadResolvedAutomationConfig}
+      />
     </div>
   );
 }
@@ -559,7 +597,7 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
     <>
       <SectionHeading
         title="Projects"
-        description="Choose a registered project from the menu, then review repository-specific workspace defaults, git metadata, and removal actions."
+        description="Choose a registered project from the menu, then review repository-specific workspace defaults, git metadata, automation config, and removal actions."
       />
       {projects.length === 0 ? (
         <SettingsCard

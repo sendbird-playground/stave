@@ -356,7 +356,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     build: (args) => ({
       id: "view.show-automations",
       title: "Show Automation Panel",
-      subtitle: "Open workspace actions, hooks, and services.",
+      subtitle: "Open workspace automation runtime, hooks, and services.",
       group: "view",
       icon: Sparkles,
       keywords: ["automation", "hooks", "services", "orbit"],
