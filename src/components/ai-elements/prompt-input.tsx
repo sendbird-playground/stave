@@ -63,6 +63,12 @@ const SUPPORTS_FIELD_SIZING_CONTENT = typeof CSS !== "undefined"
   && typeof CSS.supports === "function"
   && CSS.supports("field-sizing", "content");
 const PALETTE_ITEM_INDEX_ATTRIBUTE = "data-palette-index";
+const PROMPT_SURFACE_FOCUS_VISIBLE_RESET =
+  "focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0";
+const PROMPT_SURFACE_SECONDARY_FOCUS =
+  `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} focus-visible:border-border/70`;
+const PROMPT_SURFACE_PRIMARY_FOCUS =
+  `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} focus-visible:border-transparent`;
 
 function getPaletteItemSelector(index: number) {
   return `[${PALETTE_ITEM_INDEX_ATTRIBUTE}="${index}"]`;
@@ -476,7 +482,11 @@ export function PromptInput(args: PromptInputProps) {
 
   return (
     <>
-    <form data-prompt-input-root onSubmit={handleSubmit} className="space-y-3 rounded-xl border border-border/80 bg-card p-4">
+    <form
+      data-prompt-input-root
+      onSubmit={handleSubmit}
+      className="space-y-3 rounded-xl border border-border/80 bg-card p-4 transition-[border-color,box-shadow] focus-within:border-ring/70 focus-within:ring-3 focus-within:ring-ring/35"
+    >
       <Popover open={activePalette !== null} modal={false}>
         <PopoverAnchor asChild>
           <div>
@@ -651,7 +661,10 @@ export function PromptInput(args: PromptInputProps) {
                 void submitCurrentMessage();
               }}
               placeholder="Use / for commands, $ for skills (Enter to send)"
-              className="min-h-[104px] max-h-[240px] resize-none overflow-y-auto rounded-lg border-border/70 bg-background text-lg leading-8 md:text-lg"
+              className={cn(
+                "min-h-[104px] max-h-[240px] resize-none overflow-y-auto rounded-lg border-border/70 bg-background text-lg leading-8 md:text-lg",
+                PROMPT_SURFACE_SECONDARY_FOCUS,
+              )}
             />
           </div>
         </PopoverAnchor>
@@ -896,6 +909,7 @@ export function PromptInput(args: PromptInputProps) {
                     fastMode
                       ? "border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
                       : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
+                    PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
@@ -919,6 +933,7 @@ export function PromptInput(args: PromptInputProps) {
                     planMode
                       ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
                       : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
+                    PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
@@ -945,6 +960,7 @@ export function PromptInput(args: PromptInputProps) {
                       : thinkingMode === "disabled"
                         ? "border-border/70 bg-secondary text-muted-foreground/50 hover:bg-secondary/60"
                         : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
+                    PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
@@ -964,7 +980,10 @@ export function PromptInput(args: PromptInputProps) {
                       variant="ghost"
                       size="sm"
                       disabled={interactionsDisabled}
-                      className="h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60"
+                      className={cn(
+                        "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
+                        PROMPT_SURFACE_SECONDARY_FOCUS,
+                      )}
                       aria-label="Controls & Runtime"
                     >
                       <SlidersHorizontal className="size-3.5" />
@@ -1017,7 +1036,10 @@ export function PromptInput(args: PromptInputProps) {
                 onClick={() => {
                   void onOpenFileSelector?.();
                 }}
-                className="h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60"
+                className={cn(
+                  "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
+                  PROMPT_SURFACE_SECONDARY_FOCUS,
+                )}
                 aria-label="Attach files"
               >
                 <Paperclip className="size-3.5" />
@@ -1032,7 +1054,7 @@ export function PromptInput(args: PromptInputProps) {
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-9 rounded-md px-3.5 text-sm"
+                  className={cn("h-9 rounded-md px-3.5 text-sm", PROMPT_SURFACE_SECONDARY_FOCUS)}
                   onClick={() => onAbort?.()}
                 >
                   <OctagonX className="size-3.5" />
@@ -1047,7 +1069,12 @@ export function PromptInput(args: PromptInputProps) {
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="submit" size="sm" className="h-9 rounded-md px-3.5 text-sm" disabled={disabled}>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className={cn("h-9 rounded-md px-3.5 text-sm", PROMPT_SURFACE_PRIMARY_FOCUS)}
+                  disabled={disabled}
+                >
                   <Send className="size-3.5" />
                   Send
                 </Button>

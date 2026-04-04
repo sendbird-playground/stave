@@ -344,7 +344,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
   return (
     <div
       className={cn(
-        args.compact ? "bg-transparent px-0 py-0" : "border-t border-border/80 bg-card px-3 py-2.5 sm:px-4",
+        args.compact ? "bg-transparent px-0 py-0" : "bg-background px-3 py-2.5 sm:px-4",
         args.isEmpty && !args.compact && "pb-6",
       )}
     >
