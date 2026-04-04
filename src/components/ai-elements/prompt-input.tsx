@@ -1,6 +1,6 @@
 import { Brain, ClipboardCheck, FolderOpen, Globe2, OctagonX, Paperclip, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
 import type { Attachment, UserInputPart } from "@/types/chat";
-import { type FormEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
@@ -8,6 +8,7 @@ import { filterCommandPaletteItems, getSlashCommandSearchQuery } from "@/lib/com
 import { getActiveSkillTokenMatch, replaceSkillToken } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
+import { collectClipboardFiles, partitionClipboardFiles } from "./prompt-input.clipboard";
 import {
   getAcceptedCommandPaletteItem,
   getAcceptedPaletteItem,
@@ -49,6 +50,7 @@ interface PromptInputProps {
   onAttachFilesChange: (args: { filePaths: string[] }) => void;
   onOpenFileSelector?: () => void;
   onAttachmentsChange?: (args: { attachments: Attachment[] }) => void;
+  onPasteFiles?: (args: { files: File[] }) => void | Promise<void>;
   onPermissionModeChange?: (value: PermissionModeValue) => void;
   effortLabel?: string;
   effortValue?: string;
@@ -111,6 +113,7 @@ export function PromptInput(args: PromptInputProps) {
     onAttachFilesChange,
     onOpenFileSelector,
     onAttachmentsChange,
+    onPasteFiles,
     onPermissionModeChange,
     effortLabel,
     effortValue,
@@ -139,11 +142,21 @@ export function PromptInput(args: PromptInputProps) {
   const [selectedPromptHistoryIndex, setSelectedPromptHistoryIndex] = useState(NO_PROMPT_HISTORY_SELECTION);
   const [draftBeforeHistory, setDraftBeforeHistory] = useState("");
   const [caretIndex, setCaretIndex] = useState(value.length);
+  const [isPromptInputFocused, setIsPromptInputFocused] = useState(false);
+  const [modelSelectorOpenNonce, setModelSelectorOpenNonce] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const textareaAutosizeFrameRef = useRef<number | null>(null);
   const commandListRef = useRef<HTMLDivElement | null>(null);
   const wasTurnActiveRef = useRef(Boolean(isTurnActive));
   const interactionsDisabled = Boolean(disabled || isTurnActive);
+  const modifierLabel = useMemo(
+    () => (
+      typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
+        ? "Cmd"
+        : "Ctrl"
+    ),
+    [],
+  );
   const maxTextareaHeight = 240;
   const normalizedPromptHistoryEntries = useMemo(
     () => (promptHistoryEntries ?? []).filter((entry) => entry.trim().length > 0),
@@ -290,6 +303,47 @@ export function PromptInput(args: PromptInputProps) {
     }
     wasTurnActiveRef.current = isTurnNowActive;
   }, [isTurnActive]);
+
+  const focusComposer = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+    textarea.focus();
+    const nextCaretIndex = textarea.value.length;
+    textarea.setSelectionRange(nextCaretIndex, nextCaretIndex);
+    setCaretIndex(nextCaretIndex);
+  }, []);
+
+  const syncComposerFocus = useCallback(() => {
+    setIsPromptInputFocused(typeof document !== "undefined" && document.activeElement === textareaRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (interactionsDisabled) {
+      return;
+    }
+
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      const hasMod = event.ctrlKey || event.metaKey;
+      if (hasMod && !event.altKey && !event.shiftKey && (event.key.toLowerCase() === "l" || event.key.toLowerCase() === "j")) {
+        if (!textareaRef.current || document.activeElement === textareaRef.current) {
+          return;
+        }
+        event.preventDefault();
+        focusComposer();
+        return;
+      }
+
+      if (!event.ctrlKey && !event.metaKey && event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setModelSelectorOpenNonce((current) => current + 1);
+      }
+    };
+
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, [focusComposer, interactionsDisabled]);
 
   useEffect(() => {
     setSelectedPromptHistoryIndex(NO_PROMPT_HISTORY_SELECTION);
@@ -500,6 +554,10 @@ export function PromptInput(args: PromptInputProps) {
     <form
       data-prompt-input-root
       onSubmit={handleSubmit}
+      onFocusCapture={syncComposerFocus}
+      onBlurCapture={() => {
+        window.requestAnimationFrame(syncComposerFocus);
+      }}
       className="space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-colors focus-within:border-ring/60"
     >
       {promptSuggestions && promptSuggestions.length > 0 ? (
@@ -532,44 +590,48 @@ export function PromptInput(args: PromptInputProps) {
               onKeyUp={(event) => syncCaretPosition(event.currentTarget)}
               onSelect={(event) => syncCaretPosition(event.currentTarget)}
               onPaste={(event) => {
-                const items = event.clipboardData?.items;
-                if (!items || !onAttachmentsChange) {
+                const clipboardData = event.clipboardData;
+                if (!clipboardData) {
                   return;
                 }
-                const imageFiles: File[] = [];
-                for (const item of items) {
-                  if (item.type.startsWith("image/")) {
-                    const file = item.getAsFile();
-                    if (file) {
-                      imageFiles.push(file);
-                    }
-                  }
-                }
-                if (imageFiles.length === 0) {
+                const { imageFiles, nonImageFiles: pastedFiles } = partitionClipboardFiles(
+                  collectClipboardFiles({
+                    items: clipboardData.items,
+                    files: clipboardData.files,
+                  }),
+                );
+                const shouldHandleImages = imageFiles.length > 0 && Boolean(onAttachmentsChange);
+                const shouldHandleFiles = pastedFiles.length > 0 && Boolean(onPasteFiles);
+                if (!shouldHandleImages && !shouldHandleFiles) {
                   return;
                 }
                 event.preventDefault();
-                Promise.all(
-                  imageFiles.map(
-                    (file) =>
-                      new Promise<Extract<Attachment, { kind: "image" }>>((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          resolve({
-                            kind: "image",
-                            id: crypto.randomUUID(),
-                            dataUrl: reader.result as string,
-                            label: file.name || "Pasted image",
-                          });
-                        };
-                        reader.readAsDataURL(file);
-                      }),
-                  ),
-                ).then((newImages) => {
-                  onAttachmentsChange({
-                    attachments: [...(attachments ?? []), ...newImages],
+                if (shouldHandleFiles) {
+                  void onPasteFiles?.({ files: pastedFiles });
+                }
+                if (shouldHandleImages) {
+                  Promise.all(
+                    imageFiles.map(
+                      (file) =>
+                        new Promise<Extract<Attachment, { kind: "image" }>>((resolve) => {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            resolve({
+                              kind: "image",
+                              id: crypto.randomUUID(),
+                              dataUrl: reader.result as string,
+                              label: file.name || "Pasted image",
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }),
+                    ),
+                  ).then((newImages) => {
+                    onAttachmentsChange?.({
+                      attachments: [...(attachments ?? []), ...newImages],
+                    });
                   });
-                });
+                }
               }}
               onKeyDown={(event) => {
                 if (activePalette === "skill" && filteredSkillItems.length > 0 && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
@@ -666,6 +728,11 @@ export function PromptInput(args: PromptInputProps) {
                     event.preventDefault();
                     return;
                   }
+                }
+                if (event.key === "Tab" && event.shiftKey && onPlanModeChange) {
+                  event.preventDefault();
+                  onPlanModeChange(!planMode);
+                  return;
                 }
                 if (event.key === "Tab" && event.shiftKey && permissionMode && onPermissionModeChange) {
                   event.preventDefault();
@@ -920,11 +987,32 @@ export function PromptInput(args: PromptInputProps) {
       ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
+          {!isPromptInputFocused && !interactionsDisabled ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={focusComposer}
+              className={cn(PROMPT_TOOLBAR_BUTTON, "gap-2 border border-border/60 bg-background/70 text-foreground hover:bg-background")}
+            >
+              <span>Focus</span>
+              <KbdGroup>
+                <Kbd>{modifierLabel}</Kbd>
+                <Kbd>L</Kbd>
+              </KbdGroup>
+              <span className="text-xs text-muted-foreground">or</span>
+              <KbdGroup>
+                <Kbd>{modifierLabel}</Kbd>
+                <Kbd>J</Kbd>
+              </KbdGroup>
+            </Button>
+          ) : null}
           <ModelSelector
             value={selectedModel}
             options={modelOptions}
             recommendedOptions={recommendedModelOptions}
             disabled={interactionsDisabled}
+            openToken={modelSelectorOpenNonce}
             onSelect={({ selection }) => onModelSelect({ selection })}
           />
           {onFastModeChange ? (

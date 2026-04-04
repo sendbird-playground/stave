@@ -8,6 +8,7 @@ import {
 } from "@/components/ai-elements/model-selector";
 import { type PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
 import type { PromptInputRuntimeControl, PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
+import { toast } from "@/components/ui";
 import { buildCommandPaletteItems, type CommandPaletteItem, type CommandPaletteProviderNote } from "@/lib/commands";
 import type { ClaudeSettingSource } from "@/lib/providers/provider.types";
 import {
@@ -48,6 +49,7 @@ import {
   cycleClaudeEffortValue,
   cycleCodexEffortValue,
 } from "./chat-input.runtime";
+import { toWorkspaceRelativeFilePath } from "./chat-input.attachments";
 import { getLatestPromptSuggestions, getPromptHistoryEntries, mergePromptSuggestionWithDraft } from "./chat-input.utils";
 
 interface ChatInputProps {
@@ -96,6 +98,7 @@ const INACTIVE_STAVE_SETTINGS = [
   true,
   2,
 ] as const;
+
 interface ChatInputComposerProps {
   compact?: boolean;
   isEmpty: boolean;
@@ -258,6 +261,40 @@ function ChatInputComposer(args: ChatInputComposerProps) {
         updateNonTextPromptDraft({ attachedFilePaths: nextFilePaths });
       }
     : undefined;
+  const handlePasteFiles = workspaceRootPath
+    ? async (input: { files: File[] }) => {
+        const currentFilePaths = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachedFilePaths ?? [];
+        const nextFilePaths = [...currentFilePaths];
+        let attachedCount = 0;
+
+        for (const file of input.files) {
+          const absolutePath = (file as File & { path?: string }).path?.trim();
+          if (!absolutePath) {
+            continue;
+          }
+
+          const relativePath = toWorkspaceRelativeFilePath({
+            absolutePath,
+            rootPath: workspaceRootPath,
+          });
+          if (!relativePath || nextFilePaths.includes(relativePath)) {
+            continue;
+          }
+
+          nextFilePaths.push(relativePath);
+          attachedCount += 1;
+        }
+
+        if (attachedCount === 0) {
+          toast.warning("No workspace files were attached", {
+            description: "Paste files copied from the current workspace, or use Attach Files.",
+          });
+          return;
+        }
+
+        updateNonTextPromptDraft({ attachedFilePaths: nextFilePaths });
+      }
+    : undefined;
 
   function schedulePromptDraftSave(nextDraft: { taskId: string; text: string }) {
     cancelPendingDraftSave();
@@ -410,6 +447,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           onAttachFilesChange={({ filePaths }) =>
             updateNonTextPromptDraft({ attachedFilePaths: filePaths })}
           onOpenFileSelector={handleOpenFileSelector}
+          onPasteFiles={handlePasteFiles}
           onAttachmentsChange={({ attachments }) =>
             updateNonTextPromptDraft({ attachments })}
           onSubmit={async ({ text, filePaths }) => {

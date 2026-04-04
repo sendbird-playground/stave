@@ -42,6 +42,7 @@ import {
   isReasonablePullRequestTitle,
 } from "@/lib/source-control-pr";
 import { buildCreatePrTargetBranchOptions } from "@/components/layout/TopBarOpenPR.utils";
+import { TOP_BAR_PR_ACTION_EVENT, type TopBarPrActionDetail } from "@/components/layout/top-bar-pr-events";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import { useAppStore } from "@/store/app.store";
 import {
@@ -262,12 +263,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     const interval = setInterval(fetchStatus, 60_000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
-
-  // -------------------------------------------------------------------------
-  // Hide on default workspace
-  // -------------------------------------------------------------------------
-
-  if (!hasWorkspaceContext || isDefaultWorkspace) return null;
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -745,6 +740,57 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     : "Create a new workspace and attach a continuation brief from this completed branch";
 
   const badgeColorClass = PR_TONE_BADGE_CLASS[visual.tone];
+
+  useEffect(() => {
+    const onTopBarPrAction = (event: Event) => {
+      const detail = (event as CustomEvent<TopBarPrActionDetail>).detail;
+      if (!detail || !hasWorkspaceContext || isDefaultWorkspace) {
+        return;
+      }
+
+      if (detail.action === "create-pr") {
+        if (isCreateDisabled) {
+          toast.warning("Create PR is unavailable", {
+            description: createPrTooltip,
+          });
+          return;
+        }
+        void handleCreateClick();
+        return;
+      }
+
+      if (!canContinueWorkspace) {
+        return;
+      }
+
+      if (isContinueDisabled) {
+        toast.warning("Continue is unavailable", {
+          description: continueTooltip,
+        });
+        return;
+      }
+
+      setContinueDialogOpen(true);
+    };
+
+    window.addEventListener(TOP_BAR_PR_ACTION_EVENT, onTopBarPrAction);
+    return () => window.removeEventListener(TOP_BAR_PR_ACTION_EVENT, onTopBarPrAction);
+  }, [
+    canContinueWorkspace,
+    continueTooltip,
+    createPrTooltip,
+    handleCreateClick,
+    hasWorkspaceContext,
+    isContinueDisabled,
+    isCreateDisabled,
+    isDefaultWorkspace,
+  ]);
+
+  // -------------------------------------------------------------------------
+  // Hide on default workspace
+  // -------------------------------------------------------------------------
+
+  if (!hasWorkspaceContext || isDefaultWorkspace) return null;
 
   // -------------------------------------------------------------------------
   // Render

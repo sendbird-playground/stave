@@ -2,7 +2,10 @@ import {
   Bot,
   Command as CommandIcon,
   FolderOpen,
+  GitBranch,
+  GitPullRequest,
   Home,
+  History,
   Keyboard,
   Layers3,
   LibraryBig,
@@ -19,6 +22,7 @@ import {
 import { getProviderLabel } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
+import type { WorkspacePrStatus } from "@/lib/pr-status";
 
 export type CommandPaletteGroup = "navigation" | "view" | "task" | "provider" | "settings" | "external";
 
@@ -84,8 +88,11 @@ export interface CommandPaletteLayoutState {
 
 export interface CommandPaletteCommandHandlers {
   clearTaskSelection: () => void;
+  createPullRequest: () => Promise<void> | void;
   createTask: () => void;
+  continueWorkspace: () => Promise<void> | void;
   focusFileSearch: () => void;
+  openLatestCompletedTurnTask: () => Promise<void> | void;
   openInTerminal: (path: string) => Promise<void> | void;
   openInVSCode: (path: string) => Promise<void> | void;
   openKeyboardShortcuts: () => void;
@@ -102,6 +109,7 @@ export interface CommandPaletteCommandHandlers {
   switchWorkspace: (workspaceId: string) => Promise<void> | void;
   toggleChangesPanel: () => void;
   toggleEditor: () => void;
+  toggleInformationPanel: () => void;
   toggleTerminal: () => void;
   toggleWorkspaceSidebar: () => void;
 }
@@ -109,6 +117,9 @@ export interface CommandPaletteCommandHandlers {
 export interface CommandPaletteRuntimeContext {
   activeEditorTabId: string | null;
   activeTaskId: string;
+  activeWorkspaceBranch?: string;
+  activeWorkspaceIsDefault: boolean;
+  activeWorkspacePrStatus: WorkspacePrStatus;
   hasActiveTurn: boolean;
   layout: CommandPaletteLayoutState;
   modifierLabel: "Cmd" | "Ctrl";
@@ -229,6 +240,24 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     }),
   },
   {
+    id: "navigation.latest-completed-turn-task",
+    title: "Go to Latest Completed Turn Task",
+    description: "Jump to the task with the most recently completed turn across workspaces.",
+    group: "navigation",
+    icon: History,
+    keywords: ["latest completed turn", "recent task", "last completed", "recent turn"],
+    build: (args) => ({
+      id: "navigation.latest-completed-turn-task",
+      title: "Go to Latest Completed Turn Task",
+      subtitle: "Jump to the newest completed task run.",
+      group: "navigation",
+      icon: History,
+      keywords: ["latest completed turn", "recent task", "last completed", "recent turn"],
+      run: args.commands.openLatestCompletedTurnTask,
+      source: "core",
+    }),
+  },
+  {
     id: "task.new",
     title: "New Task",
     description: "Create a new task in the active workspace.",
@@ -247,6 +276,55 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       run: args.commands.createTask,
       source: "core",
     }),
+  },
+  {
+    id: "task.create-pr",
+    title: "Create Pull Request",
+    description: "Open the pull request flow for the active workspace.",
+    group: "task",
+    icon: GitPullRequest,
+    keywords: ["create pr", "pull request", "github", "open pr"],
+    build: (args) => (
+      !args.activeWorkspaceIsDefault && args.activeWorkspacePrStatus === "no_pr"
+        ? {
+            id: "task.create-pr",
+            title: "Create Pull Request",
+            subtitle: args.activeWorkspaceBranch
+              ? `Open the PR flow for ${args.activeWorkspaceBranch}.`
+              : "Open the PR flow for the active workspace.",
+            group: "task",
+            icon: GitPullRequest,
+            keywords: ["create pr", "pull request", "github", "open pr"],
+            run: args.commands.createPullRequest,
+            source: "core",
+          }
+        : null
+    ),
+  },
+  {
+    id: "task.continue-workspace",
+    title: "Continue in New Workspace",
+    description: "Create a follow-up workspace with a continuation brief attached.",
+    group: "task",
+    icon: GitBranch,
+    keywords: ["continue", "workspace", "follow up", "branch"],
+    build: (args) => (
+      !args.activeWorkspaceIsDefault
+        && (args.activeWorkspacePrStatus === "merged" || args.activeWorkspacePrStatus === "closed_unmerged")
+        ? {
+            id: "task.continue-workspace",
+            title: "Continue in New Workspace",
+            subtitle: args.activeWorkspaceBranch
+              ? `Create a follow-up workspace from ${args.activeWorkspaceBranch}.`
+              : "Create a follow-up workspace from the active branch.",
+            group: "task",
+            icon: GitBranch,
+            keywords: ["continue", "workspace", "follow up", "branch"],
+            run: args.commands.continueWorkspace,
+            source: "core",
+          }
+        : null
+    ),
   },
   {
     id: "task.stop-active-turn",
@@ -277,6 +355,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "view",
     icon: PanelLeft,
     keywords: ["sidebar", "project list", "collapse"],
+    shortcut: (modifierLabel) => `${modifierLabel}+B`,
     build: (args) => ({
       id: "view.toggle-workspace-sidebar",
       title: args.layout.workspaceSidebarCollapsed ? "Expand Workspace Sidebar" : "Collapse Workspace Sidebar",
@@ -284,6 +363,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       group: "view",
       icon: PanelLeft,
       keywords: ["sidebar", "project list", "collapse"],
+      shortcut: `${args.modifierLabel}+B`,
       run: args.commands.toggleWorkspaceSidebar,
       source: "core",
     }),
@@ -295,7 +375,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "view",
     icon: Layers3,
     keywords: ["source control", "changes", "diff", "git"],
-    shortcut: (modifierLabel) => `${modifierLabel}+B`,
+    shortcut: (modifierLabel) => `${modifierLabel}+Shift+B`,
     build: (args) => ({
       id: "view.toggle-changes-panel",
       title: args.layout.sidebarOverlayVisible && args.layout.sidebarOverlayTab === "changes"
@@ -305,7 +385,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       group: "view",
       icon: Layers3,
       keywords: ["source control", "changes", "diff", "git"],
-      shortcut: `${args.modifierLabel}+B`,
+      shortcut: `${args.modifierLabel}+Shift+B`,
       run: args.commands.toggleChangesPanel,
       source: "core",
     }),
@@ -317,6 +397,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "view",
     icon: FolderOpen,
     keywords: ["explorer", "files", "right rail"],
+    shortcut: (modifierLabel) => `${modifierLabel}+E`,
     build: (args) => ({
       id: "view.show-explorer",
       title: "Show Explorer Panel",
@@ -324,25 +405,30 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       group: "view",
       icon: FolderOpen,
       keywords: ["explorer", "files", "right rail"],
+      shortcut: `${args.modifierLabel}+E`,
       run: () => args.commands.showOverlayTab("explorer"),
       source: "core",
     }),
   },
   {
     id: "view.show-information",
-    title: "Show Information Panel",
-    description: "Open the workspace information overlay on the right rail.",
+    title: "Toggle Information Panel",
+    description: "Show or hide the workspace information overlay on the right rail.",
     group: "view",
     icon: LibraryBig,
     keywords: ["information", "notes", "jira", "figma", "slack"],
+    shortcut: (modifierLabel) => `${modifierLabel}+I`,
     build: (args) => ({
       id: "view.show-information",
-      title: "Show Information Panel",
+      title: args.layout.sidebarOverlayVisible && args.layout.sidebarOverlayTab === "information"
+        ? "Hide Information Panel"
+        : "Show Information Panel",
       subtitle: "Open notes, links, plans, and structured workspace fields.",
       group: "view",
       icon: LibraryBig,
       keywords: ["information", "notes", "jira", "figma", "slack"],
-      run: () => args.commands.showOverlayTab("information"),
+      shortcut: `${args.modifierLabel}+I`,
+      run: args.commands.toggleInformationPanel,
       source: "core",
     }),
   },
@@ -371,7 +457,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "view",
     icon: PanelRight,
     keywords: ["editor", "code", "panel"],
-    shortcut: (modifierLabel) => `${modifierLabel}+E`,
+    shortcut: (modifierLabel) => `${modifierLabel}+\\`,
     build: (args) => ({
       id: "view.toggle-editor",
       title: args.layout.editorVisible ? "Hide Editor" : "Show Editor",
@@ -379,7 +465,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       group: "view",
       icon: PanelRight,
       keywords: ["editor", "code", "panel"],
-      shortcut: `${args.modifierLabel}+E`,
+      shortcut: `${args.modifierLabel}+\\`,
       run: args.commands.toggleEditor,
       source: "core",
     }),

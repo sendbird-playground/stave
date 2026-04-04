@@ -24,15 +24,18 @@
 - `Navigation`
   - quick open file
   - go home
+  - jump to the latest completed turn task
   - switch task / workspace / project
   - refresh project files / workspaces
 - `View`
   - toggle workspace sidebar
   - toggle changes panel
-  - show explorer / information
+  - show explorer / toggle information
   - toggle editor / terminal
 - `Task`
   - new task
+  - create PR
+  - continue in new workspace
   - save file
   - stop active turn
 - `Provider`
@@ -65,3 +68,12 @@ registerCommandPaletteContributor(contributor)
 ```
 
 Contributors can inject additional commands without coupling to the dialog UI. Core Stave commands, dynamic task/workspace entries, and future contributed commands all use the same presentation and execution pipeline.
+
+## Related Shortcuts
+
+- `Cmd/Ctrl+B` toggles the left workspace sidebar.
+- `Cmd/Ctrl+Shift+B` toggles the source control panel.
+- `Cmd/Ctrl+E` opens the explorer panel.
+- `Cmd/Ctrl+I` toggles the information panel.
+- `Cmd/Ctrl+L` or `Cmd/Ctrl+J` focuses the prompt composer when it is not already focused.
+- `Alt+P` opens the prompt model selector.
