@@ -1,6 +1,6 @@
 import { Brain, ClipboardCheck, FolderOpen, Globe2, OctagonX, Paperclip, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
 import type { Attachment, UserInputPart } from "@/types/chat";
-import { type FormEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
@@ -20,7 +20,7 @@ import {
 } from "./prompt-input.utils";
 import { ModelSelector, type ModelSelectorOption } from "./model-selector";
 import { PromptInputRuntimeBar, type PromptInputRuntimeControl, type PromptInputRuntimeStatusItem } from "./prompt-input-runtime-bar";
-import { PermissionModeSelector, cyclePermissionMode, type PermissionModeValue } from "./permission-mode-selector";
+import { PermissionModeSelector, type PermissionModeValue } from "./permission-mode-selector";
 import { Suggestion, Suggestions } from "./suggestion";
 
 interface PromptInputProps {
@@ -319,12 +319,34 @@ export function PromptInput(args: PromptInputProps) {
     setIsPromptInputFocused(typeof document !== "undefined" && document.activeElement === textareaRef.current);
   }, []);
 
+  const handleShiftTabShortcut = useCallback((event: KeyboardEvent | ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Tab" || !event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+      return false;
+    }
+
+    if (!onPlanModeChange) {
+      return false;
+    }
+
+    event.preventDefault();
+    onPlanModeChange(!planMode);
+    return true;
+  }, [onPlanModeChange, planMode]);
+
   useEffect(() => {
     if (interactionsDisabled) {
       return;
     }
 
     const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      if (handleShiftTabShortcut(event)) {
+        return;
+      }
+
       const hasMod = event.ctrlKey || event.metaKey;
       if (hasMod && !event.altKey && !event.shiftKey && (event.key.toLowerCase() === "l" || event.key.toLowerCase() === "j")) {
         if (!textareaRef.current || document.activeElement === textareaRef.current) {
@@ -335,7 +357,12 @@ export function PromptInput(args: PromptInputProps) {
         return;
       }
 
-      if (!event.ctrlKey && !event.metaKey && event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
+      const isAltP = !event.ctrlKey
+        && !event.metaKey
+        && event.altKey
+        && !event.shiftKey
+        && (event.code === "KeyP" || event.key.toLowerCase() === "p");
+      if (isAltP) {
         event.preventDefault();
         setModelSelectorOpenNonce((current) => current + 1);
       }
@@ -343,7 +370,7 @@ export function PromptInput(args: PromptInputProps) {
 
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [focusComposer, interactionsDisabled]);
+  }, [focusComposer, handleShiftTabShortcut, interactionsDisabled]);
 
   useEffect(() => {
     setSelectedPromptHistoryIndex(NO_PROMPT_HISTORY_SELECTION);
@@ -752,14 +779,7 @@ export function PromptInput(args: PromptInputProps) {
                     return;
                   }
                 }
-                if (event.key === "Tab" && event.shiftKey && onPlanModeChange) {
-                  event.preventDefault();
-                  onPlanModeChange(!planMode);
-                  return;
-                }
-                if (event.key === "Tab" && event.shiftKey && permissionMode && onPermissionModeChange) {
-                  event.preventDefault();
-                  onPermissionModeChange(cyclePermissionMode({ providerId: selectedModel.providerId === "stave" ? "claude-code" : selectedModel.providerId, current: permissionMode }));
+                if (handleShiftTabShortcut(event)) {
                   return;
                 }
                 if (event.key !== "Enter") {
