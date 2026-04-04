@@ -43,7 +43,7 @@ export interface ProviderDescriptor {
   fallbackLabel: string;
   models: readonly string[];
   defaultModel: string;
-  conversationLabel: string;
+  sessionLabel: string;
   capabilities: {
     nativeCommandCatalog: boolean;
   };
@@ -60,7 +60,7 @@ export const PROVIDER_DESCRIPTORS = [
     fallbackLabel: "S",
     models: STAVE_META_MODEL_OPTIONS,
     defaultModel: "stave-auto",
-    conversationLabel: "Stave router",
+    sessionLabel: "Stave router",
     capabilities: {
       nativeCommandCatalog: false,
     },
@@ -73,7 +73,7 @@ export const PROVIDER_DESCRIPTORS = [
     fallbackLabel: "C",
     models: CLAUDE_SDK_MODEL_OPTIONS,
     defaultModel: "claude-sonnet-4-6",
-    conversationLabel: "Claude session ID",
+    sessionLabel: "Claude session ID",
     capabilities: {
       nativeCommandCatalog: true,
     },
@@ -86,7 +86,7 @@ export const PROVIDER_DESCRIPTORS = [
     fallbackLabel: "O",
     models: CODEX_SDK_MODEL_OPTIONS,
     defaultModel: "gpt-5.4",
-    conversationLabel: "Codex thread ID",
+    sessionLabel: "Codex thread ID",
     capabilities: {
       nativeCommandCatalog: false,
     },
@@ -163,8 +163,8 @@ export function getProviderFallbackLabel(args: { providerId: ProviderId }) {
   return getProviderDescriptor(args).fallbackLabel;
 }
 
-export function getProviderConversationLabel(args: { providerId: ProviderId }) {
-  return getProviderDescriptor(args).conversationLabel;
+export function getProviderSessionLabel(args: { providerId: ProviderId }) {
+  return getProviderDescriptor(args).sessionLabel;
 }
 
 export function providerSupportsNativeCommandCatalog(args: { providerId: ProviderId }) {

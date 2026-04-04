@@ -144,7 +144,7 @@ export type ProviderRuntimeOptionKeyContractIsValid = Assert<
 export const NORMALIZED_PROVIDER_EVENT_TYPES = [
   "thinking",
   "text",
-  "provider_conversation",
+  "provider_session",
   "usage",
   "prompt_suggestions",
   "tool",

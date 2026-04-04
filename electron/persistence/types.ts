@@ -35,7 +35,7 @@ export interface PersistenceWorkspaceSnapshot {
   tasks: PersistenceTaskRow[];
   messagesByTask: Record<string, PersistenceChatMessageRow[]>;
   promptDraftByTask?: Record<string, PromptDraft>;
-  providerConversationByTask?: Record<string, {
+  providerSessionByTask?: Record<string, {
     "claude-code"?: string;
     codex?: string;
     stave?: string;
@@ -60,7 +60,7 @@ export interface PersistenceWorkspaceShell {
   activeTaskId: string;
   tasks: PersistenceTaskRow[];
   promptDraftByTask?: Record<string, PromptDraft>;
-  providerConversationByTask?: Record<string, {
+  providerSessionByTask?: Record<string, {
     "claude-code"?: string;
     codex?: string;
     stave?: string;

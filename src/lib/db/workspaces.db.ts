@@ -8,7 +8,7 @@ export interface WorkspaceSummary {
   updatedAt: string;
 }
 
-export interface TaskProviderConversationState {
+export interface TaskProviderSessionState {
   "claude-code"?: string;
   codex?: string;
   // stave routes to claude-code/codex internally; this field is never set
@@ -21,7 +21,7 @@ export interface WorkspaceSnapshot {
   tasks: Task[];
   messagesByTask: Record<string, ChatMessage[]>;
   promptDraftByTask: Record<string, PromptDraft>;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
   editorTabs?: EditorTab[];
   activeEditorTabId?: string | null;
   workspaceInformation: WorkspaceInformationState;
@@ -31,7 +31,7 @@ export interface WorkspaceShell {
   activeTaskId: string;
   tasks: Task[];
   promptDraftByTask: Record<string, PromptDraft>;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
   editorTabs?: EditorTab[];
   activeEditorTabId?: string | null;
   workspaceInformation: WorkspaceInformationState;
@@ -132,7 +132,7 @@ function buildShellFromSnapshot(snapshot: WorkspaceSnapshot): WorkspaceShell {
     activeTaskId: snapshot.activeTaskId,
     tasks: snapshot.tasks,
     promptDraftByTask: snapshot.promptDraftByTask,
-    providerConversationByTask: snapshot.providerConversationByTask,
+    providerSessionByTask: snapshot.providerSessionByTask,
     editorTabs: snapshot.editorTabs,
     activeEditorTabId: snapshot.activeEditorTabId,
     workspaceInformation: snapshot.workspaceInformation,

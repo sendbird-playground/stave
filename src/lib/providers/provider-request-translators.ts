@@ -1,58 +1,13 @@
 import { buildLegacyPromptFromCanonicalRequest } from "./canonical-request";
 import type { CanonicalConversationRequest, ProviderId } from "./provider.types";
 
-function getStoredResumeConversationId(conversation?: CanonicalConversationRequest) {
-  const value = conversation?.resume?.nativeConversationId?.trim();
+function getStoredResumeSessionId(conversation?: CanonicalConversationRequest) {
+  const value = conversation?.resume?.nativeSessionId?.trim();
   return value ? value : undefined;
 }
 
-function getLatestTargetProviderModel(conversation: CanonicalConversationRequest) {
-  for (let index = conversation.history.length - 1; index >= 0; index -= 1) {
-    const message = conversation.history[index];
-    if (!message || message.role !== "assistant") {
-      continue;
-    }
-    if (message.providerId !== conversation.target.providerId) {
-      continue;
-    }
-    const model = message.model?.trim();
-    if (model) {
-      return model;
-    }
-  }
-
-  return undefined;
-}
-
-function isResumeCompatibleWithConversationTarget(conversation?: CanonicalConversationRequest) {
-  if (!conversation || conversation.target.providerId !== "codex") {
-    return true;
-  }
-
-  const targetModel = conversation.target.model?.trim();
-  if (!targetModel) {
-    return true;
-  }
-
-  const latestModel = getLatestTargetProviderModel(conversation);
-  if (!latestModel) {
-    return true;
-  }
-
-  return latestModel === targetModel;
-}
-
-function getResumeConversationId(conversation?: CanonicalConversationRequest) {
-  const value = getStoredResumeConversationId(conversation);
-  if (!value) {
-    return undefined;
-  }
-
-  return isResumeCompatibleWithConversationTarget(conversation) ? value : undefined;
-}
-
 function shouldIncludeHistory(conversation: CanonicalConversationRequest) {
-  return !getResumeConversationId(conversation);
+  return !getStoredResumeSessionId(conversation);
 }
 
 export function buildClaudePromptFromConversation(args: {
@@ -103,17 +58,13 @@ export function buildProviderTurnPrompt(args: {
   });
 }
 
-export function resolveProviderResumeConversationId(args: {
+export function resolveProviderResumeSessionId(args: {
   conversation?: CanonicalConversationRequest;
   fallbackResumeId?: string;
 }) {
-  if (!isResumeCompatibleWithConversationTarget(args.conversation)) {
-    return undefined;
-  }
-
   const fallback = args.fallbackResumeId?.trim();
   if (fallback) {
     return fallback;
   }
-  return getStoredResumeConversationId(args.conversation);
+  return getStoredResumeSessionId(args.conversation);
 }

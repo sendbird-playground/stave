@@ -639,7 +639,7 @@ interface WindowPersistenceApi {
         controlOwner?: "stave" | "external";
       }>;
       promptDraftByTask?: Record<string, PromptDraft>;
-      providerConversationByTask?: Record<
+      providerSessionByTask?: Record<
         string,
         {
           "claude-code"?: string;
@@ -698,7 +698,7 @@ interface WindowPersistenceApi {
         }>
       >;
       promptDraftByTask?: Record<string, PromptDraft>;
-      providerConversationByTask?: Record<
+      providerSessionByTask?: Record<
         string,
         {
           "claude-code"?: string;
@@ -793,7 +793,7 @@ interface WindowPersistenceApi {
         }>
       >;
       promptDraftByTask?: Record<string, PromptDraft>;
-      providerConversationByTask?: Record<
+      providerSessionByTask?: Record<
         string,
         {
           "claude-code"?: string;
@@ -908,7 +908,7 @@ interface WindowPersistenceApi {
         }>
       >;
       promptDraftByTask?: Record<string, PromptDraft>;
-      providerConversationByTask?: Record<
+      providerSessionByTask?: Record<
         string,
         {
           "claude-code"?: string;

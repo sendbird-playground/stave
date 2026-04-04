@@ -201,7 +201,7 @@ const TaskSchema = z.object({
   planFilePaths: z.array(z.string()).optional().default([]),
 });
 
-const TaskProviderConversationStateSchema = z.object({
+const TaskProviderSessionStateSchema = z.object({
   "claude-code": z.string().optional(),
   codex: z.string().optional(),
   stave: z.string().optional(),
@@ -339,7 +339,7 @@ export const WorkspaceSnapshotSchema = z.object({
     attachments: z.array(AttachmentSchema).optional().default([]),
     runtimeOverrides: PromptDraftRuntimeOverridesSchema.optional(),
   })).optional().default({}),
-  providerConversationByTask: z.record(z.string(), TaskProviderConversationStateSchema).optional().default({}),
+  providerSessionByTask: z.record(z.string(), TaskProviderSessionStateSchema).optional().default({}),
   editorTabs: z.array(EditorTabSchema).optional().default([]),
   activeEditorTabId: z.string().nullable().optional().default(null),
   workspaceInformation: WorkspaceInformationSchema.optional().default({

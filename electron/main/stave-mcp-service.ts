@@ -152,7 +152,7 @@ function createEmptyWorkspaceSnapshot() {
     promptDraftByTask: empty.promptDraftByTask,
     editorTabs: empty.editorTabs,
     activeEditorTabId: empty.activeEditorTabId,
-    providerConversationByTask: empty.providerConversationByTask,
+    providerSessionByTask: empty.providerSessionByTask,
   });
 }
 
@@ -183,7 +183,7 @@ async function persistWorkspaceSession(args: {
       promptDraftByTask: args.session.promptDraftByTask,
       editorTabs: args.session.editorTabs,
       activeEditorTabId: args.session.activeEditorTabId,
-      providerConversationByTask: args.session.providerConversationByTask,
+      providerSessionByTask: args.session.providerSessionByTask,
     }) as never,
   });
 }
@@ -796,8 +796,8 @@ export async function runTask(args: {
         ...session.messagesByTask,
         [task.id]: session.messagesByTask[task.id] ?? [],
       },
-      nativeConversationReadyByTask: {
-        ...session.nativeConversationReadyByTask,
+      nativeSessionReadyByTask: {
+        ...session.nativeSessionReadyByTask,
         [task.id]: false,
       },
     });
@@ -820,7 +820,7 @@ export async function runTask(args: {
 
   const turnId = randomUUID();
   const existingHistory = session.messagesByTask[task.id] ?? [];
-  const providerConversation = session.providerConversationByTask[task.id];
+  const providerSession = session.providerSessionByTask[task.id];
   const conversation = buildCanonicalConversationRequest({
     turnId,
     taskId: task.id,
@@ -830,7 +830,7 @@ export async function runTask(args: {
     history: existingHistory,
     userInput: args.prompt,
     mode: "chat",
-    nativeConversationId: providerConversation?.[provider] ?? null,
+    nativeSessionId: providerSession?.[provider] ?? null,
   });
   const pendingState = buildPendingProviderTurnState({
     tasks: session.tasks,

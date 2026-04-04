@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildProviderTurnPrompt,
-  resolveProviderResumeConversationId,
+  resolveProviderResumeSessionId,
 } from "@/lib/providers/provider-request-translators";
 import type { CanonicalConversationRequest } from "@/lib/providers/provider.types";
 
@@ -101,42 +101,13 @@ describe("provider request translators", () => {
           model: "claude-sonnet-4-6",
         },
         resume: {
-          nativeConversationId: "session_123",
+          nativeSessionId: "session_123",
         },
       }),
     });
 
     expect(prompt).not.toContain("[Task Shared Context]");
     expect(prompt).toContain("[Current User Input]");
-  });
-
-  test("skips Codex resume when the task switches to a different Codex model", () => {
-    const conversation = createConversation({
-      history: [
-        {
-          role: "assistant",
-          providerId: "codex",
-          model: "gpt-5.3-codex",
-          content: "Patched the runtime.",
-          parts: [{ type: "text", text: "Patched the runtime." }],
-        },
-      ],
-      resume: {
-        nativeConversationId: "thread_456",
-      },
-    });
-
-    const prompt = buildProviderTurnPrompt({
-      providerId: "codex",
-      prompt: "fallback prompt",
-      conversation,
-    });
-
-    expect(prompt).toContain("[Task Shared Context]");
-    expect(resolveProviderResumeConversationId({
-      conversation,
-      fallbackResumeId: "thread_override",
-    })).toBeUndefined();
   });
 
   test("preserves Codex resume when the task stays on the same Codex model", () => {
@@ -151,7 +122,7 @@ describe("provider request translators", () => {
         },
       ],
       resume: {
-        nativeConversationId: "thread_456",
+        nativeSessionId: "thread_456",
       },
     });
 
@@ -162,18 +133,18 @@ describe("provider request translators", () => {
     });
 
     expect(prompt).not.toContain("[Task Shared Context]");
-    expect(resolveProviderResumeConversationId({ conversation })).toBe("thread_456");
+    expect(resolveProviderResumeSessionId({ conversation })).toBe("thread_456");
   });
 
   test("reads resume ids from canonical conversation metadata", () => {
     const conversation = createConversation({
       resume: {
-        nativeConversationId: "thread_456",
+        nativeSessionId: "thread_456",
       },
     });
 
-    expect(resolveProviderResumeConversationId({ conversation })).toBe("thread_456");
-    expect(resolveProviderResumeConversationId({
+    expect(resolveProviderResumeSessionId({ conversation })).toBe("thread_456");
+    expect(resolveProviderResumeSessionId({
       conversation,
       fallbackResumeId: "thread_override",
     })).toBe("thread_override");

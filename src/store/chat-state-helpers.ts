@@ -1,5 +1,5 @@
 import { sanitizeFileContextPayload } from "@/lib/file-context-sanitization";
-import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
+import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
 import type { ProviderId } from "@/lib/providers/provider.types";
 import type {
   ChatMessage,
@@ -45,8 +45,8 @@ export function buildLocalCommandResponseState(args: {
   messagesByTask: Record<string, ChatMessage[]>;
   messageCountByTask: Record<string, number>;
   activeTurnIdsByTask: Record<string, string | undefined>;
-  nativeConversationReadyByTask: Record<string, boolean>;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
+  nativeSessionReadyByTask: Record<string, boolean>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
   taskWorkspaceIdById: Record<string, string>;
   workspaceSnapshotVersion: number;
   taskId: string;
@@ -55,7 +55,7 @@ export function buildLocalCommandResponseState(args: {
   activeModel: string;
   content: string;
   responseText: string;
-  shouldClearProviderConversation: boolean;
+  shouldClearProviderSession: boolean;
 }) {
   const current = args.messagesByTask[args.taskId] ?? [];
   const userMessageId = buildMessageId({ taskId: args.taskId, count: current.length });
@@ -82,7 +82,7 @@ export function buildLocalCommandResponseState(args: {
     isStreaming: false,
     parts: args.responseText ? [createUserTextPart({ text: args.responseText })] : [],
   };
-  const nextMessages = args.shouldClearProviderConversation
+  const nextMessages = args.shouldClearProviderSession
     ? [userMessage, assistantMessage]
     : [...current, userMessage, assistantMessage];
 
@@ -107,17 +107,17 @@ export function buildLocalCommandResponseState(args: {
       ...args.activeTurnIdsByTask,
       [args.taskId]: undefined,
     },
-    nativeConversationReadyByTask: args.shouldClearProviderConversation
+    nativeSessionReadyByTask: args.shouldClearProviderSession
       ? {
-          ...args.nativeConversationReadyByTask,
+          ...args.nativeSessionReadyByTask,
           [args.taskId]: false,
         }
-      : args.nativeConversationReadyByTask,
-    providerConversationByTask: args.shouldClearProviderConversation
+      : args.nativeSessionReadyByTask,
+    providerSessionByTask: args.shouldClearProviderSession
       ? Object.fromEntries(
-          Object.entries(args.providerConversationByTask).filter(([key]) => key !== args.taskId)
+          Object.entries(args.providerSessionByTask).filter(([key]) => key !== args.taskId)
         )
-      : args.providerConversationByTask,
+      : args.providerSessionByTask,
     taskWorkspaceIdById: {
       ...args.taskWorkspaceIdById,
       [args.taskId]: args.taskWorkspaceId,

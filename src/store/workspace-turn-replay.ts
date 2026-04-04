@@ -17,22 +17,22 @@ export function applyProviderEventsToWorkspaceSession(args: {
     provider: args.provider,
     model: args.model,
     turnId: args.turnId,
-    nativeConversationReady: args.session.nativeConversationReadyByTask[args.taskId],
-    providerConversation: args.session.providerConversationByTask[args.taskId],
+    nativeSessionReady: args.session.nativeSessionReadyByTask[args.taskId],
+    providerSession: args.session.providerSessionByTask[args.taskId],
   });
 
   const activeTurnMatches = args.session.activeTurnIdsByTask[args.taskId] === replayed.activeTurnId;
-  const nativeConversationReadyMatches =
-    args.session.nativeConversationReadyByTask[args.taskId] === replayed.nativeConversationReady;
-  const providerConversationMatches =
-    replayed.providerConversation === undefined
-    || args.session.providerConversationByTask[args.taskId] === replayed.providerConversation;
+  const nativeSessionReadyMatches =
+    args.session.nativeSessionReadyByTask[args.taskId] === replayed.nativeSessionReady;
+  const providerSessionMatches =
+    replayed.providerSession === undefined
+    || args.session.providerSessionByTask[args.taskId] === replayed.providerSession;
 
   if (
     !replayed.changed
     && activeTurnMatches
-    && nativeConversationReadyMatches
-    && providerConversationMatches
+    && nativeSessionReadyMatches
+    && providerSessionMatches
   ) {
     return {
       stateChanged: false,
@@ -44,7 +44,7 @@ export function applyProviderEventsToWorkspaceSession(args: {
 
   return {
     stateChanged: true,
-    snapshotChanged: replayed.changed || !providerConversationMatches,
+    snapshotChanged: replayed.changed || !providerSessionMatches,
     session: {
       ...args.session,
       messagesByTask: replayed.changed
@@ -69,17 +69,17 @@ export function applyProviderEventsToWorkspaceSession(args: {
             ...args.session.activeTurnIdsByTask,
             [args.taskId]: replayed.activeTurnId,
           },
-      nativeConversationReadyByTask: nativeConversationReadyMatches
-        ? args.session.nativeConversationReadyByTask
+      nativeSessionReadyByTask: nativeSessionReadyMatches
+        ? args.session.nativeSessionReadyByTask
         : {
-            ...args.session.nativeConversationReadyByTask,
-            [args.taskId]: replayed.nativeConversationReady,
+            ...args.session.nativeSessionReadyByTask,
+            [args.taskId]: replayed.nativeSessionReady,
           },
-      providerConversationByTask: providerConversationMatches
-        ? args.session.providerConversationByTask
+      providerSessionByTask: providerSessionMatches
+        ? args.session.providerSessionByTask
         : {
-            ...args.session.providerConversationByTask,
-            [args.taskId]: replayed.providerConversation!,
+            ...args.session.providerSessionByTask,
+            [args.taskId]: replayed.providerSession!,
           },
     },
     turnCompleted: replayed.activeTurnId === undefined,

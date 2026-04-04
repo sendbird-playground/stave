@@ -6,7 +6,7 @@ import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants"
 import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
-import { getProviderConversationLabel, listProviderConversations } from "@/lib/providers/provider-conversations";
+import { getProviderSessionLabel, listProviderSessions } from "@/lib/providers/provider-sessions";
 import { filterTasksByName, getRespondingProviderId, isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -111,7 +111,7 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
   onSelectTask: (taskId: string) => void;
   onArchiveTask: (task: { id: string; title: string }) => void;
   onOpenTaskMenuRename: (task: { id: string; title: string }) => void;
-  onOpenTaskMenuConversationIds: (task: { id: string; title: string }) => void;
+  onOpenTaskMenuSessionIds: (task: { id: string; title: string }) => void;
   onDragStart: (event: DragEvent<HTMLDivElement>, taskId: string) => void;
   onDragEnd: () => void;
   onDragOver: (event: DragEvent<HTMLDivElement>, taskId: string, disabled: boolean) => void;
@@ -201,10 +201,10 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
-              args.onOpenTaskMenuConversationIds({ id: args.task.id, title: args.task.title });
+              args.onOpenTaskMenuSessionIds({ id: args.task.id, title: args.task.title });
             }}
           >
-            Conversation IDs
+            Session IDs
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -246,15 +246,15 @@ export function WorkspaceTaskTabs() {
 
   const visibleTasks = tasks.filter((task) => !isTaskArchived(task));
   const archivedTasks = tasks.filter((task) => isTaskArchived(task));
-  const viewedConversationState = useAppStore((state) =>
-    taskToViewSession ? state.providerConversationByTask[taskToViewSession.id] : undefined
+  const viewedSessionState = useAppStore((state) =>
+    taskToViewSession ? state.providerSessionByTask[taskToViewSession.id] : undefined
   );
   const sessionTask = taskToViewSession
     ? tasks.find((task) => task.id === taskToViewSession.id) ?? null
     : null;
-  const sessionConversationRows = useMemo(() => listProviderConversations({
-    conversations: viewedConversationState,
-  }), [viewedConversationState]);
+  const sessionRows = useMemo(() => listProviderSessions({
+    sessions: viewedSessionState,
+  }), [viewedSessionState]);
 
   useEffect(() => {
     if (!taskToRename) {
@@ -333,7 +333,7 @@ export function WorkspaceTaskTabs() {
                     onSelectTask={(taskId) => selectTask({ taskId })}
                     onArchiveTask={setTaskToArchive}
                     onOpenTaskMenuRename={setTaskToRename}
-                    onOpenTaskMenuConversationIds={(nextTask) => {
+                    onOpenTaskMenuSessionIds={(nextTask) => {
                       setCopiedSessionIdKey(null);
                       setTaskToViewSession(nextTask);
                     }}
@@ -458,9 +458,9 @@ export function WorkspaceTaskTabs() {
           <Card className="w-full max-w-lg rounded-lg border-border/80 bg-card p-4 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-foreground">Conversation IDs</h3>
+                <h3 className="text-base font-semibold text-foreground">Session IDs</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Stave keeps its own stable task id, and each provider keeps its own native conversation id.
+                  Stave keeps its own stable task id, and each provider keeps its own native session id.
                   For <span className="font-medium text-foreground">{taskToViewSession.title}</span>, these ids can coexist because one task can switch between providers over time.
                   Provider-native ids are what Stave uses for in-app resume. They may not be resumable from an external Claude or Codex terminal session.
                 </p>
@@ -485,28 +485,28 @@ export function WorkspaceTaskTabs() {
                   </Button>
                 </div>
               </div>
-              {sessionConversationRows.length === 0 ? (
+              {sessionRows.length === 0 ? (
                 <div className="rounded-md border border-dashed border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
-                  No provider-native conversation ids have been recorded for this task yet.
+                  No provider-native session ids have been recorded for this task yet.
                 </div>
               ) : (
-                sessionConversationRows.map((row) => (
+                sessionRows.map((row) => (
                   <div key={row.providerId} className="rounded-md border border-border/80 bg-background px-3 py-2">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                        {getProviderConversationLabel({ providerId: row.providerId })}
+                        {getProviderSessionLabel({ providerId: row.providerId })}
                       </p>
                       <span className="rounded-md border border-border/70 px-2 py-1 text-xs text-muted-foreground">
                         {getProviderLabel({ providerId: row.providerId })}
                       </span>
                     </div>
                     <div className="mt-1 flex items-center justify-between gap-3">
-                      <p className="min-w-0 flex-1 truncate font-mono text-sm text-foreground">{row.nativeConversationId}</p>
+                      <p className="min-w-0 flex-1 truncate font-mono text-sm text-foreground">{row.nativeSessionId}</p>
                       <Button
                         size="sm"
                         variant="ghost"
                         className="h-8 shrink-0 px-2"
-                        onClick={() => void copySessionIdentifier({ key: row.providerId, value: row.nativeConversationId })}
+                        onClick={() => void copySessionIdentifier({ key: row.providerId, value: row.nativeSessionId })}
                       >
                         {copiedSessionIdKey === row.providerId ? <Check className="size-4" /> : <Copy className="size-4" />}
                         {copiedSessionIdKey === row.providerId ? "Copied" : "Copy"}

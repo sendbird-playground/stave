@@ -24,9 +24,9 @@ describe("mapClaudeMessageToEvents", () => {
 
     expect(events).toEqual([
       {
-        type: "provider_conversation",
+        type: "provider_session",
         providerId: "claude-code",
-        nativeConversationId: "session-1",
+        nativeSessionId: "session-1",
       },
     ]);
   });

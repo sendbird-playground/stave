@@ -337,7 +337,7 @@ export class SqliteStore {
       activeTaskId: args.snapshot.activeTaskId,
       tasks: args.snapshot.tasks,
       promptDraftByTask: args.snapshot.promptDraftByTask ?? {},
-      providerConversationByTask: args.snapshot.providerConversationByTask ?? {},
+      providerSessionByTask: args.snapshot.providerSessionByTask ?? {},
       editorTabs: args.snapshot.editorTabs ?? [],
       activeEditorTabId: args.snapshot.activeEditorTabId ?? null,
       workspaceInformation: args.snapshot.workspaceInformation,
@@ -363,7 +363,7 @@ export class SqliteStore {
     }
     return {
       promptDraftByTask: {},
-      providerConversationByTask: {},
+      providerSessionByTask: {},
       editorTabs: [],
       activeEditorTabId: null,
       messageCountByTask: {},

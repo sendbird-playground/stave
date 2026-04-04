@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildCodexThreadStartedEvents,
   buildCodexConfigOverrides,
   buildCodexTodoPlanText,
   extractProposedPlan,
   mapCodexItemEvent,
   resolveApprovalPolicy,
+  resolveCodexResumeThreadFallback,
   resolveCodexPlanReadyText,
 } from "../electron/providers/codex-sdk-runtime";
 
@@ -256,6 +258,70 @@ describe("resolveCodexPlanReadyText", () => {
       pendingMessageText: null,
       latestTodoPlanText: "## Draft Plan\n- [ ] step 1",
     })).toBe("## Draft Plan\n- [ ] step 1");
+  });
+});
+
+describe("buildCodexThreadStartedEvents", () => {
+  test("always surfaces Codex thread ids as provider conversation metadata", () => {
+    expect(buildCodexThreadStartedEvents({
+      threadId: "thread-plan-1",
+    })).toEqual([
+      {
+        type: "provider_session",
+        providerId: "codex",
+        nativeSessionId: "thread-plan-1",
+      },
+    ]);
+  });
+
+  test("ignores empty thread ids", () => {
+    expect(buildCodexThreadStartedEvents({
+      threadId: "   ",
+    })).toEqual([]);
+  });
+});
+
+describe("resolveCodexResumeThreadFallback", () => {
+  test("preserves persisted resume ids in plan mode", () => {
+    expect(resolveCodexResumeThreadFallback({
+      runtimeOptions: {
+        codexExperimentalPlanMode: true,
+        codexResumeThreadId: "thread-plan-1",
+      },
+    })).toBe("thread-plan-1");
+  });
+
+  test("falls back to the canonical conversation resume id in plan mode", () => {
+    expect(resolveCodexResumeThreadFallback({
+      runtimeOptions: {
+        codexExperimentalPlanMode: true,
+      },
+      conversation: {
+        target: {
+          providerId: "codex",
+          model: "gpt-5.4",
+        },
+        mode: "chat",
+        history: [{
+          role: "assistant",
+          providerId: "codex",
+          model: "gpt-5.4",
+          content: "Patched the runtime.",
+          parts: [{ type: "text", text: "Patched the runtime." }],
+        }],
+        input: {
+          role: "user",
+          providerId: "user",
+          model: "user",
+          content: "Continue.",
+          parts: [{ type: "text", text: "Continue." }],
+        },
+        contextParts: [],
+        resume: {
+          nativeSessionId: "thread-plan-2",
+        },
+      },
+    })).toBe("thread-plan-2");
   });
 });
 

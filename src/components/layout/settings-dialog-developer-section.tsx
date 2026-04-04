@@ -52,7 +52,7 @@ export function DeveloperSection() {
     activeWorkspaceId,
     workspacePathById,
     projectPath,
-    providerConversationByTask,
+    providerSessionByTask,
     refreshProviderCommandCatalog,
   ] = useAppStore(useShallow((state) => [
     state.settings,
@@ -60,7 +60,7 @@ export function DeveloperSection() {
     state.activeWorkspaceId,
     state.workspacePathById,
     state.projectPath,
-    state.providerConversationByTask,
+    state.providerSessionByTask,
     state.refreshProviderCommandCatalog,
   ] as const));
   const [gpuStatus, setGpuStatus] = useState<GpuStatusSnapshot | null>(null);
@@ -78,8 +78,8 @@ export function DeveloperSection() {
     provider: "claude-code",
     model: settings.modelClaude,
     settings,
-    providerConversation: activeTaskId
-      ? (providerConversationByTask[activeTaskId] ?? null)
+    providerSession: activeTaskId
+      ? (providerSessionByTask[activeTaskId] ?? null)
       : null,
   });
 

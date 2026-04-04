@@ -1,4 +1,4 @@
-import type { TaskProviderConversationState } from "@/lib/db/workspaces.db";
+import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
@@ -17,8 +17,8 @@ type ActiveWorkspaceProjectionState = {
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
-  providerConversationByTask: Record<string, TaskProviderConversationState>;
-  nativeConversationReadyByTask: Record<string, boolean>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
+  nativeSessionReadyByTask: Record<string, boolean>;
 };
 
 type WorkspaceRuntimeCacheState = ActiveWorkspaceProjectionState & {
@@ -38,8 +38,8 @@ export type ActiveWorkspaceStatePatch = Pick<
   | "editorTabs"
   | "activeEditorTabId"
   | "activeTurnIdsByTask"
-  | "providerConversationByTask"
-  | "nativeConversationReadyByTask"
+  | "providerSessionByTask"
+  | "nativeSessionReadyByTask"
 >;
 
 export type WorkspaceRuntimeStatePatch = Partial<ActiveWorkspaceStatePatch> & {
@@ -60,8 +60,8 @@ export function createWorkspaceSessionStateFromAppState(
     editorTabs: state.editorTabs,
     activeEditorTabId: state.activeEditorTabId,
     activeTurnIdsByTask: state.activeTurnIdsByTask,
-    providerConversationByTask: state.providerConversationByTask,
-    nativeConversationReadyByTask: state.nativeConversationReadyByTask,
+    providerSessionByTask: state.providerSessionByTask,
+    nativeSessionReadyByTask: state.nativeSessionReadyByTask,
   };
 }
 
@@ -76,8 +76,8 @@ export function createActiveWorkspaceStatePatch(session: WorkspaceSessionState):
     editorTabs: session.editorTabs,
     activeEditorTabId: session.activeEditorTabId,
     activeTurnIdsByTask: session.activeTurnIdsByTask,
-    providerConversationByTask: session.providerConversationByTask,
-    nativeConversationReadyByTask: session.nativeConversationReadyByTask,
+    providerSessionByTask: session.providerSessionByTask,
+    nativeSessionReadyByTask: session.nativeSessionReadyByTask,
   };
 }
 
@@ -117,8 +117,8 @@ export function saveActiveWorkspaceRuntimeCache(args: {
     | "editorTabs"
     | "activeEditorTabId"
     | "activeTurnIdsByTask"
-    | "providerConversationByTask"
-    | "nativeConversationReadyByTask"
+    | "providerSessionByTask"
+    | "nativeSessionReadyByTask"
   >;
 }) {
   if (!args.state.activeWorkspaceId) {

@@ -12,10 +12,10 @@ const TextEventSchema = z.object({
   segmentId: z.string().optional(),
 });
 
-const ProviderConversationEventSchema = z.object({
-  type: z.literal("provider_conversation"),
+const ProviderSessionEventSchema = z.object({
+  type: z.literal("provider_session"),
   providerId: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]),
-  nativeConversationId: z.string(),
+  nativeSessionId: z.string(),
 });
 
 const UsageEventSchema = z.object({
@@ -181,7 +181,7 @@ const SubagentProgressEventSchema = z.object({
 export const NormalizedProviderEventSchema = z.discriminatedUnion("type", [
   ThinkingEventSchema,
   TextEventSchema,
-  ProviderConversationEventSchema,
+  ProviderSessionEventSchema,
   UsageEventSchema,
   PromptSuggestionsEventSchema,
   ToolEventSchema,
