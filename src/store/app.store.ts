@@ -4474,16 +4474,27 @@ export const useAppStore = create<AppState>()(
             void abortTurn({ turnId: activeTurnId });
           }
         }
+        // Clean up provider runtime state (thread caches, session maps) so a
+        // subsequent turn does not try to resume a stale / aborted thread.
+        const cleanupTask = window.api?.provider?.cleanupTask;
+        if (cleanupTask) {
+          void cleanupTask({ taskId });
+        }
 
         set((state) => {
           const current = state.messagesByTask[taskId] ?? [];
           const target = current[current.length - 1];
+          // Clear persisted provider session so stale thread IDs are not
+          // carried across to subsequent turns or workspace reloads.
+          const { [taskId]: _dropped, ...restProviderSession } =
+            state.providerSessionByTask;
           if (!target || target.role !== "assistant" || !target.isStreaming) {
             return {
               activeTurnIdsByTask: {
                 ...state.activeTurnIdsByTask,
                 [taskId]: undefined,
               },
+              providerSessionByTask: restProviderSession,
             };
           }
 
@@ -4506,6 +4517,7 @@ export const useAppStore = create<AppState>()(
               ...state.activeTurnIdsByTask,
               [taskId]: undefined,
             },
+            providerSessionByTask: restProviderSession,
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });

@@ -1804,4 +1804,97 @@ describe("workspace store hydration ordering", () => {
       "ws-alpha-feature",
     ]);
   });
+
+  test("abortTaskTurn calls cleanupTask and clears providerSessionByTask to prevent stale thread resume", async () => {
+    const localStorage = createMemoryStorage();
+    const abortCalls: string[] = [];
+    const cleanupCalls: string[] = [];
+    let streamListener: ((payload: { streamId: string; event: unknown; done: boolean }) => void) | null = null;
+
+    (globalThis as { window: unknown }).window = {
+      localStorage,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        provider: {
+          startPushTurn: async () => ({
+            ok: true,
+            streamId: "stream-abort-1",
+            turnId: "turn-abort-1",
+          }),
+          subscribeStreamEvents: (listener: typeof streamListener) => {
+            streamListener = listener;
+            return () => {
+              if (streamListener === listener) {
+                streamListener = null;
+              }
+            };
+          },
+          abortTurn: async ({ turnId }: { turnId: string }) => {
+            abortCalls.push(turnId);
+            return { ok: true, message: "aborted" };
+          },
+          cleanupTask: async ({ taskId }: { taskId: string }) => {
+            cleanupCalls.push(taskId);
+            return { ok: true };
+          },
+        },
+        persistence: {
+          listWorkspaces: async () => ({ ok: true, rows: [] }),
+          upsertWorkspace: async () => ({ ok: true }),
+        },
+        fs: {
+          listFiles: async () => ({ ok: true, files: [] }),
+        },
+      },
+    } as unknown;
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      activeWorkspaceId: "ws-abort-test",
+      activeTaskId: "task-abort-1",
+      projectPath: "/tmp/stave-abort-test",
+      draftProvider: "codex",
+      tasks: [{
+        id: "task-abort-1",
+        title: "Abort Test",
+        provider: "codex",
+        updatedAt: "2026-04-01T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      messagesByTask: { "task-abort-1": [] },
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {
+        "task-abort-1": { codex: "thread-id-stale-abc123" },
+      },
+    });
+
+    useAppStore.getState().sendUserMessage({
+      taskId: "task-abort-1",
+      content: "Do something, then I will abort.",
+    });
+
+    await Bun.sleep(0);
+
+    const beforeAbort = useAppStore.getState();
+    const activeTurnId = beforeAbort.activeTurnIdsByTask["task-abort-1"];
+    expect(activeTurnId).toBeString();
+
+    useAppStore.getState().abortTaskTurn({ taskId: "task-abort-1" });
+    await Bun.sleep(0);
+
+    const afterAbort = useAppStore.getState();
+    // Turn should be cleared
+    expect(afterAbort.activeTurnIdsByTask["task-abort-1"]).toBeUndefined();
+    // cleanupTask must have been called so provider thread caches are evicted
+    expect(cleanupCalls).toContain("task-abort-1");
+    // providerSessionByTask should no longer hold the stale thread id
+    expect(afterAbort.providerSessionByTask["task-abort-1"]).toBeUndefined();
+  });
 });

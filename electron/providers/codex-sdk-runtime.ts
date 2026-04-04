@@ -928,6 +928,11 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
 
     return events;
   } catch (error) {
+    // Evict the cached thread so a subsequent retry does not attempt to
+    // resume the same (possibly stale) thread that just failed.
+    if (args.taskId) {
+      cleanupCodexTask(args.taskId);
+    }
     console.warn("[provider-runtime] Codex SDK unavailable", error, diagnostics);
     const reason = toCodexUserFacingErrorMessage({ message: toText(error) });
     const failureEvents: BridgeEvent[] = [
