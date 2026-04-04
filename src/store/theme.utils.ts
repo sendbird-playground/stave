@@ -14,12 +14,15 @@ export {
   type ThemeTokenValues,
   type ThemeOverrideValues,
   type CustomThemeDefinition,
+  type SidebarArtworkMode,
 
   // Presets
   PRESET_THEME_TOKENS,
 
   // Built-in custom themes
   BUILTIN_CUSTOM_THEMES,
+  SIDEBAR_ARTWORK_OPTIONS,
+  DEFAULT_SIDEBAR_ARTWORK_MODE,
 
   // DOM application
   applyThemeClass,
@@ -31,6 +34,8 @@ export {
   resolveDarkModeForTheme,
   findCustomThemeById,
   listAllCustomThemes,
+  normalizeSidebarArtworkMode,
+  resolveSidebarArtworkClass,
 
   // Validation
   MAX_USER_THEMES,

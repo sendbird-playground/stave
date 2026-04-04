@@ -154,9 +154,11 @@ import {
   type ThemeTokenValues,
   type ThemeOverrideValues,
   type CustomThemeDefinition,
+  type SidebarArtworkMode,
   THEME_TOKEN_NAMES,
   PRESET_THEME_TOKENS,
   BUILTIN_CUSTOM_THEMES,
+  DEFAULT_SIDEBAR_ARTWORK_MODE,
   applyThemeClass,
   applyThemeOverrides,
   applyCustomTheme,
@@ -165,6 +167,8 @@ import {
   findCustomThemeById,
   listAllCustomThemes,
   MAX_USER_THEMES,
+  normalizeSidebarArtworkMode,
+  SIDEBAR_ARTWORK_OPTIONS,
 } from "@/lib/themes";
 import {
   type RecentProjectState,
@@ -221,6 +225,7 @@ export {
   PRESET_THEME_TOKENS,
   BUILTIN_CUSTOM_THEMES,
   MAX_USER_THEMES,
+  SIDEBAR_ARTWORK_OPTIONS,
 } from "@/lib/themes";
 export {
   parseCustomThemeFile,
@@ -233,6 +238,7 @@ export type {
   ThemeTokenValues,
   ThemeOverrideValues,
   CustomThemeDefinition,
+  SidebarArtworkMode,
   ThemeValidationResult,
 } from "@/lib/themes";
 export type { RecentProjectState } from "@/store/project.utils";
@@ -259,6 +265,8 @@ export interface AppSettings {
   themeMode: "light" | "dark" | "system";
   /** ID of the active custom theme preset, or `null` for the default. */
   customThemeId: string | null;
+  /** Ambient artwork rendered behind the left project sidebar glass. */
+  sidebarArtworkMode: SidebarArtworkMode;
   /** User-installed custom theme definitions (persisted in localStorage). */
   userCustomThemes: CustomThemeDefinition[];
   themeOverrides: Record<ThemeModeName, ThemeOverrideValues>;
@@ -724,6 +732,7 @@ const ARCHIVED_TASK_TURN_NOTICE = "Generation stopped because the task was archi
 const defaultSettings: AppSettings = {
   themeMode: "dark",
   customThemeId: null,
+  sidebarArtworkMode: DEFAULT_SIDEBAR_ARTWORK_MODE,
   userCustomThemes: [],
   themeOverrides: {
     light: {},
@@ -5277,6 +5286,9 @@ export const useAppStore = create<AppState>()(
         // Migrate legacy fastModeVisible → per-provider fields.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = state.settings as any;
+        state.settings.sidebarArtworkMode = normalizeSidebarArtworkMode(
+          raw.sidebarArtworkMode,
+        );
         state.settings.notificationSoundEnabled = typeof raw.notificationSoundEnabled === "boolean"
           ? raw.notificationSoundEnabled
           : defaultSettings.notificationSoundEnabled;
