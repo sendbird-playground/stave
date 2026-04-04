@@ -678,7 +678,7 @@ export function ProjectWorkspaceSidebar(args: {
                       <PanelLeft className="size-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="right">
+                  <TooltipContent side="bottom">
                     Collapse Project List
                   </TooltipContent>
                 </Tooltip>
@@ -808,7 +808,7 @@ export function ProjectWorkspaceSidebar(args: {
                         <FolderOpen className="size-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="right">Open Project</TooltipContent>
+                    <TooltipContent side="top">Open Project</TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -828,7 +828,7 @@ export function ProjectWorkspaceSidebar(args: {
                         <ArrowUpDown className="size-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="right">
+                    <TooltipContent side="top">
                       {reorderMode
                         ? "Finish reordering"
                         : "Reorder projects and workspaces"}
