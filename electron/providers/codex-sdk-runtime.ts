@@ -317,6 +317,43 @@ export function extractProposedPlan(text: string): string | null {
   return text.slice(contentStart, closeIdx).trim();
 }
 
+export function looksLikeCodexPlanText(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (extractProposedPlan(trimmed)) {
+    return true;
+  }
+
+  const nonEmptyLines = trimmed
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (nonEmptyLines.length >= 2) {
+    return true;
+  }
+
+  return nonEmptyLines.some((line) => (
+    /^#{1,6}\s/u.test(line)
+    || /^[-*+]\s/u.test(line)
+    || /^\d+\.\s/u.test(line)
+    || /^\[[ xX]\]\s/u.test(line)
+  ));
+}
+
+export function shouldBufferCompletedCodexPlanCandidate(args: {
+  planMode: boolean;
+  lifecycle: "item.started" | "item.updated" | "item.completed";
+  itemType: string;
+  text?: string | null;
+}) {
+  return args.planMode
+    && args.lifecycle === "item.completed"
+    && args.itemType === "agent_message"
+    && Boolean(args.text?.trim());
+}
+
 function buildCodexTodoToolInput(args: {
   items: Array<{ text?: string; completed?: boolean }>;
 }) {
@@ -353,17 +390,29 @@ export function resolveCodexPlanReadyText(args: {
   pendingMessageText?: string | null;
   latestTodoPlanText?: string | null;
 }): string | null {
+  const todoPlanText = args.latestTodoPlanText?.trim() ?? "";
   const finalPlanText = args.finalPlanText?.trim() ?? "";
   if (finalPlanText) {
-    return extractProposedPlan(finalPlanText) ?? finalPlanText;
+    const extracted = extractProposedPlan(finalPlanText);
+    if (extracted) {
+      return extracted;
+    }
+    if (!todoPlanText || looksLikeCodexPlanText(finalPlanText)) {
+      return finalPlanText;
+    }
   }
 
   const pendingText = args.pendingMessageText?.trim() ?? "";
   if (pendingText) {
-    return extractProposedPlan(pendingText) ?? pendingText;
+    const extracted = extractProposedPlan(pendingText);
+    if (extracted) {
+      return extracted;
+    }
+    if (!todoPlanText || looksLikeCodexPlanText(pendingText)) {
+      return pendingText;
+    }
   }
 
-  const todoPlanText = args.latestTodoPlanText?.trim() ?? "";
   return todoPlanText || null;
 }
 
@@ -818,17 +867,22 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
               items: threadEvent.item.items ?? [],
             });
           }
-          if (
-            codexExperimentalPlanMode
-            && threadEvent.type === "item.completed"
-            && threadEvent.item.type === "agent_message"
-            && (sawExperimentalPlanTodo || Boolean(extractProposedPlan(threadEvent.item.text ?? "")))
-          ) {
+          if (shouldBufferCompletedCodexPlanCandidate({
+            planMode: codexExperimentalPlanMode,
+            lifecycle: threadEvent.type,
+            itemType: threadEvent.item.type,
+            text: threadEvent.item.type === "agent_message" ? threadEvent.item.text : null,
+          })) {
             if (pendingPlanMessageText) {
               flushPendingPlanMessage(false);
             }
             pendingPlanMessageText = threadEvent.item.text ?? "";
-            retainedFinalPlanText = threadEvent.item.text ?? "";
+            if (
+              !sawExperimentalPlanTodo
+              || looksLikeCodexPlanText(threadEvent.item.text ?? "")
+            ) {
+              retainedFinalPlanText = threadEvent.item.text ?? "";
+            }
             if (codexDebug) {
               console.debug("[codex-sdk-runtime] buffering final codex plan candidate");
             }
