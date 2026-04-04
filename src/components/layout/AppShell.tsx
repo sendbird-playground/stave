@@ -399,7 +399,8 @@ export function AppShell() {
 
       if (event.key.toLowerCase() === "e") {
         event.preventDefault();
-        store.setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "explorer" } });
+        const nextVisible = !(store.layout.sidebarOverlayVisible && store.layout.sidebarOverlayTab === "explorer");
+        store.setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "explorer" } });
         return;
       }
 

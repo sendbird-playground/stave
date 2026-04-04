@@ -558,7 +558,7 @@ export function PromptInput(args: PromptInputProps) {
       onBlurCapture={() => {
         window.requestAnimationFrame(syncComposerFocus);
       }}
-      className="space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-colors focus-within:border-ring/60"
+      className="relative space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-colors focus-within:border-ring/60"
     >
       {promptSuggestions && promptSuggestions.length > 0 ? (
         <Suggestions aria-label="Suggestions" className="mb-0">
@@ -574,34 +574,32 @@ export function PromptInput(args: PromptInputProps) {
           ))}
         </Suggestions>
       ) : null}
+      {!isPromptInputFocused && !interactionsDisabled ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={focusComposer}
+          className={cn(
+            PROMPT_TOOLBAR_BUTTON,
+            "absolute right-4 top-4 h-8 gap-2 border border-border/60 bg-background/70 text-foreground hover:bg-background",
+          )}
+        >
+          <span>Focus</span>
+          <KbdGroup>
+            <Kbd>{modifierLabel}</Kbd>
+            <Kbd>L</Kbd>
+          </KbdGroup>
+          <span className="text-xs text-muted-foreground">or</span>
+          <KbdGroup>
+            <Kbd>{modifierLabel}</Kbd>
+            <Kbd>J</Kbd>
+          </KbdGroup>
+        </Button>
+      ) : null}
       <Popover open={activePalette !== null} modal={false}>
         <PopoverAnchor asChild>
           <div className="space-y-2">
-            {!isPromptInputFocused && !interactionsDisabled ? (
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={focusComposer}
-                  className={cn(
-                    PROMPT_TOOLBAR_BUTTON,
-                    "h-8 gap-2 border border-border/60 bg-background/70 text-foreground hover:bg-background",
-                  )}
-                >
-                  <span>Focus</span>
-                  <KbdGroup>
-                    <Kbd>{modifierLabel}</Kbd>
-                    <Kbd>L</Kbd>
-                  </KbdGroup>
-                  <span className="text-xs text-muted-foreground">or</span>
-                  <KbdGroup>
-                    <Kbd>{modifierLabel}</Kbd>
-                    <Kbd>J</Kbd>
-                  </KbdGroup>
-                </Button>
-              </div>
-            ) : null}
             <Textarea
               ref={textareaRef}
               value={value}
