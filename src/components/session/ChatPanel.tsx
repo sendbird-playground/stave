@@ -302,6 +302,8 @@ function ChatPanelMessageList() {
   const taskMessagesLoading = useAppStore((state) => state.taskMessagesLoadingByTask[state.activeTaskId] === true);
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
   const [elapsedAnchorMs, setElapsedAnchorMs] = useState(() => Date.now());
+  const [turnCompletionScrollTick, setTurnCompletionScrollTick] = useState(0);
+  const previousActiveTurnIdRef = useRef<string | undefined>(activeTurnId);
 
   const visibleMessages = useMemo(() => messages.filter((message) => !message.isPlanResponse), [messages]);
   const hasOlderMessages = messages.length < totalMessageCount;
@@ -312,8 +314,15 @@ function ChatPanelMessageList() {
     [visibleMessages]
   );
   const autoScrollKey = `${visibleMessages.length}:${lastVisibleMessageScrollFingerprint}`;
-  const forceScrollKey = latestVisibleMessageId;
+  const forceScrollKey = `${latestVisibleMessageId ?? "none"}:${turnCompletionScrollTick}`;
   const scrollContextKey = `${activeWorkspaceId}:${activeTaskId}`;
+
+  useEffect(() => {
+    if (previousActiveTurnIdRef.current && !activeTurnId) {
+      setTurnCompletionScrollTick((current) => current + 1);
+    }
+    previousActiveTurnIdRef.current = activeTurnId;
+  }, [activeTurnId]);
 
   useEffect(() => {
     if (!activeTurnId) {
