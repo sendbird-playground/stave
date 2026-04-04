@@ -40,7 +40,7 @@ import {
 } from "./runtime-shared";
 
 /** SDK-level permission modes accepted by the claude-agent-sdk query() API. */
-type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
 
 const ClaudePermissionResultSchema = z.union([
   z.object({
@@ -62,6 +62,41 @@ const CLAUDE_LOOKUP_PATHS = [
   `${homedir()}/.local/bin`,
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Prewarm: eagerly cache the SDK module import and executable path resolution
+// so the first query() call doesn't pay those costs.
+// ---------------------------------------------------------------------------
+
+let prewarmSdkModulePromise: Promise<typeof import("@anthropic-ai/claude-agent-sdk")> | null = null;
+let prewarmExecutablePath: string | null = null;
+
+async function getPrewarmedSdkModule(): Promise<typeof import("@anthropic-ai/claude-agent-sdk")> {
+  if (!prewarmSdkModulePromise) {
+    prewarmSdkModulePromise = import("@anthropic-ai/claude-agent-sdk");
+  }
+  return prewarmSdkModulePromise;
+}
+
+function getPrewarmedExecutablePath(): string {
+  if (prewarmExecutablePath == null) {
+    prewarmExecutablePath = resolveClaudeExecutablePath();
+  }
+  return prewarmExecutablePath;
+}
+
+/**
+ * Trigger eager SDK module import and executable path resolution.
+ * Call this early (e.g. at app startup) so the first query() is fast.
+ * Safe to call multiple times — subsequent calls are no-ops.
+ */
+export function prewarmClaudeSdk(): void {
+  getPrewarmedSdkModule().catch(() => {
+    // Reset so next attempt retries
+    prewarmSdkModulePromise = null;
+  });
+  getPrewarmedExecutablePath();
+}
+
 function resolveClaudePermissionMode(args: {
   runtimeValue?: ClaudePermissionMode;
   envValue?: string;
@@ -74,6 +109,7 @@ function resolveClaudePermissionMode(args: {
     || candidate === "bypassPermissions"
     || candidate === "plan"
     || candidate === "dontAsk"
+    || candidate === "auto"
   ) {
     return candidate;
   }
@@ -1022,7 +1058,7 @@ export async function getClaudeCommandCatalog(args: {
   let stream: Query | null = null;
   try {
     const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
-    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const mod = await getPrewarmedSdkModule();
     const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
 
     if (!queryFn) {
@@ -1034,7 +1070,7 @@ export async function getClaudeCommandCatalog(args: {
       };
     }
 
-    const claudeExecutablePath = resolveClaudeExecutablePath();
+    const claudeExecutablePath = getPrewarmedExecutablePath();
 
     stream = queryFn({
       prompt: "",
@@ -1075,7 +1111,7 @@ export async function getClaudeContextUsage(args: {
   let stream: Query | null = null;
   try {
     const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
-    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const mod = await getPrewarmedSdkModule();
     const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
 
     if (!queryFn) {
@@ -1085,7 +1121,7 @@ export async function getClaudeContextUsage(args: {
       };
     }
 
-    const claudeExecutablePath = resolveClaudeExecutablePath();
+    const claudeExecutablePath = getPrewarmedExecutablePath();
     stream = queryFn({
       prompt: "",
       options: buildClaudeQueryOptions({
@@ -1120,7 +1156,7 @@ export async function reloadClaudePlugins(args: {
   let stream: Query | null = null;
   try {
     const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
-    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const mod = await getPrewarmedSdkModule();
     const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
 
     if (!queryFn) {
@@ -1130,7 +1166,7 @@ export async function reloadClaudePlugins(args: {
       };
     }
 
-    const claudeExecutablePath = resolveClaudeExecutablePath();
+    const claudeExecutablePath = getPrewarmedExecutablePath();
     stream = queryFn({
       prompt: "",
       options: buildClaudeQueryOptions({
@@ -1201,7 +1237,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
   let diagnostics: ReturnType<typeof buildClaudeDiagnostics> | null = null;
   try {
     const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
-    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const mod = await getPrewarmedSdkModule();
     const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
 
     if (!queryFn) {
@@ -1211,7 +1247,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       ];
     }
 
-    const claudeExecutablePath = resolveClaudeExecutablePath();
+    const claudeExecutablePath = getPrewarmedExecutablePath();
     selectedClaudePath = claudeExecutablePath;
     diagnostics = buildClaudeDiagnostics({
       executablePath: claudeExecutablePath,
@@ -1474,13 +1510,13 @@ export async function suggestClaudeTaskName(args: {
   history?: Array<{ role: string; content: string }>;
 }): Promise<{ ok: boolean; title?: string }> {
   try {
-    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const mod = await getPrewarmedSdkModule();
     const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
     if (!queryFn) {
       return { ok: false };
     }
 
-    const claudeExecutablePath = resolveClaudeExecutablePath();
+    const claudeExecutablePath = getPrewarmedExecutablePath();
 
     // Build a conversation summary from the last few exchanges (if any).
     const historyLines = (args.history ?? [])
@@ -1540,13 +1576,13 @@ export async function suggestClaudeCommitMessage(args: {
   fileList: string;
 }): Promise<{ ok: boolean; message?: string }> {
   try {
-    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const mod = await getPrewarmedSdkModule();
     const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
     if (!queryFn) {
       return { ok: false };
     }
 
-    const claudeExecutablePath = resolveClaudeExecutablePath();
+    const claudeExecutablePath = getPrewarmedExecutablePath();
 
     const commitPrompt = [
       "You are a git commit message generator. Generate a single concise commit message following the Conventional Commits specification.",
@@ -1619,13 +1655,13 @@ export async function suggestClaudePRDescription(args: {
   promptTemplate?: string;
 }): Promise<{ ok: boolean; title?: string; body?: string }> {
   try {
-    const mod = await import("@anthropic-ai/claude-agent-sdk");
+    const mod = await getPrewarmedSdkModule();
     const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
     if (!queryFn) {
       return { ok: false };
     }
 
-    const claudeExecutablePath = resolveClaudeExecutablePath();
+    const claudeExecutablePath = getPrewarmedExecutablePath();
 
     // Use user-provided prompt template or fall back to the built-in default.
     const { DEFAULT_PROMPT_PR_DESCRIPTION } = await import(

@@ -181,6 +181,7 @@ export const RuntimeOptionsObjectSchema = z
         z.literal("bypassPermissions"),
         z.literal("plan"),
         z.literal("dontAsk"),
+        z.literal("auto"),
       ])
       .optional(),
     claudeAllowDangerouslySkipPermissions: z.boolean().optional(),
@@ -229,6 +230,7 @@ export const RuntimeOptionsObjectSchema = z
       .union([
         z.literal("never"),
         z.literal("on-request"),
+        z.literal("on-failure"),
         z.literal("untrusted"),
       ])
       .optional(),

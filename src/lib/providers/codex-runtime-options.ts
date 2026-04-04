@@ -12,6 +12,11 @@ export function resolveEffectiveCodexApprovalPolicy(args: {
     return "never";
   }
 
+  // "on-failure" is deprecated — normalize to "on-request" for backward compat.
+  if (args.approvalPolicy === "on-failure") {
+    return "on-request";
+  }
+
   if (
     args.approvalPolicy === "never"
     || args.approvalPolicy === "on-request"

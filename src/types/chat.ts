@@ -17,7 +17,7 @@ export type Attachment =
   | { kind: "file"; filePath: string }
   | { kind: "image"; id: string; dataUrl: string; label: string };
 
-export type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+export type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
 export type ClaudePermissionModeBeforePlan = Exclude<ClaudePermissionMode, "plan"> | null;
 
 export interface PromptDraftRuntimeOverrides {

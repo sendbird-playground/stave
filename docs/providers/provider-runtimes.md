@@ -89,9 +89,19 @@ Claude text-boundary note:
   fix is to preserve a provider-side text boundary, not to special-case markdown
   parsing.
 
+Claude SDK prewarm:
+
+- At Electron app startup, Stave calls `prewarmClaudeSdk()` which eagerly
+  imports the `@anthropic-ai/claude-agent-sdk` module and resolves the Claude
+  executable path. This front-loads the two most expensive initialization costs
+  so the first `query()` call in either the main runtime or inline-completion
+  path is faster.
+- Subsequent SDK calls reuse the cached module and executable path rather than
+  repeating the dynamic import and filesystem probing.
+
 Claude-specific runtime controls come from the UI and runtime options:
 
-- permission mode
+- permission mode (`default`, `acceptEdits`, `bypassPermissions`, `plan`, `dontAsk`, `auto`)
 - dangerous skip permissions
 - sandbox enabled
 - allow unsandboxed commands
@@ -193,13 +203,18 @@ Codex-specific runtime controls come from the UI and runtime options:
 - network access
 - skip Git repository check
 - sandbox mode
-- approval policy
+- approval policy (`never`, `on-request`, `untrusted`; `on-failure` is deprecated and normalizes to `on-request`)
 - reasoning effort
 - reasoning summary and raw reasoning toggles
 - experimental plan mode
 - binary path override
 - provider timeout
 - debug stream logging
+
+The `on-failure` Codex approval policy is **deprecated**. Stave keeps the value
+in the type union for backward compatibility with persisted settings but
+normalizes it to `on-request` at resolution time. It is no longer shown in the
+UI or accepted as a new selection.
 
 New Codex defaults enable raw agent reasoning, request `detailed` reasoning summaries, and force reasoning-summary capability support to `enabled` unless the user changes those toggles.
 

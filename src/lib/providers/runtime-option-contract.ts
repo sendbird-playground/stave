@@ -22,6 +22,7 @@ export const CLAUDE_PERMISSION_MODE_OPTIONS = [
   { value: "bypassPermissions", label: "bypassPermissions" },
   { value: "plan", label: "plan" },
   { value: "dontAsk", label: "dontAsk" },
+  { value: "auto", label: "auto" },
 ] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["claudePermissionMode"]>>[];
 
 export const CLAUDE_THINKING_OPTIONS = [

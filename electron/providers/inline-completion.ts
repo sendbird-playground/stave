@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Query, SDKAssistantMessage, SDKAuthStatusMessage, SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { buildClaudeEnv, resolveClaudeExecutablePath } from "./claude-sdk-runtime";
+import { buildClaudeEnv, resolveClaudeExecutablePath, prewarmClaudeSdk } from "./claude-sdk-runtime";
 
 interface InlineCompletionRequest {
   prefix: string;

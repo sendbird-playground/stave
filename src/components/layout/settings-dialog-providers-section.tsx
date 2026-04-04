@@ -355,7 +355,7 @@ export function ProvidersSection() {
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    claudePermissionMode: value as "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk",
+                    claudePermissionMode: value as "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto",
                   },
                 })
               }
