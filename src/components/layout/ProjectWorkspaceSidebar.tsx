@@ -67,6 +67,7 @@ import {
 } from "@/components/ui";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
+import { resolveSidebarArtworkClass } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage } from "@/types/chat";
@@ -211,6 +212,9 @@ export function ProjectWorkspaceSidebar(args: {
   }) => void;
   onPreloadSettings: () => void;
 }) {
+  const sidebarArtworkMode = useAppStore(
+    (state) => state.settings.sidebarArtworkMode,
+  );
   const [collapsedByProjectPath, setCollapsedByProjectPath] = useState<
     Record<string, boolean>
   >({});
@@ -608,8 +612,10 @@ export function ProjectWorkspaceSidebar(args: {
     <>
       <aside
         data-testid="project-workspace-sidebar"
+        data-sidebar-artwork={sidebarArtworkMode}
         className={cn(
           "sidebar-liquid-glass hidden h-full shrink-0 overflow-hidden text-sidebar-foreground lg:flex lg:flex-col",
+          resolveSidebarArtworkClass({ mode: sidebarArtworkMode }),
           args.collapsed && "border-r border-sidebar-border/60",
         )}
         style={{
@@ -1093,11 +1099,11 @@ export function ProjectWorkspaceSidebar(args: {
                                                     }) => (
                                                       <div
                                                         className={cn(
-                                                          "group/workspace-row flex items-center gap-1 rounded-md transition-colors hover:bg-background/16",
+                                                          "group/workspace-row flex items-center gap-1 rounded-lg border border-transparent bg-transparent transition-[background-color,border-color,box-shadow,color] hover:border-sidebar-border/45 hover:bg-background/20 hover:text-foreground hover:shadow-sm",
                                                           isActive &&
-                                                            "bg-background/20 text-foreground ring-1 ring-primary/25 shadow-sm backdrop-blur-sm",
+                                                            "border-sidebar-border/60 bg-background/24 text-foreground ring-1 ring-primary/20 shadow-sm backdrop-blur-sm",
                                                           isDragging &&
-                                                            "bg-background/20",
+                                                            "border-sidebar-border/45 bg-background/22 shadow-sm",
                                                         )}
                                                       >
                                                         {dragHandle}
@@ -1150,7 +1156,13 @@ export function ProjectWorkspaceSidebar(args: {
                                                               />
                                                             )}
                                                           </span>
-                                                          <span className="min-w-0 flex-1 truncate">
+                                                          <span
+                                                            className={cn(
+                                                              "min-w-0 flex-1 truncate",
+                                                              isActive &&
+                                                                "font-medium text-foreground",
+                                                            )}
+                                                          >
                                                             {formatWorkspaceName(
                                                               workspace.name,
                                                               workspace.branch,

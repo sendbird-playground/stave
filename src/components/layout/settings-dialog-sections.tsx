@@ -27,15 +27,18 @@ import {
   normalizeModelSelection,
 } from "@/lib/providers/model-catalog";
 import { BOOLEAN_TOGGLE_OPTIONS } from "@/lib/providers/runtime-option-contract";
+import { resolveSidebarArtworkClass } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import {
   BUILTIN_CUSTOM_THEMES,
   MAX_USER_THEMES,
   PRESET_THEME_TOKENS,
+  SIDEBAR_ARTWORK_OPTIONS,
   THEME_TOKEN_NAMES,
   exportCustomThemeJson,
   listAllCustomThemes,
   parseCustomThemeFile,
+  type SidebarArtworkMode,
   type CustomThemeDefinition,
   type ThemeModeName,
   type ThemeTokenName,
@@ -921,6 +924,9 @@ function ThemeSection() {
   const [themeEditorMode, setThemeEditorMode] = useState<ThemeModeName>("light");
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const customThemeId = useAppStore((state) => state.settings.customThemeId);
+  const sidebarArtworkMode = useAppStore(
+    (state) => state.settings.sidebarArtworkMode,
+  );
   const userCustomThemes = useAppStore((state) => state.settings.userCustomThemes);
   const updateSettings = useAppStore((state) => state.updateSettings);
   const installCustomTheme = useAppStore((state) => state.installCustomTheme);
@@ -953,6 +959,57 @@ function ThemeSection() {
               <Monitor className="size-4" />
               System
             </Button>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Sidebar Artwork"
+          description="Choose the ambient gradient artwork behind the left sidebar. Space Haze is the default shell backdrop."
+        >
+          <div className="grid gap-2 sm:grid-cols-3">
+            {SIDEBAR_ARTWORK_OPTIONS.map((option) => {
+              const isActive = sidebarArtworkMode === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={cn(
+                    "grid gap-2 rounded-xl border p-3 text-left transition-colors",
+                    isActive
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/25"
+                      : "border-border/70 bg-background/60 hover:border-primary/35 hover:bg-muted/30",
+                  )}
+                  onClick={() =>
+                    updateSettings({
+                      patch: {
+                        sidebarArtworkMode:
+                          option.value as SidebarArtworkMode,
+                      },
+                    })}
+                >
+                  <SidebarArtworkPreview
+                    mode={option.value as SidebarArtworkMode}
+                  />
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold">{option.label}</p>
+                    {option.value === "space-haze" ? (
+                      <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                        Default
+                      </Badge>
+                    ) : null}
+                    {isActive ? (
+                      <span className="ml-auto flex items-center gap-1 text-xs font-medium text-primary">
+                        <Check className="size-3.5" />
+                        Active
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {option.description}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </SettingsCard>
 
@@ -1039,6 +1096,30 @@ function ThemeSection() {
     </>
   );
 }
+
+const SidebarArtworkPreview = memo(function SidebarArtworkPreview(args: {
+  mode: SidebarArtworkMode;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        "sidebar-liquid-glass relative h-20 overflow-hidden rounded-lg border border-sidebar-border/40 bg-sidebar/70",
+        resolveSidebarArtworkClass({ mode: args.mode }),
+      )}
+    >
+      <div className="absolute inset-x-3 top-2 h-px rounded-full bg-sidebar-border/75" />
+      <div className="absolute inset-x-2 bottom-2 grid gap-1.5">
+        <div className="rounded-md border border-sidebar-border/45 bg-background/20 px-2 py-1 shadow-sm">
+          <div className="h-1.5 w-2/5 rounded-full bg-foreground/60" />
+        </div>
+        <div className="rounded-md border border-sidebar-border/60 bg-background/24 px-2 py-1 ring-1 ring-primary/20 shadow-sm backdrop-blur-sm">
+          <div className="h-1.5 w-3/5 rounded-full bg-foreground/80" />
+        </div>
+      </div>
+    </div>
+  );
+});
 
 /** A visual card for a single custom theme preset. */
 const CustomThemeCard = memo(function CustomThemeCard(args: {

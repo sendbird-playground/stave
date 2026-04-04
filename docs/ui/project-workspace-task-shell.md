@@ -12,6 +12,7 @@ Replace the legacy workspace/task shell with a three-part layout:
 
 - The left project list is full-height and reaches the top edge of the app shell.
 - The left sidebar uses theme-reactive gradient artwork behind translucent project and workspace panels instead of a flat fill.
+- The left sidebar artwork now supports `Space Haze`, `Wave + Aurora`, and `Gravity Paint`, with `Space Haze` as the default and a selector under `Settings > Design`.
 - The top bar now applies only to the main work area, not the left project list.
 - The top bar shows the selected workspace path for the current workspace.
 - The top bar exposes an always-visible quick-open file search input, and `Cmd/Ctrl+P` focuses it from anywhere outside text inputs.
@@ -74,11 +75,14 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - shows a wave indicator plus the count of responding tasks when any task in that workspace is responding, then swaps that trailing slot to `Archive` on hover for archivable workspaces
   - uses stronger visual emphasis for the selected workspace while keeping project rows neutral
   - lets the sidebar background pattern show through project/workspace containers with restrained liquid-glass translucency
+  - keeps workspace hover and selected states slightly stronger than the glass baseline so interaction state stays readable without losing the subdued mood
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
   - assigns `Cmd/Ctrl+1..9` to the first nine visible workspaces in sidebar order and shows those shortcuts in the expanded list plus collapsed-rail tooltips
 - `SettingsDialog`
   - includes a `Projects` section with a dedicated project menu and a single detail panel for the selected project
   - keeps repository workspace defaults, git metadata, close action, and project removal inside that selected-project panel instead of the main sidebar row
+  - exposes `Settings > Design > Sidebar Artwork` so the left sidebar backdrop can switch between `Space Haze`, `Wave + Aurora`, and `Gravity Paint`
+  - shows thumbnail previews for each sidebar artwork option so the backdrop modes can be compared before switching
 - `WorkspaceTaskTabs`
   - renders active tasks as horizontal tabs for the selected workspace
   - uses one shared leading slot for responding wave or model icon
