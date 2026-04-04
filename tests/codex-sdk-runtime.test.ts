@@ -230,6 +230,14 @@ describe("buildCodexTodoPlanText", () => {
 });
 
 describe("resolveCodexPlanReadyText", () => {
+  test("prefers a retained final plan even after the pending message was flushed", () => {
+    expect(resolveCodexPlanReadyText({
+      finalPlanText: "## Final Plan\n- ship it",
+      pendingMessageText: null,
+      latestTodoPlanText: "## Draft Plan\n- [ ] ignored",
+    })).toBe("## Final Plan\n- ship it");
+  });
+
   test("prefers the final pending message when available", () => {
     expect(resolveCodexPlanReadyText({
       pendingMessageText: "Ship the patch.",
