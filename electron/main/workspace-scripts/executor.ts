@@ -4,6 +4,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { webContents } from "electron";
 import * as pty from "node-pty";
 import {
@@ -34,6 +35,11 @@ import {
   setWorkspaceAutomationProcess,
   type WorkspaceAutomationProcess,
 } from "./state";
+import {
+  buildOrbitCommand,
+  extractOrbitOutput,
+  resolvePortlessCommand,
+} from "./orbit";
 
 const SIGTERM_GRACE_MS = 5_000;
 
@@ -71,7 +77,6 @@ function buildAutomationEnv(args: {
     [AUTOMATION_ENV_VARS.WORKSPACE_NAME]: args.workspaceName,
     [AUTOMATION_ENV_VARS.WORKSPACE_PATH]: args.workspacePath,
     [AUTOMATION_ENV_VARS.BRANCH]: args.branch,
-    [AUTOMATION_ENV_VARS.EXECUTION_MODE]: args.automation.target.executionMode,
     [AUTOMATION_ENV_VARS.TARGET_ID]: args.automation.targetId,
     ...(args.source.kind === "hook" ? { [AUTOMATION_ENV_VARS.TRIGGER]: args.source.trigger } : {}),
     ...args.automation.target.env,
@@ -395,8 +400,38 @@ async function runServiceAutomation(args: {
     }
   }
 
+  if (args.automation.orbit && args.automation.target.cwd !== "workspace") {
+    return {
+      ok: false as const,
+      runId,
+      error: "Orbit services must target the workspace path.",
+      exitCode: -1,
+    };
+  }
+
+  const orbitCommand = args.automation.orbit
+    ? resolvePortlessCommand()
+    : null;
+  if (args.automation.orbit && !orbitCommand) {
+    return {
+      ok: false as const,
+      runId,
+      error: "Orbit could not find the portless executable.",
+      exitCode: -1,
+    };
+  }
+
+  const commandToRun = args.automation.orbit && orbitCommand
+    ? buildOrbitCommand({
+        command: lastCommand,
+        orbit: args.automation.orbit,
+        defaultName: path.basename(args.projectPath),
+        portlessCommand: orbitCommand,
+      })
+    : lastCommand;
+
   const shellExe = args.automation.target.shell || process.env.SHELL || "/bin/bash";
-  const ptyProcess = pty.spawn(shellExe, ["-c", lastCommand], {
+  const ptyProcess = pty.spawn(shellExe, ["-c", commandToRun], {
     name: "xterm-color",
     cols: 120,
     rows: 30,
@@ -425,12 +460,48 @@ async function runServiceAutomation(args: {
     event: {
       type: "started",
       commandIndex: args.automation.commands.length - 1,
-      command: lastCommand,
+      command: commandToRun,
       totalCommands: args.automation.commands.length,
     },
   });
 
+  let orbitBuffer = "";
   ptyProcess.onData((data) => {
+    if (args.automation.orbit) {
+      const parsed = extractOrbitOutput({
+        buffer: orbitBuffer,
+        chunk: data,
+      });
+      orbitBuffer = parsed.buffer;
+
+      for (const orbitUrl of parsed.orbitUrls) {
+        emitAutomationEvent({
+          workspaceId: args.workspaceId,
+          automationId: args.automation.id,
+          automationKind: args.automation.kind,
+          runId,
+          sessionId,
+          source: args.source,
+          event: { type: "orbit-url", url: orbitUrl },
+        });
+      }
+
+      if (!parsed.output) {
+        return;
+      }
+
+      emitAutomationEvent({
+        workspaceId: args.workspaceId,
+        automationId: args.automation.id,
+        automationKind: args.automation.kind,
+        runId,
+        sessionId,
+        source: args.source,
+        event: { type: "output", data: parsed.output },
+      });
+      return;
+    }
+
     emitAutomationEvent({
       workspaceId: args.workspaceId,
       automationId: args.automation.id,
@@ -443,6 +514,17 @@ async function runServiceAutomation(args: {
   });
 
   ptyProcess.onExit(({ exitCode }) => {
+    if (orbitBuffer) {
+      emitAutomationEvent({
+        workspaceId: args.workspaceId,
+        automationId: args.automation.id,
+        automationKind: args.automation.kind,
+        runId,
+        sessionId,
+        source: args.source,
+        event: { type: "output", data: orbitBuffer },
+      });
+    }
     emitAutomationEvent({
       workspaceId: args.workspaceId,
       automationId: args.automation.id,

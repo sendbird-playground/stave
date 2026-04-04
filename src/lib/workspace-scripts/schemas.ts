@@ -3,9 +3,15 @@ import { z } from "zod";
 export const AutomationTargetSchema = z.object({
   label: z.string().optional(),
   cwd: z.enum(["workspace", "project"]).optional(),
-  executionMode: z.enum(["default", "spotlight"]).optional(),
   env: z.record(z.string(), z.string()).optional(),
   shell: z.string().optional(),
+});
+
+export const AutomationOrbitSchema = z.object({
+  enabled: z.boolean().optional(),
+  name: z.string().optional(),
+  noTls: z.boolean().optional(),
+  proxyPort: z.number().int().positive().optional(),
 });
 
 export const AutomationActionSchema = z.object({
@@ -19,6 +25,7 @@ export const AutomationActionSchema = z.object({
 
 export const AutomationServiceSchema = AutomationActionSchema.extend({
   restartOnRun: z.boolean().optional(),
+  orbit: AutomationOrbitSchema.optional(),
 });
 
 export const AutomationHookRefSchema = z.union([

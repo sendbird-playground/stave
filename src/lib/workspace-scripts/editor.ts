@@ -18,6 +18,10 @@ export interface AutomationEditorEntry {
   timeoutMs: string;
   enabled: boolean;
   restartOnRun: boolean;
+  orbitEnabled: boolean;
+  orbitName: string;
+  orbitNoTls: boolean;
+  orbitProxyPort: string;
 }
 
 export interface AutomationEditorHookLink {
@@ -91,6 +95,10 @@ export function createEmptyAutomationEditorEntry(
     timeoutMs: "",
     enabled: true,
     restartOnRun: kind === "service",
+    orbitEnabled: false,
+    orbitName: "",
+    orbitNoTls: false,
+    orbitProxyPort: "",
   };
 }
 
@@ -123,6 +131,10 @@ export function buildAutomationEditorState(args: {
     timeoutMs: entry.timeoutMs ? String(entry.timeoutMs) : "",
     enabled: entry.enabled ?? true,
     restartOnRun: true,
+    orbitEnabled: false,
+    orbitName: "",
+    orbitNoTls: false,
+    orbitProxyPort: "",
   }));
 
   const services = Object.entries(args.config.services ?? {}).map(([id, entry]) => ({
@@ -134,6 +146,10 @@ export function buildAutomationEditorState(args: {
     timeoutMs: entry.timeoutMs ? String(entry.timeoutMs) : "",
     enabled: entry.enabled ?? true,
     restartOnRun: entry.restartOnRun ?? true,
+    orbitEnabled: entry.orbit?.enabled !== false && Boolean(entry.orbit),
+    orbitName: entry.orbit?.name ?? "",
+    orbitNoTls: entry.orbit?.noTls ?? false,
+    orbitProxyPort: entry.orbit?.proxyPort ? String(entry.orbit.proxyPort) : "",
   }));
 
   const hooks = AUTOMATION_TRIGGER_IDS.reduce<AutomationEditorState["hooks"]>((acc, trigger) => {
@@ -218,6 +234,16 @@ export function buildAutomationConfigFromEditorState(
       .map((entry) => [entry.id.trim(), {
         ...buildEntryConfig(entry),
         ...(entry.restartOnRun ? {} : { restartOnRun: false }),
+        ...(entry.orbitEnabled
+          ? {
+              orbit: {
+                enabled: true,
+                ...(entry.orbitName.trim() ? { name: entry.orbitName.trim() } : {}),
+                ...(entry.orbitNoTls ? { noTls: true } : {}),
+                ...(entry.orbitProxyPort.trim() ? { proxyPort: Number(entry.orbitProxyPort.trim()) } : {}),
+              },
+            }
+          : {}),
       }] as const)
       .filter(([id, entry]) => Boolean(id) && entry.commands.length > 0),
   );
@@ -361,6 +387,17 @@ export function validateAutomationEditorState(state: AutomationEditorState) {
         const timeout = Number(entry.timeoutMs);
         if (!Number.isInteger(timeout) || timeout <= 0) {
           issues.push(`${section}: "${label}" has an invalid timeout.`);
+        }
+      }
+
+      if (section === "services" && entry.orbitEnabled && entry.target !== DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE) {
+        issues.push(`${section}: "${label}" must target workspace when Orbit is enabled.`);
+      }
+
+      if (section === "services" && entry.orbitEnabled && entry.orbitProxyPort.trim()) {
+        const orbitProxyPort = Number(entry.orbitProxyPort);
+        if (!Number.isInteger(orbitProxyPort) || orbitProxyPort <= 0) {
+          issues.push(`${section}: "${label}" has an invalid Orbit proxy port.`);
         }
       }
     });

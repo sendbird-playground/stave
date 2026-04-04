@@ -3,12 +3,12 @@
 // ---------------------------------------------------------------------------
 
 export type {
-  AutomationExecutionMode,
   AutomationKind,
   AutomationTargetScope,
   AutomationTrigger,
   ResolvedAutomationTarget,
   ResolvedWorkspaceAutomation,
+  ResolvedWorkspaceAutomationOrbitConfig,
   ResolvedWorkspaceAutomationHook,
   ResolvedWorkspaceAutomationsConfig,
   WorkspaceAutomationActionConfig,
@@ -16,6 +16,7 @@ export type {
   WorkspaceAutomationEventEnvelope,
   WorkspaceAutomationHookRef,
   WorkspaceAutomationHookRunSummary,
+  WorkspaceAutomationOrbitConfig,
   WorkspaceAutomationRunSource,
   WorkspaceAutomationServiceConfig,
   WorkspaceAutomationStatusEntry,
