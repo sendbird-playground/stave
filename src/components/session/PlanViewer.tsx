@@ -141,7 +141,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
         taskId: activeTaskId,
         patch: {
           runtimeOverrides: transitionClaudePromptDraftPermissionMode({
-            nextMode: effectiveClaudePermissionModeBeforePlan ?? "acceptEdits",
+            nextMode: effectiveClaudePermissionModeBeforePlan ?? "auto",
             currentMode: effectiveClaudePermissionMode,
             beforePlan: effectiveClaudePermissionModeBeforePlan,
           }),

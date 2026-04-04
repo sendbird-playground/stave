@@ -1,10 +1,11 @@
+import {
+  buildModelSelectorOptions,
+  buildRecommendedModelSelectorOptions,
+  buildModelSelectorValue,
+  ModelSelector,
+} from "@/components/ai-elements/model-selector";
 import { Badge, Button } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  CLAUDE_SDK_MODEL_OPTIONS,
-  CODEX_SDK_MODEL_OPTIONS,
-  normalizeModelSelection,
-} from "@/lib/providers/model-catalog";
 import {
   BOOLEAN_TOGGLE_OPTIONS,
   CLAUDE_EFFORT_OPTIONS,
@@ -23,7 +24,6 @@ import {
 } from "@/lib/providers/runtime-option-contract";
 import {
   buildStaveAutoModelSettingsPatch,
-  DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
   detectStaveAutoModelPreset,
   STAVE_AUTO_MODEL_PRESETS,
 } from "@/lib/providers/stave-auto-profile";
@@ -39,7 +39,34 @@ import {
   SettingsCard,
 } from "./settings-dialog.shared";
 
-const STAVE_ROUTING_MODEL_OPTIONS = [...CLAUDE_SDK_MODEL_OPTIONS, ...CODEX_SDK_MODEL_OPTIONS] as const;
+const STAVE_AUTO_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
+const STAVE_AUTO_ROLE_MODEL_OPTIONS = buildModelSelectorOptions({
+  providerIds: STAVE_AUTO_MODEL_PROVIDER_IDS,
+});
+const STAVE_AUTO_RECOMMENDED_MODEL_OPTIONS = buildRecommendedModelSelectorOptions({
+  options: STAVE_AUTO_ROLE_MODEL_OPTIONS,
+});
+
+function StaveAutoModelField(args: {
+  title: string;
+  description: string;
+  value: string;
+  onSelect: (model: string) => void;
+}) {
+  return (
+    <LabeledField title={args.title} description={args.description}>
+      <ModelSelector
+        value={buildModelSelectorValue({ model: args.value })}
+        options={STAVE_AUTO_ROLE_MODEL_OPTIONS}
+        recommendedOptions={STAVE_AUTO_RECOMMENDED_MODEL_OPTIONS}
+        className="w-full"
+        triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
+        menuClassName="sm:max-w-lg"
+        onSelect={({ selection }) => args.onSelect(selection.model)}
+      />
+    </LabeledField>
+  );
+}
 
 function StaveAutoCard() {
   const [
@@ -87,9 +114,6 @@ function StaveAutoCard() {
     },
   });
   const currentPreset = STAVE_AUTO_MODEL_PRESETS.find((preset) => preset.id === currentPresetId) ?? null;
-  const fallbackPreset = buildStaveAutoModelSettingsPatch({
-    presetId: currentPresetId ?? DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
-  });
 
   return (
     <SettingsCard
@@ -162,70 +186,54 @@ function StaveAutoCard() {
           ]}
         />
       </LabeledField>
-      <LabeledField title="Supervisor Model" description="Used for orchestration planning and synthesis. Default: claude-sonnet-4-6.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-auto-model-options"
-          value={staveAutoSupervisorModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoSupervisorModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoSupervisorModel }) } })}
-        />
-      </LabeledField>
-      <LabeledField title="Plan Model" description="Used for strategy, design, and plan-only requests.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-auto-model-options"
-          value={staveAutoPlanModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoPlanModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoPlanModel }) } })}
-        />
-      </LabeledField>
-      <LabeledField title="Analyze Model" description="Used for debugging, review, explanation, architecture, and root-cause analysis.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-auto-model-options"
-          value={staveAutoAnalyzeModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoAnalyzeModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoAnalyzeModel }) } })}
-        />
-      </LabeledField>
-      <LabeledField title="Implement Model" description="Used for feature work, code generation, patching, refactors, and test writing.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-auto-model-options"
-          value={staveAutoImplementModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoImplementModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoImplementModel }) } })}
-        />
-      </LabeledField>
-      <LabeledField title="Quick Edit Model" description="Used for rename, typo, and tiny targeted edits.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-auto-model-options"
-          value={staveAutoQuickEditModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoQuickEditModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoQuickEditModel }) } })}
-        />
-      </LabeledField>
-      <LabeledField title="General Model" description="Used when the request does not strongly match another role.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-auto-model-options"
-          value={staveAutoGeneralModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoGeneralModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoGeneralModel }) } })}
-        />
-      </LabeledField>
-      <LabeledField title="Verify Model" description="Used for validation, sanity checks, and review after implementation.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-auto-model-options"
-          value={staveAutoVerifyModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoVerifyModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoVerifyModel }) } })}
-        />
-      </LabeledField>
-      <LabeledField title="Classifier Model" description="Lightweight model that decides whether to route directly or orchestrate.">
-        <DraftInput
-          className="h-10 rounded-md border-border/80 bg-background"
-          list="stave-auto-model-options"
-          value={staveAutoClassifierModel}
-          onCommit={(value) => updateSettings({ patch: { staveAutoClassifierModel: normalizeModelSelection({ value, fallback: fallbackPreset.staveAutoClassifierModel }) } })}
-        />
-      </LabeledField>
+      <StaveAutoModelField
+        title="Supervisor Model"
+        description="Used for orchestration planning and synthesis. Default: claude-sonnet-4-6."
+        value={staveAutoSupervisorModel}
+        onSelect={(model) => updateSettings({ patch: { staveAutoSupervisorModel: model } })}
+      />
+      <StaveAutoModelField
+        title="Plan Model"
+        description="Used for strategy, design, and plan-only requests."
+        value={staveAutoPlanModel}
+        onSelect={(model) => updateSettings({ patch: { staveAutoPlanModel: model } })}
+      />
+      <StaveAutoModelField
+        title="Analyze Model"
+        description="Used for debugging, review, explanation, architecture, and root-cause analysis."
+        value={staveAutoAnalyzeModel}
+        onSelect={(model) => updateSettings({ patch: { staveAutoAnalyzeModel: model } })}
+      />
+      <StaveAutoModelField
+        title="Implement Model"
+        description="Used for feature work, code generation, patching, refactors, and test writing."
+        value={staveAutoImplementModel}
+        onSelect={(model) => updateSettings({ patch: { staveAutoImplementModel: model } })}
+      />
+      <StaveAutoModelField
+        title="Quick Edit Model"
+        description="Used for rename, typo, and tiny targeted edits."
+        value={staveAutoQuickEditModel}
+        onSelect={(model) => updateSettings({ patch: { staveAutoQuickEditModel: model } })}
+      />
+      <StaveAutoModelField
+        title="General Model"
+        description="Used when the request does not strongly match another role."
+        value={staveAutoGeneralModel}
+        onSelect={(model) => updateSettings({ patch: { staveAutoGeneralModel: model } })}
+      />
+      <StaveAutoModelField
+        title="Verify Model"
+        description="Used for validation, sanity checks, and review after implementation."
+        value={staveAutoVerifyModel}
+        onSelect={(model) => updateSettings({ patch: { staveAutoVerifyModel: model } })}
+      />
+      <StaveAutoModelField
+        title="Classifier Model"
+        description="Lightweight model that decides whether to route directly or orchestrate."
+        value={staveAutoClassifierModel}
+        onSelect={(model) => updateSettings({ patch: { staveAutoClassifierModel: model } })}
+      />
       <LabeledField title="Max Subtasks" description="Upper bound for supervisor-generated subtasks per orchestration run.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"
@@ -252,11 +260,6 @@ function StaveAutoCard() {
           ]}
         />
       </LabeledField>
-      <datalist id="stave-auto-model-options">
-        {STAVE_ROUTING_MODEL_OPTIONS.map((model) => (
-          <option key={model} value={model} />
-        ))}
-      </datalist>
     </SettingsCard>
   );
 }

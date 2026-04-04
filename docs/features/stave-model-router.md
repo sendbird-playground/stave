@@ -93,7 +93,7 @@ Codex threads remain model-sensitive. If a task previously used one Codex model 
 
 ## Settings
 
-Stave Auto now uses presets plus role-based settings under **Settings → Providers → Stave Auto**. Picking a preset rewrites the full role map, and you can still fine-tune any individual role afterwards.
+Stave Auto now uses presets plus role-based settings under **Settings → Providers → Stave Auto**. Picking a preset rewrites the full role map, and you can still fine-tune any individual role afterwards through the same searchable model dropdown used in PromptInput, excluding the `stave-auto` meta-model.
 
 ### Presets
 

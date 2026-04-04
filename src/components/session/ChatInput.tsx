@@ -1,6 +1,11 @@
 import { PromptInput } from "@/components/ai-elements";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { ModelSelectorOption } from "@/components/ai-elements/model-selector";
+import {
+  buildModelSelectorOptions,
+  buildRecommendedModelSelectorOptions,
+  buildModelSelectorValue,
+  type ModelSelectorOption,
+} from "@/components/ai-elements/model-selector";
 import { type PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
 import type { PromptInputRuntimeControl, PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
 import { buildCommandPaletteItems, type CommandPaletteItem, type CommandPaletteProviderNote } from "@/lib/commands";
@@ -15,12 +20,15 @@ import {
 import {
   getDefaultModelForProvider,
   getProviderLabel,
-  getSdkModelOptions,
   listProviderIds,
   normalizeModelSelection,
   providerSupportsNativeCommandCatalog,
-  toHumanModelName,
 } from "@/lib/providers/model-catalog";
+import {
+  CLAUDE_EFFORT_OPTIONS,
+  CODEX_EFFORT_OPTIONS,
+  findOptionLabel,
+} from "@/lib/providers/runtime-option-contract";
 import { resolveEffectiveCodexApprovalPolicy } from "@/lib/providers/codex-runtime-options";
 import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
@@ -37,6 +45,8 @@ import {
   buildChatInputRuntimeQuickControls,
   buildChatInputRuntimeStatusItems,
   buildCommandCatalogRuntimeOptions,
+  cycleClaudeEffortValue,
+  cycleCodexEffortValue,
 } from "./chat-input.runtime";
 import { getLatestPromptSuggestions, getPromptHistoryEntries, mergePromptSuggestionWithDraft } from "./chat-input.utils";
 
@@ -49,17 +59,9 @@ const EMPTY_MESSAGES: ChatMessage[] = [];
 const PROMPT_DRAFT_SAVE_DELAY_MS = 1200;
 const PROMPT_DRAFT_IDLE_TIMEOUT_MS = 750;
 const PROVIDER_IDS = listProviderIds();
-const MODEL_OPTION_TEMPLATES = PROVIDER_IDS.flatMap((providerId) =>
-  getSdkModelOptions({ providerId }).map((model) => ({
-    key: `${providerId}:${model}`,
-    providerId,
-    model,
-    label: toHumanModelName({ model }),
-  }))
-);
 const INACTIVE_CLAUDE_SETTING_SOURCES: ClaudeSettingSource[] = ["project"];
 const INACTIVE_CLAUDE_SETTINGS = [
-  "acceptEdits",
+  "auto",
   null,
   false,
   false,
@@ -104,6 +106,7 @@ interface ChatInputComposerProps {
   isTurnActive: boolean;
   selectedModelOption: ModelSelectorOption;
   modelOptions: ModelSelectorOption[];
+  recommendedModelOptions: readonly ModelSelectorOption[];
   commandPaletteItems: readonly CommandPaletteItem[];
   commandPaletteProviderNote?: CommandPaletteProviderNote;
   skillsEnabled: boolean;
@@ -112,6 +115,9 @@ interface ChatInputComposerProps {
   permissionMode: PermissionModeValue;
   runtimeQuickControls: readonly PromptInputRuntimeControl[];
   runtimeStatusItems: readonly PromptInputRuntimeStatusItem[];
+  effortLabel?: string;
+  effortValue?: string;
+  onEffortCycle?: () => void;
   fastMode?: boolean;
   onFastModeChange?: (enabled: boolean) => void;
   planMode?: boolean;
@@ -323,6 +329,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           isTurnActive={args.isTurnActive}
           selectedModel={args.selectedModelOption}
           modelOptions={args.modelOptions}
+          recommendedModelOptions={args.recommendedModelOptions}
           attachedFilePaths={promptDraft.attachedFilePaths}
           promptHistoryEntries={promptHistoryEntries}
           promptSuggestions={promptSuggestions}
@@ -391,6 +398,14 @@ function ChatInputComposer(args: ChatInputComposerProps) {
             commitCurrentDraftText();
             args.onPermissionModeChange(value);
           }}
+          effortLabel={args.effortLabel}
+          effortValue={args.effortValue}
+          onEffortCycle={args.onEffortCycle
+            ? () => {
+                commitCurrentDraftText();
+                args.onEffortCycle?.();
+              }
+            : undefined}
           attachments={promptDraft.attachments}
           onAttachFilesChange={({ filePaths }) =>
             updateNonTextPromptDraft({ attachedFilePaths: filePaths })}
@@ -602,17 +617,47 @@ export function ChatInput(args: ChatInputProps = {}) {
       ? modelStave
       : modelCodex;
   const activeProviderAvailable = providerAvailability[activeProvider];
-  const selectedModelOption = useMemo<ModelSelectorOption>(() => ({
-    key: `${activeProvider}:${activeModel}`,
+  const selectedModelOption = useMemo<ModelSelectorOption>(() => buildModelSelectorValue({
     providerId: activeProvider,
     model: activeModel,
-    label: toHumanModelName({ model: activeModel }),
     available: activeProviderAvailable,
   }), [activeModel, activeProvider, activeProviderAvailable]);
-  const modelOptions = useMemo<ModelSelectorOption[]>(() => MODEL_OPTION_TEMPLATES.map((option) => ({
-    ...option,
-    available: providerAvailability[option.providerId],
-  })), [providerAvailability]);
+  const modelOptions = useMemo<ModelSelectorOption[]>(() => (
+    buildModelSelectorOptions({
+      providerIds: PROVIDER_IDS,
+      availabilityByProvider: providerAvailability,
+    })
+  ), [providerAvailability]);
+  const recommendedModelOptions = useMemo<ModelSelectorOption[]>(() => (
+    buildRecommendedModelSelectorOptions({ options: modelOptions })
+  ), [modelOptions]);
+  const effortLabel = useMemo(() => {
+    if (activeProvider === "claude-code") {
+      return findOptionLabel(CLAUDE_EFFORT_OPTIONS, claudeEffort);
+    }
+    if (activeProvider === "codex") {
+      return findOptionLabel(CODEX_EFFORT_OPTIONS, codexModelReasoningEffort);
+    }
+    return undefined;
+  }, [activeProvider, claudeEffort, codexModelReasoningEffort]);
+  const effortValue = activeProvider === "claude-code"
+    ? claudeEffort
+    : activeProvider === "codex"
+      ? codexModelReasoningEffort
+      : undefined;
+  const onEffortCycle = useMemo(() => {
+    if (activeProvider === "claude-code") {
+      return () => updateSettings({
+        patch: { claudeEffort: cycleClaudeEffortValue(claudeEffort) },
+      });
+    }
+    if (activeProvider === "codex") {
+      return () => updateSettings({
+        patch: { codexModelReasoningEffort: cycleCodexEffortValue(codexModelReasoningEffort) },
+      });
+    }
+    return undefined;
+  }, [activeProvider, claudeEffort, codexModelReasoningEffort, updateSettings]);
   const runtimeQuickControls = useMemo(() => {
     return buildChatInputRuntimeQuickControls({
       activeProvider,
@@ -922,6 +967,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       isTurnActive={isTurnActive}
       selectedModelOption={selectedModelOption}
       modelOptions={modelOptions}
+      recommendedModelOptions={recommendedModelOptions}
       commandPaletteItems={deferredCommandPaletteItems}
       commandPaletteProviderNote={commandPalette.providerNote}
       skillsEnabled={skillsEnabled}
@@ -930,6 +976,9 @@ export function ChatInput(args: ChatInputProps = {}) {
       permissionMode={permissionMode}
       runtimeQuickControls={runtimeQuickControls}
       runtimeStatusItems={runtimeStatusItems}
+      effortLabel={effortLabel}
+      effortValue={effortValue}
+      onEffortCycle={onEffortCycle}
       onModelSelect={({ selection }) => {
         setTaskProvider({ taskId: providerSelectionTarget, provider: selection.providerId });
         if (selection.providerId === "claude-code") {
@@ -997,7 +1046,7 @@ export function ChatInput(args: ChatInputProps = {}) {
           ? (enabled) => {
               const nextMode: ClaudePermissionMode = enabled
                 ? "plan"
-                : (effectiveClaudePermissionModeBeforePlan ?? "acceptEdits");
+                : (effectiveClaudePermissionModeBeforePlan ?? "auto");
               updatePromptDraft({
                 taskId: providerSelectionTarget,
                 patch: {

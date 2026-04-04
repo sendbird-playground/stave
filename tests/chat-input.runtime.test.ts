@@ -3,6 +3,8 @@ import {
   buildChatInputRuntimeQuickControls,
   buildChatInputRuntimeStatusItems,
   buildCommandCatalogRuntimeOptions,
+  cycleClaudeEffortValue,
+  cycleCodexEffortValue,
 } from "@/components/session/chat-input.runtime";
 
 const updateSettings = () => {};
@@ -46,11 +48,24 @@ describe("chat-input runtime helpers", () => {
 
     expect(controls.map((control) => control.id)).toEqual([
       "permission-mode",
-      "effort",
       "web-search",
     ]);
-    expect(controls[1]?.value).toBe("high");
-    expect(controls[2]?.value).toBe("live");
+    expect(controls[1]?.value).toBe("live");
+  });
+
+  test("cycles Claude effort in provider order", () => {
+    expect(cycleClaudeEffortValue("low")).toBe("medium");
+    expect(cycleClaudeEffortValue("medium")).toBe("high");
+    expect(cycleClaudeEffortValue("high")).toBe("max");
+    expect(cycleClaudeEffortValue("max")).toBe("low");
+  });
+
+  test("cycles Codex effort with minimal at the end of the loop", () => {
+    expect(cycleCodexEffortValue("low")).toBe("medium");
+    expect(cycleCodexEffortValue("medium")).toBe("high");
+    expect(cycleCodexEffortValue("high")).toBe("xhigh");
+    expect(cycleCodexEffortValue("xhigh")).toBe("minimal");
+    expect(cycleCodexEffortValue("minimal")).toBe("low");
   });
 
   test("surfaces Codex runtime status items including binary override", () => {
