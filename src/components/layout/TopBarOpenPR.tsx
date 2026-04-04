@@ -40,7 +40,6 @@ import {
 import {
   generateFallbackPullRequestDraft,
   isReasonablePullRequestTitle,
-  resolvePullRequestTitle,
 } from "@/lib/source-control-pr";
 import { buildCreatePrTargetBranchOptions } from "@/components/layout/TopBarOpenPR.utils";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
@@ -210,7 +209,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const [commitMessage, setCommitMessage] = useState("");
   const [changesExpanded, setChangesExpanded] = useState(true);
   const suggestionRequestIdRef = useRef(0);
-  const prTitleEditedRef = useRef(false);
 
   const [
     activeWorkspaceId,
@@ -310,7 +308,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
     const requestId = suggestionRequestIdRef.current + 1;
     suggestionRequestIdRef.current = requestId;
-    prTitleEditedRef.current = false;
 
     setStep("loading");
     setDialogOpen(true);
@@ -497,14 +494,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         return;
       }
 
-      if (!prTitleEditedRef.current) {
-        title = resolvePullRequestTitle({
-          currentTitle: title,
-          commitLog: message,
-          headBranch: currentBranch,
-        });
-        setPrTitle(title);
-      }
       setChangedFiles([]);
       setChangesExpanded(false);
       setInlineNotice({
@@ -943,7 +932,6 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
                   placeholder="PR title"
                   value={prTitle}
                   onChange={(e) => {
-                    prTitleEditedRef.current = true;
                     setPrTitle(e.target.value);
                   }}
                   aria-invalid={titleValidationMessage ? true : undefined}
