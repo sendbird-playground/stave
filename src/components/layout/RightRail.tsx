@@ -1,17 +1,10 @@
-import { FileCode2, FolderTree, GitBranch, Info, Sparkles, TerminalSquare, type LucideIcon } from "lucide-react";
+import { FileCode2, TerminalSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
-import { RIGHT_RAIL_PANEL_IDS, RIGHT_RAIL_PANEL_TITLES, type RightRailPanelId } from "@/lib/right-rail-panels";
+import { RIGHT_RAIL_PANEL_ICONS, RIGHT_RAIL_PANEL_IDS, RIGHT_RAIL_PANEL_TITLES, type RightRailPanelId } from "@/lib/right-rail-panels";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-
-const RIGHT_RAIL_PANEL_ICONS: Record<RightRailPanelId, LucideIcon> = {
-  explorer: FolderTree,
-  changes: GitBranch,
-  information: Info,
-  automation: Sparkles,
-};
 
 export function RightRail() {
   const [

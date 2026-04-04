@@ -1,3 +1,5 @@
+import { FolderTree, GitBranch, Info, Sparkles, type LucideIcon } from "lucide-react";
+
 export const RIGHT_RAIL_PANEL_IDS = [
   "explorer",
   "changes",
@@ -12,4 +14,11 @@ export const RIGHT_RAIL_PANEL_TITLES: Record<RightRailPanelId, string> = {
   changes: "Source Control",
   information: "Information",
   automation: "Automation",
+};
+
+export const RIGHT_RAIL_PANEL_ICONS: Record<RightRailPanelId, LucideIcon> = {
+  explorer: FolderTree,
+  changes: GitBranch,
+  information: Info,
+  automation: Sparkles,
 };
