@@ -614,9 +614,10 @@ test("source control actions update status and history surfaces", async ({ page 
 
   await page.keyboard.press("Control+b");
   const rightPanel = page.getByTestId("editor-panel");
-  await rightPanel.getByTitle("changes").click();
-
-  await expect(rightPanel.getByText("Branch: main | Changes (1)")).toBeVisible();
+  await expect(rightPanel.getByText("Source Control")).toBeVisible();
+  await expect(rightPanel.getByRole("tab", { name: /Changes/ })).toBeVisible();
+  await expect(rightPanel.getByRole("tab", { name: /History/ })).toBeVisible();
+  await expect(rightPanel.getByText("1 file changed")).toBeVisible();
   const changeRow = rightPanel.getByRole("button", { name: /README\.md/ }).first();
   await changeRow.hover();
   await expect(rightPanel.getByRole("button", { name: /^Stage$/ })).toBeVisible();
@@ -625,13 +626,14 @@ test("source control actions update status and history surfaces", async ({ page 
   await changeRow.hover();
   await expect(rightPanel.getByRole("button", { name: /^Unstage$/ })).toBeVisible();
 
-  const commitInput = rightPanel.getByPlaceholder(/Message/);
+  const commitInput = rightPanel.getByPlaceholder(/Commit staged changes/);
   await commitInput.fill("feat: save snapshot");
   await rightPanel.getByRole("button", { name: "Commit" }).click();
 
-  await expect(commitInput).toHaveValue("");
-  await expect(rightPanel.getByText("No local changes.")).toBeVisible();
-  await expect(rightPanel.getByText("Commit History (1)")).toBeVisible();
+  await expect(commitInput).toHaveCount(0);
+  await expect(rightPanel.getByText("Working tree is clean.")).toBeVisible();
+  await rightPanel.getByRole("tab", { name: /History/ }).click();
+  await expect(rightPanel.getByText("1 recent commit")).toBeVisible();
   await expect(rightPanel.getByText("feat: save snapshot")).toBeVisible();
 });
 

@@ -15,17 +15,56 @@ test("settings modal and workspace modal open", async ({ page }) => {
 });
 
 test("right panel tabs switch", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("stave-store", JSON.stringify({
+      state: {
+        projectPath: "/tmp/stave-project",
+        projectName: "stave-project",
+        workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
+        activeWorkspaceId: "ws-main",
+        workspaceBranchById: { "ws-main": "main" },
+        workspacePathById: { "ws-main": "/tmp/stave-project" },
+        workspaceDefaultById: { "ws-main": true },
+      },
+      version: 0,
+    }));
+
+    (window as unknown as { api?: Record<string, unknown> }).api = {
+      provider: {
+        streamTurn: async () => [],
+      },
+      terminal: {
+        runCommand: async () => ({ ok: true, code: 0, stdout: "", stderr: "" }),
+      },
+      sourceControl: {
+        getStatus: async () => ({
+          ok: true,
+          branch: "main",
+          items: [],
+          hasConflicts: false,
+          stderr: "",
+        }),
+        getHistory: async () => ({
+          ok: true,
+          items: [],
+          stderr: "",
+        }),
+      },
+    };
+  });
+
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
 
   await page.getByTestId("workspace-bar").getByRole("button", { name: "Explorer" }).click();
   const rightPanel = page.getByTestId("editor-panel");
   await expect(rightPanel).toBeVisible();
-  await expect(rightPanel.getByText("Explorer panel", { exact: true })).toBeVisible();
+  await expect(rightPanel.getByRole("heading", { name: "Explorer" })).toBeVisible();
 
-  await rightPanel.getByTitle("changes").click();
-  await expect(rightPanel.getByText(/Branch:/)).toBeVisible();
+  await page.getByTestId("workspace-bar").getByRole("button", { name: "Changes" }).click();
+  await expect(rightPanel.getByRole("heading", { name: "Source Control" })).toBeVisible();
+  await expect(rightPanel.getByRole("tab", { name: /Changes/ })).toBeVisible();
 
-  await rightPanel.getByTitle("information").click();
-  await expect(rightPanel.getByText("Workspace Information")).toBeVisible();
+  await page.getByTestId("workspace-bar").getByRole("button", { name: "Information" }).click();
+  await expect(rightPanel.getByRole("heading", { name: "Information" })).toBeVisible();
 });

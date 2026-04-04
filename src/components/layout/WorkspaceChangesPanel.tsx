@@ -1,11 +1,27 @@
-import { Copy, File, LoaderCircle, Minus, Plus, RotateCcw, RotateCw } from "lucide-react";
-import type { ReactNode } from "react";
-import { Badge, Button, Input } from "@/components/ui";
+import { Copy, File, GitBranch, GitCommitHorizontal, History, LoaderCircle, Minus, Plus, RotateCcw } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Badge, Button, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import type { SourceControlStatusItem } from "@/lib/source-control-status";
 import { cn } from "@/lib/utils";
 import { WorkspaceFileIcon } from "./explorer-entry-icon";
 import type { SourceControlItemViewModel, SourceControlSection, SourceControlSummary } from "./editor-panel.utils";
+
+type SourceControlPanelView = "changes" | "history";
+
+interface SourceControlHistoryEntry {
+  hash: string;
+  relativeDate: string;
+  subject: string;
+}
+
+function formatFileCount(count: number) {
+  return `${count} file${count === 1 ? "" : "s"}`;
+}
+
+function formatRecentCommitCount(count: number) {
+  return `${count} recent commit${count === 1 ? "" : "s"}`;
+}
 
 function SourceControlActionButton(args: {
   disabled?: boolean;
@@ -162,6 +178,33 @@ function SourceControlRow(args: {
   );
 }
 
+function SourceControlHistoryRow(args: {
+  isLast: boolean;
+  item: SourceControlHistoryEntry;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="relative flex w-5 shrink-0 justify-center pt-1.5">
+        <span className="size-2.5 rounded-full border border-border/80 bg-background shadow-xs" />
+        {!args.isLast ? <span className="absolute bottom-[-12px] top-4 w-px bg-border/70" /> : null}
+      </div>
+      <div className="min-w-0 flex-1 rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-foreground">{args.item.subject}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-mono text-[11px] text-foreground/70">{args.item.hash}</span>
+              <span className="size-1 rounded-full bg-border" />
+              <span>{args.item.relativeDate}</span>
+            </div>
+          </div>
+          <GitCommitHorizontal className="mt-0.5 size-4 shrink-0 text-muted-foreground/70" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function WorkspaceChangesPanel(props: {
   sourceBranch: string;
   filteredScmItems: SourceControlStatusItem[];
@@ -182,100 +225,124 @@ export function WorkspaceChangesPanel(props: {
   onSelectDiff: (path: string) => Promise<void>;
   onStageAction: (args: { action: "stage" | "unstage"; item: SourceControlStatusItem }) => Promise<void>;
   onDiscardChange: (item: SourceControlStatusItem) => Promise<void>;
-  sourceHistory: Array<{ hash: string; relativeDate: string; subject: string }>;
+  sourceHistory: SourceControlHistoryEntry[];
 }) {
+  const [view, setView] = useState<SourceControlPanelView>("changes");
+  const showStageAll = props.sourceControlSummary.workingTreeCount > 0;
+  const showUnstageAll = props.canUnstageAnyChanges;
+  const showComposer = props.filteredScmItems.length > 0 || props.commitMessage.trim().length > 0;
+  const summaryLabels = [
+    props.sourceControlSummary.stagedCount > 0
+      ? { className: "text-success", text: `Staged ${props.sourceControlSummary.stagedCount}` }
+      : null,
+    props.sourceControlSummary.workingTreeCount > 0
+      ? { className: "text-muted-foreground", text: `Working tree ${props.sourceControlSummary.workingTreeCount}` }
+      : null,
+    props.sourceControlSummary.conflictCount > 0
+      ? { className: "text-destructive", text: `Conflicts ${props.sourceControlSummary.conflictCount}` }
+      : null,
+  ].filter(Boolean) as Array<{ className: string; text: string }>;
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="overflow-auto border-b border-border/80 p-2">
-        <div className="space-y-2">
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+    <Tabs value={view} onValueChange={(nextValue) => setView(nextValue as SourceControlPanelView)} className="flex h-full min-h-0 flex-col gap-0">
+      <div className="border-b border-border/80 px-2 py-2">
+        <TabsList className="h-auto w-full justify-start rounded-xl border border-border/70 bg-muted/30 p-1">
+          <TabsTrigger value="changes" className="h-8 flex-none gap-2 rounded-lg px-3 text-xs font-medium">
+            <span>Changes</span>
+            <span className="text-[11px] text-muted-foreground">{props.filteredScmItems.length}</span>
+          </TabsTrigger>
+          <TabsTrigger value="history" className="h-8 flex-none gap-2 rounded-lg px-3 text-xs font-medium">
+            <History className="size-3.5" />
+            <span>History</span>
+            <span className="text-[11px] text-muted-foreground">{props.sourceHistory.length}</span>
+          </TabsTrigger>
+        </TabsList>
+      </div>
+
+      <TabsContent value="changes" className="min-h-0 flex-1 overflow-auto">
+        <div className="space-y-3 p-2">
+          <section className="rounded-xl border border-border/70 bg-muted/20 p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className="h-6 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal">
-                    <RotateCw className="size-3.5 text-muted-foreground" />
+                    <GitBranch className="size-3.5 text-muted-foreground" />
                     <span className="truncate">{props.sourceBranch}</span>
                   </Badge>
-                  <Badge variant={props.filteredScmItems.length > 0 ? "secondary" : "outline"} className="h-6 rounded-md px-2 font-normal">
-                    Changes {props.filteredScmItems.length}
-                  </Badge>
+                  <p className="text-sm font-medium text-foreground">
+                    {formatFileCount(props.filteredScmItems.length)} changed
+                  </p>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {props.sourceControlSummary.stagedCount > 0 ? (
-                    <Badge variant="success" className="rounded-md px-2 font-normal">
-                      Staged {props.sourceControlSummary.stagedCount}
-                    </Badge>
-                  ) : null}
-                  {props.sourceControlSummary.unstagedCount > 0 ? (
-                    <Badge variant="warning" className="rounded-md px-2 font-normal">
-                      Working Tree {props.sourceControlSummary.unstagedCount}
-                    </Badge>
-                  ) : null}
-                  {props.sourceControlSummary.untrackedCount > 0 ? (
-                    <Badge variant="outline" className="rounded-md px-2 font-normal">
-                      Untracked {props.sourceControlSummary.untrackedCount}
-                    </Badge>
-                  ) : null}
-                  {props.sourceControlSummary.conflictCount > 0 ? (
-                    <Badge variant="destructive" className="rounded-md px-2 font-normal">
-                      Conflicts {props.sourceControlSummary.conflictCount}
-                    </Badge>
-                  ) : null}
-                </div>
+                {summaryLabels.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {summaryLabels.map((item) => (
+                      <span key={item.text} className={item.className}>
+                        {item.text}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <p className="text-xs text-muted-foreground">{props.sourceControlHint}</p>
               </div>
               {props.isScmBusy ? <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" /> : null}
             </div>
-          </div>
 
-          <div className="rounded-xl border border-border/70 bg-background/80 p-3">
-            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Commit Staged Changes
-            </p>
-            <Input
-              className="mt-2 h-9 rounded-md border-border/70 bg-background px-2 text-sm"
-              placeholder={`Message for "${props.sourceBranch}"`}
-              value={props.commitMessage}
-              onChange={(event) => props.onCommitMessageChange(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && props.commitMessage.trim() && props.canCommitStagedChanges && !props.isScmBusy) {
-                  event.preventDefault();
-                  void props.onCommit();
-                }
-              }}
-              disabled={props.isScmBusy}
-            />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                className="h-8 min-w-[112px] flex-1 rounded-md text-sm"
-                disabled={props.isScmBusy || !props.commitMessage.trim() || !props.canCommitStagedChanges}
-                onClick={() => void props.onCommit()}
-              >
-                Commit
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 rounded-md text-sm"
-                disabled={props.isScmBusy || props.filteredScmItems.length === 0}
-                onClick={() => void props.onStageAll()}
-              >
-                Stage All
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 rounded-md text-sm"
-                disabled={props.isScmBusy || !props.canUnstageAnyChanges}
-                onClick={() => void props.onUnstageAll()}
-              >
-                Unstage All
-              </Button>
-            </div>
-          </div>
+            {showComposer ? (
+              <div className="mt-3 border-t border-border/70 pt-3">
+                <div className="flex items-start gap-2">
+                  <Input
+                    className="h-9 rounded-lg border-border/70 bg-background/90 text-sm"
+                    placeholder={`Commit staged changes on "${props.sourceBranch}"`}
+                    value={props.commitMessage}
+                    onChange={(event) => props.onCommitMessageChange(event.target.value)}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && props.commitMessage.trim() && props.canCommitStagedChanges && !props.isScmBusy) {
+                        event.preventDefault();
+                        void props.onCommit();
+                      }
+                    }}
+                    disabled={props.isScmBusy}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-9 rounded-lg px-3 text-sm"
+                    disabled={props.isScmBusy || !props.commitMessage.trim() || !props.canCommitStagedChanges}
+                    onClick={() => void props.onCommit()}
+                  >
+                    Commit
+                  </Button>
+                </div>
+                {(showStageAll || showUnstageAll) ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {showStageAll ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 rounded-lg text-sm"
+                        disabled={props.isScmBusy}
+                        onClick={() => void props.onStageAll()}
+                      >
+                        Stage All
+                      </Button>
+                    ) : null}
+                    {showUnstageAll ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 rounded-lg text-sm"
+                        disabled={props.isScmBusy}
+                        onClick={() => void props.onUnstageAll()}
+                      >
+                        Unstage All
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
 
-          <div className="space-y-3 px-1">
+          <div className="space-y-3">
             {props.hasConflicts ? (
               <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning dark:bg-warning/15">
                 Conflict detected. Resolve, stage, or discard the affected files before committing.
@@ -287,23 +354,17 @@ export function WorkspaceChangesPanel(props: {
               </div>
             ) : null}
             {!props.sourceError && props.filteredScmItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-4">
-                <p className="text-sm font-medium">No local changes.</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  This workspace matches the checked-out branch.
-                </p>
+              <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-3">
+                <p className="text-sm text-muted-foreground">No local changes.</p>
               </div>
             ) : null}
             {props.sourceControlSections.map((section) => (
               <section key={section.id} className="space-y-1.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      {section.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{section.description}</p>
-                  </div>
-                  <Badge variant={section.badgeVariant} className="mt-0.5 rounded-md px-2 font-normal">
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    {section.title}
+                  </p>
+                  <Badge variant={section.badgeVariant} className="rounded-md px-2 font-normal">
                     {section.items.length}
                   </Badge>
                 </div>
@@ -325,24 +386,38 @@ export function WorkspaceChangesPanel(props: {
             ))}
           </div>
         </div>
-      </div>
+      </TabsContent>
 
-      <div className="border-t border-border/80 p-2">
-        <p className="text-sm text-muted-foreground">Commit History ({props.sourceHistory.length})</p>
-        <div className="mt-2 max-h-32 space-y-1.5 overflow-auto">
+      <TabsContent value="history" className="min-h-0 flex-1 overflow-auto">
+        <div className="space-y-3 p-2">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Badge variant="outline" className="h-6 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal">
+                <GitBranch className="size-3.5 text-muted-foreground" />
+                <span className="truncate">{props.sourceBranch}</span>
+              </Badge>
+              <p className="text-xs text-muted-foreground">{formatRecentCommitCount(props.sourceHistory.length)}</p>
+            </div>
+            {props.isScmBusy ? <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" /> : null}
+          </div>
+
           {props.sourceHistory.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-3">
               <p className="text-sm text-muted-foreground">Initial commit</p>
             </div>
-          ) : null}
-          {props.sourceHistory.map((item) => (
-            <div key={`${item.hash}:${item.subject}`} className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
-              <p className="truncate text-sm font-medium">{item.subject}</p>
-              <p className="text-xs text-muted-foreground">{item.hash} · {item.relativeDate}</p>
+          ) : (
+            <div className="space-y-0">
+              {props.sourceHistory.map((item, index) => (
+                <SourceControlHistoryRow
+                  key={`${item.hash}:${item.subject}`}
+                  item={item}
+                  isLast={index === props.sourceHistory.length - 1}
+                />
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      </div>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }

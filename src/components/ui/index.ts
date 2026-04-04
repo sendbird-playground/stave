@@ -114,6 +114,13 @@ export {
   TableHeader,
   TableRow,
 } from "./table";
+export {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  tabsListVariants,
+} from "./tabs";
 export { Toggle, toggleVariants } from "./toggle";
 export {
   Tooltip,
