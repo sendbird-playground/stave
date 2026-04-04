@@ -563,6 +563,9 @@ interface WindowAutomationsApi {
     workspacePath: string;
     workspaceName: string;
     branch: string;
+    taskId?: string;
+    taskTitle?: string;
+    turnId?: string;
   }) => Promise<{
     ok: boolean;
     error?: string;

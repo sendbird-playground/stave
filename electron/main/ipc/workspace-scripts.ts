@@ -120,6 +120,11 @@ export function registerWorkspaceAutomationHandlers() {
         workspacePath: parsed.data.workspacePath,
         workspaceName: parsed.data.workspaceName,
         branch: parsed.data.branch,
+        hookContext: {
+          taskId: parsed.data.taskId,
+          taskTitle: parsed.data.taskTitle,
+          turnId: parsed.data.turnId,
+        },
       });
       return { ok: summary.failures.length === 0, summary };
     } catch (error) {

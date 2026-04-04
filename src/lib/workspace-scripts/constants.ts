@@ -9,11 +9,56 @@ export const AUTOMATIONS_CONFIG_FILENAME = "automations.json";
 export const AUTOMATIONS_LOCAL_CONFIG_FILENAME = "automations.local.json";
 
 export const AUTOMATION_TRIGGER_IDS: readonly AutomationTrigger[] = [
-  "workspace.created",
-  "workspace.archiving",
+  "task.created",
+  "task.archiving",
+  "turn.started",
+  "turn.completed",
   "pr.beforeOpen",
   "pr.afterOpen",
+  "workspace.created",
+  "workspace.archiving",
 ] as const;
+
+export const AUTOMATION_TRIGGER_METADATA: Record<AutomationTrigger, {
+  label: string;
+  description: string;
+  legacy?: boolean;
+}> = {
+  "task.created": {
+    label: "Task Created",
+    description: "Runs when Stave creates a new task in the active workspace.",
+  },
+  "task.archiving": {
+    label: "Task Archiving",
+    description: "Runs when Stave archives a task from the workspace task list.",
+  },
+  "turn.started": {
+    label: "Turn Started",
+    description: "Runs when a provider turn starts for a task.",
+  },
+  "turn.completed": {
+    label: "Turn Completed",
+    description: "Runs after a provider turn finishes and the task returns to idle.",
+  },
+  "pr.beforeOpen": {
+    label: "PR Before Open",
+    description: "Runs before Stave pushes and opens a pull request.",
+  },
+  "pr.afterOpen": {
+    label: "PR After Open",
+    description: "Runs after Stave opens a pull request.",
+  },
+  "workspace.created": {
+    label: "Workspace Created",
+    description: "Legacy trigger for worktree creation bootstrap flows.",
+    legacy: true,
+  },
+  "workspace.archiving": {
+    label: "Workspace Archiving",
+    description: "Legacy trigger for workspace teardown flows.",
+    legacy: true,
+  },
+};
 
 export const DEFAULT_AUTOMATION_TARGET_IDS = {
   WORKSPACE: "workspace",
@@ -25,6 +70,9 @@ export const AUTOMATION_ENV_VARS = {
   WORKSPACE_NAME: "STAVE_WORKSPACE_NAME",
   WORKSPACE_PATH: "STAVE_WORKSPACE_PATH",
   BRANCH: "STAVE_BRANCH",
+  TASK_ID: "STAVE_TASK_ID",
+  TASK_TITLE: "STAVE_TASK_TITLE",
+  TURN_ID: "STAVE_TURN_ID",
   TARGET_ID: "STAVE_AUTOMATION_TARGET_ID",
   TRIGGER: "STAVE_AUTOMATION_TRIGGER",
 } as const;

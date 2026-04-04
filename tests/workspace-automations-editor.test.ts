@@ -34,7 +34,7 @@ describe("buildAutomationEditorState", () => {
         },
       },
       hooks: {
-        "workspace.created": ["bootstrap"],
+        "task.created": ["bootstrap"],
         "pr.beforeOpen": [{ ref: "app", blocking: false }],
       },
     };
@@ -55,7 +55,7 @@ describe("buildAutomationEditorState", () => {
       orbitNoTls: true,
       orbitProxyPort: "1355",
     });
-    expect(editorState.hooks["workspace.created"]).toEqual([
+    expect(editorState.hooks["task.created"]).toEqual([
       {
         automationId: "bootstrap",
         automationKind: "action",
@@ -146,7 +146,7 @@ describe("buildAutomationConfigFromEditorState", () => {
       actions: [action],
       services: [service],
       hooks: {
-        "workspace.created": [
+        "task.created": [
           {
             automationId: "bootstrap",
             automationKind: "action",
@@ -187,7 +187,7 @@ describe("buildAutomationConfigFromEditorState", () => {
         },
       },
       hooks: {
-        "workspace.created": [
+        "task.created": [
           {
             ref: "bootstrap",
             kind: "action",

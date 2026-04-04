@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 export type {
+  AutomationHookContext,
   AutomationKind,
   AutomationTargetScope,
   AutomationTrigger,
@@ -30,6 +31,7 @@ export {
   AUTOMATIONS_LOCAL_CONFIG_FILENAME,
   AUTOMATION_ENV_VARS,
   AUTOMATION_TRIGGER_IDS,
+  AUTOMATION_TRIGGER_METADATA,
   DEFAULT_AUTOMATION_TARGET_IDS,
   STAVE_CONFIG_DIR,
   WORKSPACE_AUTOMATIONS_IPC,

@@ -51,6 +51,10 @@ export const CreatePRArgsSchema = z
 
 const AutomationKindSchema = z.union([z.literal("action"), z.literal("service")]);
 const AutomationTriggerSchema = z.union([
+  z.literal("task.created"),
+  z.literal("task.archiving"),
+  z.literal("turn.started"),
+  z.literal("turn.completed"),
   z.literal("workspace.created"),
   z.literal("workspace.archiving"),
   z.literal("pr.beforeOpen"),
@@ -99,6 +103,9 @@ export const WorkspaceAutomationsRunHookArgsSchema = z
     workspacePath: z.string().min(1).max(4096),
     workspaceName: z.string().min(1).max(200),
     branch: z.string().min(1).max(200),
+    taskId: z.string().min(1).max(200).optional(),
+    taskTitle: z.string().min(1).max(500).optional(),
+    turnId: z.string().min(1).max(200).optional(),
   })
   .strict();
 

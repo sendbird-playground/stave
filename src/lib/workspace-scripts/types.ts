@@ -47,10 +47,20 @@ export interface ResolvedScriptsConfig {
 export type AutomationKind = "action" | "service";
 export type AutomationTargetScope = "workspace" | "project";
 export type AutomationTrigger =
-  | "workspace.created"
-  | "workspace.archiving"
+  | "task.created"
+  | "task.archiving"
+  | "turn.started"
+  | "turn.completed"
   | "pr.beforeOpen"
-  | "pr.afterOpen";
+  | "pr.afterOpen"
+  | "workspace.created"
+  | "workspace.archiving";
+
+export interface AutomationHookContext {
+  taskId?: string;
+  taskTitle?: string;
+  turnId?: string;
+}
 
 export interface WorkspaceAutomationTargetConfig {
   label?: string;

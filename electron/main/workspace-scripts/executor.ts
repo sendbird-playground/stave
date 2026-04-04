@@ -15,6 +15,7 @@ import {
   getAutomationHooksForTrigger,
 } from "../../../src/lib/workspace-scripts/config";
 import type {
+  AutomationHookContext,
   AutomationKind,
   AutomationTrigger,
   ResolvedWorkspaceAutomation,
@@ -70,6 +71,7 @@ function buildAutomationEnv(args: {
   branch: string;
   automation: ResolvedWorkspaceAutomation;
   source: WorkspaceAutomationRunSource;
+  hookContext?: AutomationHookContext;
 }): NodeJS.ProcessEnv {
   return {
     ...buildExecutableLookupEnv(),
@@ -77,6 +79,9 @@ function buildAutomationEnv(args: {
     [AUTOMATION_ENV_VARS.WORKSPACE_NAME]: args.workspaceName,
     [AUTOMATION_ENV_VARS.WORKSPACE_PATH]: args.workspacePath,
     [AUTOMATION_ENV_VARS.BRANCH]: args.branch,
+    ...(args.hookContext?.taskId ? { [AUTOMATION_ENV_VARS.TASK_ID]: args.hookContext.taskId } : {}),
+    ...(args.hookContext?.taskTitle ? { [AUTOMATION_ENV_VARS.TASK_TITLE]: args.hookContext.taskTitle } : {}),
+    ...(args.hookContext?.turnId ? { [AUTOMATION_ENV_VARS.TURN_ID]: args.hookContext.turnId } : {}),
     [AUTOMATION_ENV_VARS.TARGET_ID]: args.automation.targetId,
     ...(args.source.kind === "hook" ? { [AUTOMATION_ENV_VARS.TRIGGER]: args.source.trigger } : {}),
     ...args.automation.target.env,
@@ -203,6 +208,7 @@ async function runFiniteAutomation(args: {
   workspaceName: string;
   branch: string;
   source: WorkspaceAutomationRunSource;
+  hookContext?: AutomationHookContext;
 }) {
   const runId = randomUUID();
   const key = createProcessKey({
@@ -358,6 +364,7 @@ async function runServiceAutomation(args: {
   workspaceName: string;
   branch: string;
   source: WorkspaceAutomationRunSource;
+  hookContext?: AutomationHookContext;
 }) {
   const key = createProcessKey({
     workspaceId: args.workspaceId,
@@ -548,6 +555,7 @@ export async function runAutomationEntry(args: {
   workspaceName: string;
   branch: string;
   source?: WorkspaceAutomationRunSource;
+  hookContext?: AutomationHookContext;
 }) {
   const source = args.source ?? { kind: "manual" as const };
   if (args.automation.kind === "service") {
@@ -564,6 +572,7 @@ export async function runAutomationHook(args: {
   workspacePath: string;
   workspaceName: string;
   branch: string;
+  hookContext?: AutomationHookContext;
 }): Promise<WorkspaceAutomationHookRunSummary> {
   const refs = getAutomationHooksForTrigger(args.config, args.trigger);
   const summary: WorkspaceAutomationHookRunSummary = {
@@ -597,6 +606,7 @@ export async function runAutomationHook(args: {
       workspaceName: args.workspaceName,
       branch: args.branch,
       source: { kind: "hook", trigger: args.trigger },
+      hookContext: args.hookContext,
     });
 
     if (!result.ok) {

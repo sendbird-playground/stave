@@ -32,6 +32,7 @@ import {
   toast,
 } from "@/components/ui";
 import {
+  AUTOMATION_TRIGGER_METADATA,
   AUTOMATION_TRIGGER_IDS,
   AUTOMATIONS_CONFIG_FILENAME,
   DEFAULT_AUTOMATION_TARGET_IDS,
@@ -347,14 +348,20 @@ function HookTriggerEditor(props: {
   onToggleLink: (trigger: AutomationTrigger, candidate: AutomationEditorCandidate, enabled: boolean) => void;
   onToggleBlocking: (trigger: AutomationTrigger, candidate: AutomationEditorCandidate, blocking: boolean) => void;
 }) {
+  const triggerMeta = AUTOMATION_TRIGGER_METADATA[props.trigger];
   return (
     <div className="rounded-lg border border-border/70 bg-background/80 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-foreground">{props.trigger}</p>
-          <p className="text-xs text-muted-foreground">
-            Link actions or services that should run from this trigger.
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium text-foreground">{triggerMeta.label}</p>
+            {triggerMeta.legacy ? (
+              <Badge variant="secondary" className="rounded-sm px-2 py-0">
+                Legacy
+              </Badge>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">{triggerMeta.description}</p>
         </div>
         <Badge variant="outline" className="rounded-sm px-2 py-0">
           {(props.links ?? []).length} linked
@@ -1134,7 +1141,7 @@ export function WorkspaceAutomationsManager(props: {
                   <div>
                     <p className="text-sm font-medium text-foreground">Hooks</p>
                     <p className="text-xs text-muted-foreground">
-                      Wire actions and services into workspace and PR lifecycle triggers.
+                      Wire actions and services into task, turn, PR, and legacy workspace lifecycle triggers.
                     </p>
                   </div>
 
@@ -1158,7 +1165,7 @@ export function WorkspaceAutomationsManager(props: {
                       <div className="mt-2 flex flex-wrap gap-2">
                         {unresolvedHookRefs.map(({ trigger, link }, index) => (
                           <Badge key={`${trigger}:${link.automationKind ?? "unknown"}:${link.automationId}:${index}`} variant="secondary" className="rounded-sm px-2 py-0">
-                            {trigger} → {link.automationKind ?? "unknown"}:{link.automationId}
+                            {AUTOMATION_TRIGGER_METADATA[trigger].label} → {link.automationKind ?? "unknown"}:{link.automationId}
                           </Badge>
                         ))}
                       </div>
