@@ -193,7 +193,7 @@ When the active workspace PR is in a terminal state (`merged` or `closed_unmerge
 
 The flow:
 
-1. Prompt for the new workspace branch name
+1. Prompt for the new workspace branch name, defaulting to `<source-branch>--continue--<utcstamp>`
 2. Create a fresh worktree from the PR base branch (or project default branch fallback)
 3. Generate a markdown continuation brief from:
    - source branch and PR metadata
