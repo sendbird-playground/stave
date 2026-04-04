@@ -38,14 +38,24 @@ export function resolvePlanViewerState(args: {
   const isPlanModeActive = isClaudePlanMode || isCodexPlanMode;
   const lastMessageHasPlan = hasPlanContent(args.lastMessage);
   const hasHistoricalPlan = hasPlanContent(args.latestPlanMessage);
+  const shouldDelayCodexPendingViewer =
+    isCodexPlanMode
+    && args.isTurnActive
+    && args.latestPlanMessage?.isStreaming === true;
 
   // Stay in "preparing" while plan mode is active and the current turn has not
   // produced a fresh plan response yet. Historical plan text may still exist.
-  const isPlanPreparing = isPlanModeActive && args.isTurnActive && !lastMessageHasPlan;
+  const isPlanPreparing =
+    isPlanModeActive
+    && args.isTurnActive
+    && (!lastMessageHasPlan || shouldDelayCodexPendingViewer);
 
   // Render the full viewer only while the task is still in plan review, or
   // when the latest message is itself the plan response awaiting user action.
-  const isPlanPending = hasHistoricalPlan && (isPlanModeActive || lastMessageHasPlan);
+  const isPlanPending =
+    hasHistoricalPlan
+    && !shouldDelayCodexPendingViewer
+    && (isPlanModeActive || lastMessageHasPlan);
   const canReplyToPlan = isPlanPending && !args.isTurnActive;
 
   return {

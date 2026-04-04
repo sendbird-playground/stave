@@ -350,9 +350,15 @@ export function buildCodexTodoPlanText(args: {
 }
 
 export function resolveCodexPlanReadyText(args: {
+  finalPlanText?: string | null;
   pendingMessageText?: string | null;
   latestTodoPlanText?: string | null;
 }): string | null {
+  const finalPlanText = args.finalPlanText?.trim() ?? "";
+  if (finalPlanText) {
+    return extractProposedPlan(finalPlanText) ?? finalPlanText;
+  }
+
   const pendingText = args.pendingMessageText?.trim() ?? "";
   if (pendingText) {
     return extractProposedPlan(pendingText) ?? pendingText;
@@ -736,8 +742,13 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     const events: BridgeEvent[] = [];
     let sawExperimentalPlanTodo = false;
     let latestTodoPlanText: string | null = null;
+    let retainedFinalPlanText: string | null = null;
     let pendingPlanMessageText: string | null = null;
+    let hasEmittedPlanReady = false;
     const emitBridgeEvent = (event: BridgeEvent) => {
+      if (event.type === "plan_ready") {
+        hasEmittedPlanReady = true;
+      }
       events.push(event);
       args.onEvent?.(event);
     };
@@ -746,6 +757,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     };
     const flushPendingPlanMessage = (asPlanReady: boolean) => {
       const planText = resolveCodexPlanReadyText({
+        finalPlanText: retainedFinalPlanText,
         pendingMessageText: pendingPlanMessageText,
         latestTodoPlanText,
       });
@@ -796,7 +808,9 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
           codexItemLastEmitTime.clear();
           sawExperimentalPlanTodo = false;
           latestTodoPlanText = null;
+          retainedFinalPlanText = null;
           pendingPlanMessageText = null;
+          hasEmittedPlanReady = false;
           break;
         case "item.started":
         case "item.updated":
@@ -817,6 +831,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
               flushPendingPlanMessage(false);
             }
             pendingPlanMessageText = threadEvent.item.text ?? "";
+            retainedFinalPlanText = threadEvent.item.text ?? "";
             if (codexDebug) {
               console.debug("[codex-sdk-runtime] buffering final codex plan candidate");
             }
@@ -867,7 +882,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
           });
           break;
         case "turn.completed":
-          if (codexExperimentalPlanMode && (pendingPlanMessageText || latestTodoPlanText)) {
+          if (!hasEmittedPlanReady && codexExperimentalPlanMode && (retainedFinalPlanText || pendingPlanMessageText || latestTodoPlanText)) {
             flushPendingPlanMessage(true);
           }
           {

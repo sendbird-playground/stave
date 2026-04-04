@@ -130,7 +130,7 @@ describe("resolvePlanViewerState", () => {
     });
   });
 
-  test("waits for Codex to finish the current turn before allowing plan replies", () => {
+  test("keeps Codex plan viewer in preparing state until the turn fully completes", () => {
     const state = resolvePlanViewerState({
       activeProvider: "codex",
       claudePermissionMode: "default",
@@ -154,8 +154,8 @@ describe("resolvePlanViewerState", () => {
 
     expect(state).toEqual({
       planText: "1. Inspect\n2. Patch",
-      isPlanPreparing: false,
-      isPlanPending: true,
+      isPlanPreparing: true,
+      isPlanPending: false,
       canReplyToPlan: false,
     });
   });
