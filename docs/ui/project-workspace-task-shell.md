@@ -91,17 +91,19 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
+  - labels the git panel as `Source Control`, with `Changes` and `History` kept as the internal tabs inside that panel
   - exposes a dedicated Automation panel for workspace actions, services, hook inspection, Orbit-enabled dev services, runtime path/status summary, and quick navigation back to project settings
   - exposes a workspace information panel with shared accordion sections, a distinct summary card, URL-first Jira/Figma/GitHub integrations, notes, todos, saved plans, and custom structured fields
   - surfaces workspace-level plan history from markdown files under `.stave/context/plans`, while still showing legacy `.stave/plans` files
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`
   - keeps terminal independent while making editor and explorer/changes mutually exclusive on small widths
   - opens its right-side panels as full-height siblings under the top bar instead of placing them beneath the task-tabs row
+  - prefers flat sectioned layouts, divider-separated groups, and compact rows inside right-side panels; avoid stacking card-on-card surfaces unless a summary or isolated workflow genuinely needs stronger containment
 - `EditorPanel`
   - loads explorer folders on demand instead of materializing the full tree from `projectFiles`
   - caches loaded directory entries in memory for the active workspace until refresh, workspace switch, or add file/folder invalidation
   - keeps empty folders visible because directory entries now come from folder listings instead of file-only scans
-  - presents source control as a tabbed `Changes` / `History` surface with a condensed summary header instead of stacking commit history under the working-tree list
+  - presents source control as a tabbed `Changes` / `History` surface with a condensed flat summary header instead of stacking commit history under the working-tree list
   - renders commit history rows in a git-log-inspired timeline layout so per-commit diff drill-in can be added later without redesigning the list
   - renders open file tabs with a stronger two-line filename and directory hierarchy plus diff/conflict state chips, so the strip feels aligned with task tabs without reusing the exact same visual treatment
 

@@ -105,6 +105,7 @@ Then add the export to `src/components/ui/index.ts` and verify import paths use 
   - secondary metadata third
 - Use semantic status colors for warnings, destructive actions, success, and provider identity. Do not add a new accent family unless there is a real product meaning for it.
 - Empty, loading, and error states should be useful and operational, not ornamental. Use the `Empty` component family for structured empty states.
+- In right-rail panels, prefer flat section headers, divider-separated groups, and compact rows over stacking independent cards. Use card-like containment only when a summary block or isolated workflow genuinely benefits from stronger separation.
 
 ## Implementation Workflow
 

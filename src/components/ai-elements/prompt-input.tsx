@@ -20,6 +20,7 @@ import {
 import { ModelSelector, type ModelSelectorOption } from "./model-selector";
 import { PromptInputRuntimeBar, type PromptInputRuntimeControl, type PromptInputRuntimeStatusItem } from "./prompt-input-runtime-bar";
 import { PermissionModeSelector, cyclePermissionMode, type PermissionModeValue } from "./permission-mode-selector";
+import { Suggestion, Suggestions } from "./suggestion";
 
 interface PromptInputProps {
   value: string;
@@ -31,6 +32,7 @@ interface PromptInputProps {
   attachedFilePaths: string[];
   attachments?: Attachment[];
   promptHistoryEntries?: readonly string[];
+  promptSuggestions?: readonly string[];
   permissionMode?: PermissionModeValue;
   runtimeQuickControls?: readonly PromptInputRuntimeControl[];
   runtimeStatusItems?: readonly PromptInputRuntimeStatusItem[];
@@ -40,6 +42,7 @@ interface PromptInputProps {
   skillsAutoSuggest?: boolean;
   skillPaletteItems?: readonly SkillCatalogEntry[];
   onValueChange: (value: string) => void;
+  onSuggestionSelect?: (suggestion: string) => void;
   onBlur?: () => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
   onAttachFilesChange: (args: { filePaths: string[] }) => void;
@@ -65,10 +68,12 @@ const SUPPORTS_FIELD_SIZING_CONTENT = typeof CSS !== "undefined"
 const PALETTE_ITEM_INDEX_ATTRIBUTE = "data-palette-index";
 const PROMPT_SURFACE_FOCUS_VISIBLE_RESET =
   "focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0";
-const PROMPT_SURFACE_SECONDARY_FOCUS =
-  `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} focus-visible:border-border/70`;
 const PROMPT_SURFACE_PRIMARY_FOCUS =
   `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} focus-visible:border-transparent`;
+const PROMPT_TOOLBAR_BUTTON =
+  `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} h-9 rounded-md border border-transparent bg-transparent px-2.5 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground`;
+const PROMPT_TOOLBAR_ICON_BUTTON =
+  `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} rounded-md border border-transparent bg-transparent p-0 text-muted-foreground hover:bg-muted/60 hover:text-foreground`;
 
 function getPaletteItemSelector(index: number) {
   return `[${PALETTE_ITEM_INDEX_ATTRIBUTE}="${index}"]`;
@@ -85,6 +90,7 @@ export function PromptInput(args: PromptInputProps) {
     attachedFilePaths,
     attachments,
     promptHistoryEntries,
+    promptSuggestions,
     permissionMode,
     runtimeQuickControls,
     runtimeStatusItems,
@@ -94,6 +100,7 @@ export function PromptInput(args: PromptInputProps) {
     skillsAutoSuggest,
     skillPaletteItems,
     onValueChange,
+    onSuggestionSelect,
     onBlur,
     onModelSelect,
     onAttachFilesChange,
@@ -485,8 +492,22 @@ export function PromptInput(args: PromptInputProps) {
     <form
       data-prompt-input-root
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-xl border border-border/80 bg-card p-4 transition-[border-color,box-shadow] focus-within:border-ring/70 focus-within:ring-3 focus-within:ring-ring/35"
+      className="space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-colors focus-within:border-ring/60"
     >
+      {promptSuggestions && promptSuggestions.length > 0 ? (
+        <Suggestions aria-label="Suggestions" className="mb-0">
+          {promptSuggestions.map((suggestion) => (
+            <Suggestion
+              key={suggestion}
+              suggestion={suggestion}
+              onClick={onSuggestionSelect}
+              title={suggestion}
+              variant="ghost"
+              className="h-7 rounded-full bg-muted/40 px-3 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+            />
+          ))}
+        </Suggestions>
+      ) : null}
       <Popover open={activePalette !== null} modal={false}>
         <PopoverAnchor asChild>
           <div>
@@ -662,8 +683,8 @@ export function PromptInput(args: PromptInputProps) {
               }}
               placeholder="Use / for commands, $ for skills (Enter to send)"
               className={cn(
-                "min-h-[104px] max-h-[240px] resize-none overflow-y-auto rounded-lg border-border/70 bg-background text-lg leading-8 md:text-lg",
-                PROMPT_SURFACE_SECONDARY_FOCUS,
+                "min-h-[104px] max-h-[240px] resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0 text-lg leading-8 shadow-none md:text-lg",
+                PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
               )}
             />
           </div>
@@ -900,21 +921,23 @@ export function PromptInput(args: PromptInputProps) {
           {onFastModeChange ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   disabled={interactionsDisabled}
                   onClick={() => onFastModeChange(!fastMode)}
                   className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+                    PROMPT_TOOLBAR_BUTTON,
                     fastMode
-                      ? "border-amber-500/60 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
-                      : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
-                    PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
+                      ? "bg-amber-500/12 text-amber-500 hover:bg-amber-500/18 hover:text-amber-500"
+                      : undefined,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
                   <Zap className={cn("size-3.5", fastMode && "fill-amber-400")} />
-                </button>
+                  <span>Fast</span>
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="top">
                 {fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
@@ -924,21 +947,23 @@ export function PromptInput(args: PromptInputProps) {
           {onPlanModeChange ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   disabled={interactionsDisabled}
                   onClick={() => onPlanModeChange(!planMode)}
                   className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+                    PROMPT_TOOLBAR_BUTTON,
                     planMode
-                      ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
-                      : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
-                    PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
+                      ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                      : undefined,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
                   <ClipboardCheck className="size-3.5" />
-                </button>
+                  <span>Plan</span>
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{planMode ? "Plan mode ON" : "Plan mode OFF"}</TooltipContent>
             </Tooltip>
@@ -946,26 +971,28 @@ export function PromptInput(args: PromptInputProps) {
           {onThinkingModeChange ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   disabled={interactionsDisabled}
                   onClick={() => {
                     const cycle = { adaptive: "enabled", enabled: "disabled", disabled: "adaptive" } as const;
                     onThinkingModeChange(cycle[thinkingMode ?? "adaptive"]);
                   }}
                   className={cn(
-                    "inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors",
+                    PROMPT_TOOLBAR_BUTTON,
                     thinkingMode === "enabled"
-                      ? "border-primary/60 bg-primary/15 text-primary hover:bg-primary/25"
+                      ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                       : thinkingMode === "disabled"
-                        ? "border-border/70 bg-secondary text-muted-foreground/50 hover:bg-secondary/60"
-                        : "border-border/70 bg-secondary text-muted-foreground hover:bg-secondary/60",
-                    PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
+                        ? "text-muted-foreground/50"
+                        : undefined,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
                   <Brain className="size-3.5" />
-                </button>
+                  <span>Thinking</span>
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{`Thinking: ${thinkingMode ?? "adaptive"}`}</TooltipContent>
             </Tooltip>
@@ -981,12 +1008,12 @@ export function PromptInput(args: PromptInputProps) {
                       size="sm"
                       disabled={interactionsDisabled}
                       className={cn(
-                        "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
-                        PROMPT_SURFACE_SECONDARY_FOCUS,
+                        PROMPT_TOOLBAR_BUTTON,
                       )}
                       aria-label="Controls & Runtime"
                     >
                       <SlidersHorizontal className="size-3.5" />
+                      <span>Controls</span>
                     </Button>
                   </DrawerTrigger>
                 </TooltipTrigger>
@@ -1031,14 +1058,13 @@ export function PromptInput(args: PromptInputProps) {
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="icon-sm"
                 disabled={interactionsDisabled || !onOpenFileSelector}
                 onClick={() => {
                   void onOpenFileSelector?.();
                 }}
                 className={cn(
-                  "h-9 w-9 rounded-md border border-border/70 bg-secondary p-0 text-muted-foreground hover:bg-secondary/60",
-                  PROMPT_SURFACE_SECONDARY_FOCUS,
+                  PROMPT_TOOLBAR_ICON_BUTTON,
                 )}
                 aria-label="Attach files"
               >
@@ -1052,13 +1078,13 @@ export function PromptInput(args: PromptInputProps) {
               <TooltipTrigger asChild>
                 <Button
                   type="button"
-                  size="sm"
-                  variant="outline"
-                  className={cn("h-9 rounded-md px-3.5 text-sm", PROMPT_SURFACE_SECONDARY_FOCUS)}
+                  size="icon-sm"
+                  variant="ghost"
+                  className={cn(PROMPT_TOOLBAR_ICON_BUTTON, "text-destructive hover:bg-destructive/10 hover:text-destructive")}
+                  aria-label="Abort"
                   onClick={() => onAbort?.()}
                 >
                   <OctagonX className="size-3.5" />
-                  Abort
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">
@@ -1071,12 +1097,12 @@ export function PromptInput(args: PromptInputProps) {
               <TooltipTrigger asChild>
                 <Button
                   type="submit"
-                  size="sm"
-                  className={cn("h-9 rounded-md px-3.5 text-sm", PROMPT_SURFACE_PRIMARY_FOCUS)}
+                  size="icon-sm"
+                  className={cn("rounded-md", PROMPT_SURFACE_PRIMARY_FOCUS)}
                   disabled={disabled}
+                  aria-label="Send"
                 >
                   <Send className="size-3.5" />
-                  Send
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">

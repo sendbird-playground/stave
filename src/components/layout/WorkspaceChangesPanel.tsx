@@ -183,12 +183,12 @@ function SourceControlHistoryRow(args: {
   item: SourceControlHistoryEntry;
 }) {
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-3 rounded-lg px-1 py-2 transition-colors hover:bg-muted/20">
       <div className="relative flex w-5 shrink-0 justify-center pt-1.5">
         <span className="size-2.5 rounded-full border border-border/80 bg-background shadow-xs" />
         {!args.isLast ? <span className="absolute bottom-[-12px] top-4 w-px bg-border/70" /> : null}
       </div>
-      <div className="min-w-0 flex-1 rounded-xl border border-border/70 bg-background/80 px-3 py-2.5">
+      <div className="min-w-0 flex-1 py-0.5">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-foreground">{args.item.subject}</p>
@@ -260,35 +260,35 @@ export function WorkspaceChangesPanel(props: {
       </div>
 
       <TabsContent value="changes" className="min-h-0 flex-1 overflow-auto">
-        <div className="space-y-3 p-2">
-          <section className="rounded-xl border border-border/70 bg-muted/20 p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className="h-6 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal">
-                    <GitBranch className="size-3.5 text-muted-foreground" />
-                    <span className="truncate">{props.sourceBranch}</span>
-                  </Badge>
-                  <p className="text-sm font-medium text-foreground">
-                    {formatFileCount(props.filteredScmItems.length)} changed
-                  </p>
-                </div>
-                {summaryLabels.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    {summaryLabels.map((item) => (
-                      <span key={item.text} className={item.className}>
-                        {item.text}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <p className="text-xs text-muted-foreground">{props.sourceControlHint}</p>
+        <div className="space-y-4 p-2">
+          <section className="space-y-3 px-1">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <Badge variant="outline" className="h-6 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal">
+                  <GitBranch className="size-3.5 text-muted-foreground" />
+                  <span className="truncate">{props.sourceBranch}</span>
+                </Badge>
+                <p className="text-sm font-medium text-foreground">
+                  {formatFileCount(props.filteredScmItems.length)} changed
+                </p>
               </div>
-              {props.isScmBusy ? <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" /> : null}
+              {props.isScmBusy ? <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" /> : null}
             </div>
 
+            {summaryLabels.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {summaryLabels.map((item) => (
+                  <span key={item.text} className={item.className}>
+                    {item.text}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            <p className="text-xs text-muted-foreground">{props.sourceControlHint}</p>
+
             {showComposer ? (
-              <div className="mt-3 border-t border-border/70 pt-3">
+              <div className="space-y-3 border-t border-border/70 pt-3">
                 <div className="flex items-start gap-2">
                   <Input
                     className="h-9 rounded-lg border-border/70 bg-background/90 text-sm"
@@ -313,7 +313,7 @@ export function WorkspaceChangesPanel(props: {
                   </Button>
                 </div>
                 {(showStageAll || showUnstageAll) ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {showStageAll ? (
                       <Button
                         size="sm"
