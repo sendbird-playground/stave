@@ -475,6 +475,35 @@ function createPlanAssistantMessage(args: {
   };
 }
 
+function finalizeAssistantMessage(args: {
+  message: ChatMessage;
+  completedAt?: string;
+}): ChatMessage {
+  const completedAt = args.completedAt ?? buildRecentTimestamp();
+  const finalizedParts = args.message.parts.map((part) => {
+    if (part.type === "thinking" && part.isStreaming) {
+      return { ...part, isStreaming: false, completedAt: part.completedAt ?? completedAt };
+    }
+    if (part.type === "tool_use") {
+      if (part.state === "input-available" || part.state === "input-streaming") {
+        return { ...part, state: "output-available" as const };
+      }
+      return part;
+    }
+    if (part.type === "orchestration_progress" && part.status !== "done") {
+      return { ...part, status: "done" as const };
+    }
+    return part;
+  });
+
+  return {
+    ...args.message,
+    completedAt,
+    isStreaming: false,
+    parts: finalizedParts,
+  };
+}
+
 export function appendProviderEventToAssistant(args: {
   message: ChatMessage;
   event: NormalizedProviderEvent;
@@ -685,31 +714,17 @@ export function appendProviderEventToAssistant(args: {
       };
     }
 
-    const finalizedParts = message.parts.map((part) => {
-      if (part.type === "thinking" && part.isStreaming) {
-        return { ...part, isStreaming: false, completedAt: part.completedAt ?? completedAt };
-      }
-      if (part.type === "tool_use") {
-        if (part.state === "input-available" || part.state === "input-streaming") {
-          return { ...part, state: "output-available" as const };
-        }
-        return part;
-      }
-      if (part.type === "orchestration_progress" && part.status !== "done") {
-        return { ...part, status: "done" as const };
-      }
-      return part;
+    const truncated = args.event.stop_reason === "max_tokens";
+    const finalizedMessage = finalizeAssistantMessage({
+      message,
+      completedAt,
     });
 
-    const truncated = args.event.stop_reason === "max_tokens";
-
     return {
-      ...message,
-      completedAt,
-      isStreaming: false,
+      ...finalizedMessage,
       parts: truncated
-        ? [...finalizedParts, { type: "system_event" as const, content: "Response was cut off because the output limit was reached." }]
-        : finalizedParts,
+        ? [...finalizedMessage.parts, { type: "system_event" as const, content: "Response was cut off because the output limit was reached." }]
+        : finalizedMessage.parts,
     };
   }
 
@@ -870,6 +885,9 @@ export function replayProviderEventsToTaskState(args: {
         && hasRenderableAssistantContent({ message: cleanedTarget });
 
       if (shouldAppendSeparatePlanMessage) {
+        const finalizedTarget = finalizeAssistantMessage({
+          message: cleanedTarget,
+        });
         const planMessage = createPlanAssistantMessage({
           taskId: args.taskId,
           count: current.length,
@@ -878,7 +896,7 @@ export function replayProviderEventsToTaskState(args: {
           planText: event.planText,
         });
 
-        current = [...current.slice(0, -1), cleanedTarget, planMessage];
+        current = [...current.slice(0, -1), finalizedTarget, planMessage];
         changed = true;
         continue;
       }

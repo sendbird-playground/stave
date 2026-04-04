@@ -295,8 +295,10 @@ describe("plan response replay", () => {
     expect(replayed.messages).toHaveLength(2);
     expect(replayed.messages[0]).toMatchObject({
       content: "I have a plan ready.",
+      isStreaming: false,
     });
     expect(replayed.messages[0]?.isPlanResponse).not.toBe(true);
+    expect(typeof replayed.messages[0]?.completedAt).toBe("string");
     expect(replayed.messages[1]).toMatchObject({
       providerId: "claude-code",
       model: "claude-sonnet-4-6",

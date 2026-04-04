@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
+import { replayProviderEventsToTaskState } from "@/lib/session/provider-event-replay";
 import type { ChatMessage } from "@/types/chat";
 
 function createAssistantMessage(
@@ -77,5 +78,36 @@ describe("AssistantMessageBody", () => {
 
     expect(html).toContain("Inspecting files.");
     expect(html.match(/<button/g)?.length ?? 0).toBe(2);
+  });
+
+  test("keeps markdown rendering for the pre-plan assistant message after plan splitting", async () => {
+    const AssistantMessageBody = await loadAssistantMessageBody();
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "text", text: "## Review\n\n- Keep markdown\n- Preserve bullets" },
+        { type: "plan_ready", planText: "1. Inspect\n2. Patch" },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "gpt-5.4",
+    });
+
+    const priorAssistantMessage = replayed.messages[0];
+    if (!priorAssistantMessage) {
+      throw new Error("expected prior assistant message");
+    }
+
+    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+      message: priorAssistantMessage,
+      taskId: "task-1",
+      messageId: priorAssistantMessage.id,
+      streamingEnabled: true,
+    }));
+
+    expect(html).toContain("<h2");
+    expect(html).toContain("<ul");
+    expect(html).toContain("Keep markdown");
   });
 });
