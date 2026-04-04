@@ -11,6 +11,7 @@ import { registerSkillsHandlers } from "./skills";
 import { registerTerminalHandlers } from "./terminal";
 import { registerToolingHandlers } from "./tooling";
 import { registerWindowHandlers } from "./window";
+import { registerWorkspaceAutomationHandlers } from "./workspace-scripts";
 
 export function registerHandlers() {
   registerWindowHandlers();
@@ -18,6 +19,7 @@ export function registerHandlers() {
   registerPersistenceHandlers();
   registerTerminalHandlers();
   registerToolingHandlers();
+  registerWorkspaceAutomationHandlers();
   registerScmHandlers();
   registerFilesystemHandlers();
   registerSkillsHandlers();

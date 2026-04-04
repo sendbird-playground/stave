@@ -1,9 +1,17 @@
-import { FileCode2, FolderTree, GitBranch, Info, TerminalSquare } from "lucide-react";
+import { FileCode2, FolderTree, GitBranch, Info, Sparkles, TerminalSquare, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import { RIGHT_RAIL_PANEL_IDS, RIGHT_RAIL_PANEL_TITLES, type RightRailPanelId } from "@/lib/right-rail-panels";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+
+const RIGHT_RAIL_PANEL_ICONS: Record<RightRailPanelId, LucideIcon> = {
+  explorer: FolderTree,
+  changes: GitBranch,
+  information: Info,
+  automation: Sparkles,
+};
 
 export function RightRail() {
   const [
@@ -50,7 +58,7 @@ export function RightRail() {
     });
   }
 
-  function toggleSidebarTab(tab: "explorer" | "changes" | "information") {
+  function toggleSidebarTab(tab: RightRailPanelId) {
     if (sidebarOverlayVisible && sidebarOverlayTab === tab) {
       setLayout({ patch: { sidebarOverlayVisible: false } });
       return;
@@ -65,10 +73,6 @@ export function RightRail() {
   }
 
   const editorActive = editorVisible;
-  const explorerActive = sidebarOverlayVisible && sidebarOverlayTab === "explorer";
-  const changesActive = sidebarOverlayVisible && sidebarOverlayTab === "changes";
-  const informationActive = sidebarOverlayVisible && sidebarOverlayTab === "information";
-
   return (
     <aside
       data-testid="workspace-bar"
@@ -94,60 +98,31 @@ export function RightRail() {
             </TooltipTrigger>
             <TooltipContent side="left">Editor</TooltipContent>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant={explorerActive ? "default" : "ghost"}
-                disabled={!hasProject}
-                className={cn(
-                  "h-9 w-9 rounded-md border border-transparent p-0 lg:h-10 lg:w-10",
-                  !explorerActive && "hover:border-border/80 hover:bg-secondary/70"
-                )}
-                onClick={() => toggleSidebarTab("explorer")}
-                aria-label="Explorer"
-              >
-                <FolderTree className="size-3.5 lg:size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">Explorer</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant={changesActive ? "default" : "ghost"}
-                disabled={!hasProject}
-                className={cn(
-                  "h-9 w-9 rounded-md border border-transparent p-0 lg:h-10 lg:w-10",
-                  !changesActive && "hover:border-border/80 hover:bg-secondary/70"
-                )}
-                onClick={() => toggleSidebarTab("changes")}
-                aria-label="Changes"
-              >
-                <GitBranch className="size-3.5 lg:size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">Changes</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant={informationActive ? "default" : "ghost"}
-                disabled={!hasProject}
-                className={cn(
-                  "h-9 w-9 rounded-md border border-transparent p-0 lg:h-10 lg:w-10",
-                  !informationActive && "hover:border-border/80 hover:bg-secondary/70"
-                )}
-                onClick={() => toggleSidebarTab("information")}
-                aria-label="Information"
-              >
-                <Info className="size-3.5 lg:size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">Information</TooltipContent>
-          </Tooltip>
+          {RIGHT_RAIL_PANEL_IDS.map((panelId) => {
+            const Icon = RIGHT_RAIL_PANEL_ICONS[panelId];
+            const isActive = sidebarOverlayVisible && sidebarOverlayTab === panelId;
+
+            return (
+              <Tooltip key={panelId}>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant={isActive ? "default" : "ghost"}
+                    disabled={!hasProject}
+                    className={cn(
+                      "h-9 w-9 rounded-md border border-transparent p-0 lg:h-10 lg:w-10",
+                      !isActive && "hover:border-border/80 hover:bg-secondary/70"
+                    )}
+                    onClick={() => toggleSidebarTab(panelId)}
+                    aria-label={RIGHT_RAIL_PANEL_TITLES[panelId]}
+                  >
+                    <Icon className="size-3.5 lg:size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">{RIGHT_RAIL_PANEL_TITLES[panelId]}</TooltipContent>
+              </Tooltip>
+            );
+          })}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

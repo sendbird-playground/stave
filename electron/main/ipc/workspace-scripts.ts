@@ -1,111 +1,142 @@
 // ---------------------------------------------------------------------------
-// Workspace Lifecycle Scripts – IPC Handlers
+// Workspace Automations – IPC Handlers
 // ---------------------------------------------------------------------------
 
 import { ipcMain } from "electron";
+import { getAutomationEntry } from "../../../src/lib/workspace-scripts/config";
+import type { AutomationKind } from "../../../src/lib/workspace-scripts/types";
 import {
-  WorkspaceScriptsGetConfigArgsSchema,
-  WorkspaceScriptsRunPhaseArgsSchema,
-  WorkspaceScriptsStopPhaseArgsSchema,
-  WorkspaceScriptsGetStatusArgsSchema,
+  WorkspaceAutomationsGetConfigArgsSchema,
+  WorkspaceAutomationsGetStatusArgsSchema,
+  WorkspaceAutomationsRunEntryArgsSchema,
+  WorkspaceAutomationsRunHookArgsSchema,
+  WorkspaceAutomationsStopAllArgsSchema,
+  WorkspaceAutomationsStopEntryArgsSchema,
 } from "./schemas";
 import {
-  resolveScriptsForWorkspace,
-  runFinitePhase,
-  runLongRunningPhase,
-  stopPhase,
-  getAllPhaseStatuses,
+  getAutomationStatuses,
+  resolveAutomationsForWorkspace,
+  runAutomationEntry,
+  runAutomationHook,
+  stopAllWorkspaceAutomationProcesses,
+  stopAutomationEntry,
 } from "../workspace-scripts";
-import { getPhaseCommands } from "../../../src/lib/workspace-scripts/config";
-import type { ScriptPhase } from "../../../src/lib/workspace-scripts/types";
 
-const TEARDOWN_TIMEOUT_MS = 30_000;
-
-export function registerWorkspaceScriptsHandlers() {
-  // ---- Get resolved config ------------------------------------------------
-  ipcMain.handle("workspace-scripts:get-config", async (_event, rawArgs: unknown) => {
-    const parsed = WorkspaceScriptsGetConfigArgsSchema.safeParse(rawArgs);
+export function registerWorkspaceAutomationHandlers() {
+  ipcMain.handle("workspace-automations:get-config", async (_event, rawArgs: unknown) => {
+    const parsed = WorkspaceAutomationsGetConfigArgsSchema.safeParse(rawArgs);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.message, config: null };
     }
-    const { projectPath, workspacePath } = parsed.data;
-
     try {
-      const config = await resolveScriptsForWorkspace({ projectPath, workspacePath });
+      const config = await resolveAutomationsForWorkspace(parsed.data);
       return { ok: true, config };
-    } catch (err) {
-      return { ok: false, error: String(err), config: null };
+    } catch (error) {
+      return { ok: false, error: String(error), config: null };
     }
   });
 
-  // ---- Run a phase --------------------------------------------------------
-  ipcMain.handle("workspace-scripts:run-phase", async (_event, rawArgs: unknown) => {
-    const parsed = WorkspaceScriptsRunPhaseArgsSchema.safeParse(rawArgs);
+  ipcMain.handle("workspace-automations:get-status", async (_event, rawArgs: unknown) => {
+    const parsed = WorkspaceAutomationsGetStatusArgsSchema.safeParse(rawArgs);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.message };
+      return { ok: false, error: parsed.error.message, statuses: [] };
     }
-    const { workspaceId, phase, projectPath, workspacePath, workspaceName, branch } = parsed.data;
-
-    try {
-      const config = await resolveScriptsForWorkspace({ projectPath, workspacePath });
-      const commands = getPhaseCommands(config, phase as ScriptPhase);
-
-      if (commands.length === 0) {
-        return { ok: true, message: "No commands configured for this phase." };
-      }
-
-      if (phase === "run") {
-        return await runLongRunningPhase({
-          workspaceId,
-          projectPath,
-          workspacePath,
-          workspaceName,
-          branch,
-          commands,
-        });
-      }
-
-      // setup or teardown — finite execution
-      return await runFinitePhase({
-        workspaceId,
-        phase: phase as ScriptPhase,
-        projectPath,
-        workspacePath,
-        workspaceName,
-        branch,
-        commands,
-        timeoutMs: phase === "teardown" ? TEARDOWN_TIMEOUT_MS : undefined,
-      });
-    } catch (err) {
-      return { ok: false, error: String(err) };
-    }
-  });
-
-  // ---- Stop a phase -------------------------------------------------------
-  ipcMain.handle("workspace-scripts:stop-phase", async (_event, rawArgs: unknown) => {
-    const parsed = WorkspaceScriptsStopPhaseArgsSchema.safeParse(rawArgs);
-    if (!parsed.success) {
-      return { ok: false, error: parsed.error.message };
-    }
-
-    try {
-      await stopPhase(parsed.data);
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: String(err) };
-    }
-  });
-
-  // ---- Get status ---------------------------------------------------------
-  ipcMain.handle("workspace-scripts:get-status", async (_event, rawArgs: unknown) => {
-    const parsed = WorkspaceScriptsGetStatusArgsSchema.safeParse(rawArgs);
-    if (!parsed.success) {
-      return { ok: false, error: parsed.error.message };
-    }
-
     return {
       ok: true,
-      statuses: getAllPhaseStatuses({ workspaceId: parsed.data.workspaceId }),
+      statuses: getAutomationStatuses({ workspaceId: parsed.data.workspaceId }),
     };
+  });
+
+  ipcMain.handle("workspace-automations:run-entry", async (_event, rawArgs: unknown) => {
+    const parsed = WorkspaceAutomationsRunEntryArgsSchema.safeParse(rawArgs);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.message };
+    }
+
+    try {
+      const config = await resolveAutomationsForWorkspace({
+        projectPath: parsed.data.projectPath,
+        workspacePath: parsed.data.workspacePath,
+      });
+      const automation = getAutomationEntry(config, {
+        automationId: parsed.data.automationId,
+        kind: parsed.data.automationKind as AutomationKind,
+      });
+      if (!automation) {
+        return { ok: false, error: "Automation entry not found." };
+      }
+      return await runAutomationEntry({
+        workspaceId: parsed.data.workspaceId,
+        automation,
+        projectPath: parsed.data.projectPath,
+        workspacePath: parsed.data.workspacePath,
+        workspaceName: parsed.data.workspaceName,
+        branch: parsed.data.branch,
+      });
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle("workspace-automations:stop-entry", async (_event, rawArgs: unknown) => {
+    const parsed = WorkspaceAutomationsStopEntryArgsSchema.safeParse(rawArgs);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.message };
+    }
+    try {
+      await stopAutomationEntry(parsed.data);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  ipcMain.handle("workspace-automations:run-hook", async (_event, rawArgs: unknown) => {
+    const parsed = WorkspaceAutomationsRunHookArgsSchema.safeParse(rawArgs);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.message, summary: null };
+    }
+    try {
+      const config = await resolveAutomationsForWorkspace({
+        projectPath: parsed.data.projectPath,
+        workspacePath: parsed.data.workspacePath,
+      });
+      if (!config) {
+        return {
+          ok: true,
+          summary: {
+            trigger: parsed.data.trigger,
+            totalEntries: 0,
+            executedEntries: 0,
+            failures: [],
+          },
+        };
+      }
+      const summary = await runAutomationHook({
+        workspaceId: parsed.data.workspaceId,
+        trigger: parsed.data.trigger,
+        config,
+        projectPath: parsed.data.projectPath,
+        workspacePath: parsed.data.workspacePath,
+        workspaceName: parsed.data.workspaceName,
+        branch: parsed.data.branch,
+      });
+      return { ok: summary.failures.length === 0, summary };
+    } catch (error) {
+      return { ok: false, error: String(error), summary: null };
+    }
+  });
+
+  ipcMain.handle("workspace-automations:stop-all", async (_event, rawArgs: unknown) => {
+    const parsed = WorkspaceAutomationsStopAllArgsSchema.safeParse(rawArgs);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.message };
+    }
+    try {
+      await stopAllWorkspaceAutomationProcesses(parsed.data);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
   });
 }

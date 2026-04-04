@@ -12,6 +12,7 @@ import {
   Save,
   Search,
   Settings,
+  Sparkles,
   Terminal,
   type LucideIcon,
 } from "lucide-react";
@@ -75,7 +76,7 @@ export interface CommandPaletteProjectSummary {
 
 export interface CommandPaletteLayoutState {
   editorVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes" | "information";
+  sidebarOverlayTab: "explorer" | "changes" | "information" | "automation";
   sidebarOverlayVisible: boolean;
   terminalDocked: boolean;
   workspaceSidebarCollapsed: boolean;
@@ -342,6 +343,24 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       icon: LibraryBig,
       keywords: ["information", "notes", "jira", "figma", "slack"],
       run: () => args.commands.showOverlayTab("information"),
+      source: "core",
+    }),
+  },
+  {
+    id: "view.show-automations",
+    title: "Show Automation Panel",
+    description: "Open the workspace automation overlay on the right rail.",
+    group: "view",
+    icon: Sparkles,
+    keywords: ["automation", "hooks", "services", "spotlight"],
+    build: (args) => ({
+      id: "view.show-automations",
+      title: "Show Automation Panel",
+      subtitle: "Open workspace actions, hooks, and services.",
+      group: "view",
+      icon: Sparkles,
+      keywords: ["automation", "hooks", "services", "spotlight"],
+      run: () => args.commands.showOverlayTab("automation"),
       source: "core",
     }),
   },

@@ -1,261 +1,253 @@
 import { describe, expect, test } from "bun:test";
 import {
-  createEmptyResolvedConfig,
-  getPhaseCommands,
-  hasAnyScripts,
-  mergePhaseCommands,
-  mergeScriptsConfigs,
-  resolveScriptsFromTiers,
+  createDefaultAutomationTargets,
+  getAutomationEntry,
+  getAutomationHooksForTrigger,
+  hasAnyAutomations,
+  mergeAutomationsConfig,
+  resolveAutomationConfigFromTiers,
+  resolveAutomationsFromConfig,
 } from "../src/lib/workspace-scripts/config";
 import type {
-  WorkspaceScriptsConfig,
-  WorkspaceScriptsLocalConfig,
+  WorkspaceAutomationsConfig,
+  WorkspaceAutomationsLocalConfig,
 } from "../src/lib/workspace-scripts/types";
 
-// ---------------------------------------------------------------------------
-// mergePhaseCommands
-// ---------------------------------------------------------------------------
-
-describe("mergePhaseCommands", () => {
-  test("returns base unchanged when local is undefined", () => {
-    expect(mergePhaseCommands(["bun install"], undefined)).toEqual(["bun install"]);
+describe("mergeAutomationsConfig", () => {
+  test("returns null when both base and local are null", () => {
+    expect(mergeAutomationsConfig(null, null)).toBeNull();
   });
 
-  test("returns empty array when both base and local are undefined", () => {
-    expect(mergePhaseCommands(undefined, undefined)).toEqual([]);
+  test("merges action and service overrides by id", () => {
+    const base: WorkspaceAutomationsConfig = {
+      version: 2,
+      actions: {
+        bootstrap: {
+          label: "Bootstrap",
+          commands: ["bun install"],
+          target: "workspace",
+        },
+      },
+      services: {
+        dev: {
+          commands: ["bun run dev"],
+          target: "spotlight",
+        },
+      },
+    };
+    const local: WorkspaceAutomationsLocalConfig = {
+      version: 2,
+      actions: {
+        bootstrap: {
+          commands: ["pnpm install"],
+        },
+      },
+      services: {
+        dev: {
+          restartOnRun: false,
+        },
+      },
+    };
+
+    expect(mergeAutomationsConfig(base, local)).toEqual({
+      version: 2,
+      actions: {
+        bootstrap: {
+          label: "Bootstrap",
+          commands: ["pnpm install"],
+          target: "workspace",
+        },
+      },
+      services: {
+        dev: {
+          commands: ["bun run dev"],
+          target: "spotlight",
+          restartOnRun: false,
+        },
+      },
+      hooks: {},
+      targets: {},
+    });
   });
 
-  test("local plain array fully replaces base", () => {
+  test("merges target env values shallowly", () => {
+    const base: WorkspaceAutomationsConfig = {
+      version: 2,
+      targets: {
+        spotlight: {
+          cwd: "project",
+          executionMode: "spotlight",
+          env: { PORT: "3000" },
+        },
+      },
+    };
+    const local: WorkspaceAutomationsLocalConfig = {
+      version: 2,
+      targets: {
+        spotlight: {
+          env: { DEBUG: "1" },
+        },
+      },
+    };
+
+    expect(mergeAutomationsConfig(base, local)?.targets?.spotlight).toEqual({
+      cwd: "project",
+      executionMode: "spotlight",
+      env: {
+        PORT: "3000",
+        DEBUG: "1",
+      },
+    });
+  });
+});
+
+describe("resolveAutomationsFromConfig", () => {
+  test("normalizes actions, services, hooks, and targets", () => {
+    const config: WorkspaceAutomationsConfig = {
+      version: 2,
+      targets: {
+        spotlight: {
+          label: "Spotlight Runtime",
+          cwd: "project",
+          executionMode: "spotlight",
+        },
+      },
+      actions: {
+        bootstrap: {
+          description: "Prepare the workspace.",
+          commands: ["bun install", "bun run db:prepare"],
+        },
+      },
+      services: {
+        app: {
+          commands: ["bun run dev"],
+          target: "spotlight",
+        },
+      },
+      hooks: {
+        "workspace.created": ["bootstrap"],
+        "pr.beforeOpen": [{ ref: "app", kind: "service", blocking: false }],
+      },
+    };
+
+    const resolved = resolveAutomationsFromConfig(config);
+    expect(resolved?.actions).toHaveLength(1);
+    expect(resolved?.services).toHaveLength(1);
+    expect(resolved?.targets.spotlight).toMatchObject({
+      label: "Spotlight Runtime",
+      cwd: "project",
+      executionMode: "spotlight",
+    });
+    expect(getAutomationHooksForTrigger(resolved ?? null, "workspace.created")).toEqual([
+      {
+        trigger: "workspace.created",
+        automationId: "bootstrap",
+        automationKind: "action",
+        blocking: true,
+      },
+    ]);
+    expect(getAutomationHooksForTrigger(resolved ?? null, "pr.beforeOpen")).toEqual([
+      {
+        trigger: "pr.beforeOpen",
+        automationId: "app",
+        automationKind: "service",
+        blocking: false,
+      },
+    ]);
+  });
+
+  test("drops disabled or empty entries", () => {
+    const resolved = resolveAutomationsFromConfig({
+      version: 2,
+      actions: {
+        noop: {
+          commands: [],
+        },
+        disabled: {
+          commands: ["echo nope"],
+          enabled: false,
+        },
+      },
+    });
+
+    expect(resolved?.actions).toEqual([]);
+  });
+});
+
+describe("resolveAutomationConfigFromTiers", () => {
+  test("returns the first tier with a base config", () => {
+    const first: WorkspaceAutomationsConfig = {
+      version: 2,
+      actions: {
+        one: {
+          commands: ["echo first"],
+        },
+      },
+    };
+    const second: WorkspaceAutomationsConfig = {
+      version: 2,
+      actions: {
+        two: {
+          commands: ["echo second"],
+        },
+      },
+    };
+
+    const resolved = resolveAutomationConfigFromTiers([
+      { base: first, local: null },
+      { base: second, local: null },
+    ]);
+
+    expect(resolved?.actions.map((action) => action.id)).toEqual(["one"]);
+  });
+
+  test("applies local overrides inside the winning tier", () => {
+    const base: WorkspaceAutomationsConfig = {
+      version: 2,
+      services: {
+        app: {
+          commands: ["bun run dev"],
+        },
+      },
+    };
+    const local: WorkspaceAutomationsLocalConfig = {
+      version: 2,
+      services: {
+        app: {
+          target: "spotlight",
+        },
+      },
+    };
+
+    const resolved = resolveAutomationConfigFromTiers([{ base, local }]);
+    expect(getAutomationEntry(resolved ?? null, { automationId: "app", kind: "service" })).toMatchObject({
+      targetId: "spotlight",
+      target: {
+        executionMode: "spotlight",
+      },
+    });
+  });
+});
+
+describe("helpers", () => {
+  test("default targets include workspace, project, and spotlight", () => {
+    expect(Object.keys(createDefaultAutomationTargets())).toEqual(["workspace", "project", "spotlight"]);
+  });
+
+  test("hasAnyAutomations reflects content", () => {
+    expect(hasAnyAutomations(null)).toBe(false);
+    expect(hasAnyAutomations(resolveAutomationsFromConfig({ version: 2 }))).toBe(false);
     expect(
-      mergePhaseCommands(["bun install"], ["npm ci"]),
-    ).toEqual(["npm ci"]);
-  });
-
-  test("local plain array replaces even when base is undefined", () => {
-    expect(
-      mergePhaseCommands(undefined, ["npm ci"]),
-    ).toEqual(["npm ci"]);
-  });
-
-  test("local empty array replaces base (clears phase)", () => {
-    expect(
-      mergePhaseCommands(["bun install", "bun run migrate"], []),
-    ).toEqual([]);
-  });
-
-  test("local { before } prepends to base", () => {
-    expect(
-      mergePhaseCommands(["bun run dev"], { before: ["export DEBUG=1"] }),
-    ).toEqual(["export DEBUG=1", "bun run dev"]);
-  });
-
-  test("local { after } appends to base", () => {
-    expect(
-      mergePhaseCommands(["bun install"], { after: ["bun run generate"] }),
-    ).toEqual(["bun install", "bun run generate"]);
-  });
-
-  test("local { before, after } wraps base", () => {
-    expect(
-      mergePhaseCommands(
-        ["bun run dev"],
-        { before: ["export DEBUG=1"], after: ["echo done"] },
+      hasAnyAutomations(
+        resolveAutomationsFromConfig({
+          version: 2,
+          actions: {
+            bootstrap: {
+              commands: ["bun install"],
+            },
+          },
+        }),
       ),
-    ).toEqual(["export DEBUG=1", "bun run dev", "echo done"]);
-  });
-
-  test("local { before, after } with empty base", () => {
-    expect(
-      mergePhaseCommands(undefined, { before: ["setup"], after: ["cleanup"] }),
-    ).toEqual(["setup", "cleanup"]);
-  });
-
-  test("local {} (empty object) keeps base unchanged", () => {
-    expect(
-      mergePhaseCommands(["bun install"], {}),
-    ).toEqual(["bun install"]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// mergeScriptsConfigs
-// ---------------------------------------------------------------------------
-
-describe("mergeScriptsConfigs", () => {
-  test("returns all empty when base is null and local is null", () => {
-    expect(mergeScriptsConfigs(null, null)).toEqual({
-      setup: [],
-      run: [],
-      teardown: [],
-    });
-  });
-
-  test("returns base commands when local is null", () => {
-    const base: WorkspaceScriptsConfig = {
-      version: 1,
-      setup: ["bun install"],
-      run: ["bun run dev"],
-    };
-    expect(mergeScriptsConfigs(base, null)).toEqual({
-      setup: ["bun install"],
-      run: ["bun run dev"],
-      teardown: [],
-    });
-  });
-
-  test("merges each phase independently", () => {
-    const base: WorkspaceScriptsConfig = {
-      version: 1,
-      setup: ["bun install"],
-      run: ["bun run dev"],
-      teardown: ["docker-compose down"],
-    };
-    const local: WorkspaceScriptsLocalConfig = {
-      version: 1,
-      setup: ["npm ci"],                                    // replace
-      run: { before: ["export PORT=3001"] },                // extend
-      // teardown omitted → falls through
-    };
-    expect(mergeScriptsConfigs(base, local)).toEqual({
-      setup: ["npm ci"],
-      run: ["export PORT=3001", "bun run dev"],
-      teardown: ["docker-compose down"],
-    });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// resolveScriptsFromTiers
-// ---------------------------------------------------------------------------
-
-describe("resolveScriptsFromTiers", () => {
-  test("returns null when no tiers have a base config", () => {
-    expect(resolveScriptsFromTiers([
-      { base: null, local: null },
-      { base: null, local: null },
-    ])).toBeNull();
-  });
-
-  test("uses first tier with a base config (tier 1 wins)", () => {
-    const tier1Base: WorkspaceScriptsConfig = {
-      version: 1,
-      setup: ["tier1-setup"],
-    };
-    const tier2Base: WorkspaceScriptsConfig = {
-      version: 1,
-      setup: ["tier2-setup"],
-      run: ["tier2-run"],
-    };
-    const result = resolveScriptsFromTiers([
-      { base: tier1Base, local: null },
-      { base: tier2Base, local: null },
-    ]);
-    expect(result).toEqual({
-      setup: ["tier1-setup"],
-      run: [],
-      teardown: [],
-    });
-  });
-
-  test("skips empty tier 1, uses tier 2", () => {
-    const tier2Base: WorkspaceScriptsConfig = {
-      version: 1,
-      run: ["bun run dev"],
-    };
-    const result = resolveScriptsFromTiers([
-      { base: null, local: null },
-      { base: tier2Base, local: null },
-    ]);
-    expect(result).toEqual({
-      setup: [],
-      run: ["bun run dev"],
-      teardown: [],
-    });
-  });
-
-  test("winning tier's local override is applied", () => {
-    const base: WorkspaceScriptsConfig = {
-      version: 1,
-      setup: ["bun install"],
-      run: ["bun run dev"],
-    };
-    const local: WorkspaceScriptsLocalConfig = {
-      version: 1,
-      run: { before: ["export DEBUG=1"] },
-    };
-    const result = resolveScriptsFromTiers([
-      { base, local },
-    ]);
-    expect(result).toEqual({
-      setup: ["bun install"],
-      run: ["export DEBUG=1", "bun run dev"],
-      teardown: [],
-    });
-  });
-
-  test("three-tier resolution: user > worktree > project", () => {
-    const userBase: WorkspaceScriptsConfig = { version: 1, setup: ["user-setup"] };
-    const worktreeBase: WorkspaceScriptsConfig = { version: 1, setup: ["worktree-setup"] };
-    const projectBase: WorkspaceScriptsConfig = { version: 1, setup: ["project-setup"] };
-
-    // User tier wins
-    expect(resolveScriptsFromTiers([
-      { base: userBase, local: null },
-      { base: worktreeBase, local: null },
-      { base: projectBase, local: null },
-    ])?.setup).toEqual(["user-setup"]);
-
-    // No user tier → worktree wins
-    expect(resolveScriptsFromTiers([
-      { base: null, local: null },
-      { base: worktreeBase, local: null },
-      { base: projectBase, local: null },
-    ])?.setup).toEqual(["worktree-setup"]);
-
-    // No user or worktree → project wins
-    expect(resolveScriptsFromTiers([
-      { base: null, local: null },
-      { base: null, local: null },
-      { base: projectBase, local: null },
-    ])?.setup).toEqual(["project-setup"]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-describe("hasAnyScripts", () => {
-  test("returns false for null", () => {
-    expect(hasAnyScripts(null)).toBe(false);
-  });
-
-  test("returns false for empty config", () => {
-    expect(hasAnyScripts(createEmptyResolvedConfig())).toBe(false);
-  });
-
-  test("returns true when any phase has commands", () => {
-    expect(hasAnyScripts({ setup: [], run: ["bun dev"], teardown: [] })).toBe(true);
-  });
-});
-
-describe("getPhaseCommands", () => {
-  test("returns empty array for null config", () => {
-    expect(getPhaseCommands(null, "setup")).toEqual([]);
-  });
-
-  test("returns commands for a specific phase", () => {
-    const config = { setup: ["a"], run: ["b", "c"], teardown: [] };
-    expect(getPhaseCommands(config, "run")).toEqual(["b", "c"]);
-  });
-});
-
-describe("createEmptyResolvedConfig", () => {
-  test("returns all phases as empty arrays", () => {
-    expect(createEmptyResolvedConfig()).toEqual({
-      setup: [],
-      run: [],
-      teardown: [],
-    });
+    ).toBe(true);
   });
 });

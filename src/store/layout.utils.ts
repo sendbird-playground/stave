@@ -1,3 +1,4 @@
+import { RIGHT_RAIL_PANEL_IDS, type RightRailPanelId } from "@/lib/right-rail-panels";
 import type { EditorTab } from "@/types/chat";
 
 export interface LayoutState {
@@ -8,7 +9,7 @@ export interface LayoutState {
   terminalDockHeight: number;
   editorVisible: boolean;
   sidebarOverlayVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes" | "information";
+  sidebarOverlayTab: RightRailPanelId;
   terminalDocked: boolean;
   editorDiffMode: boolean;
 }
@@ -39,9 +40,9 @@ export function normalizeLayoutState(layout: LayoutState): LayoutState {
   return {
     ...layout,
     editorPanelWidth: Math.max(MIN_EDITOR_PANEL_WIDTH, layout.editorPanelWidth),
-    sidebarOverlayTab: layout.sidebarOverlayTab === "changes"
-      ? "changes"
-      : (layout.sidebarOverlayTab === "information" ? "information" : "explorer"),
+    sidebarOverlayTab: RIGHT_RAIL_PANEL_IDS.includes(layout.sidebarOverlayTab)
+      ? layout.sidebarOverlayTab
+      : "explorer",
   };
 }
 

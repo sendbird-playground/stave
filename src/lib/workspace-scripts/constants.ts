@@ -1,38 +1,42 @@
 // ---------------------------------------------------------------------------
-// Workspace Lifecycle Scripts – Constants
+// Workspace Automations – Constants
 // ---------------------------------------------------------------------------
 
-import type { ScriptPhase } from "./types";
+import type { AutomationTrigger } from "./types";
 
-/** Ordered list of all lifecycle phases. */
-export const SCRIPT_PHASES: readonly ScriptPhase[] = ["setup", "run", "teardown"] as const;
-
-// ---- Config file names ----------------------------------------------------
-
-/** Team-shared config (committed to git). */
-export const SCRIPTS_CONFIG_FILENAME = "scripts.json";
-
-/** Per-developer local override (gitignored). */
-export const SCRIPTS_LOCAL_CONFIG_FILENAME = "scripts.local.json";
-
-/** Directory inside the project root that holds Stave config. */
 export const STAVE_CONFIG_DIR = ".stave";
+export const AUTOMATIONS_CONFIG_FILENAME = "automations.json";
+export const AUTOMATIONS_LOCAL_CONFIG_FILENAME = "automations.local.json";
 
-// ---- Environment variable names -------------------------------------------
+export const AUTOMATION_TRIGGER_IDS: readonly AutomationTrigger[] = [
+  "workspace.created",
+  "workspace.archiving",
+  "pr.beforeOpen",
+  "pr.afterOpen",
+] as const;
 
-export const SCRIPT_ENV_VARS = {
+export const DEFAULT_AUTOMATION_TARGET_IDS = {
+  WORKSPACE: "workspace",
+  PROJECT: "project",
+  SPOTLIGHT: "spotlight",
+} as const;
+
+export const AUTOMATION_ENV_VARS = {
   ROOT_PATH: "STAVE_ROOT_PATH",
   WORKSPACE_NAME: "STAVE_WORKSPACE_NAME",
   WORKSPACE_PATH: "STAVE_WORKSPACE_PATH",
   BRANCH: "STAVE_BRANCH",
+  EXECUTION_MODE: "STAVE_AUTOMATION_EXECUTION_MODE",
+  TARGET_ID: "STAVE_AUTOMATION_TARGET_ID",
+  TRIGGER: "STAVE_AUTOMATION_TRIGGER",
 } as const;
 
-// ---- IPC channel names ----------------------------------------------------
-
-export const SCRIPTS_IPC = {
-  GET_CONFIG: "workspace-scripts:get-config",
-  RUN_PHASE: "workspace-scripts:run-phase",
-  STOP_PHASE: "workspace-scripts:stop-phase",
-  GET_STATUS: "workspace-scripts:get-status",
-  PHASE_EVENT: "workspace-scripts:phase-event",
+export const WORKSPACE_AUTOMATIONS_IPC = {
+  GET_CONFIG: "workspace-automations:get-config",
+  GET_STATUS: "workspace-automations:get-status",
+  RUN_ENTRY: "workspace-automations:run-entry",
+  STOP_ENTRY: "workspace-automations:stop-entry",
+  RUN_HOOK: "workspace-automations:run-hook",
+  STOP_ALL: "workspace-automations:stop-all",
+  EVENT: "workspace-automations:event",
 } as const;

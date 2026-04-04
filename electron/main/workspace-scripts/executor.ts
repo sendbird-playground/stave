@@ -1,71 +1,128 @@
 // ---------------------------------------------------------------------------
-// Workspace Lifecycle Scripts – Execution Engine (Electron main process)
+// Workspace Automations – Execution Engine (Electron main process)
 // ---------------------------------------------------------------------------
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { webContents } from "electron";
 import * as pty from "node-pty";
-import { randomUUID } from "node:crypto";
-import { SCRIPT_ENV_VARS } from "../../../src/lib/workspace-scripts/constants";
+import {
+  AUTOMATION_ENV_VARS,
+} from "../../../src/lib/workspace-scripts/constants";
+import {
+  getAutomationEntry,
+  getAutomationHooksForTrigger,
+} from "../../../src/lib/workspace-scripts/config";
 import type {
-  ScriptPhase,
-  ScriptPhaseEvent,
-  ScriptPhaseEventEnvelope,
-  ResolvedScriptsConfig,
+  AutomationKind,
+  AutomationTrigger,
+  ResolvedWorkspaceAutomation,
+  ResolvedWorkspaceAutomationsConfig,
+  WorkspaceAutomationEvent,
+  WorkspaceAutomationEventEnvelope,
+  WorkspaceAutomationHookRunSummary,
+  WorkspaceAutomationRunSource,
+  WorkspaceAutomationStatusEntry,
 } from "../../../src/lib/workspace-scripts/types";
 import { buildExecutableLookupEnv } from "../../providers/executable-path";
 import {
-  getWorkspaceScriptProcess,
-  setWorkspaceScriptProcess,
-  deleteWorkspaceScriptProcess,
-  getAllWorkspaceScriptProcessKeys,
-  type WorkspaceScriptProcess,
+  deleteWorkspaceAutomationProcess,
+  getAutomationProcessKey,
+  getWorkspaceAutomationProcess,
+  listWorkspaceAutomationProcessKeys,
+  listWorkspaceAutomationProcessesForWorkspace,
+  setWorkspaceAutomationProcess,
+  type WorkspaceAutomationProcess,
 } from "./state";
 
-// ---- Environment builder --------------------------------------------------
+const SIGTERM_GRACE_MS = 5_000;
 
-function buildScriptEnv(args: {
-  projectPath: string;
-  workspaceName: string;
-  workspacePath: string;
-  branch: string;
-}): NodeJS.ProcessEnv {
-  return {
-    ...buildExecutableLookupEnv(),
-    [SCRIPT_ENV_VARS.ROOT_PATH]: args.projectPath,
-    [SCRIPT_ENV_VARS.WORKSPACE_NAME]: args.workspaceName,
-    [SCRIPT_ENV_VARS.WORKSPACE_PATH]: args.workspacePath,
-    [SCRIPT_ENV_VARS.BRANCH]: args.branch,
-  };
-}
-
-// ---- Event broadcasting ---------------------------------------------------
-
-function broadcastPhaseEvent(envelope: ScriptPhaseEventEnvelope) {
+function broadcastAutomationEvent(envelope: WorkspaceAutomationEventEnvelope) {
   for (const wc of webContents.getAllWebContents()) {
     if (!wc.isDestroyed()) {
-      wc.send("workspace-scripts:phase-event", envelope);
+      wc.send("workspace-automations:event", envelope);
     }
   }
 }
 
-function sendEvent(
-  workspaceId: string,
-  phase: ScriptPhase,
-  event: ScriptPhaseEvent,
-) {
-  broadcastPhaseEvent({ workspaceId, phase, event });
+function emitAutomationEvent(args: {
+  workspaceId: string;
+  automationId: string;
+  automationKind: AutomationKind;
+  runId: string;
+  sessionId?: string;
+  source: WorkspaceAutomationRunSource;
+  event: WorkspaceAutomationEvent;
+}) {
+  broadcastAutomationEvent(args);
 }
 
-// ---- Process key helpers --------------------------------------------------
-
-function processKey(workspaceId: string, phase: ScriptPhase): string {
-  return `${workspaceId}:${phase}`;
+function buildAutomationEnv(args: {
+  projectPath: string;
+  workspaceName: string;
+  workspacePath: string;
+  branch: string;
+  automation: ResolvedWorkspaceAutomation;
+  source: WorkspaceAutomationRunSource;
+}): NodeJS.ProcessEnv {
+  return {
+    ...buildExecutableLookupEnv(),
+    [AUTOMATION_ENV_VARS.ROOT_PATH]: args.projectPath,
+    [AUTOMATION_ENV_VARS.WORKSPACE_NAME]: args.workspaceName,
+    [AUTOMATION_ENV_VARS.WORKSPACE_PATH]: args.workspacePath,
+    [AUTOMATION_ENV_VARS.BRANCH]: args.branch,
+    [AUTOMATION_ENV_VARS.EXECUTION_MODE]: args.automation.target.executionMode,
+    [AUTOMATION_ENV_VARS.TARGET_ID]: args.automation.targetId,
+    ...(args.source.kind === "hook" ? { [AUTOMATION_ENV_VARS.TRIGGER]: args.source.trigger } : {}),
+    ...args.automation.target.env,
+  };
 }
 
-// ---- Kill helper ----------------------------------------------------------
+function resolveAutomationCwd(args: {
+  projectPath: string;
+  workspacePath: string;
+  automation: ResolvedWorkspaceAutomation;
+}) {
+  return args.automation.target.cwd === "project" ? args.projectPath : args.workspacePath;
+}
 
-const SIGTERM_GRACE_MS = 5_000;
+function createProcessKey(args: {
+  workspaceId: string;
+  automationId: string;
+  automationKind: AutomationKind;
+}) {
+  return getAutomationProcessKey(args);
+}
+
+function createProcessEntry(args: {
+  workspaceId: string;
+  automationId: string;
+  automationKind: AutomationKind;
+  runId: string;
+  source: WorkspaceAutomationRunSource;
+  process: WorkspaceAutomationProcess["process"];
+  sessionId?: string;
+}) {
+  const entry: WorkspaceAutomationProcess = {
+    workspaceId: args.workspaceId,
+    automationId: args.automationId,
+    automationKind: args.automationKind,
+    runId: args.runId,
+    source: args.source,
+    process: args.process,
+    aborted: false,
+    sessionId: args.sessionId,
+  };
+  setWorkspaceAutomationProcess(
+    createProcessKey({
+      workspaceId: args.workspaceId,
+      automationId: args.automationId,
+      automationKind: args.automationKind,
+    }),
+    entry,
+  );
+  return entry;
+}
 
 function killProcess(proc: ChildProcess | pty.IPty): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -88,344 +145,430 @@ function killProcess(proc: ChildProcess | pty.IPty): Promise<void> {
       try {
         proc.kill("SIGKILL");
       } catch {
-        // already dead
+        // noop
       }
       done();
     }, SIGTERM_GRACE_MS);
 
-    // If process exits before the grace period, resolve early
     if ("on" in proc && typeof proc.on === "function") {
-      // ChildProcess
       (proc as ChildProcess).once("close", () => {
         clearTimeout(timer);
         done();
       });
     } else if ("onExit" in proc && typeof proc.onExit === "function") {
-      // IPty
       (proc as pty.IPty).onExit(() => {
         clearTimeout(timer);
         done();
       });
-    } else {
-      // Fallback: just wait for the timeout
     }
   });
 }
 
-// ---- Stop a phase ---------------------------------------------------------
-
-export async function stopPhase(args: {
+export async function stopAutomationEntry(args: {
   workspaceId: string;
-  phase: ScriptPhase;
+  automationId: string;
+  automationKind: AutomationKind;
 }): Promise<void> {
-  const key = processKey(args.workspaceId, args.phase);
-  const entry = getWorkspaceScriptProcess(key);
-  if (!entry) return;
-
+  const key = createProcessKey(args);
+  const entry = getWorkspaceAutomationProcess(key);
+  if (!entry) {
+    return;
+  }
   entry.aborted = true;
-
   if (entry.process) {
     await killProcess(entry.process);
   }
-
-  deleteWorkspaceScriptProcess(key);
+  emitAutomationEvent({
+    workspaceId: entry.workspaceId,
+    automationId: entry.automationId,
+    automationKind: entry.automationKind,
+    runId: entry.runId,
+    sessionId: entry.sessionId,
+    source: entry.source,
+    event: { type: "stopped" },
+  });
+  deleteWorkspaceAutomationProcess(key);
 }
 
-// ---- Execute setup/teardown (finite commands) -----------------------------
-
-export interface RunPhaseArgs {
+async function runFiniteAutomation(args: {
   workspaceId: string;
-  phase: ScriptPhase;
+  automation: ResolvedWorkspaceAutomation;
   projectPath: string;
   workspacePath: string;
   workspaceName: string;
   branch: string;
-  commands: string[];
-  /** Timeout in ms for the entire phase (teardown default: 30s). */
-  timeoutMs?: number;
-}
-
-/**
- * Execute a setup or teardown phase: run commands sequentially,
- * collect stdout/stderr, report events, and return overall exit code.
- */
-export async function runFinitePhase(args: RunPhaseArgs): Promise<{
-  ok: boolean;
-  exitCode: number;
-  error?: string;
-}> {
-  const { workspaceId, phase, commands } = args;
-  const key = processKey(workspaceId, phase);
-
-  // Stop any existing process for this workspace+phase
-  await stopPhase({ workspaceId, phase });
-
-  const env = buildScriptEnv({
-    projectPath: args.projectPath,
-    workspaceName: args.workspaceName,
-    workspacePath: args.workspacePath,
-    branch: args.branch,
+  source: WorkspaceAutomationRunSource;
+}) {
+  const runId = randomUUID();
+  const key = createProcessKey({
+    workspaceId: args.workspaceId,
+    automationId: args.automation.id,
+    automationKind: args.automation.kind,
   });
 
-  const entry: WorkspaceScriptProcess = {
-    type: "finite",
+  await stopAutomationEntry({
+    workspaceId: args.workspaceId,
+    automationId: args.automation.id,
+    automationKind: args.automation.kind,
+  });
+
+  const env = buildAutomationEnv(args);
+  const cwd = resolveAutomationCwd(args);
+  const entry = createProcessEntry({
+    workspaceId: args.workspaceId,
+    automationId: args.automation.id,
+    automationKind: args.automation.kind,
+    runId,
+    source: args.source,
     process: null,
-    aborted: false,
-  };
-  setWorkspaceScriptProcess(key, entry);
+  });
 
   let lastExitCode = 0;
 
-  for (let i = 0; i < commands.length; i++) {
+  for (let index = 0; index < args.automation.commands.length; index += 1) {
     if (entry.aborted) {
-      deleteWorkspaceScriptProcess(key);
-      return { ok: false, exitCode: -1, error: "Aborted" };
+      deleteWorkspaceAutomationProcess(key);
+      return { ok: false as const, runId, exitCode: -1, error: "Aborted" };
     }
 
-    const command = commands[i];
-    sendEvent(workspaceId, phase, {
-      type: "started",
-      commandIndex: i,
-      command,
-      totalCommands: commands.length,
+    const command = args.automation.commands[index];
+    emitAutomationEvent({
+      workspaceId: args.workspaceId,
+      automationId: args.automation.id,
+      automationKind: args.automation.kind,
+      runId,
+      source: args.source,
+      event: {
+        type: "started",
+        commandIndex: index,
+        command,
+        totalCommands: args.automation.commands.length,
+      },
     });
 
     try {
       lastExitCode = await new Promise<number>((resolve, reject) => {
         const child = spawn(command, {
-          shell: true,
-          cwd: args.workspacePath,
+          shell: args.automation.target.shell ?? true,
+          cwd,
           env,
         });
 
         entry.process = child;
 
         child.stdout?.on("data", (chunk: Buffer) => {
-          sendEvent(workspaceId, phase, {
-            type: "output",
-            data: chunk.toString(),
+          emitAutomationEvent({
+            workspaceId: args.workspaceId,
+            automationId: args.automation.id,
+            automationKind: args.automation.kind,
+            runId,
+            source: args.source,
+            event: { type: "output", data: chunk.toString() },
           });
         });
 
         child.stderr?.on("data", (chunk: Buffer) => {
-          sendEvent(workspaceId, phase, {
-            type: "output",
-            data: chunk.toString(),
+          emitAutomationEvent({
+            workspaceId: args.workspaceId,
+            automationId: args.automation.id,
+            automationKind: args.automation.kind,
+            runId,
+            source: args.source,
+            event: { type: "output", data: chunk.toString() },
           });
         });
 
-        child.on("error", (err) => {
-          reject(err);
-        });
+        child.on("error", reject);
+        child.on("close", (code) => resolve(code ?? -1));
 
-        child.on("close", (code) => {
-          resolve(code ?? -1);
-        });
-
-        // Phase-level timeout
-        if (args.timeoutMs) {
+        if (args.automation.timeoutMs) {
           setTimeout(() => {
             if (!entry.aborted) {
               entry.aborted = true;
               try {
                 child.kill("SIGKILL");
               } catch {
-                // already dead
+                // noop
               }
-              reject(new Error(`Phase timed out after ${args.timeoutMs}ms`));
+              reject(new Error(`Automation timed out after ${args.automation.timeoutMs}ms`));
             }
-          }, args.timeoutMs);
+          }, args.automation.timeoutMs);
         }
       });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      sendEvent(workspaceId, phase, {
-        type: "phase-error",
-        error: errorMessage,
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emitAutomationEvent({
+        workspaceId: args.workspaceId,
+        automationId: args.automation.id,
+        automationKind: args.automation.kind,
+        runId,
+        source: args.source,
+        event: { type: "error", error: message },
       });
-      deleteWorkspaceScriptProcess(key);
-      return { ok: false, exitCode: -1, error: errorMessage };
+      deleteWorkspaceAutomationProcess(key);
+      return { ok: false as const, runId, exitCode: -1, error: message };
     }
 
     entry.process = null;
-
-    sendEvent(workspaceId, phase, {
-      type: "command-completed",
-      commandIndex: i,
-      exitCode: lastExitCode,
+    emitAutomationEvent({
+      workspaceId: args.workspaceId,
+      automationId: args.automation.id,
+      automationKind: args.automation.kind,
+      runId,
+      source: args.source,
+      event: { type: "command-completed", commandIndex: index, exitCode: lastExitCode },
     });
 
     if (lastExitCode !== 0) {
-      sendEvent(workspaceId, phase, {
-        type: "phase-completed",
-        exitCode: lastExitCode,
+      emitAutomationEvent({
+        workspaceId: args.workspaceId,
+        automationId: args.automation.id,
+        automationKind: args.automation.kind,
+        runId,
+        source: args.source,
+        event: { type: "completed", exitCode: lastExitCode },
       });
-      deleteWorkspaceScriptProcess(key);
-      return { ok: false, exitCode: lastExitCode };
+      deleteWorkspaceAutomationProcess(key);
+      return { ok: false as const, runId, exitCode: lastExitCode };
     }
   }
 
-  sendEvent(workspaceId, phase, {
-    type: "phase-completed",
-    exitCode: 0,
+  emitAutomationEvent({
+    workspaceId: args.workspaceId,
+    automationId: args.automation.id,
+    automationKind: args.automation.kind,
+    runId,
+    source: args.source,
+    event: { type: "completed", exitCode: 0 },
   });
-  deleteWorkspaceScriptProcess(key);
-  return { ok: true, exitCode: 0 };
+  deleteWorkspaceAutomationProcess(key);
+  return { ok: true as const, runId, exitCode: 0 };
 }
 
-// ---- Execute run phase (long-running, PTY-backed) -------------------------
-
-export interface RunLongRunningPhaseArgs {
+async function runServiceAutomation(args: {
   workspaceId: string;
+  automation: ResolvedWorkspaceAutomation;
   projectPath: string;
   workspacePath: string;
   workspaceName: string;
   branch: string;
-  commands: string[];
-}
-
-/**
- * Execute the "run" phase.
- *
- * - Earlier commands (all but the last) run sequentially as finite commands.
- * - The **last** command spawns as a long-running PTY process that stays alive
- *   until explicitly stopped.
- *
- * Returns the PTY session ID for the long-running process.
- */
-export async function runLongRunningPhase(args: RunLongRunningPhaseArgs): Promise<{
-  ok: boolean;
-  sessionId?: string;
-  exitCode?: number;
-  error?: string;
-}> {
-  const { workspaceId, commands } = args;
-  const phase: ScriptPhase = "run";
-  const key = processKey(workspaceId, phase);
-
-  // Stop any existing run process
-  await stopPhase({ workspaceId, phase });
-
-  if (commands.length === 0) {
-    return { ok: true };
+  source: WorkspaceAutomationRunSource;
+}) {
+  const key = createProcessKey({
+    workspaceId: args.workspaceId,
+    automationId: args.automation.id,
+    automationKind: args.automation.kind,
+  });
+  const existing = getWorkspaceAutomationProcess(key);
+  if (existing && !existing.aborted && args.automation.restartOnRun === false) {
+    return {
+      ok: true as const,
+      runId: existing.runId,
+      sessionId: existing.sessionId,
+      alreadyRunning: true,
+    };
   }
 
-  const env = buildScriptEnv({
-    projectPath: args.projectPath,
-    workspaceName: args.workspaceName,
-    workspacePath: args.workspacePath,
-    branch: args.branch,
+  await stopAutomationEntry({
+    workspaceId: args.workspaceId,
+    automationId: args.automation.id,
+    automationKind: args.automation.kind,
   });
 
-  // Run all but the last command as finite
-  if (commands.length > 1) {
-    const prefixResult = await runFinitePhase({
-      workspaceId,
-      phase,
-      projectPath: args.projectPath,
-      workspacePath: args.workspacePath,
-      workspaceName: args.workspaceName,
-      branch: args.branch,
-      commands: commands.slice(0, -1),
-    });
+  const runId = randomUUID();
+  const env = buildAutomationEnv(args);
+  const cwd = resolveAutomationCwd(args);
+  const prefixCommands = args.automation.commands.slice(0, -1);
+  const lastCommand = args.automation.commands[args.automation.commands.length - 1];
 
+  if (!lastCommand) {
+    return { ok: true as const, runId };
+  }
+
+  if (prefixCommands.length > 0) {
+    const prefixResult = await runFiniteAutomation({
+      ...args,
+      automation: { ...args.automation, commands: prefixCommands },
+    });
     if (!prefixResult.ok) {
       return prefixResult;
     }
   }
 
-  // Spawn the last command as a long-running PTY process
-  const lastCommand = commands[commands.length - 1];
-  const shellExe = process.env.SHELL || "/bin/bash";
-
+  const shellExe = args.automation.target.shell || process.env.SHELL || "/bin/bash";
   const ptyProcess = pty.spawn(shellExe, ["-c", lastCommand], {
     name: "xterm-color",
     cols: 120,
     rows: 30,
-    cwd: args.workspacePath,
+    cwd,
     env: env as Record<string, string>,
   });
-
   const sessionId = randomUUID();
 
-  const entry: WorkspaceScriptProcess = {
-    type: "long-running",
+  createProcessEntry({
+    workspaceId: args.workspaceId,
+    automationId: args.automation.id,
+    automationKind: args.automation.kind,
+    runId,
+    source: args.source,
     process: ptyProcess,
-    aborted: false,
     sessionId,
-  };
-  setWorkspaceScriptProcess(key, entry);
+  });
 
-  sendEvent(workspaceId, phase, {
-    type: "started",
-    commandIndex: commands.length - 1,
-    command: lastCommand,
-    totalCommands: commands.length,
+  emitAutomationEvent({
+    workspaceId: args.workspaceId,
+    automationId: args.automation.id,
+    automationKind: args.automation.kind,
+    runId,
+    sessionId,
+    source: args.source,
+    event: {
+      type: "started",
+      commandIndex: args.automation.commands.length - 1,
+      command: lastCommand,
+      totalCommands: args.automation.commands.length,
+    },
   });
 
   ptyProcess.onData((data) => {
-    sendEvent(workspaceId, phase, {
-      type: "output",
-      data,
+    emitAutomationEvent({
+      workspaceId: args.workspaceId,
+      automationId: args.automation.id,
+      automationKind: args.automation.kind,
+      runId,
+      sessionId,
+      source: args.source,
+      event: { type: "output", data },
     });
   });
 
   ptyProcess.onExit(({ exitCode }) => {
-    sendEvent(workspaceId, phase, {
-      type: "phase-completed",
-      exitCode: exitCode ?? -1,
+    emitAutomationEvent({
+      workspaceId: args.workspaceId,
+      automationId: args.automation.id,
+      automationKind: args.automation.kind,
+      runId,
+      sessionId,
+      source: args.source,
+      event: { type: "completed", exitCode: exitCode ?? -1 },
     });
-    deleteWorkspaceScriptProcess(key);
+    deleteWorkspaceAutomationProcess(key);
   });
 
-  return { ok: true, sessionId };
+  return { ok: true as const, runId, sessionId };
 }
 
-// ---- Query status ---------------------------------------------------------
-
-export interface PhaseStatus {
-  phase: ScriptPhase;
-  running: boolean;
-  sessionId?: string;
-}
-
-export function getPhaseStatus(args: {
+export async function runAutomationEntry(args: {
   workspaceId: string;
-  phase: ScriptPhase;
-}): PhaseStatus {
-  const key = processKey(args.workspaceId, args.phase);
-  const entry = getWorkspaceScriptProcess(key);
-  return {
-    phase: args.phase,
-    running: entry !== undefined && !entry.aborted,
-    sessionId: entry?.sessionId,
-  };
+  automation: ResolvedWorkspaceAutomation;
+  projectPath: string;
+  workspacePath: string;
+  workspaceName: string;
+  branch: string;
+  source?: WorkspaceAutomationRunSource;
+}) {
+  const source = args.source ?? { kind: "manual" as const };
+  if (args.automation.kind === "service") {
+    return runServiceAutomation({ ...args, source });
+  }
+  return runFiniteAutomation({ ...args, source });
 }
 
-export function getAllPhaseStatuses(args: {
+export async function runAutomationHook(args: {
   workspaceId: string;
-}): Record<ScriptPhase, PhaseStatus> {
-  return {
-    setup: getPhaseStatus({ workspaceId: args.workspaceId, phase: "setup" }),
-    run: getPhaseStatus({ workspaceId: args.workspaceId, phase: "run" }),
-    teardown: getPhaseStatus({ workspaceId: args.workspaceId, phase: "teardown" }),
+  trigger: AutomationTrigger;
+  config: ResolvedWorkspaceAutomationsConfig;
+  projectPath: string;
+  workspacePath: string;
+  workspaceName: string;
+  branch: string;
+}): Promise<WorkspaceAutomationHookRunSummary> {
+  const refs = getAutomationHooksForTrigger(args.config, args.trigger);
+  const summary: WorkspaceAutomationHookRunSummary = {
+    trigger: args.trigger,
+    totalEntries: refs.length,
+    executedEntries: 0,
+    failures: [],
   };
-}
 
-// ---- Cleanup on app quit --------------------------------------------------
-
-export async function cleanupAllScriptProcesses(): Promise<void> {
-  const keys = getAllWorkspaceScriptProcessKeys();
-  const tasks: Promise<void>[] = [];
-
-  for (const key of keys) {
-    const entry = getWorkspaceScriptProcess(key);
-    if (entry?.process) {
-      entry.aborted = true;
-      tasks.push(killProcess(entry.process));
+  for (const ref of refs) {
+    const automation = getAutomationEntry(args.config, {
+      automationId: ref.automationId,
+      kind: ref.automationKind,
+    });
+    if (!automation) {
+      summary.failures.push({
+        automationId: ref.automationId,
+        message: "Automation entry not found.",
+      });
+      if (ref.blocking) {
+        break;
+      }
+      continue;
     }
-    deleteWorkspaceScriptProcess(key);
+
+    const result = await runAutomationEntry({
+      workspaceId: args.workspaceId,
+      automation,
+      projectPath: args.projectPath,
+      workspacePath: args.workspacePath,
+      workspaceName: args.workspaceName,
+      branch: args.branch,
+      source: { kind: "hook", trigger: args.trigger },
+    });
+
+    if (!result.ok) {
+      summary.failures.push({
+        automationId: ref.automationId,
+        message: "error" in result && result.error ? result.error : `Exited with ${result.exitCode ?? -1}`,
+      });
+      if (ref.blocking) {
+        break;
+      }
+      continue;
+    }
+
+    summary.executedEntries += 1;
   }
 
-  await Promise.allSettled(tasks);
+  return summary;
+}
+
+export function getAutomationStatuses(args: {
+  workspaceId: string;
+}): WorkspaceAutomationStatusEntry[] {
+  return listWorkspaceAutomationProcessesForWorkspace(args.workspaceId).map((entry) => ({
+    automationId: entry.automationId,
+    automationKind: entry.automationKind,
+    running: !entry.aborted,
+    runId: entry.runId,
+    sessionId: entry.sessionId,
+    source: entry.source,
+  }));
+}
+
+export async function stopAllWorkspaceAutomationProcesses(args: {
+  workspaceId: string;
+}): Promise<void> {
+  const entries = listWorkspaceAutomationProcessesForWorkspace(args.workspaceId);
+  await Promise.all(entries.map((entry) => stopAutomationEntry({
+    workspaceId: entry.workspaceId,
+    automationId: entry.automationId,
+    automationKind: entry.automationKind,
+  })));
+}
+
+export async function cleanupAllAutomationProcesses(): Promise<void> {
+  const keys = listWorkspaceAutomationProcessKeys();
+  await Promise.all(keys.map(async (key) => {
+    const entry = getWorkspaceAutomationProcess(key);
+    if (!entry) {
+      return;
+    }
+    entry.aborted = true;
+    if (entry.process) {
+      await killProcess(entry.process);
+    }
+    deleteWorkspaceAutomationProcess(key);
+  }));
 }

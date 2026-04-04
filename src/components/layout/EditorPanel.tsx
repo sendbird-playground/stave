@@ -1,40 +1,17 @@
-import {
-  Code2,
-  ChevronsDown,
-  ChevronsUp,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  File,
-  FilePlus,
-  FolderOpen,
-  FolderPlus,
-  FolderTree,
-  GitBranch,
-  Info,
-  LoaderCircle,
-  Minus,
-  Plus,
-  RefreshCcw,
-  RotateCcw,
-  SquareTerminal,
-  Trash2,
-  X,
-} from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
-import { Badge, Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { toast } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { workspaceFsAdapter } from "@/lib/fs";
 import type { WorkspaceCreateEntryResult, WorkspaceDeleteEntryResult, WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
 import { parseUnifiedDiffToBuffers } from "@/lib/source-control-diff";
 import { hasSourceControlStagedChanges, type SourceControlStatusItem } from "@/lib/source-control-status";
-import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import { ExplorerEntryIcon, WorkspaceFileIcon } from "./explorer-entry-icon";
+import { RightRailPanelShell } from "./RightRailPanelShell";
+import { WorkspaceAutomationsPanel } from "./WorkspaceAutomationsPanel";
+import { WorkspaceChangesPanel } from "./WorkspaceChangesPanel";
+import { WorkspaceExplorerPanel } from "./WorkspaceExplorerPanel";
 import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
 import {
   buildSourceControlSections,
@@ -102,332 +79,6 @@ function resolveWorkspaceAbsolutePath(args: { workspacePath?: string; relativePa
   const separator = normalizedWorkspacePath.includes("\\") ? "\\" : "/";
   const joinedRelativePath = normalizedRelativePath.split("/").filter(Boolean).join(separator);
   return `${normalizedWorkspacePath}${separator}${joinedRelativePath}`;
-}
-
-function ExplorerTreeRow(args: {
-  entry: WorkspaceDirectoryEntry;
-  depth: number;
-  expanded: Set<string>;
-  directoryStateByPath: Record<string, ExplorerDirectoryState>;
-  onToggle: (path: string) => void;
-  onOpenFile: (path: string) => void;
-  onStartCreateFile: (directoryPath: string) => void;
-  onStartCreateFolder: (directoryPath: string) => void;
-  onCopyRelativePath: (path: string) => void;
-  onCopyAbsolutePath: (path: string) => void;
-  onOpenInFinder: (path: string) => void;
-  onOpenInVSCode: (path: string) => void;
-  onOpenInTerminal: (path: string) => void;
-  onRefreshDirectory: (path: string) => void;
-  onRequestDeleteFile: (path: string, name: string) => void;
-  onRequestDeleteFolder: (path: string, name: string) => void;
-}) {
-  const {
-    entry,
-    depth,
-    expanded,
-    directoryStateByPath,
-    onToggle,
-    onOpenFile,
-    onStartCreateFile,
-    onStartCreateFolder,
-    onCopyRelativePath,
-    onCopyAbsolutePath,
-    onOpenInFinder,
-    onOpenInVSCode,
-    onOpenInTerminal,
-    onRefreshDirectory,
-    onRequestDeleteFile,
-    onRequestDeleteFolder,
-  } = args;
-  const isFolder = entry.type === "folder";
-  const isOpen = isFolder && expanded.has(entry.path);
-  const directoryState = isFolder ? directoryStateByPath[entry.path] : undefined;
-  const childEntries = directoryState?.entries ?? [];
-  const parentDirectoryPath = isFolder ? entry.path : getParentDirectoryPath({ path: entry.path });
-  const terminalTargetPath = isFolder ? entry.path : parentDirectoryPath;
-
-  return (
-    <div>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <button
-            type="button"
-            onClick={() => (isFolder ? onToggle(entry.path) : onOpenFile(entry.path))}
-            className="flex min-w-0 w-full items-center gap-1 rounded-sm px-1.5 py-1 text-left text-sm hover:bg-secondary/60"
-            style={{ paddingLeft: `${6 + depth * 14}px` }}
-          >
-            {isFolder ? (
-              isOpen
-                ? <ChevronDown className="size-3.5 text-muted-foreground" />
-                : <ChevronRight className="size-3.5 text-muted-foreground" />
-            ) : (
-              <span className="inline-block w-3.5" />
-            )}
-            <ExplorerEntryIcon entry={entry} isOpen={isOpen} />
-            <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-            {isFolder && directoryState?.status === "loading" ? <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" /> : null}
-          </button>
-        </ContextMenuTrigger>
-        <ContextMenuContent className="w-56">
-          {isFolder ? (
-            <ContextMenuItem onSelect={() => onToggle(entry.path)}>
-              {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-              {isOpen ? "Collapse folder" : "Expand folder"}
-            </ContextMenuItem>
-          ) : (
-            <ContextMenuItem onSelect={() => onOpenFile(entry.path)}>
-              <File className="size-4" />
-              Open file
-            </ContextMenuItem>
-          )}
-          <ContextMenuItem onSelect={() => onStartCreateFile(parentDirectoryPath)}>
-            <FilePlus className="size-4" />
-            New file here
-          </ContextMenuItem>
-          <ContextMenuItem onSelect={() => onStartCreateFolder(parentDirectoryPath)}>
-            <FolderPlus className="size-4" />
-            New folder here
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onSelect={() => onCopyRelativePath(entry.path)}>
-            <Copy className="size-4" />
-            Copy relative path
-          </ContextMenuItem>
-          <ContextMenuItem onSelect={() => onCopyAbsolutePath(entry.path)}>
-            <Copy className="size-4" />
-            Copy absolute path
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onSelect={() => onOpenInFinder(entry.path)}>
-            <FolderOpen className="size-4" />
-            Open in Finder
-          </ContextMenuItem>
-          <ContextMenuItem onSelect={() => onOpenInVSCode(entry.path)}>
-            <Code2 className="size-4" />
-            Open in VS Code
-          </ContextMenuItem>
-          <ContextMenuItem onSelect={() => onOpenInTerminal(terminalTargetPath)}>
-            <SquareTerminal className="size-4" />
-            Open in Terminal
-          </ContextMenuItem>
-          {isFolder ? (
-            <>
-              <ContextMenuSeparator />
-              <ContextMenuItem onSelect={() => onRefreshDirectory(entry.path)}>
-                <RefreshCcw className="size-4" />
-                Refresh folder
-              </ContextMenuItem>
-            </>
-          ) : null}
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            variant="destructive"
-            onSelect={() => (isFolder ? onRequestDeleteFolder(entry.path, entry.name) : onRequestDeleteFile(entry.path, entry.name))}
-          >
-            <Trash2 className="size-4" />
-            {isFolder ? "Delete folder" : "Delete file"}
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-      {isFolder && isOpen ? (
-        <>
-          {directoryState?.status === "error" ? (
-            <p
-              className="py-1 text-sm text-destructive"
-              style={{ paddingLeft: `${24 + depth * 14}px` }}
-            >
-              {directoryState.error ?? "Failed to load folder."}
-            </p>
-          ) : null}
-          {directoryState?.status === "ready" && childEntries.length === 0 ? (
-            <p
-              className="py-1 text-sm text-muted-foreground"
-              style={{ paddingLeft: `${24 + depth * 14}px` }}
-            >
-              Empty
-            </p>
-          ) : null}
-          {childEntries.map((child) => (
-            <ExplorerTreeRow
-              key={child.path}
-              entry={child}
-              depth={depth + 1}
-              expanded={expanded}
-              directoryStateByPath={directoryStateByPath}
-              onToggle={onToggle}
-              onOpenFile={onOpenFile}
-              onStartCreateFile={onStartCreateFile}
-              onStartCreateFolder={onStartCreateFolder}
-              onCopyRelativePath={onCopyRelativePath}
-              onCopyAbsolutePath={onCopyAbsolutePath}
-              onOpenInFinder={onOpenInFinder}
-              onOpenInVSCode={onOpenInVSCode}
-              onOpenInTerminal={onOpenInTerminal}
-              onRefreshDirectory={onRefreshDirectory}
-              onRequestDeleteFile={onRequestDeleteFile}
-              onRequestDeleteFolder={onRequestDeleteFolder}
-            />
-          ))}
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-function SourceControlActionButton(args: {
-  disabled?: boolean;
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-  tone?: "default" | "destructive" | "success";
-}) {
-  const toneClassName = args.tone === "destructive"
-    ? "text-destructive hover:bg-destructive/10 hover:text-destructive"
-    : args.tone === "success"
-      ? "text-success hover:bg-success/10 hover:text-success"
-      : "text-muted-foreground hover:bg-muted hover:text-foreground";
-
-  return (
-    <Button
-      type="button"
-      size="icon-xs"
-      variant="ghost"
-      aria-label={args.label}
-      title={args.label}
-      className={cn("size-6 rounded-sm border border-transparent p-0 transition-colors", toneClassName)}
-      disabled={args.disabled}
-      onClick={args.onClick}
-    >
-      {args.icon}
-    </Button>
-  );
-}
-
-function SourceControlRow(args: {
-  isScmBusy: boolean;
-  item: SourceControlItemViewModel;
-  onCopyPath: (path: string) => void;
-  onDiscard: (item: SourceControlStatusItem) => void;
-  onOpenDiff: (path: string) => void;
-  onStage: (item: SourceControlStatusItem) => void;
-  onUnstage: (item: SourceControlStatusItem) => void;
-}) {
-  const statusClassName = args.item.isConflict
-    ? "text-destructive"
-    : args.item.hasMixedChanges || args.item.hasUnstagedChanges
-      ? "text-warning"
-      : args.item.hasStagedChanges
-        ? "text-success"
-        : "text-muted-foreground";
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div className="group flex items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 transition-colors hover:bg-muted/30 focus-within:bg-muted/30">
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-            onClick={() => args.onOpenDiff(args.item.item.path)}
-          >
-            <WorkspaceFileIcon fileName={args.item.fileName} className="h-4 w-[14px]" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-sm font-medium">{args.item.fileName}</span>
-                {args.item.hasMixedChanges ? (
-                  <Badge variant="outline" className="rounded-md px-1.5 text-[10px]">
-                    partial
-                  </Badge>
-                ) : null}
-                {args.item.isUntracked ? (
-                  <Badge variant="outline" className="rounded-md px-1.5 text-[10px]">
-                    new
-                  </Badge>
-                ) : null}
-              </div>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {args.item.pathDetail}
-              </p>
-            </div>
-          </button>
-
-          <div className="relative flex h-6 w-[84px] shrink-0 items-center justify-end">
-            <span
-              className={cn(
-                "pointer-events-none absolute inset-0 flex items-center justify-end pr-1 font-mono text-[11px] font-medium transition-opacity duration-150 group-hover:opacity-0 group-focus-within:opacity-0",
-                statusClassName,
-              )}
-            >
-              {args.item.displayCode}
-            </span>
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-              {args.item.canStage ? (
-                <SourceControlActionButton
-                  label="Stage"
-                  disabled={args.isScmBusy}
-                  icon={<Plus className="size-3.5" />}
-                  onClick={() => args.onStage(args.item.item)}
-                  tone="success"
-                />
-              ) : null}
-              {args.item.canUnstage ? (
-                <SourceControlActionButton
-                  label="Unstage"
-                  disabled={args.isScmBusy}
-                  icon={<Minus className="size-3.5" />}
-                  onClick={() => args.onUnstage(args.item.item)}
-                  tone="default"
-                />
-              ) : null}
-              {args.item.canDiscard ? (
-                <SourceControlActionButton
-                  label="Discard"
-                  disabled={args.isScmBusy}
-                  icon={<RotateCcw className="size-3.5" />}
-                  onClick={() => args.onDiscard(args.item.item)}
-                  tone="destructive"
-                />
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onSelect={() => args.onOpenDiff(args.item.item.path)}>
-          <File className="size-4" />
-          Open Changes
-        </ContextMenuItem>
-        {(args.item.canStage || args.item.canUnstage || args.item.canDiscard) ? <ContextMenuSeparator /> : null}
-        {args.item.canStage ? (
-          <ContextMenuItem disabled={args.isScmBusy} onSelect={() => args.onStage(args.item.item)}>
-            <Plus className="size-4" />
-            Stage
-          </ContextMenuItem>
-        ) : null}
-        {args.item.canUnstage ? (
-          <ContextMenuItem disabled={args.isScmBusy} onSelect={() => args.onUnstage(args.item.item)}>
-            <Minus className="size-4" />
-            Unstage
-          </ContextMenuItem>
-        ) : null}
-        {args.item.canDiscard ? (
-          <ContextMenuItem
-            variant="destructive"
-            disabled={args.isScmBusy}
-            onSelect={() => args.onDiscard(args.item.item)}
-          >
-            <RotateCcw className="size-4" />
-            Discard
-          </ContextMenuItem>
-        ) : null}
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => args.onCopyPath(args.item.pathLabel)}>
-          <Copy className="size-4" />
-          Copy path
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
 }
 
 export function EditorPanel() {
@@ -1174,416 +825,68 @@ export function EditorPanel() {
       className="h-full min-w-0 w-full overflow-hidden"
     >
       <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-card">
-        <div className={cn("flex items-center justify-between border-b border-border/80 px-3", PANEL_BAR_HEIGHT_CLASS)}>
-          <TooltipProvider>
-            <div className="flex items-center gap-1.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "explorer" && "bg-secondary/80 text-foreground")}
-                    onClick={() => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "explorer" } })}
-                    title="explorer"
-                  >
-                    <FolderTree className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Explorer</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "changes" && "bg-secondary/80 text-foreground")}
-                    onClick={() => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "changes" } })}
-                    title="changes"
-                  >
-                    <GitBranch className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Changes</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={cn("h-7 w-7 rounded-sm p-0 text-muted-foreground", rightTab === "information" && "bg-secondary/80 text-foreground")}
-                    onClick={() => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: "information" } })}
-                    title="information"
-                  >
-                    <Info className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Information</TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    onClick={() => {
-                      if (rightTab === "changes") {
-                        void loadScmStatus();
-                      } else if (rightTab === "information") {
-                        if (activeWorkspaceId) {
-                          void useAppStore.getState().fetchWorkspacePrStatus({ workspaceId: activeWorkspaceId });
-                        }
-                      } else {
-                        void Promise.all([
-                          refreshProjectFiles(),
-                          reloadExplorer({ expandedPaths: expandedFolders }),
-                        ]);
-                      }
-                    }}
-                  >
-                    <RefreshCcw className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Refresh</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                    onClick={() => setLayout({ patch: { sidebarOverlayVisible: false } })}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Close panel</TooltipContent>
-              </Tooltip>
-            </div>
-          </TooltipProvider>
-        </div>
+        <RightRailPanelShell panelId={rightTab}>
+          {rightTab === "explorer" ? (
+            <WorkspaceExplorerPanel
+              projectName={explorerProjectName}
+              explorerError={explorerError}
+              pendingExplorerCreate={pendingExplorerCreate}
+              pendingExplorerCreateInputRef={pendingExplorerCreateInputRef}
+              pendingExplorerCreatePath={pendingExplorerCreatePath}
+              onPendingExplorerCreatePathChange={setPendingExplorerCreatePath}
+              isCreatingExplorerEntry={isCreatingExplorerEntry}
+              onStartExplorerCreate={startExplorerCreate}
+              onCancelExplorerCreate={cancelExplorerCreate}
+              onSubmitExplorerCreate={submitExplorerCreate}
+              isExplorerLoading={isExplorerLoading}
+              explorerTree={explorerTree}
+              expandedFolders={expandedFolders}
+              onCollapseAllFolders={() => setExpandedFolders(new Set())}
+              onExpandAllFolders={handleExpandAllFolders}
+              explorerDirectoryStateByPath={explorerDirectoryStateByPath}
+              onToggleExplorerFolder={handleToggleExplorerFolder}
+              onOpenExplorerFile={handleOpenExplorerFile}
+              onStartExplorerFileCreate={handleStartExplorerFileCreate}
+              onStartExplorerFolderCreate={handleStartExplorerFolderCreate}
+              onCopyExplorerRelativePath={handleCopyExplorerRelativePath}
+              onCopyExplorerAbsolutePath={handleCopyExplorerAbsolutePath}
+              onOpenExplorerInFinder={handleOpenExplorerInFinder}
+              onOpenExplorerInVSCode={handleOpenExplorerInVSCode}
+              onOpenExplorerInTerminal={handleOpenExplorerInTerminal}
+              onRefreshExplorerDirectory={handleRefreshExplorerDirectory}
+              onRequestDeleteExplorerFile={handleRequestDeleteExplorerFile}
+              onRequestDeleteExplorerFolder={handleRequestDeleteExplorerFolder}
+            />
+          ) : null}
 
-        {rightTab === "changes" ? (
-          <div className="border-b border-border/80 p-2">
-            <div className="space-y-2">
-              <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant="outline" className="h-6 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal">
-                        <GitBranch className="size-3.5 text-muted-foreground" />
-                        <span className="truncate">{sourceBranch}</span>
-                      </Badge>
-                      <Badge variant={filteredScmItems.length > 0 ? "secondary" : "outline"} className="h-6 rounded-md px-2 font-normal">
-                        Changes {filteredScmItems.length}
-                      </Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {sourceControlSummary.stagedCount > 0 ? (
-                        <Badge variant="success" className="rounded-md px-2 font-normal">
-                          Staged {sourceControlSummary.stagedCount}
-                        </Badge>
-                      ) : null}
-                      {sourceControlSummary.unstagedCount > 0 ? (
-                        <Badge variant="warning" className="rounded-md px-2 font-normal">
-                          Working Tree {sourceControlSummary.unstagedCount}
-                        </Badge>
-                      ) : null}
-                      {sourceControlSummary.untrackedCount > 0 ? (
-                        <Badge variant="outline" className="rounded-md px-2 font-normal">
-                          Untracked {sourceControlSummary.untrackedCount}
-                        </Badge>
-                      ) : null}
-                      {sourceControlSummary.conflictCount > 0 ? (
-                        <Badge variant="destructive" className="rounded-md px-2 font-normal">
-                          Conflicts {sourceControlSummary.conflictCount}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{sourceControlHint}</p>
-                  </div>
-                  {isScmBusy ? <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground" /> : null}
-                </div>
-              </div>
+          {rightTab === "changes" ? (
+            <WorkspaceChangesPanel
+              sourceBranch={sourceBranch}
+              filteredScmItems={filteredScmItems}
+              sourceControlSummary={sourceControlSummary}
+              sourceControlHint={sourceControlHint}
+              isScmBusy={isScmBusy}
+              commitMessage={commitMessage}
+              onCommitMessageChange={setCommitMessage}
+              canCommitStagedChanges={canCommitStagedChanges}
+              canUnstageAnyChanges={canUnstageAnyChanges}
+              onCommit={handleCommit}
+              onStageAll={handleStageAll}
+              onUnstageAll={handleUnstageAll}
+              hasConflicts={hasConflicts}
+              sourceError={sourceError}
+              sourceControlSections={sourceControlSections}
+              onCopySourceControlPath={handleCopySourceControlPath}
+              onSelectDiff={(path) => handleSelectDiff({ path })}
+              onStageAction={handleStageAction}
+              onDiscardChange={(item) => handleDiscardChange({ item })}
+              sourceHistory={sourceHistory}
+            />
+          ) : null}
 
-              <div className="rounded-xl border border-border/70 bg-background/80 p-3">
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  Commit Staged Changes
-                </p>
-                <Input
-                  className="mt-2 h-9 rounded-md border-border/70 bg-background px-2 text-sm"
-                  placeholder={`Message for "${sourceBranch}"`}
-                  value={commitMessage}
-                  onChange={(event) => setCommitMessage(event.target.value)}
-                  onKeyDown={(event) => {
-                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && commitMessage.trim() && canCommitStagedChanges && !isScmBusy) {
-                      event.preventDefault();
-                      void handleCommit();
-                    }
-                  }}
-                  disabled={isScmBusy}
-                />
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="h-8 min-w-[112px] flex-1 rounded-md text-sm"
-                    disabled={isScmBusy || !commitMessage.trim() || !canCommitStagedChanges}
-                    onClick={() => void handleCommit()}
-                  >
-                    Commit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 rounded-md text-sm"
-                    disabled={isScmBusy || filteredScmItems.length === 0}
-                    onClick={() => void handleStageAll()}
-                  >
-                    Stage All
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 rounded-md text-sm"
-                    disabled={isScmBusy || !canUnstageAnyChanges}
-                    onClick={() => void handleUnstageAll()}
-                  >
-                    Unstage All
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="min-h-0 flex-1 overflow-auto p-2">
-          {rightTab === "information" ? (
-            <WorkspaceInformationPanel />
-          ) : rightTab === "explorer" ? (
-            <>
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <p className="truncate text-sm text-muted-foreground">{explorerProjectName}</p>
-                <div className="flex items-center gap-1">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                          onClick={() => startExplorerCreate("file")}
-                        >
-                          <FilePlus className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">Add file</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                          onClick={() => startExplorerCreate("folder")}
-                        >
-                          <FolderPlus className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">Add folder</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                          onClick={() => setExpandedFolders(new Set())}
-                        >
-                          <ChevronsUp className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">Collapse all</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 rounded-sm p-0 text-muted-foreground"
-                          onClick={() => void handleExpandAllFolders()}
-                        >
-                          <ChevronsDown className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">Expand all</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              </div>
-              {explorerError ? <p className="mb-1 text-sm text-destructive">{explorerError}</p> : null}
-              <div className="space-y-1">
-                {pendingExplorerCreate ? (
-                  <form
-                    className="rounded-sm border border-border/80 bg-muted/40 px-2 py-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void submitExplorerCreate();
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      {pendingExplorerCreate.type === "file" ? (
-                        <FilePlus className="size-4 shrink-0 text-muted-foreground" />
-                      ) : (
-                        <FolderPlus className="size-4 shrink-0 text-muted-foreground" />
-                      )}
-                      <Input
-                        ref={pendingExplorerCreateInputRef}
-                        value={pendingExplorerCreatePath}
-                        onChange={(event) => setPendingExplorerCreatePath(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Escape") {
-                            event.preventDefault();
-                            cancelExplorerCreate();
-                          }
-                        }}
-                        className="h-8 rounded-sm border-border/80 bg-background px-2 text-sm"
-                        placeholder={pendingExplorerCreate.placeholder}
-                        aria-label={pendingExplorerCreate.type === "file" ? "New file path" : "New folder path"}
-                        disabled={isCreatingExplorerEntry}
-                      />
-                      <Button
-                        type="submit"
-                        size="sm"
-                        className="h-8 rounded-sm"
-                        disabled={isCreatingExplorerEntry}
-                      >
-                        {isCreatingExplorerEntry ? "Creating..." : "Create"}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 rounded-sm px-2 text-muted-foreground"
-                        onClick={cancelExplorerCreate}
-                        disabled={isCreatingExplorerEntry}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Enter a path relative to the project root. Press Enter to create or Esc to cancel.
-                    </p>
-                  </form>
-                ) : null}
-                {isExplorerLoading && explorerTree.length === 0 ? (
-                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <LoaderCircle className="size-4 animate-spin" />
-                    Loading files...
-                  </p>
-                ) : null}
-                {!explorerError && !isExplorerLoading && explorerTree.length === 0 ? <p className="text-sm text-muted-foreground">No files found.</p> : null}
-                {explorerTree.map((entry) => (
-                  <ExplorerTreeRow
-                    key={entry.path}
-                    entry={entry}
-                    depth={0}
-                    expanded={expandedFolders}
-                    directoryStateByPath={explorerDirectoryStateByPath}
-                    onToggle={handleToggleExplorerFolder}
-                    onOpenFile={handleOpenExplorerFile}
-                    onStartCreateFile={handleStartExplorerFileCreate}
-                    onStartCreateFolder={handleStartExplorerFolderCreate}
-                    onCopyRelativePath={handleCopyExplorerRelativePath}
-                    onCopyAbsolutePath={handleCopyExplorerAbsolutePath}
-                    onOpenInFinder={handleOpenExplorerInFinder}
-                    onOpenInVSCode={handleOpenExplorerInVSCode}
-                    onOpenInTerminal={handleOpenExplorerInTerminal}
-                    onRefreshDirectory={handleRefreshExplorerDirectory}
-                    onRequestDeleteFile={handleRequestDeleteExplorerFile}
-                    onRequestDeleteFolder={handleRequestDeleteExplorerFolder}
-                  />
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">Branch: {sourceBranch} | Changes ({filteredScmItems.length})</p>
-                {hasConflicts ? (
-                  <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning dark:bg-warning/15">
-                    Conflict detected. Resolve, stage, or discard the affected files before committing.
-                  </div>
-                ) : null}
-                {sourceError ? (
-                  <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    {sourceError}
-                  </div>
-                ) : null}
-                {!sourceError && filteredScmItems.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-4">
-                    <p className="text-sm font-medium">No local changes.</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      This workspace matches the checked-out branch.
-                    </p>
-                  </div>
-                ) : null}
-                {sourceControlSections.map((section) => (
-                  <section key={section.id} className="space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                          {section.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{section.description}</p>
-                      </div>
-                      <Badge variant={section.badgeVariant} className="mt-0.5 rounded-md px-2 font-normal">
-                        {section.items.length}
-                      </Badge>
-                    </div>
-                    <div className="space-y-1.5">
-                      {section.items.map((item) => (
-                        <SourceControlRow
-                          key={`${item.displayCode}:${item.pathLabel}`}
-                          item={item}
-                          isScmBusy={isScmBusy}
-                          onCopyPath={(path) => void handleCopySourceControlPath(path)}
-                          onOpenDiff={(path) => void handleSelectDiff({ path })}
-                          onStage={(sourceItem) => void handleStageAction({ action: "stage", item: sourceItem })}
-                          onUnstage={(sourceItem) => void handleStageAction({ action: "unstage", item: sourceItem })}
-                          onDiscard={(sourceItem) => void handleDiscardChange({ item: sourceItem })}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-
-        {rightTab === "changes" ? (
-          <div className="border-t border-border/80 p-2">
-            <p className="text-sm text-muted-foreground">Commit History ({sourceHistory.length})</p>
-            <div className="mt-2 max-h-32 space-y-1.5 overflow-auto">
-              {sourceHistory.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-3">
-                  <p className="text-sm text-muted-foreground">Initial commit</p>
-                </div>
-              ) : null}
-              {sourceHistory.map((item) => (
-                <div key={`${item.hash}:${item.subject}`} className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
-                  <p className="truncate text-sm font-medium">{item.subject}</p>
-                  <p className="text-xs text-muted-foreground">{item.hash} · {item.relativeDate}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
+          {rightTab === "information" ? <WorkspaceInformationPanel /> : null}
+          {rightTab === "automation" ? <WorkspaceAutomationsPanel /> : null}
+        </RightRailPanelShell>
       </div>
       <ConfirmDialog
         open={Boolean(pendingExplorerDelete)}

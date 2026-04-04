@@ -25,6 +25,14 @@ import type {
   ToolingStatusRequest,
   ToolingStatusSnapshot,
 } from "@/lib/tooling-status";
+import type {
+  AutomationKind,
+  AutomationTrigger,
+  ResolvedWorkspaceAutomationsConfig,
+  WorkspaceAutomationEventEnvelope,
+  WorkspaceAutomationHookRunSummary,
+  WorkspaceAutomationStatusEntry,
+} from "@/lib/workspace-scripts/types";
 
 interface ProviderStreamTurnArgs {
   turnId?: string;
@@ -507,6 +515,66 @@ interface WindowTerminalApi {
 interface WindowToolingApi {
   getStatus?: (args: ToolingStatusRequest) => Promise<ToolingStatusSnapshot>;
   syncOriginMain?: (args: { cwd?: string }) => Promise<SyncOriginMainResult>;
+}
+
+interface WindowAutomationsApi {
+  getConfig?: (args: {
+    projectPath: string;
+    workspacePath: string;
+    userOverridePath?: string;
+  }) => Promise<{
+    ok: boolean;
+    error?: string;
+    config: ResolvedWorkspaceAutomationsConfig | null;
+  }>;
+  getStatus?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    error?: string;
+    statuses: WorkspaceAutomationStatusEntry[];
+  }>;
+  runEntry?: (args: {
+    workspaceId: string;
+    automationId: string;
+    automationKind: AutomationKind;
+    projectPath: string;
+    workspacePath: string;
+    workspaceName: string;
+    branch: string;
+  }) => Promise<{
+    ok: boolean;
+    runId?: string;
+    sessionId?: string;
+    exitCode?: number;
+    alreadyRunning?: boolean;
+    error?: string;
+  }>;
+  stopEntry?: (args: {
+    workspaceId: string;
+    automationId: string;
+    automationKind: AutomationKind;
+  }) => Promise<{
+    ok: boolean;
+    error?: string;
+  }>;
+  runHook?: (args: {
+    workspaceId: string;
+    trigger: AutomationTrigger;
+    projectPath: string;
+    workspacePath: string;
+    workspaceName: string;
+    branch: string;
+  }) => Promise<{
+    ok: boolean;
+    error?: string;
+    summary: WorkspaceAutomationHookRunSummary | null;
+  }>;
+  stopAll?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    error?: string;
+  }>;
+  subscribeEvents?: (
+    listener: (payload: WorkspaceAutomationEventEnvelope) => void,
+  ) => () => void;
 }
 
 interface SourceControlStatusItem {
@@ -998,6 +1066,7 @@ interface WindowApi {
   eslint?: WindowEslintApi;
   terminal?: WindowTerminalApi;
   tooling?: WindowToolingApi;
+  automations?: WindowAutomationsApi;
   sourceControl?: WindowSourceControlApi;
   metrics?: WindowMetricsApi;
   inlineCompletion?: WindowInlineCompletionApi;

@@ -14,6 +14,7 @@ import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
 import { isEditableShortcutTarget, shouldAbortTaskOnEscape } from "@/components/layout/app-shell.shortcuts";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
+import type { RightRailPanelId } from "@/lib/right-rail-panels";
 
 const EditorPanel = lazy(() =>
   import("@/components/layout/EditorPanel").then((module) => ({
@@ -593,7 +594,7 @@ export function AppShell() {
       saveActiveEditor: () => saveActiveEditorTab().then(() => undefined),
       selectTask: (taskId: string) => selectTask({ taskId }),
       setTaskProvider: (taskId: string, provider: "claude-code" | "codex" | "stave") => setTaskProvider({ taskId, provider }),
-      showOverlayTab: (tab: "explorer" | "changes" | "information") => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: tab } }),
+      showOverlayTab: (tab: RightRailPanelId) => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: tab } }),
       stopActiveTurn: () => abortTaskTurn({ taskId: activeTaskId }),
       switchWorkspace: (workspaceId: string) => switchWorkspace({ workspaceId }),
       toggleChangesPanel: () => {

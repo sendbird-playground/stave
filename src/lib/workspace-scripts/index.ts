@@ -1,34 +1,46 @@
 // ---------------------------------------------------------------------------
-// Workspace Lifecycle Scripts – Public API
+// Workspace Automations – Public API
 // ---------------------------------------------------------------------------
 
 export type {
-  LocalPhaseOverride,
-  PhaseExecutionState,
-  PhaseExecutionStatus,
-  ResolvedScriptsConfig,
-  ScriptPhase,
-  ScriptPhaseEvent,
-  ScriptPhaseEventEnvelope,
-  WorkspaceScriptStatus,
-  WorkspaceScriptsConfig,
-  WorkspaceScriptsLocalConfig,
+  AutomationExecutionMode,
+  AutomationKind,
+  AutomationTargetScope,
+  AutomationTrigger,
+  ResolvedAutomationTarget,
+  ResolvedWorkspaceAutomation,
+  ResolvedWorkspaceAutomationHook,
+  ResolvedWorkspaceAutomationsConfig,
+  WorkspaceAutomationActionConfig,
+  WorkspaceAutomationEvent,
+  WorkspaceAutomationEventEnvelope,
+  WorkspaceAutomationHookRef,
+  WorkspaceAutomationHookRunSummary,
+  WorkspaceAutomationRunSource,
+  WorkspaceAutomationServiceConfig,
+  WorkspaceAutomationStatusEntry,
+  WorkspaceAutomationTargetConfig,
+  WorkspaceAutomationsConfig,
+  WorkspaceAutomationsLocalConfig,
 } from "./types";
 
 export {
-  SCRIPT_ENV_VARS,
-  SCRIPT_PHASES,
-  SCRIPTS_CONFIG_FILENAME,
-  SCRIPTS_IPC,
-  SCRIPTS_LOCAL_CONFIG_FILENAME,
+  AUTOMATIONS_CONFIG_FILENAME,
+  AUTOMATIONS_LOCAL_CONFIG_FILENAME,
+  AUTOMATION_ENV_VARS,
+  AUTOMATION_TRIGGER_IDS,
+  DEFAULT_AUTOMATION_TARGET_IDS,
   STAVE_CONFIG_DIR,
+  WORKSPACE_AUTOMATIONS_IPC,
 } from "./constants";
 
 export {
-  createEmptyResolvedConfig,
-  getPhaseCommands,
-  hasAnyScripts,
-  mergePhaseCommands,
-  mergeScriptsConfigs,
-  resolveScriptsFromTiers,
+  createDefaultAutomationTargets,
+  getAutomationEntry,
+  getAutomationHooksForTrigger,
+  hasAnyAutomations,
+  listAutomationEntries,
+  mergeAutomationsConfig,
+  resolveAutomationsFromConfig,
+  resolveAutomationConfigFromTiers,
 } from "./config";
