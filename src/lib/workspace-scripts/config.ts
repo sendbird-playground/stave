@@ -10,6 +10,7 @@ import type {
   AutomationKind,
   AutomationTrigger,
   ResolvedAutomationTarget,
+  ResolvedWorkspaceAutomationOrbitConfig,
   ResolvedWorkspaceAutomation,
   ResolvedWorkspaceAutomationHook,
   ResolvedWorkspaceAutomationsConfig,
@@ -35,21 +36,12 @@ export function createDefaultAutomationTargets(): Record<string, ResolvedAutomat
       id: DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE,
       label: "Workspace",
       cwd: "workspace",
-      executionMode: "default",
       env: {},
     },
     [DEFAULT_AUTOMATION_TARGET_IDS.PROJECT]: {
       id: DEFAULT_AUTOMATION_TARGET_IDS.PROJECT,
       label: "Project",
       cwd: "project",
-      executionMode: "default",
-      env: {},
-    },
-    [DEFAULT_AUTOMATION_TARGET_IDS.SPOTLIGHT]: {
-      id: DEFAULT_AUTOMATION_TARGET_IDS.SPOTLIGHT,
-      label: "Spotlight",
-      cwd: "project",
-      executionMode: "spotlight",
       env: {},
     },
   };
@@ -94,10 +86,17 @@ function mergeServiceRecord(
 ): Record<string, WorkspaceAutomationServiceConfig> {
   const result: Record<string, WorkspaceAutomationServiceConfig> = { ...(base ?? {}) };
   for (const [entryId, patch] of Object.entries(local ?? {})) {
+    const nextOrbit = result[entryId]?.orbit || patch.orbit
+      ? {
+          ...(result[entryId]?.orbit ?? {}),
+          ...(patch.orbit ?? {}),
+        }
+      : undefined;
     result[entryId] = {
       ...(result[entryId] ?? { commands: [] }),
       ...patch,
       commands: patch.commands ?? result[entryId]?.commands ?? [],
+      ...(nextOrbit ? { orbit: nextOrbit } : {}),
     };
   }
   return result;
@@ -131,12 +130,25 @@ function normalizeTargetMap(
       id: targetId,
       label: target.label?.trim() || humanizeId(targetId),
       cwd: target.cwd ?? nextTargets[targetId]?.cwd ?? "workspace",
-      executionMode: target.executionMode ?? nextTargets[targetId]?.executionMode ?? "default",
       env: { ...(nextTargets[targetId]?.env ?? {}), ...(target.env ?? {}) },
       shell: target.shell ?? nextTargets[targetId]?.shell,
     };
   }
   return nextTargets;
+}
+
+function normalizeOrbitConfig(
+  orbit: WorkspaceAutomationServiceConfig["orbit"],
+): ResolvedWorkspaceAutomationOrbitConfig | undefined {
+  if (!orbit || orbit.enabled === false) {
+    return undefined;
+  }
+
+  return {
+    ...(orbit.name?.trim() ? { name: orbit.name.trim() } : {}),
+    noTls: orbit.noTls ?? false,
+    ...(orbit.proxyPort ? { proxyPort: orbit.proxyPort } : {}),
+  };
 }
 
 function normalizeEntryDescription(args: {
@@ -180,6 +192,7 @@ function normalizeEntries(
       target,
       timeoutMs: entry.timeoutMs,
       restartOnRun: args.kind === "service" ? (entry as WorkspaceAutomationServiceConfig).restartOnRun ?? true : undefined,
+      orbit: args.kind === "service" ? normalizeOrbitConfig((entry as WorkspaceAutomationServiceConfig).orbit) : undefined,
       source: "automation",
     });
   }

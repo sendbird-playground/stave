@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, Play, RefreshCcw, Sparkles, Square, Zap } from "lucide-react";
+import { Copy, ExternalLink, LoaderCircle, Play, RefreshCcw, Sparkles, Square, Zap } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import {
   Badge,
@@ -13,6 +13,7 @@ import {
   EmptyTitle,
   toast,
 } from "@/components/ui";
+import { copyTextToClipboard } from "@/lib/clipboard";
 import type {
   AutomationKind,
   AutomationTrigger,
@@ -30,6 +31,7 @@ interface AutomationUiState {
   sessionId?: string;
   log: string;
   error?: string;
+  orbitUrl?: string;
   sourceLabel?: string;
 }
 
@@ -53,6 +55,10 @@ function appendLog(current: string, chunk: string) {
 
 function sourceLabel(event: WorkspaceAutomationEventEnvelope) {
   return event.source.kind === "hook" ? `Hook · ${event.source.trigger}` : "Manual";
+}
+
+function openExternalUrl(url: string) {
+  void window.api?.shell?.openExternal?.({ url: url.trim() });
 }
 
 function HookRow(props: {
@@ -104,12 +110,14 @@ function AutomationEntryRow(props: {
   label: string;
   description: string;
   targetLabel: string;
-  executionMode: string;
+  orbitEnabled: boolean;
   state: AutomationUiState | undefined;
   onRun: (args: { automationId: string; automationKind: AutomationKind }) => Promise<void>;
   onStop: (args: { automationId: string; automationKind: AutomationKind }) => Promise<void>;
 }) {
   const state = props.state;
+  const startLabel = props.orbitEnabled ? "Start Orbit" : "Run";
+  const stopLabel = props.orbitEnabled ? "Stop Orbit" : "Stop";
 
   return (
     <div className="rounded-lg border border-border/70 bg-background/80 p-3">
@@ -120,9 +128,9 @@ function AutomationEntryRow(props: {
             <Badge variant="outline" className="rounded-sm px-2 py-0">
               {props.targetLabel}
             </Badge>
-            {props.executionMode === "spotlight" ? (
+            {props.orbitEnabled ? (
               <Badge variant="secondary" className="rounded-sm px-2 py-0">
-                Spotlight
+                Orbit
               </Badge>
             ) : null}
             {state?.running ? (
@@ -135,8 +143,33 @@ function AutomationEntryRow(props: {
           {state?.sourceLabel ? (
             <p className="text-[11px] text-muted-foreground/80">{state.sourceLabel}</p>
           ) : null}
+          {state?.orbitUrl ? (
+            <p className="text-[11px] text-muted-foreground/80">{state.orbitUrl}</p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
+          {state?.orbitUrl ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-md"
+                onClick={() => openExternalUrl(state.orbitUrl ?? "")}
+              >
+                <ExternalLink className="mr-1 size-4" />
+                Open
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-md"
+                onClick={() => void copyTextToClipboard(state.orbitUrl ?? "")}
+              >
+                <Copy className="mr-1 size-4" />
+                Copy URL
+              </Button>
+            </>
+          ) : null}
           <Button
             size="sm"
             className="h-8 rounded-md"
@@ -146,7 +179,7 @@ function AutomationEntryRow(props: {
               : props.onRun({ automationId: props.automationId, automationKind: props.automationKind }))}
           >
             {state?.running ? <Square className="mr-1 size-4" /> : <Play className="mr-1 size-4" />}
-            {state?.running ? "Stop" : "Run"}
+            {state?.running ? stopLabel : startLabel}
           </Button>
         </div>
       </div>
@@ -277,6 +310,10 @@ export function WorkspaceAutomationsPanel() {
           case "started":
             next.running = true;
             next.error = undefined;
+            next.orbitUrl = undefined;
+            break;
+          case "orbit-url":
+            next.orbitUrl = payload.event.url;
             break;
           case "output":
             next.log = appendLog(existing.log, payload.event.data);
@@ -468,7 +505,7 @@ export function WorkspaceAutomationsPanel() {
                   label={entry.label}
                   description={entry.description}
                   targetLabel={entry.target.label}
-                  executionMode={entry.target.executionMode}
+                  orbitEnabled={Boolean(entry.orbit)}
                   state={entryStateByKey[automationEntryKey(entry)]}
                   onRun={runEntry}
                   onStop={stopEntry}
@@ -495,7 +532,7 @@ export function WorkspaceAutomationsPanel() {
                   label={entry.label}
                   description={entry.description}
                   targetLabel={entry.target.label}
-                  executionMode={entry.target.executionMode}
+                  orbitEnabled={Boolean(entry.orbit)}
                   state={entryStateByKey[automationEntryKey(entry)]}
                   onRun={runEntry}
                   onStop={stopEntry}

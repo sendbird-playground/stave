@@ -31,7 +31,7 @@ describe("mergeAutomationsConfig", () => {
       services: {
         dev: {
           commands: ["bun run dev"],
-          target: "spotlight",
+          target: "project",
         },
       },
     };
@@ -61,7 +61,7 @@ describe("mergeAutomationsConfig", () => {
       services: {
         dev: {
           commands: ["bun run dev"],
-          target: "spotlight",
+          target: "project",
           restartOnRun: false,
         },
       },
@@ -74,9 +74,8 @@ describe("mergeAutomationsConfig", () => {
     const base: WorkspaceAutomationsConfig = {
       version: 2,
       targets: {
-        spotlight: {
+        project: {
           cwd: "project",
-          executionMode: "spotlight",
           env: { PORT: "3000" },
         },
       },
@@ -84,15 +83,14 @@ describe("mergeAutomationsConfig", () => {
     const local: WorkspaceAutomationsLocalConfig = {
       version: 2,
       targets: {
-        spotlight: {
+        project: {
           env: { DEBUG: "1" },
         },
       },
     };
 
-    expect(mergeAutomationsConfig(base, local)?.targets?.spotlight).toEqual({
+    expect(mergeAutomationsConfig(base, local)?.targets?.project).toEqual({
       cwd: "project",
-      executionMode: "spotlight",
       env: {
         PORT: "3000",
         DEBUG: "1",
@@ -106,10 +104,12 @@ describe("resolveAutomationsFromConfig", () => {
     const config: WorkspaceAutomationsConfig = {
       version: 2,
       targets: {
-        spotlight: {
-          label: "Spotlight Runtime",
+        ci: {
+          label: "CI Runtime",
           cwd: "project",
-          executionMode: "spotlight",
+          env: {
+            CI: "1",
+          },
         },
       },
       actions: {
@@ -121,7 +121,10 @@ describe("resolveAutomationsFromConfig", () => {
       services: {
         app: {
           commands: ["bun run dev"],
-          target: "spotlight",
+          orbit: {
+            enabled: true,
+            name: "stave-desktop",
+          },
         },
       },
       hooks: {
@@ -133,10 +136,16 @@ describe("resolveAutomationsFromConfig", () => {
     const resolved = resolveAutomationsFromConfig(config);
     expect(resolved?.actions).toHaveLength(1);
     expect(resolved?.services).toHaveLength(1);
-    expect(resolved?.targets.spotlight).toMatchObject({
-      label: "Spotlight Runtime",
+    expect(resolved?.targets.ci).toMatchObject({
+      label: "CI Runtime",
       cwd: "project",
-      executionMode: "spotlight",
+      env: {
+        CI: "1",
+      },
+    });
+    expect(resolved?.services[0]?.orbit).toEqual({
+      name: "stave-desktop",
+      noTls: false,
     });
     expect(getAutomationHooksForTrigger(resolved ?? null, "workspace.created")).toEqual([
       {
@@ -214,24 +223,24 @@ describe("resolveAutomationConfigFromTiers", () => {
       version: 2,
       services: {
         app: {
-          target: "spotlight",
+          target: "project",
         },
       },
     };
 
     const resolved = resolveAutomationConfigFromTiers([{ base, local }]);
     expect(getAutomationEntry(resolved ?? null, { automationId: "app", kind: "service" })).toMatchObject({
-      targetId: "spotlight",
+      targetId: "project",
       target: {
-        executionMode: "spotlight",
+        cwd: "project",
       },
     });
   });
 });
 
 describe("helpers", () => {
-  test("default targets include workspace, project, and spotlight", () => {
-    expect(Object.keys(createDefaultAutomationTargets())).toEqual(["workspace", "project", "spotlight"]);
+  test("default targets include workspace and project", () => {
+    expect(Object.keys(createDefaultAutomationTargets())).toEqual(["workspace", "project"]);
   });
 
   test("hasAnyAutomations reflects content", () => {

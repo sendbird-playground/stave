@@ -53,7 +53,6 @@
 4. Choose a `Target`:
    - `Workspace` runs inside the active workspace path.
    - `Project` runs in the repository root.
-   - `Spotlight` uses the spotlight execution mode when that target is available.
 5. Enter one shell command per line in `Commands`.
 6. Save, then run the action from `Effective Runtime`.
 
@@ -62,7 +61,9 @@
 1. Click `Add Service`.
 2. Enter the service id and one or more commands.
 3. Set `Restart on run` if Stave should replace an existing running process when you run it again.
-4. Save, then use `Run` / `Stop` from `Effective Runtime` to manage the service.
+4. Enable `Use Orbit` when the service should run through `portless` and expose an Orbit URL.
+5. Optionally set `Orbit Name`, `Orbit Proxy Port`, or `Plain HTTP` for local routing preferences.
+6. Save, then use `Run` / `Stop` from `Effective Runtime` to manage the service.
 
 ### Wire A Hook
 
@@ -106,7 +107,11 @@ Minimal shared config example:
       "commands": [
         "bun run dev"
       ],
-      "target": "spotlight"
+      "target": "workspace",
+      "orbit": {
+        "enabled": true,
+        "name": "stave"
+      }
     }
   },
   "hooks": {
@@ -125,6 +130,7 @@ Minimal shared config example:
 - The GUI edits only shared `.stave/automations.json` files.
 - The GUI does not edit `targets`.
 - The GUI does not edit `.stave/automations.local.json`.
+- Orbit services require `Workspace` as the target.
 - If you need custom target definitions, per-developer overrides, or unsupported JSON fields, edit the file manually.
 - When both workspace and project shared configs exist, the workspace shared config wins for the active workspace.
 

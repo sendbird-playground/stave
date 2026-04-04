@@ -46,7 +46,6 @@ export interface ResolvedScriptsConfig {
 
 export type AutomationKind = "action" | "service";
 export type AutomationTargetScope = "workspace" | "project";
-export type AutomationExecutionMode = "default" | "spotlight";
 export type AutomationTrigger =
   | "workspace.created"
   | "workspace.archiving"
@@ -56,9 +55,21 @@ export type AutomationTrigger =
 export interface WorkspaceAutomationTargetConfig {
   label?: string;
   cwd?: AutomationTargetScope;
-  executionMode?: AutomationExecutionMode;
   env?: Record<string, string>;
   shell?: string;
+}
+
+export interface WorkspaceAutomationOrbitConfig {
+  enabled?: boolean;
+  name?: string;
+  noTls?: boolean;
+  proxyPort?: number;
+}
+
+export interface ResolvedWorkspaceAutomationOrbitConfig {
+  name?: string;
+  noTls: boolean;
+  proxyPort?: number;
 }
 
 interface WorkspaceAutomationEntryConfigBase {
@@ -74,6 +85,7 @@ export interface WorkspaceAutomationActionConfig extends WorkspaceAutomationEntr
 
 export interface WorkspaceAutomationServiceConfig extends WorkspaceAutomationEntryConfigBase {
   restartOnRun?: boolean;
+  orbit?: WorkspaceAutomationOrbitConfig;
 }
 
 export type WorkspaceAutomationHookRef =
@@ -104,7 +116,6 @@ export interface ResolvedAutomationTarget {
   id: string;
   label: string;
   cwd: AutomationTargetScope;
-  executionMode: AutomationExecutionMode;
   env: Record<string, string>;
   shell?: string;
 }
@@ -119,6 +130,7 @@ export interface ResolvedWorkspaceAutomation {
   target: ResolvedAutomationTarget;
   timeoutMs?: number;
   restartOnRun?: boolean;
+  orbit?: ResolvedWorkspaceAutomationOrbitConfig;
   source: "automation" | "legacy";
 }
 
@@ -148,6 +160,7 @@ export type WorkspaceAutomationEvent =
       command: string;
       totalCommands: number;
     }
+  | { type: "orbit-url"; url: string }
   | { type: "output"; data: string }
   | { type: "command-completed"; commandIndex: number; exitCode: number }
   | { type: "completed"; exitCode: number }

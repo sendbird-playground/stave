@@ -25,6 +25,12 @@ describe("buildAutomationEditorState", () => {
         app: {
           commands: ["bun run dev"],
           restartOnRun: false,
+          orbit: {
+            enabled: true,
+            name: "stave",
+            noTls: true,
+            proxyPort: 1355,
+          },
         },
       },
       hooks: {
@@ -44,6 +50,10 @@ describe("buildAutomationEditorState", () => {
       id: "app",
       restartOnRun: false,
       commandsText: "bun run dev",
+      orbitEnabled: true,
+      orbitName: "stave",
+      orbitNoTls: true,
+      orbitProxyPort: "1355",
     });
     expect(editorState.hooks["workspace.created"]).toEqual([
       {
@@ -81,7 +91,6 @@ describe("buildAutomationEditorState", () => {
             id: "workspace",
             label: "Workspace",
             cwd: "workspace",
-            executionMode: "default",
             env: {},
           },
           source: "automation",
@@ -94,7 +103,6 @@ describe("buildAutomationEditorState", () => {
           id: "workspace",
           label: "Workspace",
           cwd: "workspace",
-          executionMode: "default",
           env: {},
         },
       },
@@ -126,9 +134,13 @@ describe("buildAutomationConfigFromEditorState", () => {
 
     const service = createEmptyAutomationEditorEntry("service");
     service.id = "app";
-    service.target = "spotlight";
+    service.target = "workspace";
     service.commandsText = "bun run dev";
     service.restartOnRun = false;
+    service.orbitEnabled = true;
+    service.orbitName = "Stave Desktop";
+    service.orbitNoTls = true;
+    service.orbitProxyPort = "1355";
 
     const config = buildAutomationConfigFromEditorState({
       actions: [action],
@@ -164,8 +176,14 @@ describe("buildAutomationConfigFromEditorState", () => {
       services: {
         app: {
           commands: ["bun run dev"],
-          target: "spotlight",
+          target: "workspace",
           restartOnRun: false,
+          orbit: {
+            enabled: true,
+            name: "Stave Desktop",
+            noTls: true,
+            proxyPort: 1355,
+          },
         },
       },
       hooks: {
@@ -195,10 +213,12 @@ describe("mergeAutomationConfigIntoRaw", () => {
         owner: "team-desktop",
       },
       targets: {
-        spotlight: {
-          label: "Spotlight Runtime",
+        ci: {
+          label: "CI Runtime",
           cwd: "project",
-          executionMode: "spotlight",
+          env: {
+            CI: "1",
+          },
         },
       },
       actions: {
@@ -227,10 +247,12 @@ describe("mergeAutomationConfigIntoRaw", () => {
         owner: "team-desktop",
       },
       targets: {
-        spotlight: {
-          label: "Spotlight Runtime",
+        ci: {
+          label: "CI Runtime",
           cwd: "project",
-          executionMode: "spotlight",
+          env: {
+            CI: "1",
+          },
         },
       },
       actions: {

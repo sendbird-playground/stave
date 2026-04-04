@@ -178,6 +178,11 @@ function AutomationEntryEditor(props: {
             <Badge variant="secondary" className="rounded-sm px-2 py-0 font-normal">
               {targetLabel(props.entry.target, props.targetOptions)}
             </Badge>
+            {props.kind === "service" && props.entry.orbitEnabled ? (
+              <Badge variant="secondary" className="rounded-sm px-2 py-0">
+                Orbit
+              </Badge>
+            ) : null}
             {!props.entry.enabled ? (
               <Badge variant="secondary" className="rounded-sm px-2 py-0">
                 Disabled
@@ -254,6 +259,35 @@ function AutomationEntryEditor(props: {
               One shell command per line.
             </span>
           </label>
+          {props.kind === "service" ? (
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="text-xs font-medium text-foreground">Orbit Name</span>
+              <Input
+                value={props.entry.orbitName}
+                onChange={(event) => props.onFieldChange(props.index, "orbitName", event.target.value)}
+                placeholder="Optional base host name override"
+                disabled={!props.entry.orbitEnabled}
+              />
+              <span className="block text-[11px] text-muted-foreground">
+                Optional `portless --name` override. Orbit services must target the workspace.
+              </span>
+            </label>
+          ) : null}
+          {props.kind === "service" ? (
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium text-foreground">Orbit Proxy Port</span>
+              <Input
+                value={props.entry.orbitProxyPort}
+                onChange={(event) => props.onFieldChange(props.index, "orbitProxyPort", event.target.value)}
+                inputMode="numeric"
+                placeholder="Optional"
+                disabled={!props.entry.orbitEnabled}
+              />
+              <span className="block text-[11px] text-muted-foreground">
+                Optional portless proxy port override.
+              </span>
+            </label>
+          ) : null}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-4 rounded-lg border border-border/70 bg-muted/15 px-3 py-2.5">
@@ -265,13 +299,30 @@ function AutomationEntryEditor(props: {
             <span className="text-xs text-foreground">Enabled</span>
           </div>
           {props.kind === "service" ? (
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={props.entry.restartOnRun}
-                onCheckedChange={(checked) => props.onFieldChange(props.index, "restartOnRun", checked)}
-              />
-              <span className="text-xs text-foreground">Restart on run</span>
-            </div>
+            <>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={props.entry.restartOnRun}
+                  onCheckedChange={(checked) => props.onFieldChange(props.index, "restartOnRun", checked)}
+                />
+                <span className="text-xs text-foreground">Restart on run</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={props.entry.orbitEnabled}
+                  onCheckedChange={(checked) => props.onFieldChange(props.index, "orbitEnabled", checked)}
+                />
+                <span className="text-xs text-foreground">Use Orbit</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={props.entry.orbitNoTls}
+                  disabled={!props.entry.orbitEnabled}
+                  onCheckedChange={(checked) => props.onFieldChange(props.index, "orbitNoTls", checked)}
+                />
+                <span className="text-xs text-foreground">Plain HTTP</span>
+              </div>
+            </>
           ) : null}
           <Button
             type="button"
@@ -592,7 +643,6 @@ export function WorkspaceAutomationsManager(props: {
     const next = new Map<string, string>([
       [DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE, "Workspace"],
       [DEFAULT_AUTOMATION_TARGET_IDS.PROJECT, "Project"],
-      [DEFAULT_AUTOMATION_TARGET_IDS.SPOTLIGHT, "Spotlight"],
     ]);
 
     for (const target of Object.values(props.resolvedConfig?.targets ?? {})) {
