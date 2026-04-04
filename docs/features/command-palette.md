@@ -76,4 +76,5 @@ Contributors can inject additional commands without coupling to the dialog UI. C
 - `Cmd/Ctrl+E` opens the explorer panel.
 - `Cmd/Ctrl+I` toggles the information panel.
 - `Cmd/Ctrl+L` or `Cmd/Ctrl+J` focuses the prompt composer when it is not already focused.
-- `Alt+P` opens the prompt model selector.
+- `Alt+P` opens the prompt model selector from anywhere in the app.
+- `Shift+Tab` toggles plan mode from anywhere in the app.

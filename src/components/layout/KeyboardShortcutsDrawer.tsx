@@ -148,7 +148,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           },
           {
             label: "Toggle plan mode",
-            description: "Switch the active prompt between normal and plan mode while focused in the composer.",
+            description: "Switch the active prompt between normal and plan mode from anywhere in the app.",
             sequences: [["Shift", "Tab"]],
           },
           {
@@ -228,7 +228,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           </div>
           <DrawerFooter className="border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
             <p className="text-sm text-muted-foreground">
-              Workspace quick jump follows the sidebar's top-to-bottom order. Quick open and the shortcut guide are ignored while typing in inputs, the command palette stays globally available, and plan mode toggle applies in the composer.
+              Workspace quick jump follows the sidebar's top-to-bottom order. Quick open and the shortcut guide are ignored while typing in inputs, and command palette/plan mode/model selector shortcuts stay globally available.
             </p>
             <DrawerClose asChild>
               <Button variant="outline">Close</Button>
