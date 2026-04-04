@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, ExternalLink, LoaderCircle, Play, RefreshCcw, Sparkles, Square, Zap } from "lucide-react";
+import { Copy, ExternalLink, LoaderCircle, Play, RefreshCcw, Settings2, Sparkles, Square, Zap } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import {
   Badge,
@@ -14,6 +14,7 @@ import {
   toast,
 } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import type {
   AutomationKind,
   AutomationTrigger,
@@ -23,7 +24,6 @@ import type {
 } from "@/lib/workspace-scripts/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import { WorkspaceAutomationsManager } from "./WorkspaceAutomationsManager";
 
 interface AutomationUiState {
   running: boolean;
@@ -197,7 +197,12 @@ function AutomationEntryRow(props: {
   );
 }
 
-export function WorkspaceAutomationsPanel() {
+export function WorkspaceAutomationsPanel(props: {
+  onOpenSettings?: (options?: {
+    projectPath?: string | null;
+    section?: SectionId;
+  }) => void;
+}) {
   const [
     activeWorkspaceId,
     projectPath,
@@ -416,6 +421,18 @@ export function WorkspaceAutomationsPanel() {
   const hookEntries = config
     ? Object.entries(config.hooks) as Array<[AutomationTrigger, NonNullable<ResolvedWorkspaceAutomationsConfig["hooks"][AutomationTrigger]>]>
     : [];
+  const actionCount = config?.actions.length ?? 0;
+  const serviceCount = config?.services.length ?? 0;
+  const hookCount = hookEntries.length;
+  const hasAutomations = actionCount > 0 || serviceCount > 0 || hookCount > 0;
+  const hasWorkspaceOverride = Boolean(projectPath && workspacePath && workspacePath !== projectPath);
+
+  const openAutomationSettings = useCallback(() => {
+    props.onOpenSettings?.({
+      section: "projects",
+      projectPath: projectPath ?? null,
+    });
+  }, [projectPath, props.onOpenSettings]);
 
   if (!workspacePath) {
     return (
@@ -434,36 +451,76 @@ export function WorkspaceAutomationsPanel() {
   return (
     <div className="h-full overflow-auto px-2 py-2">
       <div className="space-y-3">
-        <WorkspaceAutomationsManager
-          projectPath={projectPath ?? workspacePath}
-          workspacePath={workspacePath}
-          resolvedConfig={config}
-          onSaved={loadConfig}
-        />
-
         <Card size="sm" className="border border-border/70 bg-background/80">
-          <CardContent className="pt-4">
+          <CardContent className="space-y-4 pt-4">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Effective Runtime</p>
+                <p className="text-sm font-medium text-foreground">Automation Runtime</p>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Run the merged action/service set for this workspace and verify how hooks resolve after changes.
+                  Inspect the merged actions, services, and hooks for the active workspace. Edit shared automation config from Settings.
                 </p>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 rounded-md"
-                onClick={() => void loadConfig()}
-                disabled={configState.status === "loading"}
-              >
-                <RefreshCcw className={cn("mr-1 size-4", configState.status === "loading" && "animate-spin")} />
-                Refresh
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-md"
+                  onClick={openAutomationSettings}
+                  disabled={!projectPath}
+                >
+                  <Settings2 className="mr-1 size-4" />
+                  Edit Config
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-md"
+                  onClick={() => void loadConfig()}
+                  disabled={configState.status === "loading"}
+                >
+                  <RefreshCcw className={cn("mr-1 size-4", configState.status === "loading" && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="rounded-sm px-2 py-0">
+                {actionCount} actions
+              </Badge>
+              <Badge variant="outline" className="rounded-sm px-2 py-0">
+                {serviceCount} services
+              </Badge>
+              <Badge variant="outline" className="rounded-sm px-2 py-0">
+                {hookCount} hooks
+              </Badge>
+              {hasWorkspaceOverride ? (
+                <Badge variant="secondary" className="rounded-sm px-2 py-0">
+                  Workspace override active
+                </Badge>
+              ) : null}
+            </div>
+
+            <div className="grid gap-2">
+              <div className="rounded-lg border border-border/70 bg-muted/15 px-3 py-2.5">
+                <p className="text-xs font-medium text-foreground">Project Config</p>
+                <p className="mt-1 break-all text-[11px] leading-5 text-muted-foreground">
+                  {projectPath ? `${projectPath}/.stave/automations.json` : "Project path unavailable."}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-muted/15 px-3 py-2.5">
+                <p className="text-xs font-medium text-foreground">Workspace Config</p>
+                <p className="mt-1 break-all text-[11px] leading-5 text-muted-foreground">
+                  {hasWorkspaceOverride
+                    ? `${workspacePath}/.stave/automations.json`
+                    : "This workspace currently inherits the project shared config."}
+                </p>
+              </div>
             </div>
             {configState.error ? (
-              <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+              <div className="rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive">
                 {configState.error}
               </div>
             ) : null}
@@ -476,15 +533,26 @@ export function WorkspaceAutomationsPanel() {
           </div>
         ) : null}
 
-        {configState.status === "ready" && config && config.actions.length === 0 && config.services.length === 0 && hookEntries.length === 0 ? (
+        {configState.status === "ready" && config && !hasAutomations ? (
           <Empty className="border border-dashed border-border/70 bg-muted/15">
             <EmptyHeader>
               <EmptyMedia>
                 <Zap className="size-4" />
               </EmptyMedia>
               <EmptyTitle>No automations configured</EmptyTitle>
-              <EmptyDescription>Use the manager above to create `.stave/automations.json` for the project or workspace.</EmptyDescription>
+              <EmptyDescription>Open Settings to create `.stave/automations.json` for the project or active workspace.</EmptyDescription>
             </EmptyHeader>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-1 h-8 rounded-md"
+              onClick={openAutomationSettings}
+              disabled={!projectPath}
+            >
+              <Settings2 className="mr-1 size-4" />
+              Open Project Settings
+            </Button>
           </Empty>
         ) : null}
 

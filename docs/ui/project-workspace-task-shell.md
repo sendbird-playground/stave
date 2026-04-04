@@ -80,7 +80,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - assigns `Cmd/Ctrl+1..9` to the first nine visible workspaces in sidebar order and shows those shortcuts in the expanded list plus collapsed-rail tooltips
 - `SettingsDialog`
   - includes a `Projects` section with a dedicated project menu and a single detail panel for the selected project
-  - keeps repository workspace defaults, git metadata, close action, and project removal inside that selected-project panel instead of the main sidebar row
+  - keeps repository workspace defaults, git metadata, automation config editing, close action, and project removal inside that selected-project panel instead of the main sidebar row
   - exposes `Settings > Design > Sidebar Artwork` so the left sidebar backdrop can switch between `Space Haze`, `Wave + Aurora`, and `Gravity Paint`
   - shows thumbnail previews for each sidebar artwork option so the backdrop modes can be compared before switching
 - `WorkspaceTaskTabs`
@@ -91,7 +91,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
-  - exposes a dedicated Automation panel for workspace actions, services, hook inspection, Orbit-enabled dev services, and a lightweight shared-config manager for `.stave/automations.json`
+  - exposes a dedicated Automation panel for workspace actions, services, hook inspection, Orbit-enabled dev services, runtime path/status summary, and quick navigation back to project settings
   - exposes a workspace information panel with shared accordion sections, a distinct summary card, URL-first Jira/Figma/GitHub integrations, notes, todos, saved plans, and custom structured fields
   - surfaces workspace-level plan history from markdown files under `.stave/context/plans`, while still showing legacy `.stave/plans` files
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`
@@ -115,7 +115,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
 - `moveProjectInList()` and `moveWorkspaceInProjectList()` allow explicit sidebar ordering without auto-reordering on selection.
 - `reorderTasks()` persists manual task ordering within the active, archived, or all-task filter views.
 - `restoreTask()` re-activates archived tasks from workspace task history.
-- Workspace automations now run from `.stave/automations.json`, with a right-rail manager for actions, services, and hooks, plus hook entry points for workspace creation, workspace archiving, and PR creation flows.
+- Workspace automations now run from `.stave/automations.json`, with config editing in `Settings > Projects`, a right-rail runtime panel for actions, services, and hooks, and hook entry points for workspace creation, workspace archiving, and PR creation flows.
 
 ### Files Changed
 

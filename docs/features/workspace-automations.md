@@ -3,7 +3,7 @@
 ## Summary
 
 - Workspace Automations let Stave run workspace actions, long-running services, and lifecycle hooks from the right rail.
-- The Automation Manager provides a lightweight GUI for editing shared `actions`, `services`, and `hooks` in `.stave/automations.json` without exposing a raw JSON editor.
+- The Automation Manager now lives under `Settings > Projects`, where it provides a lightweight GUI for editing shared `actions`, `services`, and `hooks` in `.stave/automations.json` without exposing a raw JSON editor.
 
 ## When To Use It
 
@@ -16,22 +16,24 @@
 - Open a project in Stave and select a workspace.
 - Make sure the workspace has write access to its `.stave/` folder.
 - If you need project-wide automation, decide whether the config should live in the repository root or in the active workspace.
+- Workspace-level shared config is editable when that project is the current project in Stave.
 
 ## Quick Start
 
-1. Open the right rail and switch to `Automation`.
-2. In `Automation Manager`, choose `Project Config` or `Workspace Config`.
-3. Add an `Action` or `Service`, fill in the id, target, and commands, then save.
-4. Add hook links if the automation should run from `workspace.created`, `workspace.archiving`, `pr.beforeOpen`, or `pr.afterOpen`.
-5. Use `Effective Runtime` below the manager to run the entry and verify the merged result for the current workspace.
+1. Open `Settings > Projects`.
+2. Select the project, then use `Automation Manager`.
+3. Choose `Project Config` or `Workspace Config`.
+4. Add an `Action` or `Service`, fill in the id, target, and commands, then save.
+5. Add hook links if the automation should run from `workspace.created`, `workspace.archiving`, `pr.beforeOpen`, or `pr.afterOpen`.
+6. Open the right rail `Automation` tab to run the entry and verify the merged runtime for the current workspace.
 
 ## Interface Walkthrough
 
 ### Entry Points
 
-- Open the right rail and select the `Automation` tab.
-- The top card is `Automation Manager`.
-- The lower cards under `Effective Runtime` show the merged actions, services, and hooks that Stave will actually run for the active workspace.
+- Open `Settings > Projects`, select a project, and edit shared automation config in `Automation Manager`.
+- Open the right rail and select the `Automation` tab to inspect the merged runtime for the active workspace.
+- The runtime panel shows the resolved actions, services, hooks, config paths, and quick access back to project settings.
 
 ### Key Controls
 
@@ -42,41 +44,43 @@
 - `Save`: writes the selected shared config file.
 - `Reload`: re-reads the selected config file from disk.
 - `Discard`: throws away unsaved GUI changes and reloads the file.
+- `Edit Config`: opens `Settings > Projects` from the right-rail runtime panel.
+- `Refresh`: reloads the effective runtime for the active workspace.
 
 ## Common Workflows
 
 ### Create An Action
 
-1. Click `Add Action`.
+1. Open `Settings > Projects` and click `Add Action`.
 2. Set a stable `ID` such as `bootstrap` or `test-ci`.
 3. Add a label and description if the default generated name is not enough.
 4. Choose a `Target`:
    - `Workspace` runs inside the active workspace path.
    - `Project` runs in the repository root.
 5. Enter one shell command per line in `Commands`.
-6. Save, then run the action from `Effective Runtime`.
+6. Save, then run the action from the right-rail `Automation Runtime`.
 
 ### Create A Service
 
-1. Click `Add Service`.
+1. Open `Settings > Projects` and click `Add Service`.
 2. Enter the service id and one or more commands.
 3. Set `Restart on run` if Stave should replace an existing running process when you run it again.
 4. Enable `Use Orbit` when the service should run through `portless` and expose an Orbit URL.
 5. Optionally set `Orbit Name`, `Orbit Proxy Port`, or `Plain HTTP` for local routing preferences.
-6. Save, then use `Run` / `Stop` from `Effective Runtime` to manage the service.
+6. Save, then use `Run` / `Stop` from the right-rail `Automation Runtime` to manage the service.
 
 ### Wire A Hook
 
-1. Scroll to `Hooks`.
+1. Open `Settings > Projects` and scroll to `Hooks`.
 2. Find the trigger you need.
 3. Toggle `Enabled` on the action or service you want linked.
 4. Leave `Blocking` on when failures should stop the parent workflow, or turn it off for best-effort execution.
-5. Save, then test the hook from the `Hooks` section in `Effective Runtime`.
+5. Save, then test the hook from the `Hooks` section in the right-rail runtime panel.
 
-### Verify The Effective Runtime
+### Verify The Runtime
 
-1. Save the manager changes.
-2. Use the `Refresh` button in `Effective Runtime`.
+1. Save the manager changes in `Settings > Projects`.
+2. Open the right rail `Automation` tab and use `Refresh`.
 3. Run the target action, service, or hook.
 4. Inspect the live status badge, error message, and log output in the panel.
 
@@ -138,15 +142,15 @@ Minimal shared config example:
 
 ### The Manager Shows A File Error
 
-- Symptom: the top card shows invalid JSON or schema errors.
+- Symptom: `Settings > Projects > Automation Manager` shows invalid JSON or schema errors.
 - Cause: the existing config file is not valid `version: 2` automations JSON.
 - Fix: correct the file manually, then reload the manager.
 
 ### The Runtime View Does Not Change After Saving
 
-- Symptom: `Effective Runtime` still shows older entries.
+- Symptom: the right-rail `Automation Runtime` still shows older entries.
 - Cause: a higher-priority workspace shared config is overriding the project shared config for the current workspace.
-- Fix: check the selected `Config Scope`, then refresh `Effective Runtime`.
+- Fix: check the selected `Config Scope` in `Settings > Projects`, then refresh the runtime panel.
 
 ### A Hook Entry Is Marked As Unresolved
 

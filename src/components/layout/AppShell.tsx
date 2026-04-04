@@ -841,7 +841,7 @@ export function AppShell() {
                 <Suspense fallback={<aside className="bg-card p-3 text-sm text-muted-foreground" style={{ width: `${desktopSidebarWidth}px` }}>Loading panel...</aside>}>
                   <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopSidebarWidth}px` }}>
                     <RenderProfiler id="EditorPanel" thresholdMs={8}>
-                      <EditorPanel />
+                      <EditorPanel onOpenSettings={handleOpenSettings} />
                     </RenderProfiler>
                   </div>
                 </Suspense>
@@ -856,7 +856,7 @@ export function AppShell() {
                 ) : (
                   <Suspense fallback={<aside className="h-full bg-card p-3 text-sm text-muted-foreground">Loading panel...</aside>}>
                     <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
-                      <EditorPanel />
+                      <EditorPanel onOpenSettings={handleOpenSettings} />
                     </RenderProfiler>
                   </Suspense>
                 )}
