@@ -375,9 +375,14 @@ describe("buildCodexConfigOverrides", () => {
 });
 
 describe("resolveApprovalPolicy", () => {
-  test("returns undefined for unknown or deprecated approval modes", () => {
+  test("returns undefined for unknown approval modes", () => {
     expect(resolveApprovalPolicy({ runtimeValue: undefined })).toBeUndefined();
-    expect(resolveApprovalPolicy({ envValue: "on-failure" })).toBeUndefined();
+    expect(resolveApprovalPolicy({ envValue: "bogus-policy" })).toBeUndefined();
+  });
+
+  test("normalizes deprecated on-failure to on-request", () => {
+    expect(resolveApprovalPolicy({ runtimeValue: "on-failure" })).toBe("on-request");
+    expect(resolveApprovalPolicy({ envValue: "on-failure" })).toBe("on-request");
   });
 
   test("forces never in plan mode when a fallback policy is provided", () => {
@@ -385,6 +390,14 @@ describe("resolveApprovalPolicy", () => {
       runtimeValue: "on-request",
       planMode: true,
       fallback: "on-request",
+    })).toBe("never");
+  });
+
+  test("forces never in plan mode even when deprecated on-failure is set", () => {
+    expect(resolveApprovalPolicy({
+      runtimeValue: "on-failure",
+      planMode: true,
+      fallback: "on-failure",
     })).toBe("never");
   });
 });

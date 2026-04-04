@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { ClaudePermissionMode } from "@/types/chat";
 export type { ClaudePermissionMode } from "@/types/chat";
 
-export type CodexApprovalPolicy = "never" | "on-request" | "untrusted";
+export type CodexApprovalPolicy = "never" | "on-request" | "on-failure" | "untrusted";
 export type PermissionModeValue = ClaudePermissionMode | CodexApprovalPolicy;
 
 interface PermissionModeOption {
@@ -18,6 +18,7 @@ const CLAUDE_OPTIONS: PermissionModeOption[] = [
   { value: "bypassPermissions", label: "Bypass" },
   { value: "plan", label: "Plan" },
   { value: "dontAsk", label: "Don't Ask" },
+  { value: "auto", label: "Auto" },
 ];
 
 const CODEX_OPTIONS: PermissionModeOption[] = [

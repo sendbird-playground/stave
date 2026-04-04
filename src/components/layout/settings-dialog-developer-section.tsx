@@ -184,7 +184,7 @@ export function DeveloperSection() {
               Supported Codex baseline
             </p>
             <p className="mt-1">
-              Stave targets Codex SDK `0.117.0` and expects a local `codex` CLI around `0.117.0`.
+              Stave targets Codex SDK `0.118.0` and expects a local `codex` CLI around `0.118.0`.
               If your installed CLI is older, update it or point this field at the version you want Stave to use.
             </p>
           </div>

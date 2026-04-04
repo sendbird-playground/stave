@@ -23,7 +23,7 @@ function hasPlanContent(message?: PlanMessage | null) {
 
 export function resolvePlanViewerState(args: {
   activeProvider: "claude-code" | "codex" | "stave";
-  claudePermissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+  claudePermissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
   codexExperimentalPlanMode?: boolean;
   latestPlanMessage?: PlanMessage | null;
   lastMessage?: PlanMessage | null;

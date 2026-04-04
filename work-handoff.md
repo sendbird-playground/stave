@@ -1,56 +1,95 @@
 # Work Handoff
 
 ## Objective
-Replace the unpublished legacy scripts concept with workspace automations, expose it in the right rail, and clean up the right-side overlay architecture so each panel is independently owned behind a shared shell.
+Upgrade Stave's Claude and Codex SDK integrations to the most recent safe versions and adopt the highest-value new SDK features in Stave itself, with end-to-end contract updates, UI exposure where appropriate, and verification.
 
 ## Active Task Path
-tracking/sessions/2026-04-04_workspace-automations/features/workspace-automations/tasks/automation-panel-and-hooks
+Not set. No `tracking/` task directory exists for this worktree yet.
 
 ## Current Status
-Handoff
+Plan
 
 ## Completed
-- Replaced the old scripts groundwork with the `automations` domain and `.stave/automations.json` config flow.
-- Wired main/preload/window API contracts and workspace/PR hook execution.
-- Added the Automation panel to the right rail.
-- Removed the old top tab bar from `EditorPanel`.
-- Added `RightRailPanelShell` and split Explorer, Changes, Information, and Automation into independent right-rail panel modules.
-- Aligned right-rail panel ids through `right-rail-panels.ts`, `RightRail.tsx`, `AppShell.tsx`, and `layout.utils.ts`.
-- Deleted the obsolete untracked `RUN_SCRIPTS.md`.
-- Verified `bun run typecheck` and `bun test tests/workspace-scripts-config.test.ts`.
+- Audited current dependency versions in `package.json` and `bun.lock`.
+- Verified current Stave integration points for both SDKs.
+- Verified upstream current state:
+- Claude Agent SDK is behind locally and should move from `0.2.86` to `0.2.92`.
+- Codex SDK local `0.118.0` already matches the current stable release line.
+- Identified concrete adoption gaps in Stave:
+- Codex `approvalPolicy: "on-failure"` is not supported in Stave contracts or UI.
+- Codex `TurnOptions.outputSchema` is not used anywhere.
+- Claude `startup()` prewarm is not used.
+- Claude session/subagent inspection APIs are not exposed through IPC.
+- Found stale Codex version copy in settings UI: `0.117.0` text is outdated.
 
 ## Remaining Work
-- Run a desktop smoke test for the new right-rail panel layout.
-- Validate Automation panel behavior in real workspace/project configs.
-- Decide whether spotlight/runtime-target work should be expanded next.
+- Bump `@anthropic-ai/claude-agent-sdk` to `0.2.92` and refresh lockfile.
+- Keep `@openai/codex-sdk` on `0.118.0` unless the user explicitly wants prerelease `0.119.0-alpha.8`.
+- Add Codex `on-failure` approval policy support across runtime types, Zod schema, normalization, settings, UI, and tests.
+- Add Claude `startup()` prewarm in the main Claude runtime and inline completion path.
+- Update stale docs and UI copy for Codex supported baseline.
+- Run `bun run typecheck` and `bun test`.
 
 ## Recommended Next Actions
-- Open the desktop app and verify right-rail switching for Explorer, Changes, Information, and Automation.
-- Check that Information panel scrolling and Automation panel refresh/log interactions feel correct in the new shell.
-- If UI polish is needed, adjust `RightRailPanelShell` or per-panel spacing rather than putting shared chrome back into `EditorPanel`.
+1. Update dependencies:
+   - `bun add @anthropic-ai/claude-agent-sdk@0.2.92`
+   - Keep `@openai/codex-sdk@0.118.0`
+2. Implement Codex approval policy upgrade end-to-end in:
+   - `src/lib/providers/provider.types.ts`
+   - `electron/main/ipc/schemas.ts`
+   - `src/lib/providers/runtime-option-contract.ts`
+   - `src/lib/providers/codex-runtime-options.ts`
+   - `src/store/provider-runtime-options.ts`
+   - `src/store/app.store.ts`
+   - `src/components/layout/settings-dialog-providers-section.tsx`
+   - `src/components/session/ChatInput.tsx`
+   - `tests/codex-sdk-runtime.test.ts`
+3. Update `electron/providers/codex-sdk-runtime.ts` so `resolveApprovalPolicy(...)` accepts `"on-failure"` and passes it through to the SDK.
+4. Add Claude prewarm support:
+   - `electron/providers/claude-sdk-runtime.ts`
+   - `electron/providers/inline-completion.ts`
+   Approach:
+   - dynamically import SDK `startup()`
+   - cache prewarm promise per resolved Claude executable path
+   - call it before first `query()` in runtime and inline completion
+5. Update docs and stale copy:
+   - `src/components/layout/settings-dialog-developer-section.tsx`
+   - `docs/providers/provider-runtimes.md`
+6. If time remains, do a second pass for higher-value adoption:
+   - expose Claude `listSessions()`, `getSessionMessages()`, `listSubagents()`, `getSubagentMessages()` through provider IPC
+   - surface them in the developer section rather than leaving them runtime-only
 
 ## Nice-to-Have Follow-Ups
-- Centralize right-rail panel ids across `layout.utils.ts`, `RightRail.tsx`, and `AppShell.tsx` with `src/lib/right-rail-panels.ts`.
-- Add per-panel visibility configuration once product requirements are fixed.
+- Adopt Codex `TurnOptions.outputSchema` for internal structured tasks like task naming, commit message generation, PR description generation, or plan extraction.
+- Expose Claude `terminal_reason` separately in Stave diagnostics instead of only relying on `stop_reason`.
+- Evaluate whether Codex `additionalDirectories` and `webSearchEnabled` are worth adding to runtime options.
 
 ## Open Questions
-- Should the right rail eventually support user-configurable panel visibility/order?
-- Should spotlight execution become a first-class service/runtime surface beyond the current automation target model?
+- Should Codex stay on stable `0.118.0`, or does the user want the prerelease line `0.119.0-alpha.8`?
+- Is Claude session/subagent inspection part of the required scope now, or should it be deferred after the minimal upgrade lands?
+- Should `outputSchema` adoption be included in this task or split into a follow-up?
 
 ## Changed Files
-- src/components/layout/EditorPanel.tsx
-- src/components/layout/RightRailPanelShell.tsx
-- src/components/layout/RightRail.tsx
-- src/components/layout/WorkspaceExplorerPanel.tsx
-- src/components/layout/WorkspaceChangesPanel.tsx
-- src/components/layout/WorkspaceInformationPanel.tsx
-- src/components/layout/WorkspaceAutomationsPanel.tsx
-- src/components/layout/AppShell.tsx
-- src/lib/right-rail-panels.ts
-- src/store/layout.utils.ts
-- tracking/sessions/2026-04-04_workspace-automations/features/workspace-automations/tasks/automation-panel-and-hooks/tasks.md
-- tracking/sessions/2026-04-04_workspace-automations/features/workspace-automations/tasks/automation-panel-and-hooks/handoff.md
+- `work-handoff.md`
 
 ## Notes
-- `Editor` and `Terminal` remain exceptions; only the right-side overlay panels were refactored.
-- The shared shell intentionally owns only the panel title and divider. Panel-specific actions remain inside each panel module.
+- Current local versions:
+  - `@anthropic-ai/claude-agent-sdk`: `0.2.86`
+  - `@openai/codex-sdk`: `0.118.0`
+- Current stable recommendation:
+  - Claude: `0.2.92`
+  - Codex: `0.118.0`
+- Existing Stave support already present and should not be regressed:
+  - Claude `getContextUsage()`
+  - Claude `reloadPlugins()`
+  - Claude task budget and agent progress summaries
+  - Codex reasoning summary controls
+  - Codex experimental plan mode
+- Stale copy to fix:
+  - `src/components/layout/settings-dialog-developer-section.tsx` still says Codex baseline `0.117.0`
+- Source references used for the audit:
+  - Anthropic changelog: `https://github.com/anthropics/claude-agent-sdk-typescript/blob/main/CHANGELOG.md`
+  - Anthropic migration guide: `https://docs.claude.com/en/docs/claude-code/sdk/migration-guide`
+  - OpenAI Codex releases: `https://github.com/openai/codex/releases`
+  - OpenAI Codex thread options: `https://github.com/openai/codex/blob/main/sdk/typescript/src/threadOptions.ts`
+  - OpenAI Codex turn options: `https://github.com/openai/codex/blob/main/sdk/typescript/src/turnOptions.ts`

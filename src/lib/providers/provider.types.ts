@@ -194,7 +194,7 @@ export interface ProviderRuntimeOptions {
   chatStreamingEnabled?: boolean;
   debug?: boolean;
   providerTimeoutMs?: number;
-  claudePermissionMode?: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk";
+  claudePermissionMode?: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
   claudeAllowDangerouslySkipPermissions?: boolean;
   claudeSandboxEnabled?: boolean;
   claudeAllowUnsandboxedCommands?: boolean;
@@ -213,7 +213,7 @@ export interface ProviderRuntimeOptions {
   codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
   codexSkipGitRepoCheck?: boolean;
   codexNetworkAccessEnabled?: boolean;
-  codexApprovalPolicy?: "never" | "on-request" | "untrusted";
+  codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
   codexPathOverride?: string;
   codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
   codexWebSearchMode?: "disabled" | "cached" | "live";
