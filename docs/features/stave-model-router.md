@@ -12,7 +12,7 @@ The model selector shows **Stave Auto** as the single model option. The chat sur
 
 Routing happens in two stages:
 
-If the Stave task is explicitly in plan mode, the router short-circuits these stages and sends the turn directly to the configured `staveAutoPlanModel`. This bypasses classifier, skill fast-path, and orchestration so plan-mode turns do not fall through to implementation routes. If that plan model resolves to Codex, Stave also enables Codex experimental plan mode for the rewritten direct turn so the underlying runtime stays read-only.
+If the Stave task is explicitly in plan mode, the router short-circuits these stages and sends the turn directly to the configured `staveAutoPlanModel`. This bypasses classifier, skill fast-path, and orchestration so plan-mode turns do not fall through to implementation routes. If that plan model resolves to Codex, Stave also enables Codex experimental plan mode for the rewritten direct turn so the underlying runtime stays read-only. For the practical effect of that runtime rewrite, see [Provider Sandbox And Approval Guide](provider-sandbox-and-approval.md).
 
 ### Stage 1 — Pre-processor (LLM)
 
