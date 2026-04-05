@@ -254,6 +254,84 @@ function normalizeClaudeToolInput(input: unknown): Record<string, unknown> {
   return input as Record<string, unknown>;
 }
 
+function normalizeClaudeSkillSlug(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const firstToken = trimmed.split(/\s+/)[0] ?? "";
+  const withoutPrefix = firstToken.replace(/^[/$]+/, "");
+  const slug = withoutPrefix.match(/^[A-Za-z0-9._-]+/)?.[0]?.toLowerCase();
+  return slug || null;
+}
+
+function extractClaudeSkillSlugFromRecord(input: Record<string, unknown>) {
+  const candidateKeys = ["skill", "slug", "name", "command", "skill_name", "skillName"] as const;
+  for (const key of candidateKeys) {
+    const value = input[key];
+    if (typeof value !== "string") {
+      continue;
+    }
+    const slug = normalizeClaudeSkillSlug(value);
+    if (slug) {
+      return slug;
+    }
+  }
+  return null;
+}
+
+export function extractClaudeRequestedSkillSlug(args: {
+  input: Record<string, unknown>;
+}) {
+  const direct = extractClaudeSkillSlugFromRecord(args.input);
+  if (direct) {
+    return direct;
+  }
+  const nestedInput = args.input.input;
+  if (nestedInput && typeof nestedInput === "object" && !Array.isArray(nestedInput)) {
+    return extractClaudeSkillSlugFromRecord(nestedInput as Record<string, unknown>);
+  }
+  return null;
+}
+
+export function shouldRedirectClaudePreloadedSkillToolUse(args: {
+  toolName: string;
+  input: Record<string, unknown>;
+  preloadedSkillSlugs: ReadonlySet<string>;
+}) {
+  if (args.toolName.trim().toLowerCase() !== "skill") {
+    return null;
+  }
+  if (args.preloadedSkillSlugs.size === 0) {
+    return null;
+  }
+  const slug = extractClaudeRequestedSkillSlug({ input: args.input });
+  if (!slug || !args.preloadedSkillSlugs.has(slug)) {
+    return null;
+  }
+  return slug;
+}
+
+function collectClaudeActivatedSkillSlugs(args: {
+  conversation?: StreamTurnArgs["conversation"];
+}) {
+  const activatedSkillSlugs = new Set<string>();
+  args.conversation?.contextParts.forEach((part) => {
+    if (part.type !== "skill_context") {
+      return;
+    }
+    part.skills.forEach((skill) => {
+      [skill.slug, skill.invocationToken, skill.name].forEach((value) => {
+        const normalized = normalizeClaudeSkillSlug(value);
+        if (normalized) {
+          activatedSkillSlugs.add(normalized);
+        }
+      });
+    });
+  });
+  return activatedSkillSlugs;
+}
+
 function validateClaudePermissionResult(args: {
   candidate: ClaudePermissionResult;
   fallbackMessage: string;
@@ -1397,6 +1475,9 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       prompt: args.prompt,
       conversation: args.conversation,
     });
+    const activatedSkillSlugs = collectClaudeActivatedSkillSlugs({
+      conversation: args.conversation,
+    });
     const stream = queryFn({
       prompt: providerPrompt,
       options: buildClaudeQueryOptions({
@@ -1411,6 +1492,17 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         canUseTool: async (toolName, input, options) => {
           const normalizedInput = normalizeClaudeToolInput(input);
           const requestId = options.toolUseID;
+          const redirectedSkillSlug = shouldRedirectClaudePreloadedSkillToolUse({
+            toolName,
+            input: normalizedInput,
+            preloadedSkillSlugs: activatedSkillSlugs,
+          });
+          if (redirectedSkillSlug) {
+            return buildClaudeDenyPermissionResult({
+              message: `Skill "${redirectedSkillSlug}" is already activated by Stave. Do not call the Skill tool for it; follow the [Activated Skills] instructions directly.`,
+              context: "skill:activated-skill-redirect",
+            });
+          }
 
           if (shouldAutoAllowClaudeTool({ toolName })) {
             return buildClaudeApprovalPermissionResult({
