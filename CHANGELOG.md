@@ -1,3 +1,26 @@
+## [0.0.37](https://github.com/sendbird-playground/stave/compare/v0.0.36...v0.0.37) (2026-04-05)
+
+### Highlights
+
+* Added guided provider runtime controls in Settings, with new Claude/Codex sandbox, approval, and reasoning documentation.
+* Added per-role Stave Auto runtime overrides so classifier, supervisor, plan, implement, and verify turns can use different provider settings.
+* Normalized activated `$skill` context across Claude and Codex, redirected redundant Claude `Skill` tool calls, and auto-allowed `ExitPlanMode` so plan turns do not stall.
+* Deduped pasted image attachments and fixed Settings project selection so manual project picks are not unexpectedly overridden.
+* Polished shell ergonomics with a more stable Stave app menu overlay and safer release worktree cleanup guidance.
+
+### Features
+
+* **settings:** add provider runtime guidance ([#286](https://github.com/sendbird-playground/stave/issues/286)) ([e52c1ca](https://github.com/sendbird-playground/stave/commit/e52c1ca9f0d54d8bd87d5f91c19614631db7c2f5))
+* **stave-auto:** add role-specific runtime controls ([#279](https://github.com/sendbird-playground/stave/issues/279)) ([4787313](https://github.com/sendbird-playground/stave/commit/47873136306361240836bf3e885eca7ef4509c83))
+
+### Bug Fixes
+
+* **chat:** avoid duplicate image pastes and stalled claude plan turns ([#277](https://github.com/sendbird-playground/stave/issues/277)) ([859a7f1](https://github.com/sendbird-playground/stave/commit/859a7f1fafb929bc06d18b76c95b9523c1992f86))
+* **prompt:** normalize activated skill context ([#281](https://github.com/sendbird-playground/stave/issues/281)) ([3f5efa9](https://github.com/sendbird-playground/stave/commit/3f5efa9f827270362bb10c2937b319b8f1b9456d))
+* **settings:** resolve project selection logic in settings dialog ([#284](https://github.com/sendbird-playground/stave/issues/284)) ([95b84d6](https://github.com/sendbird-playground/stave/commit/95b84d6e16ba1b067ec2c95c9361e6219890e9bd))
+* **skills:** require safe worktree cleanup cwd ([#280](https://github.com/sendbird-playground/stave/issues/280)) ([f77914d](https://github.com/sendbird-playground/stave/commit/f77914dfc9df6701646ece573062bc4e84811d3b))
+* **skills:** route activated skills through prompt context ([#278](https://github.com/sendbird-playground/stave/issues/278)) ([05a49d1](https://github.com/sendbird-playground/stave/commit/05a49d15b8c6f31929aff7d3096136541db115c9))
+* **ui:** stabilize app menu overlay layout ([#282](https://github.com/sendbird-playground/stave/issues/282)) ([3723626](https://github.com/sendbird-playground/stave/commit/37236266a7084ff33ff011f6b32c61714d52869c))
 ## [0.0.36](https://github.com/sendbird-playground/stave/compare/v0.0.35...v0.0.36) (2026-04-05)
 
 ### Features

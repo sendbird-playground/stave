@@ -80,14 +80,14 @@ Provider differences that matter in practice:
 ## Files And Data
 
 - These settings live in Stave application settings, not in your repository files.
-- The current Claude defaults are `Permission Mode = auto`, `Sandbox Enabled = false`, and `Allow Unsandboxed Commands = false`.
+- The current Claude defaults are `Permission Mode = auto`, `Sandbox Enabled = false`, and `Allow Unsandboxed Commands = true`.
 - The current Codex defaults are `Sandbox Mode = workspace-write`, `Approval Policy = on-request`, `Network Access = true`, and `Plan = Off`.
 
 ```json
 {
   "claudePermissionMode": "acceptEdits",
   "claudeSandboxEnabled": true,
-  "claudeAllowUnsandboxedCommands": false,
+  "claudeAllowUnsandboxedCommands": true,
   "codexSandboxMode": "workspace-write",
   "codexApprovalPolicy": "on-request",
   "codexNetworkAccessEnabled": true,
