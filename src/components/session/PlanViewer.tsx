@@ -11,6 +11,7 @@ import {
   transitionClaudePromptDraftPermissionMode,
 } from "@/store/prompt-draft-runtime";
 import {
+  resolvePlanViewerAutoViewState,
   resolvePlanViewerLayout,
   resolvePlanViewerState,
   type PlanViewerViewState,
@@ -123,6 +124,17 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
       setCopied(false);
     }
   }, [isPlanPending]);
+
+  useEffect(() => {
+    const nextViewState = resolvePlanViewerAutoViewState({
+      viewState,
+      isPlanPreparing,
+      planText,
+    });
+    if (nextViewState !== viewState) {
+      setViewState(nextViewState);
+    }
+  }, [isPlanPreparing, planText, viewState]);
 
   // Clear drag position whenever the viewer is not minimised.
   useEffect(() => {
