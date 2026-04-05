@@ -61,6 +61,25 @@ const CLAUDE_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
 ] as const;
+const CLAUDE_PLAN_MODE_DISALLOWED_TOOLS = [
+  "Edit",
+  "MultiEdit",
+  "Write",
+  "NotebookEdit",
+  "TodoWrite",
+] as const;
+const CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES = new Set(
+  CLAUDE_PLAN_MODE_DISALLOWED_TOOLS.map((toolName) => toolName.toLowerCase()),
+);
+const CLAUDE_MUTATING_BASH_PATTERNS = [
+  /(^|[;&|]\s*)(mkdir|mktemp|rm|rmdir|mv|cp|install|touch|chmod|chown|ln|truncate)\b/i,
+  /(^|[;&|]\s*)git\s+(add|am|apply|checkout|cherry-pick|clean|commit|merge|rebase|reset|restore|revert|rm|stash)\b/i,
+  /(^|[;&|]\s*)(npm|pnpm|yarn|bun)\s+(add|install|remove|rm|uninstall|update|upgrade)\b/i,
+  /(^|[;&|]\s*)(sed|perl)\b[^\n]*\s-i(?:\s|$)/i,
+  /(^|[;&|]\s*)tee\b/i,
+  /(^|[;&|]\s*)cat\b[^\n]*\s\d*(?:>>|>(?![&]))/i,
+  /\s\d*(?:>>|>(?![&]))/,
+] as const;
 
 // ---------------------------------------------------------------------------
 // Prewarm: eagerly cache the SDK module import and executable path resolution
@@ -265,6 +284,66 @@ function buildClaudeDenyPermissionResult(args: {
     fallbackMessage: args.message,
     context: args.context,
   });
+}
+
+function extractClaudeBashCommand(input: Record<string, unknown>) {
+  for (const key of ["command", "cmd", "script", "bash", "input"] as const) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  const rendered = toText(input).trim();
+  return rendered.length > 0 ? rendered : undefined;
+}
+
+function isMutatingClaudeBashCommand(command: string) {
+  return CLAUDE_MUTATING_BASH_PATTERNS.some((pattern) => pattern.test(command));
+}
+
+export function resolveClaudeDisallowedTools(args: {
+  permissionMode: ClaudePermissionMode;
+  runtimeDisallowedTools?: readonly string[] | null;
+}) {
+  const merged = new Set<string>();
+  if (Array.isArray(args.runtimeDisallowedTools)) {
+    args.runtimeDisallowedTools.forEach((toolName) => {
+      if (typeof toolName === "string" && toolName.trim().length > 0) {
+        merged.add(toolName.trim());
+      }
+    });
+  }
+  if (args.permissionMode === "plan") {
+    CLAUDE_PLAN_MODE_DISALLOWED_TOOLS.forEach((toolName) => {
+      merged.add(toolName);
+    });
+  }
+  return [...merged];
+}
+
+export function shouldDenyClaudeToolInPlanMode(args: {
+  toolName: string;
+  input: Record<string, unknown>;
+}) {
+  const normalizedToolName = args.toolName.trim().toLowerCase();
+  if (CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES.has(normalizedToolName)) {
+    return true;
+  }
+  if (normalizedToolName !== "bash") {
+    return false;
+  }
+  const command = extractClaudeBashCommand(args.input);
+  return typeof command === "string" && isMutatingClaudeBashCommand(command);
+}
+
+function buildClaudePlanModeDenyMessage(args: {
+  toolName: string;
+}) {
+  if (args.toolName.trim().toLowerCase() === "bash") {
+    return "Claude plan mode denied a mutating Bash command. Planning turns cannot modify files or task state.";
+  }
+  return `Claude plan mode denied ${args.toolName}. Planning turns cannot modify files or task state.`;
 }
 
 export function buildClaudeSystemPrompt(args: {
@@ -489,17 +568,19 @@ function buildClaudeQueryOptions(args: {
   cwd: string;
   claudeExecutablePath: string;
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  permissionMode?: ClaudePermissionMode;
   resume?: string;
   systemPrompt?: string;
   includePartialMessages?: boolean;
   promptSuggestions?: boolean;
   canUseTool?: CanUseTool;
 }) {
-  const permissionMode = resolveClaudePermissionMode({
-    runtimeValue: args.runtimeOptions?.claudePermissionMode,
-    envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
-    fallback: "acceptEdits",
-  });
+  const permissionMode = args.permissionMode
+    ?? resolveClaudePermissionMode({
+      runtimeValue: args.runtimeOptions?.claudePermissionMode,
+      envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
+      fallback: "acceptEdits",
+    });
   const allowDangerouslySkipPermissions = args.runtimeOptions?.claudeAllowDangerouslySkipPermissions
     ?? parseBooleanEnv({
       value: process.env.STAVE_CLAUDE_ALLOW_DANGEROUSLY_SKIP_PERMISSIONS,
@@ -519,6 +600,10 @@ function buildClaudeQueryOptions(args: {
   const agentProgressSummaries = resolveClaudeAgentProgressSummaries(args.runtimeOptions?.claudeAgentProgressSummaries);
   const settingSources = resolveClaudeSettingSources(args.runtimeOptions?.claudeSettingSources);
   const taskBudget = resolveClaudeTaskBudget(args.runtimeOptions?.claudeTaskBudgetTokens);
+  const disallowedTools = resolveClaudeDisallowedTools({
+    permissionMode,
+    runtimeDisallowedTools: args.runtimeOptions?.claudeDisallowedTools,
+  });
 
   return {
     permissionMode,
@@ -536,7 +621,7 @@ function buildClaudeQueryOptions(args: {
     ...(thinking ? { thinking } : {}),
     ...(agentProgressSummaries !== undefined ? { agentProgressSummaries } : {}),
     ...(args.runtimeOptions?.claudeAllowedTools ? { allowedTools: args.runtimeOptions.claudeAllowedTools } : {}),
-    ...(args.runtimeOptions?.claudeDisallowedTools ? { disallowedTools: args.runtimeOptions.claudeDisallowedTools } : {}),
+    ...(disallowedTools.length > 0 ? { disallowedTools } : {}),
     ...(settingSources !== undefined ? { settingSources } : {}),
     ...(args.runtimeOptions?.claudeFastMode ? { settings: { fastMode: true } } : {}),
     ...(args.canUseTool ? { canUseTool: args.canUseTool } : {}),
@@ -1293,6 +1378,11 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       baseSystemPrompt: args.runtimeOptions?.claudeSystemPrompt,
       responseStylePrompt: args.runtimeOptions?.responseStylePrompt,
     });
+    const claudePermissionMode = resolveClaudePermissionMode({
+      runtimeValue: args.runtimeOptions?.claudePermissionMode,
+      envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
+      fallback: "acceptEdits",
+    });
     const providerPrompt = buildProviderTurnPrompt({
       providerId: args.providerId,
       prompt: args.prompt,
@@ -1304,6 +1394,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         cwd: runtimeCwd,
         claudeExecutablePath,
         runtimeOptions: args.runtimeOptions,
+        permissionMode: claudePermissionMode,
         resume: existingSessionId,
         systemPrompt: claudeSystemPrompt,
         includePartialMessages: true,
@@ -1346,13 +1437,13 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
             });
           }
 
-          // In plan mode the CLI already enforces read-only tool boundaries,
-          // so we can auto-approve without prompting the user.
-          if (args.runtimeOptions?.claudePermissionMode === "plan") {
-            return buildClaudeApprovalPermissionResult({
-              approved: true,
-              normalizedInput,
-              denialMessage: `User denied permission for ${toolName}.`,
+          if (claudePermissionMode === "plan" && shouldDenyClaudeToolInPlanMode({
+            toolName,
+            input: normalizedInput,
+          })) {
+            return buildClaudeDenyPermissionResult({
+              message: buildClaudePlanModeDenyMessage({ toolName }),
+              context: "approval:plan-mode-hard-deny",
             });
           }
 
