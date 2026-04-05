@@ -1,3 +1,51 @@
+## [0.0.36](https://github.com/sendbird-playground/stave/compare/v0.0.35...v0.0.36) (2026-04-05)
+
+### Features
+
+* add Claude SDK prewarming and upgrade to 0.2.92 ([#240](https://github.com/sendbird-playground/stave/issues/240)) ([f5a8eb3](https://github.com/sendbird-playground/stave/commit/f5a8eb32c88b6368a51fe377fda150526c69eabd))
+* add sidebar artwork theming with design selector ([#241](https://github.com/sendbird-playground/stave/issues/241)) ([d57a5ff](https://github.com/sendbird-playground/stave/commit/d57a5ff99cc1820534176892c569dfec90205ac8))
+* add tabbed source control with history timeline view ([#244](https://github.com/sendbird-playground/stave/issues/244)) ([b51043c](https://github.com/sendbird-playground/stave/commit/b51043cfa7b6f5fa7fa0e47a5b123c8b398fef2b))
+* add workspace automations editor and documentation ([#243](https://github.com/sendbird-playground/stave/issues/243)) ([a0326b7](https://github.com/sendbird-playground/stave/commit/a0326b7742b6fe2443d01208afc5b23f288cd5d3))
+* add workspace automations system with lifecycle hooks ([#238](https://github.com/sendbird-playground/stave/issues/238)) ([05a1313](https://github.com/sendbird-playground/stave/commit/05a131347f08a37c9fe46eba52cd58efb86eddda))
+* **assistant:** add stave assistant widget to app shell ([#271](https://github.com/sendbird-playground/stave/issues/271)) ([403f8b4](https://github.com/sendbird-playground/stave/commit/403f8b4a549133316af7d5d967d79cbe67ea9317))
+* **ChatPanel:** trigger scroll on turn completion ([#250](https://github.com/sendbird-playground/stave/issues/250)) ([8b65967](https://github.com/sendbird-playground/stave/commit/8b65967af8e4d17e8984997e54ede303b98c6837))
+* **lens:** add browser inspection panel with MCP tools ([#267](https://github.com/sendbird-playground/stave/issues/267)) ([d9f7d2b](https://github.com/sendbird-playground/stave/commit/d9f7d2b3f7fb80cb8cb72af0df7c2d4898d85f30))
+* load persisted tasks from database in workspace shell ([#235](https://github.com/sendbird-playground/stave/issues/235)) ([49a80cb](https://github.com/sendbird-playground/stave/commit/49a80cb903af16939823921a51658c3dec22cb0d))
+* **right-panel-title:** add icons to panel headers ([#256](https://github.com/sendbird-playground/stave/issues/256)) ([0af60a8](https://github.com/sendbird-playground/stave/commit/0af60a8c1743ee1703932c5bd55bbdebe781487e))
+* **scm:** redesign source control panel with flat right-rail layouts ([#254](https://github.com/sendbird-playground/stave/issues/254)) ([0f91c23](https://github.com/sendbird-playground/stave/commit/0f91c238080541ae9cc36e0a3df3e4f83b6df733))
+* **ui:** add stave muse and lens polish ([39cd3f8](https://github.com/sendbird-playground/stave/commit/39cd3f8ab9ddad66fd2e0f48ec03b1e6c647d831))
+* **workspace-automations:** add Orbit support for services ([#248](https://github.com/sendbird-playground/stave/issues/248)) ([e45aff8](https://github.com/sendbird-playground/stave/commit/e45aff8f34a788c72485720243ed6195439e05c2))
+* **workspace-automations:** add task and turn lifecycle hooks ([#255](https://github.com/sendbird-playground/stave/issues/255)) ([5cf3c89](https://github.com/sendbird-playground/stave/commit/5cf3c89cb5d9b67f56f3b68765f3cd490aedb2ec))
+* **workspace-continue:** add timestamped branch naming ([#242](https://github.com/sendbird-playground/stave/issues/242)) ([94442c7](https://github.com/sendbird-playground/stave/commit/94442c7060ddb99c855733ccf6375dab92bb2b8b))
+
+### Bug Fixes
+
+* **approval:** handle missing approval message locations ([#269](https://github.com/sendbird-playground/stave/issues/269)) ([236d1a7](https://github.com/sendbird-playground/stave/commit/236d1a722eb1885dfe5f01d8ca01e208db7d40c9))
+* **chat-panel:** position conversation scroll button to the left ([#266](https://github.com/sendbird-playground/stave/issues/266)) ([fffdb02](https://github.com/sendbird-playground/stave/commit/fffdb02df47b2c82b74abcf7cd206c3568955902))
+* **chat-panel:** position conversation scroll button to the left ([#266](https://github.com/sendbird-playground/stave/issues/266)) ([#268](https://github.com/sendbird-playground/stave/issues/268)) ([1a1fee3](https://github.com/sendbird-playground/stave/commit/1a1fee3507d86e07d844e9213e7957c93cd93370))
+* **codex:** preserve final plan responses in plan mode ([#246](https://github.com/sendbird-playground/stave/issues/246)) ([62f67c1](https://github.com/sendbird-playground/stave/commit/62f67c19fe676530ae2e1e451247214dc4fb322c))
+* **controls:** remove deprecated on-failure approval policy ([#263](https://github.com/sendbird-playground/stave/issues/263)) ([3f082e8](https://github.com/sendbird-playground/stave/commit/3f082e895eb3ef44061b36d126ee93133c277686))
+* defer plan viewer and prevent duplicate emissions ([#233](https://github.com/sendbird-playground/stave/issues/233)) ([bc3df5d](https://github.com/sendbird-playground/stave/commit/bc3df5d6fb35b3d886dac7e6d2a1efe875b1f07e))
+* evict cached threads on abort to prevent stale resumption ([#236](https://github.com/sendbird-playground/stave/issues/236)) ([1a1cff4](https://github.com/sendbird-playground/stave/commit/1a1cff4a1562546a5b53c40035020b57916f7c47))
+* **keyboard-shortcuts:** add global shift+tab shortcut for plan mode ([#262](https://github.com/sendbird-playground/stave/issues/262)) ([c549e18](https://github.com/sendbird-playground/stave/commit/c549e1836f96e5ad28bdcf6817622f70fd3df6cd))
+* **palette:** shortcut ([#259](https://github.com/sendbird-playground/stave/issues/259)) ([4cf0837](https://github.com/sendbird-playground/stave/commit/4cf08374d96feb56f0eba5d5b5b23fea1a184465))
+* **palette:** shortcut bug fix ([#260](https://github.com/sendbird-playground/stave/issues/260)) ([2059d70](https://github.com/sendbird-playground/stave/commit/2059d702ae5ff19dddc06bda443bd50a95001fd1))
+* **plan:** viewer revise ([#265](https://github.com/sendbird-playground/stave/issues/265)) ([79d2cec](https://github.com/sendbird-playground/stave/commit/79d2cecccecc768afa62319bbf8241037bac1c2a))
+* **scm:** expand untracked directories into file entries ([#232](https://github.com/sendbird-playground/stave/issues/232)) ([83ac73d](https://github.com/sendbird-playground/stave/commit/83ac73dad47d1722d6b63cbefa72b7bcb0d550fc))
+* **shortcuts:** reposition focus button and toggle explorer sidebar ([#261](https://github.com/sendbird-playground/stave/issues/261)) ([e07ea5e](https://github.com/sendbird-playground/stave/commit/e07ea5e0b7bad8a978b49a8301031a928d7e683d))
+* **sidebar:** resolve left resize boundary artifact ([#257](https://github.com/sendbird-playground/stave/issues/257)) ([93d1584](https://github.com/sendbird-playground/stave/commit/93d15846fa0dafebe9d2386c3e6e5537fda6e4a7))
+* **styles:** adjust inset shadows on sidebar and modal elements ([#252](https://github.com/sendbird-playground/stave/issues/252)) ([a2952ff](https://github.com/sendbird-playground/stave/commit/a2952ff6113f122e95247e40e6417d5acf1cc73a))
+* theme style token fix ([#264](https://github.com/sendbird-playground/stave/issues/264)) ([682fbde](https://github.com/sendbird-playground/stave/commit/682fbde28a82f39f71bbdc66fee44fab7abdb661))
+* **tooltips:** adjust positioning in sidebar and popover ([#245](https://github.com/sendbird-playground/stave/issues/245)) ([52b7364](https://github.com/sendbird-playground/stave/commit/52b736425ebcadbf6d3e09b576c81293505935ba))
+* **ui:** add spacing between suggestion chips and textarea ([c413710](https://github.com/sendbird-playground/stave/commit/c41371047b23753f5784754abfcf002cb09714bd))
+* **ui:** align suggestion chips with textarea content edge ([b84c7d3](https://github.com/sendbird-playground/stave/commit/b84c7d3acfe5c5b331414f920ce5afe2a49decd3))
+* **workspace-scripts:** correct automation schema exports ([009d8d0](https://github.com/sendbird-playground/stave/commit/009d8d05616948f951aac8eff2b7a181ad5305be))
+
+### Performance Improvements
+
+* **app-store:** add workspace switch performance metrics ([#272](https://github.com/sendbird-playground/stave/issues/272)) ([20c9dcb](https://github.com/sendbird-playground/stave/commit/20c9dcb992596cdbe8f4774e4af59eea62df2c89))
+* **app-store:** add workspace switch performance metrics ([#272](https://github.com/sendbird-playground/stave/issues/272)) ([#274](https://github.com/sendbird-playground/stave/issues/274)) ([712bbc1](https://github.com/sendbird-playground/stave/commit/712bbc10a6aec8d6eee3bd189ef7f320d3579050))
+* **workspace:** reduce switch fan-out ([#273](https://github.com/sendbird-playground/stave/issues/273)) ([4f8952f](https://github.com/sendbird-playground/stave/commit/4f8952f13da49204cfa770fe737c9d3a30c8366b))
 ## [0.0.35](https://github.com/sendbird-playground/stave/compare/v0.0.34...v0.0.35) (2026-04-03)
 
 ### Highlights
