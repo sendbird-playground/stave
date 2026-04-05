@@ -415,7 +415,7 @@ export function ChatPanel() {
         <MemoizedChatPanelHeader />
         <MemoizedChatPanelMessageList />
       </div>
-      <ConversationScrollButton tooltip="Scroll to bottom" />
+      <ConversationScrollButton className="left-3 right-auto" tooltip="Scroll to bottom" />
     </Conversation>
   );
 }
