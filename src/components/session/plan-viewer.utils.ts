@@ -66,6 +66,22 @@ export function resolvePlanViewerState(args: {
   };
 }
 
+export function resolvePlanViewerAutoViewState(args: {
+  viewState: PlanViewerViewState;
+  isPlanPreparing: boolean;
+  planText: string;
+}): PlanViewerViewState {
+  if (
+    args.viewState === "expanded"
+    && args.isPlanPreparing
+    && args.planText.trim().length > 0
+  ) {
+    return "minimized";
+  }
+
+  return args.viewState;
+}
+
 export function resolvePlanViewerInsets(args: {
   isExpanded: boolean;
   inputDockHeight: number;

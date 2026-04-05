@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { resolvePlanViewerInsets, resolvePlanViewerLayout, resolvePlanViewerState } from "@/components/session/plan-viewer.utils";
+import {
+  resolvePlanViewerAutoViewState,
+  resolvePlanViewerInsets,
+  resolvePlanViewerLayout,
+  resolvePlanViewerState,
+} from "@/components/session/plan-viewer.utils";
 
 describe("resolvePlanViewerState", () => {
   test("shows a completed Claude plan response in the viewer", () => {
@@ -296,6 +301,24 @@ describe("resolvePlanViewerInsets", () => {
       rightOffset: 16,
       bottomOffset: 84,
     });
+  });
+});
+
+describe("resolvePlanViewerAutoViewState", () => {
+  test("minimizes an expanded viewer when replanning starts from an existing plan", () => {
+    expect(resolvePlanViewerAutoViewState({
+      viewState: "expanded",
+      isPlanPreparing: true,
+      planText: "1. Inspect\n2. Patch",
+    })).toBe("minimized");
+  });
+
+  test("keeps the current view state when there is no historical plan text", () => {
+    expect(resolvePlanViewerAutoViewState({
+      viewState: "expanded",
+      isPlanPreparing: true,
+      planText: "",
+    })).toBe("expanded");
   });
 });
 
