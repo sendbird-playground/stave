@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { ClaudePermissionMode } from "@/types/chat";
 export type { ClaudePermissionMode } from "@/types/chat";
 
-export type CodexApprovalPolicy = "never" | "on-request" | "on-failure" | "untrusted";
+export type CodexApprovalPolicy = "never" | "on-request" | "untrusted";
 export type PermissionModeValue = ClaudePermissionMode | CodexApprovalPolicy;
 
 interface PermissionModeOption {

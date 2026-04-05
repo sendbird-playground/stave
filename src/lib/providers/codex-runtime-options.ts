@@ -4,7 +4,7 @@ export type CodexApprovalPolicy = NonNullable<ProviderRuntimeOptions["codexAppro
 export type CodexSandboxMode = NonNullable<ProviderRuntimeOptions["codexSandboxMode"]>;
 
 export function resolveEffectiveCodexApprovalPolicy(args: {
-  approvalPolicy?: ProviderRuntimeOptions["codexApprovalPolicy"];
+  approvalPolicy?: string;
   planMode?: boolean;
   fallback?: CodexApprovalPolicy;
 }): CodexApprovalPolicy {

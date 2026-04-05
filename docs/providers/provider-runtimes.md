@@ -211,10 +211,11 @@ Codex-specific runtime controls come from the UI and runtime options:
 - provider timeout
 - debug stream logging
 
-The `on-failure` Codex approval policy is **deprecated**. Stave keeps the value
-in the type union for backward compatibility with persisted settings but
-normalizes it to `on-request` at resolution time. It is no longer shown in the
-UI or accepted as a new selection.
+The `on-failure` Codex approval policy is **deprecated**. Stave now keeps the
+public runtime contract canonical (`never`, `on-request`, `untrusted`) and
+normalizes legacy persisted `on-failure` settings to `on-request` during
+settings hydration/runtime resolution. It is no longer shown in the UI or
+accepted as a new selection.
 
 New Codex defaults enable raw agent reasoning, request `detailed` reasoning summaries, and force reasoning-summary capability support to `enabled` unless the user changes those toggles.
 

@@ -65,7 +65,7 @@ export function normalizeCodexApprovalPolicy(args: {
   value?: string;
 }): NonNullable<ProviderRuntimeOptions["codexApprovalPolicy"]> {
   return resolveEffectiveCodexApprovalPolicy({
-    approvalPolicy: args.value as ProviderRuntimeOptions["codexApprovalPolicy"] | undefined,
+    approvalPolicy: args.value,
     fallback: DEFAULT_CODEX_APPROVAL_POLICY,
   });
 }
