@@ -236,6 +236,7 @@ Stable project documentation now lives under `docs/`.
 - [Runtime architecture](docs/architecture/runtime.md)
 - [Architecture map](docs/architecture/index.md)
 - [Embedded local MCP plan](docs/architecture/local-mcp-embedded-plan.md)
+- [Lens](docs/features/lens.md)
 - [Local MCP user guide](docs/features/local-mcp-user-guide.md)
 - [Conversation flow](docs/architecture/conversation-flow.md)
 - [Entrypoints](docs/architecture/entrypoints.md)

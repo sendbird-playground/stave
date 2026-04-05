@@ -3,6 +3,7 @@ import {
   Code2,
   Cog,
   Folder,
+  Globe,
   KeyRound,
   Palette,
   ScrollText,
@@ -27,6 +28,7 @@ export const settingsSections = [
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "editor", label: "Editor", icon: Code2 },
   { id: "tooling", label: "Tooling", icon: Shield },
+  { id: "lens", label: "Lens", icon: Globe },
   { id: "developer", label: "Developer", icon: Wrench },
 ] as const;
 
@@ -36,5 +38,6 @@ export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> =
   { label: "Workspace", ids: ["general", "projects"] },
   { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
   { label: "Providers", ids: ["assistant", "providers", "prompts", "skills", "commandPalette", "commands"] },
-  { label: "System", ids: ["tooling", "developer"] },
+  { label: "System", ids: ["tooling", "lens", "developer"] },
+  { label: "System", ids: ["tooling", "lens", "developer"] },
 ];

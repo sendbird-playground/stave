@@ -6,6 +6,12 @@ const MIN_ZOOM_FACTOR = 0.5;
 const MAX_ZOOM_FACTOR = 2;
 const ZOOM_STEP = 0.1;
 const runtimeDir = import.meta.dirname;
+let mainWindow: BrowserWindow | null = null;
+
+/** Return the main BrowserWindow instance (used by browser-manager for WebContentsView). */
+export function getMainWindow(): BrowserWindow | null {
+  return mainWindow;
+}
 
 function clampZoomFactor(value: number) {
   return Math.min(MAX_ZOOM_FACTOR, Math.max(MIN_ZOOM_FACTOR, value));
@@ -39,6 +45,10 @@ export function createMainWindow() {
       webSecurity: true,
       allowRunningInsecureContent: false,
     },
+  });
+  mainWindow = window;
+  window.on("closed", () => {
+    mainWindow = null;
   });
   window.maximize();
 

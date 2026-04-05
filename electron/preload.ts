@@ -31,6 +31,7 @@ import type {
   WorkspaceScriptHookRunSummary,
   WorkspaceScriptStatusEntry,
 } from "../src/lib/workspace-scripts/types";
+import type { BrowserNavigationEventPayload } from "../src/lib/lens/lens.types";
 import { WORKSPACE_SCRIPTS_IPC } from "../src/lib/workspace-scripts/constants";
 
 interface ProviderSlashCommand {
@@ -233,6 +234,18 @@ const scriptsApi = {
     };
   },
 };
+
+const lensNavigationEventSubscribers = new Set<
+  (payload: BrowserNavigationEventPayload) => void
+>();
+ipcRenderer.on(
+  "lens:navigation-event",
+  (_event, payload: BrowserNavigationEventPayload) => {
+    for (const subscriber of lensNavigationEventSubscribers) {
+      subscriber(payload);
+    }
+  },
+);
 
 contextBridge.exposeInMainWorld("api", {
   platform: process.platform,
@@ -785,5 +798,125 @@ contextBridge.exposeInMainWorld("api", {
         ok: boolean;
         available: boolean;
       }>,
+  },
+  lens: {
+    createView: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("lens:create-view", args) as Promise<{
+        ok: boolean;
+        message?: string;
+      }>,
+    destroyView: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("lens:destroy-view", args) as Promise<{
+        ok: boolean;
+      }>,
+    setBounds: (args: {
+      workspaceId: string;
+      bounds: { x: number; y: number; width: number; height: number };
+    }) =>
+      ipcRenderer.invoke("lens:set-bounds", args) as Promise<{
+        ok: boolean;
+        message?: string;
+      }>,
+    setVisible: (args: { workspaceId: string; visible: boolean }) =>
+      ipcRenderer.invoke("lens:set-visible", args) as Promise<{
+        ok: boolean;
+      }>,
+    navigate: (args: { workspaceId: string; url: string }) =>
+      ipcRenderer.invoke("lens:navigate", args),
+    goBack: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("lens:go-back", args),
+    goForward: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("lens:go-forward", args),
+    reload: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("lens:reload", args),
+    getState: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("lens:get-state", args) as Promise<{
+        ok: boolean;
+        state?: {
+          url: string;
+          title: string;
+          canGoBack: boolean;
+          canGoForward: boolean;
+          isLoading: boolean;
+        };
+        message?: string;
+      }>,
+    screenshot: (args: {
+      workspaceId: string;
+      options?: {
+        fullPage?: boolean;
+        clip?: { x: number; y: number; width: number; height: number };
+      };
+    }) =>
+      ipcRenderer.invoke("lens:screenshot", args) as Promise<{
+        ok: boolean;
+        dataUrl?: string;
+        message?: string;
+      }>,
+    getDom: (args: { workspaceId: string; selector?: string }) =>
+      ipcRenderer.invoke("lens:get-dom", args) as Promise<{
+        ok: boolean;
+        html?: string;
+        message?: string;
+      }>,
+    evaluate: (args: { workspaceId: string; expression: string }) =>
+      ipcRenderer.invoke("lens:evaluate", args) as Promise<{
+        ok: boolean;
+        result?: unknown;
+        message?: string;
+      }>,
+    getConsoleLog: (args: { workspaceId: string; limit?: number }) =>
+      ipcRenderer.invoke("lens:get-console-log", args) as Promise<{
+        ok: boolean;
+        entries?: Array<{
+          level: string;
+          text: string;
+          timestamp: string;
+          source?: string;
+        }>;
+        message?: string;
+      }>,
+    getNetworkLog: (args: { workspaceId: string; limit?: number }) =>
+      ipcRenderer.invoke("lens:get-network-log", args) as Promise<{
+        ok: boolean;
+        entries?: Array<{
+          url: string;
+          method: string;
+          status?: number;
+          timestamp: string;
+        }>;
+        message?: string;
+      }>,
+    startElementPicker: (args: {
+      workspaceId: string;
+      options?: { extractDebugSource?: boolean };
+    }) =>
+      ipcRenderer.invoke("lens:start-element-picker", args) as Promise<{
+        ok: boolean;
+        result?: {
+          selector: string;
+          tagName: string;
+          id: string;
+          classList: string[];
+          boundingBox: { x: number; y: number; width: number; height: number };
+          computedStyles: Record<string, string>;
+          outerHTML: string;
+          textContent: string;
+          debugSource?: {
+            fileName: string;
+            lineNumber: number;
+            columnNumber?: number;
+          };
+        };
+        message?: string;
+      }>,
+    subscribeNavigationEvents: (
+      listener: (payload: LensNavigationEventPayload) => void,
+    ) => {
+      lensNavigationEventSubscribers.add(listener);
+      return () => {
+        lensNavigationEventSubscribers.delete(listener);
+      };
+    },
   },
 });

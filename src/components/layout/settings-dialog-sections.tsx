@@ -2403,6 +2403,8 @@ export function SettingsDialogSectionContent(args: {
       return <PromptsSection />;
     case "developer":
       return <DeveloperSection />;
+    case "lens":
+      return <LensSection />;
     default:
       return null;
   }
@@ -2561,6 +2563,72 @@ function PromptsSection() {
             defaultValue={DEFAULT_PROMPT_INLINE_COMPLETION}
             onCommit={(v) => updateSettings({ patch: { promptInlineCompletion: v } })}
           />
+        </SettingsCard>
+      </SectionStack>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Lens section – built-in browser source mapping configuration
+// ---------------------------------------------------------------------------
+
+function LensSection() {
+  const [heuristic, reactDebugSource] = useAppStore(
+    useShallow((state) => [
+      state.settings.lensSourceMappingHeuristic,
+      state.settings.lensSourceMappingReactDebugSource,
+    ] as const),
+  );
+  const updateSettings = useAppStore((state) => state.updateSettings);
+
+  return (
+    <>
+      <SectionHeading
+        title="Lens"
+        description="Configure the built-in browser for inspecting your running application."
+      />
+      <SectionStack>
+        <SettingsCard
+          title="Source Code Mapping"
+          description="Choose which strategies the element picker uses to help AI locate source files."
+        >
+          <LabeledField
+            title="Heuristic Search"
+            description="AI uses class names, text content, and IDs to search for source files via grep. Recommended for most projects."
+          >
+            <ChoiceButtons
+              value={heuristic ? "on" : "off"}
+              columns={2}
+              onChange={(v) =>
+                updateSettings({
+                  patch: { lensSourceMappingHeuristic: v === "on" },
+                })
+              }
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
+          <LabeledField
+            title="React _debugSource"
+            description="Extract exact file and line number from React fiber internals. Only works with dev builds that include @babel/plugin-transform-react-jsx-source (enabled by default in Vite React plugin, CRA, and Next.js dev)."
+          >
+            <ChoiceButtons
+              value={reactDebugSource ? "on" : "off"}
+              columns={2}
+              onChange={(v) =>
+                updateSettings({
+                  patch: { lensSourceMappingReactDebugSource: v === "on" },
+                })
+              }
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
         </SettingsCard>
       </SectionStack>
     </>

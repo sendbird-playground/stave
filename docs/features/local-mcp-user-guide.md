@@ -27,6 +27,8 @@ Both transports provide the same tools and task flows:
 - read task status and turn events
 - answer approval and user-input requests
 
+When Lens is open in a workspace, the same Local MCP server also exposes optional `stave_lens_*` inspection tools for that workspace browser session. Use those when an external agent needs screenshots, DOM, console logs, network logs, or element-level inspection from the live page.
+
 ## Open The Settings
 
 In Stave:
@@ -79,6 +81,11 @@ The manifest includes:
    - `stave_run_task`
    - `stave_get_task` or `stave_list_turn_events`
    - `stave_respond_approval` or `stave_respond_user_input` when needed
+
+If the workflow also needs live UI inspection:
+
+6. Open Lens inside the same workspace in Stave
+7. Call `stave_lens_navigate`, `stave_lens_screenshot`, `stave_lens_get_html`, or the other `stave_lens_*` tools as needed
 
 ## Example Manifest
 
@@ -148,3 +155,9 @@ The token is wrong or stale. Copy the token again from Settings or rotate it and
 ### The UI and bot seem out of sync
 
 Managed tasks poll persisted state while the external turn is active. If a finished task still looks read-only, use `Take Over` in the task header.
+
+### Lens tools say no browser session exists
+
+- open the `Lens` panel inside the target workspace first
+- make sure the external agent is using the same workspace ID
+- retry the `stave_lens_*` call after the panel is visible

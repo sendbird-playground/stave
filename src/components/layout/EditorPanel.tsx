@@ -14,6 +14,7 @@ import { WorkspaceScriptsPanel } from "./WorkspaceScriptsPanel";
 import { WorkspaceChangesPanel } from "./WorkspaceChangesPanel";
 import { WorkspaceExplorerPanel } from "./WorkspaceExplorerPanel";
 import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
+import { WorkspaceLensPanel } from "./WorkspaceLensPanel";
 import {
   buildSourceControlSections,
   buildSourceControlSummary,
@@ -896,6 +897,7 @@ export function EditorPanel(props: EditorPanelProps) {
           {rightTab === "scripts" ? (
             <WorkspaceScriptsPanel onOpenSettings={props.onOpenSettings} />
           ) : null}
+          {rightTab === "lens" ? <WorkspaceLensPanel /> : null}
         </RightRailPanelShell>
       </div>
       <ConfirmDialog

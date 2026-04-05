@@ -19,6 +19,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Provider runtimes](providers/provider-runtimes.md)
 - [Feature guide authoring](features/README.md)
 - [Feature guide template](templates/feature-guide-template.md)
+- [Lens](features/lens.md)
 - [Local MCP user guide](features/local-mcp-user-guide.md)
 - [Stave Assistant](features/stave-assistant.md)
 - [Stave Model Router](features/stave-model-router.md)

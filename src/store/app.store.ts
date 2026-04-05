@@ -428,6 +428,12 @@ export interface AppSettings {
   promptPreprocessorClassifier: string;
   /** System prompt for inline code completion. */
   promptInlineCompletion: string;
+
+  // -- Lens (built-in browser) --
+  /** Heuristic search: AI uses class names, text, ID to grep source files. */
+  lensSourceMappingHeuristic: boolean;
+  /** React _debugSource: extract file:line from React fiber (dev builds). */
+  lensSourceMappingReactDebugSource: boolean;
 }
 
 interface AppState {
@@ -898,6 +904,10 @@ const defaultSettings: AppSettings = {
   promptSupervisorSynthesis: DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS,
   promptPreprocessorClassifier: DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
   promptInlineCompletion: DEFAULT_PROMPT_INLINE_COMPLETION,
+
+  // Lens
+  lensSourceMappingHeuristic: true,
+  lensSourceMappingReactDebugSource: false,
 };
 
 function createDefaultProviderAvailability() {
