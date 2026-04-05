@@ -34,4 +34,11 @@ describe("resolveEffectiveCodexApprovalPolicy", () => {
       planMode: false,
     })).toBe("untrusted");
   });
+
+  test("normalizes deprecated on-failure inputs to on-request", () => {
+    expect(resolveEffectiveCodexApprovalPolicy({
+      approvalPolicy: "on-failure",
+      planMode: false,
+    })).toBe("on-request");
+  });
 });

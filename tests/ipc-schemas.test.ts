@@ -3,6 +3,18 @@ import { FilesystemRepoMapArgsSchema, StreamTurnArgsSchema } from "../electron/m
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 
 describe("provider IPC schemas", () => {
+  test("rejects deprecated Codex on-failure approval policy in runtime options", () => {
+    const parsed = StreamTurnArgsSchema.safeParse({
+      providerId: "codex",
+      prompt: "continue",
+      runtimeOptions: {
+        codexApprovalPolicy: "on-failure",
+      },
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
   test("accepts stave_processing in canonical history", () => {
     const parsed = StreamTurnArgsSchema.safeParse({
       turnId: "turn-1",

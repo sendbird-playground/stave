@@ -433,7 +433,6 @@ describe("resolveApprovalPolicy", () => {
   });
 
   test("normalizes deprecated on-failure to on-request", () => {
-    expect(resolveApprovalPolicy({ runtimeValue: "on-failure" })).toBe("on-request");
     expect(resolveApprovalPolicy({ envValue: "on-failure" })).toBe("on-request");
   });
 
@@ -447,9 +446,9 @@ describe("resolveApprovalPolicy", () => {
 
   test("forces never in plan mode even when deprecated on-failure is set", () => {
     expect(resolveApprovalPolicy({
-      runtimeValue: "on-failure",
+      envValue: "on-failure",
       planMode: true,
-      fallback: "on-failure",
+      fallback: "on-request",
     })).toBe("never");
   });
 });

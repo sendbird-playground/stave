@@ -46,6 +46,10 @@ describe("normalizeCodexApprovalPolicy", () => {
   test("falls back to the safe default when persisted data is invalid", () => {
     expect(normalizeCodexApprovalPolicy({ value: "bogus" })).toBe("on-request");
   });
+
+  test("normalizes deprecated on-failure persisted settings to on-request", () => {
+    expect(normalizeCodexApprovalPolicy({ value: "on-failure" })).toBe("on-request");
+  });
 });
 
 describe("buildProviderRuntimeOptions", () => {

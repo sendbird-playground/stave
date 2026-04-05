@@ -213,7 +213,7 @@ export interface ProviderRuntimeOptions {
   codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
   codexSkipGitRepoCheck?: boolean;
   codexNetworkAccessEnabled?: boolean;
-  codexApprovalPolicy?: "never" | "on-request" | "on-failure" | "untrusted";
+  codexApprovalPolicy?: "never" | "on-request" | "untrusted";
   codexPathOverride?: string;
   codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
   codexWebSearchMode?: "disabled" | "cached" | "live";

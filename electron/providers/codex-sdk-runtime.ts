@@ -45,10 +45,10 @@ function resolveSandboxMode(args: {
 }
 
 export function resolveApprovalPolicy(args: {
-  runtimeValue?: "never" | "on-request" | "on-failure" | "untrusted";
+  runtimeValue?: "never" | "on-request" | "untrusted";
   envValue?: string;
   planMode?: boolean;
-  fallback?: "never" | "on-request" | "on-failure" | "untrusted";
+  fallback?: "never" | "on-request" | "untrusted";
 }): "never" | "on-request" | "untrusted" | undefined {
   const candidate = args.runtimeValue ?? args.envValue;
   if (candidate !== "never" && candidate !== "on-request" && candidate !== "on-failure" && candidate !== "untrusted") {
