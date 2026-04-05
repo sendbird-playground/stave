@@ -1045,6 +1045,116 @@ interface WindowMetricsApi {
   getAppMetrics?: () => Promise<AppMetricsResult>;
 }
 
+interface LensNavigationState {
+  url: string;
+  title: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  isLoading: boolean;
+}
+
+interface LensNavigationEventPayload {
+  workspaceId: string;
+  state: LensNavigationState;
+}
+
+interface LensElementPickerResult {
+  selector: string;
+  tagName: string;
+  id: string;
+  classList: string[];
+  boundingBox: { x: number; y: number; width: number; height: number };
+  computedStyles: Record<string, string>;
+  outerHTML: string;
+  textContent: string;
+  debugSource?: {
+    fileName: string;
+    lineNumber: number;
+    columnNumber?: number;
+  };
+}
+
+interface WindowLensApi {
+  createView?: (args: {
+    workspaceId: string;
+  }) => Promise<{ ok: boolean; message?: string }>;
+  destroyView?: (args: {
+    workspaceId: string;
+  }) => Promise<{ ok: boolean }>;
+  setBounds?: (args: {
+    workspaceId: string;
+    bounds: { x: number; y: number; width: number; height: number };
+  }) => Promise<{ ok: boolean; message?: string }>;
+  setVisible?: (args: {
+    workspaceId: string;
+    visible: boolean;
+  }) => Promise<{ ok: boolean }>;
+  navigate?: (args: {
+    workspaceId: string;
+    url: string;
+  }) => Promise<{ ok: boolean; message?: string }>;
+  goBack?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
+  goForward?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
+  reload?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
+  getState?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    state?: LensNavigationState;
+    message?: string;
+  }>;
+  screenshot?: (args: {
+    workspaceId: string;
+    options?: {
+      fullPage?: boolean;
+      clip?: { x: number; y: number; width: number; height: number };
+    };
+  }) => Promise<{ ok: boolean; dataUrl?: string; message?: string }>;
+  getDom?: (args: {
+    workspaceId: string;
+    selector?: string;
+  }) => Promise<{ ok: boolean; html?: string; message?: string }>;
+  evaluate?: (args: {
+    workspaceId: string;
+    expression: string;
+  }) => Promise<{ ok: boolean; result?: unknown; message?: string }>;
+  getConsoleLog?: (args: {
+    workspaceId: string;
+    limit?: number;
+  }) => Promise<{
+    ok: boolean;
+    entries?: Array<{
+      level: string;
+      text: string;
+      timestamp: string;
+      source?: string;
+    }>;
+    message?: string;
+  }>;
+  getNetworkLog?: (args: {
+    workspaceId: string;
+    limit?: number;
+  }) => Promise<{
+    ok: boolean;
+    entries?: Array<{
+      url: string;
+      method: string;
+      status?: number;
+      timestamp: string;
+    }>;
+    message?: string;
+  }>;
+  startElementPicker?: (args: {
+    workspaceId: string;
+    options?: { extractDebugSource?: boolean };
+  }) => Promise<{
+    ok: boolean;
+    result?: LensElementPickerResult;
+    message?: string;
+  }>;
+  subscribeNavigationEvents?: (
+    listener: (payload: LensNavigationEventPayload) => void,
+  ) => () => void;
+}
+
 interface WindowInlineCompletionApi {
   request?: (args: {
     prefix: string;
@@ -1073,6 +1183,7 @@ interface WindowApi {
   sourceControl?: WindowSourceControlApi;
   metrics?: WindowMetricsApi;
   inlineCompletion?: WindowInlineCompletionApi;
+  lens?: WindowLensApi;
   window?: {
     minimize?: () => Promise<void>;
     toggleMaximize?: () => Promise<{ isMaximized: boolean }>;

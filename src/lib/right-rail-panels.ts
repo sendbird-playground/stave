@@ -1,10 +1,11 @@
-import { FolderTree, GitBranch, Info, Sparkles, type LucideIcon } from "lucide-react";
+import { FolderTree, GitBranch, Globe, Info, Sparkles, type LucideIcon } from "lucide-react";
 
 export const RIGHT_RAIL_PANEL_IDS = [
   "explorer",
   "changes",
   "information",
   "scripts",
+  "lens",
 ] as const;
 
 export type RightRailPanelId = typeof RIGHT_RAIL_PANEL_IDS[number];
@@ -14,6 +15,7 @@ export const RIGHT_RAIL_PANEL_TITLES: Record<RightRailPanelId, string> = {
   changes: "Source Control",
   information: "Information",
   scripts: "Scripts",
+  lens: "Lens",
 };
 
 export const RIGHT_RAIL_PANEL_ICONS: Record<RightRailPanelId, LucideIcon> = {
@@ -21,4 +23,5 @@ export const RIGHT_RAIL_PANEL_ICONS: Record<RightRailPanelId, LucideIcon> = {
   changes: GitBranch,
   information: Info,
   scripts: Sparkles,
+  lens: Globe,
 };

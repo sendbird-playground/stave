@@ -31,6 +31,7 @@ import {
   respondUserInput,
   runTask,
 } from "./stave-mcp-service";
+import { registerBrowserTools } from "./browser/browser-tools";
 
 let httpServer: Server | null = null;
 let manifestPaths: string[] = [];
@@ -364,6 +365,9 @@ function createToolServer() {
       denied,
     }),
   }));
+
+  // ---- Browser tools (navigate, screenshot, DOM, evaluate, etc.) ----
+  registerBrowserTools(server);
 
   return server;
 }

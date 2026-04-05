@@ -4,6 +4,7 @@ import {
   FolderOpen,
   GitBranch,
   GitPullRequest,
+  Globe,
   Home,
   History,
   Keyboard,
@@ -80,7 +81,7 @@ export interface CommandPaletteProjectSummary {
 
 export interface CommandPaletteLayoutState {
   editorVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes" | "information" | "scripts";
+  sidebarOverlayTab: "explorer" | "changes" | "information" | "scripts" | "lens";
   sidebarOverlayVisible: boolean;
   terminalDocked: boolean;
   workspaceSidebarCollapsed: boolean;
@@ -466,6 +467,24 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       icon: Sparkles,
       keywords: ["scripts", "hooks", "services", "orbit"],
       run: () => args.commands.showOverlayTab("scripts"),
+      source: "core",
+    }),
+  },
+  {
+    id: "view.show-lens",
+    title: "Show Lens Panel",
+    description: "Open the Lens browser overlay on the right rail.",
+    group: "view",
+    icon: Globe,
+    keywords: ["lens", "browser", "preview", "inspect", "right rail"],
+    build: (args) => ({
+      id: "view.show-lens",
+      title: "Show Lens Panel",
+      subtitle: "Open the embedded browser for preview, inspection, and element picking.",
+      group: "view",
+      icon: Globe,
+      keywords: ["lens", "browser", "preview", "inspect", "right rail"],
+      run: () => args.commands.showOverlayTab("lens"),
       source: "core",
     }),
   },
