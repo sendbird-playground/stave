@@ -6,6 +6,7 @@ import {
   buildClaudeUserInputPermissionResult,
   mapClaudeMessageToEvents,
   resolveClaudeDisallowedTools,
+  shouldAutoAllowClaudeTool,
   shouldDenyClaudeToolInPlanMode,
   SubagentProgressTracker,
 } from "../electron/providers/claude-sdk-runtime";
@@ -232,6 +233,20 @@ describe("buildClaudeUserInputPermissionResult", () => {
       behavior: "deny",
       message: "User declined to answer questions.",
     });
+  });
+});
+
+describe("Claude internal tool auto-allow", () => {
+  test("auto-allows ExitPlanMode without surfacing an approval wait", () => {
+    expect(shouldAutoAllowClaudeTool({
+      toolName: "ExitPlanMode",
+    })).toBe(true);
+  });
+
+  test("does not auto-allow ordinary tools", () => {
+    expect(shouldAutoAllowClaudeTool({
+      toolName: "Bash",
+    })).toBe(false);
   });
 });
 

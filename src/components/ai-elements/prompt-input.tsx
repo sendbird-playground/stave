@@ -8,7 +8,11 @@ import { filterCommandPaletteItems, getSlashCommandSearchQuery } from "@/lib/com
 import { getActiveSkillTokenMatch, replaceSkillToken } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
-import { collectClipboardFiles, partitionClipboardFiles } from "./prompt-input.clipboard";
+import {
+  collectClipboardFiles,
+  mergeClipboardImageAttachments,
+  partitionClipboardFiles,
+} from "./prompt-input.clipboard";
 import {
   getAcceptedCommandPaletteItem,
   getAcceptedPaletteItem,
@@ -677,8 +681,19 @@ export function PromptInput(args: PromptInputProps) {
                         }),
                     ),
                   ).then((newImages) => {
+                    const existingImageAttachments = (attachments ?? []).filter(
+                      (attachment): attachment is Extract<Attachment, { kind: "image" }> =>
+                        attachment.kind === "image",
+                    );
+                    const retainedAttachments = (attachments ?? []).filter((attachment) => attachment.kind !== "image");
                     onAttachmentsChange?.({
-                      attachments: [...(attachments ?? []), ...newImages],
+                      attachments: [
+                        ...retainedAttachments,
+                        ...mergeClipboardImageAttachments({
+                          existing: existingImageAttachments,
+                          incoming: newImages,
+                        }),
+                      ],
                     });
                   });
                 }
