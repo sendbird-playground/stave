@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Workspace Automations – Shared Types
+// Workspace Scripts – Shared Types
 // ---------------------------------------------------------------------------
 
 // ---- Legacy lifecycle scripts ---------------------------------------------
@@ -10,10 +10,10 @@ export type ScriptPhase = "setup" | "run" | "teardown";
 /**
  * `.stave/scripts.json` — the legacy, team-shared config.
  *
- * The new automation layer still supports this shape and normalizes it into
+ * The new scripts layer still supports this shape and normalizes it into
  * actions, services, and hooks.
  */
-export interface WorkspaceScriptsConfig {
+export interface LegacyWorkspaceScriptsConfig {
   version: 1;
   setup?: string[];
   run?: string[];
@@ -28,7 +28,7 @@ export interface WorkspaceScriptsConfig {
  */
 export type LocalPhaseOverride = string[] | { before?: string[]; after?: string[] };
 
-export interface WorkspaceScriptsLocalConfig {
+export interface LegacyWorkspaceScriptsLocalConfig {
   version: 1;
   setup?: LocalPhaseOverride;
   run?: LocalPhaseOverride;
@@ -36,17 +36,17 @@ export interface WorkspaceScriptsLocalConfig {
 }
 
 /** Fully resolved legacy commands for the three lifecycle phases. */
-export interface ResolvedScriptsConfig {
+export interface ResolvedLegacyScriptsConfig {
   setup: string[];
   run: string[];
   teardown: string[];
 }
 
-// ---- Workspace automations ------------------------------------------------
+// ---- Workspace scripts ----------------------------------------------------
 
-export type AutomationKind = "action" | "service";
-export type AutomationTargetScope = "workspace" | "project";
-export type AutomationTrigger =
+export type ScriptKind = "action" | "service";
+export type ScriptTargetScope = "workspace" | "project";
+export type ScriptTrigger =
   | "task.created"
   | "task.archiving"
   | "turn.started"
@@ -56,33 +56,33 @@ export type AutomationTrigger =
   | "workspace.created"
   | "workspace.archiving";
 
-export interface AutomationHookContext {
+export interface ScriptHookContext {
   taskId?: string;
   taskTitle?: string;
   turnId?: string;
 }
 
-export interface WorkspaceAutomationTargetConfig {
+export interface WorkspaceScriptTargetConfig {
   label?: string;
-  cwd?: AutomationTargetScope;
+  cwd?: ScriptTargetScope;
   env?: Record<string, string>;
   shell?: string;
 }
 
-export interface WorkspaceAutomationOrbitConfig {
+export interface WorkspaceScriptOrbitConfig {
   enabled?: boolean;
   name?: string;
   noTls?: boolean;
   proxyPort?: number;
 }
 
-export interface ResolvedWorkspaceAutomationOrbitConfig {
+export interface ResolvedWorkspaceScriptOrbitConfig {
   name?: string;
   noTls: boolean;
   proxyPort?: number;
 }
 
-interface WorkspaceAutomationEntryConfigBase {
+interface WorkspaceScriptEntryConfigBase {
   label?: string;
   description?: string;
   commands: string[];
@@ -91,79 +91,79 @@ interface WorkspaceAutomationEntryConfigBase {
   enabled?: boolean;
 }
 
-export interface WorkspaceAutomationActionConfig extends WorkspaceAutomationEntryConfigBase {}
+export interface WorkspaceScriptActionConfig extends WorkspaceScriptEntryConfigBase {}
 
-export interface WorkspaceAutomationServiceConfig extends WorkspaceAutomationEntryConfigBase {
+export interface WorkspaceScriptServiceConfig extends WorkspaceScriptEntryConfigBase {
   restartOnRun?: boolean;
-  orbit?: WorkspaceAutomationOrbitConfig;
+  orbit?: WorkspaceScriptOrbitConfig;
 }
 
-export type WorkspaceAutomationHookRef =
+export type WorkspaceScriptHookRef =
   | string
   | {
       ref: string;
-      kind?: AutomationKind;
+      kind?: ScriptKind;
       blocking?: boolean;
     };
 
-export interface WorkspaceAutomationsConfig {
+export interface WorkspaceScriptsConfig {
   version: 2;
-  actions?: Record<string, WorkspaceAutomationActionConfig>;
-  services?: Record<string, WorkspaceAutomationServiceConfig>;
-  hooks?: Partial<Record<AutomationTrigger, WorkspaceAutomationHookRef[]>>;
-  targets?: Record<string, WorkspaceAutomationTargetConfig>;
+  actions?: Record<string, WorkspaceScriptActionConfig>;
+  services?: Record<string, WorkspaceScriptServiceConfig>;
+  hooks?: Partial<Record<ScriptTrigger, WorkspaceScriptHookRef[]>>;
+  targets?: Record<string, WorkspaceScriptTargetConfig>;
 }
 
-export interface WorkspaceAutomationsLocalConfig {
+export interface WorkspaceScriptsLocalConfig {
   version: 2;
-  actions?: Record<string, Partial<WorkspaceAutomationActionConfig>>;
-  services?: Record<string, Partial<WorkspaceAutomationServiceConfig>>;
-  hooks?: Partial<Record<AutomationTrigger, WorkspaceAutomationHookRef[]>>;
-  targets?: Record<string, Partial<WorkspaceAutomationTargetConfig>>;
+  actions?: Record<string, Partial<WorkspaceScriptActionConfig>>;
+  services?: Record<string, Partial<WorkspaceScriptServiceConfig>>;
+  hooks?: Partial<Record<ScriptTrigger, WorkspaceScriptHookRef[]>>;
+  targets?: Record<string, Partial<WorkspaceScriptTargetConfig>>;
 }
 
-export interface ResolvedAutomationTarget {
+export interface ResolvedScriptTarget {
   id: string;
   label: string;
-  cwd: AutomationTargetScope;
+  cwd: ScriptTargetScope;
   env: Record<string, string>;
   shell?: string;
 }
 
-export interface ResolvedWorkspaceAutomation {
+export interface ResolvedWorkspaceScript {
   id: string;
-  kind: AutomationKind;
+  kind: ScriptKind;
   label: string;
   description: string;
   commands: string[];
   targetId: string;
-  target: ResolvedAutomationTarget;
+  target: ResolvedScriptTarget;
   timeoutMs?: number;
   restartOnRun?: boolean;
-  orbit?: ResolvedWorkspaceAutomationOrbitConfig;
-  source: "automation" | "legacy";
+  orbit?: ResolvedWorkspaceScriptOrbitConfig;
+  source: "script" | "legacy";
 }
 
-export interface ResolvedWorkspaceAutomationHook {
-  trigger: AutomationTrigger;
-  automationId: string;
-  automationKind: AutomationKind;
+export interface ResolvedWorkspaceScriptHook {
+  trigger: ScriptTrigger;
+  scriptId: string;
+  scriptKind: ScriptKind;
   blocking: boolean;
 }
 
-export interface ResolvedWorkspaceAutomationsConfig {
-  actions: ResolvedWorkspaceAutomation[];
-  services: ResolvedWorkspaceAutomation[];
-  hooks: Partial<Record<AutomationTrigger, ResolvedWorkspaceAutomationHook[]>>;
-  targets: Record<string, ResolvedAutomationTarget>;
-  legacyPhases: ResolvedScriptsConfig;
+export interface ResolvedWorkspaceScriptsConfig {
+  actions: ResolvedWorkspaceScript[];
+  services: ResolvedWorkspaceScript[];
+  hooks: Partial<Record<ScriptTrigger, ResolvedWorkspaceScriptHook[]>>;
+  targets: Record<string, ResolvedScriptTarget>;
+  legacyPhases: ResolvedLegacyScriptsConfig;
 }
 
-export type WorkspaceAutomationRunSource =
+export type WorkspaceScriptRunSource =
   | { kind: "manual" }
-  | { kind: "hook"; trigger: AutomationTrigger };
+  | { kind: "hook"; trigger: ScriptTrigger };
 
-export type WorkspaceAutomationEvent =
+export type WorkspaceScriptEvent =
   | {
       type: "started";
       commandIndex: number;
@@ -177,30 +177,30 @@ export type WorkspaceAutomationEvent =
   | { type: "error"; error: string }
   | { type: "stopped" };
 
-export interface WorkspaceAutomationEventEnvelope {
+export interface WorkspaceScriptEventEnvelope {
   workspaceId: string;
-  automationId: string;
-  automationKind: AutomationKind;
+  scriptId: string;
+  scriptKind: ScriptKind;
   runId: string;
   sessionId?: string;
-  source: WorkspaceAutomationRunSource;
-  event: WorkspaceAutomationEvent;
+  source: WorkspaceScriptRunSource;
+  event: WorkspaceScriptEvent;
 }
 
-export interface WorkspaceAutomationStatusEntry {
-  automationId: string;
-  automationKind: AutomationKind;
+export interface WorkspaceScriptStatusEntry {
+  scriptId: string;
+  scriptKind: ScriptKind;
   running: boolean;
   runId?: string;
   sessionId?: string;
-  source?: WorkspaceAutomationRunSource;
+  source?: WorkspaceScriptRunSource;
 }
 
-export interface WorkspaceAutomationHookRunSummary {
-  trigger: AutomationTrigger;
+export interface WorkspaceScriptHookRunSummary {
+  trigger: ScriptTrigger;
   totalEntries: number;
   executedEntries: number;
-  failures: Array<{ automationId: string; message: string }>;
+  failures: Array<{ scriptId: string; message: string }>;
 }
 
 // ---- Legacy renderer state kept for compatibility ------------------------

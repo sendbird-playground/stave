@@ -15,18 +15,18 @@ import {
 } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
-import { AUTOMATION_TRIGGER_METADATA } from "@/lib/workspace-scripts";
+import { SCRIPT_TRIGGER_METADATA } from "@/lib/workspace-scripts";
 import type {
-  AutomationKind,
-  AutomationTrigger,
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationEventEnvelope,
-  WorkspaceAutomationStatusEntry,
+  ScriptKind,
+  ScriptTrigger,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptEventEnvelope,
+  WorkspaceScriptStatusEntry,
 } from "@/lib/workspace-scripts/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
-interface AutomationUiState {
+interface ScriptUiState {
   running: boolean;
   runId?: string;
   sessionId?: string;
@@ -38,11 +38,11 @@ interface AutomationUiState {
 
 const MAX_LOG_LENGTH = 12_000;
 
-function automationKey(args: { automationId: string; automationKind: AutomationKind }) {
-  return `${args.automationKind}:${args.automationId}`;
+function scriptKey(args: { scriptId: string; scriptKind: ScriptKind }) {
+  return `${args.scriptKind}:${args.scriptId}`;
 }
 
-function automationEntryKey(args: { id: string; kind: AutomationKind }) {
+function scriptEntryKey(args: { id: string; kind: ScriptKind }) {
   return `${args.kind}:${args.id}`;
 }
 
@@ -54,8 +54,8 @@ function appendLog(current: string, chunk: string) {
   return next.slice(next.length - MAX_LOG_LENGTH);
 }
 
-function sourceLabel(event: WorkspaceAutomationEventEnvelope) {
-  return event.source.kind === "hook" ? `Hook · ${AUTOMATION_TRIGGER_METADATA[event.source.trigger].label}` : "Manual";
+function sourceLabel(event: WorkspaceScriptEventEnvelope) {
+  return event.source.kind === "hook" ? `Hook · ${SCRIPT_TRIGGER_METADATA[event.source.trigger].label}` : "Manual";
 }
 
 function openExternalUrl(url: string) {
@@ -63,12 +63,12 @@ function openExternalUrl(url: string) {
 }
 
 function HookRow(props: {
-  trigger: AutomationTrigger;
-  refs: NonNullable<ResolvedWorkspaceAutomationsConfig["hooks"][AutomationTrigger]>;
-  onRun: (trigger: AutomationTrigger) => Promise<void>;
+  trigger: ScriptTrigger;
+  refs: NonNullable<ResolvedWorkspaceScriptsConfig["hooks"][ScriptTrigger]>;
+  onRun: (trigger: ScriptTrigger) => Promise<void>;
   running: boolean;
 }) {
-  const triggerMeta = AUTOMATION_TRIGGER_METADATA[props.trigger];
+  const triggerMeta = SCRIPT_TRIGGER_METADATA[props.trigger];
   return (
     <div className="rounded-lg border border-border/70 bg-background/80 p-3">
       <div className="flex items-start justify-between gap-3">
@@ -88,11 +88,11 @@ function HookRow(props: {
           <div className="flex flex-wrap gap-1.5">
             {props.refs.map((ref) => (
               <Badge
-                key={`${ref.automationKind}:${ref.automationId}`}
+                key={`${ref.scriptKind}:${ref.scriptId}`}
                 variant="secondary"
                 className="rounded-sm px-2 py-0 font-normal"
               >
-                {ref.automationKind}:{ref.automationId}
+                {ref.scriptKind}:{ref.scriptId}
               </Badge>
             ))}
           </div>
@@ -112,16 +112,16 @@ function HookRow(props: {
   );
 }
 
-function AutomationEntryRow(props: {
-  automationId: string;
-  automationKind: AutomationKind;
+function ScriptEntryRow(props: {
+  scriptId: string;
+  scriptKind: ScriptKind;
   label: string;
   description: string;
   targetLabel: string;
   orbitEnabled: boolean;
-  state: AutomationUiState | undefined;
-  onRun: (args: { automationId: string; automationKind: AutomationKind }) => Promise<void>;
-  onStop: (args: { automationId: string; automationKind: AutomationKind }) => Promise<void>;
+  state: ScriptUiState | undefined;
+  onRun: (args: { scriptId: string; scriptKind: ScriptKind }) => Promise<void>;
+  onStop: (args: { scriptId: string; scriptKind: ScriptKind }) => Promise<void>;
 }) {
   const state = props.state;
   const startLabel = props.orbitEnabled ? "Start Orbit" : "Run";
@@ -183,8 +183,8 @@ function AutomationEntryRow(props: {
             className="h-8 rounded-md"
             variant={state?.running ? "outline" : "default"}
             onClick={() => void (state?.running
-              ? props.onStop({ automationId: props.automationId, automationKind: props.automationKind })
-              : props.onRun({ automationId: props.automationId, automationKind: props.automationKind }))}
+              ? props.onStop({ scriptId: props.scriptId, scriptKind: props.scriptKind })
+              : props.onRun({ scriptId: props.scriptId, scriptKind: props.scriptKind }))}
           >
             {state?.running ? <Square className="mr-1 size-4" /> : <Play className="mr-1 size-4" />}
             {state?.running ? stopLabel : startLabel}
@@ -205,7 +205,7 @@ function AutomationEntryRow(props: {
   );
 }
 
-export function WorkspaceAutomationsPanel(props: {
+export function WorkspaceScriptsPanel(props: {
   onOpenSettings?: (options?: {
     projectPath?: string | null;
     section?: SectionId;
@@ -243,14 +243,14 @@ export function WorkspaceAutomationsPanel(props: {
 
   const [configState, setConfigState] = useState<{
     status: "idle" | "loading" | "ready" | "error";
-    config: ResolvedWorkspaceAutomationsConfig | null;
+    config: ResolvedWorkspaceScriptsConfig | null;
     error: string;
   }>({
     status: "idle",
     config: null,
     error: "",
   });
-  const [entryStateByKey, setEntryStateByKey] = useState<Record<string, AutomationUiState>>({});
+  const [entryStateByKey, setEntryStateByKey] = useState<Record<string, ScriptUiState>>({});
   const [runningHooks, setRunningHooks] = useState<Record<string, boolean>>({});
 
   const loadConfig = useCallback(async () => {
@@ -260,12 +260,12 @@ export function WorkspaceAutomationsPanel(props: {
       return;
     }
 
-    const api = window.api?.automations;
+    const api = window.api?.scripts;
     if (!api?.getConfig || !api.getStatus) {
       setConfigState({
         status: "error",
         config: null,
-        error: "Automation bridge unavailable.",
+        error: "Scripts bridge unavailable.",
       });
       return;
     }
@@ -273,27 +273,27 @@ export function WorkspaceAutomationsPanel(props: {
     setConfigState((current) => ({ ...current, status: "loading", error: "" }));
     const [configResult, statusResult] = await Promise.all([
       api.getConfig({ projectPath, workspacePath }),
-      activeWorkspaceId ? api.getStatus({ workspaceId: activeWorkspaceId }) : Promise.resolve({ ok: true, statuses: [] as WorkspaceAutomationStatusEntry[] }),
+      activeWorkspaceId ? api.getStatus({ workspaceId: activeWorkspaceId }) : Promise.resolve({ ok: true, statuses: [] as WorkspaceScriptStatusEntry[] }),
     ]);
 
     if (!configResult.ok) {
       setConfigState({
         status: "error",
         config: null,
-        error: configResult.error ?? "Failed to load automations.",
+        error: configResult.error ?? "Failed to load scripts.",
       });
       return;
     }
 
-    const nextStateByKey: Record<string, AutomationUiState> = {};
+    const nextStateByKey: Record<string, ScriptUiState> = {};
     if (statusResult.ok) {
       statusResult.statuses.forEach((status) => {
-        nextStateByKey[automationKey(status)] = {
+        nextStateByKey[scriptKey(status)] = {
           running: status.running,
           runId: status.runId,
           sessionId: status.sessionId,
           log: "",
-          sourceLabel: status.source?.kind === "hook" ? `Hook · ${AUTOMATION_TRIGGER_METADATA[status.source.trigger].label}` : "Manual",
+          sourceLabel: status.source?.kind === "hook" ? `Hook · ${SCRIPT_TRIGGER_METADATA[status.source.trigger].label}` : "Manual",
         };
       });
     }
@@ -311,7 +311,7 @@ export function WorkspaceAutomationsPanel(props: {
   }, [loadConfig]);
 
   useEffect(() => {
-    const subscribeEvents = window.api?.automations?.subscribeEvents;
+    const subscribeEvents = window.api?.scripts?.subscribeEvents;
     if (!subscribeEvents) {
       return undefined;
     }
@@ -320,10 +320,10 @@ export function WorkspaceAutomationsPanel(props: {
       if (payload.workspaceId !== activeWorkspaceId) {
         return;
       }
-      const key = automationKey(payload);
+      const key = scriptKey(payload);
       setEntryStateByKey((current) => {
         const existing = current[key] ?? { running: false, log: "" };
-        const next: AutomationUiState = {
+        const next: ScriptUiState = {
           ...existing,
           runId: payload.runId,
           sessionId: payload.sessionId,
@@ -362,23 +362,23 @@ export function WorkspaceAutomationsPanel(props: {
     });
   }, [activeWorkspaceId]);
 
-  const runEntry = useCallback(async (args: { automationId: string; automationKind: AutomationKind }) => {
-    const api = window.api?.automations?.runEntry;
+  const runEntry = useCallback(async (args: { scriptId: string; scriptKind: ScriptKind }) => {
+    const api = window.api?.scripts?.runEntry;
     if (!api || !activeWorkspaceId || !projectPath || !workspacePath) {
-      toast.error("Automation bridge unavailable");
+      toast.error("Scripts bridge unavailable");
       return;
     }
     const result = await api({
       workspaceId: activeWorkspaceId,
-      automationId: args.automationId,
-      automationKind: args.automationKind,
+      scriptId: args.scriptId,
+      scriptKind: args.scriptKind,
       projectPath,
       workspacePath,
       workspaceName,
       branch: workspaceBranch || workspaceName,
     });
     if (!result.ok) {
-      toast.error("Automation failed to start", {
+      toast.error("Script failed to start", {
         description: result.error ?? "Unknown error",
       });
       return;
@@ -388,31 +388,31 @@ export function WorkspaceAutomationsPanel(props: {
     }
   }, [activeWorkspaceId, projectPath, workspaceBranch, workspaceName, workspacePath]);
 
-  const stopEntry = useCallback(async (args: { automationId: string; automationKind: AutomationKind }) => {
-    const api = window.api?.automations?.stopEntry;
+  const stopEntry = useCallback(async (args: { scriptId: string; scriptKind: ScriptKind }) => {
+    const api = window.api?.scripts?.stopEntry;
     if (!api || !activeWorkspaceId) {
-      toast.error("Automation bridge unavailable");
+      toast.error("Scripts bridge unavailable");
       return;
     }
     const result = await api({
       workspaceId: activeWorkspaceId,
-      automationId: args.automationId,
-      automationKind: args.automationKind,
+      scriptId: args.scriptId,
+      scriptKind: args.scriptKind,
     });
     if (!result.ok) {
-      toast.error("Failed to stop automation", {
+      toast.error("Failed to stop script", {
         description: result.error ?? "Unknown error",
       });
     }
   }, [activeWorkspaceId]);
 
-  const runHook = useCallback(async (trigger: AutomationTrigger) => {
-    const api = window.api?.automations?.runHook;
+  const runHook = useCallback(async (trigger: ScriptTrigger) => {
+    const api = window.api?.scripts?.runHook;
     if (!api || !activeWorkspaceId || !projectPath || !workspacePath) {
-      toast.error("Automation bridge unavailable");
+      toast.error("Scripts bridge unavailable");
       return;
     }
-    const triggerMeta = AUTOMATION_TRIGGER_METADATA[trigger];
+    const triggerMeta = SCRIPT_TRIGGER_METADATA[trigger];
     setRunningHooks((current) => ({ ...current, [trigger]: true }));
     try {
       const result = await api({
@@ -433,7 +433,7 @@ export function WorkspaceAutomationsPanel(props: {
         return;
       }
       toast.success("Hook executed", {
-        description: `${result.summary?.executedEntries ?? 0} automation(s) ran for ${triggerMeta.label}.`,
+        description: `${result.summary?.executedEntries ?? 0} script(s) ran for ${triggerMeta.label}.`,
       });
     } finally {
       setRunningHooks((current) => ({ ...current, [trigger]: false }));
@@ -442,15 +442,15 @@ export function WorkspaceAutomationsPanel(props: {
 
   const config = configState.config;
   const hookEntries = config
-    ? Object.entries(config.hooks) as Array<[AutomationTrigger, NonNullable<ResolvedWorkspaceAutomationsConfig["hooks"][AutomationTrigger]>]>
+    ? Object.entries(config.hooks) as Array<[ScriptTrigger, NonNullable<ResolvedWorkspaceScriptsConfig["hooks"][ScriptTrigger]>]>
     : [];
   const actionCount = config?.actions.length ?? 0;
   const serviceCount = config?.services.length ?? 0;
   const hookCount = hookEntries.length;
-  const hasAutomations = actionCount > 0 || serviceCount > 0 || hookCount > 0;
+  const hasScripts = actionCount > 0 || serviceCount > 0 || hookCount > 0;
   const hasWorkspaceOverride = Boolean(projectPath && workspacePath && workspacePath !== projectPath);
 
-  const openAutomationSettings = useCallback(() => {
+  const openScriptSettings = useCallback(() => {
     props.onOpenSettings?.({
       section: "projects",
       projectPath: projectPath ?? null,
@@ -464,8 +464,8 @@ export function WorkspaceAutomationsPanel(props: {
           <EmptyMedia>
             <Sparkles className="size-4" />
           </EmptyMedia>
-          <EmptyTitle>Automations unavailable</EmptyTitle>
-          <EmptyDescription>Select a workspace to inspect its automation config.</EmptyDescription>
+          <EmptyTitle>Scripts unavailable</EmptyTitle>
+          <EmptyDescription>Select a workspace to inspect its scripts config.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -478,9 +478,9 @@ export function WorkspaceAutomationsPanel(props: {
           <CardContent className="space-y-4 pt-4">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Automation Runtime</p>
+                <p className="text-sm font-medium text-foreground">Scripts Runtime</p>
                 <p className="text-xs leading-5 text-muted-foreground">
-                  Inspect the merged actions, services, and hooks for the active workspace. Edit shared automation config from Settings.
+                  Inspect the merged actions, services, and hooks for the active workspace. Edit shared scripts config from Settings.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -489,7 +489,7 @@ export function WorkspaceAutomationsPanel(props: {
                   size="sm"
                   variant="outline"
                   className="h-8 rounded-md"
-                  onClick={openAutomationSettings}
+                  onClick={openScriptSettings}
                   disabled={!projectPath}
                 >
                   <Settings2 className="mr-1 size-4" />
@@ -530,14 +530,14 @@ export function WorkspaceAutomationsPanel(props: {
               <div className="rounded-lg border border-border/70 bg-muted/15 px-3 py-2.5">
                 <p className="text-xs font-medium text-foreground">Project Config</p>
                 <p className="mt-1 break-all text-[11px] leading-5 text-muted-foreground">
-                  {projectPath ? `${projectPath}/.stave/automations.json` : "Project path unavailable."}
+                  {projectPath ? `${projectPath}/.stave/scripts.json` : "Project path unavailable."}
                 </p>
               </div>
               <div className="rounded-lg border border-border/70 bg-muted/15 px-3 py-2.5">
                 <p className="text-xs font-medium text-foreground">Workspace Config</p>
                 <p className="mt-1 break-all text-[11px] leading-5 text-muted-foreground">
                   {hasWorkspaceOverride
-                    ? `${workspacePath}/.stave/automations.json`
+                    ? `${workspacePath}/.stave/scripts.json`
                     : "This workspace currently inherits the project shared config."}
                 </p>
               </div>
@@ -552,25 +552,25 @@ export function WorkspaceAutomationsPanel(props: {
 
         {configState.status === "loading" ? (
           <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-            Loading automation config...
+            Loading scripts config...
           </div>
         ) : null}
 
-        {configState.status === "ready" && config && !hasAutomations ? (
+        {configState.status === "ready" && config && !hasScripts ? (
           <Empty className="border border-dashed border-border/70 bg-muted/15">
             <EmptyHeader>
               <EmptyMedia>
                 <Zap className="size-4" />
               </EmptyMedia>
-              <EmptyTitle>No automations configured</EmptyTitle>
-              <EmptyDescription>Open Settings to create `.stave/automations.json` for the project or active workspace.</EmptyDescription>
+              <EmptyTitle>No scripts configured</EmptyTitle>
+              <EmptyDescription>Open Settings to create the shared scripts config for the project or active workspace.</EmptyDescription>
             </EmptyHeader>
             <Button
               type="button"
               size="sm"
               variant="outline"
               className="mt-1 h-8 rounded-md"
-              onClick={openAutomationSettings}
+              onClick={openScriptSettings}
               disabled={!projectPath}
             >
               <Settings2 className="mr-1 size-4" />
@@ -589,15 +589,15 @@ export function WorkspaceAutomationsPanel(props: {
                 </Badge>
               </div>
               {config.actions.map((entry) => (
-                <AutomationEntryRow
-                  key={automationEntryKey(entry)}
-                  automationId={entry.id}
-                  automationKind={entry.kind}
+                <ScriptEntryRow
+                  key={scriptEntryKey(entry)}
+                  scriptId={entry.id}
+                  scriptKind={entry.kind}
                   label={entry.label}
                   description={entry.description}
                   targetLabel={entry.target.label}
                   orbitEnabled={Boolean(entry.orbit)}
-                  state={entryStateByKey[automationEntryKey(entry)]}
+                  state={entryStateByKey[scriptEntryKey(entry)]}
                   onRun={runEntry}
                   onStop={stopEntry}
                 />
@@ -616,15 +616,15 @@ export function WorkspaceAutomationsPanel(props: {
                 </Badge>
               </div>
               {config.services.map((entry) => (
-                <AutomationEntryRow
-                  key={automationEntryKey(entry)}
-                  automationId={entry.id}
-                  automationKind={entry.kind}
+                <ScriptEntryRow
+                  key={scriptEntryKey(entry)}
+                  scriptId={entry.id}
+                  scriptKind={entry.kind}
                   label={entry.label}
                   description={entry.description}
                   targetLabel={entry.target.label}
                   orbitEnabled={Boolean(entry.orbit)}
-                  state={entryStateByKey[automationEntryKey(entry)]}
+                  state={entryStateByKey[scriptEntryKey(entry)]}
                   onRun={runEntry}
                   onStop={stopEntry}
                 />

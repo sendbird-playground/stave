@@ -62,11 +62,11 @@ import {
   THINKING_PHRASE_ANIMATION_OPTIONS,
   normalizeThinkingPhraseAnimationStyle,
 } from "@/lib/thinking-phrases";
-import type { ResolvedWorkspaceAutomationsConfig } from "@/lib/workspace-scripts/types";
+import type { ResolvedWorkspaceScriptsConfig } from "@/lib/workspace-scripts/types";
 import { DeveloperSection } from "./settings-dialog-developer-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
 import { ToolingSection } from "./settings-dialog-tooling-section";
-import { WorkspaceAutomationsManager } from "./WorkspaceAutomationsManager";
+import { WorkspaceScriptsManager } from "./WorkspaceScriptsManager";
 import {
   ChoiceButtons,
   DraftInput,
@@ -186,10 +186,10 @@ function ProjectSettingsPanel(args: {
     normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
       value: args.project.newWorkspaceUseRootNodeModulesSymlink,
     });
-  const automationWorkspacePath = args.isCurrent
+  const scriptsWorkspacePath = args.isCurrent
     ? workspacePathById[activeWorkspaceId] ?? currentProjectPath ?? args.project.projectPath
     : args.project.projectPath;
-  const [resolvedAutomationConfig, setResolvedAutomationConfig] = useState<ResolvedWorkspaceAutomationsConfig | null>(null);
+  const [resolvedScriptsConfig, setResolvedScriptsConfig] = useState<ResolvedWorkspaceScriptsConfig | null>(null);
   const [repositoryRefreshNonce, setRepositoryRefreshNonce] = useState(0);
   const [repositoryState, setRepositoryState] = useState<{
     status: "idle" | "loading" | "ready" | "error";
@@ -203,23 +203,23 @@ function ProjectSettingsPanel(args: {
     detail: "Refreshing repository metadata...",
   });
 
-  const loadResolvedAutomationConfig = useCallback(async () => {
-    const getConfig = window.api?.automations?.getConfig;
-    if (!getConfig || !args.project.projectPath || !automationWorkspacePath) {
-      setResolvedAutomationConfig(null);
+  const loadResolvedScriptsConfig = useCallback(async () => {
+    const getConfig = window.api?.scripts?.getConfig;
+    if (!getConfig || !args.project.projectPath || !scriptsWorkspacePath) {
+      setResolvedScriptsConfig(null);
       return;
     }
 
     const result = await getConfig({
       projectPath: args.project.projectPath,
-      workspacePath: automationWorkspacePath,
+      workspacePath: scriptsWorkspacePath,
     });
-    setResolvedAutomationConfig(result.ok ? result.config : null);
-  }, [args.project.projectPath, automationWorkspacePath]);
+    setResolvedScriptsConfig(result.ok ? result.config : null);
+  }, [args.project.projectPath, scriptsWorkspacePath]);
 
   useEffect(() => {
-    void loadResolvedAutomationConfig();
-  }, [loadResolvedAutomationConfig]);
+    void loadResolvedScriptsConfig();
+  }, [loadResolvedScriptsConfig]);
 
   useEffect(() => {
     const runCommand = window.api?.terminal?.runCommand;
@@ -319,7 +319,7 @@ function ProjectSettingsPanel(args: {
             </h4>
             <p className="text-sm text-muted-foreground">
               Review repository-specific workspace defaults, git metadata,
-              automation config, and removal actions for this project.
+              scripts config, and removal actions for this project.
             </p>
           </div>
           <p className="font-mono text-xs text-muted-foreground break-all">
@@ -478,11 +478,11 @@ function ProjectSettingsPanel(args: {
         </div>
       </SettingsCard>
 
-      <WorkspaceAutomationsManager
+      <WorkspaceScriptsManager
         projectPath={args.project.projectPath}
-        workspacePath={automationWorkspacePath}
-        resolvedConfig={resolvedAutomationConfig}
-        onSaved={loadResolvedAutomationConfig}
+        workspacePath={scriptsWorkspacePath}
+        resolvedConfig={resolvedScriptsConfig}
+        onSaved={loadResolvedScriptsConfig}
       />
     </div>
   );
@@ -597,7 +597,7 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
     <>
       <SectionHeading
         title="Projects"
-        description="Choose a registered project from the menu, then review repository-specific workspace defaults, git metadata, automation config, and removal actions."
+        description="Choose a registered project from the menu, then review repository-specific workspace defaults, git metadata, scripts config, and removal actions."
       />
       {projects.length === 0 ? (
         <SettingsCard

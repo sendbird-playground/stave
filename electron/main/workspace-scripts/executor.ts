@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Workspace Automations – Execution Engine (Electron main process)
+// Workspace Scripts – Execution Engine (Electron main process)
 // ---------------------------------------------------------------------------
 
 import { spawn, type ChildProcess } from "node:child_process";
@@ -8,33 +8,33 @@ import path from "node:path";
 import { webContents } from "electron";
 import * as pty from "node-pty";
 import {
-  AUTOMATION_ENV_VARS,
+  SCRIPT_ENV_VARS,
 } from "../../../src/lib/workspace-scripts/constants";
 import {
-  getAutomationEntry,
-  getAutomationHooksForTrigger,
+  getScriptEntry,
+  getScriptHooksForTrigger,
 } from "../../../src/lib/workspace-scripts/config";
 import type {
-  AutomationHookContext,
-  AutomationKind,
-  AutomationTrigger,
-  ResolvedWorkspaceAutomation,
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationEvent,
-  WorkspaceAutomationEventEnvelope,
-  WorkspaceAutomationHookRunSummary,
-  WorkspaceAutomationRunSource,
-  WorkspaceAutomationStatusEntry,
+  ScriptHookContext,
+  ScriptKind,
+  ScriptTrigger,
+  ResolvedWorkspaceScript,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptEvent,
+  WorkspaceScriptEventEnvelope,
+  WorkspaceScriptHookRunSummary,
+  WorkspaceScriptRunSource,
+  WorkspaceScriptStatusEntry,
 } from "../../../src/lib/workspace-scripts/types";
 import { buildExecutableLookupEnv } from "../../providers/executable-path";
 import {
-  deleteWorkspaceAutomationProcess,
-  getAutomationProcessKey,
-  getWorkspaceAutomationProcess,
-  listWorkspaceAutomationProcessKeys,
-  listWorkspaceAutomationProcessesForWorkspace,
-  setWorkspaceAutomationProcess,
-  type WorkspaceAutomationProcess,
+  deleteWorkspaceScriptProcess,
+  getScriptProcessKey,
+  getWorkspaceScriptProcess,
+  listWorkspaceScriptProcessKeys,
+  listWorkspaceScriptProcessesForWorkspace,
+  setWorkspaceScriptProcess,
+  type WorkspaceScriptProcess,
 } from "./state";
 import {
   buildOrbitCommand,
@@ -44,90 +44,90 @@ import {
 
 const SIGTERM_GRACE_MS = 5_000;
 
-function broadcastAutomationEvent(envelope: WorkspaceAutomationEventEnvelope) {
+function broadcastScriptEvent(envelope: WorkspaceScriptEventEnvelope) {
   for (const wc of webContents.getAllWebContents()) {
     if (!wc.isDestroyed()) {
-      wc.send("workspace-automations:event", envelope);
+      wc.send("workspace-scripts:event", envelope);
     }
   }
 }
 
-function emitAutomationEvent(args: {
+function emitScriptEvent(args: {
   workspaceId: string;
-  automationId: string;
-  automationKind: AutomationKind;
+  scriptId: string;
+  scriptKind: ScriptKind;
   runId: string;
   sessionId?: string;
-  source: WorkspaceAutomationRunSource;
-  event: WorkspaceAutomationEvent;
+  source: WorkspaceScriptRunSource;
+  event: WorkspaceScriptEvent;
 }) {
-  broadcastAutomationEvent(args);
+  broadcastScriptEvent(args);
 }
 
-function buildAutomationEnv(args: {
+function buildScriptEnv(args: {
   projectPath: string;
   workspaceName: string;
   workspacePath: string;
   branch: string;
-  automation: ResolvedWorkspaceAutomation;
-  source: WorkspaceAutomationRunSource;
-  hookContext?: AutomationHookContext;
+  scriptEntry: ResolvedWorkspaceScript;
+  source: WorkspaceScriptRunSource;
+  hookContext?: ScriptHookContext;
 }): NodeJS.ProcessEnv {
   return {
     ...buildExecutableLookupEnv(),
-    [AUTOMATION_ENV_VARS.ROOT_PATH]: args.projectPath,
-    [AUTOMATION_ENV_VARS.WORKSPACE_NAME]: args.workspaceName,
-    [AUTOMATION_ENV_VARS.WORKSPACE_PATH]: args.workspacePath,
-    [AUTOMATION_ENV_VARS.BRANCH]: args.branch,
-    ...(args.hookContext?.taskId ? { [AUTOMATION_ENV_VARS.TASK_ID]: args.hookContext.taskId } : {}),
-    ...(args.hookContext?.taskTitle ? { [AUTOMATION_ENV_VARS.TASK_TITLE]: args.hookContext.taskTitle } : {}),
-    ...(args.hookContext?.turnId ? { [AUTOMATION_ENV_VARS.TURN_ID]: args.hookContext.turnId } : {}),
-    [AUTOMATION_ENV_VARS.TARGET_ID]: args.automation.targetId,
-    ...(args.source.kind === "hook" ? { [AUTOMATION_ENV_VARS.TRIGGER]: args.source.trigger } : {}),
-    ...args.automation.target.env,
+    [SCRIPT_ENV_VARS.ROOT_PATH]: args.projectPath,
+    [SCRIPT_ENV_VARS.WORKSPACE_NAME]: args.workspaceName,
+    [SCRIPT_ENV_VARS.WORKSPACE_PATH]: args.workspacePath,
+    [SCRIPT_ENV_VARS.BRANCH]: args.branch,
+    ...(args.hookContext?.taskId ? { [SCRIPT_ENV_VARS.TASK_ID]: args.hookContext.taskId } : {}),
+    ...(args.hookContext?.taskTitle ? { [SCRIPT_ENV_VARS.TASK_TITLE]: args.hookContext.taskTitle } : {}),
+    ...(args.hookContext?.turnId ? { [SCRIPT_ENV_VARS.TURN_ID]: args.hookContext.turnId } : {}),
+    [SCRIPT_ENV_VARS.TARGET_ID]: args.scriptEntry.targetId,
+    ...(args.source.kind === "hook" ? { [SCRIPT_ENV_VARS.TRIGGER]: args.source.trigger } : {}),
+    ...args.scriptEntry.target.env,
   };
 }
 
-function resolveAutomationCwd(args: {
+function resolveScriptCwd(args: {
   projectPath: string;
   workspacePath: string;
-  automation: ResolvedWorkspaceAutomation;
+  scriptEntry: ResolvedWorkspaceScript;
 }) {
-  return args.automation.target.cwd === "project" ? args.projectPath : args.workspacePath;
+  return args.scriptEntry.target.cwd === "project" ? args.projectPath : args.workspacePath;
 }
 
 function createProcessKey(args: {
   workspaceId: string;
-  automationId: string;
-  automationKind: AutomationKind;
+  scriptId: string;
+  scriptKind: ScriptKind;
 }) {
-  return getAutomationProcessKey(args);
+  return getScriptProcessKey(args);
 }
 
 function createProcessEntry(args: {
   workspaceId: string;
-  automationId: string;
-  automationKind: AutomationKind;
+  scriptId: string;
+  scriptKind: ScriptKind;
   runId: string;
-  source: WorkspaceAutomationRunSource;
-  process: WorkspaceAutomationProcess["process"];
+  source: WorkspaceScriptRunSource;
+  process: WorkspaceScriptProcess["process"];
   sessionId?: string;
 }) {
-  const entry: WorkspaceAutomationProcess = {
+  const entry: WorkspaceScriptProcess = {
     workspaceId: args.workspaceId,
-    automationId: args.automationId,
-    automationKind: args.automationKind,
+    scriptId: args.scriptId,
+    scriptKind: args.scriptKind,
     runId: args.runId,
     source: args.source,
     process: args.process,
     aborted: false,
     sessionId: args.sessionId,
   };
-  setWorkspaceAutomationProcess(
+  setWorkspaceScriptProcess(
     createProcessKey({
       workspaceId: args.workspaceId,
-      automationId: args.automationId,
-      automationKind: args.automationKind,
+      scriptId: args.scriptId,
+      scriptKind: args.scriptKind,
     }),
     entry,
   );
@@ -174,13 +174,13 @@ function killProcess(proc: ChildProcess | pty.IPty): Promise<void> {
   });
 }
 
-export async function stopAutomationEntry(args: {
+export async function stopScriptEntry(args: {
   workspaceId: string;
-  automationId: string;
-  automationKind: AutomationKind;
+  scriptId: string;
+  scriptKind: ScriptKind;
 }): Promise<void> {
   const key = createProcessKey(args);
-  const entry = getWorkspaceAutomationProcess(key);
+  const entry = getWorkspaceScriptProcess(key);
   if (!entry) {
     return;
   }
@@ -188,47 +188,47 @@ export async function stopAutomationEntry(args: {
   if (entry.process) {
     await killProcess(entry.process);
   }
-  emitAutomationEvent({
+  emitScriptEvent({
     workspaceId: entry.workspaceId,
-    automationId: entry.automationId,
-    automationKind: entry.automationKind,
+    scriptId: entry.scriptId,
+    scriptKind: entry.scriptKind,
     runId: entry.runId,
     sessionId: entry.sessionId,
     source: entry.source,
     event: { type: "stopped" },
   });
-  deleteWorkspaceAutomationProcess(key);
+  deleteWorkspaceScriptProcess(key);
 }
 
-async function runFiniteAutomation(args: {
+async function runFiniteScript(args: {
   workspaceId: string;
-  automation: ResolvedWorkspaceAutomation;
+  scriptEntry: ResolvedWorkspaceScript;
   projectPath: string;
   workspacePath: string;
   workspaceName: string;
   branch: string;
-  source: WorkspaceAutomationRunSource;
-  hookContext?: AutomationHookContext;
+  source: WorkspaceScriptRunSource;
+  hookContext?: ScriptHookContext;
 }) {
   const runId = randomUUID();
   const key = createProcessKey({
     workspaceId: args.workspaceId,
-    automationId: args.automation.id,
-    automationKind: args.automation.kind,
+    scriptId: args.scriptEntry.id,
+    scriptKind: args.scriptEntry.kind,
   });
 
-  await stopAutomationEntry({
+  await stopScriptEntry({
     workspaceId: args.workspaceId,
-    automationId: args.automation.id,
-    automationKind: args.automation.kind,
+    scriptId: args.scriptEntry.id,
+    scriptKind: args.scriptEntry.kind,
   });
 
-  const env = buildAutomationEnv(args);
-  const cwd = resolveAutomationCwd(args);
+  const env = buildScriptEnv(args);
+  const cwd = resolveScriptCwd(args);
   const entry = createProcessEntry({
     workspaceId: args.workspaceId,
-    automationId: args.automation.id,
-    automationKind: args.automation.kind,
+    scriptId: args.scriptEntry.id,
+    scriptKind: args.scriptEntry.kind,
     runId,
     source: args.source,
     process: null,
@@ -236,31 +236,31 @@ async function runFiniteAutomation(args: {
 
   let lastExitCode = 0;
 
-  for (let index = 0; index < args.automation.commands.length; index += 1) {
+  for (let index = 0; index < args.scriptEntry.commands.length; index += 1) {
     if (entry.aborted) {
-      deleteWorkspaceAutomationProcess(key);
+      deleteWorkspaceScriptProcess(key);
       return { ok: false as const, runId, exitCode: -1, error: "Aborted" };
     }
 
-    const command = args.automation.commands[index];
-    emitAutomationEvent({
+    const command = args.scriptEntry.commands[index];
+    emitScriptEvent({
       workspaceId: args.workspaceId,
-      automationId: args.automation.id,
-      automationKind: args.automation.kind,
+      scriptId: args.scriptEntry.id,
+      scriptKind: args.scriptEntry.kind,
       runId,
       source: args.source,
       event: {
         type: "started",
         commandIndex: index,
         command,
-        totalCommands: args.automation.commands.length,
+        totalCommands: args.scriptEntry.commands.length,
       },
     });
 
     try {
       lastExitCode = await new Promise<number>((resolve, reject) => {
         const child = spawn(command, {
-          shell: args.automation.target.shell ?? true,
+          shell: args.scriptEntry.target.shell ?? true,
           cwd,
           env,
         });
@@ -268,10 +268,10 @@ async function runFiniteAutomation(args: {
         entry.process = child;
 
         child.stdout?.on("data", (chunk: Buffer) => {
-          emitAutomationEvent({
+          emitScriptEvent({
             workspaceId: args.workspaceId,
-            automationId: args.automation.id,
-            automationKind: args.automation.kind,
+            scriptId: args.scriptEntry.id,
+            scriptKind: args.scriptEntry.kind,
             runId,
             source: args.source,
             event: { type: "output", data: chunk.toString() },
@@ -279,10 +279,10 @@ async function runFiniteAutomation(args: {
         });
 
         child.stderr?.on("data", (chunk: Buffer) => {
-          emitAutomationEvent({
+          emitScriptEvent({
             workspaceId: args.workspaceId,
-            automationId: args.automation.id,
-            automationKind: args.automation.kind,
+            scriptId: args.scriptEntry.id,
+            scriptKind: args.scriptEntry.kind,
             runId,
             source: args.source,
             event: { type: "output", data: chunk.toString() },
@@ -292,7 +292,7 @@ async function runFiniteAutomation(args: {
         child.on("error", reject);
         child.on("close", (code) => resolve(code ?? -1));
 
-        if (args.automation.timeoutMs) {
+        if (args.scriptEntry.timeoutMs) {
           setTimeout(() => {
             if (!entry.aborted) {
               entry.aborted = true;
@@ -301,78 +301,78 @@ async function runFiniteAutomation(args: {
               } catch {
                 // noop
               }
-              reject(new Error(`Automation timed out after ${args.automation.timeoutMs}ms`));
+              reject(new Error(`Script timed out after ${args.scriptEntry.timeoutMs}ms`));
             }
-          }, args.automation.timeoutMs);
+          }, args.scriptEntry.timeoutMs);
         }
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      emitAutomationEvent({
+      emitScriptEvent({
         workspaceId: args.workspaceId,
-        automationId: args.automation.id,
-        automationKind: args.automation.kind,
+        scriptId: args.scriptEntry.id,
+        scriptKind: args.scriptEntry.kind,
         runId,
         source: args.source,
         event: { type: "error", error: message },
       });
-      deleteWorkspaceAutomationProcess(key);
+      deleteWorkspaceScriptProcess(key);
       return { ok: false as const, runId, exitCode: -1, error: message };
     }
 
     entry.process = null;
-    emitAutomationEvent({
+    emitScriptEvent({
       workspaceId: args.workspaceId,
-      automationId: args.automation.id,
-      automationKind: args.automation.kind,
+      scriptId: args.scriptEntry.id,
+      scriptKind: args.scriptEntry.kind,
       runId,
       source: args.source,
       event: { type: "command-completed", commandIndex: index, exitCode: lastExitCode },
     });
 
     if (lastExitCode !== 0) {
-      emitAutomationEvent({
+      emitScriptEvent({
         workspaceId: args.workspaceId,
-        automationId: args.automation.id,
-        automationKind: args.automation.kind,
+        scriptId: args.scriptEntry.id,
+        scriptKind: args.scriptEntry.kind,
         runId,
         source: args.source,
         event: { type: "completed", exitCode: lastExitCode },
       });
-      deleteWorkspaceAutomationProcess(key);
+      deleteWorkspaceScriptProcess(key);
       return { ok: false as const, runId, exitCode: lastExitCode };
     }
   }
 
-  emitAutomationEvent({
+  emitScriptEvent({
     workspaceId: args.workspaceId,
-    automationId: args.automation.id,
-    automationKind: args.automation.kind,
+    scriptId: args.scriptEntry.id,
+    scriptKind: args.scriptEntry.kind,
     runId,
     source: args.source,
     event: { type: "completed", exitCode: 0 },
   });
-  deleteWorkspaceAutomationProcess(key);
+  deleteWorkspaceScriptProcess(key);
   return { ok: true as const, runId, exitCode: 0 };
 }
 
-async function runServiceAutomation(args: {
+async function runServiceScript(args: {
   workspaceId: string;
-  automation: ResolvedWorkspaceAutomation;
+  scriptEntry: ResolvedWorkspaceScript;
   projectPath: string;
   workspacePath: string;
   workspaceName: string;
   branch: string;
-  source: WorkspaceAutomationRunSource;
-  hookContext?: AutomationHookContext;
+  source: WorkspaceScriptRunSource;
+  hookContext?: ScriptHookContext;
 }) {
   const key = createProcessKey({
     workspaceId: args.workspaceId,
-    automationId: args.automation.id,
-    automationKind: args.automation.kind,
+    scriptId: args.scriptEntry.id,
+    scriptKind: args.scriptEntry.kind,
   });
-  const existing = getWorkspaceAutomationProcess(key);
-  if (existing && !existing.aborted && args.automation.restartOnRun === false) {
+  const existing = getWorkspaceScriptProcess(key);
+  if (existing && !existing.aborted && args.scriptEntry.restartOnRun === false) {
     return {
       ok: true as const,
       runId: existing.runId,
@@ -381,33 +381,33 @@ async function runServiceAutomation(args: {
     };
   }
 
-  await stopAutomationEntry({
+  await stopScriptEntry({
     workspaceId: args.workspaceId,
-    automationId: args.automation.id,
-    automationKind: args.automation.kind,
+    scriptId: args.scriptEntry.id,
+    scriptKind: args.scriptEntry.kind,
   });
 
   const runId = randomUUID();
-  const env = buildAutomationEnv(args);
-  const cwd = resolveAutomationCwd(args);
-  const prefixCommands = args.automation.commands.slice(0, -1);
-  const lastCommand = args.automation.commands[args.automation.commands.length - 1];
+  const env = buildScriptEnv(args);
+  const cwd = resolveScriptCwd(args);
+  const prefixCommands = args.scriptEntry.commands.slice(0, -1);
+  const lastCommand = args.scriptEntry.commands[args.scriptEntry.commands.length - 1];
 
   if (!lastCommand) {
     return { ok: true as const, runId };
   }
 
   if (prefixCommands.length > 0) {
-    const prefixResult = await runFiniteAutomation({
+    const prefixResult = await runFiniteScript({
       ...args,
-      automation: { ...args.automation, commands: prefixCommands },
+      scriptEntry: { ...args.scriptEntry, commands: prefixCommands },
     });
     if (!prefixResult.ok) {
       return prefixResult;
     }
   }
 
-  if (args.automation.orbit && args.automation.target.cwd !== "workspace") {
+  if (args.scriptEntry.orbit && args.scriptEntry.target.cwd !== "workspace") {
     return {
       ok: false as const,
       runId,
@@ -416,10 +416,10 @@ async function runServiceAutomation(args: {
     };
   }
 
-  const orbitCommand = args.automation.orbit
+  const orbitCommand = args.scriptEntry.orbit
     ? resolvePortlessCommand()
     : null;
-  if (args.automation.orbit && !orbitCommand) {
+  if (args.scriptEntry.orbit && !orbitCommand) {
     return {
       ok: false as const,
       runId,
@@ -428,16 +428,16 @@ async function runServiceAutomation(args: {
     };
   }
 
-  const commandToRun = args.automation.orbit && orbitCommand
+  const commandToRun = args.scriptEntry.orbit && orbitCommand
     ? buildOrbitCommand({
         command: lastCommand,
-        orbit: args.automation.orbit,
+        orbit: args.scriptEntry.orbit,
         defaultName: path.basename(args.projectPath),
         portlessCommand: orbitCommand,
       })
     : lastCommand;
 
-  const shellExe = args.automation.target.shell || process.env.SHELL || "/bin/bash";
+  const shellExe = args.scriptEntry.target.shell || process.env.SHELL || "/bin/bash";
   const ptyProcess = pty.spawn(shellExe, ["-c", commandToRun], {
     name: "xterm-color",
     cols: 120,
@@ -449,32 +449,32 @@ async function runServiceAutomation(args: {
 
   createProcessEntry({
     workspaceId: args.workspaceId,
-    automationId: args.automation.id,
-    automationKind: args.automation.kind,
+    scriptId: args.scriptEntry.id,
+    scriptKind: args.scriptEntry.kind,
     runId,
     source: args.source,
     process: ptyProcess,
     sessionId,
   });
 
-  emitAutomationEvent({
+  emitScriptEvent({
     workspaceId: args.workspaceId,
-    automationId: args.automation.id,
-    automationKind: args.automation.kind,
+    scriptId: args.scriptEntry.id,
+    scriptKind: args.scriptEntry.kind,
     runId,
     sessionId,
     source: args.source,
     event: {
       type: "started",
-      commandIndex: args.automation.commands.length - 1,
+      commandIndex: args.scriptEntry.commands.length - 1,
       command: commandToRun,
-      totalCommands: args.automation.commands.length,
+      totalCommands: args.scriptEntry.commands.length,
     },
   });
 
   let orbitBuffer = "";
   ptyProcess.onData((data) => {
-    if (args.automation.orbit) {
+    if (args.scriptEntry.orbit) {
       const parsed = extractOrbitOutput({
         buffer: orbitBuffer,
         chunk: data,
@@ -482,10 +482,10 @@ async function runServiceAutomation(args: {
       orbitBuffer = parsed.buffer;
 
       for (const orbitUrl of parsed.orbitUrls) {
-        emitAutomationEvent({
+        emitScriptEvent({
           workspaceId: args.workspaceId,
-          automationId: args.automation.id,
-          automationKind: args.automation.kind,
+          scriptId: args.scriptEntry.id,
+          scriptKind: args.scriptEntry.kind,
           runId,
           sessionId,
           source: args.source,
@@ -497,10 +497,10 @@ async function runServiceAutomation(args: {
         return;
       }
 
-      emitAutomationEvent({
+      emitScriptEvent({
         workspaceId: args.workspaceId,
-        automationId: args.automation.id,
-        automationKind: args.automation.kind,
+        scriptId: args.scriptEntry.id,
+        scriptKind: args.scriptEntry.kind,
         runId,
         sessionId,
         source: args.source,
@@ -509,10 +509,10 @@ async function runServiceAutomation(args: {
       return;
     }
 
-    emitAutomationEvent({
+    emitScriptEvent({
       workspaceId: args.workspaceId,
-      automationId: args.automation.id,
-      automationKind: args.automation.kind,
+      scriptId: args.scriptEntry.id,
+      scriptKind: args.scriptEntry.kind,
       runId,
       sessionId,
       source: args.source,
@@ -522,60 +522,60 @@ async function runServiceAutomation(args: {
 
   ptyProcess.onExit(({ exitCode }) => {
     if (orbitBuffer) {
-      emitAutomationEvent({
+      emitScriptEvent({
         workspaceId: args.workspaceId,
-        automationId: args.automation.id,
-        automationKind: args.automation.kind,
+        scriptId: args.scriptEntry.id,
+        scriptKind: args.scriptEntry.kind,
         runId,
         sessionId,
         source: args.source,
         event: { type: "output", data: orbitBuffer },
       });
     }
-    emitAutomationEvent({
+    emitScriptEvent({
       workspaceId: args.workspaceId,
-      automationId: args.automation.id,
-      automationKind: args.automation.kind,
+      scriptId: args.scriptEntry.id,
+      scriptKind: args.scriptEntry.kind,
       runId,
       sessionId,
       source: args.source,
       event: { type: "completed", exitCode: exitCode ?? -1 },
     });
-    deleteWorkspaceAutomationProcess(key);
+    deleteWorkspaceScriptProcess(key);
   });
 
   return { ok: true as const, runId, sessionId };
 }
 
-export async function runAutomationEntry(args: {
+export async function runScriptEntry(args: {
   workspaceId: string;
-  automation: ResolvedWorkspaceAutomation;
+  scriptEntry: ResolvedWorkspaceScript;
   projectPath: string;
   workspacePath: string;
   workspaceName: string;
   branch: string;
-  source?: WorkspaceAutomationRunSource;
-  hookContext?: AutomationHookContext;
+  source?: WorkspaceScriptRunSource;
+  hookContext?: ScriptHookContext;
 }) {
   const source = args.source ?? { kind: "manual" as const };
-  if (args.automation.kind === "service") {
-    return runServiceAutomation({ ...args, source });
+  if (args.scriptEntry.kind === "service") {
+    return runServiceScript({ ...args, source });
   }
-  return runFiniteAutomation({ ...args, source });
+  return runFiniteScript({ ...args, source });
 }
 
-export async function runAutomationHook(args: {
+export async function runScriptHook(args: {
   workspaceId: string;
-  trigger: AutomationTrigger;
-  config: ResolvedWorkspaceAutomationsConfig;
+  trigger: ScriptTrigger;
+  config: ResolvedWorkspaceScriptsConfig;
   projectPath: string;
   workspacePath: string;
   workspaceName: string;
   branch: string;
-  hookContext?: AutomationHookContext;
-}): Promise<WorkspaceAutomationHookRunSummary> {
-  const refs = getAutomationHooksForTrigger(args.config, args.trigger);
-  const summary: WorkspaceAutomationHookRunSummary = {
+  hookContext?: ScriptHookContext;
+}): Promise<WorkspaceScriptHookRunSummary> {
+  const refs = getScriptHooksForTrigger(args.config, args.trigger);
+  const summary: WorkspaceScriptHookRunSummary = {
     trigger: args.trigger,
     totalEntries: refs.length,
     executedEntries: 0,
@@ -583,14 +583,14 @@ export async function runAutomationHook(args: {
   };
 
   for (const ref of refs) {
-    const automation = getAutomationEntry(args.config, {
-      automationId: ref.automationId,
-      kind: ref.automationKind,
+    const scriptEntry = getScriptEntry(args.config, {
+      scriptId: ref.scriptId,
+      kind: ref.scriptKind,
     });
-    if (!automation) {
+    if (!scriptEntry) {
       summary.failures.push({
-        automationId: ref.automationId,
-        message: "Automation entry not found.",
+        scriptId: ref.scriptId,
+        message: "Script entry not found.",
       });
       if (ref.blocking) {
         break;
@@ -598,9 +598,9 @@ export async function runAutomationHook(args: {
       continue;
     }
 
-    const result = await runAutomationEntry({
+    const result = await runScriptEntry({
       workspaceId: args.workspaceId,
-      automation,
+      scriptEntry,
       projectPath: args.projectPath,
       workspacePath: args.workspacePath,
       workspaceName: args.workspaceName,
@@ -611,7 +611,7 @@ export async function runAutomationHook(args: {
 
     if (!result.ok) {
       summary.failures.push({
-        automationId: ref.automationId,
+        scriptId: ref.scriptId,
         message: "error" in result && result.error ? result.error : `Exited with ${result.exitCode ?? -1}`,
       });
       if (ref.blocking) {
@@ -626,12 +626,12 @@ export async function runAutomationHook(args: {
   return summary;
 }
 
-export function getAutomationStatuses(args: {
+export function getScriptStatuses(args: {
   workspaceId: string;
-}): WorkspaceAutomationStatusEntry[] {
-  return listWorkspaceAutomationProcessesForWorkspace(args.workspaceId).map((entry) => ({
-    automationId: entry.automationId,
-    automationKind: entry.automationKind,
+}): WorkspaceScriptStatusEntry[] {
+  return listWorkspaceScriptProcessesForWorkspace(args.workspaceId).map((entry) => ({
+    scriptId: entry.scriptId,
+    scriptKind: entry.scriptKind,
     running: !entry.aborted,
     runId: entry.runId,
     sessionId: entry.sessionId,
@@ -639,21 +639,21 @@ export function getAutomationStatuses(args: {
   }));
 }
 
-export async function stopAllWorkspaceAutomationProcesses(args: {
+export async function stopAllWorkspaceScriptProcesses(args: {
   workspaceId: string;
 }): Promise<void> {
-  const entries = listWorkspaceAutomationProcessesForWorkspace(args.workspaceId);
-  await Promise.all(entries.map((entry) => stopAutomationEntry({
+  const entries = listWorkspaceScriptProcessesForWorkspace(args.workspaceId);
+  await Promise.all(entries.map((entry) => stopScriptEntry({
     workspaceId: entry.workspaceId,
-    automationId: entry.automationId,
-    automationKind: entry.automationKind,
+    scriptId: entry.scriptId,
+    scriptKind: entry.scriptKind,
   })));
 }
 
-export async function cleanupAllAutomationProcesses(): Promise<void> {
-  const keys = listWorkspaceAutomationProcessKeys();
+export async function cleanupAllScriptProcesses(): Promise<void> {
+  const keys = listWorkspaceScriptProcessKeys();
   await Promise.all(keys.map(async (key) => {
-    const entry = getWorkspaceAutomationProcess(key);
+    const entry = getWorkspaceScriptProcess(key);
     if (!entry) {
       return;
     }
@@ -661,6 +661,6 @@ export async function cleanupAllAutomationProcesses(): Promise<void> {
     if (entry.process) {
       await killProcess(entry.process);
     }
-    deleteWorkspaceAutomationProcess(key);
+    deleteWorkspaceScriptProcess(key);
   }));
 }

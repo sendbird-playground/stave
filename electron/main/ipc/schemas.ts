@@ -49,8 +49,8 @@ export const CreatePRArgsSchema = z
   })
   .strict();
 
-const AutomationKindSchema = z.union([z.literal("action"), z.literal("service")]);
-const AutomationTriggerSchema = z.union([
+const ScriptKindSchema = z.union([z.literal("action"), z.literal("service")]);
+const ScriptTriggerSchema = z.union([
   z.literal("task.created"),
   z.literal("task.archiving"),
   z.literal("turn.started"),
@@ -61,7 +61,7 @@ const AutomationTriggerSchema = z.union([
   z.literal("pr.afterOpen"),
 ]);
 
-export const WorkspaceAutomationsGetConfigArgsSchema = z
+export const WorkspaceScriptsGetConfigArgsSchema = z
   .object({
     projectPath: z.string().min(1).max(4096),
     workspacePath: z.string().min(1).max(4096),
@@ -69,17 +69,17 @@ export const WorkspaceAutomationsGetConfigArgsSchema = z
   })
   .strict();
 
-export const WorkspaceAutomationsGetStatusArgsSchema = z
+export const WorkspaceScriptsGetStatusArgsSchema = z
   .object({
     workspaceId: z.string().min(1).max(200),
   })
   .strict();
 
-export const WorkspaceAutomationsRunEntryArgsSchema = z
+export const WorkspaceScriptsRunEntryArgsSchema = z
   .object({
     workspaceId: z.string().min(1).max(200),
-    automationId: z.string().min(1).max(200),
-    automationKind: AutomationKindSchema,
+    scriptId: z.string().min(1).max(200),
+    scriptKind: ScriptKindSchema,
     projectPath: z.string().min(1).max(4096),
     workspacePath: z.string().min(1).max(4096),
     workspaceName: z.string().min(1).max(200),
@@ -87,18 +87,18 @@ export const WorkspaceAutomationsRunEntryArgsSchema = z
   })
   .strict();
 
-export const WorkspaceAutomationsStopEntryArgsSchema = z
+export const WorkspaceScriptsStopEntryArgsSchema = z
   .object({
     workspaceId: z.string().min(1).max(200),
-    automationId: z.string().min(1).max(200),
-    automationKind: AutomationKindSchema,
+    scriptId: z.string().min(1).max(200),
+    scriptKind: ScriptKindSchema,
   })
   .strict();
 
-export const WorkspaceAutomationsRunHookArgsSchema = z
+export const WorkspaceScriptsRunHookArgsSchema = z
   .object({
     workspaceId: z.string().min(1).max(200),
-    trigger: AutomationTriggerSchema,
+    trigger: ScriptTriggerSchema,
     projectPath: z.string().min(1).max(4096),
     workspacePath: z.string().min(1).max(4096),
     workspaceName: z.string().min(1).max(200),
@@ -109,7 +109,7 @@ export const WorkspaceAutomationsRunHookArgsSchema = z
   })
   .strict();
 
-export const WorkspaceAutomationsStopAllArgsSchema = z
+export const WorkspaceScriptsStopAllArgsSchema = z
   .object({
     workspaceId: z.string().min(1).max(200),
   })

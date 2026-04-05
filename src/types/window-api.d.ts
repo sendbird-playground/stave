@@ -26,12 +26,12 @@ import type {
   ToolingStatusSnapshot,
 } from "@/lib/tooling-status";
 import type {
-  AutomationKind,
-  AutomationTrigger,
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationEventEnvelope,
-  WorkspaceAutomationHookRunSummary,
-  WorkspaceAutomationStatusEntry,
+  ScriptKind,
+  ScriptTrigger,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptEventEnvelope,
+  WorkspaceScriptHookRunSummary,
+  WorkspaceScriptStatusEntry,
 } from "@/lib/workspace-scripts/types";
 
 interface ProviderStreamTurnArgs {
@@ -517,7 +517,7 @@ interface WindowToolingApi {
   syncOriginMain?: (args: { cwd?: string }) => Promise<SyncOriginMainResult>;
 }
 
-interface WindowAutomationsApi {
+interface WindowScriptsApi {
   getConfig?: (args: {
     projectPath: string;
     workspacePath: string;
@@ -525,17 +525,17 @@ interface WindowAutomationsApi {
   }) => Promise<{
     ok: boolean;
     error?: string;
-    config: ResolvedWorkspaceAutomationsConfig | null;
+    config: ResolvedWorkspaceScriptsConfig | null;
   }>;
   getStatus?: (args: { workspaceId: string }) => Promise<{
     ok: boolean;
     error?: string;
-    statuses: WorkspaceAutomationStatusEntry[];
+    statuses: WorkspaceScriptStatusEntry[];
   }>;
   runEntry?: (args: {
     workspaceId: string;
-    automationId: string;
-    automationKind: AutomationKind;
+    scriptId: string;
+    scriptKind: ScriptKind;
     projectPath: string;
     workspacePath: string;
     workspaceName: string;
@@ -550,15 +550,15 @@ interface WindowAutomationsApi {
   }>;
   stopEntry?: (args: {
     workspaceId: string;
-    automationId: string;
-    automationKind: AutomationKind;
+    scriptId: string;
+    scriptKind: ScriptKind;
   }) => Promise<{
     ok: boolean;
     error?: string;
   }>;
   runHook?: (args: {
     workspaceId: string;
-    trigger: AutomationTrigger;
+    trigger: ScriptTrigger;
     projectPath: string;
     workspacePath: string;
     workspaceName: string;
@@ -569,14 +569,14 @@ interface WindowAutomationsApi {
   }) => Promise<{
     ok: boolean;
     error?: string;
-    summary: WorkspaceAutomationHookRunSummary | null;
+    summary: WorkspaceScriptHookRunSummary | null;
   }>;
   stopAll?: (args: { workspaceId: string }) => Promise<{
     ok: boolean;
     error?: string;
   }>;
   subscribeEvents?: (
-    listener: (payload: WorkspaceAutomationEventEnvelope) => void,
+    listener: (payload: WorkspaceScriptEventEnvelope) => void,
   ) => () => void;
 }
 
@@ -1069,7 +1069,7 @@ interface WindowApi {
   eslint?: WindowEslintApi;
   terminal?: WindowTerminalApi;
   tooling?: WindowToolingApi;
-  automations?: WindowAutomationsApi;
+  scripts?: WindowScriptsApi;
   sourceControl?: WindowSourceControlApi;
   metrics?: WindowMetricsApi;
   inlineCompletion?: WindowInlineCompletionApi;

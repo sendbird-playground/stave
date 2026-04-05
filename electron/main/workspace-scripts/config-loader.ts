@@ -1,26 +1,26 @@
 // ---------------------------------------------------------------------------
-// Workspace Automations – Config Loader (Electron main process)
+// Workspace Scripts – Config Loader (Electron main process)
 // ---------------------------------------------------------------------------
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import {
-  AUTOMATIONS_CONFIG_FILENAME,
-  AUTOMATIONS_LOCAL_CONFIG_FILENAME,
+  SCRIPTS_CONFIG_FILENAME,
+  SCRIPTS_LOCAL_CONFIG_FILENAME,
   STAVE_CONFIG_DIR,
 } from "../../../src/lib/workspace-scripts/constants";
 import {
-  resolveAutomationConfigFromTiers,
+  resolveScriptConfigFromTiers,
 } from "../../../src/lib/workspace-scripts/config";
 import {
-  AutomationsConfigSchema,
-  AutomationsLocalConfigSchema,
+  ScriptsConfigSchema,
+  ScriptsLocalConfigSchema,
 } from "../../../src/lib/workspace-scripts/schemas";
 import type {
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationsConfig,
-  WorkspaceAutomationsLocalConfig,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptsConfig,
+  WorkspaceScriptsLocalConfig,
 } from "../../../src/lib/workspace-scripts/types";
 
 async function readJsonFile<T>(filePath: string, schema: z.ZodType<T>): Promise<T | null> {
@@ -29,7 +29,7 @@ async function readJsonFile<T>(filePath: string, schema: z.ZodType<T>): Promise<
     const parsed = JSON.parse(raw);
     const result = schema.safeParse(parsed);
     if (!result.success) {
-      console.warn(`[workspace-automations] Invalid config at ${filePath}:`, result.error.message);
+      console.warn(`[workspace-scripts] Invalid config at ${filePath}:`, result.error.message);
       return null;
     }
     return result.data;
@@ -39,38 +39,38 @@ async function readJsonFile<T>(filePath: string, schema: z.ZodType<T>): Promise<
 }
 
 async function loadConfigPair(dir: string): Promise<{
-  base: WorkspaceAutomationsConfig | null;
-  local: WorkspaceAutomationsLocalConfig | null;
+  base: WorkspaceScriptsConfig | null;
+  local: WorkspaceScriptsLocalConfig | null;
 }> {
-  const basePath = path.join(dir, STAVE_CONFIG_DIR, AUTOMATIONS_CONFIG_FILENAME);
-  const localPath = path.join(dir, STAVE_CONFIG_DIR, AUTOMATIONS_LOCAL_CONFIG_FILENAME);
+  const basePath = path.join(dir, STAVE_CONFIG_DIR, SCRIPTS_CONFIG_FILENAME);
+  const localPath = path.join(dir, STAVE_CONFIG_DIR, SCRIPTS_LOCAL_CONFIG_FILENAME);
 
   const [base, local] = await Promise.all([
-    readJsonFile(basePath, AutomationsConfigSchema),
-    readJsonFile(localPath, AutomationsLocalConfigSchema),
+    readJsonFile(basePath, ScriptsConfigSchema),
+    readJsonFile(localPath, ScriptsLocalConfigSchema),
   ]);
 
   return { base, local };
 }
 
-export interface ResolveAutomationsArgs {
+export interface ResolveScriptsArgs {
   projectPath: string;
   workspacePath: string;
   userOverridePath?: string;
 }
 
-export async function resolveAutomationsForWorkspace(
-  args: ResolveAutomationsArgs,
-): Promise<ResolvedWorkspaceAutomationsConfig | null> {
+export async function resolveScriptsForWorkspace(
+  args: ResolveScriptsArgs,
+): Promise<ResolvedWorkspaceScriptsConfig | null> {
   const tiers: Array<{
-    base: WorkspaceAutomationsConfig | null;
-    local: WorkspaceAutomationsLocalConfig | null;
+    base: WorkspaceScriptsConfig | null;
+    local: WorkspaceScriptsLocalConfig | null;
   }> = [];
 
   if (args.userOverridePath) {
     const userBase = await readJsonFile(
-      path.join(args.userOverridePath, AUTOMATIONS_CONFIG_FILENAME),
-      AutomationsConfigSchema,
+      path.join(args.userOverridePath, SCRIPTS_CONFIG_FILENAME),
+      ScriptsConfigSchema,
     );
     if (userBase) {
       tiers.push({ base: userBase, local: null });
@@ -85,5 +85,5 @@ export async function resolveAutomationsForWorkspace(
 
   tiers.push(await loadConfigPair(args.projectPath));
 
-  return resolveAutomationConfigFromTiers(tiers);
+  return resolveScriptConfigFromTiers(tiers);
 }

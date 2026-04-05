@@ -26,7 +26,7 @@ import {
   buildWorkspaceContinueSummaryFilePath,
   buildWorkspaceContinueSummaryMarkdown,
 } from "@/lib/workspace-continue";
-import type { AutomationTrigger } from "@/lib/workspace-scripts";
+import type { ScriptTrigger } from "@/lib/workspace-scripts";
 import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
 import {
   isNotificationUnread,
@@ -955,7 +955,7 @@ function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspa
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => {
-      const resolveAutomationHookWorkspaceContext = (workspaceId: string) => {
+      const resolveScriptHookWorkspaceContext = (workspaceId: string) => {
         const state = get();
         const projectPath = state.projectPath;
         const workspacePath = state.workspacePathById[workspaceId];
@@ -973,20 +973,20 @@ export const useAppStore = create<AppState>()(
         };
       };
 
-      const runAutomationHookInBackground = (args: {
+      const runScriptHookInBackground = (args: {
         workspaceId: string;
-        trigger: AutomationTrigger;
+        trigger: ScriptTrigger;
         taskId?: string;
         taskTitle?: string;
         turnId?: string;
       }) => {
-        const runAutomationHook = window.api?.automations?.runHook;
-        const context = resolveAutomationHookWorkspaceContext(args.workspaceId);
-        if (!runAutomationHook || !context) {
+        const runScriptHook = window.api?.scripts?.runHook;
+        const context = resolveScriptHookWorkspaceContext(args.workspaceId);
+        if (!runScriptHook || !context) {
           return;
         }
 
-        void runAutomationHook({
+        void runScriptHook({
           ...context,
           trigger: args.trigger,
           ...(args.taskId ? { taskId: args.taskId } : {}),
@@ -994,13 +994,13 @@ export const useAppStore = create<AppState>()(
           ...(args.turnId ? { turnId: args.turnId } : {}),
         }).then((result) => {
           if (!result.ok && result.summary?.failures.length) {
-            console.warn("[workspace-automations] hook failures", {
+            console.warn("[workspace-scripts] hook failures", {
               trigger: args.trigger,
               failures: result.summary.failures,
             });
           }
         }).catch((error) => {
-          console.warn("[workspace-automations] hook failed", {
+          console.warn("[workspace-scripts] hook failed", {
             trigger: args.trigger,
             error: String(error),
           });
@@ -2515,9 +2515,9 @@ export const useAppStore = create<AppState>()(
           }
         }
 
-        const runAutomationHook = window.api?.automations?.runHook;
-        if (runAutomationHook) {
-          const automationResult = await runAutomationHook({
+        const runScriptHook = window.api?.scripts?.runHook;
+        if (runScriptHook) {
+          const scriptResult = await runScriptHook({
             workspaceId,
             trigger: "workspace.created",
             projectPath: current.projectPath,
@@ -2525,12 +2525,12 @@ export const useAppStore = create<AppState>()(
             workspaceName: branchName,
             branch: branchName,
           });
-          if (automationResult.summary?.totalEntries) {
+          if (scriptResult.summary?.totalEntries) {
             creationNotices.push({
-              level: automationResult.ok ? "success" : "warning",
-              message: automationResult.ok
-                ? `Ran ${automationResult.summary.executedEntries} workspace create automation${automationResult.summary.executedEntries === 1 ? "" : "s"}.`
-                : `Workspace create automations reported failures. ${automationResult.summary.failures.map((failure) => `${failure.automationId}: ${failure.message}`).join(" ")}`,
+              level: scriptResult.ok ? "success" : "warning",
+              message: scriptResult.ok
+                ? `Ran ${scriptResult.summary.executedEntries} workspace create script${scriptResult.summary.executedEntries === 1 ? "" : "s"}.`
+                : `Workspace create scripts reported failures. ${scriptResult.summary.failures.map((failure) => `${failure.scriptId}: ${failure.message}`).join(" ")}`,
             });
           }
         }
@@ -2758,10 +2758,10 @@ export const useAppStore = create<AppState>()(
         const workspaceBranch = state.workspaceBranchById[workspaceId];
         const projectPath = state.projectPath;
         const runner = window.api?.terminal?.runCommand;
-        const runAutomationHook = window.api?.automations?.runHook;
-        const stopWorkspaceAutomations = window.api?.automations?.stopAll;
-        if (runAutomationHook && projectPath && workspacePath && workspaceBranch) {
-          const hookResult = await runAutomationHook({
+        const runScriptHook = window.api?.scripts?.runHook;
+        const stopWorkspaceScripts = window.api?.scripts?.stopAll;
+        if (runScriptHook && projectPath && workspacePath && workspaceBranch) {
+          const hookResult = await runScriptHook({
             workspaceId,
             trigger: "workspace.archiving",
             projectPath,
@@ -2770,11 +2770,11 @@ export const useAppStore = create<AppState>()(
             branch: workspaceBranch,
           });
           if (!hookResult.ok && hookResult.summary?.failures.length) {
-            console.warn("[workspace-automations] archive hook failures", hookResult.summary.failures);
+            console.warn("[workspace-scripts] archive hook failures", hookResult.summary.failures);
           }
         }
-        if (stopWorkspaceAutomations) {
-          await stopWorkspaceAutomations({ workspaceId });
+        if (stopWorkspaceScripts) {
+          await stopWorkspaceScripts({ workspaceId });
         }
         if (runner && projectPath && workspacePath) {
           const removeResult = await runner({
@@ -3392,7 +3392,7 @@ export const useAppStore = create<AppState>()(
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
-        runAutomationHookInBackground({
+        runScriptHookInBackground({
           workspaceId,
           trigger: "task.created",
           taskId: nextTask.id,
@@ -3815,7 +3815,7 @@ export const useAppStore = create<AppState>()(
         }
         void window.api?.provider?.cleanupTask?.({ taskId });
         if (workspaceId) {
-          runAutomationHookInBackground({
+          runScriptHookInBackground({
             workspaceId,
             trigger: "task.archiving",
             taskId,
@@ -4560,7 +4560,7 @@ export const useAppStore = create<AppState>()(
             }
             if (applied.turnCompleted) {
               const completedTask = latestState.tasks.find((task) => task.id === resolvedTaskId) ?? null;
-              runAutomationHookInBackground({
+              runScriptHookInBackground({
                 workspaceId: taskWorkspaceId,
                 trigger: "turn.completed",
                 taskId: resolvedTaskId,
@@ -4571,7 +4571,7 @@ export const useAppStore = create<AppState>()(
           },
         });
 
-        runAutomationHookInBackground({
+        runScriptHookInBackground({
           workspaceId: taskWorkspaceId,
           trigger: "turn.started",
           taskId: resolvedTaskId,

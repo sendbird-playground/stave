@@ -1,15 +1,15 @@
 import {
-  AUTOMATION_TRIGGER_IDS,
-  DEFAULT_AUTOMATION_TARGET_IDS,
+  SCRIPT_TRIGGER_IDS,
+  DEFAULT_SCRIPT_TARGET_IDS,
 } from "./constants";
 import type {
-  AutomationKind,
-  AutomationTrigger,
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationsConfig,
+  ScriptKind,
+  ScriptTrigger,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptsConfig,
 } from "./types";
 
-export interface AutomationEditorEntry {
+export interface ScriptEditorEntry {
   id: string;
   label: string;
   description: string;
@@ -24,21 +24,21 @@ export interface AutomationEditorEntry {
   orbitProxyPort: string;
 }
 
-export interface AutomationEditorHookLink {
-  automationId: string;
-  automationKind: AutomationKind | null;
+export interface ScriptEditorHookLink {
+  scriptId: string;
+  scriptKind: ScriptKind | null;
   blocking: boolean;
 }
 
-export interface AutomationEditorState {
-  actions: AutomationEditorEntry[];
-  services: AutomationEditorEntry[];
-  hooks: Partial<Record<AutomationTrigger, AutomationEditorHookLink[]>>;
+export interface ScriptEditorState {
+  actions: ScriptEditorEntry[];
+  services: ScriptEditorEntry[];
+  hooks: Partial<Record<ScriptTrigger, ScriptEditorHookLink[]>>;
 }
 
-export interface AutomationEditorCandidate {
-  automationId: string;
-  automationKind: AutomationKind;
+export interface ScriptEditorCandidate {
+  scriptId: string;
+  scriptKind: ScriptKind;
   label: string;
   description: string;
 }
@@ -48,28 +48,28 @@ function normalizeCommandsText(commands: string[] | undefined) {
 }
 
 function inferHookKind(args: {
-  automationId: string;
-  explicitKind?: AutomationKind;
+  scriptId: string;
+  explicitKind?: ScriptKind;
   fileActionIds: Set<string>;
   fileServiceIds: Set<string>;
-  resolvedKindsById: Map<string, AutomationKind | null>;
+  resolvedKindsById: Map<string, ScriptKind | null>;
 }) {
   if (args.explicitKind) {
     return args.explicitKind;
   }
-  if (args.fileActionIds.has(args.automationId)) {
+  if (args.fileActionIds.has(args.scriptId)) {
     return "action";
   }
-  if (args.fileServiceIds.has(args.automationId)) {
+  if (args.fileServiceIds.has(args.scriptId)) {
     return "service";
   }
-  return args.resolvedKindsById.get(args.automationId) ?? null;
+  return args.resolvedKindsById.get(args.scriptId) ?? null;
 }
 
 function buildResolvedKindsById(
-  resolvedConfig: ResolvedWorkspaceAutomationsConfig | null | undefined,
+  resolvedConfig: ResolvedWorkspaceScriptsConfig | null | undefined,
 ) {
-  const kindsById = new Map<string, AutomationKind | null>();
+  const kindsById = new Map<string, ScriptKind | null>();
   for (const entry of [...(resolvedConfig?.actions ?? []), ...(resolvedConfig?.services ?? [])]) {
     const existing = kindsById.get(entry.id);
     if (!existing) {
@@ -83,14 +83,14 @@ function buildResolvedKindsById(
   return kindsById;
 }
 
-export function createEmptyAutomationEditorEntry(
-  kind: AutomationKind,
-): AutomationEditorEntry {
+export function createEmptyScriptEditorEntry(
+  kind: ScriptKind,
+): ScriptEditorEntry {
   return {
     id: "",
     label: "",
     description: "",
-    target: DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE,
+    target: DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE,
     commandsText: "",
     timeoutMs: "",
     enabled: true,
@@ -102,7 +102,7 @@ export function createEmptyAutomationEditorEntry(
   };
 }
 
-export function createEmptyAutomationEditorState(): AutomationEditorState {
+export function createEmptyScriptEditorState(): ScriptEditorState {
   return {
     actions: [],
     services: [],
@@ -110,12 +110,12 @@ export function createEmptyAutomationEditorState(): AutomationEditorState {
   };
 }
 
-export function buildAutomationEditorState(args: {
-  config: WorkspaceAutomationsConfig | null;
-  resolvedConfig?: ResolvedWorkspaceAutomationsConfig | null;
-}): AutomationEditorState {
+export function buildScriptEditorState(args: {
+  config: WorkspaceScriptsConfig | null;
+  resolvedConfig?: ResolvedWorkspaceScriptsConfig | null;
+}): ScriptEditorState {
   if (!args.config) {
-    return createEmptyAutomationEditorState();
+    return createEmptyScriptEditorState();
   }
 
   const fileActionIds = new Set(Object.keys(args.config.actions ?? {}));
@@ -126,7 +126,7 @@ export function buildAutomationEditorState(args: {
     id,
     label: entry.label ?? "",
     description: entry.description ?? "",
-    target: entry.target ?? DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE,
+    target: entry.target ?? DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE,
     commandsText: normalizeCommandsText(entry.commands),
     timeoutMs: entry.timeoutMs ? String(entry.timeoutMs) : "",
     enabled: entry.enabled ?? true,
@@ -141,7 +141,7 @@ export function buildAutomationEditorState(args: {
     id,
     label: entry.label ?? "",
     description: entry.description ?? "",
-    target: entry.target ?? DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE,
+    target: entry.target ?? DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE,
     commandsText: normalizeCommandsText(entry.commands),
     timeoutMs: entry.timeoutMs ? String(entry.timeoutMs) : "",
     enabled: entry.enabled ?? true,
@@ -152,21 +152,21 @@ export function buildAutomationEditorState(args: {
     orbitProxyPort: entry.orbit?.proxyPort ? String(entry.orbit.proxyPort) : "",
   }));
 
-  const hooks = AUTOMATION_TRIGGER_IDS.reduce<AutomationEditorState["hooks"]>((acc, trigger) => {
+  const hooks = SCRIPT_TRIGGER_IDS.reduce<ScriptEditorState["hooks"]>((acc, trigger) => {
     const refs = args.config?.hooks?.[trigger];
     if (!refs?.length) {
       return acc;
     }
     const normalizedRefs = refs
       .map((ref) => {
-        const automationId = (typeof ref === "string" ? ref : ref.ref).trim();
-        if (!automationId) {
+        const scriptId = (typeof ref === "string" ? ref : ref.ref).trim();
+        if (!scriptId) {
           return null;
         }
         return {
-          automationId,
-          automationKind: inferHookKind({
-            automationId,
+          scriptId,
+          scriptKind: inferHookKind({
+            scriptId,
             explicitKind: typeof ref === "string" ? undefined : ref.kind,
             fileActionIds,
             fileServiceIds,
@@ -175,7 +175,7 @@ export function buildAutomationEditorState(args: {
           blocking: typeof ref === "string" ? true : ref.blocking ?? true,
         };
       })
-      .filter((item): item is AutomationEditorHookLink => item !== null);
+      .filter((item): item is ScriptEditorHookLink => item !== null);
 
     if (normalizedRefs.length > 0) {
       acc[trigger] = normalizedRefs;
@@ -191,7 +191,7 @@ export function buildAutomationEditorState(args: {
   };
 }
 
-function buildEntryConfig(entry: AutomationEditorEntry) {
+function buildEntryConfig(entry: ScriptEditorEntry) {
   const commands = entry.commandsText
     .split("\n")
     .map((command) => command.trim())
@@ -202,16 +202,16 @@ function buildEntryConfig(entry: AutomationEditorEntry) {
     ...(entry.label.trim() ? { label: entry.label.trim() } : {}),
     ...(entry.description.trim() ? { description: entry.description.trim() } : {}),
     commands,
-    target: entry.target.trim() || DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE,
+    target: entry.target.trim() || DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE,
     ...(timeoutMs ? { timeoutMs: Number(timeoutMs) } : {}),
     ...(entry.enabled ? {} : { enabled: false }),
   };
 }
 
-function dedupeHookLinks(links: AutomationEditorHookLink[]) {
+function dedupeHookLinks(links: ScriptEditorHookLink[]) {
   const seen = new Set<string>();
   return links.filter((link) => {
-    const key = `${link.automationKind ?? "unknown"}:${link.automationId}`;
+    const key = `${link.scriptKind ?? "unknown"}:${link.scriptId}`;
     if (seen.has(key)) {
       return false;
     }
@@ -220,9 +220,9 @@ function dedupeHookLinks(links: AutomationEditorHookLink[]) {
   });
 }
 
-export function buildAutomationConfigFromEditorState(
-  state: AutomationEditorState,
-): WorkspaceAutomationsConfig {
+export function buildScriptConfigFromEditorState(
+  state: ScriptEditorState,
+): WorkspaceScriptsConfig {
   const actions = Object.fromEntries(
     state.actions
       .map((entry) => [entry.id.trim(), buildEntryConfig(entry)] as const)
@@ -248,20 +248,20 @@ export function buildAutomationConfigFromEditorState(
       .filter(([id, entry]) => Boolean(id) && entry.commands.length > 0),
   );
 
-  const hooks = AUTOMATION_TRIGGER_IDS.reduce<WorkspaceAutomationsConfig["hooks"]>((acc, trigger) => {
+  const hooks = SCRIPT_TRIGGER_IDS.reduce<WorkspaceScriptsConfig["hooks"]>((acc, trigger) => {
     const nextRefs = dedupeHookLinks(state.hooks[trigger] ?? [])
       .map((link) => {
-        const automationId = link.automationId.trim();
-        if (!automationId) {
+        const scriptId = link.scriptId.trim();
+        if (!scriptId) {
           return null;
         }
         return {
-          ref: automationId,
-          ...(link.automationKind ? { kind: link.automationKind } : {}),
+          ref: scriptId,
+          ...(link.scriptKind ? { kind: link.scriptKind } : {}),
           ...(link.blocking ? {} : { blocking: false }),
         };
       })
-      .filter((item): item is { ref: string; kind?: AutomationKind; blocking?: boolean } => item !== null);
+      .filter((item): item is { ref: string; kind?: ScriptKind; blocking?: boolean } => item !== null);
 
     if (nextRefs.length > 0) {
       acc ??= {};
@@ -279,9 +279,9 @@ export function buildAutomationConfigFromEditorState(
   };
 }
 
-export function mergeAutomationConfigIntoRaw(args: {
+export function mergeScriptConfigIntoRaw(args: {
   rawConfig: Record<string, unknown> | null;
-  config: WorkspaceAutomationsConfig;
+  config: WorkspaceScriptsConfig;
 }): Record<string, unknown> {
   const next = {
     ...(args.rawConfig ?? {}),
@@ -302,60 +302,60 @@ export function mergeAutomationConfigIntoRaw(args: {
   return next;
 }
 
-export function formatAutomationConfigFile(rawConfig: Record<string, unknown>) {
+export function formatScriptConfigFile(rawConfig: Record<string, unknown>) {
   return `${JSON.stringify(rawConfig, null, 2)}\n`;
 }
 
-export function buildAutomationEditorCandidates(args: {
-  state: AutomationEditorState;
-  resolvedConfig?: ResolvedWorkspaceAutomationsConfig | null;
-}): AutomationEditorCandidate[] {
-  const next = new Map<string, AutomationEditorCandidate>();
+export function buildScriptEditorCandidates(args: {
+  state: ScriptEditorState;
+  resolvedConfig?: ResolvedWorkspaceScriptsConfig | null;
+}): ScriptEditorCandidate[] {
+  const next = new Map<string, ScriptEditorCandidate>();
 
   for (const entry of [...(args.resolvedConfig?.actions ?? []), ...(args.resolvedConfig?.services ?? [])]) {
     next.set(`${entry.kind}:${entry.id}`, {
-      automationId: entry.id,
-      automationKind: entry.kind,
+      scriptId: entry.id,
+      scriptKind: entry.kind,
       label: entry.label,
       description: entry.description,
     });
   }
 
   for (const entry of args.state.actions) {
-    const automationId = entry.id.trim();
-    if (!automationId) {
+    const scriptId = entry.id.trim();
+    if (!scriptId) {
       continue;
     }
-    next.set(`action:${automationId}`, {
-      automationId,
-      automationKind: "action",
-      label: entry.label.trim() || automationId,
+    next.set(`action:${scriptId}`, {
+      scriptId,
+      scriptKind: "action",
+      label: entry.label.trim() || scriptId,
       description: entry.description.trim(),
     });
   }
 
   for (const entry of args.state.services) {
-    const automationId = entry.id.trim();
-    if (!automationId) {
+    const scriptId = entry.id.trim();
+    if (!scriptId) {
       continue;
     }
-    next.set(`service:${automationId}`, {
-      automationId,
-      automationKind: "service",
-      label: entry.label.trim() || automationId,
+    next.set(`service:${scriptId}`, {
+      scriptId,
+      scriptKind: "service",
+      label: entry.label.trim() || scriptId,
       description: entry.description.trim(),
     });
   }
 
   return [...next.values()].sort((left, right) => {
-    if (left.automationKind !== right.automationKind) {
-      return left.automationKind.localeCompare(right.automationKind);
+    if (left.scriptKind !== right.scriptKind) {
+      return left.scriptKind.localeCompare(right.scriptKind);
     }
-    return (left.label || left.automationId).localeCompare(right.label || right.automationId);
+    return (left.label || left.scriptId).localeCompare(right.label || right.scriptId);
   });
 }
 
-export function validateAutomationEditorState(state: AutomationEditorState) {
+export function validateScriptEditorState(state: ScriptEditorState) {
   const issues: string[] = [];
 
   for (const [section, entries] of [
@@ -364,15 +364,15 @@ export function validateAutomationEditorState(state: AutomationEditorState) {
   ] as const) {
     const seenIds = new Set<string>();
     entries.forEach((entry, index) => {
-      const automationId = entry.id.trim();
-      const label = entry.label.trim() || automationId || `${section.slice(0, -1)} ${index + 1}`;
+      const scriptId = entry.id.trim();
+      const label = entry.label.trim() || scriptId || `${section.slice(0, -1)} ${index + 1}`;
 
-      if (!automationId) {
+      if (!scriptId) {
         issues.push(`${section}: "${label}" is missing an id.`);
-      } else if (seenIds.has(automationId)) {
-        issues.push(`${section}: duplicate id "${automationId}".`);
+      } else if (seenIds.has(scriptId)) {
+        issues.push(`${section}: duplicate id "${scriptId}".`);
       } else {
-        seenIds.add(automationId);
+        seenIds.add(scriptId);
       }
 
       const commands = entry.commandsText
@@ -390,7 +390,7 @@ export function validateAutomationEditorState(state: AutomationEditorState) {
         }
       }
 
-      if (section === "services" && entry.orbitEnabled && entry.target !== DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE) {
+      if (section === "services" && entry.orbitEnabled && entry.target !== DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE) {
         issues.push(`${section}: "${label}" must target workspace when Orbit is enabled.`);
       }
 

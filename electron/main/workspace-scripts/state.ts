@@ -1,51 +1,51 @@
 // ---------------------------------------------------------------------------
-// Workspace Automations – Process State (Electron main process)
+// Workspace Scripts – Process State (Electron main process)
 // ---------------------------------------------------------------------------
 
 import type { ChildProcess } from "node:child_process";
 import type * as pty from "node-pty";
 import type {
-  AutomationKind,
-  WorkspaceAutomationRunSource,
+  ScriptKind,
+  WorkspaceScriptRunSource,
 } from "../../../src/lib/workspace-scripts/types";
 
-export interface WorkspaceAutomationProcess {
+export interface WorkspaceScriptProcess {
   workspaceId: string;
-  automationId: string;
-  automationKind: AutomationKind;
+  scriptId: string;
+  scriptKind: ScriptKind;
   runId: string;
-  source: WorkspaceAutomationRunSource;
+  source: WorkspaceScriptRunSource;
   process: ChildProcess | pty.IPty | null;
   aborted: boolean;
   sessionId?: string;
 }
 
-const workspaceAutomationProcesses = new Map<string, WorkspaceAutomationProcess>();
+const workspaceScriptProcesses = new Map<string, WorkspaceScriptProcess>();
 
-export function getAutomationProcessKey(args: {
+export function getScriptProcessKey(args: {
   workspaceId: string;
-  automationId: string;
-  automationKind: AutomationKind;
+  scriptId: string;
+  scriptKind: ScriptKind;
 }) {
-  return `${args.workspaceId}:${args.automationKind}:${args.automationId}`;
+  return `${args.workspaceId}:${args.scriptKind}:${args.scriptId}`;
 }
 
-export function getWorkspaceAutomationProcess(key: string): WorkspaceAutomationProcess | undefined {
-  return workspaceAutomationProcesses.get(key);
+export function getWorkspaceScriptProcess(key: string): WorkspaceScriptProcess | undefined {
+  return workspaceScriptProcesses.get(key);
 }
 
-export function setWorkspaceAutomationProcess(key: string, entry: WorkspaceAutomationProcess): void {
-  workspaceAutomationProcesses.set(key, entry);
+export function setWorkspaceScriptProcess(key: string, entry: WorkspaceScriptProcess): void {
+  workspaceScriptProcesses.set(key, entry);
 }
 
-export function deleteWorkspaceAutomationProcess(key: string): void {
-  workspaceAutomationProcesses.delete(key);
+export function deleteWorkspaceScriptProcess(key: string): void {
+  workspaceScriptProcesses.delete(key);
 }
 
-export function listWorkspaceAutomationProcessKeys(): string[] {
-  return [...workspaceAutomationProcesses.keys()];
+export function listWorkspaceScriptProcessKeys(): string[] {
+  return [...workspaceScriptProcesses.keys()];
 }
 
-export function listWorkspaceAutomationProcessesForWorkspace(workspaceId: string): WorkspaceAutomationProcess[] {
-  return [...workspaceAutomationProcesses.values()].filter((entry) => entry.workspaceId === workspaceId);
+export function listWorkspaceScriptProcessesForWorkspace(workspaceId: string): WorkspaceScriptProcess[] {
+  return [...workspaceScriptProcesses.values()].filter((entry) => entry.workspaceId === workspaceId);
 }
