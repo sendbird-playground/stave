@@ -1,25 +1,25 @@
 // ---------------------------------------------------------------------------
-// Workspace Automations – Config Resolution
+// Workspace Scripts – Config Resolution
 // ---------------------------------------------------------------------------
 
 import {
-  AUTOMATION_TRIGGER_IDS,
-  DEFAULT_AUTOMATION_TARGET_IDS,
+  SCRIPT_TRIGGER_IDS,
+  DEFAULT_SCRIPT_TARGET_IDS,
 } from "./constants";
 import type {
-  AutomationKind,
-  AutomationTrigger,
-  ResolvedAutomationTarget,
-  ResolvedWorkspaceAutomationOrbitConfig,
-  ResolvedWorkspaceAutomation,
-  ResolvedWorkspaceAutomationHook,
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationActionConfig,
-  WorkspaceAutomationHookRef,
-  WorkspaceAutomationServiceConfig,
-  WorkspaceAutomationsConfig,
-  WorkspaceAutomationsLocalConfig,
-  WorkspaceAutomationTargetConfig,
+  ScriptKind,
+  ScriptTrigger,
+  ResolvedScriptTarget,
+  ResolvedWorkspaceScriptOrbitConfig,
+  ResolvedWorkspaceScript,
+  ResolvedWorkspaceScriptHook,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptActionConfig,
+  WorkspaceScriptHookRef,
+  WorkspaceScriptServiceConfig,
+  WorkspaceScriptsConfig,
+  WorkspaceScriptsLocalConfig,
+  WorkspaceScriptTargetConfig,
 } from "./types";
 
 function humanizeId(value: string) {
@@ -30,16 +30,16 @@ function humanizeId(value: string) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-export function createDefaultAutomationTargets(): Record<string, ResolvedAutomationTarget> {
+export function createDefaultScriptTargets(): Record<string, ResolvedScriptTarget> {
   return {
-    [DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE]: {
-      id: DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE,
+    [DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE]: {
+      id: DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE,
       label: "Workspace",
       cwd: "workspace",
       env: {},
     },
-    [DEFAULT_AUTOMATION_TARGET_IDS.PROJECT]: {
-      id: DEFAULT_AUTOMATION_TARGET_IDS.PROJECT,
+    [DEFAULT_SCRIPT_TARGET_IDS.PROJECT]: {
+      id: DEFAULT_SCRIPT_TARGET_IDS.PROJECT,
       label: "Project",
       cwd: "project",
       env: {},
@@ -48,10 +48,10 @@ export function createDefaultAutomationTargets(): Record<string, ResolvedAutomat
 }
 
 function mergeTargetRecord(
-  base: Record<string, WorkspaceAutomationTargetConfig> | undefined,
-  local: Record<string, Partial<WorkspaceAutomationTargetConfig>> | undefined,
-): Record<string, WorkspaceAutomationTargetConfig> {
-  const result: Record<string, WorkspaceAutomationTargetConfig> = { ...(base ?? {}) };
+  base: Record<string, WorkspaceScriptTargetConfig> | undefined,
+  local: Record<string, Partial<WorkspaceScriptTargetConfig>> | undefined,
+): Record<string, WorkspaceScriptTargetConfig> {
+  const result: Record<string, WorkspaceScriptTargetConfig> = { ...(base ?? {}) };
   for (const [targetId, patch] of Object.entries(local ?? {})) {
     result[targetId] = {
       ...(result[targetId] ?? {}),
@@ -66,10 +66,10 @@ function mergeTargetRecord(
 }
 
 function mergeActionRecord(
-  base: Record<string, WorkspaceAutomationActionConfig> | undefined,
-  local: Record<string, Partial<WorkspaceAutomationActionConfig>> | undefined,
-): Record<string, WorkspaceAutomationActionConfig> {
-  const result: Record<string, WorkspaceAutomationActionConfig> = { ...(base ?? {}) };
+  base: Record<string, WorkspaceScriptActionConfig> | undefined,
+  local: Record<string, Partial<WorkspaceScriptActionConfig>> | undefined,
+): Record<string, WorkspaceScriptActionConfig> {
+  const result: Record<string, WorkspaceScriptActionConfig> = { ...(base ?? {}) };
   for (const [entryId, patch] of Object.entries(local ?? {})) {
     result[entryId] = {
       ...(result[entryId] ?? { commands: [] }),
@@ -81,10 +81,10 @@ function mergeActionRecord(
 }
 
 function mergeServiceRecord(
-  base: Record<string, WorkspaceAutomationServiceConfig> | undefined,
-  local: Record<string, Partial<WorkspaceAutomationServiceConfig>> | undefined,
-): Record<string, WorkspaceAutomationServiceConfig> {
-  const result: Record<string, WorkspaceAutomationServiceConfig> = { ...(base ?? {}) };
+  base: Record<string, WorkspaceScriptServiceConfig> | undefined,
+  local: Record<string, Partial<WorkspaceScriptServiceConfig>> | undefined,
+): Record<string, WorkspaceScriptServiceConfig> {
+  const result: Record<string, WorkspaceScriptServiceConfig> = { ...(base ?? {}) };
   for (const [entryId, patch] of Object.entries(local ?? {})) {
     const nextOrbit = result[entryId]?.orbit || patch.orbit
       ? {
@@ -102,10 +102,10 @@ function mergeServiceRecord(
   return result;
 }
 
-export function mergeAutomationsConfig(
-  base: WorkspaceAutomationsConfig | null,
-  local: WorkspaceAutomationsLocalConfig | null,
-): WorkspaceAutomationsConfig | null {
+export function mergeScriptsConfig(
+  base: WorkspaceScriptsConfig | null,
+  local: WorkspaceScriptsLocalConfig | null,
+): WorkspaceScriptsConfig | null {
   if (!base && !local) {
     return null;
   }
@@ -122,9 +122,9 @@ export function mergeAutomationsConfig(
 }
 
 function normalizeTargetMap(
-  targets: Record<string, WorkspaceAutomationTargetConfig> | undefined,
-): Record<string, ResolvedAutomationTarget> {
-  const nextTargets = createDefaultAutomationTargets();
+  targets: Record<string, WorkspaceScriptTargetConfig> | undefined,
+): Record<string, ResolvedScriptTarget> {
+  const nextTargets = createDefaultScriptTargets();
   for (const [targetId, target] of Object.entries(targets ?? {})) {
     nextTargets[targetId] = {
       id: targetId,
@@ -138,8 +138,8 @@ function normalizeTargetMap(
 }
 
 function normalizeOrbitConfig(
-  orbit: WorkspaceAutomationServiceConfig["orbit"],
-): ResolvedWorkspaceAutomationOrbitConfig | undefined {
+  orbit: WorkspaceScriptServiceConfig["orbit"],
+): ResolvedWorkspaceScriptOrbitConfig | undefined {
   if (!orbit || orbit.enabled === false) {
     return undefined;
   }
@@ -153,34 +153,34 @@ function normalizeOrbitConfig(
 
 function normalizeEntryDescription(args: {
   entryId: string;
-  entry: WorkspaceAutomationActionConfig | WorkspaceAutomationServiceConfig;
-  kind: AutomationKind;
+  entry: WorkspaceScriptActionConfig | WorkspaceScriptServiceConfig;
+  kind: ScriptKind;
 }) {
   if (args.entry.description?.trim()) {
     return args.entry.description.trim();
   }
   if (args.kind === "service") {
-    return "Long-running automation service.";
+    return "Long-running script service.";
   }
-  return "Runnable workspace automation.";
+  return "Runnable workspace script.";
 }
 
 function normalizeEntries(
   args: {
-    entries: Record<string, WorkspaceAutomationActionConfig | WorkspaceAutomationServiceConfig> | undefined;
-    kind: AutomationKind;
-    targets: Record<string, ResolvedAutomationTarget>;
+    entries: Record<string, WorkspaceScriptActionConfig | WorkspaceScriptServiceConfig> | undefined;
+    kind: ScriptKind;
+    targets: Record<string, ResolvedScriptTarget>;
   },
-): ResolvedWorkspaceAutomation[] {
-  const fallbackTarget = args.targets[DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE];
-  const resolvedEntries: ResolvedWorkspaceAutomation[] = [];
+): ResolvedWorkspaceScript[] {
+  const fallbackTarget = args.targets[DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE];
+  const resolvedEntries: ResolvedWorkspaceScript[] = [];
 
   for (const [entryId, entry] of Object.entries(args.entries ?? {})) {
     const commands = (entry.commands ?? []).map((command) => command.trim()).filter(Boolean);
     if (entry.enabled === false || commands.length === 0 || !fallbackTarget) {
       continue;
     }
-    const targetId = entry.target?.trim() || DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE;
+    const targetId = entry.target?.trim() || DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE;
     const target = args.targets[targetId] ?? fallbackTarget;
     resolvedEntries.push({
       id: entryId,
@@ -191,9 +191,9 @@ function normalizeEntries(
       targetId,
       target,
       timeoutMs: entry.timeoutMs,
-      restartOnRun: args.kind === "service" ? (entry as WorkspaceAutomationServiceConfig).restartOnRun ?? true : undefined,
-      orbit: args.kind === "service" ? normalizeOrbitConfig((entry as WorkspaceAutomationServiceConfig).orbit) : undefined,
-      source: "automation",
+      restartOnRun: args.kind === "service" ? (entry as WorkspaceScriptServiceConfig).restartOnRun ?? true : undefined,
+      orbit: args.kind === "service" ? normalizeOrbitConfig((entry as WorkspaceScriptServiceConfig).orbit) : undefined,
+      source: "script",
     });
   }
 
@@ -202,57 +202,57 @@ function normalizeEntries(
 
 function resolveHookRef(
   args: {
-    ref: WorkspaceAutomationHookRef;
-    trigger: AutomationTrigger;
+    ref: WorkspaceScriptHookRef;
+    trigger: ScriptTrigger;
     actionIds: Set<string>;
     serviceIds: Set<string>;
   },
-): ResolvedWorkspaceAutomationHook | null {
+): ResolvedWorkspaceScriptHook | null {
   const rawRef = typeof args.ref === "string" ? args.ref : args.ref.ref;
-  const automationId = rawRef.trim();
-  if (!automationId) {
+  const scriptId = rawRef.trim();
+  if (!scriptId) {
     return null;
   }
 
   const kind = typeof args.ref === "string"
-    ? (args.actionIds.has(automationId)
+    ? (args.actionIds.has(scriptId)
         ? "action"
-        : (args.serviceIds.has(automationId) ? "service" : null))
+        : (args.serviceIds.has(scriptId) ? "service" : null))
     : (args.ref.kind
-        ?? (args.actionIds.has(automationId)
+        ?? (args.actionIds.has(scriptId)
           ? "action"
-          : (args.serviceIds.has(automationId) ? "service" : null)));
+          : (args.serviceIds.has(scriptId) ? "service" : null)));
   if (!kind) {
     return null;
   }
 
   return {
     trigger: args.trigger,
-    automationId,
-    automationKind: kind,
+    scriptId,
+    scriptKind: kind,
     blocking: typeof args.ref === "string" ? true : args.ref.blocking ?? true,
   };
 }
 
 function normalizeHooks(
   args: {
-    hooks: WorkspaceAutomationsConfig["hooks"];
-    actions: ResolvedWorkspaceAutomation[];
-    services: ResolvedWorkspaceAutomation[];
+    hooks: WorkspaceScriptsConfig["hooks"];
+    actions: ResolvedWorkspaceScript[];
+    services: ResolvedWorkspaceScript[];
   },
-): ResolvedWorkspaceAutomationsConfig["hooks"] {
+): ResolvedWorkspaceScriptsConfig["hooks"] {
   const actionIds = new Set(args.actions.map((entry) => entry.id));
   const serviceIds = new Set(args.services.map((entry) => entry.id));
-  const result: ResolvedWorkspaceAutomationsConfig["hooks"] = {};
+  const result: ResolvedWorkspaceScriptsConfig["hooks"] = {};
 
-  for (const trigger of AUTOMATION_TRIGGER_IDS) {
+  for (const trigger of SCRIPT_TRIGGER_IDS) {
     const refs = args.hooks?.[trigger];
     if (!refs || refs.length === 0) {
       continue;
     }
     const resolvedRefs = refs
       .map((ref) => resolveHookRef({ ref, trigger, actionIds, serviceIds }))
-      .filter((item): item is ResolvedWorkspaceAutomationHook => item !== null);
+      .filter((item): item is ResolvedWorkspaceScriptHook => item !== null);
     if (resolvedRefs.length > 0) {
       result[trigger] = resolvedRefs;
     }
@@ -261,9 +261,9 @@ function normalizeHooks(
   return result;
 }
 
-export function resolveAutomationsFromConfig(
-  config: WorkspaceAutomationsConfig | null,
-): ResolvedWorkspaceAutomationsConfig | null {
+export function resolveScriptsFromConfig(
+  config: WorkspaceScriptsConfig | null,
+): ResolvedWorkspaceScriptsConfig | null {
   if (!config) {
     return null;
   }
@@ -298,48 +298,48 @@ export function resolveAutomationsFromConfig(
   };
 }
 
-export function resolveAutomationConfigFromTiers(
+export function resolveScriptConfigFromTiers(
   tiers: Array<{
-    base: WorkspaceAutomationsConfig | null;
-    local: WorkspaceAutomationsLocalConfig | null;
+    base: WorkspaceScriptsConfig | null;
+    local: WorkspaceScriptsLocalConfig | null;
   }>,
-): ResolvedWorkspaceAutomationsConfig | null {
+): ResolvedWorkspaceScriptsConfig | null {
   for (const tier of tiers) {
     if (!tier.base) {
       continue;
     }
-    return resolveAutomationsFromConfig(mergeAutomationsConfig(tier.base, tier.local));
+    return resolveScriptsFromConfig(mergeScriptsConfig(tier.base, tier.local));
   }
   return null;
 }
 
-export function listAutomationEntries(
-  config: ResolvedWorkspaceAutomationsConfig | null,
-): ResolvedWorkspaceAutomation[] {
+export function listScriptEntries(
+  config: ResolvedWorkspaceScriptsConfig | null,
+): ResolvedWorkspaceScript[] {
   if (!config) {
     return [];
   }
   return [...config.actions, ...config.services];
 }
 
-export function getAutomationEntry(
-  config: ResolvedWorkspaceAutomationsConfig | null,
-  args: { automationId: string; kind: AutomationKind },
-): ResolvedWorkspaceAutomation | null {
+export function getScriptEntry(
+  config: ResolvedWorkspaceScriptsConfig | null,
+  args: { scriptId: string; kind: ScriptKind },
+): ResolvedWorkspaceScript | null {
   if (!config) {
     return null;
   }
   const collection = args.kind === "service" ? config.services : config.actions;
-  return collection.find((entry) => entry.id === args.automationId) ?? null;
+  return collection.find((entry) => entry.id === args.scriptId) ?? null;
 }
 
-export function getAutomationHooksForTrigger(
-  config: ResolvedWorkspaceAutomationsConfig | null,
-  trigger: AutomationTrigger,
-): ResolvedWorkspaceAutomationHook[] {
+export function getScriptHooksForTrigger(
+  config: ResolvedWorkspaceScriptsConfig | null,
+  trigger: ScriptTrigger,
+): ResolvedWorkspaceScriptHook[] {
   return config?.hooks[trigger] ?? [];
 }
 
-export function hasAnyAutomations(config: ResolvedWorkspaceAutomationsConfig | null): boolean {
+export function hasAnyScripts(config: ResolvedWorkspaceScriptsConfig | null): boolean {
   return Boolean(config && (config.actions.length > 0 || config.services.length > 0 || Object.keys(config.hooks).length > 0));
 }

@@ -1,25 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import {
-  createDefaultAutomationTargets,
-  getAutomationEntry,
-  getAutomationHooksForTrigger,
-  hasAnyAutomations,
-  mergeAutomationsConfig,
-  resolveAutomationConfigFromTiers,
-  resolveAutomationsFromConfig,
+  createDefaultScriptTargets,
+  getScriptEntry,
+  getScriptHooksForTrigger,
+  hasAnyScripts,
+  mergeScriptsConfig,
+  resolveScriptConfigFromTiers,
+  resolveScriptsFromConfig,
 } from "../src/lib/workspace-scripts/config";
 import type {
-  WorkspaceAutomationsConfig,
-  WorkspaceAutomationsLocalConfig,
+  WorkspaceScriptsConfig,
+  WorkspaceScriptsLocalConfig,
 } from "../src/lib/workspace-scripts/types";
 
-describe("mergeAutomationsConfig", () => {
+describe("mergeScriptsConfig", () => {
   test("returns null when both base and local are null", () => {
-    expect(mergeAutomationsConfig(null, null)).toBeNull();
+    expect(mergeScriptsConfig(null, null)).toBeNull();
   });
 
   test("merges action and service overrides by id", () => {
-    const base: WorkspaceAutomationsConfig = {
+    const base: WorkspaceScriptsConfig = {
       version: 2,
       actions: {
         bootstrap: {
@@ -35,7 +35,7 @@ describe("mergeAutomationsConfig", () => {
         },
       },
     };
-    const local: WorkspaceAutomationsLocalConfig = {
+    const local: WorkspaceScriptsLocalConfig = {
       version: 2,
       actions: {
         bootstrap: {
@@ -49,7 +49,7 @@ describe("mergeAutomationsConfig", () => {
       },
     };
 
-    expect(mergeAutomationsConfig(base, local)).toEqual({
+    expect(mergeScriptsConfig(base, local)).toEqual({
       version: 2,
       actions: {
         bootstrap: {
@@ -71,7 +71,7 @@ describe("mergeAutomationsConfig", () => {
   });
 
   test("merges target env values shallowly", () => {
-    const base: WorkspaceAutomationsConfig = {
+    const base: WorkspaceScriptsConfig = {
       version: 2,
       targets: {
         project: {
@@ -80,7 +80,7 @@ describe("mergeAutomationsConfig", () => {
         },
       },
     };
-    const local: WorkspaceAutomationsLocalConfig = {
+    const local: WorkspaceScriptsLocalConfig = {
       version: 2,
       targets: {
         project: {
@@ -89,7 +89,7 @@ describe("mergeAutomationsConfig", () => {
       },
     };
 
-    expect(mergeAutomationsConfig(base, local)?.targets?.project).toEqual({
+    expect(mergeScriptsConfig(base, local)?.targets?.project).toEqual({
       cwd: "project",
       env: {
         PORT: "3000",
@@ -99,9 +99,9 @@ describe("mergeAutomationsConfig", () => {
   });
 });
 
-describe("resolveAutomationsFromConfig", () => {
+describe("resolveScriptsFromConfig", () => {
   test("normalizes actions, services, hooks, and targets", () => {
-    const config: WorkspaceAutomationsConfig = {
+    const config: WorkspaceScriptsConfig = {
       version: 2,
       targets: {
         ci: {
@@ -133,7 +133,7 @@ describe("resolveAutomationsFromConfig", () => {
       },
     };
 
-    const resolved = resolveAutomationsFromConfig(config);
+    const resolved = resolveScriptsFromConfig(config);
     expect(resolved?.actions).toHaveLength(1);
     expect(resolved?.services).toHaveLength(1);
     expect(resolved?.targets.ci).toMatchObject({
@@ -147,26 +147,26 @@ describe("resolveAutomationsFromConfig", () => {
       name: "stave-desktop",
       noTls: false,
     });
-    expect(getAutomationHooksForTrigger(resolved ?? null, "task.created")).toEqual([
+    expect(getScriptHooksForTrigger(resolved ?? null, "task.created")).toEqual([
       {
         trigger: "task.created",
-        automationId: "bootstrap",
-        automationKind: "action",
+        scriptId: "bootstrap",
+        scriptKind: "action",
         blocking: true,
       },
     ]);
-    expect(getAutomationHooksForTrigger(resolved ?? null, "pr.beforeOpen")).toEqual([
+    expect(getScriptHooksForTrigger(resolved ?? null, "pr.beforeOpen")).toEqual([
       {
         trigger: "pr.beforeOpen",
-        automationId: "app",
-        automationKind: "service",
+        scriptId: "app",
+        scriptKind: "service",
         blocking: false,
       },
     ]);
   });
 
   test("drops disabled or empty entries", () => {
-    const resolved = resolveAutomationsFromConfig({
+    const resolved = resolveScriptsFromConfig({
       version: 2,
       actions: {
         noop: {
@@ -183,9 +183,9 @@ describe("resolveAutomationsFromConfig", () => {
   });
 });
 
-describe("resolveAutomationConfigFromTiers", () => {
+describe("resolveScriptConfigFromTiers", () => {
   test("returns the first tier with a base config", () => {
-    const first: WorkspaceAutomationsConfig = {
+    const first: WorkspaceScriptsConfig = {
       version: 2,
       actions: {
         one: {
@@ -193,7 +193,7 @@ describe("resolveAutomationConfigFromTiers", () => {
         },
       },
     };
-    const second: WorkspaceAutomationsConfig = {
+    const second: WorkspaceScriptsConfig = {
       version: 2,
       actions: {
         two: {
@@ -202,7 +202,7 @@ describe("resolveAutomationConfigFromTiers", () => {
       },
     };
 
-    const resolved = resolveAutomationConfigFromTiers([
+    const resolved = resolveScriptConfigFromTiers([
       { base: first, local: null },
       { base: second, local: null },
     ]);
@@ -211,7 +211,7 @@ describe("resolveAutomationConfigFromTiers", () => {
   });
 
   test("applies local overrides inside the winning tier", () => {
-    const base: WorkspaceAutomationsConfig = {
+    const base: WorkspaceScriptsConfig = {
       version: 2,
       services: {
         app: {
@@ -219,7 +219,7 @@ describe("resolveAutomationConfigFromTiers", () => {
         },
       },
     };
-    const local: WorkspaceAutomationsLocalConfig = {
+    const local: WorkspaceScriptsLocalConfig = {
       version: 2,
       services: {
         app: {
@@ -228,8 +228,8 @@ describe("resolveAutomationConfigFromTiers", () => {
       },
     };
 
-    const resolved = resolveAutomationConfigFromTiers([{ base, local }]);
-    expect(getAutomationEntry(resolved ?? null, { automationId: "app", kind: "service" })).toMatchObject({
+    const resolved = resolveScriptConfigFromTiers([{ base, local }]);
+    expect(getScriptEntry(resolved ?? null, { scriptId: "app", kind: "service" })).toMatchObject({
       targetId: "project",
       target: {
         cwd: "project",
@@ -240,15 +240,15 @@ describe("resolveAutomationConfigFromTiers", () => {
 
 describe("helpers", () => {
   test("default targets include workspace and project", () => {
-    expect(Object.keys(createDefaultAutomationTargets())).toEqual(["workspace", "project"]);
+    expect(Object.keys(createDefaultScriptTargets())).toEqual(["workspace", "project"]);
   });
 
-  test("hasAnyAutomations reflects content", () => {
-    expect(hasAnyAutomations(null)).toBe(false);
-    expect(hasAnyAutomations(resolveAutomationsFromConfig({ version: 2 }))).toBe(false);
+  test("hasAnyScripts reflects content", () => {
+    expect(hasAnyScripts(null)).toBe(false);
+    expect(hasAnyScripts(resolveScriptsFromConfig({ version: 2 }))).toBe(false);
     expect(
-      hasAnyAutomations(
-        resolveAutomationsFromConfig({
+      hasAnyScripts(
+        resolveScriptsFromConfig({
           version: 2,
           actions: {
             bootstrap: {

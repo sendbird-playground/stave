@@ -80,7 +80,7 @@ export interface CommandPaletteProjectSummary {
 
 export interface CommandPaletteLayoutState {
   editorVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes" | "information" | "automation";
+  sidebarOverlayTab: "explorer" | "changes" | "information" | "scripts";
   sidebarOverlayVisible: boolean;
   terminalDocked: boolean;
   workspaceSidebarCollapsed: boolean;
@@ -433,20 +433,20 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     }),
   },
   {
-    id: "view.show-automations",
-    title: "Show Automation Panel",
-    description: "Open the workspace automation overlay on the right rail.",
+    id: "view.show-scripts",
+    title: "Show Scripts Panel",
+    description: "Open the workspace scripts overlay on the right rail.",
     group: "view",
     icon: Sparkles,
-    keywords: ["automation", "hooks", "services", "orbit"],
+    keywords: ["scripts", "hooks", "services", "orbit"],
     build: (args) => ({
-      id: "view.show-automations",
-      title: "Show Automation Panel",
-      subtitle: "Open workspace automation runtime, hooks, and services.",
+      id: "view.show-scripts",
+      title: "Show Scripts Panel",
+      subtitle: "Open workspace scripts runtime, hooks, and services.",
       group: "view",
       icon: Sparkles,
-      keywords: ["automation", "hooks", "services", "orbit"],
-      run: () => args.commands.showOverlayTab("automation"),
+      keywords: ["scripts", "hooks", "services", "orbit"],
+      run: () => args.commands.showOverlayTab("scripts"),
       source: "core",
     }),
   },

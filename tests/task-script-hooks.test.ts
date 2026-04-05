@@ -33,7 +33,7 @@ afterEach(() => {
   (globalThis as { window?: unknown }).window = originalWindow;
 });
 
-describe("task automation hooks", () => {
+describe("task script hooks", () => {
   test("fires task.created with task context", async () => {
     const localStorage = createMemoryStorage();
     const hookCalls: Array<Record<string, unknown>> = [];
@@ -43,7 +43,7 @@ describe("task automation hooks", () => {
       setTimeout: globalThis.setTimeout.bind(globalThis),
       clearTimeout: globalThis.clearTimeout.bind(globalThis),
       api: {
-        automations: {
+        scripts: {
           runHook: async (args: Record<string, unknown>) => {
             hookCalls.push(args);
             return {
@@ -107,7 +107,7 @@ describe("task automation hooks", () => {
       setTimeout: globalThis.setTimeout.bind(globalThis),
       clearTimeout: globalThis.clearTimeout.bind(globalThis),
       api: {
-        automations: {
+        scripts: {
           runHook: async (args: Record<string, unknown>) => {
             hookCalls.push(args);
             return {

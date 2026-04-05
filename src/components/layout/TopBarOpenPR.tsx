@@ -396,7 +396,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     const runCommand = window.api?.terminal?.runCommand;
     const createPR = window.api?.sourceControl?.createPR;
     const openExternal = window.api?.shell?.openExternal;
-    const runAutomationHook = window.api?.automations?.runHook;
+    const runScriptHook = window.api?.scripts?.runHook;
     const selectedTargetBranch = targetBranch.trim() || defaultBaseBranch;
 
     if (!runCommand || !createPR) {
@@ -498,14 +498,14 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       });
     }
 
-    if (runAutomationHook && activeWorkspaceId && projectPath) {
+    if (runScriptHook && activeWorkspaceId && projectPath) {
       setStep("action");
       setInlineNotice({
         tone: "info",
         title: "Running PR preflight",
-        description: "Executing configured `pr.beforeOpen` automations before push and PR creation.",
+        description: "Executing configured `pr.beforeOpen` scripts before push and PR creation.",
       });
-      const hookResult = await runAutomationHook({
+      const hookResult = await runScriptHook({
         workspaceId: activeWorkspaceId,
         trigger: "pr.beforeOpen",
         projectPath,
@@ -518,8 +518,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           tone: "error",
           title: "PR preflight failed",
           description: hookResult.error
-            ?? hookResult.summary?.failures.map((failure) => `${failure.automationId}: ${failure.message}`).join(" ")
-            ?? "Configured pre-open automations failed.",
+            ?? hookResult.summary?.failures.map((failure) => `${failure.scriptId}: ${failure.message}`).join(" ")
+            ?? "Configured pre-open scripts failed.",
         });
         setStep("ready");
         return;
@@ -580,8 +580,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     // Refresh PR status to pick up the new PR
     fetchStatus();
 
-    if (runAutomationHook && activeWorkspaceId && projectPath) {
-      const hookResult = await runAutomationHook({
+    if (runScriptHook && activeWorkspaceId && projectPath) {
+      const hookResult = await runScriptHook({
         workspaceId: activeWorkspaceId,
         trigger: "pr.afterOpen",
         projectPath,
@@ -590,10 +590,10 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         branch: currentBranch ?? selectedTargetBranch,
       });
       if (!hookResult.ok) {
-        toast.warning("Post-PR automations reported failures", {
+        toast.warning("Post-PR scripts reported failures", {
           description: hookResult.error
-            ?? hookResult.summary?.failures.map((failure) => `${failure.automationId}: ${failure.message}`).join(" ")
-            ?? "Configured `pr.afterOpen` automations failed.",
+            ?? hookResult.summary?.failures.map((failure) => `${failure.scriptId}: ${failure.message}`).join(" ")
+            ?? "Configured `pr.afterOpen` scripts failed.",
         });
       }
     }

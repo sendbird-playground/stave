@@ -399,7 +399,7 @@ export function createCustomNotificationSoundPlayer(args?: {
 
       const gainNode = audioContext.createGain();
       // Zero the gain immediately so the default value (1.0) never leaks
-      // through before the automation takes effect.
+      // through before the script takes effect.
       gainNode.gain.value = 0;
 
       const scheduleTime = audioContext.currentTime;

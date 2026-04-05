@@ -21,7 +21,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Feature guide template](templates/feature-guide-template.md)
 - [Local MCP user guide](features/local-mcp-user-guide.md)
 - [Stave Model Router](features/stave-model-router.md)
-- [Workspace Automations](features/workspace-automations.md)
+- [Workspace Scripts](features/workspace-scripts.md)
 - [Future SDK backlog](future/claude-sdk-candidates.md)
 - [Codex native plan roadmap (2026-03-31)](future/codex-native-plan-mode-roadmap-2026-03-31.md)
 - [Checkpoint restore roadmap (2026-03-29)](future/checkpoint-restore-roadmap-2026-03-29.md)

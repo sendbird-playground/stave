@@ -10,7 +10,7 @@ import { hasSourceControlStagedChanges, type SourceControlStatusItem } from "@/l
 import { useAppStore } from "@/store/app.store";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import { RightRailPanelShell } from "./RightRailPanelShell";
-import { WorkspaceAutomationsPanel } from "./WorkspaceAutomationsPanel";
+import { WorkspaceScriptsPanel } from "./WorkspaceScriptsPanel";
 import { WorkspaceChangesPanel } from "./WorkspaceChangesPanel";
 import { WorkspaceExplorerPanel } from "./WorkspaceExplorerPanel";
 import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
@@ -893,8 +893,8 @@ export function EditorPanel(props: EditorPanelProps) {
           ) : null}
 
           {rightTab === "information" ? <WorkspaceInformationPanel /> : null}
-          {rightTab === "automation" ? (
-            <WorkspaceAutomationsPanel onOpenSettings={props.onOpenSettings} />
+          {rightTab === "scripts" ? (
+            <WorkspaceScriptsPanel onOpenSettings={props.onOpenSettings} />
           ) : null}
         </RightRailPanelShell>
       </div>

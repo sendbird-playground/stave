@@ -1,20 +1,20 @@
 import { z } from "zod";
 
-export const AutomationTargetSchema = z.object({
+export const ScriptTargetSchema = z.object({
   label: z.string().optional(),
   cwd: z.enum(["workspace", "project"]).optional(),
   env: z.record(z.string(), z.string()).optional(),
   shell: z.string().optional(),
 });
 
-export const AutomationOrbitSchema = z.object({
+export const ScriptOrbitSchema = z.object({
   enabled: z.boolean().optional(),
   name: z.string().optional(),
   noTls: z.boolean().optional(),
   proxyPort: z.number().int().positive().optional(),
 });
 
-export const AutomationActionSchema = z.object({
+export const ScriptActionSchema = z.object({
   label: z.string().optional(),
   description: z.string().optional(),
   commands: z.array(z.string()).default([]),
@@ -23,12 +23,12 @@ export const AutomationActionSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
-export const AutomationServiceSchema = AutomationActionSchema.extend({
+export const ScriptServiceSchema = ScriptActionSchema.extend({
   restartOnRun: z.boolean().optional(),
-  orbit: AutomationOrbitSchema.optional(),
+  orbit: ScriptOrbitSchema.optional(),
 });
 
-export const AutomationHookRefSchema = z.union([
+export const ScriptHookRefSchema = z.union([
   z.string(),
   z.object({
     ref: z.string(),
@@ -37,29 +37,29 @@ export const AutomationHookRefSchema = z.union([
   }),
 ]);
 
-export const AutomationHooksSchema = z.object({
-  "task.created": z.array(AutomationHookRefSchema).optional(),
-  "task.archiving": z.array(AutomationHookRefSchema).optional(),
-  "turn.started": z.array(AutomationHookRefSchema).optional(),
-  "turn.completed": z.array(AutomationHookRefSchema).optional(),
-  "workspace.created": z.array(AutomationHookRefSchema).optional(),
-  "workspace.archiving": z.array(AutomationHookRefSchema).optional(),
-  "pr.beforeOpen": z.array(AutomationHookRefSchema).optional(),
-  "pr.afterOpen": z.array(AutomationHookRefSchema).optional(),
+export const ScriptHooksSchema = z.object({
+  "task.created": z.array(ScriptHookRefSchema).optional(),
+  "task.archiving": z.array(ScriptHookRefSchema).optional(),
+  "turn.started": z.array(ScriptHookRefSchema).optional(),
+  "turn.completed": z.array(ScriptHookRefSchema).optional(),
+  "workspace.created": z.array(ScriptHookRefSchema).optional(),
+  "workspace.archiving": z.array(ScriptHookRefSchema).optional(),
+  "pr.beforeOpen": z.array(ScriptHookRefSchema).optional(),
+  "pr.afterOpen": z.array(ScriptHookRefSchema).optional(),
 });
 
-export const AutomationsConfigSchema = z.object({
+export const ScriptsConfigSchema = z.object({
   version: z.literal(2),
-  actions: z.record(z.string(), AutomationActionSchema).optional(),
-  services: z.record(z.string(), AutomationServiceSchema).optional(),
-  hooks: AutomationHooksSchema.optional(),
-  targets: z.record(z.string(), AutomationTargetSchema).optional(),
+  actions: z.record(z.string(), ScriptActionSchema).optional(),
+  services: z.record(z.string(), ScriptServiceSchema).optional(),
+  hooks: ScriptHooksSchema.optional(),
+  targets: z.record(z.string(), ScriptTargetSchema).optional(),
 });
 
-export const AutomationsLocalConfigSchema = z.object({
+export const ScriptsLocalConfigSchema = z.object({
   version: z.literal(2),
-  actions: z.record(z.string(), AutomationActionSchema.partial()).optional(),
-  services: z.record(z.string(), AutomationServiceSchema.partial()).optional(),
-  hooks: AutomationHooksSchema.optional(),
-  targets: z.record(z.string(), AutomationTargetSchema.partial()).optional(),
+  actions: z.record(z.string(), ScriptActionSchema.partial()).optional(),
+  services: z.record(z.string(), ScriptServiceSchema.partial()).optional(),
+  hooks: ScriptHooksSchema.optional(),
+  targets: z.record(z.string(), ScriptTargetSchema.partial()).optional(),
 });

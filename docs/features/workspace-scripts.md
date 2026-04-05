@@ -1,43 +1,43 @@
-# Workspace Automations
+# Workspace Scripts
 
 ## Summary
 
-- Workspace Automations let Stave run workspace actions, long-running services, and lifecycle hooks from the right rail.
-- The Automation Manager now lives under `Settings > Projects`, where it provides a lightweight GUI for editing shared `actions`, `services`, and `hooks` in `.stave/automations.json` without exposing a raw JSON editor.
+- Workspace Scripts let Stave run workspace actions, long-running services, and lifecycle hooks from the right rail.
+- The Scripts Manager now lives under `Settings > Projects`, where it provides a lightweight GUI for editing shared `actions`, `services`, and `hooks` in `.stave/scripts.json` without exposing a raw JSON editor.
 
 ## When To Use It
 
-- Use this when a workspace needs repeatable setup commands, dev services, or task/turn/PR lifecycle automation.
-- Use it when you want teammates to share the same automation entry points through the Stave UI.
-- Use manual JSON editing instead when you need custom `targets` or advanced `.stave/automations.local.json` overrides.
+- Use this when a workspace needs repeatable setup commands, dev services, or task/turn/PR lifecycle scripts.
+- Use it when you want teammates to share the same script entry points through the Stave UI.
+- Use manual JSON editing instead when you need custom `targets` or advanced `.stave/scripts.local.json` overrides.
 
 ## Before You Start
 
 - Open a project in Stave and select a workspace.
 - Make sure the workspace has write access to its `.stave/` folder.
-- If you need project-wide automation, decide whether the config should live in the repository root or in the active workspace.
+- If you need project-wide scripts, decide whether the config should live in the repository root or in the active workspace.
 - Workspace-level shared config is editable when that project is the current project in Stave.
 
 ## Quick Start
 
 1. Open `Settings > Projects`.
-2. Select the project, then use `Automation Manager`.
+2. Select the project, then use `Scripts Manager`.
 3. Choose `Project Config` or `Workspace Config`.
 4. Add an `Action` or `Service`, fill in the id, target, and commands, then save.
-5. Add hook links if the automation should run from `task.created`, `task.archiving`, `turn.started`, `turn.completed`, `pr.beforeOpen`, or `pr.afterOpen`.
-6. Open the right rail `Automation` tab to run the entry and verify the merged runtime for the current workspace.
+5. Add hook links if the script should run from `task.created`, `task.archiving`, `turn.started`, `turn.completed`, `pr.beforeOpen`, or `pr.afterOpen`.
+6. Open the right rail `Scripts` tab to run the entry and verify the merged runtime for the current workspace.
 
 ## Interface Walkthrough
 
 ### Entry Points
 
-- Open `Settings > Projects`, select a project, and edit shared automation config in `Automation Manager`.
-- Open the right rail and select the `Automation` tab to inspect the merged runtime for the active workspace.
+- Open `Settings > Projects`, select a project, and edit shared scripts config in `Scripts Manager`.
+- Open the right rail and select the `Scripts` tab to inspect the merged runtime for the active workspace.
 - The runtime panel shows the resolved actions, services, hooks, config paths, and quick access back to project settings.
 
 ### Key Controls
 
-- `Config Scope`: chooses which shared `.stave/automations.json` file the manager edits.
+- `Config Scope`: chooses which shared `.stave/scripts.json` file the manager edits.
 - `Add Action`: creates a short-lived runnable command sequence.
 - `Add Service`: creates a long-running process that can be started and stopped from the panel.
 - `Hooks`: links actions or services to lifecycle triggers.
@@ -58,7 +58,7 @@
    - `Workspace` runs inside the active workspace path.
    - `Project` runs in the repository root.
 5. Enter one shell command per line in `Commands`.
-6. Save, then run the action from the right-rail `Automation Runtime`.
+6. Save, then run the action from the right-rail `Scripts Runtime`.
 
 ### Create A Service
 
@@ -67,7 +67,7 @@
 3. Set `Restart on run` if Stave should replace an existing running process when you run it again.
 4. Enable `Use Orbit` when the service should run through `portless` and expose an Orbit URL.
 5. Optionally set `Orbit Name`, `Orbit Proxy Port`, or `Plain HTTP` for local routing preferences.
-6. Save, then use `Run` / `Stop` from the right-rail `Automation Runtime` to manage the service.
+6. Save, then use `Run` / `Stop` from the right-rail `Scripts Runtime` to manage the service.
 
 ### Wire A Hook
 
@@ -80,15 +80,15 @@
 ### Verify The Runtime
 
 1. Save the manager changes in `Settings > Projects`.
-2. Open the right rail `Automation` tab and use `Refresh`.
+2. Open the right rail `Scripts` tab and use `Refresh`.
 3. Run the target action, service, or hook.
 4. Inspect the live status badge, error message, and log output in the panel.
 
 ## Files And Data
 
-- Shared project config: `<project>/.stave/automations.json`
-- Shared workspace config: `<workspace>/.stave/automations.json`
-- Optional advanced local override: `<project-or-workspace>/.stave/automations.local.json`
+- Shared project config: `<project>/.stave/scripts.json`
+- Shared workspace config: `<workspace>/.stave/scripts.json`
+- Optional advanced local override: `<project-or-workspace>/.stave/scripts.local.json`
 
 Minimal shared config example:
 
@@ -131,11 +131,11 @@ Minimal shared config example:
 
 ## Limitations And Advanced Options
 
-- The GUI edits only shared `.stave/automations.json` files.
+- The GUI edits only shared `.stave/scripts.json` files.
 - The GUI does not edit `targets`.
-- The GUI does not edit `.stave/automations.local.json`.
+- The GUI does not edit `.stave/scripts.local.json`.
 - Orbit services require `Workspace` as the target.
-- Legacy `workspace.created` and `workspace.archiving` hooks remain supported for older configs, but new automation flows should prefer task and turn triggers.
+- Legacy `workspace.created` and `workspace.archiving` hooks remain supported for older configs, but new script flows should prefer task and turn triggers.
 - If you need custom target definitions, per-developer overrides, or unsupported JSON fields, edit the file manually.
 - When both workspace and project shared configs exist, the workspace shared config wins for the active workspace.
 
@@ -143,13 +143,13 @@ Minimal shared config example:
 
 ### The Manager Shows A File Error
 
-- Symptom: `Settings > Projects > Automation Manager` shows invalid JSON or schema errors.
-- Cause: the existing config file is not valid `version: 2` automations JSON.
+- Symptom: `Settings > Projects > Scripts Manager` shows invalid JSON or schema errors.
+- Cause: the existing config file is not valid `version: 2` scripts JSON.
 - Fix: correct the file manually, then reload the manager.
 
 ### The Runtime View Does Not Change After Saving
 
-- Symptom: the right-rail `Automation Runtime` still shows older entries.
+- Symptom: the right-rail `Scripts Runtime` still shows older entries.
 - Cause: a higher-priority workspace shared config is overriding the project shared config for the current workspace.
 - Fix: check the selected `Config Scope` in `Settings > Projects`, then refresh the runtime panel.
 

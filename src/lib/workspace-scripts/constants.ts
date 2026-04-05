@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
-// Workspace Automations – Constants
+// Workspace Scripts – Constants
 // ---------------------------------------------------------------------------
 
-import type { AutomationTrigger } from "./types";
+import type { ScriptTrigger } from "./types";
 
 export const STAVE_CONFIG_DIR = ".stave";
-export const AUTOMATIONS_CONFIG_FILENAME = "automations.json";
-export const AUTOMATIONS_LOCAL_CONFIG_FILENAME = "automations.local.json";
+export const SCRIPTS_CONFIG_FILENAME = "scripts.json";
+export const SCRIPTS_LOCAL_CONFIG_FILENAME = "scripts.local.json";
 
-export const AUTOMATION_TRIGGER_IDS: readonly AutomationTrigger[] = [
+export const SCRIPT_TRIGGER_IDS: readonly ScriptTrigger[] = [
   "task.created",
   "task.archiving",
   "turn.started",
@@ -19,7 +19,7 @@ export const AUTOMATION_TRIGGER_IDS: readonly AutomationTrigger[] = [
   "workspace.archiving",
 ] as const;
 
-export const AUTOMATION_TRIGGER_METADATA: Record<AutomationTrigger, {
+export const SCRIPT_TRIGGER_METADATA: Record<ScriptTrigger, {
   label: string;
   description: string;
   legacy?: boolean;
@@ -60,12 +60,12 @@ export const AUTOMATION_TRIGGER_METADATA: Record<AutomationTrigger, {
   },
 };
 
-export const DEFAULT_AUTOMATION_TARGET_IDS = {
+export const DEFAULT_SCRIPT_TARGET_IDS = {
   WORKSPACE: "workspace",
   PROJECT: "project",
 } as const;
 
-export const AUTOMATION_ENV_VARS = {
+export const SCRIPT_ENV_VARS = {
   ROOT_PATH: "STAVE_ROOT_PATH",
   WORKSPACE_NAME: "STAVE_WORKSPACE_NAME",
   WORKSPACE_PATH: "STAVE_WORKSPACE_PATH",
@@ -73,16 +73,16 @@ export const AUTOMATION_ENV_VARS = {
   TASK_ID: "STAVE_TASK_ID",
   TASK_TITLE: "STAVE_TASK_TITLE",
   TURN_ID: "STAVE_TURN_ID",
-  TARGET_ID: "STAVE_AUTOMATION_TARGET_ID",
-  TRIGGER: "STAVE_AUTOMATION_TRIGGER",
+  TARGET_ID: "STAVE_SCRIPT_TARGET_ID",
+  TRIGGER: "STAVE_SCRIPT_TRIGGER",
 } as const;
 
-export const WORKSPACE_AUTOMATIONS_IPC = {
-  GET_CONFIG: "workspace-automations:get-config",
-  GET_STATUS: "workspace-automations:get-status",
-  RUN_ENTRY: "workspace-automations:run-entry",
-  STOP_ENTRY: "workspace-automations:stop-entry",
-  RUN_HOOK: "workspace-automations:run-hook",
-  STOP_ALL: "workspace-automations:stop-all",
-  EVENT: "workspace-automations:event",
+export const WORKSPACE_SCRIPTS_IPC = {
+  GET_CONFIG: "workspace-scripts:get-config",
+  GET_STATUS: "workspace-scripts:get-status",
+  RUN_ENTRY: "workspace-scripts:run-entry",
+  STOP_ENTRY: "workspace-scripts:stop-entry",
+  RUN_HOOK: "workspace-scripts:run-hook",
+  STOP_ALL: "workspace-scripts:stop-all",
+  EVENT: "workspace-scripts:event",
 } as const;

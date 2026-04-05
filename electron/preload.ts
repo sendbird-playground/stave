@@ -24,13 +24,14 @@ import type {
   ToolingStatusSnapshot,
 } from "../src/lib/tooling-status";
 import type {
-  AutomationKind,
-  AutomationTrigger,
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationEventEnvelope,
-  WorkspaceAutomationHookRunSummary,
-  WorkspaceAutomationStatusEntry,
+  ScriptKind,
+  ScriptTrigger,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptEventEnvelope,
+  WorkspaceScriptHookRunSummary,
+  WorkspaceScriptStatusEntry,
 } from "../src/lib/workspace-scripts/types";
+import { WORKSPACE_SCRIPTS_IPC } from "../src/lib/workspace-scripts/constants";
 
 interface ProviderSlashCommand {
   name: string;
@@ -110,13 +111,13 @@ ipcRenderer.on(
   },
 );
 
-const workspaceAutomationEventSubscribers = new Set<
-  (payload: WorkspaceAutomationEventEnvelope) => void
+const workspaceScriptEventSubscribers = new Set<
+  (payload: WorkspaceScriptEventEnvelope) => void
 >();
 ipcRenderer.on(
-  "workspace-automations:event",
-  (_event, payload: WorkspaceAutomationEventEnvelope) => {
-    for (const subscriber of workspaceAutomationEventSubscribers) {
+  WORKSPACE_SCRIPTS_IPC.EVENT,
+  (_event, payload: WorkspaceScriptEventEnvelope) => {
+    for (const subscriber of workspaceScriptEventSubscribers) {
       subscriber(payload);
     }
   },
@@ -160,6 +161,78 @@ ipcRenderer.on("lsp:event", (_event, payload: LspEventPayload) => {
     subscriber(payload);
   }
 });
+
+const scriptsApi = {
+  getConfig: (args: {
+    projectPath: string;
+    workspacePath: string;
+    userOverridePath?: string;
+  }) =>
+    ipcRenderer.invoke(WORKSPACE_SCRIPTS_IPC.GET_CONFIG, args) as Promise<{
+      ok: boolean;
+      error?: string;
+      config: ResolvedWorkspaceScriptsConfig | null;
+    }>,
+  getStatus: (args: { workspaceId: string }) =>
+    ipcRenderer.invoke(WORKSPACE_SCRIPTS_IPC.GET_STATUS, args) as Promise<{
+      ok: boolean;
+      error?: string;
+      statuses: WorkspaceScriptStatusEntry[];
+    }>,
+  runEntry: (args: {
+    workspaceId: string;
+    scriptId: string;
+    scriptKind: ScriptKind;
+    projectPath: string;
+    workspacePath: string;
+    workspaceName: string;
+    branch: string;
+  }) =>
+    ipcRenderer.invoke(WORKSPACE_SCRIPTS_IPC.RUN_ENTRY, args) as Promise<{
+      ok: boolean;
+      runId?: string;
+      sessionId?: string;
+      exitCode?: number;
+      alreadyRunning?: boolean;
+      error?: string;
+    }>,
+  stopEntry: (args: {
+    workspaceId: string;
+    scriptId: string;
+    scriptKind: ScriptKind;
+  }) =>
+    ipcRenderer.invoke(WORKSPACE_SCRIPTS_IPC.STOP_ENTRY, args) as Promise<{
+      ok: boolean;
+      error?: string;
+    }>,
+  runHook: (args: {
+    workspaceId: string;
+    trigger: ScriptTrigger;
+    projectPath: string;
+    workspacePath: string;
+    workspaceName: string;
+    branch: string;
+    taskId?: string;
+    taskTitle?: string;
+    turnId?: string;
+  }) =>
+    ipcRenderer.invoke(WORKSPACE_SCRIPTS_IPC.RUN_HOOK, args) as Promise<{
+      ok: boolean;
+      error?: string;
+      summary: WorkspaceScriptHookRunSummary | null;
+    }>,
+  stopAll: (args: { workspaceId: string }) =>
+    ipcRenderer.invoke(WORKSPACE_SCRIPTS_IPC.STOP_ALL, args) as Promise<{
+      ok: boolean;
+      error?: string;
+    }>,
+  subscribeEvents: (listener: (payload: WorkspaceScriptEventEnvelope) => void) => {
+    workspaceScriptEventSubscribers.add(listener);
+    return () => {
+      workspaceScriptEventSubscribers.delete(listener);
+    };
+  },
+};
 
 contextBridge.exposeInMainWorld("api", {
   platform: process.platform,
@@ -529,77 +602,7 @@ contextBridge.exposeInMainWorld("api", {
         args,
       ) as Promise<SyncOriginMainResult>,
   },
-  automations: {
-    getConfig: (args: {
-      projectPath: string;
-      workspacePath: string;
-      userOverridePath?: string;
-    }) =>
-      ipcRenderer.invoke("workspace-automations:get-config", args) as Promise<{
-        ok: boolean;
-        error?: string;
-        config: ResolvedWorkspaceAutomationsConfig | null;
-      }>,
-    getStatus: (args: { workspaceId: string }) =>
-      ipcRenderer.invoke("workspace-automations:get-status", args) as Promise<{
-        ok: boolean;
-        error?: string;
-        statuses: WorkspaceAutomationStatusEntry[];
-      }>,
-    runEntry: (args: {
-      workspaceId: string;
-      automationId: string;
-      automationKind: AutomationKind;
-      projectPath: string;
-      workspacePath: string;
-      workspaceName: string;
-      branch: string;
-    }) =>
-      ipcRenderer.invoke("workspace-automations:run-entry", args) as Promise<{
-        ok: boolean;
-        runId?: string;
-        sessionId?: string;
-        exitCode?: number;
-        alreadyRunning?: boolean;
-        error?: string;
-      }>,
-    stopEntry: (args: {
-      workspaceId: string;
-      automationId: string;
-      automationKind: AutomationKind;
-    }) =>
-      ipcRenderer.invoke("workspace-automations:stop-entry", args) as Promise<{
-        ok: boolean;
-        error?: string;
-      }>,
-    runHook: (args: {
-      workspaceId: string;
-      trigger: AutomationTrigger;
-      projectPath: string;
-      workspacePath: string;
-      workspaceName: string;
-      branch: string;
-      taskId?: string;
-      taskTitle?: string;
-      turnId?: string;
-    }) =>
-      ipcRenderer.invoke("workspace-automations:run-hook", args) as Promise<{
-        ok: boolean;
-        error?: string;
-        summary: WorkspaceAutomationHookRunSummary | null;
-      }>,
-    stopAll: (args: { workspaceId: string }) =>
-      ipcRenderer.invoke("workspace-automations:stop-all", args) as Promise<{
-        ok: boolean;
-        error?: string;
-      }>,
-    subscribeEvents: (listener: (payload: WorkspaceAutomationEventEnvelope) => void) => {
-      workspaceAutomationEventSubscribers.add(listener);
-      return () => {
-        workspaceAutomationEventSubscribers.delete(listener);
-      };
-    },
-  },
+  scripts: scriptsApi,
   sourceControl: {
     getStatus: (args: { cwd?: string }) =>
       ipcRenderer.invoke("scm:status", args),

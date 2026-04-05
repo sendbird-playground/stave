@@ -5,7 +5,7 @@ import {
   resolveExecutablePath,
   toAsarUnpackedPath,
 } from "../../providers/executable-path";
-import type { ResolvedWorkspaceAutomationOrbitConfig } from "../../../src/lib/workspace-scripts/types";
+import type { ResolvedWorkspaceScriptOrbitConfig } from "../../../src/lib/workspace-scripts/types";
 
 const require = createRequire(import.meta.url);
 
@@ -57,7 +57,7 @@ export function resolvePortlessCommand() {
 
 export function buildOrbitCommand(args: {
   command: string;
-  orbit: ResolvedWorkspaceAutomationOrbitConfig;
+  orbit: ResolvedWorkspaceScriptOrbitConfig;
   defaultName: string;
   portlessCommand: string;
 }) {

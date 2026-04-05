@@ -32,39 +32,39 @@ import {
   toast,
 } from "@/components/ui";
 import {
-  AUTOMATION_TRIGGER_METADATA,
-  AUTOMATION_TRIGGER_IDS,
-  AUTOMATIONS_CONFIG_FILENAME,
-  DEFAULT_AUTOMATION_TARGET_IDS,
+  SCRIPT_TRIGGER_METADATA,
+  SCRIPT_TRIGGER_IDS,
+  SCRIPTS_CONFIG_FILENAME,
+  DEFAULT_SCRIPT_TARGET_IDS,
   STAVE_CONFIG_DIR,
 } from "@/lib/workspace-scripts/constants";
 import {
-  buildAutomationConfigFromEditorState,
-  buildAutomationEditorCandidates,
-  buildAutomationEditorState,
-  createEmptyAutomationEditorEntry,
-  createEmptyAutomationEditorState,
-  formatAutomationConfigFile,
-  mergeAutomationConfigIntoRaw,
-  validateAutomationEditorState,
-  type AutomationEditorCandidate,
-  type AutomationEditorEntry,
-  type AutomationEditorHookLink,
-  type AutomationEditorState,
+  buildScriptConfigFromEditorState,
+  buildScriptEditorCandidates,
+  buildScriptEditorState,
+  createEmptyScriptEditorEntry,
+  createEmptyScriptEditorState,
+  formatScriptConfigFile,
+  mergeScriptConfigIntoRaw,
+  validateScriptEditorState,
+  type ScriptEditorCandidate,
+  type ScriptEditorEntry,
+  type ScriptEditorHookLink,
+  type ScriptEditorState,
 } from "@/lib/workspace-scripts/editor";
-import { AutomationsConfigSchema } from "@/lib/workspace-scripts/schemas";
+import { ScriptsConfigSchema } from "@/lib/workspace-scripts/schemas";
 import type {
-  AutomationKind,
-  AutomationTrigger,
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationsConfig,
+  ScriptKind,
+  ScriptTrigger,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptsConfig,
 } from "@/lib/workspace-scripts/types";
 import { cn } from "@/lib/utils";
 
-type AutomationEditorScopeId = "project" | "workspace";
+type ScriptEditorScopeId = "project" | "workspace";
 
-interface AutomationEditorScope {
-  id: AutomationEditorScopeId;
+interface ScriptEditorScope {
+  id: ScriptEditorScopeId;
   label: string;
   description: string;
   rootPath: string;
@@ -76,7 +76,7 @@ interface EditorFileState {
   exists: boolean;
   revision: string | null;
   rawConfig: Record<string, unknown> | null;
-  parsedConfig: WorkspaceAutomationsConfig | null;
+  parsedConfig: WorkspaceScriptsConfig | null;
   error: string;
 }
 
@@ -88,13 +88,13 @@ function buildEditorScopes(args: {
   projectPath: string;
   workspacePath: string;
 }) {
-  const scopes: AutomationEditorScope[] = [
+  const scopes: ScriptEditorScope[] = [
     {
       id: "project",
       label: "Project Config",
-      description: "Shared `.stave/automations.json` for the repository.",
+      description: "Shared scripts config stored in `.stave/scripts.json` for the repository.",
       rootPath: args.projectPath,
-      filePath: `${STAVE_CONFIG_DIR}/${AUTOMATIONS_CONFIG_FILENAME}`,
+      filePath: `${STAVE_CONFIG_DIR}/${SCRIPTS_CONFIG_FILENAME}`,
     },
   ];
 
@@ -102,9 +102,9 @@ function buildEditorScopes(args: {
     scopes.unshift({
       id: "workspace",
       label: "Workspace Config",
-      description: "Highest-priority `.stave/automations.json` for the active workspace.",
+      description: "Highest-priority shared scripts config stored in `.stave/scripts.json` for the active workspace.",
       rootPath: args.workspacePath,
-      filePath: `${STAVE_CONFIG_DIR}/${AUTOMATIONS_CONFIG_FILENAME}`,
+      filePath: `${STAVE_CONFIG_DIR}/${SCRIPTS_CONFIG_FILENAME}`,
     });
   }
 
@@ -119,43 +119,43 @@ function targetLabel(
 }
 
 function isHookLinked(
-  links: AutomationEditorHookLink[] | undefined,
-  candidate: AutomationEditorCandidate,
+  links: ScriptEditorHookLink[] | undefined,
+  candidate: ScriptEditorCandidate,
 ) {
   return (links ?? []).some((link) => (
-    link.automationId === candidate.automationId
-    && (link.automationKind === candidate.automationKind || link.automationKind === null)
+    link.scriptId === candidate.scriptId
+    && (link.scriptKind === candidate.scriptKind || link.scriptKind === null)
   ));
 }
 
 function getHookBlocking(
-  links: AutomationEditorHookLink[] | undefined,
-  candidate: AutomationEditorCandidate,
+  links: ScriptEditorHookLink[] | undefined,
+  candidate: ScriptEditorCandidate,
 ) {
   return (links ?? []).find((link) => (
-    link.automationId === candidate.automationId
-    && (link.automationKind === candidate.automationKind || link.automationKind === null)
+    link.scriptId === candidate.scriptId
+    && (link.scriptKind === candidate.scriptKind || link.scriptKind === null)
   ))?.blocking ?? true;
 }
 
 function removeMatchingHookLinks(
-  links: AutomationEditorHookLink[] | undefined,
-  args: { automationId: string; automationKind: AutomationKind },
+  links: ScriptEditorHookLink[] | undefined,
+  args: { scriptId: string; scriptKind: ScriptKind },
 ) {
   return (links ?? []).filter((link) => !(
-    link.automationId === args.automationId
-    && link.automationKind === args.automationKind
+    link.scriptId === args.scriptId
+    && link.scriptKind === args.scriptKind
   ));
 }
 
-function AutomationEntryEditor(props: {
-  entry: AutomationEditorEntry;
+function ScriptEntryEditor(props: {
+  entry: ScriptEditorEntry;
   index: number;
-  kind: AutomationKind;
+  kind: ScriptKind;
   targetOptions: Array<{ id: string; label: string }>;
   onFieldChange: (
     index: number,
-    field: keyof AutomationEditorEntry,
+    field: keyof ScriptEditorEntry,
     value: string | boolean,
   ) => void;
   onRemove: (index: number) => void;
@@ -218,7 +218,7 @@ function AutomationEntryEditor(props: {
             <Input
               value={props.entry.description}
               onChange={(event) => props.onFieldChange(props.index, "description", event.target.value)}
-              placeholder="Short summary of what this automation does"
+              placeholder="Short summary of what this script does"
             />
           </label>
           <label className="space-y-1.5">
@@ -342,13 +342,13 @@ function AutomationEntryEditor(props: {
 }
 
 function HookTriggerEditor(props: {
-  trigger: AutomationTrigger;
-  candidates: AutomationEditorCandidate[];
-  links: AutomationEditorHookLink[] | undefined;
-  onToggleLink: (trigger: AutomationTrigger, candidate: AutomationEditorCandidate, enabled: boolean) => void;
-  onToggleBlocking: (trigger: AutomationTrigger, candidate: AutomationEditorCandidate, blocking: boolean) => void;
+  trigger: ScriptTrigger;
+  candidates: ScriptEditorCandidate[];
+  links: ScriptEditorHookLink[] | undefined;
+  onToggleLink: (trigger: ScriptTrigger, candidate: ScriptEditorCandidate, enabled: boolean) => void;
+  onToggleBlocking: (trigger: ScriptTrigger, candidate: ScriptEditorCandidate, blocking: boolean) => void;
 }) {
-  const triggerMeta = AUTOMATION_TRIGGER_METADATA[props.trigger];
+  const triggerMeta = SCRIPT_TRIGGER_METADATA[props.trigger];
   return (
     <div className="rounded-lg border border-border/70 bg-background/80 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -380,7 +380,7 @@ function HookTriggerEditor(props: {
 
             return (
               <div
-                key={`${candidate.automationKind}:${candidate.automationId}`}
+                key={`${candidate.scriptKind}:${candidate.scriptId}`}
                 className="rounded-md border border-border/70 bg-muted/10 px-3 py-2"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -388,10 +388,10 @@ function HookTriggerEditor(props: {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-sm font-medium text-foreground">{candidate.label}</span>
                       <Badge variant="outline" className="rounded-sm px-2 py-0">
-                        {candidate.automationKind}
+                        {candidate.scriptKind}
                       </Badge>
                       <Badge variant="secondary" className="rounded-sm px-2 py-0 font-normal">
-                        {candidate.automationId}
+                        {candidate.scriptId}
                       </Badge>
                     </div>
                     {candidate.description ? (
@@ -429,10 +429,10 @@ function HookTriggerEditor(props: {
   );
 }
 
-export function WorkspaceAutomationsManager(props: {
+export function WorkspaceScriptsManager(props: {
   projectPath: string;
   workspacePath: string;
-  resolvedConfig: ResolvedWorkspaceAutomationsConfig | null;
+  resolvedConfig: ResolvedWorkspaceScriptsConfig | null;
   onSaved?: () => Promise<void> | void;
 }) {
   const scopes = useMemo(
@@ -442,7 +442,7 @@ export function WorkspaceAutomationsManager(props: {
     }),
     [props.projectPath, props.workspacePath],
   );
-  const [selectedScopeId, setSelectedScopeId] = useState<AutomationEditorScopeId>("project");
+  const [selectedScopeId, setSelectedScopeId] = useState<ScriptEditorScopeId>("project");
   const selectedScope = useMemo(
     () => scopes.find((scope) => scope.id === selectedScopeId) ?? scopes[0] ?? null,
     [scopes, selectedScopeId],
@@ -456,7 +456,7 @@ export function WorkspaceAutomationsManager(props: {
     parsedConfig: null,
     error: "",
   });
-  const [editorState, setEditorState] = useState<AutomationEditorState>(createEmptyAutomationEditorState());
+  const [editorState, setEditorState] = useState<ScriptEditorState>(createEmptyScriptEditorState());
   const [savedContentSnapshot, setSavedContentSnapshot] = useState("");
   const [saving, setSaving] = useState(false);
   const [expandedActions, setExpandedActions] = useState<string[]>([]);
@@ -498,7 +498,7 @@ export function WorkspaceAutomationsManager(props: {
     };
   }, [scopes]);
 
-  const loadSelectedScope = useCallback(async (scope: AutomationEditorScope) => {
+  const loadSelectedScope = useCallback(async (scope: ScriptEditorScope) => {
     const readFile = window.api?.fs?.readFile;
     if (!readFile) {
       setFileState({
@@ -525,11 +525,11 @@ export function WorkspaceAutomationsManager(props: {
 
     if (!result.ok) {
       if (result.stderr?.includes("ENOENT")) {
-        const emptyState = createEmptyAutomationEditorState();
-        const initialContent = formatAutomationConfigFile(
-          mergeAutomationConfigIntoRaw({
+        const emptyState = createEmptyScriptEditorState();
+        const initialContent = formatScriptConfigFile(
+          mergeScriptConfigIntoRaw({
             rawConfig: null,
-            config: buildAutomationConfigFromEditorState(emptyState),
+            config: buildScriptConfigFromEditorState(emptyState),
           }),
         );
         setEditorState(emptyState);
@@ -553,7 +553,7 @@ export function WorkspaceAutomationsManager(props: {
         revision: null,
         rawConfig: null,
         parsedConfig: null,
-        error: result.stderr ?? "Failed to read automation config.",
+        error: result.stderr ?? "Failed to read scripts config.",
       });
       return;
     }
@@ -585,7 +585,7 @@ export function WorkspaceAutomationsManager(props: {
       return;
     }
 
-    const parsed = AutomationsConfigSchema.safeParse(rawJson);
+    const parsed = ScriptsConfigSchema.safeParse(rawJson);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       setFileState({
@@ -594,19 +594,19 @@ export function WorkspaceAutomationsManager(props: {
         revision: result.revision,
         rawConfig: rawJson,
         parsedConfig: null,
-        error: `${scope.filePath} is not a valid shared automations config: ${issue?.message ?? "Unknown error."}`,
+        error: `${scope.filePath} is not a valid shared scripts config: ${issue?.message ?? "Unknown error."}`,
       });
       return;
     }
 
-    const nextEditorState = buildAutomationEditorState({
+    const nextEditorState = buildScriptEditorState({
       config: parsed.data,
       resolvedConfig: resolvedConfigRef.current,
     });
-    const initialContent = formatAutomationConfigFile(
-      mergeAutomationConfigIntoRaw({
+    const initialContent = formatScriptConfigFile(
+      mergeScriptConfigIntoRaw({
         rawConfig: rawJson,
-        config: buildAutomationConfigFromEditorState(nextEditorState),
+        config: buildScriptConfigFromEditorState(nextEditorState),
       }),
     );
 
@@ -632,12 +632,12 @@ export function WorkspaceAutomationsManager(props: {
   }, [loadSelectedScope, selectedScope]);
 
   const currentConfig = useMemo(
-    () => buildAutomationConfigFromEditorState(editorState),
+    () => buildScriptConfigFromEditorState(editorState),
     [editorState],
   );
   const currentSaveContent = useMemo(
-    () => formatAutomationConfigFile(
-      mergeAutomationConfigIntoRaw({
+    () => formatScriptConfigFile(
+      mergeScriptConfigIntoRaw({
         rawConfig: fileState.rawConfig,
         config: currentConfig,
       }),
@@ -648,8 +648,8 @@ export function WorkspaceAutomationsManager(props: {
 
   const targetOptions = useMemo(() => {
     const next = new Map<string, string>([
-      [DEFAULT_AUTOMATION_TARGET_IDS.WORKSPACE, "Workspace"],
-      [DEFAULT_AUTOMATION_TARGET_IDS.PROJECT, "Project"],
+      [DEFAULT_SCRIPT_TARGET_IDS.WORKSPACE, "Workspace"],
+      [DEFAULT_SCRIPT_TARGET_IDS.PROJECT, "Project"],
     ]);
 
     for (const target of Object.values(props.resolvedConfig?.targets ?? {})) {
@@ -671,7 +671,7 @@ export function WorkspaceAutomationsManager(props: {
   }, [editorState.actions, editorState.services, fileState.parsedConfig?.targets, props.resolvedConfig?.targets]);
 
   const hookCandidates = useMemo(
-    () => buildAutomationEditorCandidates({
+    () => buildScriptEditorCandidates({
       state: editorState,
       resolvedConfig: props.resolvedConfig,
     }),
@@ -679,16 +679,16 @@ export function WorkspaceAutomationsManager(props: {
   );
 
   const unresolvedHookRefs = useMemo(() => {
-    return AUTOMATION_TRIGGER_IDS.flatMap((trigger) => (
+    return SCRIPT_TRIGGER_IDS.flatMap((trigger) => (
       editorState.hooks[trigger] ?? []
     ).filter((link) => {
-      if (link.automationKind) {
+      if (link.scriptKind) {
         return !hookCandidates.some((candidate) => (
-          candidate.automationId === link.automationId
-          && candidate.automationKind === link.automationKind
+          candidate.scriptId === link.scriptId
+          && candidate.scriptKind === link.scriptKind
         ));
       }
-      return !hookCandidates.some((candidate) => candidate.automationId === link.automationId);
+      return !hookCandidates.some((candidate) => candidate.scriptId === link.scriptId);
     }).map((link) => ({
       trigger,
       link,
@@ -696,9 +696,9 @@ export function WorkspaceAutomationsManager(props: {
   }, [editorState.hooks, hookCandidates]);
 
   const updateEntryField = useCallback((
-    kind: AutomationKind,
+    kind: ScriptKind,
     index: number,
-    field: keyof AutomationEditorEntry,
+    field: keyof ScriptEditorEntry,
     value: string | boolean,
   ) => {
     setEditorState((current) => {
@@ -718,12 +718,12 @@ export function WorkspaceAutomationsManager(props: {
             Object.entries(current.hooks).map(([trigger, links]) => [
               trigger,
               (links ?? []).map((link) => (
-                link.automationId === previousId && link.automationKind === kind
-                  ? { ...link, automationId: nextId }
+                link.scriptId === previousId && link.scriptKind === kind
+                  ? { ...link, scriptId: nextId }
                   : link
               )),
             ]),
-          ) as AutomationEditorState["hooks"];
+          ) as ScriptEditorState["hooks"];
         }
       }
 
@@ -735,12 +735,12 @@ export function WorkspaceAutomationsManager(props: {
     });
   }, []);
 
-  const addEntry = useCallback((kind: AutomationKind) => {
+  const addEntry = useCallback((kind: ScriptKind) => {
     setEditorState((current) => {
       const collectionKey = kind === "service" ? "services" : "actions";
       return {
         ...current,
-        [collectionKey]: [...current[collectionKey], createEmptyAutomationEditorEntry(kind)],
+        [collectionKey]: [...current[collectionKey], createEmptyScriptEditorEntry(kind)],
       };
     });
 
@@ -751,7 +751,7 @@ export function WorkspaceAutomationsManager(props: {
     setExpandedActions((current) => [...current, `${kind}:${editorState.actions.length}`]);
   }, [editorState.actions.length, editorState.services.length]);
 
-  const removeEntry = useCallback((kind: AutomationKind, index: number) => {
+  const removeEntry = useCallback((kind: ScriptKind, index: number) => {
     setEditorState((current) => {
       const collectionKey = kind === "service" ? "services" : "actions";
       const removedEntry = current[collectionKey][index];
@@ -760,11 +760,11 @@ export function WorkspaceAutomationsManager(props: {
         Object.entries(current.hooks).map(([trigger, links]) => [
           trigger,
           removeMatchingHookLinks(links, {
-            automationId: removedEntry?.id.trim() ?? "",
-            automationKind: kind,
+            scriptId: removedEntry?.id.trim() ?? "",
+            scriptKind: kind,
           }),
-        ]).filter(([, links]) => (links as AutomationEditorHookLink[]).length > 0),
-      ) as AutomationEditorState["hooks"];
+        ]).filter(([, links]) => (links as ScriptEditorHookLink[]).length > 0),
+      ) as ScriptEditorState["hooks"];
 
       return {
         ...current,
@@ -775,8 +775,8 @@ export function WorkspaceAutomationsManager(props: {
   }, []);
 
   const updateHookLinks = useCallback((
-    trigger: AutomationTrigger,
-    nextLinks: AutomationEditorHookLink[],
+    trigger: ScriptTrigger,
+    nextLinks: ScriptEditorHookLink[],
   ) => {
     setEditorState((current) => ({
       ...current,
@@ -788,8 +788,8 @@ export function WorkspaceAutomationsManager(props: {
   }, []);
 
   const toggleHookLink = useCallback((
-    trigger: AutomationTrigger,
-    candidate: AutomationEditorCandidate,
+    trigger: ScriptTrigger,
+    candidate: ScriptEditorCandidate,
     enabled: boolean,
   ) => {
     const currentLinks = editorState.hooks[trigger] ?? [];
@@ -797,8 +797,8 @@ export function WorkspaceAutomationsManager(props: {
       updateHookLinks(
         trigger,
         currentLinks.filter((link) => !(
-          link.automationId === candidate.automationId
-          && (link.automationKind === candidate.automationKind || link.automationKind === null)
+          link.scriptId === candidate.scriptId
+          && (link.scriptKind === candidate.scriptKind || link.scriptKind === null)
         )),
       );
       return;
@@ -808,8 +808,8 @@ export function WorkspaceAutomationsManager(props: {
       updateHookLinks(
         trigger,
         currentLinks.map((link) => (
-          link.automationId === candidate.automationId && link.automationKind === null
-            ? { ...link, automationKind: candidate.automationKind }
+          link.scriptId === candidate.scriptId && link.scriptKind === null
+            ? { ...link, scriptKind: candidate.scriptKind }
             : link
         )),
       );
@@ -819,24 +819,24 @@ export function WorkspaceAutomationsManager(props: {
     updateHookLinks(trigger, [
       ...currentLinks,
       {
-        automationId: candidate.automationId,
-        automationKind: candidate.automationKind,
+        scriptId: candidate.scriptId,
+        scriptKind: candidate.scriptKind,
         blocking: true,
       },
     ]);
   }, [editorState.hooks, updateHookLinks]);
 
   const toggleHookBlocking = useCallback((
-    trigger: AutomationTrigger,
-    candidate: AutomationEditorCandidate,
+    trigger: ScriptTrigger,
+    candidate: ScriptEditorCandidate,
     blocking: boolean,
   ) => {
     updateHookLinks(
       trigger,
       (editorState.hooks[trigger] ?? []).map((link) => (
-        link.automationId === candidate.automationId
-        && (link.automationKind === candidate.automationKind || link.automationKind === null)
-          ? { ...link, automationKind: link.automationKind ?? candidate.automationKind, blocking }
+        link.scriptId === candidate.scriptId
+        && (link.scriptKind === candidate.scriptKind || link.scriptKind === null)
+          ? { ...link, scriptKind: link.scriptKind ?? candidate.scriptKind, blocking }
           : link
       )),
     );
@@ -868,9 +868,9 @@ export function WorkspaceAutomationsManager(props: {
       return;
     }
 
-    const issues = validateAutomationEditorState(editorState);
+    const issues = validateScriptEditorState(editorState);
     if (issues.length > 0) {
-      toast.error("Automation config is incomplete", {
+      toast.error("Scripts config is incomplete", {
         description: issues[0],
       });
       return;
@@ -896,7 +896,7 @@ export function WorkspaceAutomationsManager(props: {
         expectedRevision: fileState.revision,
       });
       if (!result.ok) {
-        toast.error(result.conflict ? "Automation config changed on disk" : "Failed to save automation config", {
+        toast.error(result.conflict ? "Scripts config changed on disk" : "Failed to save scripts config", {
           description: result.stderr ?? (result.conflict
             ? "Reload the file and re-apply your changes."
             : "Unknown error"),
@@ -906,7 +906,7 @@ export function WorkspaceAutomationsManager(props: {
 
       await loadSelectedScope(selectedScope);
       await props.onSaved?.();
-      toast.success("Automation config saved", {
+      toast.success("Scripts config saved", {
         description: selectedScope.filePath,
       });
     } finally {
@@ -931,8 +931,8 @@ export function WorkspaceAutomationsManager(props: {
           <EmptyMedia>
             <FilePenLine className="size-4" />
           </EmptyMedia>
-          <EmptyTitle>Automation manager unavailable</EmptyTitle>
-          <EmptyDescription>Select a workspace to edit its automation config.</EmptyDescription>
+          <EmptyTitle>Scripts manager unavailable</EmptyTitle>
+          <EmptyDescription>Select a workspace to edit its scripts config.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -944,7 +944,7 @@ export function WorkspaceAutomationsManager(props: {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-foreground">Automation Manager</p>
+              <p className="text-sm font-medium text-foreground">Scripts Manager</p>
               <Badge
                 variant={isDirty ? "secondary" : "outline"}
                 className="rounded-sm px-2 py-0"
@@ -1020,7 +1020,7 @@ export function WorkspaceAutomationsManager(props: {
             ? "Workspace config overrides the project shared config for this workspace."
             : "Project config is the shared fallback. If a workspace-level config exists, it wins for the active workspace."}
           {" "}
-          For custom targets or `.stave/automations.local.json`, edit JSON directly.
+          For custom targets or `.stave/scripts.local.json`, edit JSON directly.
         </div>
 
         {fileState.error ? (
@@ -1031,7 +1031,7 @@ export function WorkspaceAutomationsManager(props: {
 
         {fileState.status === "loading" ? (
           <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-            Loading automation manager...
+            Loading scripts manager...
           </div>
         ) : null}
 
@@ -1045,7 +1045,7 @@ export function WorkspaceAutomationsManager(props: {
                 {editorState.services.length} services
               </Badge>
               <Badge variant="outline" className="rounded-sm px-2 py-0">
-                {AUTOMATION_TRIGGER_IDS.reduce((sum, trigger) => sum + (editorState.hooks[trigger]?.length ?? 0), 0)} hook links
+                {SCRIPT_TRIGGER_IDS.reduce((sum, trigger) => sum + (editorState.hooks[trigger]?.length ?? 0), 0)} hook links
               </Badge>
             </div>
 
@@ -1078,7 +1078,7 @@ export function WorkspaceAutomationsManager(props: {
                   ) : (
                     <Accordion type="multiple" value={expandedActions} onValueChange={setExpandedActions}>
                       {editorState.actions.map((entry, index) => (
-                        <AutomationEntryEditor
+                        <ScriptEntryEditor
                           key={`action-${index}`}
                           entry={entry}
                           index={index}
@@ -1121,7 +1121,7 @@ export function WorkspaceAutomationsManager(props: {
                   ) : (
                     <Accordion type="multiple" value={expandedServices} onValueChange={setExpandedServices}>
                       {editorState.services.map((entry, index) => (
-                        <AutomationEntryEditor
+                        <ScriptEntryEditor
                           key={`service-${index}`}
                           entry={entry}
                           index={index}
@@ -1145,7 +1145,7 @@ export function WorkspaceAutomationsManager(props: {
                     </p>
                   </div>
 
-                  {AUTOMATION_TRIGGER_IDS.map((trigger) => (
+                  {SCRIPT_TRIGGER_IDS.map((trigger) => (
                     <HookTriggerEditor
                       key={trigger}
                       trigger={trigger}
@@ -1164,8 +1164,8 @@ export function WorkspaceAutomationsManager(props: {
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {unresolvedHookRefs.map(({ trigger, link }, index) => (
-                          <Badge key={`${trigger}:${link.automationKind ?? "unknown"}:${link.automationId}:${index}`} variant="secondary" className="rounded-sm px-2 py-0">
-                            {AUTOMATION_TRIGGER_METADATA[trigger].label} → {link.automationKind ?? "unknown"}:{link.automationId}
+                          <Badge key={`${trigger}:${link.scriptKind ?? "unknown"}:${link.scriptId}:${index}`} variant="secondary" className="rounded-sm px-2 py-0">
+                            {SCRIPT_TRIGGER_METADATA[trigger].label} → {link.scriptKind ?? "unknown"}:{link.scriptId}
                           </Badge>
                         ))}
                       </div>

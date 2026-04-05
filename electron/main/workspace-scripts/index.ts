@@ -1,26 +1,26 @@
 // ---------------------------------------------------------------------------
-// Workspace Automations – Electron Main Public API
+// Workspace Scripts – Electron Main Public API
 // ---------------------------------------------------------------------------
 
 export {
-  resolveAutomationsForWorkspace,
-  type ResolveAutomationsArgs,
+  resolveScriptsForWorkspace,
+  type ResolveScriptsArgs,
 } from "./config-loader";
 
 export {
-  AutomationsConfigSchema,
-  AutomationsLocalConfigSchema,
+  ScriptsConfigSchema,
+  ScriptsLocalConfigSchema,
 } from "../../../src/lib/workspace-scripts/schemas";
 
 export {
-  cleanupAllAutomationProcesses,
-  getAutomationStatuses,
-  runAutomationEntry,
-  runAutomationHook,
-  stopAllWorkspaceAutomationProcesses,
-  stopAutomationEntry,
+  cleanupAllScriptProcesses,
+  getScriptStatuses,
+  runScriptEntry,
+  runScriptHook,
+  stopAllWorkspaceScriptProcesses,
+  stopScriptEntry,
 } from "./executor";
 
 export {
-  type WorkspaceAutomationProcess,
+  type WorkspaceScriptProcess,
 } from "./state";

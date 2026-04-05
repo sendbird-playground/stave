@@ -1,19 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildAutomationConfigFromEditorState,
-  buildAutomationEditorState,
-  createEmptyAutomationEditorEntry,
-  mergeAutomationConfigIntoRaw,
-  validateAutomationEditorState,
+  buildScriptConfigFromEditorState,
+  buildScriptEditorState,
+  createEmptyScriptEditorEntry,
+  mergeScriptConfigIntoRaw,
+  validateScriptEditorState,
 } from "../src/lib/workspace-scripts/editor";
 import type {
-  ResolvedWorkspaceAutomationsConfig,
-  WorkspaceAutomationsConfig,
+  ResolvedWorkspaceScriptsConfig,
+  WorkspaceScriptsConfig,
 } from "../src/lib/workspace-scripts/types";
 
-describe("buildAutomationEditorState", () => {
+describe("buildScriptEditorState", () => {
   test("hydrates entries and hook links from shared config", () => {
-    const config: WorkspaceAutomationsConfig = {
+    const config: WorkspaceScriptsConfig = {
       version: 2,
       actions: {
         bootstrap: {
@@ -39,7 +39,7 @@ describe("buildAutomationEditorState", () => {
       },
     };
 
-    const editorState = buildAutomationEditorState({ config });
+    const editorState = buildScriptEditorState({ config });
     expect(editorState.actions[0]).toMatchObject({
       id: "bootstrap",
       label: "Bootstrap",
@@ -57,28 +57,28 @@ describe("buildAutomationEditorState", () => {
     });
     expect(editorState.hooks["task.created"]).toEqual([
       {
-        automationId: "bootstrap",
-        automationKind: "action",
+        scriptId: "bootstrap",
+        scriptKind: "action",
         blocking: true,
       },
     ]);
     expect(editorState.hooks["pr.beforeOpen"]).toEqual([
       {
-        automationId: "app",
-        automationKind: "service",
+        scriptId: "app",
+        scriptKind: "service",
         blocking: false,
       },
     ]);
   });
 
   test("uses resolved config to infer hook kind when needed", () => {
-    const config: WorkspaceAutomationsConfig = {
+    const config: WorkspaceScriptsConfig = {
       version: 2,
       hooks: {
         "workspace.created": ["bootstrap"],
       },
     };
-    const resolvedConfig: ResolvedWorkspaceAutomationsConfig = {
+    const resolvedConfig: ResolvedWorkspaceScriptsConfig = {
       actions: [
         {
           id: "bootstrap",
@@ -93,7 +93,7 @@ describe("buildAutomationEditorState", () => {
             cwd: "workspace",
             env: {},
           },
-          source: "automation",
+          source: "script",
         },
       ],
       services: [],
@@ -113,26 +113,26 @@ describe("buildAutomationEditorState", () => {
       },
     };
 
-    const editorState = buildAutomationEditorState({ config, resolvedConfig });
+    const editorState = buildScriptEditorState({ config, resolvedConfig });
     expect(editorState.hooks["workspace.created"]).toEqual([
       {
-        automationId: "bootstrap",
-        automationKind: "action",
+        scriptId: "bootstrap",
+        scriptKind: "action",
         blocking: true,
       },
     ]);
   });
 });
 
-describe("buildAutomationConfigFromEditorState", () => {
+describe("buildScriptConfigFromEditorState", () => {
   test("serializes actions, services, and hooks into config JSON shape", () => {
-    const action = createEmptyAutomationEditorEntry("action");
+    const action = createEmptyScriptEditorEntry("action");
     action.id = "bootstrap";
     action.label = "Bootstrap";
     action.description = "Prepare the workspace.";
     action.commandsText = "bun install\nbun run db:prepare";
 
-    const service = createEmptyAutomationEditorEntry("service");
+    const service = createEmptyScriptEditorEntry("service");
     service.id = "app";
     service.target = "workspace";
     service.commandsText = "bun run dev";
@@ -142,21 +142,21 @@ describe("buildAutomationConfigFromEditorState", () => {
     service.orbitNoTls = true;
     service.orbitProxyPort = "1355";
 
-    const config = buildAutomationConfigFromEditorState({
+    const config = buildScriptConfigFromEditorState({
       actions: [action],
       services: [service],
       hooks: {
         "task.created": [
           {
-            automationId: "bootstrap",
-            automationKind: "action",
+            scriptId: "bootstrap",
+            scriptKind: "action",
             blocking: true,
           },
         ],
         "pr.beforeOpen": [
           {
-            automationId: "app",
-            automationKind: "service",
+            scriptId: "app",
+            scriptKind: "service",
             blocking: false,
           },
         ],
@@ -205,7 +205,7 @@ describe("buildAutomationConfigFromEditorState", () => {
   });
 });
 
-describe("mergeAutomationConfigIntoRaw", () => {
+describe("mergeScriptConfigIntoRaw", () => {
   test("preserves untouched target definitions and extra metadata", () => {
     const rawConfig = {
       version: 2,
@@ -228,7 +228,7 @@ describe("mergeAutomationConfigIntoRaw", () => {
       },
     };
 
-    const merged = mergeAutomationConfigIntoRaw({
+    const merged = mergeScriptConfigIntoRaw({
       rawConfig,
       config: {
         version: 2,
@@ -265,12 +265,12 @@ describe("mergeAutomationConfigIntoRaw", () => {
   });
 });
 
-describe("validateAutomationEditorState", () => {
+describe("validateScriptEditorState", () => {
   test("reports missing ids and invalid timeouts", () => {
-    const entry = createEmptyAutomationEditorEntry("action");
+    const entry = createEmptyScriptEditorEntry("action");
     entry.timeoutMs = "0";
 
-    expect(validateAutomationEditorState({
+    expect(validateScriptEditorState({
       actions: [entry],
       services: [],
       hooks: {},
