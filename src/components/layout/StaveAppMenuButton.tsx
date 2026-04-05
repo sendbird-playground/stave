@@ -33,11 +33,11 @@ export function StaveAppMenuButton(args?: {
     setDarkMode({ enabled: !isDarkMode });
   }, [isDarkMode, setDarkMode]);
 
-  const modifierLabel = useMemo(
+  const commandPaletteShortcutLabel = useMemo(
     () => (
       typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
-        ? "Cmd"
-        : "Ctrl"
+        ? "⌘⇧P"
+        : "Ctrl+Shift+P"
     ),
     [],
   );
@@ -66,7 +66,7 @@ export function StaveAppMenuButton(args?: {
             />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" sideOffset={8} className="w-52">
+        <DropdownMenuContent align="start" sideOffset={8} className="z-[130] w-64">
           <DropdownMenuLabel>Stave</DropdownMenuLabel>
           <DropdownMenuItem className="gap-2" onSelect={clearTaskSelection}>
             <Home className="size-4 text-muted-foreground" />
@@ -75,7 +75,9 @@ export function StaveAppMenuButton(args?: {
           <DropdownMenuItem className="gap-2" onSelect={args?.onOpenCommandPalette}>
             <Command className="size-4 text-muted-foreground" />
             Command Palette
-            <DropdownMenuShortcut>{modifierLabel}+Shift+P</DropdownMenuShortcut>
+            <DropdownMenuShortcut className="text-[11px] tracking-normal">
+              {commandPaletteShortcutLabel}
+            </DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {projectPath ? (
