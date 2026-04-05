@@ -5,6 +5,8 @@ import {
   buildClaudeSystemPrompt,
   buildClaudeUserInputPermissionResult,
   mapClaudeMessageToEvents,
+  resolveClaudeDisallowedTools,
+  shouldDenyClaudeToolInPlanMode,
   SubagentProgressTracker,
 } from "../electron/providers/claude-sdk-runtime";
 
@@ -258,6 +260,59 @@ describe("resolveClaudeAgentProgressSummaries", () => {
 
   test("returns undefined when no override is set", () => {
     expect(resolveClaudeAgentProgressSummaries(undefined)).toBeUndefined();
+  });
+});
+
+describe("resolveClaudeDisallowedTools", () => {
+  test("adds mutating file tools while Claude plan mode is enabled", () => {
+    expect(resolveClaudeDisallowedTools({
+      permissionMode: "plan",
+      runtimeDisallowedTools: ["Read", "Edit"],
+    })).toEqual([
+      "Read",
+      "Edit",
+      "MultiEdit",
+      "Write",
+      "NotebookEdit",
+      "TodoWrite",
+    ]);
+  });
+
+  test("preserves runtime disallowed tools outside plan mode", () => {
+    expect(resolveClaudeDisallowedTools({
+      permissionMode: "default",
+      runtimeDisallowedTools: ["Read"],
+    })).toEqual(["Read"]);
+  });
+});
+
+describe("shouldDenyClaudeToolInPlanMode", () => {
+  test("denies mutating built-in tools", () => {
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "Edit",
+      input: { file_path: "/workspace/stave/src/app.ts" },
+    })).toBe(true);
+  });
+
+  test("denies mutating Bash commands", () => {
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "Bash",
+      input: { command: "echo hi > notes.txt" },
+    })).toBe(true);
+  });
+
+  test("allows read-only Bash commands", () => {
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "Bash",
+      input: { command: "ls -la src" },
+    })).toBe(false);
+  });
+
+  test("allows non-mutating read tools", () => {
+    expect(shouldDenyClaudeToolInPlanMode({
+      toolName: "Read",
+      input: { file_path: "/workspace/stave/README.md" },
+    })).toBe(false);
   });
 });
 

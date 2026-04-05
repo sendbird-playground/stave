@@ -374,8 +374,7 @@ export interface AppSettings {
   codexFastMode: boolean;
   codexExperimentalPlanMode: boolean;
   /**
-   * @deprecated No longer used. Plan-mode auto-approval is now handled at the
-   * SDK runtime level via `canUseTool`. Kept temporarily so persisted settings
+   * @deprecated No longer used. Kept temporarily so persisted settings
    * deserialise without errors; will be removed in a future cleanup pass.
    */
   planAutoApprove?: boolean;
@@ -810,7 +809,7 @@ const defaultSettings: AppSettings = {
   claudePermissionModeBeforePlan: null,
   claudeAllowDangerouslySkipPermissions: false,
   claudeSandboxEnabled: false,
-  claudeAllowUnsandboxedCommands: true,
+  claudeAllowUnsandboxedCommands: false,
   claudeTaskBudgetTokens: 0,
   claudeSettingSources: ["project"],
   claudeEffort: "medium",
@@ -824,10 +823,10 @@ const defaultSettings: AppSettings = {
   codexPathOverride: "",
   codexModelReasoningEffort: "medium",
   codexWebSearchMode: "disabled",
-  codexShowRawAgentReasoning: true,
-  codexReasoningSummary: "detailed",
-  codexSupportsReasoningSummaries: "enabled",
-  codexFastMode: true,
+  codexShowRawAgentReasoning: false,
+  codexReasoningSummary: "auto",
+  codexSupportsReasoningSummaries: "auto",
+  codexFastMode: false,
   codexExperimentalPlanMode: false,
   planAutoApprove: undefined,
   promptResponseStyle: DEFAULT_PROMPT_RESPONSE_STYLE,
