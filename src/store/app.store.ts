@@ -4774,7 +4774,7 @@ export const useAppStore = create<AppState>()(
                 },
               });
               break;
-            case "toggle_automation_panel":
+            case "toggle_scripts_panel":
               get().setLayout({
                 patch: {
                   sidebarOverlayVisible: localAction.open ?? true,

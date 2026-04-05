@@ -44,7 +44,7 @@
 
 ### Control Stave
 
-1. Ask for navigation or UI actions such as `open changes`, `show automation`, `collapse sidebar`, or `open settings`.
+1. Ask for navigation or UI actions such as `open changes`, `show scripts`, `collapse sidebar`, or `open settings`.
 2. The assistant applies the action immediately when it can be resolved locally.
 3. The widget replies with a short confirmation in the conversation.
 
@@ -89,5 +89,5 @@
 ## Related Docs
 
 - [Command Palette](command-palette.md)
-- [Workspace Automations](workspace-automations.md)
+- [Workspace Scripts](workspace-scripts.md)
 - [Session Replay](session-replay.md)

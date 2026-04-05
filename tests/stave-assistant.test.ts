@@ -81,13 +81,13 @@ describe("resolveStaveAssistantLocalAction", () => {
     });
   });
 
-  it("parses automation panel commands", () => {
+  it("parses scripts panel commands", () => {
     expect(resolveStaveAssistantLocalAction({
-      input: "open automation",
+      input: "open scripts",
       context,
       allowDirectWorkspaceInfoEdits: true,
     })).toEqual({
-      kind: "toggle_automation_panel",
+      kind: "toggle_scripts_panel",
       open: true,
     });
   });

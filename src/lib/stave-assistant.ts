@@ -68,7 +68,7 @@ export type StaveAssistantLocalAction =
   | { kind: "toggle_information_panel"; open?: boolean }
   | { kind: "toggle_changes_panel"; open?: boolean }
   | { kind: "toggle_explorer_panel"; open?: boolean }
-  | { kind: "toggle_automation_panel"; open?: boolean }
+  | { kind: "toggle_scripts_panel"; open?: boolean }
   | { kind: "toggle_editor"; open?: boolean }
   | { kind: "toggle_terminal"; open?: boolean }
   | { kind: "toggle_workspace_sidebar"; open?: boolean }
@@ -351,11 +351,11 @@ export function resolveStaveAssistantLocalAction(args: {
   if (input.includes("close explorer") || input.includes("hide explorer") || input.includes("탐색기 닫")) {
     return { kind: "toggle_explorer_panel", open: false };
   }
-  if (input.includes("open automation") || input.includes("show automation") || input.includes("automation 패널 열") || input.includes("자동화 패널 열")) {
-    return { kind: "toggle_automation_panel", open: true };
+  if (input.includes("open scripts") || input.includes("show scripts") || input.includes("scripts 패널 열") || input.includes("스크립트 패널 열")) {
+    return { kind: "toggle_scripts_panel", open: true };
   }
-  if (input.includes("close automation") || input.includes("hide automation") || input.includes("automation 패널 닫") || input.includes("자동화 패널 닫")) {
-    return { kind: "toggle_automation_panel", open: false };
+  if (input.includes("close scripts") || input.includes("hide scripts") || input.includes("scripts 패널 닫") || input.includes("스크립트 패널 닫")) {
+    return { kind: "toggle_scripts_panel", open: false };
   }
   if (input.includes("open editor") || input.includes("show editor") || input.includes("에디터 열")) {
     return { kind: "toggle_editor", open: true };
@@ -589,8 +589,8 @@ export function buildStaveAssistantLocalActionResponse(args: {
       return args.action.open === false ? "Closed the Changes panel." : "Opened the Changes panel.";
     case "toggle_explorer_panel":
       return args.action.open === false ? "Closed the Explorer panel." : "Opened the Explorer panel.";
-    case "toggle_automation_panel":
-      return args.action.open === false ? "Closed the Automation panel." : "Opened the Automation panel.";
+    case "toggle_scripts_panel":
+      return args.action.open === false ? "Closed the Scripts panel." : "Opened the Scripts panel.";
     case "toggle_editor":
       return args.action.open === false ? "Closed the editor." : "Opened the editor.";
     case "toggle_terminal":
