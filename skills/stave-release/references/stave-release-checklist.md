@@ -93,6 +93,7 @@ gh pr create --base main --title "chore: release x.y.z" --body "..."
 21. Clean up the temporary release worktree and verify the original checkout stayed on its original branch:
 
 ```bash
+cd <original-checkout>
 git worktree remove ../.worktrees/<repo>/release-x.y.z
 git worktree prune
 ```
@@ -114,3 +115,4 @@ If the original checkout was switched for any reason, check it back out before s
 - If verification fails, stop and surface the failure unless the user explicitly accepts releasing anyway.
 - Do not create a local semver tag until the PR is merged. Tag on the merged `main` commit.
 - Do not leave the original checkout on the temporary release branch. Preserve or restore the starting branch, usually `main`.
+- Do not run `git worktree remove` from inside the same temporary release worktree you are trying to delete.

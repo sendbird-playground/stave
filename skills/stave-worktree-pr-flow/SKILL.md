@@ -24,6 +24,7 @@ Repository-local skill for taking the full current working state and shipping it
 2. Inspect the repo and choose execution mode before moving anything.
    - Capture `git branch --show-current`, `git status --short --branch`, `git rev-parse --short HEAD`, and `git rev-parse --show-toplevel`.
    - Capture `pwd -P` and `git rev-parse --git-common-dir` to detect whether the current checkout is already a linked worktree.
+   - Record the original checkout path up front. If this flow creates a temporary worktree, use that original checkout (or another non-target worktree) as the cleanup cwd in step 8.
    - Check whether the current branch is a protected or shared branch such as `main` or `master`.
    - Run `git worktree list --porcelain`.
    - If the current top-level path is under `.stave/workspaces/` or the checkout is already a linked worktree, set mode to `reuse-current-worktree` and do not create another worktree by default.
@@ -72,8 +73,10 @@ Repository-local skill for taking the full current working state and shipping it
 
 8. Clean up the temporary worktree (only in `create-temporary-worktree` mode).
    - Skip cleanup in `reuse-current-worktree` mode; the current workspace worktree must stay intact.
-   - If push and PR creation succeeded and the temporary worktree is clean, remove it by default with `git worktree remove <path>`.
+   - If push and PR creation succeeded and the temporary worktree is clean, first leave the temporary worktree and return to the original checkout (or another safe cwd outside the target worktree).
+   - Then remove it by default with `git worktree remove <path>`.
    - Keep it only when the user explicitly wants to continue working there.
+   - If cleanup fails only because the shell is still inside the target worktree, treat that as an execution mistake: change back to the recorded original checkout and retry once before reporting failure.
    - Run `git worktree prune` after removal so the repo metadata stays clean.
    - Never remove a dirty worktree.
 
@@ -99,5 +102,6 @@ Repository-local skill for taking the full current working state and shipping it
 - Do not create a second worktree at an occupied path without reconciling it first.
 - Do not scatter temporary worktrees as unnamed sibling directories; keep them under one deterministic worktree root.
 - Do not leave stale worktree registrations behind after a successful temporary-flow run.
+- Do not run `git worktree remove <path>` from inside the same worktree path you are trying to remove.
 - Do not remove the current workspace worktree as part of cleanup.
 - Do not create an empty commit or empty PR when there are no dirty changes and no unpublished commits.

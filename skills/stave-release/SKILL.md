@@ -86,7 +86,9 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
 
 9. Clean up the temporary worktree and restore the original checkout state.
    - If push and PR creation in step 8 succeeded and the temporary worktree is clean, remove it:
-     `git worktree remove ../.worktrees/<repo>/release-x.y.z`
+     - First leave the temporary release worktree and return to the recorded original checkout (or another safe cwd outside the target worktree).
+     - Then run: `git worktree remove ../.worktrees/<repo>/release-x.y.z`
+   - If cleanup fails only because the shell is still inside the target worktree, treat that as an execution mistake: change back to the recorded original checkout and retry once before reporting failure.
    - Run `git worktree prune` to remove stale metadata.
    - Verify the original checkout is still on its original branch. If it was switched for any reason, check it back out before finishing. For the common case, that means ending back on `main`.
    - Never remove a dirty temporary worktree.
@@ -119,3 +121,4 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
 - If verification fails, stop and surface the failure unless the user explicitly accepts releasing anyway.
 - Do not leave a temporary release worktree behind after a successful PR creation; always remove it and run `git worktree prune`.
 - Do not leave the user's original checkout on `release-x.y.z`; restore or preserve the original branch, usually `main`.
+- Do not run `git worktree remove` from inside the same temporary release worktree you are trying to delete.
