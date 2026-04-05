@@ -67,6 +67,8 @@ export function buildOrbitCommand(args: {
   portlessCommand: string;
 }) {
   const childScript = `printf '%s%s\n' ${shellQuote(ORBIT_URL_MARKER)} "$PORTLESS_URL"; ${args.command}`;
+  // portless >=0.7 reads configuration from env vars instead of CLI flags.
+  // PORTLESS_PORT sets the proxy listen port; PORTLESS_HTTPS=0 disables TLS.
   const proxyPort = String(args.orbit.proxyPort ?? DEFAULT_ORBIT_PROXY_PORT);
   const segments = [
     shellAssign("PORTLESS_PORT", proxyPort),

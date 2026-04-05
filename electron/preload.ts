@@ -31,9 +31,9 @@ import type {
   WorkspaceScriptHookRunSummary,
   WorkspaceScriptStatusEntry,
 } from "../src/lib/workspace-scripts/types";
-import type { BrowserNavigationEventPayload } from "../src/lib/lens/lens.types";
 import type {
   BrowserConsoleEventPayload,
+  BrowserNavigationEventPayload,
 } from "../src/lib/lens/lens.types";
 import { WORKSPACE_SCRIPTS_IPC } from "../src/lib/workspace-scripts/constants";
 
