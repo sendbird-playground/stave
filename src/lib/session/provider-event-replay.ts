@@ -5,6 +5,7 @@ import {
   hasRenderableAssistantContent,
   mergePromptSuggestions,
   mergeToolResultIntoPart,
+  resolvePendingToolInteractionPartsByRequestId,
 } from "@/store/provider-message.utils";
 import type {
   ApprovalPart,
@@ -301,6 +302,31 @@ function shouldSuppressStaveInternalText(args: {
   return isLikelyStaveInternalRoutingPayload(args.candidateText);
 }
 
+function resolvePendingToolInteractionMessage(args: {
+  message: ChatMessage;
+  event: NormalizedProviderEvent;
+}) {
+  const requestId = args.event.type === "tool"
+    ? args.event.toolUseId
+    : args.event.type === "tool_progress"
+      ? args.event.toolUseId
+      : args.event.type === "tool_result"
+        ? args.event.tool_use_id
+        : undefined;
+
+  const resolvedParts = resolvePendingToolInteractionPartsByRequestId({
+    parts: args.message.parts,
+    requestId,
+  });
+
+  return resolvedParts === args.message.parts
+    ? args.message
+    : {
+        ...args.message,
+        parts: resolvedParts,
+      };
+}
+
 function normalizeEventToPart(args: { event: NormalizedProviderEvent }): MessagePart | null {
   const { event } = args;
 
@@ -539,6 +565,11 @@ export function appendProviderEventToAssistant(args: {
       message = { ...message, parts: finalizedParts };
     }
   }
+
+  message = resolvePendingToolInteractionMessage({
+    message,
+    event: args.event,
+  });
 
   if (args.event.type === "text") {
     const lastPart = message.parts.at(-1);

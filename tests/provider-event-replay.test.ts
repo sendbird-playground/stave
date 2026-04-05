@@ -276,6 +276,63 @@ describe("appendProviderEventToAssistant", () => {
       { type: "text", text: "## Result\n\nFinal answer.", segmentId: "msg-2" },
     ]);
   });
+
+  test("marks a matching approval as responded once the tool starts", () => {
+    const updated = appendProviderEventToAssistant({
+      message: createMessage({
+        parts: [{
+          type: "approval",
+          toolName: "Bash",
+          description: "Run npm test",
+          requestId: "tool-1",
+          state: "approval-requested",
+        }],
+      }),
+      event: {
+        type: "tool",
+        toolUseId: "tool-1",
+        toolName: "Bash",
+        input: "npm test",
+        state: "input-available",
+      },
+    });
+
+    expect(updated.parts[0]).toMatchObject({
+      type: "approval",
+      requestId: "tool-1",
+      state: "approval-responded",
+    });
+    expect(updated.parts[1]).toMatchObject({
+      type: "tool_use",
+      toolUseId: "tool-1",
+      toolName: "Bash",
+    });
+  });
+
+  test("marks a matching approval as responded once tool results arrive", () => {
+    const updated = appendProviderEventToAssistant({
+      message: createMessage({
+        parts: [{
+          type: "approval",
+          toolName: "Read",
+          description: "Inspect file",
+          requestId: "tool-1",
+          state: "approval-requested",
+        }],
+      }),
+      event: {
+        type: "tool_result",
+        tool_use_id: "tool-1",
+        output: "ok",
+      },
+    });
+
+    expect(updated.parts[0]).toMatchObject({
+      type: "approval",
+      requestId: "tool-1",
+      state: "approval-responded",
+    });
+  });
 });
 
 describe("plan response replay", () => {
