@@ -7,21 +7,16 @@ import {
 import { Badge, Button } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  BOOLEAN_TOGGLE_OPTIONS,
   CLAUDE_EFFORT_OPTIONS,
   CLAUDE_PERMISSION_MODE_OPTIONS,
-  CLAUDE_SETTING_SOURCE_OPTIONS,
   CLAUDE_THINKING_OPTIONS,
   CODEX_APPROVAL_POLICY_OPTIONS,
   CODEX_EFFORT_OPTIONS,
-  CODEX_REASONING_SUMMARY_OPTIONS,
-  CODEX_REASONING_SUPPORT_OPTIONS,
-  CODEX_SANDBOX_MODE_OPTIONS,
-  CODEX_WEB_SEARCH_OPTIONS,
   DEFAULT_PROVIDER_TIMEOUT_MS,
   formatProviderTimeoutLabel,
   PROVIDER_TIMEOUT_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
+import type { ClaudeSettingSource, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import {
   buildStaveAutoModelSettingsPatch,
   detectStaveAutoModelPreset,
@@ -44,6 +39,7 @@ import {
   readInt,
   SectionHeading,
   SectionStack,
+  SettingsFieldGuide,
   SettingsCard,
 } from "./settings-dialog.shared";
 
@@ -74,6 +70,342 @@ function fromOverrideBooleanValue(value: string) {
     return undefined;
   }
   return value === "on";
+}
+
+type ExplainedSelectOption<T extends string> = {
+  value: T;
+  label: string;
+  description: string;
+  example?: string;
+};
+
+const PROVIDER_TIMEOUT_HELP: ReadonlyArray<ExplainedSelectOption<string>> = PROVIDER_TIMEOUT_OPTIONS.map((value) => ({
+  value: String(value),
+  label: formatProviderTimeoutLabel(value),
+  description:
+    value <= 1_800_000
+      ? "Fail faster when you mostly use short chats, quick edits, or lightweight reviews."
+      : value <= 3_600_000
+        ? "Balanced default for normal coding, debugging, and medium-length tool runs."
+        : value <= 7_200_000
+          ? "Leave room for long refactors, large test suites, or slow external tools."
+          : "Best for very long research or automation turns that may stay active for hours.",
+  example:
+    value <= 1_800_000
+      ? "Use this if a turn hanging for half an hour is already a signal that something went wrong."
+      : value <= 3_600_000
+        ? "Good default when you switch between quick questions and real implementation work."
+        : value <= 7_200_000
+          ? "Useful when you often run builds, migrations, or repo-wide edits in a single turn."
+          : "Choose this only if you intentionally want Codex or Claude to stay attached for very long-running work.",
+}));
+
+const CLAUDE_PERMISSION_MODE_HELP = [
+  {
+    value: "default",
+    label: "default",
+    description: "Use Claude's standard permission behavior without asking Stave to bias the mode.",
+    example: "Pick this when you want the least opinionated baseline and do not need a special workflow.",
+  },
+  {
+    value: "acceptEdits",
+    label: "acceptEdits",
+    description: "Good default for normal coding sessions where edits are expected but you still want guardrails.",
+    example: "Use this for day-to-day feature work, bug fixes, and iterative patching.",
+  },
+  {
+    value: "bypassPermissions",
+    label: "bypassPermissions",
+    description: "Most autonomous Claude path. Pair it carefully with permission-skipping controls.",
+    example: "Use this only when you trust the task scope and want Claude to move with minimal interruption.",
+  },
+  {
+    value: "plan",
+    label: "plan",
+    description: "Planning-only mode. Stave keeps plan turns separate so you can review strategy before implementation.",
+    example: "Use this for architecture, investigation, or task breakdowns before writing code.",
+  },
+  {
+    value: "dontAsk",
+    label: "dontAsk",
+    description: "Tell Claude not to stop for interactive permission questions during the turn.",
+    example: "Useful for fast local workflows when you want fewer pauses but do not want plan mode.",
+  },
+  {
+    value: "auto",
+    label: "auto",
+    description: "Let Claude choose the most appropriate permission behavior for the turn.",
+    example: "Good when your workload shifts between analysis, coding, and light automation throughout the day.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["claudePermissionMode"]>>[];
+
+const CLAUDE_THINKING_MODE_HELP = [
+  {
+    value: "adaptive",
+    label: "Adaptive",
+    description: "Claude decides when deeper thinking is worth the extra latency.",
+    example: "Best default when some turns are simple and others need real analysis.",
+  },
+  {
+    value: "enabled",
+    label: "Enabled",
+    description: "Always ask for explicit thinking, even on simpler prompts.",
+    example: "Use this when you prioritize careful reasoning over response speed.",
+  },
+  {
+    value: "disabled",
+    label: "Disabled",
+    description: "Prefer direct answers without extra thinking overhead.",
+    example: "Useful for tiny edits, routing, or repetitive low-risk tasks.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["claudeThinkingMode"]>>[];
+
+const CLAUDE_EFFORT_HELP = [
+  {
+    value: "low",
+    label: "Low",
+    description: "Fastest and lightest reasoning budget.",
+    example: "Good for short questions, quick rewrites, and simple code edits.",
+  },
+  {
+    value: "medium",
+    label: "Medium",
+    description: "Balanced reasoning depth for most day-to-day tasks.",
+    example: "Use this as the default if you frequently switch between analysis and implementation.",
+  },
+  {
+    value: "high",
+    label: "High",
+    description: "Spend more effort on difficult debugging, design, or review work.",
+    example: "Useful for tricky bugs, architecture questions, or larger refactors.",
+  },
+  {
+    value: "max",
+    label: "Max",
+    description: "Highest deliberation and the most latency.",
+    example: "Reserve this for genuinely hard tasks where accuracy matters more than speed.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["claudeEffort"]>>[];
+
+const CLAUDE_SETTING_SOURCE_HELP = [
+  {
+    value: "project",
+    label: "Project",
+    description: "Load repo-level Claude settings such as `CLAUDE.md` and project-native slash commands.",
+  },
+  {
+    value: "local",
+    label: "Local",
+    description: "Load machine-local or workspace-local Claude settings from the runtime environment.",
+  },
+  {
+    value: "user",
+    label: "User",
+    description: "Load your user-wide Claude settings and personal defaults.",
+  },
+] as const satisfies ReadonlyArray<{ value: ClaudeSettingSource; label: string; description: string }>;
+
+const CODEX_SANDBOX_MODE_HELP = [
+  {
+    value: "read-only",
+    label: "read-only",
+    description: "Read and inspect only. Codex should not mutate files.",
+    example: "Use this for reviews, audits, repo exploration, or planning.",
+  },
+  {
+    value: "workspace-write",
+    label: "workspace-write",
+    description: "Allow edits inside the current workspace and writable roots.",
+    example: "Best default for normal implementation work where edits should stay scoped to the repo.",
+  },
+  {
+    value: "danger-full-access",
+    label: "danger-full-access",
+    description: "Remove most filesystem restrictions and allow broad mutation.",
+    example: "Use this only for trusted automation that truly needs unrestricted file access.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexSandboxMode"]>>[];
+
+const CODEX_APPROVAL_POLICY_HELP = [
+  {
+    value: "never",
+    label: "never",
+    description: "Do not stop for approval prompts. Codex proceeds directly.",
+    example: "Good for trusted local workflows when you want continuous execution.",
+  },
+  {
+    value: "on-request",
+    label: "on-request",
+    description: "Pause when approval is needed and ask you to confirm.",
+    example: "Use this when you want Codex to work normally but still checkpoint risky actions.",
+  },
+  {
+    value: "untrusted",
+    label: "untrusted",
+    description: "Only pause for actions the runtime treats as untrusted or higher risk.",
+    example: "Useful when you want fewer prompts than `on-request` without going fully hands-off.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexApprovalPolicy"]>>[];
+
+const CODEX_REASONING_EFFORT_HELP = [
+  {
+    value: "minimal",
+    label: "Minimal",
+    description: "Shortest reasoning path and the least latency.",
+    example: "Use this for rote edits, quick file lookups, or tiny transformations.",
+  },
+  {
+    value: "low",
+    label: "Low",
+    description: "Light reasoning for straightforward work.",
+    example: "Good for small implementation tasks and direct answers.",
+  },
+  {
+    value: "medium",
+    label: "Medium",
+    description: "Balanced depth for everyday coding and debugging.",
+    example: "Recommended default when task difficulty varies.",
+  },
+  {
+    value: "high",
+    label: "High",
+    description: "More deliberate reasoning for harder or more ambiguous tasks.",
+    example: "Use this for larger bug hunts, refactors, or multi-step design questions.",
+  },
+  {
+    value: "xhigh",
+    label: "X-High",
+    description: "Deepest reasoning budget and the highest latency cost.",
+    example: "Reserve this for genuinely complex work where you want Codex to think much longer.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexModelReasoningEffort"]>>[];
+
+const CODEX_REASONING_SUMMARY_HELP = [
+  {
+    value: "auto",
+    label: "Auto",
+    description: "Let Codex decide whether and how much reasoning summary to return.",
+    example: "Good default when you want Stave to adapt across different models.",
+  },
+  {
+    value: "concise",
+    label: "Concise",
+    description: "Request a short summary of model-side reasoning.",
+    example: "Useful when you want quick visibility without a lot of extra text.",
+  },
+  {
+    value: "detailed",
+    label: "Detailed",
+    description: "Request a fuller reasoning summary when the model supports it.",
+    example: "Use this when you care about understanding why Codex chose a path.",
+  },
+  {
+    value: "none",
+    label: "None",
+    description: "Do not request a reasoning summary.",
+    example: "Useful when you want the leanest possible UI output.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexReasoningSummary"]>>[];
+
+const CODEX_REASONING_SUPPORT_HELP = [
+  {
+    value: "auto",
+    label: "Auto",
+    description: "Let Stave and the Codex runtime infer whether reasoning summaries are supported.",
+    example: "Start here unless you know a model is being detected incorrectly.",
+  },
+  {
+    value: "enabled",
+    label: "Enabled",
+    description: "Force-enable reasoning summary support even if automatic detection misses it.",
+    example: "Use this when a model supports summaries but the CLI does not infer it correctly.",
+  },
+  {
+    value: "disabled",
+    label: "Disabled",
+    description: "Force-disable reasoning summary support.",
+    example: "Use this if a model claims support but returns noisy or broken summary behavior.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexSupportsReasoningSummaries"]>>[];
+
+const CODEX_WEB_SEARCH_HELP = [
+  {
+    value: "disabled",
+    label: "Disabled",
+    description: "Do not let Codex use web search.",
+    example: "Best when you want fully local reasoning or reproducible offline behavior.",
+  },
+  {
+    value: "cached",
+    label: "Cached",
+    description: "Allow search in a lower-volatility mode when cached results are available.",
+    example: "Useful when you want some search help without always relying on live web access.",
+  },
+  {
+    value: "live",
+    label: "Live",
+    description: "Allow live web search when the task needs current external information.",
+    example: "Use this for latest docs, breaking API changes, or recent news-style facts.",
+  },
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexWebSearchMode"]>>[];
+
+function buildGuideItems<T extends string>(options: readonly ExplainedSelectOption<T>[]) {
+  return options.map((option) => ({
+    label: option.label,
+    description: option.description,
+  }));
+}
+
+function buildGuideExamples<T extends string>(options: readonly ExplainedSelectOption<T>[]) {
+  return options
+    .filter((option) => option.example)
+    .map((option) => ({
+      label: option.label,
+      description: option.example ?? "",
+    }));
+}
+
+function findExplainedOption<T extends string>(
+  options: readonly ExplainedSelectOption<T>[],
+  value: T,
+) {
+  return options.find((option) => option.value === value) ?? null;
+}
+
+function DescribedSelect<T extends string>(args: {
+  value: T;
+  options: readonly ExplainedSelectOption<T>[];
+  onValueChange: (value: T) => void;
+  triggerClassName?: string;
+}) {
+  const selected = findExplainedOption(args.options, args.value);
+
+  return (
+    <div className="space-y-2">
+      <Select value={args.value} onValueChange={(value) => args.onValueChange(value as T)}>
+        <SelectTrigger className={args.triggerClassName ?? "w-64"}>
+          <span className="line-clamp-1">{selected?.label ?? args.value}</span>
+        </SelectTrigger>
+        <SelectContent className="max-w-sm">
+          {args.options.map((option) => (
+            <SelectItem key={option.value} value={option.value} textValue={option.label}>
+              <div className="flex max-w-[20rem] flex-col items-start gap-0.5 py-0.5">
+                <span className="text-sm font-medium">{option.label}</span>
+                <span className="text-xs leading-5 text-muted-foreground">{option.description}</span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {selected ? (
+        <p className="text-xs leading-5 text-muted-foreground">
+          <span className="font-medium text-foreground">{selected.label}:</span>{" "}
+          {selected.description}
+          {selected.example ? ` Example: ${selected.example}` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function StaveAutoOverrideField(args: {
@@ -635,85 +967,129 @@ export function ProvidersSection() {
           title="Provider Timeout"
           description="Maximum time to wait for a Claude or Codex SDK response before showing a timeout error."
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={String(providerTimeoutMs)}
-              onValueChange={(value) => updateSettings({ patch: { providerTimeoutMs: readInt(value, providerTimeoutMs) } })}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PROVIDER_TIMEOUT_OPTIONS.map((value) => (
-                  <SelectItem key={value} value={String(value)}>
-                    {formatProviderTimeoutLabel(value)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="text-sm text-muted-foreground">{formatProviderTimeoutLabel(providerTimeoutMs || DEFAULT_PROVIDER_TIMEOUT_MS)}</span>
-          </div>
+          <LabeledField
+            title="Timeout Window"
+            guide={(
+              <SettingsFieldGuide
+                title="Provider Timeout"
+                summary="Longer timeouts are safer for big turns, but shorter timeouts surface stuck sessions faster."
+                items={buildGuideItems(PROVIDER_TIMEOUT_HELP)}
+                examples={buildGuideExamples(PROVIDER_TIMEOUT_HELP)}
+                tooltip="Compare timeout values"
+              />
+            )}
+          >
+            <div className="flex flex-wrap items-start gap-3">
+              <DescribedSelect
+                value={String(providerTimeoutMs || DEFAULT_PROVIDER_TIMEOUT_MS)}
+                options={PROVIDER_TIMEOUT_HELP}
+                onValueChange={(value) => updateSettings({ patch: { providerTimeoutMs: readInt(value, providerTimeoutMs) } })}
+                triggerClassName="w-40"
+              />
+              <span className="pt-2 text-sm text-muted-foreground">{formatProviderTimeoutLabel(providerTimeoutMs || DEFAULT_PROVIDER_TIMEOUT_MS)}</span>
+            </div>
+          </LabeledField>
         </SettingsCard>
 
         <SettingsCard title="Claude Runtime Controls" description="Permission, sandbox, thinking, and subagent progress behavior passed into each Claude turn.">
-          <LabeledField title="Permission Mode">
-            <Select
+          <LabeledField
+            title="Permission Mode"
+            description="Controls how aggressively Claude asks for permission during a turn."
+            guide={(
+              <SettingsFieldGuide
+                title="Claude Permission Mode"
+                summary="This is the main autonomy dial for Claude turns."
+                items={buildGuideItems(CLAUDE_PERMISSION_MODE_HELP)}
+                examples={buildGuideExamples(CLAUDE_PERMISSION_MODE_HELP)}
+                note="`plan` is special in Stave: it becomes a planning workflow rather than a normal implementation turn."
+                tooltip="Compare Claude permission modes"
+              />
+            )}
+          >
+            <DescribedSelect
               value={claudePermissionMode}
+              options={CLAUDE_PERMISSION_MODE_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    claudePermissionMode: value as "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto",
+                    claudePermissionMode: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CLAUDE_PERMISSION_MODE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
-          <LabeledField title="Dangerous Skip Permissions">
+          <LabeledField
+            title="Dangerous Skip Permissions"
+            description="Only applies when `bypassPermissions` is active."
+          >
             <ChoiceButtons
               value={claudeAllowDangerouslySkipPermissions ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { claudeAllowDangerouslySkipPermissions: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Let Claude skip permission prompts more aggressively." },
+                { value: "off", label: "Off", description: "Keep dangerous skip behavior disabled." },
+              ]}
             />
           </LabeledField>
-          <LabeledField title="Sandbox Enabled">
+          <LabeledField
+            title="Sandbox Enabled"
+            description="Wrap Claude tool execution in its sandbox configuration."
+          >
             <ChoiceButtons
               value={claudeSandboxEnabled ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { claudeSandboxEnabled: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Request sandboxed Claude tool execution." },
+                { value: "off", label: "Off", description: "Do not ask Claude to use its sandbox." },
+              ]}
             />
           </LabeledField>
-          <LabeledField title="Allow Unsandboxed Commands">
+          <LabeledField
+            title="Allow Unsandboxed Commands"
+            description="Controls whether Claude may fall back to commands outside the sandbox."
+          >
             <ChoiceButtons
               value={claudeAllowUnsandboxedCommands ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { claudeAllowUnsandboxedCommands: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Permit fallbacks that cannot stay sandboxed." },
+                { value: "off", label: "Off", description: "Reject commands that would escape the sandbox." },
+              ]}
             />
           </LabeledField>
           <LabeledField
             title="Setting Sources"
             description="Controls which Claude filesystem setting layers are loaded. `project` is required for CLAUDE.md and project slash commands."
+            guide={(
+              <SettingsFieldGuide
+                title="Claude Setting Sources"
+                summary="These layers decide which Claude configuration files and commands participate in each turn."
+                items={CLAUDE_SETTING_SOURCE_HELP.map((option) => ({
+                  label: option.label,
+                  description: option.description,
+                }))}
+                tooltip="What each Claude setting source does"
+              />
+            )}
           >
             <div className="grid gap-2 sm:grid-cols-3">
-              {CLAUDE_SETTING_SOURCE_OPTIONS.map((option) => (
+              {CLAUDE_SETTING_SOURCE_HELP.map((option) => (
                 <Button
                   key={option.value}
-                  className="h-9 rounded-md"
+                  className="h-auto min-h-16 items-start justify-start whitespace-normal rounded-md px-3 py-2.5 text-left"
                   variant={claudeSettingSources.includes(option.value) ? "default" : "outline"}
                   onClick={() => toggleClaudeSettingSource(option.value)}
                 >
-                  {option.label}
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">{option.label}</p>
+                    <p className="text-xs opacity-80">{option.description}</p>
+                  </div>
                 </Button>
               ))}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Active: {claudeSettingSources.length > 0 ? claudeSettingSources.join(" + ") : "none"}
+            </p>
           </LabeledField>
           <LabeledField
             title="Task Budget (Tokens)"
@@ -729,47 +1105,53 @@ export function ProvidersSection() {
               })}
             />
           </LabeledField>
-          <LabeledField title="Thinking Mode">
-            <Select
+          <LabeledField
+            title="Thinking Mode"
+            guide={(
+              <SettingsFieldGuide
+                title="Claude Thinking Mode"
+                summary="Thinking controls whether Claude spends extra effort on explicit reasoning before answering."
+                items={buildGuideItems(CLAUDE_THINKING_MODE_HELP)}
+                examples={buildGuideExamples(CLAUDE_THINKING_MODE_HELP)}
+                tooltip="Compare Claude thinking modes"
+              />
+            )}
+          >
+            <DescribedSelect
               value={claudeThinkingMode}
+              options={CLAUDE_THINKING_MODE_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    claudeThinkingMode: value as "adaptive" | "enabled" | "disabled",
+                    claudeThinkingMode: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CLAUDE_THINKING_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.value}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
-          <LabeledField title="Effort">
-            <Select
+          <LabeledField
+            title="Effort"
+            guide={(
+              <SettingsFieldGuide
+                title="Claude Effort"
+                summary="Higher effort spends more model budget on reasoning and usually increases latency."
+                items={buildGuideItems(CLAUDE_EFFORT_HELP)}
+                examples={buildGuideExamples(CLAUDE_EFFORT_HELP)}
+                tooltip="Compare Claude effort levels"
+              />
+            )}
+          >
+            <DescribedSelect
               value={claudeEffort}
+              options={CLAUDE_EFFORT_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    claudeEffort: value as "low" | "medium" | "high" | "max",
+                    claudeEffort: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CLAUDE_EFFORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.value}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
           <LabeledField
             title="Agent Progress Summaries"
@@ -778,7 +1160,10 @@ export function ProvidersSection() {
             <ChoiceButtons
               value={claudeAgentProgressSummaries ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { claudeAgentProgressSummaries: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Show running subagent progress summaries in chat." },
+                { value: "off", label: "Off", description: "Keep subagent progress quieter and show only final output." },
+              ]}
             />
           </LabeledField>
           <LabeledField
@@ -788,17 +1173,26 @@ export function ProvidersSection() {
             <ChoiceButtons
               value={claudeFastMode ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { claudeFastMode: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Bias toward faster responses on simpler tasks." },
+                { value: "off", label: "Off", description: "Use the normal Claude runtime path." },
+              ]}
             />
           </LabeledField>
         </SettingsCard>
 
         <SettingsCard title="Codex Runtime Controls" description="Per-turn Codex sandbox, approval, reasoning, and web-search settings.">
-          <LabeledField title="Network Access">
+          <LabeledField
+            title="Network Access"
+            description="Controls whether Codex may use networked capabilities during a turn."
+          >
             <ChoiceButtons
               value={codexNetworkAccessEnabled ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { codexNetworkAccessEnabled: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Allow browsing, web search, and other networked Codex features." },
+                { value: "off", label: "Off", description: "Keep Codex local to the workspace and configured tools." },
+              ]}
             />
           </LabeledField>
           <LabeledField
@@ -808,150 +1202,173 @@ export function ProvidersSection() {
             <ChoiceButtons
               value={codexSkipGitRepoCheck ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { codexSkipGitRepoCheck: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Run Codex even when the current folder is not a Git repo." },
+                { value: "off", label: "Off", description: "Require a Git repository before starting Codex turns." },
+              ]}
             />
           </LabeledField>
-          <LabeledField title="Sandbox Mode">
-            <Select
+          <LabeledField
+            title="Sandbox Mode"
+            guide={(
+              <SettingsFieldGuide
+                title="Codex Sandbox Mode"
+                summary="This setting controls where Codex can read and write on disk."
+                items={buildGuideItems(CODEX_SANDBOX_MODE_HELP)}
+                examples={buildGuideExamples(CODEX_SANDBOX_MODE_HELP)}
+                note="When Stave runs Codex in plan mode, it forces `read-only` regardless of the normal setting."
+                tooltip="Compare Codex sandbox modes"
+              />
+            )}
+          >
+            <DescribedSelect
               value={codexSandboxMode}
+              options={CODEX_SANDBOX_MODE_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexSandboxMode: value as "read-only" | "workspace-write" | "danger-full-access",
+                    codexSandboxMode: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CODEX_SANDBOX_MODE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
-          <LabeledField title="Approval Policy">
-            <Select
+          <LabeledField
+            title="Approval Policy"
+            guide={(
+              <SettingsFieldGuide
+                title="Codex Approval Policy"
+                summary="Approval policy controls when Codex pauses to ask before acting."
+                items={buildGuideItems(CODEX_APPROVAL_POLICY_HELP)}
+                examples={buildGuideExamples(CODEX_APPROVAL_POLICY_HELP)}
+                note="Stave forces `never` during Codex plan mode so planning turns do not stop on approval prompts."
+                tooltip="Compare Codex approval policies"
+              />
+            )}
+          >
+            <DescribedSelect
               value={codexApprovalPolicy}
+              options={CODEX_APPROVAL_POLICY_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexApprovalPolicy: value as "never" | "on-request" | "untrusted",
+                    codexApprovalPolicy: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CODEX_APPROVAL_POLICY_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
-          <LabeledField title="Reasoning Effort">
-            <Select
+          <LabeledField
+            title="Reasoning Effort"
+            guide={(
+              <SettingsFieldGuide
+                title="Codex Reasoning Effort"
+                summary="Higher effort gives Codex more room to reason, but it also tends to slow the turn down."
+                items={buildGuideItems(CODEX_REASONING_EFFORT_HELP)}
+                examples={buildGuideExamples(CODEX_REASONING_EFFORT_HELP)}
+                tooltip="Compare Codex reasoning effort levels"
+              />
+            )}
+          >
+            <DescribedSelect
               value={codexModelReasoningEffort}
+              options={CODEX_REASONING_EFFORT_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexModelReasoningEffort: value as "minimal" | "low" | "medium" | "high" | "xhigh",
+                    codexModelReasoningEffort: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CODEX_EFFORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.value}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
           <LabeledField
             title="Reasoning Summary"
             description="Codex config for model-side reasoning summaries when supported."
+            guide={(
+              <SettingsFieldGuide
+                title="Codex Reasoning Summary"
+                summary="This controls how much reasoning summary Codex should try to return when the model supports it."
+                items={buildGuideItems(CODEX_REASONING_SUMMARY_HELP)}
+                examples={buildGuideExamples(CODEX_REASONING_SUMMARY_HELP)}
+                tooltip="Compare Codex reasoning summary modes"
+              />
+            )}
           >
-            <Select
+            <DescribedSelect
               value={codexReasoningSummary}
+              options={CODEX_REASONING_SUMMARY_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexReasoningSummary: value as "auto" | "concise" | "detailed" | "none",
+                    codexReasoningSummary: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CODEX_REASONING_SUMMARY_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.value}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
           <LabeledField
             title="Supports Reasoning Summaries"
             description="Override Codex capability detection when a model supports reasoning summaries but the CLI cannot infer it."
+            guide={(
+              <SettingsFieldGuide
+                title="Reasoning Summary Capability Override"
+                summary="Only touch this when automatic capability detection is wrong."
+                items={buildGuideItems(CODEX_REASONING_SUPPORT_HELP)}
+                examples={buildGuideExamples(CODEX_REASONING_SUPPORT_HELP)}
+                tooltip="How reasoning summary support override works"
+              />
+            )}
           >
-            <Select
+            <DescribedSelect
               value={codexSupportsReasoningSummaries}
+              options={CODEX_REASONING_SUPPORT_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexSupportsReasoningSummaries: value as "auto" | "enabled" | "disabled",
+                    codexSupportsReasoningSummaries: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CODEX_REASONING_SUPPORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.value}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
-          <LabeledField title="Raw Agent Reasoning">
+          <LabeledField
+            title="Raw Agent Reasoning"
+            description="Shows low-level reasoning traces when Codex emits them."
+          >
             <ChoiceButtons
               value={codexShowRawAgentReasoning ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { codexShowRawAgentReasoning: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Surface raw reasoning events in the Stave UI." },
+                { value: "off", label: "Off", description: "Hide raw reasoning traces and keep the UI quieter." },
+              ]}
             />
           </LabeledField>
           <LabeledField
             title="Web Search Mode"
             description="Default is `disabled` to match the current Codex CLI opt-in `--search` behavior."
+            guide={(
+              <SettingsFieldGuide
+                title="Codex Web Search Mode"
+                summary="Use this when Codex needs outside knowledge rather than only repo-local context."
+                items={buildGuideItems(CODEX_WEB_SEARCH_HELP)}
+                examples={buildGuideExamples(CODEX_WEB_SEARCH_HELP)}
+                tooltip="Compare Codex web search modes"
+              />
+            )}
           >
-            <Select
+            <DescribedSelect
               value={codexWebSearchMode}
+              options={CODEX_WEB_SEARCH_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexWebSearchMode: value as "disabled" | "cached" | "live",
+                    codexWebSearchMode: value,
                   },
                 })
               }
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CODEX_WEB_SEARCH_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>{option.value}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </LabeledField>
           <LabeledField
             title="Fast Mode"
@@ -960,7 +1377,10 @@ export function ProvidersSection() {
             <ChoiceButtons
               value={codexFastMode ? "on" : "off"}
               onChange={(value) => updateSettings({ patch: { codexFastMode: value === "on" } })}
-              options={[...BOOLEAN_TOGGLE_OPTIONS]}
+              options={[
+                { value: "on", label: "On", description: "Bias toward faster Codex turns on simpler work." },
+                { value: "off", label: "Off", description: "Use the normal Codex runtime path." },
+              ]}
             />
           </LabeledField>
         </SettingsCard>
