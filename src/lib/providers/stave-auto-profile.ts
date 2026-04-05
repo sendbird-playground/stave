@@ -1,4 +1,13 @@
-import type { ProviderId, StaveAutoIntent, StaveAutoProfile, StaveWorkerRole } from "@/lib/providers/provider.types";
+import type {
+  ProviderId,
+  ProviderRuntimeOptions,
+  StaveAutoIntent,
+  StaveAutoProfile,
+  StaveAutoRoleName,
+  StaveAutoRoleRuntimeOverrides,
+  StaveAutoRoleRuntimeOverridesMap,
+  StaveWorkerRole,
+} from "@/lib/providers/provider.types";
 
 export type StaveAutoModelPresetId = "recommended" | "recommended-1m" | "claude-only" | "codex-only";
 
@@ -30,12 +39,123 @@ type StaveAutoSettingsLike = StaveAutoModelSettingsPatch & {
   staveAutoMaxParallelSubtasks: number;
   staveAutoAllowCrossProviderWorkers: boolean;
   staveAutoFastMode: boolean;
+  staveAutoRoleRuntimeOverrides: StaveAutoRoleRuntimeOverridesMap;
   claudeFastModeVisible: boolean;
   codexFastModeVisible: boolean;
   promptSupervisorBreakdown?: string;
   promptSupervisorSynthesis?: string;
   promptPreprocessorClassifier?: string;
 };
+
+export const STAVE_AUTO_ROLE_NAMES = [
+  "classifier",
+  "supervisor",
+  "plan",
+  "analyze",
+  "implement",
+  "quick_edit",
+  "general",
+  "verify",
+] as const satisfies readonly StaveAutoRoleName[];
+
+function createEmptyRoleRuntimeOverrides(): StaveAutoRoleRuntimeOverrides {
+  return {
+    claude: {},
+    codex: {},
+  };
+}
+
+export function createDefaultStaveAutoRoleRuntimeOverrides(): StaveAutoRoleRuntimeOverridesMap {
+  return {
+    classifier: createEmptyRoleRuntimeOverrides(),
+    supervisor: createEmptyRoleRuntimeOverrides(),
+    plan: createEmptyRoleRuntimeOverrides(),
+    analyze: createEmptyRoleRuntimeOverrides(),
+    implement: createEmptyRoleRuntimeOverrides(),
+    quick_edit: createEmptyRoleRuntimeOverrides(),
+    general: createEmptyRoleRuntimeOverrides(),
+    verify: createEmptyRoleRuntimeOverrides(),
+  };
+}
+
+export function normalizeStaveAutoRoleRuntimeOverrides(args: {
+  value?: Partial<StaveAutoRoleRuntimeOverridesMap> | null;
+}): StaveAutoRoleRuntimeOverridesMap {
+  const defaults = createDefaultStaveAutoRoleRuntimeOverrides();
+  const rawValue = args.value;
+  if (!rawValue || typeof rawValue !== "object") {
+    return defaults;
+  }
+
+  const rawByRole = rawValue as Record<string, unknown>;
+
+  for (const role of STAVE_AUTO_ROLE_NAMES) {
+    const rawRole = rawByRole[role];
+    if (!rawRole || typeof rawRole !== "object" || Array.isArray(rawRole)) {
+      continue;
+    }
+
+    const roleValue = rawRole as Record<string, unknown>;
+    const rawClaude = roleValue.claude;
+    if (rawClaude && typeof rawClaude === "object" && !Array.isArray(rawClaude)) {
+      const claudeValue = rawClaude as Record<string, unknown>;
+      if (
+        claudeValue.permissionMode === "default"
+        || claudeValue.permissionMode === "acceptEdits"
+        || claudeValue.permissionMode === "bypassPermissions"
+        || claudeValue.permissionMode === "plan"
+        || claudeValue.permissionMode === "dontAsk"
+        || claudeValue.permissionMode === "auto"
+      ) {
+        defaults[role].claude.permissionMode = claudeValue.permissionMode;
+      }
+      if (
+        claudeValue.thinkingMode === "adaptive"
+        || claudeValue.thinkingMode === "enabled"
+        || claudeValue.thinkingMode === "disabled"
+      ) {
+        defaults[role].claude.thinkingMode = claudeValue.thinkingMode;
+      }
+      if (
+        claudeValue.effort === "low"
+        || claudeValue.effort === "medium"
+        || claudeValue.effort === "high"
+        || claudeValue.effort === "max"
+      ) {
+        defaults[role].claude.effort = claudeValue.effort;
+      }
+      if (typeof claudeValue.fastMode === "boolean") {
+        defaults[role].claude.fastMode = claudeValue.fastMode;
+      }
+    }
+
+    const rawCodex = roleValue.codex;
+    if (rawCodex && typeof rawCodex === "object" && !Array.isArray(rawCodex)) {
+      const codexValue = rawCodex as Record<string, unknown>;
+      if (
+        codexValue.approvalPolicy === "never"
+        || codexValue.approvalPolicy === "on-request"
+        || codexValue.approvalPolicy === "untrusted"
+      ) {
+        defaults[role].codex.approvalPolicy = codexValue.approvalPolicy;
+      }
+      if (
+        codexValue.reasoningEffort === "minimal"
+        || codexValue.reasoningEffort === "low"
+        || codexValue.reasoningEffort === "medium"
+        || codexValue.reasoningEffort === "high"
+        || codexValue.reasoningEffort === "xhigh"
+      ) {
+        defaults[role].codex.reasoningEffort = codexValue.reasoningEffort;
+      }
+      if (typeof codexValue.fastMode === "boolean") {
+        defaults[role].codex.fastMode = codexValue.fastMode;
+      }
+    }
+  }
+
+  return defaults;
+}
 
 export const DEFAULT_STAVE_AUTO_MODEL_PRESET_ID: StaveAutoModelPresetId = "recommended";
 
@@ -161,6 +281,7 @@ export const DEFAULT_STAVE_AUTO_PROFILE: StaveAutoProfile = {
   claudeFastModeSupported: true,
   codexFastModeSupported: true,
   fastMode: false,
+  roleRuntimeOverrides: createDefaultStaveAutoRoleRuntimeOverrides(),
 };
 
 export function buildStaveAutoProfileFromSettings(args: {
@@ -183,6 +304,9 @@ export function buildStaveAutoProfileFromSettings(args: {
     claudeFastModeSupported: settings.claudeFastModeVisible,
     codexFastModeSupported: settings.codexFastModeVisible,
     fastMode: settings.staveAutoFastMode,
+    roleRuntimeOverrides: normalizeStaveAutoRoleRuntimeOverrides({
+      value: settings.staveAutoRoleRuntimeOverrides,
+    }),
     promptSupervisorBreakdown: settings.promptSupervisorBreakdown || undefined,
     promptSupervisorSynthesis: settings.promptSupervisorSynthesis || undefined,
     promptPreprocessorClassifier: settings.promptPreprocessorClassifier || undefined,
@@ -233,4 +357,47 @@ export function resolveStaveWorkerModel(args: {
     case "general":
       return profile.generalModel;
   }
+}
+
+export function applyStaveRoleRuntimeOverrides(args: {
+  profile: StaveAutoProfile;
+  role: StaveAutoRoleName;
+  model: string;
+  runtimeOptions?: ProviderRuntimeOptions;
+}): ProviderRuntimeOptions {
+  const nextRuntimeOptions: ProviderRuntimeOptions = {
+    ...(args.runtimeOptions ?? {}),
+  };
+  const overrides = args.profile.roleRuntimeOverrides?.[args.role];
+  if (!overrides) {
+    return nextRuntimeOptions;
+  }
+
+  const providerId = resolveStaveProviderForModel({ model: args.model });
+  if (providerId === "claude-code") {
+    if (overrides.claude.permissionMode !== undefined) {
+      nextRuntimeOptions.claudePermissionMode = overrides.claude.permissionMode;
+    }
+    if (overrides.claude.thinkingMode !== undefined) {
+      nextRuntimeOptions.claudeThinkingMode = overrides.claude.thinkingMode;
+    }
+    if (overrides.claude.effort !== undefined) {
+      nextRuntimeOptions.claudeEffort = overrides.claude.effort;
+    }
+    if (overrides.claude.fastMode !== undefined) {
+      nextRuntimeOptions.claudeFastMode = overrides.claude.fastMode;
+    }
+    return nextRuntimeOptions;
+  }
+
+  if (overrides.codex.approvalPolicy !== undefined) {
+    nextRuntimeOptions.codexApprovalPolicy = overrides.codex.approvalPolicy;
+  }
+  if (overrides.codex.reasoningEffort !== undefined) {
+    nextRuntimeOptions.codexModelReasoningEffort = overrides.codex.reasoningEffort;
+  }
+  if (overrides.codex.fastMode !== undefined) {
+    nextRuntimeOptions.codexFastMode = overrides.codex.fastMode;
+  }
+  return nextRuntimeOptions;
 }

@@ -53,6 +53,7 @@ type RuntimeSettings = Pick<
   | "staveAutoMaxParallelSubtasks"
   | "staveAutoAllowCrossProviderWorkers"
   | "staveAutoFastMode"
+  | "staveAutoRoleRuntimeOverrides"
   | "promptResponseStyle"
   | "promptPrDescription"
   | "promptSupervisorBreakdown"

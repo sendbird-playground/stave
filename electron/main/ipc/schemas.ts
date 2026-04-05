@@ -287,6 +287,323 @@ export const RuntimeOptionsObjectSchema = z
         claudeFastModeSupported: z.boolean().optional(),
         codexFastModeSupported: z.boolean().optional(),
         fastMode: z.boolean().optional(),
+        roleRuntimeOverrides: z
+          .object({
+            classifier: z.object({
+              claude: z.object({
+                permissionMode: z.union([
+                  z.literal("default"),
+                  z.literal("acceptEdits"),
+                  z.literal("bypassPermissions"),
+                  z.literal("plan"),
+                  z.literal("dontAsk"),
+                  z.literal("auto"),
+                ]).optional(),
+                thinkingMode: z.union([
+                  z.literal("adaptive"),
+                  z.literal("enabled"),
+                  z.literal("disabled"),
+                ]).optional(),
+                effort: z.union([
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("max"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+              codex: z.object({
+                approvalPolicy: z.union([
+                  z.literal("never"),
+                  z.literal("on-request"),
+                  z.literal("untrusted"),
+                ]).optional(),
+                reasoningEffort: z.union([
+                  z.literal("minimal"),
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("xhigh"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+            }).strict(),
+            supervisor: z.object({
+              claude: z.object({
+                permissionMode: z.union([
+                  z.literal("default"),
+                  z.literal("acceptEdits"),
+                  z.literal("bypassPermissions"),
+                  z.literal("plan"),
+                  z.literal("dontAsk"),
+                  z.literal("auto"),
+                ]).optional(),
+                thinkingMode: z.union([
+                  z.literal("adaptive"),
+                  z.literal("enabled"),
+                  z.literal("disabled"),
+                ]).optional(),
+                effort: z.union([
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("max"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+              codex: z.object({
+                approvalPolicy: z.union([
+                  z.literal("never"),
+                  z.literal("on-request"),
+                  z.literal("untrusted"),
+                ]).optional(),
+                reasoningEffort: z.union([
+                  z.literal("minimal"),
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("xhigh"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+            }).strict(),
+            plan: z.object({
+              claude: z.object({
+                permissionMode: z.union([
+                  z.literal("default"),
+                  z.literal("acceptEdits"),
+                  z.literal("bypassPermissions"),
+                  z.literal("plan"),
+                  z.literal("dontAsk"),
+                  z.literal("auto"),
+                ]).optional(),
+                thinkingMode: z.union([
+                  z.literal("adaptive"),
+                  z.literal("enabled"),
+                  z.literal("disabled"),
+                ]).optional(),
+                effort: z.union([
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("max"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+              codex: z.object({
+                approvalPolicy: z.union([
+                  z.literal("never"),
+                  z.literal("on-request"),
+                  z.literal("untrusted"),
+                ]).optional(),
+                reasoningEffort: z.union([
+                  z.literal("minimal"),
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("xhigh"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+            }).strict(),
+            analyze: z.object({
+              claude: z.object({
+                permissionMode: z.union([
+                  z.literal("default"),
+                  z.literal("acceptEdits"),
+                  z.literal("bypassPermissions"),
+                  z.literal("plan"),
+                  z.literal("dontAsk"),
+                  z.literal("auto"),
+                ]).optional(),
+                thinkingMode: z.union([
+                  z.literal("adaptive"),
+                  z.literal("enabled"),
+                  z.literal("disabled"),
+                ]).optional(),
+                effort: z.union([
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("max"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+              codex: z.object({
+                approvalPolicy: z.union([
+                  z.literal("never"),
+                  z.literal("on-request"),
+                  z.literal("untrusted"),
+                ]).optional(),
+                reasoningEffort: z.union([
+                  z.literal("minimal"),
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("xhigh"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+            }).strict(),
+            implement: z.object({
+              claude: z.object({
+                permissionMode: z.union([
+                  z.literal("default"),
+                  z.literal("acceptEdits"),
+                  z.literal("bypassPermissions"),
+                  z.literal("plan"),
+                  z.literal("dontAsk"),
+                  z.literal("auto"),
+                ]).optional(),
+                thinkingMode: z.union([
+                  z.literal("adaptive"),
+                  z.literal("enabled"),
+                  z.literal("disabled"),
+                ]).optional(),
+                effort: z.union([
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("max"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+              codex: z.object({
+                approvalPolicy: z.union([
+                  z.literal("never"),
+                  z.literal("on-request"),
+                  z.literal("untrusted"),
+                ]).optional(),
+                reasoningEffort: z.union([
+                  z.literal("minimal"),
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("xhigh"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+            }).strict(),
+            quick_edit: z.object({
+              claude: z.object({
+                permissionMode: z.union([
+                  z.literal("default"),
+                  z.literal("acceptEdits"),
+                  z.literal("bypassPermissions"),
+                  z.literal("plan"),
+                  z.literal("dontAsk"),
+                  z.literal("auto"),
+                ]).optional(),
+                thinkingMode: z.union([
+                  z.literal("adaptive"),
+                  z.literal("enabled"),
+                  z.literal("disabled"),
+                ]).optional(),
+                effort: z.union([
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("max"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+              codex: z.object({
+                approvalPolicy: z.union([
+                  z.literal("never"),
+                  z.literal("on-request"),
+                  z.literal("untrusted"),
+                ]).optional(),
+                reasoningEffort: z.union([
+                  z.literal("minimal"),
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("xhigh"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+            }).strict(),
+            general: z.object({
+              claude: z.object({
+                permissionMode: z.union([
+                  z.literal("default"),
+                  z.literal("acceptEdits"),
+                  z.literal("bypassPermissions"),
+                  z.literal("plan"),
+                  z.literal("dontAsk"),
+                  z.literal("auto"),
+                ]).optional(),
+                thinkingMode: z.union([
+                  z.literal("adaptive"),
+                  z.literal("enabled"),
+                  z.literal("disabled"),
+                ]).optional(),
+                effort: z.union([
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("max"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+              codex: z.object({
+                approvalPolicy: z.union([
+                  z.literal("never"),
+                  z.literal("on-request"),
+                  z.literal("untrusted"),
+                ]).optional(),
+                reasoningEffort: z.union([
+                  z.literal("minimal"),
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("xhigh"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+            }).strict(),
+            verify: z.object({
+              claude: z.object({
+                permissionMode: z.union([
+                  z.literal("default"),
+                  z.literal("acceptEdits"),
+                  z.literal("bypassPermissions"),
+                  z.literal("plan"),
+                  z.literal("dontAsk"),
+                  z.literal("auto"),
+                ]).optional(),
+                thinkingMode: z.union([
+                  z.literal("adaptive"),
+                  z.literal("enabled"),
+                  z.literal("disabled"),
+                ]).optional(),
+                effort: z.union([
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("max"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+              codex: z.object({
+                approvalPolicy: z.union([
+                  z.literal("never"),
+                  z.literal("on-request"),
+                  z.literal("untrusted"),
+                ]).optional(),
+                reasoningEffort: z.union([
+                  z.literal("minimal"),
+                  z.literal("low"),
+                  z.literal("medium"),
+                  z.literal("high"),
+                  z.literal("xhigh"),
+                ]).optional(),
+                fastMode: z.boolean().optional(),
+              }).strict(),
+            }).strict(),
+          })
+          .strict()
+          .optional(),
         promptSupervisorBreakdown: z.string().max(10_000).optional(),
         promptSupervisorSynthesis: z.string().max(10_000).optional(),
         promptPreprocessorClassifier: z.string().max(10_000).optional(),

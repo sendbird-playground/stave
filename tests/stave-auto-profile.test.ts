@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  applyStaveRoleRuntimeOverrides,
   buildStaveAutoModelSettingsPatch,
   buildStaveAutoProfileFromSettings,
+  createDefaultStaveAutoRoleRuntimeOverrides,
   DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
   detectStaveAutoModelPreset,
+  normalizeStaveAutoRoleRuntimeOverrides,
 } from "@/lib/providers/stave-auto-profile";
 
 function createSettings(overrides: Partial<Parameters<typeof buildStaveAutoProfileFromSettings>[0]["settings"]> = {}) {
@@ -14,6 +17,7 @@ function createSettings(overrides: Partial<Parameters<typeof buildStaveAutoProfi
     staveAutoMaxParallelSubtasks: 2,
     staveAutoAllowCrossProviderWorkers: true,
     staveAutoFastMode: false,
+    staveAutoRoleRuntimeOverrides: createDefaultStaveAutoRoleRuntimeOverrides(),
     claudeFastModeVisible: true,
     codexFastModeVisible: true,
     ...overrides,
@@ -85,5 +89,97 @@ describe("stave auto profile presets", () => {
     expect(profile.fastMode).toBe(true);
     expect(profile.claudeFastModeSupported).toBe(true);
     expect(profile.codexFastModeSupported).toBe(true);
+  });
+
+  test("normalizes partial role runtime overrides", () => {
+    const profile = buildStaveAutoProfileFromSettings({
+      settings: createSettings({
+        staveAutoRoleRuntimeOverrides: normalizeStaveAutoRoleRuntimeOverrides({
+          value: {
+            implement: {
+              codex: {
+                reasoningEffort: "xhigh",
+                fastMode: true,
+              },
+            },
+          },
+        }),
+      }),
+    });
+
+    expect(profile.roleRuntimeOverrides?.implement.codex.reasoningEffort).toBe("xhigh");
+    expect(profile.roleRuntimeOverrides?.implement.codex.fastMode).toBe(true);
+    expect(profile.roleRuntimeOverrides?.general.claude.permissionMode).toBeUndefined();
+  });
+});
+
+describe("applyStaveRoleRuntimeOverrides", () => {
+  test("applies Claude role overrides on top of inherited runtime options", () => {
+    const profile = buildStaveAutoProfileFromSettings({
+      settings: createSettings({
+        staveAutoRoleRuntimeOverrides: normalizeStaveAutoRoleRuntimeOverrides({
+          value: {
+            plan: {
+              claude: {
+                permissionMode: "acceptEdits",
+                thinkingMode: "enabled",
+                effort: "high",
+                fastMode: true,
+              },
+            },
+          },
+        }),
+      }),
+    });
+
+    expect(applyStaveRoleRuntimeOverrides({
+      profile,
+      role: "plan",
+      model: "claude-opus-4-6",
+      runtimeOptions: {
+        claudePermissionMode: "auto",
+        claudeThinkingMode: "adaptive",
+        claudeEffort: "medium",
+        claudeFastMode: false,
+      },
+    })).toMatchObject({
+      claudePermissionMode: "acceptEdits",
+      claudeThinkingMode: "enabled",
+      claudeEffort: "high",
+      claudeFastMode: true,
+    });
+  });
+
+  test("applies Codex role overrides on top of inherited runtime options", () => {
+    const profile = buildStaveAutoProfileFromSettings({
+      settings: createSettings({
+        staveAutoRoleRuntimeOverrides: normalizeStaveAutoRoleRuntimeOverrides({
+          value: {
+            implement: {
+              codex: {
+                approvalPolicy: "never",
+                reasoningEffort: "xhigh",
+                fastMode: false,
+              },
+            },
+          },
+        }),
+      }),
+    });
+
+    expect(applyStaveRoleRuntimeOverrides({
+      profile,
+      role: "implement",
+      model: "gpt-5.3-codex",
+      runtimeOptions: {
+        codexApprovalPolicy: "on-request",
+        codexModelReasoningEffort: "medium",
+        codexFastMode: true,
+      },
+    })).toMatchObject({
+      codexApprovalPolicy: "never",
+      codexModelReasoningEffort: "xhigh",
+      codexFastMode: false,
+    });
   });
 });
