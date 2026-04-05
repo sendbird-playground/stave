@@ -1,6 +1,6 @@
 ---
 name: stave-release
-description: Release workflow for the Stave repository that bumps the patch version, reviews the actual PR changes and PR description `Changes` sections in the release scope instead of relying on commit titles alone, generates release notes with `conventional-changelog`, and opens a pull request against `main` from a dedicated temporary release worktree so the user's original checkout stays on its original branch. Use when the user asks to cut the next patch release, ship the current changes as a versioned release, or prepare a release PR. After the PR merges, the repository's GitHub Actions workflow builds and publishes the release artifacts automatically.
+description: Release workflow for the Stave repository that confirms whether the next release is patch or minor before bumping the version, reviews the actual PR changes and PR description `Changes` sections in the release scope instead of relying on commit titles alone, generates release notes with `conventional-changelog`, and opens a pull request against `main` from a dedicated temporary release worktree so the user's original checkout stays on its original branch. Use when the user asks to cut the next release, ship the current changes as a versioned release, or prepare a release PR. After the PR merges, the repository's GitHub Actions workflow builds and publishes the release artifacts automatically.
 ---
 
 # Stave Release
@@ -23,8 +23,11 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
    - Run `git tag --list 'v*' --sort=-version:refname | head -5` to find the most recent semver tag. Incremental `conventional-changelog` generation depends on at least one prior tag.
    - If no prior semver tag exists, stop and explain that a baseline `vX.Y.Z` tag is required before incremental changelog generation is safe.
 
-3. Bump only the patch version.
-   - Increment `package.json` from `x.y.z` to `x.y.(z+1)`.
+3. Confirm the release bump type and update the version.
+   - Ask the user whether this release is `patch` or `minor` before editing `package.json`, unless the user already specified the version bump explicitly.
+   - Prefer structured user input when the active runtime supports it. If structured user input is unavailable, ask in plain chat and wait for the answer before continuing.
+   - For `patch`, increment `package.json` from `x.y.z` to `x.y.(z+1)`.
+   - For `minor`, increment `package.json` from `x.y.z` to `x.(y+1).0`.
    - Do not bump if the working tree already reflects the intended release version.
 
 4. Review the shipped changes before writing the release summary.
@@ -75,7 +78,7 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
    - Push to `origin`: `git push origin <branch>`
    - Open a PR against `main` using `gh pr create --base main`.
    - PR title: `chore: release x.y.z`
-   - PR body must include: a bullet summary of shipped changes, the verification commands run and their results, and the `🤖 Generated with Claude Code` footer.
+   - PR body must include: a bullet summary of shipped changes, the verification commands run and their results, and an agent-generation footer that matches the active runtime.
    - After opening the PR, review the actual PR diff with `gh pr diff <pr-number>` or `gh pr view <pr-number> --json files`.
    - Confirm the PR body summary matches the real diff and that the PR contains only the version bump, changelog/docs, and any intentionally included release metadata.
    - If unrelated code changes appear in the release PR, stop and report them before cleanup.
@@ -101,7 +104,9 @@ Read `references/stave-release-checklist.md` for the exact sequence and repair r
 
 - **Never push directly to `main`.** All releases land via PR.
 - Never hardcode a repository path. Always derive it with `git rev-parse --show-toplevel`.
+- Do not assume a patch bump by default. Confirm `patch` vs `minor` with the user unless the request already makes the release type explicit.
 - Do not bump the version twice if the working tree already reflects the intended release.
+- Do not hardcode a Claude-only user-input mechanism in shared release instructions. Use structured user input when the runtime supports it, and plain chat fallback otherwise.
 - Do not create a non-Conventional commit.
 - Do not hand-write release notes when `conventional-changelog` is the required path.
 - Do not rely on commit titles alone when drafting release notes or the release PR summary; review the actual PR changes or underlying git diff.

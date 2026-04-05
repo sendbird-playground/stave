@@ -34,8 +34,13 @@
    Record the temporary worktree path for cleanup after PR creation and do the rest of the release work there.
 6. Verify `origin` exists: `git remote -v`
 7. Find the most recent semver tag: `git tag --list 'v*' --sort=-version:refname | head -5`
-8. Bump only the patch component in `package.json`.
-9. Review the release scope from the previous semver tag to `HEAD`.
+8. Confirm whether the release is `patch` or `minor`, unless the user already specified the release type explicitly.
+   - Prefer structured user input when the active runtime supports it.
+   - If structured user input is unavailable, ask in plain chat and wait for the answer before continuing.
+9. Bump the selected component in `package.json`.
+   - `patch`: `x.y.z` -> `x.y.(z+1)`
+   - `minor`: `x.y.z` -> `x.(y+1).0`
+10. Review the release scope from the previous semver tag to `HEAD`.
    - `git log --first-parent --oneline <prev-tag>..HEAD`
    - `git diff --stat <prev-tag>..HEAD`
    - `git diff --name-only <prev-tag>..HEAD`
@@ -47,45 +52,45 @@
    - Deduplicate PR `Changes` bullets against the actual diff before carrying them into release notes.
    - If the reviewed changes contain unexpected or unrelated work, stop before continuing.
 
-10. Generate or refresh `CHANGELOG.md`:
+11. Generate or refresh `CHANGELOG.md`:
 
 ```bash
 bunx --bun conventional-changelog-cli -p conventionalcommits -i CHANGELOG.md -s
 ```
 
-11. Treat `conventional-changelog` output as a draft baseline, not the final authority.
-12. Inspect the newly generated top release section against the reviewed PR changes, extracted PR `Changes` bullets, and actual diff.
-13. If the generated section drops or weakens validated PR `Changes` bullets, restore or merge them back into the top section.
-14. If it is still missing meaningful bullets, append a concise 3–7 bullet summary derived from the reviewed PR changes and actual diff.
+12. Treat `conventional-changelog` output as a draft baseline, not the final authority.
+13. Inspect the newly generated top release section against the reviewed PR changes, extracted PR `Changes` bullets, and actual diff.
+14. If the generated section drops or weakens validated PR `Changes` bullets, restore or merge them back into the top section.
+15. If it is still missing meaningful bullets, append a concise 3–7 bullet summary derived from the reviewed PR changes and actual diff.
    - Summarize user-visible or architecture-significant outcomes, not file lists.
    - Keep the summary as flat outcome-focused bullets; do not use per-PR heading blocks such as `PR #123 — ...`.
    - If needed, add PR links in a separate `References` section instead.
-15. Update `README.md` and other release-facing docs if the shipped behavior changed.
-16. Run verification:
+16. Update `README.md` and other release-facing docs if the shipped behavior changed.
+17. Run verification:
     - minimum: `bun run typecheck`
     - focused tests for changed areas
     - `bun test` or `bun run test:ci` when scope is broad
-17. Stage and commit:
+18. Stage and commit:
 
 ```bash
 git add -A
 git commit -m "chore: release x.y.z"
 ```
 
-18. Push and open a PR:
+19. Push and open a PR:
 
 ```bash
 git push origin <branch>
 gh pr create --base main --title "chore: release x.y.z" --body "..."
 ```
 
-19. Review the release PR diff after it is opened.
+20. Review the release PR diff after it is opened.
    - `gh pr diff <pr-number>` or `gh pr view <pr-number> --json files`
    - Confirm the PR body summary matches the actual diff.
    - Confirm the PR only contains the version bump, changelog/docs, and any intentionally included release metadata.
    - If unrelated code changes appear, stop and fix or report them before cleanup.
 
-20. Clean up the temporary release worktree and verify the original checkout stayed on its original branch:
+21. Clean up the temporary release worktree and verify the original checkout stayed on its original branch:
 
 ```bash
 git worktree remove ../.worktrees/<repo>/release-x.y.z
@@ -97,6 +102,7 @@ If the original checkout was switched for any reason, check it back out before s
 ## Repair Rules
 
 - If the repo has no prior semver tags, stop and ask the user to create a baseline tag before proceeding.
+- Do not assume `patch` by default. Confirm `patch` vs `minor` unless the user already made it explicit.
 - If `package.json` already reflects the intended version, start from that state instead of bumping again.
 - If `conventional-changelog` output needs cleanup, make the smallest explicit post-generation fix.
 - Avoid release-note formatting that foregrounds per-PR headline blocks (`PR #... — ...`) unless the user explicitly requests that style.
