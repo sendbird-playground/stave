@@ -133,7 +133,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                 <MessageAction
                   key="provider-action"
                   label={toHumanModelName({ model: message.model })}
-                  className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-white dark:bg-white/[0.06] px-2 text-sm font-normal text-foreground opacity-100"
+                  className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-background/80 px-2 text-sm font-normal text-foreground opacity-100 supports-backdrop-filter:backdrop-blur-xs"
                 >
                   <ModelIcon providerId={message.providerId} className="size-3.5" />
                   {toHumanModelName({ model: message.model })}
