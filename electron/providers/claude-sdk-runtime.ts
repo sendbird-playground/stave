@@ -71,6 +71,9 @@ const CLAUDE_PLAN_MODE_DISALLOWED_TOOLS = [
 const CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES = new Set(
   CLAUDE_PLAN_MODE_DISALLOWED_TOOLS.map((toolName) => toolName.toLowerCase()),
 );
+const CLAUDE_AUTO_ALLOWED_TOOL_NAMES = new Set([
+  "exitplanmode",
+]);
 const CLAUDE_MUTATING_BASH_PATTERNS = [
   /(^|[;&|]\s*)(mkdir|mktemp|rm|rmdir|mv|cp|install|touch|chmod|chown|ln|truncate)\b/i,
   /(^|[;&|]\s*)git\s+(add|am|apply|checkout|cherry-pick|clean|commit|merge|rebase|reset|restore|revert|rm|stash)\b/i,
@@ -335,6 +338,12 @@ export function shouldDenyClaudeToolInPlanMode(args: {
   }
   const command = extractClaudeBashCommand(args.input);
   return typeof command === "string" && isMutatingClaudeBashCommand(command);
+}
+
+export function shouldAutoAllowClaudeTool(args: {
+  toolName: string;
+}) {
+  return CLAUDE_AUTO_ALLOWED_TOOL_NAMES.has(args.toolName.trim().toLowerCase());
 }
 
 function buildClaudePlanModeDenyMessage(args: {
@@ -1402,6 +1411,14 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         canUseTool: async (toolName, input, options) => {
           const normalizedInput = normalizeClaudeToolInput(input);
           const requestId = options.toolUseID;
+
+          if (shouldAutoAllowClaudeTool({ toolName })) {
+            return buildClaudeApprovalPermissionResult({
+              approved: true,
+              normalizedInput,
+              denialMessage: `Claude auto-allowed ${toolName}.`,
+            });
+          }
 
           if (toolName === "AskUserQuestion") {
             const questions = parseClaudeQuestionList({ input: normalizedInput });

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { collectClipboardFiles, partitionClipboardFiles } from "../src/components/ai-elements/prompt-input.clipboard";
+import {
+  collectClipboardFiles,
+  mergeClipboardImageAttachments,
+  partitionClipboardFiles,
+} from "../src/components/ai-elements/prompt-input.clipboard";
 
 function createFile(args: {
   name: string;
@@ -58,5 +62,52 @@ describe("partitionClipboardFiles", () => {
       imageFiles: [imageFile],
       nonImageFiles: [textFile],
     });
+  });
+});
+
+describe("mergeClipboardImageAttachments", () => {
+  test("dedupes identical pasted images within the same batch", () => {
+    const first = {
+      kind: "image" as const,
+      id: "image-1",
+      label: "Pasted image",
+      dataUrl: "data:image/png;base64,AAA",
+    };
+    const duplicate = {
+      kind: "image" as const,
+      id: "image-2",
+      label: "Screenshot",
+      dataUrl: "data:image/png;base64,AAA",
+    };
+
+    expect(mergeClipboardImageAttachments({
+      incoming: [first, duplicate],
+    })).toEqual([first]);
+  });
+
+  test("preserves existing images and appends only new clipboard content", () => {
+    const existing = {
+      kind: "image" as const,
+      id: "image-existing",
+      label: "Existing",
+      dataUrl: "data:image/png;base64,AAA",
+    };
+    const duplicate = {
+      kind: "image" as const,
+      id: "image-duplicate",
+      label: "Duplicate",
+      dataUrl: "data:image/png;base64,AAA",
+    };
+    const next = {
+      kind: "image" as const,
+      id: "image-next",
+      label: "Next",
+      dataUrl: "data:image/png;base64,BBB",
+    };
+
+    expect(mergeClipboardImageAttachments({
+      existing: [existing],
+      incoming: [duplicate, next],
+    })).toEqual([existing, next]);
   });
 });
