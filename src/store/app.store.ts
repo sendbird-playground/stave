@@ -695,12 +695,16 @@ function buildApprovalNotificationInputs(args: {
   });
   const taskMessages = args.session.messagesByTask[args.taskId] ?? [];
 
-  return approvalEvents.map((event) => {
+  return approvalEvents.flatMap((event) => {
     const location = findPendingApprovalMessageByRequestId({
       messages: taskMessages,
       requestId: event.requestId,
     });
-    return {
+    if (!location) {
+      return [];
+    }
+
+    return [{
       id: crypto.randomUUID(),
       kind: "task.approval_requested",
       title: taskTitle,
@@ -716,14 +720,14 @@ function buildApprovalNotificationInputs(args: {
       action: {
         type: "approval",
         requestId: event.requestId,
-        messageId: location?.messageId ?? null,
+        messageId: location.messageId,
       },
       payload: {
         toolName: event.toolName,
         description: event.description,
       },
       dedupeKey: `task.approval_requested:${args.turnId}:${event.requestId}`,
-    } satisfies AppNotificationCreateInput;
+    } satisfies AppNotificationCreateInput];
   });
 }
 

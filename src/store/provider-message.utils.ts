@@ -175,6 +175,39 @@ export function updateApprovalPartsByRequestId(args: {
   });
 }
 
+export function resolvePendingToolInteractionPartsByRequestId(args: {
+  parts: MessagePart[];
+  requestId?: string;
+}): MessagePart[] {
+  const requestId = args.requestId?.trim();
+  if (!requestId) {
+    return args.parts;
+  }
+
+  let changed = false;
+  const nextParts = args.parts.map((part) => {
+    if (part.type === "approval" && part.requestId === requestId && part.state === "approval-requested") {
+      changed = true;
+      return {
+        ...part,
+        state: "approval-responded" as const,
+      };
+    }
+
+    if (part.type === "user_input" && part.requestId === requestId && part.state === "input-requested") {
+      changed = true;
+      return {
+        ...part,
+        state: "input-responded" as const,
+      };
+    }
+
+    return part;
+  });
+
+  return changed ? nextParts : args.parts;
+}
+
 export function updateUserInputPartsByRequestId(args: {
   parts: MessagePart[];
   requestId: string;

@@ -7,6 +7,7 @@ import {
   hasRenderableAssistantContent,
   mergePromptSuggestions,
   mergeToolResultIntoPart,
+  resolvePendingToolInteractionPartsByRequestId,
   updateApprovalPartsByRequestId,
   updateUserInputPartsByRequestId,
 } from "@/store/provider-message.utils";
@@ -341,5 +342,67 @@ describe("updateUserInputPartsByRequestId", () => {
         state: "input-responded",
       },
     ]);
+  });
+});
+
+describe("resolvePendingToolInteractionPartsByRequestId", () => {
+  test("marks matching pending approval and user input parts as responded", () => {
+    expect(resolvePendingToolInteractionPartsByRequestId({
+      requestId: "tool-1",
+      parts: [
+        {
+          type: "approval",
+          toolName: "Bash",
+          description: "Run command",
+          requestId: "tool-1",
+          state: "approval-requested",
+        },
+        {
+          type: "user_input",
+          toolName: "AskUserQuestion",
+          requestId: "tool-1",
+          questions: [{
+            question: "Continue?",
+            header: "Confirm",
+            options: [{ label: "Yes", description: "continue" }],
+          }],
+          state: "input-requested",
+        },
+      ],
+    })).toEqual([
+      {
+        type: "approval",
+        toolName: "Bash",
+        description: "Run command",
+        requestId: "tool-1",
+        state: "approval-responded",
+      },
+      {
+        type: "user_input",
+        toolName: "AskUserQuestion",
+        requestId: "tool-1",
+        questions: [{
+          question: "Continue?",
+          header: "Confirm",
+          options: [{ label: "Yes", description: "continue" }],
+        }],
+        state: "input-responded",
+      },
+    ]);
+  });
+
+  test("returns the original array when there is no matching pending interaction", () => {
+    const parts = [{
+      type: "approval" as const,
+      toolName: "Read",
+      description: "Inspect file",
+      requestId: "tool-2",
+      state: "approval-requested" as const,
+    }];
+
+    expect(resolvePendingToolInteractionPartsByRequestId({
+      requestId: "tool-1",
+      parts,
+    })).toBe(parts);
   });
 });

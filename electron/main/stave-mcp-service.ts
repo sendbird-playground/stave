@@ -444,6 +444,9 @@ async function persistApprovalNotification(args: {
     messages: args.session.messagesByTask[args.taskId] ?? [],
     requestId: args.event.requestId,
   });
+  if (!location) {
+    return;
+  }
   await persistNotification({
     id: randomUUID(),
     kind: "task.approval_requested",
@@ -460,7 +463,7 @@ async function persistApprovalNotification(args: {
     action: {
       type: "approval",
       requestId: args.event.requestId,
-      messageId: location?.messageId ?? null,
+      messageId: location.messageId,
     },
     payload: {
       toolName: args.event.toolName,
