@@ -854,6 +854,7 @@ describe("workspace store hydration ordering", () => {
     });
 
     await useAppStore.getState().hydrateWorkspaces();
+    await Bun.sleep(0);
 
     const nextState = useAppStore.getState();
     expect(upsertCalls).toHaveLength(0);
@@ -937,6 +938,7 @@ describe("workspace store hydration ordering", () => {
     });
 
     await useAppStore.getState().hydrateWorkspaces();
+    await Bun.sleep(0);
 
     const messages = useAppStore.getState().messagesByTask["task-stale"] ?? [];
     expect(messages).toHaveLength(2);
@@ -997,6 +999,152 @@ describe("workspace store hydration ordering", () => {
     await useAppStore.getState().hydrateWorkspaces();
 
     expect(useAppStore.getState().projectFiles).toEqual(listedFiles);
+  });
+
+  test("hydrateWorkspaces resolves after shell hydrate and backfills task messages asynchronously", async () => {
+    const localStorage = createMemoryStorage();
+    let resolveTaskMessages: ((value: {
+      ok: boolean;
+      page: {
+        messages: Array<{
+          id: string;
+          role: "assistant";
+          model: string;
+          providerId: "codex";
+          content: string;
+          isStreaming: boolean;
+          parts: Array<{ type: "text"; text: string }>;
+        }>;
+        totalCount: number;
+        limit: number;
+        offset: number;
+        hasMoreOlder: boolean;
+      };
+    }) => void) | null = null;
+    const taskMessagesPromise = new Promise<{
+      ok: boolean;
+      page: {
+        messages: Array<{
+          id: string;
+          role: "assistant";
+          model: string;
+          providerId: "codex";
+          content: string;
+          isStreaming: boolean;
+          parts: Array<{ type: "text"; text: string }>;
+        }>;
+        totalCount: number;
+        limit: number;
+        offset: number;
+        hasMoreOlder: boolean;
+      };
+    }>((resolve) => {
+      resolveTaskMessages = resolve;
+    });
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          pickRoot: async () => ({ ok: false }),
+          listFiles: async () => ({ ok: true, files: ["package.json"] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [{ id: "ws-main-hydrate", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+          }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          loadWorkspaceShell: async () => ({
+            ok: true,
+            shell: {
+              activeTaskId: "task-main-hydrate",
+              tasks: [{
+                id: "task-main-hydrate",
+                title: "Hydrated Task",
+                provider: "codex",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+                unread: false,
+              }],
+              promptDraftByTask: {},
+              providerSessionByTask: {},
+              messageCountByTask: { "task-main-hydrate": 1 },
+              workspaceInformation: {
+                jiraIssues: [],
+                confluencePages: [],
+                figmaResources: [],
+                linkedPullRequests: [],
+                slackThreads: [],
+                notes: "",
+                todos: [],
+                customFields: [],
+              },
+              editorTabs: [],
+              activeEditorTabId: null,
+            },
+          }),
+          loadTaskMessages: async () => taskMessagesPromise,
+          listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
+          loadProjectRegistry: async () => ({ ok: true, projects: [] }),
+          saveProjectRegistry: async () => ({ ok: true }),
+          upsertWorkspace: async () => ({ ok: true }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: false,
+      workspaces: [{ id: "ws-main-hydrate", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main-hydrate",
+      projectPath: "/tmp/stave-project-hydrate",
+      projectName: "stave-project-hydrate",
+      workspacePathById: { "ws-main-hydrate": "/tmp/stave-project-hydrate" },
+      workspaceBranchById: { "ws-main-hydrate": "main" },
+      workspaceDefaultById: { "ws-main-hydrate": true },
+      projectFiles: [],
+    });
+
+    let hydrated = false;
+    const hydratePromise = useAppStore.getState().hydrateWorkspaces().then(() => {
+      hydrated = true;
+    });
+
+    await Bun.sleep(0);
+
+    expect(hydrated).toBe(true);
+    expect(useAppStore.getState().activeTaskId).toBe("task-main-hydrate");
+    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual(["task-main-hydrate"]);
+    expect(useAppStore.getState().projectFiles).toEqual(["package.json"]);
+    expect(useAppStore.getState().messagesByTask["task-main-hydrate"]).toBeUndefined();
+    expect(useAppStore.getState().taskMessagesLoadingByTask["task-main-hydrate"]).toBe(true);
+
+    resolveTaskMessages?.({
+      ok: true,
+      page: {
+        messages: [{
+          id: "task-main-hydrate-m-1",
+          role: "assistant",
+          model: "gpt-5.4",
+          providerId: "codex",
+          content: "hydrated message",
+          isStreaming: false,
+          parts: [{ type: "text", text: "hydrated message" }],
+        }],
+        totalCount: 1,
+        limit: 120,
+        offset: 0,
+        hasMoreOlder: false,
+      },
+    });
+    await hydratePromise;
+    await Bun.sleep(0);
+
+    expect(useAppStore.getState().messagesByTask["task-main-hydrate"]?.at(-1)?.content).toBe("hydrated message");
+    expect(useAppStore.getState().taskMessagesLoadingByTask["task-main-hydrate"]).toBe(false);
   });
 
   test("hydrateWorkspaces auto-imports existing git worktrees missing from the DB", async () => {
@@ -1697,6 +1845,339 @@ describe("workspace store hydration ordering", () => {
     expect(nextState.activeWorkspaceId).toBe("ws-alpha");
     expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual(["src/alpha.ts"]);
     expect(nextState.activeEditorTabId).toBe("file:src/alpha.ts");
+  });
+
+  test("switchWorkspace does not wait for file refresh when the target workspace is cached", async () => {
+    const localStorage = createMemoryStorage();
+    let resolveListFiles: ((value: { ok: boolean; files: string[] }) => void) | null = null;
+    const listFilesPromise = new Promise<{ ok: boolean; files: string[] }>((resolve) => {
+      resolveListFiles = resolve;
+    });
+
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          pickRoot: async () => ({ ok: false }),
+          listFiles: async () => listFilesPromise,
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      workspaces: [
+        { id: "ws-alpha-fast", name: "alpha", updatedAt: "2026-03-10T00:00:00.000Z" },
+        { id: "ws-beta-fast", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
+      ],
+      activeWorkspaceId: "ws-alpha-fast",
+      projectPath: "/tmp/stave-project-switch-fast",
+      projectName: "stave-project-switch-fast",
+      workspacePathById: {
+        "ws-alpha-fast": "/tmp/stave-project-switch-fast",
+        "ws-beta-fast": "/tmp/stave-project-switch-fast/.stave/workspaces/beta",
+      },
+      workspaceBranchById: {
+        "ws-alpha-fast": "main",
+        "ws-beta-fast": "beta",
+      },
+      workspaceDefaultById: {
+        "ws-alpha-fast": true,
+        "ws-beta-fast": false,
+      },
+      tasks: [{
+        id: "task-alpha-fast",
+        title: "Alpha Task",
+        provider: "claude-code",
+        updatedAt: "2026-03-10T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      activeTaskId: "task-alpha-fast",
+      messagesByTask: { "task-alpha-fast": [] },
+      messageCountByTask: { "task-alpha-fast": 0 },
+      projectFiles: ["alpha-only.ts"],
+      workspaceRuntimeCacheById: {
+        "ws-beta-fast": {
+          activeTaskId: "task-beta-fast",
+          tasks: [{
+            id: "task-beta-fast",
+            title: "Beta Task",
+            provider: "codex",
+            updatedAt: "2026-03-10T00:01:00.000Z",
+            unread: false,
+            archivedAt: null,
+          }],
+          messagesByTask: { "task-beta-fast": [] },
+          messageCountByTask: { "task-beta-fast": 0 },
+          promptDraftByTask: {},
+          workspaceInformation: {
+            jiraIssues: [],
+            confluencePages: [],
+            figmaResources: [],
+            linkedPullRequests: [],
+            slackThreads: [],
+            notes: "",
+            todos: [],
+            customFields: [],
+          },
+          editorTabs: [],
+          activeEditorTabId: null,
+          activeTurnIdsByTask: {},
+          providerSessionByTask: {},
+          nativeSessionReadyByTask: {},
+        },
+      },
+    });
+
+    let switchResolved = false;
+    const switchPromise = useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta-fast" }).then(() => {
+      switchResolved = true;
+    });
+
+    await Bun.sleep(0);
+
+    expect(switchResolved).toBe(true);
+    expect(useAppStore.getState().activeWorkspaceId).toBe("ws-beta-fast");
+    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual(["task-beta-fast"]);
+    expect(useAppStore.getState().projectFiles).toEqual([]);
+
+    resolveListFiles?.({ ok: true, files: ["beta-only.ts"] });
+    await switchPromise;
+    await Bun.sleep(0);
+
+    expect(useAppStore.getState().projectFiles).toEqual(["beta-only.ts"]);
+  });
+
+  test("closeWorkspace clears cached files for the closed workspace path", async () => {
+    const localStorage = createMemoryStorage();
+    const closedWorkspaceIds: string[] = [];
+    setWindowContext({
+      localStorage,
+      api: {
+        persistence: {
+          listWorkspaces: async () => ({ ok: true, rows: [] }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          upsertWorkspace: async () => ({ ok: true }),
+          closeWorkspace: async ({ workspaceId }: { workspaceId: string }) => {
+            closedWorkspaceIds.push(workspaceId);
+            return { ok: true };
+          },
+        },
+        fs: {
+          listFiles: async () => ({ ok: true, files: [] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [
+        { id: "ws-main-close", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
+        { id: "ws-feature-close", name: "feature", updatedAt: "2026-03-10T00:01:00.000Z" },
+      ],
+      activeWorkspaceId: "ws-main-close",
+      projectPath: "/tmp/stave-project-close",
+      workspacePathById: {
+        "ws-main-close": "/tmp/stave-project-close",
+        "ws-feature-close": "/tmp/stave-project-close/.stave/workspaces/feature",
+      },
+      workspaceBranchById: {
+        "ws-main-close": "main",
+        "ws-feature-close": "feature",
+      },
+      workspaceDefaultById: {
+        "ws-main-close": true,
+        "ws-feature-close": false,
+      },
+      workspaceFileCacheByPath: {
+        "/tmp/stave-project-close": ["root.ts"],
+        "/tmp/stave-project-close/.stave/workspaces/feature": ["feature.ts"],
+      },
+    });
+
+    await useAppStore.getState().closeWorkspace({ workspaceId: "ws-feature-close" });
+
+    expect(closedWorkspaceIds).toEqual(["ws-feature-close"]);
+    expect(useAppStore.getState().workspaces.map((workspace) => workspace.id)).toEqual(["ws-main-close"]);
+    expect(useAppStore.getState().workspaceFileCacheByPath).toEqual({
+      "/tmp/stave-project-close": ["root.ts"],
+    });
+  });
+
+  test("switchWorkspace resolves after shell hydrate and backfills messages asynchronously for uncached workspaces", async () => {
+    const localStorage = createMemoryStorage();
+    let resolveTaskMessages: ((value: {
+      ok: boolean;
+      page: {
+        messages: Array<{
+          id: string;
+          role: "assistant";
+          model: string;
+          providerId: "codex";
+          content: string;
+          isStreaming: boolean;
+          parts: Array<{ type: "text"; text: string }>;
+        }>;
+        totalCount: number;
+        limit: number;
+        offset: number;
+        hasMoreOlder: boolean;
+      };
+    }) => void) | null = null;
+    const taskMessagesPromise = new Promise<{
+      ok: boolean;
+      page: {
+        messages: Array<{
+          id: string;
+          role: "assistant";
+          model: string;
+          providerId: "codex";
+          content: string;
+          isStreaming: boolean;
+          parts: Array<{ type: "text"; text: string }>;
+        }>;
+        totalCount: number;
+        limit: number;
+        offset: number;
+        hasMoreOlder: boolean;
+      };
+    }>((resolve) => {
+      resolveTaskMessages = resolve;
+    });
+
+    setWindowContext({
+      localStorage,
+      api: {
+        persistence: {
+          listWorkspaces: async () => ({ ok: true, rows: [] }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          upsertWorkspace: async () => ({ ok: true }),
+          loadWorkspaceShell: async ({ workspaceId }: { workspaceId: string }) => ({
+            ok: true,
+            shell: workspaceId === "ws-beta-cold"
+              ? {
+                  activeTaskId: "task-beta-cold",
+                  tasks: [{
+                    id: "task-beta-cold",
+                    title: "Beta Cold Task",
+                    provider: "codex",
+                    updatedAt: "2026-03-10T00:01:00.000Z",
+                    unread: false,
+                  }],
+                  promptDraftByTask: {},
+                  providerSessionByTask: {},
+                  messageCountByTask: { "task-beta-cold": 1 },
+                  workspaceInformation: {
+                    jiraIssues: [],
+                    confluencePages: [],
+                    figmaResources: [],
+                    linkedPullRequests: [],
+                    slackThreads: [],
+                    notes: "",
+                    todos: [],
+                    customFields: [],
+                  },
+                  editorTabs: [],
+                  activeEditorTabId: null,
+                }
+              : null,
+          }),
+          listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
+          loadTaskMessages: async () => taskMessagesPromise,
+        },
+        fs: {
+          listFiles: async () => ({ ok: true, files: [] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      workspaces: [
+        { id: "ws-alpha-cold", name: "alpha", updatedAt: "2026-03-10T00:00:00.000Z" },
+        { id: "ws-beta-cold", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
+      ],
+      activeWorkspaceId: "ws-alpha-cold",
+      projectPath: "/tmp/stave-project-cold",
+      projectName: "stave-project-cold",
+      workspacePathById: {
+        "ws-alpha-cold": "/tmp/stave-project-cold",
+        "ws-beta-cold": "/tmp/stave-project-cold/.stave/workspaces/beta",
+      },
+      workspaceBranchById: {
+        "ws-alpha-cold": "main",
+        "ws-beta-cold": "beta",
+      },
+      workspaceDefaultById: {
+        "ws-alpha-cold": true,
+        "ws-beta-cold": false,
+      },
+      tasks: [{
+        id: "task-alpha-cold",
+        title: "Alpha Task",
+        provider: "claude-code",
+        updatedAt: "2026-03-10T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      activeTaskId: "task-alpha-cold",
+      messagesByTask: { "task-alpha-cold": [] },
+      messageCountByTask: { "task-alpha-cold": 0 },
+      projectFiles: ["alpha.ts"],
+    });
+
+    let switchResolved = false;
+    const switchPromise = useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta-cold" }).then(() => {
+      switchResolved = true;
+    });
+
+    await Bun.sleep(0);
+
+    expect(switchResolved).toBe(true);
+    expect(useAppStore.getState().activeWorkspaceId).toBe("ws-beta-cold");
+    expect(useAppStore.getState().activeTaskId).toBe("task-beta-cold");
+    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual(["task-beta-cold"]);
+    expect(useAppStore.getState().messageCountByTask["task-beta-cold"]).toBe(1);
+    expect(useAppStore.getState().messagesByTask["task-beta-cold"]).toBeUndefined();
+    expect(useAppStore.getState().taskMessagesLoadingByTask["task-beta-cold"]).toBe(true);
+
+    resolveTaskMessages?.({
+      ok: true,
+      page: {
+        messages: [{
+          id: "task-beta-cold-m-1",
+          role: "assistant",
+          model: "gpt-5.4",
+          providerId: "codex",
+          content: "cold beta message",
+          isStreaming: false,
+          parts: [{ type: "text", text: "cold beta message" }],
+        }],
+        totalCount: 1,
+        limit: 120,
+        offset: 0,
+        hasMoreOlder: false,
+      },
+    });
+    await switchPromise;
+    await Bun.sleep(0);
+
+    expect(useAppStore.getState().messagesByTask["task-beta-cold"]?.at(-1)?.content).toBe("cold beta message");
+    expect(useAppStore.getState().taskMessagesLoadingByTask["task-beta-cold"]).toBe(false);
   });
 
   test("hydrateWorkspaces only prunes stale worktrees for the active project", async () => {
