@@ -235,6 +235,8 @@ const scriptsApi = {
   },
 };
 
+// BrowserNavigationEventPayload imported from lens.types is the single source
+// of truth for the navigation event shape. The local interface is removed.
 const lensNavigationEventSubscribers = new Set<
   (payload: BrowserNavigationEventPayload) => void
 >();
@@ -822,13 +824,25 @@ contextBridge.exposeInMainWorld("api", {
         ok: boolean;
       }>,
     navigate: (args: { workspaceId: string; url: string }) =>
-      ipcRenderer.invoke("lens:navigate", args),
+      ipcRenderer.invoke("lens:navigate", args) as Promise<{
+        ok: boolean;
+        message?: string;
+      }>,
     goBack: (args: { workspaceId: string }) =>
-      ipcRenderer.invoke("lens:go-back", args),
+      ipcRenderer.invoke("lens:go-back", args) as Promise<{
+        ok: boolean;
+        message?: string;
+      }>,
     goForward: (args: { workspaceId: string }) =>
-      ipcRenderer.invoke("lens:go-forward", args),
+      ipcRenderer.invoke("lens:go-forward", args) as Promise<{
+        ok: boolean;
+        message?: string;
+      }>,
     reload: (args: { workspaceId: string }) =>
-      ipcRenderer.invoke("lens:reload", args),
+      ipcRenderer.invoke("lens:reload", args) as Promise<{
+        ok: boolean;
+        message?: string;
+      }>,
     getState: (args: { workspaceId: string }) =>
       ipcRenderer.invoke("lens:get-state", args) as Promise<{
         ok: boolean;
@@ -911,7 +925,7 @@ contextBridge.exposeInMainWorld("api", {
         message?: string;
       }>,
     subscribeNavigationEvents: (
-      listener: (payload: LensNavigationEventPayload) => void,
+      listener: (payload: BrowserNavigationEventPayload) => void,
     ) => {
       lensNavigationEventSubscribers.add(listener);
       return () => {

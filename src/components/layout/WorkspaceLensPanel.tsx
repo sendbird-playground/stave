@@ -40,6 +40,7 @@ import {
 } from "@/components/ui";
 import { formatElementForChat } from "@/lib/lens/lens-element-message";
 import type {
+  BrowserNavigationEventPayload,
   BrowserNavigationState,
   ElementPickerResult,
   LensSourceMappingConfig,
@@ -72,6 +73,9 @@ export function WorkspaceLensPanel() {
   const placeholderRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
   const urlInputRef = useRef<HTMLInputElement>(null);
+  // Track whether the URL address bar is focused so navigation events don't
+  // clobber text the user is actively editing.
+  const isUrlInputFocused = useRef(false);
 
   const [url, setUrl] = useState(DEFAULT_NAVIGATION_STATE.url);
   const [inputUrl, setInputUrl] = useState("");
@@ -83,7 +87,11 @@ export function WorkspaceLensPanel() {
 
   const applyNavigationState = useCallback((state: BrowserNavigationState) => {
     setUrl(state.url);
-    setInputUrl(state.url === "about:blank" ? "" : state.url);
+    // Only sync the input field when the user is not actively typing in it.
+    // Without this guard, in-progress SPA redirects would erase partially typed URLs.
+    if (!isUrlInputFocused.current) {
+      setInputUrl(state.url === "about:blank" ? "" : state.url);
+    }
     setTitle(state.title);
     setIsLoading(state.isLoading);
     setCanGoBack(state.canGoBack);
@@ -152,7 +160,16 @@ export function WorkspaceLensPanel() {
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafRef.current);
+      // Reset bounds first so the view doesn't occlude other panels while hidden.
+      void window.api?.lens?.setBounds?.({
+        workspaceId,
+        bounds: { x: 0, y: 0, width: 0, height: 0 },
+      });
       void window.api?.lens?.setVisible?.({ workspaceId, visible: false });
+      // Destroy the session so memory is freed when switching workspaces or
+      // closing the panel. createView is idempotent so re-opening costs only
+      // a page reload, not a full Electron process.
+      void window.api?.lens?.destroyView?.({ workspaceId });
     };
   }, [applyNavigationState, hasLensApi, lensApi, syncBounds, workspaceId]);
 
@@ -192,7 +209,7 @@ export function WorkspaceLensPanel() {
     }
 
     const unsubscribe = window.api?.lens?.subscribeNavigationEvents?.(
-      (payload) => {
+      (payload: BrowserNavigationEventPayload) => {
         if (payload.workspaceId !== workspaceId) {
           return;
         }
@@ -310,9 +327,13 @@ export function WorkspaceLensPanel() {
         sourceMappingConfig,
       );
 
-      const store = useAppStore.getState();
-      const currentText = store.promptDraftByTask[activeTaskId]?.text?.trim() ?? "";
-      store.updatePromptDraft({
+      // updatePromptDraft + promptFocusNonce both call zustand set(). In
+      // React 18, event-handler updates are auto-batched so this is one
+      // render, but we call through the store action to preserve its equality
+      // guards and field merging logic.
+      const currentText =
+        useAppStore.getState().promptDraftByTask[activeTaskId]?.text?.trim() ?? "";
+      useAppStore.getState().updatePromptDraft({
         taskId: activeTaskId,
         patch: {
           text: currentText ? `${currentText}\n\n${selectionText}` : selectionText,
@@ -418,7 +439,15 @@ export function WorkspaceLensPanel() {
                   value={inputUrl}
                   onChange={(event) => setInputUrl(event.target.value)}
                   onKeyDown={handleUrlKeyDown}
-                  onFocus={(event) => event.target.select()}
+                  onFocus={(event) => {
+                    isUrlInputFocused.current = true;
+                    event.target.select();
+                  }}
+                  onBlur={() => {
+                    isUrlInputFocused.current = false;
+                    // Discard any uncommitted edit and restore the current page URL.
+                    setInputUrl(url === "about:blank" ? "" : url);
+                  }}
                   placeholder={hasLensApi ? "localhost:3000 or https://example.com" : "Lens is unavailable in browser-only mode"}
                   className="text-xs"
                   disabled={!hasLensApi}

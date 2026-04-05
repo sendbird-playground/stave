@@ -119,6 +119,10 @@ export function createBrowserSession(
   // Mute audio from browsed pages
   view.webContents.setAudioMuted(true);
 
+  // Throttle background rendering when the view is not visible to reduce CPU
+  // usage when the Lens panel is closed or another panel is active.
+  view.webContents.setBackgroundThrottling(true);
+
   // Deny all permission requests from the browsed page
   ses.setPermissionRequestHandler((_wc, _permission, callback) => {
     callback(false);
@@ -175,6 +179,21 @@ export function getBrowserSession(
   workspaceId: string,
 ): BrowserSessionState | undefined {
   return sessions.get(workspaceId);
+}
+
+/** Return a summary of all active sessions for workspace discovery. */
+export function listBrowserSessions(): Array<{
+  workspaceId: string;
+  url: string;
+  title: string;
+  isLoading: boolean;
+}> {
+  return [...sessions.values()].map((s) => ({
+    workspaceId: s.workspaceId,
+    url: s.navigationState.url,
+    title: s.navigationState.title,
+    isLoading: s.navigationState.isLoading,
+  }));
 }
 
 export function getWebContentsForSession(

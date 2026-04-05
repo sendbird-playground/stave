@@ -10,7 +10,10 @@ import { z } from "zod";
 import {
   getBrowserSession,
   getWebContentsForSession,
+  listBrowserSessions,
 } from "./browser-manager";
+
+const NAVIGATE_TIMEOUT_MS = 30_000;
 import {
   captureScreenshot,
   clickElement,
@@ -65,16 +68,30 @@ export function registerBrowserTools(server: McpServer): void {
       const wc = getWebContentsForSession(workspaceId);
       if (!wc) throw new Error("WebContents not available");
 
-      // Normalize
+      // Block dangerous schemes BEFORE normalisation — these use ":" without
+      // "//", so adding "https://" first would mask them.
       let targetUrl = url.trim();
+      if (/^(file|chrome|javascript|data|vbscript):/i.test(targetUrl)) {
+        throw new Error(`Blocked protocol: ${targetUrl}`);
+      }
       if (!/^[a-z]+:\/\//i.test(targetUrl)) {
         targetUrl = `https://${targetUrl}`;
       }
-      if (/^(file|chrome|javascript):/i.test(targetUrl)) {
-        throw new Error(`Blocked protocol: ${targetUrl}`);
-      }
 
-      await wc.loadURL(targetUrl);
+      await Promise.race([
+        wc.loadURL(targetUrl),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `Navigation timed out after ${NAVIGATE_TIMEOUT_MS / 1000}s`,
+                ),
+              ),
+            NAVIGATE_TIMEOUT_MS,
+          ),
+        ),
+      ]);
 
       return toStructuredResult({
         ok: true,
@@ -105,6 +122,12 @@ export function registerBrowserTools(server: McpServer): void {
       },
     },
     async ({ workspaceId, fullPage, selector }) => {
+      if (fullPage && selector) {
+        throw new Error(
+          "fullPage and selector are mutually exclusive — use one or the other.",
+        );
+      }
+
       const session = requireSession(workspaceId);
 
       let clip: { x: number; y: number; width: number; height: number } | undefined;
@@ -310,6 +333,20 @@ export function registerBrowserTools(server: McpServer): void {
       const session = requireSession(workspaceId);
       const tree = await getAccessibilitySnapshot(session.view.webContents.id);
       return toStructuredResult({ ok: true, tree });
+    },
+  );
+
+  // ---- List sessions (workspace discovery) ----
+  server.registerTool(
+    "stave_lens_list_sessions",
+    {
+      description:
+        "List all active Lens browser sessions. Use this to discover valid workspaceId values for other stave_lens_* tools. A session exists only while the Lens panel has been opened for that workspace.",
+      inputSchema: {},
+    },
+    async () => {
+      const sessions = listBrowserSessions();
+      return toStructuredResult({ ok: true, sessions });
     },
   );
 }

@@ -174,8 +174,16 @@ export function registerBrowserHandlers() {
         // Store CSS-pixel bounds for zoom-change re-apply
         session.lastCssBounds = args.bounds;
 
-        // Scale CSS pixels → device pixels
+        // Scale CSS pixels → device pixels using the sender window's zoom factor.
+        // BrowserWindow.fromWebContents should always resolve here since the
+        // sender IS the main BrowserWindow renderer, but we guard defensively.
         const win = BrowserWindow.fromWebContents(event.sender);
+        if (!win) {
+          console.warn(
+            "[lens:set-bounds] Could not resolve BrowserWindow from IPC sender — " +
+              "applying bounds without zoom scaling (HiDPI may be off).",
+          );
+        }
         const zoomFactor = win?.webContents.getZoomFactor() ?? 1;
         const scaled: LensBounds = {
           x: Math.round(args.bounds.x * zoomFactor),
@@ -212,14 +220,14 @@ export function registerBrowserHandlers() {
       if (!wc) return { ok: false, message: "No browser session" };
 
       try {
-        // Normalize URL: add https:// if no protocol
+        // Block dangerous schemes BEFORE normalisation so they are never masked.
         let url = args.url.trim();
+        if (/^(file|chrome|javascript|data|vbscript):/i.test(url)) {
+          return { ok: false, message: `Blocked protocol: ${url}` };
+        }
+        // Add https:// if no protocol was given.
         if (url && !/^[a-z]+:\/\//i.test(url)) {
           url = `https://${url}`;
-        }
-        // Block dangerous protocols
-        if (/^(file|chrome|javascript):/i.test(url)) {
-          return { ok: false, message: `Blocked protocol: ${url}` };
         }
         await wc.loadURL(url);
         return { ok: true };

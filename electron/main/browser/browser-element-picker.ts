@@ -22,7 +22,8 @@ export function getElementPickerScript(
   return `
 (function staveElementPicker() {
   return new Promise((resolve) => {
-    // Overlay for highlight
+    // Overlay for highlight — attach to body, not documentElement, to avoid
+    // breaking layouts that expect documentElement to have no extra children.
     const overlay = document.createElement("div");
     overlay.id = "__stave_picker_overlay";
     Object.assign(overlay.style, {
@@ -31,7 +32,7 @@ export function getElementPickerScript(
       borderRadius: "3px", transition: "all 80ms ease",
       top: "0", left: "0", width: "0", height: "0",
     });
-    document.documentElement.appendChild(overlay);
+    (document.body || document.documentElement).appendChild(overlay);
 
     // Label
     const label = document.createElement("div");
@@ -41,22 +42,36 @@ export function getElementPickerScript(
       fontFamily: "monospace", padding: "2px 6px", borderRadius: "3px",
       whiteSpace: "nowrap", top: "0", left: "0", display: "none",
     });
-    document.documentElement.appendChild(label);
+    (document.body || document.documentElement).appendChild(label);
 
-    /** Build a unique-ish CSS selector for the element. */
+    /** Build a stable CSS selector for the element, preferring attributes that
+     *  survive re-renders over positional nth-child indices. */
     function buildSelector(el) {
+      // 1. Unique ID — most stable anchor
+      if (el.id) return "#" + CSS.escape(el.id);
+
+      // 2. Stable test/automation attributes
+      const stableAttrs = ["data-testid", "data-cy", "data-test", "data-id", "aria-label"];
+      for (const attr of stableAttrs) {
+        const val = el.getAttribute(attr);
+        if (val) return el.tagName.toLowerCase() + "[" + attr + "=" + JSON.stringify(val) + "]";
+      }
+
+      // 3. Walk up the tree building a path. Use :nth-of-type (stable within
+      //    same-tag siblings) instead of :nth-child (shifts when other tags
+      //    are inserted by dynamic rendering).
       const parts = [];
       let cur = el;
       while (cur && cur !== document.documentElement && parts.length < 8) {
+        if (cur.id) { parts.unshift("#" + CSS.escape(cur.id)); break; }
         let seg = cur.tagName.toLowerCase();
-        if (cur.id) { parts.unshift("#" + cur.id); break; }
         const parent = cur.parentElement;
         if (parent) {
-          const siblings = Array.from(parent.children).filter(
+          const sameTagSiblings = Array.from(parent.children).filter(
             (c) => c.tagName === cur.tagName
           );
-          if (siblings.length > 1) {
-            seg += ":nth-child(" + (Array.from(parent.children).indexOf(cur) + 1) + ")";
+          if (sameTagSiblings.length > 1) {
+            seg += ":nth-of-type(" + (sameTagSiblings.indexOf(cur) + 1) + ")";
           }
         }
         parts.unshift(seg);

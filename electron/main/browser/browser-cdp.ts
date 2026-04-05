@@ -120,6 +120,11 @@ export async function getTextContent(
   return (result.result.value as string) ?? "";
 }
 
+interface RuntimeEvaluateResult {
+  result: { value: unknown };
+  exceptionDetails?: unknown;
+}
+
 export async function evaluateExpression(
   webContentsId: number,
   expression: string,
@@ -128,11 +133,11 @@ export async function evaluateExpression(
     expression,
     returnByValue: true,
     awaitPromise: true,
-  })) as { result: { value: unknown }; exceptionDetails?: unknown };
+  })) as RuntimeEvaluateResult;
 
-  if ((result as { exceptionDetails?: unknown }).exceptionDetails) {
+  if (result.exceptionDetails) {
     throw new Error(
-      `Evaluation error: ${JSON.stringify((result as { exceptionDetails: unknown }).exceptionDetails)}`,
+      `Evaluation error: ${JSON.stringify(result.exceptionDetails)}`,
     );
   }
   return result.result.value;
@@ -145,12 +150,18 @@ export async function evaluateExpression(
 export async function getAccessibilitySnapshot(
   webContentsId: number,
 ): Promise<unknown> {
-  const result = await sendCommand(
-    webContentsId,
-    "Accessibility.getFullAXTree",
-    { depth: 4 },
-  );
-  return result;
+  // Accessibility.getFullAXTree may not be available in all Electron/Chromium
+  // builds. Fall back gracefully so stave_lens_snapshot never hard-errors.
+  try {
+    return await sendCommand(webContentsId, "Accessibility.getFullAXTree", {
+      depth: 4,
+    });
+  } catch (err) {
+    return {
+      error: `Accessibility snapshot unavailable: ${err instanceof Error ? err.message : String(err)}`,
+      hint: "Try stave_lens_get_html or stave_lens_evaluate instead.",
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +172,13 @@ export async function clickElement(
   webContentsId: number,
   selector: string,
 ): Promise<void> {
-  // Get element center coordinates via Runtime.evaluate
+  // Scroll the element into view first so getBoundingClientRect returns
+  // non-negative viewport-relative coordinates, then get the center point.
+  await sendCommand(webContentsId, "Runtime.evaluate", {
+    expression: `document.querySelector(${JSON.stringify(selector)})?.scrollIntoView({ block: "center", inline: "center" })`,
+    returnByValue: true,
+  });
+
   const coords = (await sendCommand(webContentsId, "Runtime.evaluate", {
     expression: `(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
