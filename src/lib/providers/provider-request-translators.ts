@@ -14,10 +14,9 @@ export function buildClaudePromptFromConversation(args: {
   conversation: CanonicalConversationRequest;
   fallbackPrompt: string;
 }) {
-  // Include full skill instructions in the prompt body so the LLM can
-  // execute them directly. Stave-managed skills are not registered in
-  // Claude Code's native skill registry, so converting $token → /token
-  // caused Claude Code to reject them as unknown slash commands.
+  // Include full activated skill instructions in the prompt body for both
+  // providers. Stave-managed `$skill` activations are prompt-context based,
+  // not native slash-skill registrations.
   return buildLegacyPromptFromCanonicalRequest({
     request: args.conversation,
     includeHistory: shouldIncludeHistory(args.conversation),

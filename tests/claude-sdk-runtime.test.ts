@@ -4,9 +4,11 @@ import {
   resolveClaudeAgentProgressSummaries,
   buildClaudeSystemPrompt,
   buildClaudeUserInputPermissionResult,
+  extractClaudeRequestedSkillSlug,
   mapClaudeMessageToEvents,
   resolveClaudeDisallowedTools,
   shouldAutoAllowClaudeTool,
+  shouldRedirectClaudePreloadedSkillToolUse,
   shouldDenyClaudeToolInPlanMode,
   SubagentProgressTracker,
 } from "../electron/providers/claude-sdk-runtime";
@@ -233,6 +235,46 @@ describe("buildClaudeUserInputPermissionResult", () => {
       behavior: "deny",
       message: "User declined to answer questions.",
     });
+  });
+});
+
+describe("activated skill tool redirection", () => {
+  test("extracts the requested skill slug from skill tool input", () => {
+    expect(extractClaudeRequestedSkillSlug({
+      input: {
+        command: "/stave-release patch",
+      },
+    })).toBe("stave-release");
+  });
+
+  test("extracts the requested skill slug from nested skill tool input", () => {
+    expect(extractClaudeRequestedSkillSlug({
+      input: {
+        input: {
+          name: "$reviewer",
+        },
+      },
+    })).toBe("reviewer");
+  });
+
+  test("redirects Skill tool usage for already activated stave skills", () => {
+    expect(shouldRedirectClaudePreloadedSkillToolUse({
+      toolName: "Skill",
+      input: {
+        skill: "stave-release",
+      },
+      preloadedSkillSlugs: new Set(["stave-release"]),
+    })).toBe("stave-release");
+  });
+
+  test("allows Skill tool usage when the requested skill was not preloaded by stave", () => {
+    expect(shouldRedirectClaudePreloadedSkillToolUse({
+      toolName: "Skill",
+      input: {
+        skill: "commit",
+      },
+      preloadedSkillSlugs: new Set(["stave-release"]),
+    })).toBeNull();
   });
 });
 

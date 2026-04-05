@@ -988,7 +988,7 @@ export function PromptInput(args: PromptInputProps) {
                   Tab inserts the highlighted skill token. Selected skills are normalized on send.
                 </p>
                 <p className="mt-2">
-                  `Claude` uses native `/skill-name` dispatch. `Codex` receives the resolved skill instructions as prompt context.
+                  `$skill` activates Stave skill instructions for both `Claude` and `Codex` via prompt context. Use `/` commands only for provider-native commands.
                 </p>
               </div>
             ) : activePalette === "command" ? (

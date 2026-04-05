@@ -143,11 +143,11 @@ describe("canonical request builder", () => {
       request,
     });
 
-    expect(prompt).toContain("[Selected Skills]");
+    expect(prompt).toContain("[Activated Skills]");
     expect(prompt).toContain("[Current User Input]");
     expect(prompt).toContain("(none)");
     expect(prompt).toContain("[Skill Invocation]");
-    expect(prompt).toContain("The user intentionally invoked the selected skill without additional text.");
+    expect(prompt).toContain("The user intentionally activated one or more skills without additional text.");
   });
 
   test("sanitizes oversized historical and current file context payloads", () => {
