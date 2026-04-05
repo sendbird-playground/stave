@@ -11,7 +11,10 @@ import type { BridgeEvent, StreamTurnArgs } from "./types";
 import type { StaveAutoIntent, StaveAutoProfile } from "../../src/lib/providers/provider.types";
 import { getCachedAvailability } from "./stave-availability";
 import { resolveStaveIntent, resolveStaveTarget } from "./stave-router";
-import { resolveStaveProviderForModel } from "../../src/lib/providers/stave-auto-profile";
+import {
+  applyStaveRoleRuntimeOverrides,
+  resolveStaveProviderForModel,
+} from "../../src/lib/providers/stave-auto-profile";
 
 export type ExecutionProcessing =
   | {
@@ -214,6 +217,20 @@ export async function runPreprocessor(args: {
       orchestrationMode: args.profile.orchestrationMode,
       customPrompt: args.profile.promptPreprocessorClassifier,
     });
+    const runtimeOptions = applyStaveRoleRuntimeOverrides({
+      profile: args.profile,
+      role: "classifier",
+      model: chosenModel,
+      runtimeOptions: {
+        model: chosenModel,
+        ...(preprocessorProviderId === "claude-code" ? { claudeSystemPrompt: systemPrompt } : {}),
+        claudeMaxTurns: 1,
+        claudePermissionMode: "bypassPermissions",
+        claudeAllowedTools: [],
+        codexFastMode: true,
+        providerTimeoutMs: 10_000,
+      },
+    });
     events = await args.runTurnBatch({
       providerId: preprocessorProviderId,
       prompt: buildSingleTurnPrompt({
@@ -228,15 +245,7 @@ export async function runPreprocessor(args: {
       cwd: args.baseArgs.cwd,
       taskId: args.baseArgs.taskId,
       workspaceId: args.baseArgs.workspaceId,
-      runtimeOptions: {
-        model: chosenModel,
-        ...(preprocessorProviderId === "claude-code" ? { claudeSystemPrompt: systemPrompt } : {}),
-        claudeMaxTurns: 1,
-        claudePermissionMode: "bypassPermissions",
-        claudeAllowedTools: [],
-        codexFastMode: true,
-        providerTimeoutMs: 10_000,
-      },
+      runtimeOptions,
     });
   } catch {
     return fallbackToRegexProcessing({

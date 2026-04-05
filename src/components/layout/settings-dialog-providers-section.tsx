@@ -25,9 +25,17 @@ import {
 import {
   buildStaveAutoModelSettingsPatch,
   detectStaveAutoModelPreset,
+  resolveStaveProviderForModel,
   STAVE_AUTO_MODEL_PRESETS,
 } from "@/lib/providers/stave-auto-profile";
+import type {
+  StaveAutoClaudeRoleRuntimeOverrides,
+  StaveAutoCodexRoleRuntimeOverrides,
+  StaveAutoRoleName,
+  StaveAutoRoleRuntimeOverrides,
+} from "@/lib/providers/provider.types";
 import { useAppStore } from "@/store/app.store";
+import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   ChoiceButtons,
@@ -47,14 +55,67 @@ const STAVE_AUTO_RECOMMENDED_MODEL_OPTIONS = buildRecommendedModelSelectorOption
   options: STAVE_AUTO_ROLE_MODEL_OPTIONS,
 });
 
-function StaveAutoModelField(args: {
+const STAVE_AUTO_INHERIT_VALUE = "__inherit__";
+const STAVE_AUTO_BOOLEAN_OVERRIDE_OPTIONS = [
+  { value: STAVE_AUTO_INHERIT_VALUE, label: "inherit" },
+  { value: "on", label: "on" },
+  { value: "off", label: "off" },
+] as const;
+
+function toOverrideBooleanValue(value?: boolean) {
+  if (value === undefined) {
+    return STAVE_AUTO_INHERIT_VALUE;
+  }
+  return value ? "on" : "off";
+}
+
+function fromOverrideBooleanValue(value: string) {
+  if (value === STAVE_AUTO_INHERIT_VALUE) {
+    return undefined;
+  }
+  return value === "on";
+}
+
+function StaveAutoOverrideField(args: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-foreground/90">{args.label}</p>
+      {args.children}
+    </div>
+  );
+}
+
+function StaveAutoRoleField(args: {
+  role: StaveAutoRoleName;
   title: string;
   description: string;
   value: string;
-  onSelect: (model: string) => void;
+  overrides: StaveAutoRoleRuntimeOverrides;
+  onModelSelect: (model: string) => void;
+  onClaudeOverrideChange: <K extends keyof StaveAutoClaudeRoleRuntimeOverrides>(
+    key: K,
+    value: StaveAutoClaudeRoleRuntimeOverrides[K] | undefined,
+  ) => void;
+  onCodexOverrideChange: <K extends keyof StaveAutoCodexRoleRuntimeOverrides>(
+    key: K,
+    value: StaveAutoCodexRoleRuntimeOverrides[K] | undefined,
+  ) => void;
 }) {
+  const providerId = resolveStaveProviderForModel({ model: args.value });
+  const providerLabel = providerId === "claude-code" ? "Claude runtime" : "Codex runtime";
+
   return (
-    <LabeledField title={args.title} description={args.description}>
+    <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">{args.title}</p>
+          <p className="text-xs text-muted-foreground">{args.description}</p>
+        </div>
+        <Badge variant="secondary">{providerLabel}</Badge>
+      </div>
       <ModelSelector
         value={buildModelSelectorValue({ model: args.value })}
         options={STAVE_AUTO_ROLE_MODEL_OPTIONS}
@@ -62,9 +123,159 @@ function StaveAutoModelField(args: {
         className="w-full"
         triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
         menuClassName="sm:max-w-lg"
-        onSelect={({ selection }) => args.onSelect(selection.model)}
+        onSelect={({ selection }) => args.onModelSelect(selection.model)}
       />
-    </LabeledField>
+      {providerId === "claude-code"
+        ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <StaveAutoOverrideField label="Permission Mode">
+                <Select
+                  value={args.overrides.claude.permissionMode ?? STAVE_AUTO_INHERIT_VALUE}
+                  onValueChange={(value) => args.onClaudeOverrideChange(
+                    "permissionMode",
+                    value === STAVE_AUTO_INHERIT_VALUE
+                      ? undefined
+                      : value as StaveAutoClaudeRoleRuntimeOverrides["permissionMode"],
+                  )}
+                >
+                  <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
+                    {CLAUDE_PERMISSION_MODE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </StaveAutoOverrideField>
+              <StaveAutoOverrideField label="Thinking">
+                <Select
+                  value={args.overrides.claude.thinkingMode ?? STAVE_AUTO_INHERIT_VALUE}
+                  onValueChange={(value) => args.onClaudeOverrideChange(
+                    "thinkingMode",
+                    value === STAVE_AUTO_INHERIT_VALUE
+                      ? undefined
+                      : value as StaveAutoClaudeRoleRuntimeOverrides["thinkingMode"],
+                  )}
+                >
+                  <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
+                    {CLAUDE_THINKING_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </StaveAutoOverrideField>
+              <StaveAutoOverrideField label="Effort">
+                <Select
+                  value={args.overrides.claude.effort ?? STAVE_AUTO_INHERIT_VALUE}
+                  onValueChange={(value) => args.onClaudeOverrideChange(
+                    "effort",
+                    value === STAVE_AUTO_INHERIT_VALUE
+                      ? undefined
+                      : value as StaveAutoClaudeRoleRuntimeOverrides["effort"],
+                  )}
+                >
+                  <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
+                    {CLAUDE_EFFORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </StaveAutoOverrideField>
+              <StaveAutoOverrideField label="Fast">
+                <Select
+                  value={toOverrideBooleanValue(args.overrides.claude.fastMode)}
+                  onValueChange={(value) => args.onClaudeOverrideChange(
+                    "fastMode",
+                    fromOverrideBooleanValue(value),
+                  )}
+                >
+                  <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STAVE_AUTO_BOOLEAN_OVERRIDE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </StaveAutoOverrideField>
+            </div>
+          )
+        : (
+            <div className="grid gap-3 md:grid-cols-3">
+              <StaveAutoOverrideField label="Approval Policy">
+                <Select
+                  value={args.overrides.codex.approvalPolicy ?? STAVE_AUTO_INHERIT_VALUE}
+                  onValueChange={(value) => args.onCodexOverrideChange(
+                    "approvalPolicy",
+                    value === STAVE_AUTO_INHERIT_VALUE
+                      ? undefined
+                      : value as StaveAutoCodexRoleRuntimeOverrides["approvalPolicy"],
+                  )}
+                >
+                  <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
+                    {CODEX_APPROVAL_POLICY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </StaveAutoOverrideField>
+              <StaveAutoOverrideField label="Effort">
+                <Select
+                  value={args.overrides.codex.reasoningEffort ?? STAVE_AUTO_INHERIT_VALUE}
+                  onValueChange={(value) => args.onCodexOverrideChange(
+                    "reasoningEffort",
+                    value === STAVE_AUTO_INHERIT_VALUE
+                      ? undefined
+                      : value as StaveAutoCodexRoleRuntimeOverrides["reasoningEffort"],
+                  )}
+                >
+                  <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
+                    {CODEX_EFFORT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </StaveAutoOverrideField>
+              <StaveAutoOverrideField label="Fast">
+                <Select
+                  value={toOverrideBooleanValue(args.overrides.codex.fastMode)}
+                  onValueChange={(value) => args.onCodexOverrideChange(
+                    "fastMode",
+                    fromOverrideBooleanValue(value),
+                  )}
+                >
+                  <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STAVE_AUTO_BOOLEAN_OVERRIDE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </StaveAutoOverrideField>
+            </div>
+          )}
+    </div>
   );
 }
 
@@ -83,6 +294,7 @@ function StaveAutoCard() {
     staveAutoMaxParallelSubtasks,
     staveAutoAllowCrossProviderWorkers,
     staveAutoFastMode,
+    staveAutoRoleRuntimeOverrides,
   ] = useAppStore(
     useShallow((state) => [
       state.settings.staveAutoClassifierModel,
@@ -98,6 +310,7 @@ function StaveAutoCard() {
       state.settings.staveAutoMaxParallelSubtasks,
       state.settings.staveAutoAllowCrossProviderWorkers,
       state.settings.staveAutoFastMode,
+      state.settings.staveAutoRoleRuntimeOverrides,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -114,6 +327,125 @@ function StaveAutoCard() {
     },
   });
   const currentPreset = STAVE_AUTO_MODEL_PRESETS.find((preset) => preset.id === currentPresetId) ?? null;
+
+  type StaveAutoModelSettingKey =
+    | "staveAutoClassifierModel"
+    | "staveAutoSupervisorModel"
+    | "staveAutoPlanModel"
+    | "staveAutoAnalyzeModel"
+    | "staveAutoImplementModel"
+    | "staveAutoQuickEditModel"
+    | "staveAutoGeneralModel"
+    | "staveAutoVerifyModel";
+
+  const updateRoleModel = (key: StaveAutoModelSettingKey, model: string) => {
+    updateSettings({
+      patch: {
+        [key]: model,
+      } as Partial<Record<StaveAutoModelSettingKey, string>>,
+    });
+  };
+
+  const updateClaudeRoleOverride = <K extends keyof StaveAutoClaudeRoleRuntimeOverrides>(
+    role: StaveAutoRoleName,
+    key: K,
+    value: StaveAutoClaudeRoleRuntimeOverrides[K] | undefined,
+  ) => {
+    updateSettings({
+      patch: {
+        staveAutoRoleRuntimeOverrides: {
+          ...staveAutoRoleRuntimeOverrides,
+          [role]: {
+            ...staveAutoRoleRuntimeOverrides[role],
+            claude: {
+              ...staveAutoRoleRuntimeOverrides[role].claude,
+              [key]: value,
+            },
+          },
+        },
+      },
+    });
+  };
+
+  const updateCodexRoleOverride = <K extends keyof StaveAutoCodexRoleRuntimeOverrides>(
+    role: StaveAutoRoleName,
+    key: K,
+    value: StaveAutoCodexRoleRuntimeOverrides[K] | undefined,
+  ) => {
+    updateSettings({
+      patch: {
+        staveAutoRoleRuntimeOverrides: {
+          ...staveAutoRoleRuntimeOverrides,
+          [role]: {
+            ...staveAutoRoleRuntimeOverrides[role],
+            codex: {
+              ...staveAutoRoleRuntimeOverrides[role].codex,
+              [key]: value,
+            },
+          },
+        },
+      },
+    });
+  };
+
+  const roleFields = [
+    {
+      role: "supervisor" as const,
+      title: "Supervisor Model",
+      description: "Used for orchestration planning and synthesis. Default: claude-sonnet-4-6.",
+      value: staveAutoSupervisorModel,
+      onSelect: (model: string) => updateRoleModel("staveAutoSupervisorModel", model),
+    },
+    {
+      role: "plan" as const,
+      title: "Plan Model",
+      description: "Used for strategy, design, and plan-only requests.",
+      value: staveAutoPlanModel,
+      onSelect: (model: string) => updateRoleModel("staveAutoPlanModel", model),
+    },
+    {
+      role: "analyze" as const,
+      title: "Analyze Model",
+      description: "Used for debugging, review, explanation, architecture, and root-cause analysis.",
+      value: staveAutoAnalyzeModel,
+      onSelect: (model: string) => updateRoleModel("staveAutoAnalyzeModel", model),
+    },
+    {
+      role: "implement" as const,
+      title: "Implement Model",
+      description: "Used for feature work, code generation, patching, refactors, and test writing.",
+      value: staveAutoImplementModel,
+      onSelect: (model: string) => updateRoleModel("staveAutoImplementModel", model),
+    },
+    {
+      role: "quick_edit" as const,
+      title: "Quick Edit Model",
+      description: "Used for rename, typo, and tiny targeted edits.",
+      value: staveAutoQuickEditModel,
+      onSelect: (model: string) => updateRoleModel("staveAutoQuickEditModel", model),
+    },
+    {
+      role: "general" as const,
+      title: "General Model",
+      description: "Used when the request does not strongly match another role.",
+      value: staveAutoGeneralModel,
+      onSelect: (model: string) => updateRoleModel("staveAutoGeneralModel", model),
+    },
+    {
+      role: "verify" as const,
+      title: "Verify Model",
+      description: "Used for validation, sanity checks, and review after implementation.",
+      value: staveAutoVerifyModel,
+      onSelect: (model: string) => updateRoleModel("staveAutoVerifyModel", model),
+    },
+    {
+      role: "classifier" as const,
+      title: "Classifier Model",
+      description: "Lightweight model that decides whether to route directly or orchestrate.",
+      value: staveAutoClassifierModel,
+      onSelect: (model: string) => updateRoleModel("staveAutoClassifierModel", model),
+    },
+  ];
 
   return (
     <SettingsCard
@@ -186,54 +518,26 @@ function StaveAutoCard() {
           ]}
         />
       </LabeledField>
-      <StaveAutoModelField
-        title="Supervisor Model"
-        description="Used for orchestration planning and synthesis. Default: claude-sonnet-4-6."
-        value={staveAutoSupervisorModel}
-        onSelect={(model) => updateSettings({ patch: { staveAutoSupervisorModel: model } })}
-      />
-      <StaveAutoModelField
-        title="Plan Model"
-        description="Used for strategy, design, and plan-only requests."
-        value={staveAutoPlanModel}
-        onSelect={(model) => updateSettings({ patch: { staveAutoPlanModel: model } })}
-      />
-      <StaveAutoModelField
-        title="Analyze Model"
-        description="Used for debugging, review, explanation, architecture, and root-cause analysis."
-        value={staveAutoAnalyzeModel}
-        onSelect={(model) => updateSettings({ patch: { staveAutoAnalyzeModel: model } })}
-      />
-      <StaveAutoModelField
-        title="Implement Model"
-        description="Used for feature work, code generation, patching, refactors, and test writing."
-        value={staveAutoImplementModel}
-        onSelect={(model) => updateSettings({ patch: { staveAutoImplementModel: model } })}
-      />
-      <StaveAutoModelField
-        title="Quick Edit Model"
-        description="Used for rename, typo, and tiny targeted edits."
-        value={staveAutoQuickEditModel}
-        onSelect={(model) => updateSettings({ patch: { staveAutoQuickEditModel: model } })}
-      />
-      <StaveAutoModelField
-        title="General Model"
-        description="Used when the request does not strongly match another role."
-        value={staveAutoGeneralModel}
-        onSelect={(model) => updateSettings({ patch: { staveAutoGeneralModel: model } })}
-      />
-      <StaveAutoModelField
-        title="Verify Model"
-        description="Used for validation, sanity checks, and review after implementation."
-        value={staveAutoVerifyModel}
-        onSelect={(model) => updateSettings({ patch: { staveAutoVerifyModel: model } })}
-      />
-      <StaveAutoModelField
-        title="Classifier Model"
-        description="Lightweight model that decides whether to route directly or orchestrate."
-        value={staveAutoClassifierModel}
-        onSelect={(model) => updateSettings({ patch: { staveAutoClassifierModel: model } })}
-      />
+      <LabeledField
+        title="Role Runtime Overrides"
+        description="Each role can inherit the global Claude/Codex runtime controls or override them per selected model provider."
+      >
+        <div className="space-y-3">
+          {roleFields.map((field) => (
+            <StaveAutoRoleField
+              key={field.role}
+              role={field.role}
+              title={field.title}
+              description={field.description}
+              value={field.value}
+              overrides={staveAutoRoleRuntimeOverrides[field.role]}
+              onModelSelect={field.onSelect}
+              onClaudeOverrideChange={(key, value) => updateClaudeRoleOverride(field.role, key, value)}
+              onCodexOverrideChange={(key, value) => updateCodexRoleOverride(field.role, key, value)}
+            />
+          ))}
+        </div>
+      </LabeledField>
       <LabeledField title="Max Subtasks" description="Upper bound for supervisor-generated subtasks per orchestration run.">
         <DraftInput
           className="h-10 rounded-md border-border/80 bg-background"

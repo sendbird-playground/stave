@@ -20,7 +20,14 @@ import {
   type TaskProviderSessionState,
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
-import type { CanonicalRetrievedContextPart, ClaudeSettingSource, NormalizedProviderEvent, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
+import type {
+  CanonicalRetrievedContextPart,
+  ClaudeSettingSource,
+  NormalizedProviderEvent,
+  ProviderId,
+  ProviderTurnRequest,
+  StaveAutoRoleRuntimeOverridesMap,
+} from "@/lib/providers/provider.types";
 import { getRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
 import {
   buildWorkspaceContinueSummaryFilePath,
@@ -69,7 +76,9 @@ import {
 } from "@/lib/thinking-phrases";
 import {
   buildStaveAutoModelSettingsPatch,
+  createDefaultStaveAutoRoleRuntimeOverrides,
   DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
+  normalizeStaveAutoRoleRuntimeOverrides,
 } from "@/lib/providers/stave-auto-profile";
 import { getCachedProviderCommandCatalog } from "@/lib/providers/provider-command-catalog";
 import {
@@ -414,6 +423,7 @@ export interface AppSettings {
   staveAutoMaxParallelSubtasks: number;
   staveAutoAllowCrossProviderWorkers: boolean;
   staveAutoFastMode: boolean;
+  staveAutoRoleRuntimeOverrides: StaveAutoRoleRuntimeOverridesMap;
   /** Control-plane defaults used by the global Stave Muse widget. */
   museDefaultTarget: StaveMuseDefaultTarget;
   museRouterModel: string;
@@ -943,6 +953,7 @@ export const STAVE_MUSE_OPEN_SETTINGS_EVENT = "stave:muse-open-settings";
 const DEFAULT_STAVE_AUTO_MODEL_SETTINGS = buildStaveAutoModelSettingsPatch({
   presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
 });
+const DEFAULT_STAVE_AUTO_ROLE_RUNTIME_OVERRIDES = createDefaultStaveAutoRoleRuntimeOverrides();
 
 const defaultSettings: AppSettings = {
   themeMode: "dark",
@@ -978,6 +989,7 @@ const defaultSettings: AppSettings = {
   staveAutoMaxParallelSubtasks: 2,
   staveAutoAllowCrossProviderWorkers: true,
   staveAutoFastMode: false,
+  staveAutoRoleRuntimeOverrides: DEFAULT_STAVE_AUTO_ROLE_RUNTIME_OVERRIDES,
   museDefaultTarget: "app",
   museRouterModel: "gpt-5.4-mini",
   museChatModel: "gpt-5.4-mini",
@@ -1033,7 +1045,7 @@ const defaultSettings: AppSettings = {
   claudePermissionModeBeforePlan: null,
   claudeAllowDangerouslySkipPermissions: false,
   claudeSandboxEnabled: false,
-  claudeAllowUnsandboxedCommands: false,
+  claudeAllowUnsandboxedCommands: true,
   claudeTaskBudgetTokens: 0,
   claudeSettingSources: ["project"],
   claudeEffort: "medium",
@@ -4094,6 +4106,13 @@ export const useAppStore = create<AppState>()(
             : {
                 claudeSettingSources: normalizeClaudeSettingSources({
                   value: patch.claudeSettingSources,
+                }),
+              }),
+          ...(patch.staveAutoRoleRuntimeOverrides === undefined
+            ? {}
+            : {
+                staveAutoRoleRuntimeOverrides: normalizeStaveAutoRoleRuntimeOverrides({
+                  value: patch.staveAutoRoleRuntimeOverrides,
                 }),
               }),
           ...(patch.notificationSoundVolume === undefined
@@ -7193,6 +7212,9 @@ export const useAppStore = create<AppState>()(
         });
         state.settings.claudeSettingSources = normalizeClaudeSettingSources({
           value: state.settings.claudeSettingSources,
+        });
+        state.settings.staveAutoRoleRuntimeOverrides = normalizeStaveAutoRoleRuntimeOverrides({
+          value: raw.staveAutoRoleRuntimeOverrides,
         });
         state.settings.providerTimeoutMs = normalizeProviderTimeoutMs({
           value: state.settings.providerTimeoutMs,

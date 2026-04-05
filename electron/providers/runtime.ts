@@ -20,6 +20,7 @@ import { getCachedAvailability, setCachedAvailability } from "./stave-availabili
 import { runOrchestrator } from "./stave-orchestrator";
 import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
 import {
+  applyStaveRoleRuntimeOverrides,
   DEFAULT_STAVE_AUTO_PROFILE,
   resolveStaveIntentModel,
   resolveStaveProviderForModel,
@@ -263,6 +264,12 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
           ...(codexFastSupported ? { codexFastMode: true } : {}),
         };
       }
+      resolvedArgs.runtimeOptions = applyStaveRoleRuntimeOverrides({
+        profile,
+        role: "plan",
+        model: resolvedTarget.model,
+        runtimeOptions: resolvedArgs.runtimeOptions,
+      });
 
       const fastModeApplied =
         resolvedTarget.providerId === "codex"
@@ -308,6 +315,12 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       };
 
       const resolvedArgs = buildStaveResolvedArgs(args, resolvedTarget);
+      resolvedArgs.runtimeOptions = applyStaveRoleRuntimeOverrides({
+        profile,
+        role: resolvedTarget.providerId === "codex" ? "implement" : "general",
+        model: resolvedTarget.model,
+        runtimeOptions: resolvedArgs.runtimeOptions,
+      });
 
       // Emit execution plan with skill fast-path indication.
       args.onEvent?.({
@@ -393,6 +406,12 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
           ...(codexFastSupported ? { codexFastMode: true } : {}),
         };
       }
+      resolvedArgs.runtimeOptions = applyStaveRoleRuntimeOverrides({
+        profile,
+        role: plan.intent,
+        model: resolvedTarget.model,
+        runtimeOptions: resolvedArgs.runtimeOptions,
+      });
 
       // Compute the effective fast mode flag for the resolved provider.
       const resolvedProvider = resolvedTarget.providerId;

@@ -9,6 +9,7 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
 import type { ProviderRuntimeOptions, StaveAutoProfile, StaveWorkerRole } from "../../src/lib/providers/provider.types";
 import {
+  applyStaveRoleRuntimeOverrides,
   resolveStaveProviderForModel,
   resolveStaveWorkerModel,
 } from "../../src/lib/providers/stave-auto-profile";
@@ -360,11 +361,16 @@ export async function runOrchestrator(args: {
       cwd: args.baseArgs.cwd,
       taskId: args.baseArgs.taskId,
       workspaceId: args.baseArgs.workspaceId,
-      runtimeOptions: buildSingleTurnRuntimeOptions({
-        providerId: supervisorProvider,
+      runtimeOptions: applyStaveRoleRuntimeOverrides({
+        profile: args.profile,
+        role: "supervisor",
         model: supervisorModel,
-        systemPrompt: breakdownPrompt,
-        timeoutMs: 30_000,
+        runtimeOptions: buildSingleTurnRuntimeOptions({
+          providerId: supervisorProvider,
+          model: supervisorModel,
+          systemPrompt: breakdownPrompt,
+          timeoutMs: 30_000,
+        }),
       }),
     });
   } catch {
@@ -443,12 +449,10 @@ export async function runOrchestrator(args: {
         const workerProvider = resolveStaveProviderForModel({ model: workerModel });
         let success = false;
         try {
-          const subtaskEvents = await args.runTurnBatch({
-            providerId: workerProvider,
-            prompt: resolvedPrompt,
-            cwd: args.baseArgs.cwd,
-            taskId: args.baseArgs.taskId,
-            workspaceId: args.baseArgs.workspaceId,
+          const runtimeOptions = applyStaveRoleRuntimeOverrides({
+            profile: args.profile,
+            role: subtask.role,
+            model: workerModel,
             runtimeOptions: {
               ...(args.runtimeOptions ?? {}),
               model: workerModel,
@@ -460,6 +464,14 @@ export async function runOrchestrator(args: {
                 : {}),
               providerTimeoutMs: args.runtimeOptions?.providerTimeoutMs ?? 120_000,
             },
+          });
+          const subtaskEvents = await args.runTurnBatch({
+            providerId: workerProvider,
+            prompt: resolvedPrompt,
+            cwd: args.baseArgs.cwd,
+            taskId: args.baseArgs.taskId,
+            workspaceId: args.baseArgs.workspaceId,
+            runtimeOptions,
           });
           results.set(subtask.id, extractTextFromEvents(subtaskEvents));
           success = true;
@@ -494,11 +506,16 @@ export async function runOrchestrator(args: {
       cwd: args.baseArgs.cwd,
       taskId: args.baseArgs.taskId,
       workspaceId: args.baseArgs.workspaceId,
-      runtimeOptions: buildSingleTurnRuntimeOptions({
-        providerId: supervisorProvider,
+      runtimeOptions: applyStaveRoleRuntimeOverrides({
+        profile: args.profile,
+        role: "supervisor",
         model: supervisorModel,
-        systemPrompt: resolveSynthesisPrompt(args.profile),
-        timeoutMs: 60_000,
+        runtimeOptions: buildSingleTurnRuntimeOptions({
+          providerId: supervisorProvider,
+          model: supervisorModel,
+          systemPrompt: resolveSynthesisPrompt(args.profile),
+          timeoutMs: 60_000,
+        }),
       }),
     });
   } catch {

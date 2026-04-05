@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createDefaultStaveAutoRoleRuntimeOverrides } from "@/lib/providers/stave-auto-profile";
 import { buildProviderRuntimeOptions, normalizeCodexApprovalPolicy } from "@/store/provider-runtime-options";
 
 const settings = {
@@ -40,6 +41,7 @@ const settings = {
   staveAutoMaxParallelSubtasks: 2,
   staveAutoAllowCrossProviderWorkers: true,
   staveAutoFastMode: false,
+  staveAutoRoleRuntimeOverrides: createDefaultStaveAutoRoleRuntimeOverrides(),
 } as const;
 
 describe("normalizeCodexApprovalPolicy", () => {

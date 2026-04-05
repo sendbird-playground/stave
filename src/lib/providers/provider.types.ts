@@ -85,6 +85,27 @@ export interface CanonicalRetrievedContextPart {
 export type StaveAutoIntent = "plan" | "analyze" | "implement" | "quick_edit" | "general";
 export type StaveWorkerRole = "plan" | "analyze" | "implement" | "verify" | "general";
 export type StaveOrchestrationMode = "off" | "auto" | "aggressive";
+export type StaveAutoRoleName = "classifier" | "supervisor" | StaveAutoIntent | "verify";
+
+export interface StaveAutoClaudeRoleRuntimeOverrides {
+  permissionMode?: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
+  thinkingMode?: "adaptive" | "enabled" | "disabled";
+  effort?: "low" | "medium" | "high" | "max";
+  fastMode?: boolean;
+}
+
+export interface StaveAutoCodexRoleRuntimeOverrides {
+  approvalPolicy?: "never" | "on-request" | "untrusted";
+  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
+  fastMode?: boolean;
+}
+
+export interface StaveAutoRoleRuntimeOverrides {
+  claude: StaveAutoClaudeRoleRuntimeOverrides;
+  codex: StaveAutoCodexRoleRuntimeOverrides;
+}
+
+export type StaveAutoRoleRuntimeOverridesMap = Record<StaveAutoRoleName, StaveAutoRoleRuntimeOverrides>;
 
 export interface StaveAutoProfile {
   classifierModel: string;
@@ -102,6 +123,7 @@ export interface StaveAutoProfile {
   claudeFastModeSupported?: boolean;
   codexFastModeSupported?: boolean;
   fastMode?: boolean;
+  roleRuntimeOverrides?: StaveAutoRoleRuntimeOverridesMap;
   // ---- Prompt overrides for orchestration / classification ----
   promptSupervisorBreakdown?: string;
   promptSupervisorSynthesis?: string;
