@@ -1038,32 +1038,6 @@ export function PromptInput(args: PromptInputProps) {
             openToken={modelSelectorOpenNonce > 0 ? modelSelectorOpenNonce : undefined}
             onSelect={({ selection }) => onModelSelect({ selection })}
           />
-          {onFastModeChange ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={interactionsDisabled}
-                  onClick={() => onFastModeChange(!fastMode)}
-                  className={cn(
-                    PROMPT_TOOLBAR_BUTTON,
-                    fastMode
-                      ? "bg-amber-500/12 text-amber-500 hover:bg-amber-500/18 hover:text-amber-500"
-                      : undefined,
-                    interactionsDisabled && "cursor-not-allowed opacity-60",
-                  )}
-                >
-                  <Zap className={cn("size-3.5", fastMode && "fill-amber-400")} />
-                  <span>Fast</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
           {onPlanModeChange ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1139,6 +1113,32 @@ export function PromptInput(args: PromptInputProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{`Effort: ${effortLabel} — click to cycle`}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          {onFastModeChange ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={interactionsDisabled}
+                  onClick={() => onFastModeChange(!fastMode)}
+                  className={cn(
+                    PROMPT_TOOLBAR_BUTTON,
+                    fastMode
+                      ? "bg-amber-500/12 text-amber-500 hover:bg-amber-500/18 hover:text-amber-500"
+                      : undefined,
+                    interactionsDisabled && "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <Zap className={cn("size-3.5", fastMode && "fill-amber-400")} />
+                  <span>Fast</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
+              </TooltipContent>
             </Tooltip>
           ) : null}
           {hasControlsDrawerContent ? (
