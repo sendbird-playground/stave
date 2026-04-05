@@ -4,6 +4,16 @@ export function isPendingDiffStatus(status: CodeDiffPart["status"]) {
   return status === "pending";
 }
 
+export function shouldShowConversationLoadingState(args: {
+  visibleMessageCount: number;
+  totalMessageCount: number;
+  taskMessagesLoading: boolean;
+}) {
+  return args.visibleMessageCount === 0
+    && args.totalMessageCount > 0
+    && args.taskMessagesLoading;
+}
+
 export interface DiffLineChangeSummary {
   added: number;
   removed: number;

@@ -2,8 +2,10 @@ import { FolderOpen, Layers } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { ChatInput } from "@/components/session/ChatInput";
 import { ChatPanel } from "@/components/session/ChatPanel";
+import { resolveChatAreaViewMode } from "@/components/session/chat-area.utils";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { PlanViewer } from "@/components/session/PlanViewer";
+import { SessionLoadingState } from "@/components/session/SessionLoadingState";
 import { Button, Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui";
 import { isTaskManaged } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
@@ -16,6 +18,7 @@ export function ChatArea() {
   const sessionAreaRef = useRef<HTMLDivElement>(null);
   const [
     projectPath,
+    hasHydratedWorkspaces,
     hasAnyWorkspace,
     hasSelectedWorkspace,
     hasSelectedTask,
@@ -27,6 +30,7 @@ export function ChatArea() {
     createTask,
   ] = useAppStore(useShallow((state) => [
     state.projectPath,
+    state.hasHydratedWorkspaces,
     state.workspaces.length > 0,
     state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId),
     state.tasks.some((task) => task.id === state.activeTaskId),
@@ -37,6 +41,14 @@ export function ChatArea() {
     state.createProject,
     state.createTask,
   ] as const));
+  const viewMode = resolveChatAreaViewMode({
+    projectPath,
+    hasHydratedWorkspaces,
+    hasAnyWorkspace,
+    hasSelectedWorkspace,
+    hasSelectedTask,
+    activeTaskMessageCount,
+  });
   const isEmpty = activeTaskMessageCount === 0;
   const shouldPollManagedTask = isTaskManaged(activeTask) && Boolean(activeTurnId);
 
@@ -103,7 +115,7 @@ export function ChatArea() {
     className: "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background outline-none",
   } as const;
 
-  if (!projectPath) {
+  if (viewMode === "no_project") {
     return (
       <div {...sessionAreaProps}>
         <Empty data-testid="splash-no-project">
@@ -125,7 +137,19 @@ export function ChatArea() {
     );
   }
 
-  if (hasAnyWorkspace && !hasSelectedWorkspace) {
+  if (viewMode === "hydrating_project") {
+    return (
+      <div {...sessionAreaProps}>
+        <SessionLoadingState
+          testId="session-loading-state"
+          title="Opening workspace"
+          description="Loading tasks and recent conversation state for this project."
+        />
+      </div>
+    );
+  }
+
+  if (viewMode === "no_workspace") {
     return (
       <div {...sessionAreaProps}>
         <Empty data-testid="splash-no-workspace">
@@ -141,7 +165,7 @@ export function ChatArea() {
     );
   }
 
-  if (!hasSelectedTask) {
+  if (viewMode === "no_task") {
     return (
       <div {...sessionAreaProps}>
         <EmptySplash onCreateTask={() => createTask({ title: "" })} showCreateTaskAction />

@@ -13,7 +13,7 @@ import {
   MessageContent,
   ModelIcon,
 } from "@/components/ai-elements";
-import { getMessageScrollFingerprint } from "@/components/session/chat-panel.utils";
+import { getMessageScrollFingerprint, shouldShowConversationLoadingState } from "@/components/session/chat-panel.utils";
 import { canTakeOverTask, getTaskControlOwner, isTaskManaged, formatTaskUpdatedAt } from "@/lib/tasks";
 import { toHumanModelName } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ import type { ChatMessage, MessagePart } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
 import { CopyButton, toProviderWaveToneClass } from "./chat-panel-message-parts";
 import { AssistantMessageBody } from "./message/assistant-trace";
+import { SessionLoadingState } from "./SessionLoadingState";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 
@@ -307,6 +308,11 @@ function ChatPanelMessageList() {
 
   const visibleMessages = useMemo(() => messages.filter((message) => !message.isPlanResponse), [messages]);
   const hasOlderMessages = messages.length < totalMessageCount;
+  const showConversationLoadingState = shouldShowConversationLoadingState({
+    visibleMessageCount: visibleMessages.length,
+    totalMessageCount,
+    taskMessagesLoading,
+  });
   const liveStreamingMessageId = activeTurnId ? visibleMessages.at(-1)?.id : undefined;
   const latestVisibleMessageId = visibleMessages.at(-1)?.id;
   const lastVisibleMessageScrollFingerprint = useMemo(
@@ -341,7 +347,7 @@ function ChatPanelMessageList() {
       forceScrollKey={forceScrollKey}
       scrollScopeKey={scrollContextKey}
       forceScrollScopeKey={scrollContextKey}
-      withInnerLayout={visibleMessages.length === 0}
+      withInnerLayout={visibleMessages.length === 0 && !showConversationLoadingState}
     >
       {hasOlderMessages ? (
         <div className="mx-auto mb-3 flex w-full max-w-6xl px-3 pt-3 sm:px-5 sm:pt-4">
@@ -361,16 +367,12 @@ function ChatPanelMessageList() {
           </Button>
         </div>
       ) : null}
-      {visibleMessages.length === 0 && totalMessageCount > 0 && taskMessagesLoading ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <MessageSquareIcon />
-            </EmptyMedia>
-            <EmptyTitle>Loading conversation</EmptyTitle>
-            <EmptyDescription>Fetching the latest messages for this task.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+      {showConversationLoadingState ? (
+        <SessionLoadingState
+          testId="conversation-loading-state"
+          title="Loading conversation"
+          description="Fetching the latest messages for this task."
+        />
       ) : visibleMessages.length === 0 ? (
         <Empty>
           <EmptyHeader>
