@@ -32,6 +32,9 @@ import type {
   WorkspaceScriptStatusEntry,
 } from "../src/lib/workspace-scripts/types";
 import type { BrowserNavigationEventPayload } from "../src/lib/lens/lens.types";
+import type {
+  BrowserConsoleEventPayload,
+} from "../src/lib/lens/lens.types";
 import { WORKSPACE_SCRIPTS_IPC } from "../src/lib/workspace-scripts/constants";
 
 interface ProviderSlashCommand {
@@ -245,6 +248,32 @@ ipcRenderer.on(
   (_event, payload: BrowserNavigationEventPayload) => {
     for (const subscriber of lensNavigationEventSubscribers) {
       subscriber(payload);
+    }
+  },
+);
+ipcRenderer.on(
+  "lens:console-entry",
+  (_event, payload: BrowserConsoleEventPayload) => {
+    const prefix = `[Lens:${payload.workspaceId}]`;
+    const message = payload.entry.source
+      ? `${prefix} ${payload.entry.text} (${payload.entry.source})`
+      : `${prefix} ${payload.entry.text}`;
+    switch (payload.entry.level) {
+      case "debug":
+        console.debug(message);
+        break;
+      case "info":
+        console.info(message);
+        break;
+      case "warn":
+        console.warn(message);
+        break;
+      case "error":
+        console.error(message);
+        break;
+      default:
+        console.log(message);
+        break;
     }
   },
 );

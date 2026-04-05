@@ -598,10 +598,12 @@ export function AssistantMessageBody(args: {
   taskId: string;
   messageId: string;
   streamingEnabled: boolean;
+  traceExpansionMode?: "auto" | "manual";
 }) {
-  const { message, taskId, messageId, streamingEnabled } = args;
+  const { message, taskId, messageId, streamingEnabled, traceExpansionMode = "auto" } = args;
   const isActivelyStreaming = Boolean(message.isStreaming);
   const isStreaming = streamingEnabled && isActivelyStreaming;
+  const shouldAutoExpandTrace = traceExpansionMode === "auto";
   const trace = useMemo(() => buildAssistantTrace({ message }), [message]);
   const summaryItems = useMemo(() => buildTraceSummary(trace.entries), [trace.entries]);
   const allDiffParts = useMemo<CodeDiffPart[]>(
@@ -639,9 +641,9 @@ export function AssistantMessageBody(args: {
       {(trace.showStreamingPlaceholder || trace.entries.length > 0) ? (
         <ChainOfThought
           isStreaming={isStreaming}
-          defaultOpen={isStreaming}
-          openWhen={isStreaming}
-          collapseWhen={!isStreaming}
+          defaultOpen={shouldAutoExpandTrace && isStreaming}
+          openWhen={shouldAutoExpandTrace && isStreaming}
+          collapseWhen={shouldAutoExpandTrace && !isStreaming}
           summaryItems={summaryItems}
           seed={messageId}
         >

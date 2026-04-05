@@ -651,7 +651,7 @@ export function ConversationScrollButton(props: ConversationScrollButtonProps) {
     <Button
       size="sm"
       variant="outline"
-      className={cn("absolute bottom-3 right-3 h-8 rounded-full px-2", buttonProps.className)}
+      className={cn("absolute bottom-3 left-3 h-8 rounded-full px-2", buttonProps.className)}
       onClick={() => {
         scrollToBottom({ behavior: "smooth" });
       }}

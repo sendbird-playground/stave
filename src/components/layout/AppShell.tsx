@@ -1,7 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { GlobalCommandPalette } from "@/components/layout/GlobalCommandPalette";
-import { StaveAssistantWidget } from "@/components/layout/StaveAssistantWidget";
+import { StaveMuseWidget } from "@/components/layout/StaveMuseWidget";
+import { resolveStaveMuseRightInset } from "@/components/layout/stave-muse-widget.utils";
 import { TopBar } from "@/components/layout/TopBar";
 import { ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
@@ -16,7 +17,7 @@ import { isTaskArchived } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
 import {
   MIN_EDITOR_PANEL_WIDTH,
-  STAVE_ASSISTANT_OPEN_SETTINGS_EVENT,
+  STAVE_MUSE_OPEN_SETTINGS_EVENT,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
   useAppStore,
 } from "@/store/app.store";
@@ -93,7 +94,7 @@ export function AppShell() {
     openProject,
     switchWorkspace,
     abortTaskTurn,
-    focusStaveAssistant,
+    focusStaveMuse,
     setLayout,
   ] = useAppStore(useShallow((state) => [
     state.projectPath,
@@ -129,7 +130,7 @@ export function AppShell() {
     state.openProject,
     state.switchWorkspace,
     state.abortTaskTurn,
-    state.focusStaveAssistant,
+    state.focusStaveMuse,
     state.setLayout,
   ] as const));
   const hasProject = Boolean(projectPath);
@@ -184,9 +185,9 @@ export function AppShell() {
   const handleOpenCommandPalette = useCallback(() => {
     setCommandPaletteOpen(true);
   }, []);
-  const handleOpenStaveAssistant = useCallback(() => {
-    focusStaveAssistant();
-  }, [focusStaveAssistant]);
+  const handleOpenStaveMuse = useCallback(() => {
+    focusStaveMuse();
+  }, [focusStaveMuse]);
   const handleCreatePullRequest = useCallback(() => {
     dispatchTopBarPrAction("create-pr");
   }, []);
@@ -495,17 +496,17 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    const handleAssistantOpenSettings = (event: Event) => {
+    const handleMuseOpenSettings = (event: Event) => {
       const customEvent = event as CustomEvent<{ projectPath?: string | null; section?: SectionId }>;
       handleOpenSettings({
         projectPath: customEvent.detail?.projectPath ?? null,
-        section: customEvent.detail?.section ?? "assistant",
+        section: customEvent.detail?.section ?? "muse",
       });
     };
 
-    window.addEventListener(STAVE_ASSISTANT_OPEN_SETTINGS_EVENT, handleAssistantOpenSettings as EventListener);
+    window.addEventListener(STAVE_MUSE_OPEN_SETTINGS_EVENT, handleMuseOpenSettings as EventListener);
     return () => {
-      window.removeEventListener(STAVE_ASSISTANT_OPEN_SETTINGS_EVENT, handleAssistantOpenSettings as EventListener);
+      window.removeEventListener(STAVE_MUSE_OPEN_SETTINGS_EVENT, handleMuseOpenSettings as EventListener);
     };
   }, [handleOpenSettings]);
 
@@ -627,8 +628,24 @@ export function AppShell() {
     [],
   );
   const activeWorkspacePath = workspacePathById[activeWorkspaceId] ?? projectPath;
+  const hasProjectContext = Boolean(projectPath?.trim());
+  const museRightInset = resolveStaveMuseRightInset({
+    hasProjectContext,
+    isLargeViewport,
+    sidebarOverlayVisible,
+    sidebarOverlayTab,
+    showDesktopSidebar,
+    desktopSidebarWidth,
+    overlayRightPanelMode,
+    viewportWidth: typeof window === "undefined" ? 1440 : window.innerWidth,
+  });
   const activeWorkspaceIsDefault = Boolean(workspaceDefaultById[activeWorkspaceId]);
   const activeWorkspacePrStatus: WorkspacePrStatus = workspacePrInfoById[activeWorkspaceId]?.derived ?? "no_pr";
+  const hasBlockingOverlayOpen =
+    showCloseConfirm ||
+    commandPaletteOpen ||
+    settingsOpen ||
+    shortcutsOpen;
   const commandPaletteContext = useMemo(() => ({
     activeEditorTabId,
     activeTaskId,
@@ -691,7 +708,7 @@ export function AppShell() {
       createTask: () => createTask({ title: "" }),
       continueWorkspace: handleContinueWorkspace,
       focusFileSearch: handleFocusFileSearch,
-      openStaveAssistant: handleOpenStaveAssistant,
+      openStaveMuse: handleOpenStaveMuse,
       openLatestCompletedTurnTask: handleOpenLatestCompletedTurnTask,
       openInTerminal: async (path: string) => {
         await window.api?.shell?.openInTerminal?.({ path });
@@ -742,7 +759,7 @@ export function AppShell() {
     createTask,
     editorVisible,
     handleFocusFileSearch,
-    handleOpenStaveAssistant,
+    handleOpenStaveMuse,
     handleOpenLatestCompletedTurnTask,
     handleOpenKeyboardShortcuts,
     handleOpenSettings,
@@ -969,7 +986,10 @@ export function AppShell() {
                 <Suspense fallback={<aside className="bg-card p-3 text-sm text-muted-foreground" style={{ width: `${desktopSidebarWidth}px` }}>Loading panel...</aside>}>
                   <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopSidebarWidth}px` }}>
                     <RenderProfiler id="EditorPanel" thresholdMs={8}>
-                      <EditorPanel onOpenSettings={handleOpenSettings} />
+                      <EditorPanel
+                        onOpenSettings={handleOpenSettings}
+                        lensOccluded={hasBlockingOverlayOpen}
+                      />
                     </RenderProfiler>
                   </div>
                 </Suspense>
@@ -984,7 +1004,10 @@ export function AppShell() {
                 ) : (
                   <Suspense fallback={<aside className="h-full bg-card p-3 text-sm text-muted-foreground">Loading panel...</aside>}>
                     <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
-                      <EditorPanel onOpenSettings={handleOpenSettings} />
+                      <EditorPanel
+                        onOpenSettings={handleOpenSettings}
+                        lensOccluded={hasBlockingOverlayOpen}
+                      />
                     </RenderProfiler>
                   </Suspense>
                 )}
@@ -994,7 +1017,7 @@ export function AppShell() {
           <RightRail />
         </div>
       </div>
-      <StaveAssistantWidget />
+      <StaveMuseWidget rightInset={museRightInset} />
     </div>
   );
 }

@@ -93,7 +93,7 @@ export interface CommandPaletteCommandHandlers {
   createTask: () => void;
   continueWorkspace: () => Promise<void> | void;
   focusFileSearch: () => void;
-  openStaveAssistant: () => void;
+  openStaveMuse: () => void;
   openLatestCompletedTurnTask: () => Promise<void> | void;
   openInTerminal: (path: string) => Promise<void> | void;
   openInVSCode: (path: string) => Promise<void> | void;
@@ -242,20 +242,20 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     }),
   },
   {
-    id: "navigation.open-stave-assistant",
-    title: "Open Stave Assistant",
-    description: "Open the global Stave Assistant widget.",
+    id: "navigation.open-stave-muse",
+    title: "Open Stave Muse",
+    description: "Open the global Stave Muse widget.",
     group: "navigation",
     icon: Sparkles,
-    keywords: ["assistant", "operator", "global chat", "widget"],
+    keywords: ["muse", "assistant", "operator", "global chat", "widget"],
     build: (args) => ({
-      id: "navigation.open-stave-assistant",
-      title: "Open Stave Assistant",
-      subtitle: "Open the global control-plane assistant.",
+      id: "navigation.open-stave-muse",
+      title: "Open Stave Muse",
+      subtitle: "Open the global control-plane Muse.",
       group: "navigation",
       icon: Sparkles,
-      keywords: ["assistant", "operator", "global chat", "widget"],
-      run: args.commands.openStaveAssistant,
+      keywords: ["muse", "assistant", "operator", "global chat", "widget"],
+      run: args.commands.openStaveMuse,
       source: "core",
     }),
   },

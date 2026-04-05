@@ -609,7 +609,7 @@ export function PromptInput(args: PromptInputProps) {
           onClick={focusComposer}
           className={cn(
             PROMPT_TOOLBAR_BUTTON,
-            "absolute right-4 top-4 h-8 gap-2 border border-border/60 bg-background/70 text-foreground hover:bg-background",
+            "absolute right-4 top-4 h-8 gap-2 border border-border/60 bg-background text-foreground hover:bg-background",
           )}
         >
           <span>Focus</span>

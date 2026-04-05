@@ -43,6 +43,7 @@ import type {
   BrowserNavigationEventPayload,
   BrowserNavigationState,
   ElementPickerResult,
+  LensBounds,
   LensSourceMappingConfig,
 } from "@/lib/lens/lens.types";
 import { useAppStore } from "@/store/app.store";
@@ -55,24 +56,57 @@ const DEFAULT_NAVIGATION_STATE: BrowserNavigationState = {
   isLoading: false,
 };
 
-export function WorkspaceLensPanel() {
-  const { workspaceId, activeTaskId, sourceMappingConfig } = useAppStore(
-    useShallow((state) => ({
-      workspaceId: state.activeWorkspaceId,
-      activeTaskId: state.activeTaskId,
-      sourceMappingConfig: {
-        heuristic: state.settings.lensSourceMappingHeuristic,
-        reactDebugSource: state.settings.lensSourceMappingReactDebugSource,
-      } satisfies LensSourceMappingConfig,
-    })),
+function areLensBoundsEqual(
+  left: LensBounds | null,
+  right: LensBounds | null,
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.x === right.x &&
+    left.y === right.y &&
+    left.width === right.width &&
+    left.height === right.height
+  );
+}
+
+export function WorkspaceLensPanel(args: { occluded?: boolean }) {
+  // Keep the store subscription primitive-only. Returning a nested object here
+  // causes a fresh selector snapshot on every render, which can trigger React
+  // 19 ref/update loops on tooltip-heavy surfaces like Lens.
+  const [
+    workspaceId,
+    activeTaskId,
+    lensSourceMappingHeuristic,
+    lensSourceMappingReactDebugSource,
+  ] = useAppStore(useShallow((state) => [
+    state.activeWorkspaceId,
+    state.activeTaskId,
+    state.settings.lensSourceMappingHeuristic,
+    state.settings.lensSourceMappingReactDebugSource,
+  ] as const));
+
+  const sourceMappingConfig = useMemo(
+    () =>
+      ({
+        heuristic: lensSourceMappingHeuristic,
+        reactDebugSource: lensSourceMappingReactDebugSource,
+      } satisfies LensSourceMappingConfig),
+    [lensSourceMappingHeuristic, lensSourceMappingReactDebugSource],
   );
 
   const lensApi = window.api?.lens;
   const hasLensApi = Boolean(lensApi);
 
   const placeholderRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number>(0);
+  const measureRafRef = useRef<number>(0);
+  const flushRafRef = useRef<number>(0);
   const urlInputRef = useRef<HTMLInputElement>(null);
+  const pendingBoundsRef = useRef<LensBounds | null>(null);
+  const lastSentBoundsRef = useRef<LensBounds | null>(null);
+  const boundsRequestInFlightRef = useRef(false);
   // Track whether the URL address bar is focused so navigation events don't
   // clobber text the user is actively editing.
   const isUrlInputFocused = useRef(false);
@@ -84,6 +118,7 @@ export function WorkspaceLensPanel() {
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [isPickerActive, setIsPickerActive] = useState(false);
+  const isOccluded = Boolean(args.occluded);
 
   const applyNavigationState = useCallback((state: BrowserNavigationState) => {
     setUrl(state.url);
@@ -98,31 +133,80 @@ export function WorkspaceLensPanel() {
     setCanGoForward(state.canGoForward);
   }, []);
 
-  const syncBounds = useCallback(() => {
-    const el = placeholderRef.current;
-    if (!workspaceId || !el || !hasLensApi) {
+  const flushPendingBounds = useCallback(() => {
+    if (!workspaceId || !hasLensApi || boundsRequestInFlightRef.current) {
       return;
     }
 
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => {
-      const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
+    const bounds = pendingBoundsRef.current;
+    if (!bounds) {
+      return;
+    }
+
+    if (areLensBoundsEqual(bounds, lastSentBoundsRef.current)) {
+      pendingBoundsRef.current = null;
+      return;
+    }
+
+    pendingBoundsRef.current = null;
+    boundsRequestInFlightRef.current = true;
+
+    const request = window.api?.lens?.setBounds?.({
+      workspaceId,
+      bounds,
+    });
+    if (!request) {
+      boundsRequestInFlightRef.current = false;
+      return;
+    }
+
+    void request.finally(() => {
+      lastSentBoundsRef.current = bounds;
+      boundsRequestInFlightRef.current = false;
+
+      if (!pendingBoundsRef.current) {
         return;
       }
-      void window.api?.lens?.setBounds?.({
-        workspaceId,
-        bounds: {
-          x: Math.round(rect.left),
-          y: Math.round(rect.top),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-        },
+
+      cancelAnimationFrame(flushRafRef.current);
+      flushRafRef.current = requestAnimationFrame(() => {
+        flushPendingBounds();
       });
     });
   }, [hasLensApi, workspaceId]);
 
+  const syncBounds = useCallback(() => {
+    const el = placeholderRef.current;
+    if (!workspaceId || !el || !hasLensApi || isOccluded) {
+      return;
+    }
+
+    cancelAnimationFrame(measureRafRef.current);
+    measureRafRef.current = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        return;
+      }
+
+      pendingBoundsRef.current = {
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      };
+
+      cancelAnimationFrame(flushRafRef.current);
+      flushRafRef.current = requestAnimationFrame(() => {
+        flushPendingBounds();
+      });
+    });
+  }, [flushPendingBounds, hasLensApi, isOccluded, workspaceId]);
+
   useEffect(() => {
+    pendingBoundsRef.current = null;
+    lastSentBoundsRef.current = null;
+    boundsRequestInFlightRef.current = false;
+
     if (!workspaceId) {
       applyNavigationState(DEFAULT_NAVIGATION_STATE);
       return;
@@ -147,11 +231,19 @@ export function WorkspaceLensPanel() {
         return;
       }
 
-      await lensApi?.setVisible?.({ workspaceId, visible: true });
+      await lensApi?.setVisible?.({ workspaceId, visible: !isOccluded });
 
       const stateResult = await lensApi?.getState?.({ workspaceId });
       if (!cancelled && stateResult?.ok && stateResult.state) {
         applyNavigationState(stateResult.state);
+      }
+
+      if (isOccluded) {
+        await lensApi?.setBounds?.({
+          workspaceId,
+          bounds: { x: 0, y: 0, width: 0, height: 0 },
+        });
+        return;
       }
 
       syncBounds();
@@ -159,7 +251,11 @@ export function WorkspaceLensPanel() {
 
     return () => {
       cancelled = true;
-      cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(measureRafRef.current);
+      cancelAnimationFrame(flushRafRef.current);
+      pendingBoundsRef.current = null;
+      lastSentBoundsRef.current = null;
+      boundsRequestInFlightRef.current = false;
       // Reset bounds first so the view doesn't occlude other panels while hidden.
       void window.api?.lens?.setBounds?.({
         workspaceId,
@@ -171,11 +267,11 @@ export function WorkspaceLensPanel() {
       // a page reload, not a full Electron process.
       void window.api?.lens?.destroyView?.({ workspaceId });
     };
-  }, [applyNavigationState, hasLensApi, lensApi, syncBounds, workspaceId]);
+  }, [applyNavigationState, hasLensApi, isOccluded, lensApi, syncBounds, workspaceId]);
 
   useEffect(() => {
     const el = placeholderRef.current;
-    if (!workspaceId || !el || !hasLensApi) {
+    if (!workspaceId || !el || !hasLensApi || isOccluded) {
       return;
     }
 
@@ -196,12 +292,34 @@ export function WorkspaceLensPanel() {
     syncBounds();
 
     return () => {
-      cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(measureRafRef.current);
+      cancelAnimationFrame(flushRafRef.current);
       resizeObserver.disconnect();
       window.removeEventListener("resize", handleWindowResize);
       unsubscribeZoom?.();
     };
-  }, [hasLensApi, syncBounds, workspaceId]);
+  }, [hasLensApi, isOccluded, syncBounds, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || !hasLensApi) {
+      return;
+    }
+
+    if (isOccluded) {
+      cancelAnimationFrame(measureRafRef.current);
+      cancelAnimationFrame(flushRafRef.current);
+      pendingBoundsRef.current = null;
+      void window.api?.lens?.setBounds?.({
+        workspaceId,
+        bounds: { x: 0, y: 0, width: 0, height: 0 },
+      });
+      void window.api?.lens?.setVisible?.({ workspaceId, visible: false });
+      return;
+    }
+
+    void window.api?.lens?.setVisible?.({ workspaceId, visible: true });
+    syncBounds();
+  }, [hasLensApi, isOccluded, syncBounds, workspaceId]);
 
   useEffect(() => {
     if (!workspaceId || !hasLensApi) {
@@ -448,7 +566,7 @@ export function WorkspaceLensPanel() {
                     // Discard any uncommitted edit and restore the current page URL.
                     setInputUrl(url === "about:blank" ? "" : url);
                   }}
-                  placeholder={hasLensApi ? "localhost:3000 or https://example.com" : "Lens is unavailable in browser-only mode"}
+                  placeholder={hasLensApi ? "http://localhost:3000 or https://example.com" : "Lens is unavailable in browser-only mode"}
                   className="text-xs"
                   disabled={!hasLensApi}
                 />

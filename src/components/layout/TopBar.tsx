@@ -59,10 +59,10 @@ export function TopBar() {
     workspacePathById,
     projectPath,
     workspaceSidebarCollapsed,
-    staveAssistantOpen,
+    staveMuseOpen,
     setLayout,
-    focusStaveAssistant,
-    setStaveAssistantOpen,
+    focusStaveMuse,
+    setStaveMuseOpen,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -71,10 +71,10 @@ export function TopBar() {
           state.workspacePathById,
           state.projectPath,
           state.layout.workspaceSidebarCollapsed,
-          state.staveAssistant.open,
+          state.staveMuse.open,
           state.setLayout,
-          state.focusStaveAssistant,
-          state.setStaveAssistantOpen,
+          state.focusStaveMuse,
+          state.setStaveMuseOpen,
         ] as const,
     ),
   );
@@ -241,23 +241,23 @@ export function TopBar() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant={staveAssistantOpen ? "default" : "ghost"}
+                variant={staveMuseOpen ? "default" : "ghost"}
                 size="sm"
                 className="h-8 gap-1.5 rounded-md px-2.5"
                 style={TOP_BAR_NO_DRAG_STYLE}
                 onClick={() => {
-                  if (staveAssistantOpen) {
-                    setStaveAssistantOpen({ open: false });
+                  if (staveMuseOpen) {
+                    setStaveMuseOpen({ open: false });
                     return;
                   }
-                  focusStaveAssistant();
+                  focusStaveMuse();
                 }}
               >
                 <Sparkles className="size-3.5" />
-                <span className="hidden xl:inline">Assistant</span>
+                <span className="hidden xl:inline">Muse</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">Open Stave Assistant</TooltipContent>
+            <TooltipContent side="bottom">Open Stave Muse</TooltipContent>
           </Tooltip>
         </TooltipProvider>
         {hasProjectContext ? (

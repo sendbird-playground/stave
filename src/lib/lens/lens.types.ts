@@ -36,6 +36,11 @@ export interface BrowserConsoleEntry {
   lineNumber?: number;
 }
 
+export interface BrowserConsoleEventPayload {
+  workspaceId: string;
+  entry: BrowserConsoleEntry;
+}
+
 export interface BrowserNetworkEntry {
   requestId: string;
   url: string;

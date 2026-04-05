@@ -9,6 +9,7 @@ import { WebContentsView, session as electronSession } from "electron";
 import { getMainWindow } from "../window";
 import { openExternalWithFallback } from "../utils/external-url";
 import type {
+  BrowserConsoleEventPayload,
   BrowserConsoleEntry,
   BrowserNavigationState,
   BrowserNetworkEntry,
@@ -56,6 +57,8 @@ export interface BrowserSessionState {
   navigationState: BrowserNavigationState;
   /** Last CSS-pixel bounds sent from renderer (for zoom-change re-apply). */
   lastCssBounds: LensBounds | null;
+  /** Last device-pixel bounds applied to the native view. */
+  lastAppliedBounds: LensBounds | null;
 }
 
 const CONSOLE_BUFFER_SIZE = 200;
@@ -169,6 +172,7 @@ export function createBrowserSession(
       isLoading: false,
     },
     lastCssBounds: null,
+    lastAppliedBounds: null,
   };
 
   sessions.set(workspaceId, session);
@@ -273,8 +277,18 @@ export function setViewBounds(
 ): void {
   const session = sessions.get(workspaceId);
   if (!session) return;
+  if (
+    session.lastAppliedBounds &&
+    session.lastAppliedBounds.x === bounds.x &&
+    session.lastAppliedBounds.y === bounds.y &&
+    session.lastAppliedBounds.width === bounds.width &&
+    session.lastAppliedBounds.height === bounds.height
+  ) {
+    return;
+  }
   try {
     session.view.setBounds(bounds);
+    session.lastAppliedBounds = bounds;
   } catch {
     // View may be destroyed
   }
@@ -311,7 +325,22 @@ export function pushConsoleEntry(
   workspaceId: string,
   entry: BrowserConsoleEntry,
 ): void {
-  sessions.get(workspaceId)?.consoleLog.push(entry);
+  const session = sessions.get(workspaceId);
+  if (!session) {
+    return;
+  }
+
+  session.consoleLog.push(entry);
+
+  const renderer = getMainWindow()?.webContents;
+  if (!renderer || renderer.isDestroyed()) {
+    return;
+  }
+
+  renderer.send("lens:console-entry", {
+    workspaceId,
+    entry,
+  } satisfies BrowserConsoleEventPayload);
 }
 
 export function pushNetworkEntry(

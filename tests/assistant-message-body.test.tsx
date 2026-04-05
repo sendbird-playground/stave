@@ -80,6 +80,23 @@ describe("AssistantMessageBody", () => {
     expect(html.match(/<button/g)?.length ?? 0).toBe(2);
   });
 
+  test("keeps assistant trace collapsed in manual expansion mode", async () => {
+    const AssistantMessageBody = await loadAssistantMessageBody();
+    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+      message: createAssistantMessage({
+        isStreaming: true,
+        parts: [{ type: "thinking", text: "Inspecting files.", isStreaming: true }],
+      }),
+      taskId: "task-1",
+      messageId: "message-1",
+      streamingEnabled: true,
+      traceExpansionMode: "manual",
+    }));
+
+    expect(html).not.toContain("Inspecting files.");
+    expect(html.match(/<button/g)?.length ?? 0).toBe(1);
+  });
+
   test("keeps markdown rendering for the pre-plan assistant message after plan splitting", async () => {
     const AssistantMessageBody = await loadAssistantMessageBody();
     const replayed = replayProviderEventsToTaskState({

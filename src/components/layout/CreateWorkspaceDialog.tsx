@@ -2,7 +2,7 @@ import { GitBranch, X } from "lucide-react";
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { CreateWorkspaceBranchPicker } from "@/components/layout/CreateWorkspaceBranchPicker";
 import { resolveDefaultCreateWorkspaceBaseBranch } from "@/components/layout/CreateWorkspaceBranchPicker.utils";
-import { Button, Card, Input, Textarea, toast } from "@/components/ui";
+import { Badge, Button, Card, Input, Textarea, toast } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 interface CreateWorkspaceDialogProps {
@@ -301,7 +301,13 @@ export function CreateWorkspaceDialog({
               )}
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Reuse root `node_modules` via symlink</p>
+                <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                  <span>Reuse root</span>
+                  <Badge variant="outline" className="h-5 rounded-md px-1.5 font-mono text-[11px] font-medium">
+                    node_modules
+                  </Badge>
+                  <span>via symlink</span>
+                </p>
                 <span className={cn(
                   "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em]",
                   useRootNodeModulesSymlink
@@ -313,7 +319,11 @@ export function CreateWorkspaceDialog({
                 </span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">
-                Creates `node_modules` in the new workspace as a symlink to the repository root install. This is fast, but later installs in that workspace will affect the shared dependency tree.
+                Creates{" "}
+                <Badge variant="outline" className="h-5 rounded-md px-1.5 align-middle font-mono text-[11px] font-medium">
+                  node_modules
+                </Badge>
+                {" "}in the new workspace as a symlink to the repository root install. This is fast, but later installs in that workspace will affect the shared dependency tree.
               </p>
             </button>
           </div>

@@ -1,19 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Bot, Settings2, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Bot, LoaderCircle, Settings2, Sparkles, Square, Trash2, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Badge, Button, Card, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from "@/components/ui";
 import { ModelIcon } from "@/components/ai-elements";
 import { AssistantMessageBody } from "@/components/session/message/assistant-trace";
-import { STAVE_ASSISTANT_SESSION_ID } from "@/lib/stave-assistant";
+import { STAVE_MUSE_SESSION_ID } from "@/lib/stave-muse";
 import { toHumanModelName } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
-import { STAVE_ASSISTANT_OPEN_SETTINGS_EVENT, useAppStore } from "@/store/app.store";
+import { STAVE_MUSE_OPEN_SETTINGS_EVENT, useAppStore } from "@/store/app.store";
 
 const TARGET_OPTIONS = [
   { value: "app", label: "App" },
   { value: "project", label: "Current Project" },
   { value: "workspace", label: "Current Workspace" },
 ] as const;
+
+const FLOATING_TOGGLE_BOTTOM_PX = 68;
+const FLOATING_TOGGLE_SIZE_PX = 40;
+const FLOATING_PANEL_GAP_PX = 12;
+const MUSE_LAYER_Z_INDEX = 120;
 
 function UserMessageBubble(args: { content: string }) {
   return (
@@ -35,9 +40,10 @@ function AssistantMessageCard(args: {
     <div className="max-w-full rounded-2xl rounded-bl-md border border-border/70 bg-card/80 px-3.5 py-3 shadow-sm supports-backdrop-filter:backdrop-blur-sm">
       <AssistantMessageBody
         message={args.message}
-        taskId={STAVE_ASSISTANT_SESSION_ID}
+        taskId={STAVE_MUSE_SESSION_ID}
         messageId={args.message.id}
         streamingEnabled={args.streamingEnabled}
+        traceExpansionMode="manual"
       />
       {args.message.providerId !== "user" ? (
         <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -49,7 +55,7 @@ function AssistantMessageCard(args: {
   );
 }
 
-export function StaveAssistantWidget() {
+export function StaveMuseWidget(args: { rightInset?: number }) {
   const [
     open,
     targetKind,
@@ -57,13 +63,14 @@ export function StaveAssistantWidget() {
     promptText,
     focusNonce,
     activeTurnId,
-    assistantRouterModel,
-    assistantChatModel,
-    assistantPlannerModel,
-    assistantAutoHandoffToTask,
+    museRouterModel,
+    museChatModel,
+    musePlannerModel,
+    museAutoHandoffToTask,
     projectName,
     projectPath,
     activeWorkspaceName,
+    workspaceSidebarCollapsed,
     setOpen,
     setTarget,
     clearConversation,
@@ -71,37 +78,53 @@ export function StaveAssistantWidget() {
     sendMessage,
     abortTurn,
   ] = useAppStore(useShallow((state) => [
-    state.staveAssistant.open,
-    state.staveAssistant.target.kind,
-    state.staveAssistant.messages,
-    state.staveAssistant.promptDraft.text,
-    state.staveAssistant.focusNonce,
-    state.staveAssistant.activeTurnId,
-    state.settings.assistantRouterModel,
-    state.settings.assistantChatModel,
-    state.settings.assistantPlannerModel,
-    state.settings.assistantAutoHandoffToTask,
+    state.staveMuse.open,
+    state.staveMuse.target.kind,
+    state.staveMuse.messages,
+    state.staveMuse.promptDraft.text,
+    state.staveMuse.focusNonce,
+    state.staveMuse.activeTurnId,
+    state.settings.museRouterModel,
+    state.settings.museChatModel,
+    state.settings.musePlannerModel,
+    state.settings.museAutoHandoffToTask,
     state.projectName,
     state.projectPath,
     state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
-    state.setStaveAssistantOpen,
-    state.setStaveAssistantTarget,
-    state.clearStaveAssistantConversation,
-    state.updateStaveAssistantPromptDraft,
-    state.sendStaveAssistantMessage,
-    state.abortStaveAssistantTurn,
+    state.layout.workspaceSidebarCollapsed,
+    state.setStaveMuseOpen,
+    state.setStaveMuseTarget,
+    state.clearStaveMuseConversation,
+    state.updateStaveMusePromptDraft,
+    state.sendStaveMuseMessage,
+    state.abortStaveMuseTurn,
   ] as const));
   const [submitting, setSubmitting] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const floatingToggleLeftPx = workspaceSidebarCollapsed ? 8 : 12;
+  const openContainerStyle = {
+    left: `${floatingToggleLeftPx + FLOATING_TOGGLE_SIZE_PX + FLOATING_PANEL_GAP_PX}px`,
+    right: args.rightInset && args.rightInset > 0 ? `${16 + args.rightInset}px` : "16px",
+    bottom: `${FLOATING_TOGGLE_BOTTOM_PX}px`,
+    zIndex: MUSE_LAYER_Z_INDEX,
+  } as const;
+  const floatingToggleStyle = {
+    left: `${floatingToggleLeftPx}px`,
+    bottom: `${FLOATING_TOGGLE_BOTTOM_PX}px`,
+    zIndex: MUSE_LAYER_Z_INDEX,
+  } as const;
   const isTurnActive = Boolean(activeTurnId);
-  const trimmedPrompt = promptText.trim();
-  const currentTargetLabel = TARGET_OPTIONS.find((option) => option.value === targetKind)?.label ?? "Current Project";
+  const isBusy = submitting || isTurnActive;
+  const livePromptText = textareaRef.current?.value ?? promptText;
+  const trimmedPrompt = livePromptText.trim();
+  const workspaceLabel = activeWorkspaceName ?? "No workspace selected";
   const modelSummary = useMemo(() => [
-    `Chat: ${toHumanModelName({ model: assistantChatModel })}`,
-    `Planner: ${toHumanModelName({ model: assistantPlannerModel })}`,
-    `Router: ${toHumanModelName({ model: assistantRouterModel })}`,
-  ].join(" · "), [assistantChatModel, assistantPlannerModel, assistantRouterModel]);
+    `Chat: ${toHumanModelName({ model: museChatModel })}`,
+    `Planner: ${toHumanModelName({ model: musePlannerModel })}`,
+    `Router: ${toHumanModelName({ model: museRouterModel })}`,
+  ].join(" · "), [museChatModel, musePlannerModel, museRouterModel]);
 
   useEffect(() => {
     if (!open) {
@@ -122,18 +145,22 @@ export function StaveAssistantWidget() {
   }, [messages, open]);
 
   const handleSubmit = async () => {
-    if (!trimmedPrompt || isTurnActive || submitting) {
+    const nextPrompt = (textareaRef.current?.value ?? promptText).trim();
+    if (!nextPrompt || isTurnActive || submitting || isComposing) {
       return;
     }
     setSubmitting(true);
     try {
-      await sendMessage({ content: trimmedPrompt });
+      await sendMessage({ content: nextPrompt });
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing || isComposing) {
+      return;
+    }
     if (event.key !== "Enter" || event.shiftKey) {
       return;
     }
@@ -143,41 +170,43 @@ export function StaveAssistantWidget() {
 
   if (!open) {
     return (
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-end px-4">
+      <div className="pointer-events-none fixed" style={floatingToggleStyle}>
         <Button
-          className="pointer-events-auto h-11 rounded-full border border-border/70 bg-card/95 px-4 shadow-xl supports-backdrop-filter:backdrop-blur-xl"
+          variant="ghost"
+          size="icon-lg"
+          aria-label="Open Stave Muse"
+          className="pointer-events-auto rounded-xl border border-sidebar-border/90 bg-sidebar text-sidebar-foreground shadow-2xl ring-1 ring-sidebar-border/45 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground supports-backdrop-filter:bg-sidebar/96 supports-backdrop-filter:backdrop-blur-xl"
           onClick={() => setOpen({ open: true })}
         >
           <Sparkles className="size-4" />
-          <span>Stave Assistant</span>
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-end px-4">
-      <Card className="pointer-events-auto flex h-[min(72vh,680px)] w-full max-w-[min(30rem,calc(100vw-2rem))] flex-col overflow-hidden border border-border/70 bg-card/92 shadow-2xl supports-backdrop-filter:backdrop-blur-xl">
+    <div className="pointer-events-none fixed flex justify-start" style={openContainerStyle}>
+      <Card className="pointer-events-auto flex h-[min(72vh,680px)] w-full max-w-[min(30rem,calc(100vw-2rem))] flex-col gap-0 overflow-hidden border border-border/70 bg-card/92 py-0 shadow-2xl supports-backdrop-filter:backdrop-blur-xl">
         <div className="border-b border-border/60 bg-muted/30 px-3.5 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="gap-1 rounded-full px-2.5 py-0.5">
+                <Badge variant="secondary" className="h-6 gap-1.5 rounded-full text-sm [&>svg]:size-3.5!">
+                  Stave Muse
                   <Bot className="size-3.5" />
-                  Stave Assistant
                 </Badge>
-                {assistantAutoHandoffToTask ? (
+                {museAutoHandoffToTask ? (
                   <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
                     Auto handoff
                   </Badge>
                 ) : null}
+                {isBusy ? (
+                  <Badge variant="outline" className="gap-1.5 rounded-full px-2.5 py-0.5 text-primary [&>svg]:size-3.5!">
+                    <LoaderCircle className="animate-spin" />
+                    Responding
+                  </Badge>
+                ) : null}
               </div>
-              <p className="mt-2 truncate text-sm font-medium text-foreground">
-                {projectName ?? (projectPath ? "Current Project" : "No project open")}
-              </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {activeWorkspaceName ? `${activeWorkspaceName} · ${currentTargetLabel}` : currentTargetLabel}
-              </p>
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -185,8 +214,8 @@ export function StaveAssistantWidget() {
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => {
-                  window.dispatchEvent(new CustomEvent(STAVE_ASSISTANT_OPEN_SETTINGS_EVENT, {
-                    detail: { section: "assistant" },
+                  window.dispatchEvent(new CustomEvent(STAVE_MUSE_OPEN_SETTINGS_EVENT, {
+                    detail: { section: "muse" },
                   }));
                 }}
               >
@@ -210,15 +239,23 @@ export function StaveAssistantWidget() {
               </Button>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">
+                {projectName ?? (projectPath ? "Current Project" : "No project open")}
+              </p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {workspaceLabel}
+              </p>
+            </div>
             <Select
               value={targetKind}
               onValueChange={(value) => setTarget({ kind: value as typeof targetKind })}
             >
-              <SelectTrigger className="h-8 w-[11rem] rounded-md border-border/70 bg-background/70 text-xs">
+              <SelectTrigger className="ml-auto h-8 w-[11rem] shrink-0 rounded-md border-border/70 bg-background text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[121]">
                 {TARGET_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value} className="text-xs">
                     {option.label}
@@ -226,9 +263,9 @@ export function StaveAssistantWidget() {
                 ))}
               </SelectContent>
             </Select>
-            <span className="truncate text-[11px] text-muted-foreground">
-              {modelSummary}
-            </span>
+          </div>
+          <div className="mt-3 text-[11px] text-muted-foreground">
+            <span className="truncate">{modelSummary}</span>
           </div>
         </div>
 
@@ -272,15 +309,27 @@ export function StaveAssistantWidget() {
               ref={textareaRef}
               value={promptText}
               rows={3}
-              placeholder="Ask Stave to explain, navigate, or prepare a task handoff..."
+              placeholder="Ask Muse to explain, navigate, or prepare a task handoff..."
               className="min-h-[5.5rem] resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0"
               onChange={(event) => updatePromptDraft({ patch: { text: event.target.value } })}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={(event) => {
+                setIsComposing(false);
+                updatePromptDraft({ patch: { text: event.currentTarget.value } });
+              }}
               onKeyDown={handleKeyDown}
             />
             <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="min-w-0 truncate text-[11px] text-muted-foreground">
-                Shift+Enter for newline. Complex implementation work is handed off into a task.
-              </p>
+              <div className="min-w-0 flex items-center gap-2 text-[11px] text-muted-foreground">
+                {isBusy ? (
+                  <>
+                    <LoaderCircle className="size-3.5 shrink-0 animate-spin text-primary" />
+                    <p className="truncate">Stave Muse is responding...</p>
+                  </>
+                ) : (
+                  <p className="truncate">Shift+Enter for newline. Complex implementation work is handed off into a task.</p>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 {isTurnActive ? (
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => abortTurn()}>
@@ -291,11 +340,11 @@ export function StaveAssistantWidget() {
                 <Button
                   size="sm"
                   className="gap-1.5"
-                  disabled={!trimmedPrompt || isTurnActive || submitting}
+                  disabled={!trimmedPrompt || isBusy}
                   onClick={() => void handleSubmit()}
                 >
-                  <Sparkles className="size-3.5" />
-                  Send
+                  {isBusy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                  {isBusy ? "Working" : "Send"}
                 </Button>
               </div>
             </div>

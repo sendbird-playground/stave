@@ -12,6 +12,7 @@ import {
   getWebContentsForSession,
   listBrowserSessions,
 } from "./browser-manager";
+import { normalizeLensUrl } from "./browser-url";
 
 const NAVIGATE_TIMEOUT_MS = 30_000;
 import {
@@ -68,15 +69,7 @@ export function registerBrowserTools(server: McpServer): void {
       const wc = getWebContentsForSession(workspaceId);
       if (!wc) throw new Error("WebContents not available");
 
-      // Block dangerous schemes BEFORE normalisation — these use ":" without
-      // "//", so adding "https://" first would mask them.
-      let targetUrl = url.trim();
-      if (/^(file|chrome|javascript|data|vbscript):/i.test(targetUrl)) {
-        throw new Error(`Blocked protocol: ${targetUrl}`);
-      }
-      if (!/^[a-z]+:\/\//i.test(targetUrl)) {
-        targetUrl = `https://${targetUrl}`;
-      }
+      const targetUrl = normalizeLensUrl(url);
 
       await Promise.race([
         wc.loadURL(targetUrl),

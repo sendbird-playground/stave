@@ -22,7 +22,7 @@
 ## Quick Start
 
 1. Open the right rail and choose `Lens`.
-2. Enter a URL such as `localhost:3000` or `https://example.com`.
+2. Enter a URL such as `http://localhost:3000` or `https://example.com`.
 3. Click the crosshair button to pick an element.
 4. Return to the active task draft and refine the appended Lens context into an instruction.
 
@@ -96,6 +96,8 @@
 - External agents need Local MCP because the Lens browser lives inside the desktop app. Without MCP, only the current renderer UI can access it.
 - `React _debugSource` only works in React dev builds. Production builds fall back to heuristic source hints.
 - Console and network logs are buffered, not infinite. Lens keeps the most recent entries only.
+- Lens console messages are mirrored into the Stave window DevTools console with a `[Lens:<workspaceId>]` prefix.
+- Lens hides while blocking overlays such as Settings are open so the native `WebContentsView` does not render above dialogs.
 - Lens is ideal for runtime inspection, but exact DOM-to-source mapping is still framework-dependent outside React dev mode.
 
 ## Troubleshooting

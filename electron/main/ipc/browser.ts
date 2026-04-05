@@ -21,6 +21,7 @@ import {
   evaluateExpression,
 } from "../browser/browser-cdp";
 import { getElementPickerScript } from "../browser/browser-element-picker";
+import { normalizeLensUrl } from "../browser/browser-url";
 import type {
   BrowserConsoleEntry,
   LensBounds,
@@ -220,15 +221,7 @@ export function registerBrowserHandlers() {
       if (!wc) return { ok: false, message: "No browser session" };
 
       try {
-        // Block dangerous schemes BEFORE normalisation so they are never masked.
-        let url = args.url.trim();
-        if (/^(file|chrome|javascript|data|vbscript):/i.test(url)) {
-          return { ok: false, message: `Blocked protocol: ${url}` };
-        }
-        // Add https:// if no protocol was given.
-        if (url && !/^[a-z]+:\/\//i.test(url)) {
-          url = `https://${url}`;
-        }
+        const url = normalizeLensUrl(args.url);
         await wc.loadURL(url);
         return { ok: true };
       } catch (err) {

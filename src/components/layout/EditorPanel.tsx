@@ -52,6 +52,7 @@ interface EditorPanelProps {
     projectPath?: string | null;
     section?: SectionId;
   }) => void;
+  lensOccluded?: boolean;
 }
 
 function getParentDirectoryPath(args: { path: string }) {
@@ -897,7 +898,9 @@ export function EditorPanel(props: EditorPanelProps) {
           {rightTab === "scripts" ? (
             <WorkspaceScriptsPanel onOpenSettings={props.onOpenSettings} />
           ) : null}
-          {rightTab === "lens" ? <WorkspaceLensPanel /> : null}
+          {rightTab === "lens" ? (
+            <WorkspaceLensPanel occluded={props.lensOccluded} />
+          ) : null}
         </RightRailPanelShell>
       </div>
       <ConfirmDialog

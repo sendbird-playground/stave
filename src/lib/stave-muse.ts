@@ -11,18 +11,18 @@ import {
 } from "@/lib/workspace-information";
 import type { ChatMessage, PromptDraft } from "@/types/chat";
 
-export const STAVE_ASSISTANT_SESSION_ID = "stave-assistant";
+export const STAVE_MUSE_SESSION_ID = "stave-muse";
 
-export type StaveAssistantTargetKind = "app" | "project" | "workspace";
-export type StaveAssistantDefaultTarget = "app" | "current-project" | "current-workspace";
+export type StaveMuseTargetKind = "app" | "project" | "workspace";
+export type StaveMuseDefaultTarget = "app" | "current-project" | "current-workspace";
 
-export interface StaveAssistantTarget {
-  kind: StaveAssistantTargetKind;
+export interface StaveMuseTarget {
+  kind: StaveMuseTargetKind;
 }
 
-export interface StaveAssistantState {
+export interface StaveMuseState {
   open: boolean;
-  target: StaveAssistantTarget;
+  target: StaveMuseTarget;
   messages: ChatMessage[];
   promptDraft: PromptDraft;
   activeTurnId?: string;
@@ -31,13 +31,13 @@ export interface StaveAssistantState {
   focusNonce: number;
 }
 
-export interface StaveAssistantProjectSummary {
+export interface StaveMuseProjectSummary {
   projectName: string;
   projectPath: string;
   isCurrent: boolean;
 }
 
-export interface StaveAssistantWorkspaceSummary {
+export interface StaveMuseWorkspaceSummary {
   id: string;
   name: string;
   branch?: string;
@@ -45,24 +45,24 @@ export interface StaveAssistantWorkspaceSummary {
   isDefault: boolean;
 }
 
-export interface StaveAssistantTaskSummary {
+export interface StaveMuseTaskSummary {
   id: string;
   title: string;
   isActive: boolean;
   isResponding: boolean;
 }
 
-export interface StaveAssistantLocalActionContext {
+export interface StaveMuseLocalActionContext {
   projectName: string | null;
   projectPath: string | null;
-  projects: StaveAssistantProjectSummary[];
-  workspaces: StaveAssistantWorkspaceSummary[];
-  tasks: StaveAssistantTaskSummary[];
+  projects: StaveMuseProjectSummary[];
+  workspaces: StaveMuseWorkspaceSummary[];
+  tasks: StaveMuseTaskSummary[];
   activeTaskId: string;
   workspaceInformation: WorkspaceInformationState;
 }
 
-export type StaveAssistantLocalAction =
+export type StaveMuseLocalAction =
   | { kind: "show_summary" }
   | { kind: "open_settings" }
   | { kind: "toggle_information_panel"; open?: boolean }
@@ -141,7 +141,7 @@ function extractTrailingValue(args: { input: string; prefixes: string[] }) {
 
 function findWorkspaceByText(args: {
   input: string;
-  workspaces: StaveAssistantWorkspaceSummary[];
+  workspaces: StaveMuseWorkspaceSummary[];
 }) {
   const query = normalizeSearch(args.input);
   return args.workspaces.find((workspace) => {
@@ -154,9 +154,36 @@ function findWorkspaceByText(args: {
   }) ?? null;
 }
 
+export function findStaveMuseWorkspaceMention(args: {
+  input: string;
+  workspaces: StaveMuseWorkspaceSummary[];
+}) {
+  const query = normalizeSearch(args.input);
+  return args.workspaces.find((workspace) => {
+    const candidates = [
+      workspace.name,
+      workspace.branch ?? "",
+      workspace.isDefault ? "default workspace" : "",
+      workspace.isDefault ? "기본 워크스페이스" : "",
+    ];
+    return candidates.some((candidate) => {
+      const normalizedCandidate = normalizeSearch(candidate);
+      return Boolean(normalizedCandidate) && query.includes(normalizedCandidate);
+    });
+  }) ?? null;
+}
+
+export function getStaveMuseRuntimeCwd() {
+  const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  if (/\bWindows\b/i.test(userAgent)) {
+    return "C:\\Windows\\Temp";
+  }
+  return "/tmp";
+}
+
 function findProjectByText(args: {
   input: string;
-  projects: StaveAssistantProjectSummary[];
+  projects: StaveMuseProjectSummary[];
 }) {
   const query = normalizeSearch(args.input);
   return args.projects.find((project) => (
@@ -167,10 +194,21 @@ function findProjectByText(args: {
 
 function findTaskByText(args: {
   input: string;
-  tasks: StaveAssistantTaskSummary[];
+  tasks: StaveMuseTaskSummary[];
 }) {
   const query = normalizeSearch(args.input);
   return args.tasks.find((task) => normalizeSearch(task.title).includes(query)) ?? null;
+}
+
+function findTaskMentionInInput(args: {
+  input: string;
+  tasks: StaveMuseTaskSummary[];
+}) {
+  const query = normalizeSearch(args.input);
+  return args.tasks.find((task) => {
+    const title = normalizeSearch(task.title);
+    return Boolean(title) && (query.includes(title) || query.includes(normalizeSearch(task.id)));
+  }) ?? null;
 }
 
 function findTodoByText(args: {
@@ -199,6 +237,21 @@ function detectWorkspaceInfoFieldType(input: string): WorkspaceInfoFieldType | n
   return null;
 }
 
+function isTaskSelectionIntent(input: string) {
+  return (input.includes("task") || input.includes("태스크"))
+    && (
+      input.includes("open")
+      || input.includes("select")
+      || input.includes("switch")
+      || input.includes("activate")
+      || input.includes("click")
+      || input.includes("열")
+      || input.includes("선택")
+      || input.includes("활성")
+      || input.includes("클릭")
+    );
+}
+
 function summarizeInformationState(info: WorkspaceInformationState) {
   return [
     `Notes: ${info.notes.trim() ? "present" : "empty"}`,
@@ -212,11 +265,11 @@ function summarizeInformationState(info: WorkspaceInformationState) {
   ].join("\n");
 }
 
-export function buildStaveAssistantContextSnapshot(args: {
-  target: StaveAssistantTarget;
-  context: StaveAssistantLocalActionContext;
+export function buildStaveMuseContextSnapshot(args: {
+  target: StaveMuseTarget;
+  context: StaveMuseLocalActionContext;
 }) {
-  const scopeLabel = formatStaveAssistantTargetLabel({ target: args.target });
+  const scopeLabel = formatStaveMuseTargetLabel({ target: args.target });
   const currentProjectLabel = args.context.projectPath
     ? `${args.context.projectName ?? "Current project"} (\`${args.context.projectPath}\`)`
     : "No project open";
@@ -232,7 +285,7 @@ export function buildStaveAssistantContextSnapshot(args: {
     : ["- No tasks"];
 
   return [
-    `Stave Assistant scope: ${scopeLabel}`,
+    `Stave Muse scope: ${scopeLabel}`,
     "",
     `Current project: ${currentProjectLabel}`,
     "",
@@ -247,8 +300,8 @@ export function buildStaveAssistantContextSnapshot(args: {
   ].join("\n");
 }
 
-export function formatStaveAssistantTargetLabel(args: {
-  target: StaveAssistantTarget;
+export function formatStaveMuseTargetLabel(args: {
+  target: StaveMuseTarget;
 }) {
   switch (args.target.kind) {
     case "app":
@@ -261,11 +314,11 @@ export function formatStaveAssistantTargetLabel(args: {
   }
 }
 
-export function createEmptyStaveAssistantState(args?: {
-  defaultTarget?: StaveAssistantDefaultTarget;
-}): StaveAssistantState {
-  const defaultTarget = args?.defaultTarget ?? "current-project";
-  const target: StaveAssistantTarget = {
+export function createEmptyStaveMuseState(args?: {
+  defaultTarget?: StaveMuseDefaultTarget;
+}): StaveMuseState {
+  const defaultTarget = args?.defaultTarget ?? "app";
+  const target: StaveMuseTarget = {
     kind: defaultTarget === "app"
       ? "app"
       : defaultTarget === "current-workspace"
@@ -284,12 +337,12 @@ export function createEmptyStaveAssistantState(args?: {
   };
 }
 
-export function buildStaveAssistantSummaryResponse(args: {
-  target: StaveAssistantTarget;
-  context: StaveAssistantLocalActionContext;
+export function buildStaveMuseSummaryResponse(args: {
+  target: StaveMuseTarget;
+  context: StaveMuseLocalActionContext;
 }) {
   const lines: string[] = [];
-  lines.push(`Scope: ${formatStaveAssistantTargetLabel({ target: args.target })}`);
+  lines.push(`Scope: ${formatStaveMuseTargetLabel({ target: args.target })}`);
   lines.push(`Project: ${args.context.projectName ?? "No project open"}`);
   if (args.context.projectPath) {
     lines.push(`Path: \`${args.context.projectPath}\``);
@@ -302,11 +355,11 @@ export function buildStaveAssistantSummaryResponse(args: {
   return lines.join("\n");
 }
 
-export function resolveStaveAssistantLocalAction(args: {
+export function resolveStaveMuseLocalAction(args: {
   input: string;
-  context: StaveAssistantLocalActionContext;
+  context: StaveMuseLocalActionContext;
   allowDirectWorkspaceInfoEdits: boolean;
-}): StaveAssistantLocalAction | null {
+}): StaveMuseLocalAction | null {
   const raw = normalizeWhitespace(args.input);
   const input = raw.toLowerCase();
 
@@ -430,6 +483,20 @@ export function resolveStaveAssistantLocalAction(args: {
   if (selectTaskValue) {
     const task = findTaskByText({
       input: selectTaskValue.replace(/^(to|열기|선택)\s+/i, ""),
+      tasks: args.context.tasks,
+    });
+    if (task) {
+      return {
+        kind: "select_task",
+        taskId: task.id,
+        taskTitle: task.title,
+      };
+    }
+  }
+
+  if (isTaskSelectionIntent(input)) {
+    const task = findTaskMentionInInput({
+      input: quoteWrapped(raw) ?? raw,
       tasks: args.context.tasks,
     });
     if (task) {
@@ -569,13 +636,13 @@ export function resolveStaveAssistantLocalAction(args: {
   return null;
 }
 
-export function buildStaveAssistantLocalActionResponse(args: {
-  action: StaveAssistantLocalAction;
-  context: StaveAssistantLocalActionContext;
+export function buildStaveMuseLocalActionResponse(args: {
+  action: StaveMuseLocalAction;
+  context: StaveMuseLocalActionContext;
 }) {
   switch (args.action.kind) {
     case "show_summary":
-      return buildStaveAssistantSummaryResponse({
+      return buildStaveMuseSummaryResponse({
         target: { kind: "app" },
         context: args.context,
       });

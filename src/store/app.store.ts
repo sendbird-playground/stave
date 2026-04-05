@@ -100,21 +100,37 @@ import {
   type WorkspaceInformationState,
 } from "@/lib/workspace-information";
 import {
-  buildStaveAssistantContextSnapshot,
-  buildStaveAssistantLocalActionResponse,
-  buildStaveAssistantSummaryResponse,
-  createEmptyStaveAssistantState,
-  formatStaveAssistantTargetLabel,
-  resolveStaveAssistantLocalAction,
-  STAVE_ASSISTANT_SESSION_ID,
-  type StaveAssistantDefaultTarget,
-  type StaveAssistantLocalAction,
-  type StaveAssistantLocalActionContext,
-  type StaveAssistantProjectSummary,
-  type StaveAssistantState,
-  type StaveAssistantTaskSummary,
-  type StaveAssistantWorkspaceSummary,
-} from "@/lib/stave-assistant";
+  buildStaveMuseContextSnapshot,
+  buildStaveMuseLocalActionResponse,
+  buildStaveMuseSummaryResponse,
+  createEmptyStaveMuseState,
+  findStaveMuseWorkspaceMention,
+  getStaveMuseRuntimeCwd,
+  formatStaveMuseTargetLabel,
+  resolveStaveMuseLocalAction,
+  STAVE_MUSE_SESSION_ID,
+  type StaveMuseDefaultTarget,
+  type StaveMuseLocalAction,
+  type StaveMuseLocalActionContext,
+  type StaveMuseProjectSummary,
+  type StaveMuseState,
+  type StaveMuseTaskSummary,
+  type StaveMuseWorkspaceSummary,
+} from "@/lib/stave-muse";
+import {
+  buildStaveMuseInstructionContextPart,
+  buildStaveMuseRouterPrompt,
+  DEFAULT_STAVE_MUSE_CHAT_PROMPT,
+  DEFAULT_STAVE_MUSE_PLANNER_PROMPT,
+  DEFAULT_STAVE_MUSE_ROUTER_PROMPT,
+} from "@/lib/stave-muse-prompts";
+import {
+  DEFAULT_STAVE_MUSE_ROUTING_DECISION,
+  isStaveMuseExplicitTaskRequest,
+  parseStaveMuseRoutingDecision,
+  resolveStaveMuseFastPathDecision,
+  type StaveMuseRoutingDecision,
+} from "@/lib/stave-muse-routing";
 import {
   findLatestPendingApprovalPart,
   findPendingApprovalMessageByRequestId,
@@ -398,13 +414,16 @@ export interface AppSettings {
   staveAutoMaxParallelSubtasks: number;
   staveAutoAllowCrossProviderWorkers: boolean;
   staveAutoFastMode: boolean;
-  /** Control-plane defaults used by the global Stave Assistant widget. */
-  assistantDefaultTarget: StaveAssistantDefaultTarget;
-  assistantRouterModel: string;
-  assistantChatModel: string;
-  assistantPlannerModel: string;
-  assistantAutoHandoffToTask: boolean;
-  assistantAllowDirectWorkspaceInfoEdits: boolean;
+  /** Control-plane defaults used by the global Stave Muse widget. */
+  museDefaultTarget: StaveMuseDefaultTarget;
+  museRouterModel: string;
+  museChatModel: string;
+  musePlannerModel: string;
+  museRouterPrompt: string;
+  museChatPrompt: string;
+  musePlannerPrompt: string;
+  museAutoHandoffToTask: boolean;
+  museAllowDirectWorkspaceInfoEdits: boolean;
   rulesPresetPrimary: string;
   rulesPresetSecondary: string;
   permissionMode: "require-approval" | "auto-safe";
@@ -545,7 +564,7 @@ interface AppState {
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
   taskWorkspaceIdById: Record<string, string>;
-  staveAssistant: StaveAssistantState;
+  staveMuse: StaveMuseState;
   hydrateProjectRegistry: () => Promise<void>;
   flushProjectRegistry: () => Promise<void>;
   hydrateWorkspaces: () => Promise<void>;
@@ -619,15 +638,15 @@ interface AppState {
   markAllNotificationsRead: () => Promise<void>;
   openNotificationContext: (args: { notificationId: string }) => Promise<NotificationContextOpenResult>;
   resolveNotificationApproval: (args: { notificationId: string; approved: boolean }) => Promise<void>;
-  setStaveAssistantOpen: (args: { open: boolean }) => void;
-  focusStaveAssistant: () => void;
-  setStaveAssistantTarget: (args: { kind: StaveAssistantState["target"]["kind"] }) => void;
-  clearStaveAssistantConversation: () => void;
-  updateStaveAssistantPromptDraft: (args: { patch: Partial<PromptDraft> }) => void;
-  sendStaveAssistantMessage: (args: { content: string }) => Promise<void>;
-  abortStaveAssistantTurn: () => void;
-  resolveStaveAssistantApproval: (args: { messageId: string; approved: boolean }) => Promise<void>;
-  resolveStaveAssistantUserInput: (args: {
+  setStaveMuseOpen: (args: { open: boolean }) => void;
+  focusStaveMuse: () => void;
+  setStaveMuseTarget: (args: { kind: StaveMuseState["target"]["kind"] }) => void;
+  clearStaveMuseConversation: () => void;
+  updateStaveMusePromptDraft: (args: { patch: Partial<PromptDraft> }) => void;
+  sendStaveMuseMessage: (args: { content: string }) => Promise<void>;
+  abortStaveMuseTurn: () => void;
+  resolveStaveMuseApproval: (args: { messageId: string; approved: boolean }) => Promise<void>;
+  resolveStaveMuseUserInput: (args: {
     messageId: string;
     answers?: Record<string, string>;
     denied?: boolean;
@@ -920,7 +939,7 @@ function buildApprovalNotificationInputs(args: {
 }
 
 const ARCHIVED_TASK_TURN_NOTICE = "Generation stopped because the task was archived before this turn completed.";
-export const STAVE_ASSISTANT_OPEN_SETTINGS_EVENT = "stave:assistant-open-settings";
+export const STAVE_MUSE_OPEN_SETTINGS_EVENT = "stave:muse-open-settings";
 const DEFAULT_STAVE_AUTO_MODEL_SETTINGS = buildStaveAutoModelSettingsPatch({
   presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
 });
@@ -959,12 +978,15 @@ const defaultSettings: AppSettings = {
   staveAutoMaxParallelSubtasks: 2,
   staveAutoAllowCrossProviderWorkers: true,
   staveAutoFastMode: false,
-  assistantDefaultTarget: "current-project",
-  assistantRouterModel: DEFAULT_STAVE_AUTO_MODEL_SETTINGS.staveAutoClassifierModel,
-  assistantChatModel: DEFAULT_STAVE_AUTO_MODEL_SETTINGS.staveAutoGeneralModel,
-  assistantPlannerModel: DEFAULT_STAVE_AUTO_MODEL_SETTINGS.staveAutoPlanModel,
-  assistantAutoHandoffToTask: true,
-  assistantAllowDirectWorkspaceInfoEdits: true,
+  museDefaultTarget: "app",
+  museRouterModel: "gpt-5.4-mini",
+  museChatModel: "gpt-5.4-mini",
+  musePlannerModel: "gpt-5.4",
+  museRouterPrompt: DEFAULT_STAVE_MUSE_ROUTER_PROMPT,
+  museChatPrompt: DEFAULT_STAVE_MUSE_CHAT_PROMPT,
+  musePlannerPrompt: DEFAULT_STAVE_MUSE_PLANNER_PROMPT,
+  museAutoHandoffToTask: true,
+  museAllowDirectWorkspaceInfoEdits: true,
   rulesPresetPrimary: "typescript-best-practices",
   rulesPresetSecondary: "no-target-brand-keyword",
   permissionMode: "auto-safe",
@@ -1154,7 +1176,7 @@ function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspa
     + Object.values(snapshot.messageCountByTask).reduce((sum, count) => sum + count, 0);
 }
 
-function buildStaveAssistantLocalActionContextFromState(state: Pick<
+function buildStaveMuseLocalActionContextFromState(state: Pick<
   AppState,
   | "activeWorkspaceId"
   | "projectName"
@@ -1168,19 +1190,19 @@ function buildStaveAssistantLocalActionContextFromState(state: Pick<
   | "activeTaskId"
   | "activeTurnIdsByTask"
 >) {
-  const projects: StaveAssistantProjectSummary[] = state.recentProjects.map((project) => ({
+  const projects: StaveMuseProjectSummary[] = state.recentProjects.map((project) => ({
     projectName: project.projectName,
     projectPath: project.projectPath,
     isCurrent: project.projectPath === state.projectPath,
   }));
-  const workspaces: StaveAssistantWorkspaceSummary[] = state.workspaces.map((workspace) => ({
+  const workspaces: StaveMuseWorkspaceSummary[] = state.workspaces.map((workspace) => ({
     id: workspace.id,
     name: workspace.name,
     branch: state.workspaceBranchById[workspace.id],
     isActive: workspace.id === state.activeWorkspaceId,
     isDefault: Boolean(state.workspaceDefaultById[workspace.id]),
   }));
-  const tasks: StaveAssistantTaskSummary[] = state.tasks
+  const tasks: StaveMuseTaskSummary[] = state.tasks
     .filter((task) => !isTaskArchived(task))
     .map((task) => ({
       id: task.id,
@@ -1197,16 +1219,16 @@ function buildStaveAssistantLocalActionContextFromState(state: Pick<
     tasks,
     activeTaskId: state.activeTaskId,
     workspaceInformation: state.workspaceInformation,
-  } satisfies StaveAssistantLocalActionContext;
+  } satisfies StaveMuseLocalActionContext;
 }
 
-function createStaveAssistantUserMessage(args: {
+function createStaveMuseUserMessage(args: {
   content: string;
   existingMessages: ChatMessage[];
 }): ChatMessage {
   return {
     id: buildMessageId({
-      taskId: STAVE_ASSISTANT_SESSION_ID,
+      taskId: STAVE_MUSE_SESSION_ID,
       count: args.existingMessages.length,
     }),
     role: "user",
@@ -1217,17 +1239,17 @@ function createStaveAssistantUserMessage(args: {
   };
 }
 
-function createStaveAssistantAssistantMessage(args: {
+function createStaveMuseAssistantMessage(args: {
   content: string;
-  existingMessages: ChatMessage[];
+  messageCount: number;
   providerId: ProviderId;
   model: string;
 }): ChatMessage {
   const timestamp = buildRecentTimestamp();
   return {
     id: buildMessageId({
-      taskId: STAVE_ASSISTANT_SESSION_ID,
-      count: args.existingMessages.length + 1,
+      taskId: STAVE_MUSE_SESSION_ID,
+      count: args.messageCount,
     }),
     role: "assistant",
     model: args.model,
@@ -1242,17 +1264,28 @@ function createStaveAssistantAssistantMessage(args: {
   };
 }
 
-function appendStaveAssistantStandaloneMessage(args: {
-  assistant: StaveAssistantState;
+function buildClearedStaveMusePromptDraft(assistant: StaveMuseState): PromptDraft {
+  return {
+    text: "",
+    attachedFilePaths: [],
+    attachments: [],
+    ...(assistant.promptDraft.runtimeOverrides
+      ? { runtimeOverrides: assistant.promptDraft.runtimeOverrides }
+      : {}),
+  };
+}
+
+function appendStaveMuseStandaloneMessage(args: {
+  assistant: StaveMuseState;
   content: string;
   providerId?: ProviderId;
   model?: string;
 }) {
-  const assistantMessage = createStaveAssistantAssistantMessage({
+  const assistantMessage = createStaveMuseAssistantMessage({
     content: args.content,
-    existingMessages: args.assistant.messages,
+    messageCount: args.assistant.messages.length,
     providerId: args.providerId ?? "stave",
-    model: args.model ?? "stave-assistant",
+    model: args.model ?? "stave-muse",
   });
 
   return {
@@ -1260,15 +1293,33 @@ function appendStaveAssistantStandaloneMessage(args: {
     messages: [...args.assistant.messages, assistantMessage],
     open: true,
     focusNonce: args.assistant.focusNonce + 1,
-  } satisfies StaveAssistantState;
+  } satisfies StaveMuseState;
 }
 
-function hasSelectedAssistantWorkspace(state: Pick<AppState, "activeWorkspaceId" | "workspaces">) {
+function appendStaveMuseSubmittedUserMessage(args: {
+  assistant: StaveMuseState;
+  content: string;
+}) {
+  const userMessage = createStaveMuseUserMessage({
+    content: args.content,
+    existingMessages: args.assistant.messages,
+  });
+
+  return {
+    ...args.assistant,
+    messages: [...args.assistant.messages, userMessage],
+    promptDraft: buildClearedStaveMusePromptDraft(args.assistant),
+    open: true,
+    focusNonce: args.assistant.focusNonce + 1,
+  } satisfies StaveMuseState;
+}
+
+function hasSelectedMuseWorkspace(state: Pick<AppState, "activeWorkspaceId" | "workspaces">) {
   return Boolean(state.activeWorkspaceId)
     && state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId);
 }
 
-function coerceAssistantCustomFieldValue(args: {
+function coerceMuseCustomFieldValue(args: {
   field: WorkspaceInformationState["customFields"][number];
   value: string;
 }) {
@@ -1302,11 +1353,11 @@ function coerceAssistantCustomFieldValue(args: {
   }
 }
 
-function updateAssistantCustomField(args: {
+function updateMuseCustomField(args: {
   field: WorkspaceInformationState["customFields"][number];
   value: string;
 }): WorkspaceInformationState["customFields"][number] {
-  const nextValue = coerceAssistantCustomFieldValue(args);
+  const nextValue = coerceMuseCustomFieldValue(args);
   switch (args.field.type) {
     case "number":
       return {
@@ -1335,56 +1386,78 @@ function updateAssistantCustomField(args: {
   }
 }
 
-function appendStaveAssistantLocalExchange(args: {
-  assistant: StaveAssistantState;
+function appendStaveMuseLocalExchange(args: {
+  assistant: StaveMuseState;
   content: string;
   responseText: string;
   providerId?: ProviderId;
   model?: string;
 }) {
-  const userMessage = createStaveAssistantUserMessage({
+  const userMessage = createStaveMuseUserMessage({
     content: args.content,
     existingMessages: args.assistant.messages,
   });
   const messagesWithUser = [...args.assistant.messages, userMessage];
-  const assistantMessage = createStaveAssistantAssistantMessage({
+  const assistantMessage = createStaveMuseAssistantMessage({
     content: args.responseText,
-    existingMessages: messagesWithUser,
+    messageCount: messagesWithUser.length,
     providerId: args.providerId ?? "stave",
-    model: args.model ?? "stave-assistant",
+    model: args.model ?? "stave-muse",
   });
 
   return {
     ...args.assistant,
     messages: [...messagesWithUser, assistantMessage],
-    promptDraft: {
-      text: "",
-      attachedFilePaths: [],
-      attachments: [],
-      ...(args.assistant.promptDraft.runtimeOverrides
-        ? { runtimeOverrides: args.assistant.promptDraft.runtimeOverrides }
-        : {}),
-    },
+    promptDraft: buildClearedStaveMusePromptDraft(args.assistant),
     open: true,
     focusNonce: args.assistant.focusNonce + 1,
-  } satisfies StaveAssistantState;
+  } satisfies StaveMuseState;
 }
 
-function appendStaveAssistantPendingTurn(args: {
-  assistant: StaveAssistantState;
+function appendStaveMusePendingReply(args: {
+  assistant: StaveMuseState;
+  providerId: ProviderId;
+  model: string;
+  turnId: string;
+}) {
+  const currentMessages = args.assistant.messages;
+  const assistantMessage: ChatMessage = {
+    id: buildMessageId({
+      taskId: STAVE_MUSE_SESSION_ID,
+      count: currentMessages.length,
+    }),
+    role: "assistant",
+    model: args.model,
+    providerId: args.providerId,
+    content: "",
+    startedAt: buildRecentTimestamp(),
+    isStreaming: true,
+    parts: [],
+  };
+
+  return {
+    ...args.assistant,
+    messages: [...currentMessages, assistantMessage],
+    activeTurnId: args.turnId,
+    open: true,
+  } satisfies StaveMuseState;
+}
+
+function appendStaveMusePendingTurn(args: {
+  assistant: StaveMuseState;
   content: string;
   providerId: ProviderId;
   model: string;
   turnId: string;
 }) {
   const currentMessages = args.assistant.messages;
-  const userMessage = createStaveAssistantUserMessage({
+  const userMessage = createStaveMuseUserMessage({
     content: args.content,
     existingMessages: currentMessages,
   });
   const assistantMessage: ChatMessage = {
     id: buildMessageId({
-      taskId: STAVE_ASSISTANT_SESSION_ID,
+      taskId: STAVE_MUSE_SESSION_ID,
       count: currentMessages.length + 1,
     }),
     role: "assistant",
@@ -1400,21 +1473,14 @@ function appendStaveAssistantPendingTurn(args: {
     ...args.assistant,
     messages: [...currentMessages, userMessage, assistantMessage],
     activeTurnId: args.turnId,
-    promptDraft: {
-      text: "",
-      attachedFilePaths: [],
-      attachments: [],
-      ...(args.assistant.promptDraft.runtimeOverrides
-        ? { runtimeOverrides: args.assistant.promptDraft.runtimeOverrides }
-        : {}),
-    },
+    promptDraft: buildClearedStaveMusePromptDraft(args.assistant),
     open: true,
     focusNonce: args.assistant.focusNonce + 1,
-  } satisfies StaveAssistantState;
+  } satisfies StaveMuseState;
 }
 
-function applyProviderEventsToStaveAssistant(args: {
-  assistant: StaveAssistantState;
+function applyProviderEventsToStaveMuse(args: {
+  assistant: StaveMuseState;
   events: NormalizedProviderEvent[];
   provider: ProviderId;
   model: string;
@@ -1425,7 +1491,7 @@ function applyProviderEventsToStaveAssistant(args: {
   }
 
   const replayed = replayProviderEventsToTaskState({
-    taskId: STAVE_ASSISTANT_SESSION_ID,
+    taskId: STAVE_MUSE_SESSION_ID,
     messages: args.assistant.messages,
     events: args.events,
     provider: args.provider,
@@ -1441,70 +1507,80 @@ function applyProviderEventsToStaveAssistant(args: {
     activeTurnId: replayed.activeTurnId,
     nativeSessionReady: replayed.nativeSessionReady,
     providerSession: replayed.providerSession,
-  } satisfies StaveAssistantState;
+  } satisfies StaveMuseState;
 }
 
-async function collectStaveAssistantRoutingDecision(args: {
+async function collectStaveMuseRoutingDecision(args: {
   content: string;
   model: string;
   settings: AppSettings;
   contextSnapshot: string;
 }) {
+  const STAVE_MUSE_ROUTER_TIMEOUT_MS = 4_000;
+  const runtimeCwd = getStaveMuseRuntimeCwd();
+  const fastPathDecision = resolveStaveMuseFastPathDecision({
+    input: args.content,
+  });
+  if (fastPathDecision) {
+    return fastPathDecision;
+  }
   const provider = inferProviderIdFromModel({ model: args.model });
-  const prompt = [
-    "You route requests for the Stave Assistant widget.",
-    "Return JSON only with keys mode and reason.",
-    'mode must be one of: "chat", "planner", "handoff".',
-    'Use "handoff" for code changes, debugging, terminal or git-heavy work, or long-running implementation.',
-    'Use "planner" for workflow planning, settings strategy, or app-configuration design that should stay in the assistant.',
-    'Use "chat" for questions, summaries, explanations, and direct Stave control that does not need a task.',
-    "",
-    "Current Stave context:",
-    args.contextSnapshot,
-    "",
-    "User request:",
-    args.content,
-  ].join("\n");
+  const prompt = buildStaveMuseRouterPrompt({
+    instructionPrompt: args.settings.museRouterPrompt,
+    contextSnapshot: args.contextSnapshot,
+    userRequest: args.content,
+  });
 
-  return new Promise<{ mode: "chat" | "planner" | "handoff"; reason: string }>((resolve) => {
+  return new Promise<StaveMuseRoutingDecision>((resolve) => {
     let responseText = "";
+    let settled = false;
+    const finalize = (decision: StaveMuseRoutingDecision) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutHandle);
+      resolve(decision);
+    };
+    const timeoutHandle = setTimeout(() => {
+      finalize(DEFAULT_STAVE_MUSE_ROUTING_DECISION);
+    }, STAVE_MUSE_ROUTER_TIMEOUT_MS);
+    const runtimeOptions = buildProviderRuntimeOptions({
+      provider,
+      model: args.model,
+      settings: args.settings,
+    });
     runProviderTurn({
       provider,
       prompt,
-      taskId: `${STAVE_ASSISTANT_SESSION_ID}-router`,
-      runtimeOptions: buildProviderRuntimeOptions({
-        provider,
-        model: args.model,
-        settings: args.settings,
-      }),
+      taskId: `${STAVE_MUSE_SESSION_ID}-router`,
+      cwd: runtimeCwd,
+      runtimeOptions: {
+        ...runtimeOptions,
+        claudeAllowedTools: [],
+        claudeMaxTurns: 1,
+        codexApprovalPolicy: "never",
+        codexFastMode: true,
+        codexSandboxMode: "read-only",
+        providerTimeoutMs: Math.min(
+          runtimeOptions.providerTimeoutMs ?? STAVE_MUSE_ROUTER_TIMEOUT_MS,
+          STAVE_MUSE_ROUTER_TIMEOUT_MS,
+        ),
+      },
       onEvent: ({ event }) => {
         if (event.type === "text") {
           responseText += event.text;
           return;
         }
+        if (
+          event.type === "error"
+          || (event.type === "system" && event.content.startsWith("Provider stream failed:"))
+        ) {
+          finalize(DEFAULT_STAVE_MUSE_ROUTING_DECISION);
+          return;
+        }
         if (event.type === "done") {
-          const cleaned = responseText
-            .replace(/^```json\s*/i, "")
-            .replace(/^```\s*/i, "")
-            .replace(/\s*```$/i, "")
-            .trim();
-          try {
-            const parsed = JSON.parse(cleaned) as { mode?: string; reason?: string };
-            if (
-              parsed.mode === "chat"
-              || parsed.mode === "planner"
-              || parsed.mode === "handoff"
-            ) {
-              resolve({
-                mode: parsed.mode,
-                reason: typeof parsed.reason === "string" ? parsed.reason : "",
-              });
-              return;
-            }
-          } catch {
-            // fall through
-          }
-          resolve({ mode: "chat", reason: "" });
+          finalize(parseStaveMuseRoutingDecision(responseText));
         }
       },
     });
@@ -2275,8 +2351,8 @@ export const useAppStore = create<AppState>()(
       providerSessionByTask: {},
       workspaceRuntimeCacheById: {},
       taskWorkspaceIdById: {},
-      staveAssistant: createEmptyStaveAssistantState({
-        defaultTarget: defaultSettings.assistantDefaultTarget,
+      staveMuse: createEmptyStaveMuseState({
+        defaultTarget: defaultSettings.museDefaultTarget,
       }),
       hydrateProjectRegistry: async () => {
         const rawPersistedProjects = (await loadProjectRegistrySnapshot()) as RecentProjectState[];
@@ -3365,26 +3441,6 @@ export const useAppStore = create<AppState>()(
           }
         }
 
-        const runScriptHook = window.api?.scripts?.runHook;
-        if (runScriptHook) {
-          const scriptResult = await runScriptHook({
-            workspaceId,
-            trigger: "workspace.created",
-            projectPath: current.projectPath,
-            workspacePath,
-            workspaceName: branchName,
-            branch: branchName,
-          });
-          if (scriptResult.summary?.totalEntries) {
-            creationNotices.push({
-              level: scriptResult.ok ? "success" : "warning",
-              message: scriptResult.ok
-                ? `Ran ${scriptResult.summary.executedEntries} workspace create script${scriptResult.summary.executedEntries === 1 ? "" : "s"}.`
-                : `Workspace create scripts reported failures. ${scriptResult.summary.failures.map((failure) => `${failure.scriptId}: ${failure.message}`).join(" ")}`,
-            });
-          }
-        }
-
         try {
           files = await workspaceFsAdapter.listFiles();
         } catch {
@@ -3613,21 +3669,7 @@ export const useAppStore = create<AppState>()(
         const workspaceBranch = state.workspaceBranchById[workspaceId];
         const projectPath = state.projectPath;
         const runner = window.api?.terminal?.runCommand;
-        const runScriptHook = window.api?.scripts?.runHook;
         const stopWorkspaceScripts = window.api?.scripts?.stopAll;
-        if (runScriptHook && projectPath && workspacePath && workspaceBranch) {
-          const hookResult = await runScriptHook({
-            workspaceId,
-            trigger: "workspace.archiving",
-            projectPath,
-            workspacePath,
-            workspaceName: workspace?.name ?? workspaceBranch,
-            branch: workspaceBranch,
-          });
-          if (!hookResult.ok && hookResult.summary?.failures.length) {
-            console.warn("[workspace-scripts] archive hook failures", hookResult.summary.failures);
-          }
-        }
         if (stopWorkspaceScripts) {
           await stopWorkspaceScripts({ workspaceId });
         }
@@ -5092,60 +5134,60 @@ export const useAppStore = create<AppState>()(
         });
         await latestState.markNotificationRead({ id: notification.id });
       },
-      setStaveAssistantOpen: ({ open }) => {
+      setStaveMuseOpen: ({ open }) => {
         set((state) => {
-          if (state.staveAssistant.open === open) {
+          if (state.staveMuse.open === open) {
             return state;
           }
           return {
-            staveAssistant: {
-              ...state.staveAssistant,
+            staveMuse: {
+              ...state.staveMuse,
               open,
             },
           };
         });
       },
-      focusStaveAssistant: () => {
+      focusStaveMuse: () => {
         set((state) => ({
-          staveAssistant: {
-            ...state.staveAssistant,
+          staveMuse: {
+            ...state.staveMuse,
             open: true,
-            focusNonce: state.staveAssistant.focusNonce + 1,
+            focusNonce: state.staveMuse.focusNonce + 1,
           },
         }));
       },
-      setStaveAssistantTarget: ({ kind }) => {
+      setStaveMuseTarget: ({ kind }) => {
         set((state) => {
-          if (state.staveAssistant.target.kind === kind) {
+          if (state.staveMuse.target.kind === kind) {
             return state;
           }
           return {
-            staveAssistant: {
-              ...state.staveAssistant,
+            staveMuse: {
+              ...state.staveMuse,
               open: true,
               target: { kind },
             },
           };
         });
       },
-      clearStaveAssistantConversation: () => {
-        const activeTurnId = get().staveAssistant.activeTurnId;
+      clearStaveMuseConversation: () => {
+        const activeTurnId = get().staveMuse.activeTurnId;
         if (activeTurnId) {
           void window.api?.provider?.abortTurn?.({ turnId: activeTurnId });
         }
-        void window.api?.provider?.cleanupTask?.({ taskId: STAVE_ASSISTANT_SESSION_ID });
+        void window.api?.provider?.cleanupTask?.({ taskId: STAVE_MUSE_SESSION_ID });
         set((state) => ({
-          staveAssistant: {
-            ...createEmptyStaveAssistantState(),
-            open: state.staveAssistant.open,
-            target: state.staveAssistant.target,
-            focusNonce: state.staveAssistant.focusNonce + 1,
+          staveMuse: {
+            ...createEmptyStaveMuseState(),
+            open: state.staveMuse.open,
+            target: state.staveMuse.target,
+            focusNonce: state.staveMuse.focusNonce + 1,
           },
         }));
       },
-      updateStaveAssistantPromptDraft: ({ patch }) => {
+      updateStaveMusePromptDraft: ({ patch }) => {
         set((state) => {
-          const currentDraft = state.staveAssistant.promptDraft;
+          const currentDraft = state.staveMuse.promptDraft;
           const nextDraft = {
             text: currentDraft.text,
             attachedFilePaths: currentDraft.attachedFilePaths,
@@ -5168,45 +5210,40 @@ export const useAppStore = create<AppState>()(
             return state;
           }
           return {
-            staveAssistant: {
-              ...state.staveAssistant,
+            staveMuse: {
+              ...state.staveMuse,
               promptDraft: nextDraft,
             },
           };
         });
       },
-      sendStaveAssistantMessage: async ({ content }) => {
+      sendStaveMuseMessage: async ({ content }) => {
         const trimmedContent = content.trim();
         if (!trimmedContent) {
           return;
         }
 
-        if (get().staveAssistant.activeTurnId) {
+        const stateBeforeSubmit = get();
+        if (stateBeforeSubmit.staveMuse.activeTurnId) {
           return;
         }
 
-        const appendLocalExchange = (responseText: string, args?: {
-          providerId?: ProviderId;
-          model?: string;
-        }) => {
-          set((state) => ({
-            staveAssistant: appendStaveAssistantLocalExchange({
-              assistant: state.staveAssistant,
-              content: trimmedContent,
-              responseText,
-              providerId: args?.providerId,
-              model: args?.model,
-            }),
-          }));
-        };
+        const historyBeforeSubmit = stateBeforeSubmit.staveMuse.messages;
 
-        const appendStandalone = (responseText: string, args?: {
+        set((state) => ({
+          staveMuse: appendStaveMuseSubmittedUserMessage({
+            assistant: state.staveMuse,
+            content: trimmedContent,
+          }),
+        }));
+
+        const appendMuseResponse = (responseText: string, args?: {
           providerId?: ProviderId;
           model?: string;
         }) => {
           set((state) => ({
-            staveAssistant: appendStaveAssistantStandaloneMessage({
-              assistant: state.staveAssistant,
+            staveMuse: appendStaveMuseStandaloneMessage({
+              assistant: state.staveMuse,
               content: responseText,
               providerId: args?.providerId,
               model: args?.model,
@@ -5214,13 +5251,13 @@ export const useAppStore = create<AppState>()(
           }));
         };
 
-        const buildAssistantContext = () => buildStaveAssistantLocalActionContextFromState(get());
+        const buildMuseContext = () => buildStaveMuseLocalActionContextFromState(get());
         const ensureWorkspaceInfoContext = () => {
           const state = get();
-          if (hasSelectedAssistantWorkspace(state)) {
+          if (hasSelectedMuseWorkspace(state)) {
             return true;
           }
-          appendLocalExchange("Select a workspace first.");
+          appendMuseResponse("Select a workspace first.");
           return false;
         };
         const applyWorkspaceInformationUpdate = (
@@ -5234,29 +5271,29 @@ export const useAppStore = create<AppState>()(
         };
 
         const stateBeforeRouting = get();
-        const localAction = resolveStaveAssistantLocalAction({
+        const localAction = resolveStaveMuseLocalAction({
           input: trimmedContent,
-          context: buildAssistantContext(),
-          allowDirectWorkspaceInfoEdits: stateBeforeRouting.settings.assistantAllowDirectWorkspaceInfoEdits,
+          context: buildMuseContext(),
+          allowDirectWorkspaceInfoEdits: stateBeforeRouting.settings.museAllowDirectWorkspaceInfoEdits,
         });
 
         if (localAction) {
           switch (localAction.kind) {
             case "show_summary":
-              appendLocalExchange(buildStaveAssistantSummaryResponse({
-                target: get().staveAssistant.target,
-                context: buildAssistantContext(),
+              appendMuseResponse(buildStaveMuseSummaryResponse({
+                target: get().staveMuse.target,
+                context: buildMuseContext(),
               }));
               return;
             case "show_information_summary":
-              appendLocalExchange(buildStaveAssistantLocalActionResponse({
+              appendMuseResponse(buildStaveMuseLocalActionResponse({
                 action: localAction,
-                context: buildAssistantContext(),
+                context: buildMuseContext(),
               }));
               return;
             case "open_settings":
-              window.dispatchEvent(new CustomEvent(STAVE_ASSISTANT_OPEN_SETTINGS_EVENT, {
-                detail: { section: "assistant" },
+              window.dispatchEvent(new CustomEvent(STAVE_MUSE_OPEN_SETTINGS_EVENT, {
+                detail: { section: "muse" },
               }));
               break;
             case "toggle_information_panel":
@@ -5321,8 +5358,8 @@ export const useAppStore = create<AppState>()(
               await get().openProject({ projectPath: localAction.projectPath });
               break;
             case "create_task":
-              if (!hasSelectedAssistantWorkspace(get())) {
-                appendLocalExchange("Open a project workspace first.");
+              if (!hasSelectedMuseWorkspace(get())) {
+                appendMuseResponse("Open a project workspace first.");
                 return;
               }
               get().createTask({ title: localAction.title });
@@ -5474,7 +5511,7 @@ export const useAppStore = create<AppState>()(
                 ...current,
                 customFields: current.customFields.map((field) => (
                   field.id === localAction.fieldId
-                    ? updateAssistantCustomField({
+                    ? updateMuseCustomField({
                         field,
                         value: localAction.value,
                       })
@@ -5486,89 +5523,99 @@ export const useAppStore = create<AppState>()(
               break;
           }
 
-          appendLocalExchange(buildStaveAssistantLocalActionResponse({
+          appendMuseResponse(buildStaveMuseLocalActionResponse({
             action: localAction,
-            context: buildAssistantContext(),
+            context: buildMuseContext(),
           }));
           return;
         }
 
-        const contextSnapshot = buildStaveAssistantContextSnapshot({
-          target: stateBeforeRouting.staveAssistant.target,
-          context: buildAssistantContext(),
+        const contextSnapshot = buildStaveMuseContextSnapshot({
+          target: stateBeforeRouting.staveMuse.target,
+          context: buildMuseContext(),
         });
-        const routingDecision = await collectStaveAssistantRoutingDecision({
+        const routingDecision = await collectStaveMuseRoutingDecision({
           content: trimmedContent,
-          model: stateBeforeRouting.settings.assistantRouterModel,
+          model: stateBeforeRouting.settings.museRouterModel,
           settings: stateBeforeRouting.settings,
           contextSnapshot,
         });
 
-        if (routingDecision.mode === "handoff" && stateBeforeRouting.settings.assistantAutoHandoffToTask) {
+        const explicitTaskRequest = isStaveMuseExplicitTaskRequest(trimmedContent);
+        if (routingDecision.mode === "handoff") {
           const currentState = get();
-          if (!hasSelectedAssistantWorkspace(currentState)) {
-            appendLocalExchange("Open a project workspace first so I can hand this off to a task.");
+          if (!currentState.settings.museAutoHandoffToTask && !explicitTaskRequest) {
+            appendMuseResponse(
+              "This request needs task chat. Turn on Auto Handoff To Task or ask Muse to open a task for it.",
+              { model: "stave-muse-router" },
+            );
+            return;
+          }
+          if (!hasSelectedMuseWorkspace(currentState)) {
+            appendMuseResponse("Open a project workspace first so I can hand this off to a task.");
             return;
           }
 
-          const nextTitle = normalizeSuggestedTaskTitle({ title: trimmedContent }) ?? "Assistant Task";
-          currentState.createTask({ title: nextTitle });
+          const requestedWorkspace = findStaveMuseWorkspaceMention({
+            input: trimmedContent,
+            workspaces: buildMuseContext().workspaces,
+          });
+          if (requestedWorkspace && requestedWorkspace.id !== get().activeWorkspaceId) {
+            await get().switchWorkspace({ workspaceId: requestedWorkspace.id });
+          }
+
+          const nextTitle = normalizeSuggestedTaskTitle({ title: trimmedContent }) ?? "Muse Task";
+          get().createTask({ title: nextTitle });
           const nextTaskId = get().activeTaskId;
           get().sendUserMessage({
             taskId: nextTaskId,
             content: trimmedContent,
           });
-          appendLocalExchange(
+          appendMuseResponse(
             `Created task "${nextTitle}" and handed the request off to task chat.${routingDecision.reason ? ` ${routingDecision.reason}` : ""}`,
-            { model: "stave-assistant-router" },
+            { model: "stave-muse-router" },
           );
           return;
         }
 
         const activeModel = routingDecision.mode === "planner"
-          ? stateBeforeRouting.settings.assistantPlannerModel
-          : stateBeforeRouting.settings.assistantChatModel;
+          ? stateBeforeRouting.settings.musePlannerModel
+          : stateBeforeRouting.settings.museChatModel;
         const provider = inferProviderIdFromModel({ model: activeModel });
         const turnId = crypto.randomUUID();
         const workspaceId = get().activeWorkspaceId || undefined;
-        const workspaceCwd = get().workspacePathById[get().activeWorkspaceId] ?? get().projectPath ?? undefined;
-        const existingHistory = get().staveAssistant.messages;
-        const providerSession = get().staveAssistant.providerSession;
-        const retrievedContextParts: CanonicalRetrievedContextPart[] = [{
-          type: "retrieved_context",
-          sourceId: "stave:assistant-context",
-          title: "Stave Assistant Context",
-          content: contextSnapshot,
-        }];
-        if (existingHistory.length === 0 && workspaceCwd) {
-          const repoMapText = getRepoMapContextCache(workspaceCwd);
-          if (repoMapText) {
-            retrievedContextParts.push({
-              type: "retrieved_context",
-              sourceId: "stave:repo-map",
-              title: "Codebase Map",
-              content: repoMapText,
-            });
-          }
-        }
+        const museRuntimeCwd = getStaveMuseRuntimeCwd();
+        const promptContextPart = buildStaveMuseInstructionContextPart({
+          mode: routingDecision.mode === "planner" ? "planner" : "chat",
+          prompt: routingDecision.mode === "planner"
+            ? stateBeforeRouting.settings.musePlannerPrompt
+            : stateBeforeRouting.settings.museChatPrompt,
+        });
+        const retrievedContextParts: CanonicalRetrievedContextPart[] = [
+          promptContextPart,
+          {
+            type: "retrieved_context",
+            sourceId: "stave:muse-context",
+            title: "Stave Muse Context",
+            content: contextSnapshot,
+          },
+        ];
 
         const conversation = buildCanonicalConversationRequest({
           turnId,
-          taskId: STAVE_ASSISTANT_SESSION_ID,
+          taskId: STAVE_MUSE_SESSION_ID,
           workspaceId,
           providerId: provider,
           model: activeModel,
-          history: existingHistory,
+          history: historyBeforeSubmit,
           userInput: trimmedContent,
           mode: "chat",
-          nativeSessionId: providerSession?.[provider] ?? null,
           retrievedContextParts,
         });
 
         set((state) => ({
-          staveAssistant: appendStaveAssistantPendingTurn({
-            assistant: state.staveAssistant,
-            content: trimmedContent,
+          staveMuse: appendStaveMusePendingReply({
+            assistant: state.staveMuse,
             providerId: provider,
             model: activeModel,
             turnId,
@@ -5578,8 +5625,8 @@ export const useAppStore = create<AppState>()(
         const providerTurnEventController = createProviderTurnEventController({
           flushEvents: (pendingEvents) => {
             set((state) => ({
-              staveAssistant: applyProviderEventsToStaveAssistant({
-                assistant: state.staveAssistant,
+              staveMuse: applyProviderEventsToStaveMuse({
+                assistant: state.staveMuse,
                 events: pendingEvents,
                 provider,
                 model: activeModel,
@@ -5594,32 +5641,42 @@ export const useAppStore = create<AppState>()(
           provider,
           prompt: trimmedContent,
           conversation,
-          taskId: STAVE_ASSISTANT_SESSION_ID,
+          taskId: STAVE_MUSE_SESSION_ID,
           workspaceId,
-          cwd: workspaceCwd,
-          runtimeOptions: buildProviderRuntimeOptions({
-            provider,
-            model: activeModel,
-            settings: get().settings,
-            providerSession,
-          }),
+          cwd: museRuntimeCwd,
+          runtimeOptions: {
+            ...buildProviderRuntimeOptions({
+              provider,
+              model: activeModel,
+              settings: get().settings,
+            }),
+            ...(provider === "claude-code"
+              ? {
+                  claudeDisallowedTools: ["Bash", "Glob", "Grep", "LS", "NotebookRead", "Read"],
+                  claudePermissionMode: "plan" as const,
+                }
+              : {
+                  codexApprovalPolicy: "never" as const,
+                  codexSandboxMode: "read-only" as const,
+                }),
+          },
           onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
         });
       },
-      abortStaveAssistantTurn: () => {
+      abortStaveMuseTurn: () => {
         const stateBefore = get();
-        const activeTurnId = stateBefore.staveAssistant.activeTurnId;
+        const activeTurnId = stateBefore.staveMuse.activeTurnId;
         if (activeTurnId) {
           void window.api?.provider?.abortTurn?.({ turnId: activeTurnId });
         }
-        void window.api?.provider?.cleanupTask?.({ taskId: STAVE_ASSISTANT_SESSION_ID });
+        void window.api?.provider?.cleanupTask?.({ taskId: STAVE_MUSE_SESSION_ID });
         set((state) => {
-          const current = state.staveAssistant.messages;
+          const current = state.staveMuse.messages;
           const target = current[current.length - 1];
           if (!target || target.role !== "assistant" || !target.isStreaming) {
             return {
-              staveAssistant: {
-                ...state.staveAssistant,
+              staveMuse: {
+                ...state.staveMuse,
                 activeTurnId: undefined,
                 providerSession: undefined,
                 nativeSessionReady: false,
@@ -5636,8 +5693,8 @@ export const useAppStore = create<AppState>()(
             ],
           };
           return {
-            staveAssistant: {
-              ...state.staveAssistant,
+            staveMuse: {
+              ...state.staveMuse,
               messages: [...current.slice(0, -1), aborted],
               activeTurnId: undefined,
               providerSession: undefined,
@@ -5646,16 +5703,16 @@ export const useAppStore = create<AppState>()(
           };
         });
       },
-      resolveStaveAssistantApproval: async ({ messageId, approved }) => {
+      resolveStaveMuseApproval: async ({ messageId, approved }) => {
         const stateBefore = get();
-        const activeTurnId = stateBefore.staveAssistant.activeTurnId;
-        const message = stateBefore.staveAssistant.messages.find((item) => item.id === messageId);
+        const activeTurnId = stateBefore.staveMuse.activeTurnId;
+        const message = stateBefore.staveMuse.messages.find((item) => item.id === messageId);
         const approvalPart = findLatestPendingApprovalPart({ message });
 
         const appendApprovalFailure = (failureText: string) => {
           set((state) => ({
-            staveAssistant: appendStaveAssistantStandaloneMessage({
-              assistant: state.staveAssistant,
+            staveMuse: appendStaveMuseStandaloneMessage({
+              assistant: state.staveMuse,
               content: failureText,
               providerId: "stave",
               model: "system",
@@ -5665,10 +5722,10 @@ export const useAppStore = create<AppState>()(
 
         const applyApprovalResponse = (requestId: string) => {
           set((state) => ({
-            staveAssistant: {
-              ...state.staveAssistant,
+            staveMuse: {
+              ...state.staveMuse,
               messages: updateMessageById({
-                messages: state.staveAssistant.messages,
+                messages: state.staveMuse.messages,
                 messageId,
                 update: (currentMessage) => ({
                   ...currentMessage,
@@ -5704,23 +5761,23 @@ export const useAppStore = create<AppState>()(
         }
 
         if (!activeTurnId && approvalPart && window.api?.provider?.respondApproval) {
-          appendApprovalFailure("Approval delivery failed: no active turn found for this assistant turn.");
+          appendApprovalFailure("Approval delivery failed: no active turn found for this Muse turn.");
           return;
         }
         if (approvalPart) {
           applyApprovalResponse(approvalPart.requestId);
         }
       },
-      resolveStaveAssistantUserInput: async ({ messageId, answers, denied }) => {
+      resolveStaveMuseUserInput: async ({ messageId, answers, denied }) => {
         const stateBefore = get();
-        const activeTurnId = stateBefore.staveAssistant.activeTurnId;
-        const message = stateBefore.staveAssistant.messages.find((item) => item.id === messageId);
+        const activeTurnId = stateBefore.staveMuse.activeTurnId;
+        const message = stateBefore.staveMuse.messages.find((item) => item.id === messageId);
         const userInputPart = findLatestPendingUserInputPart({ message });
 
         const appendUserInputFailure = (failureText: string) => {
           set((state) => ({
-            staveAssistant: appendStaveAssistantStandaloneMessage({
-              assistant: state.staveAssistant,
+            staveMuse: appendStaveMuseStandaloneMessage({
+              assistant: state.staveMuse,
               content: failureText,
               providerId: "stave",
               model: "system",
@@ -5730,10 +5787,10 @@ export const useAppStore = create<AppState>()(
 
         const applyUserInputResponse = (requestId: string) => {
           set((state) => ({
-            staveAssistant: {
-              ...state.staveAssistant,
+            staveMuse: {
+              ...state.staveMuse,
               messages: updateMessageById({
-                messages: state.staveAssistant.messages,
+                messages: state.staveMuse.messages,
                 messageId,
                 update: (currentMessage) => ({
                   ...currentMessage,
@@ -5771,7 +5828,7 @@ export const useAppStore = create<AppState>()(
         }
 
         if (!activeTurnId && userInputPart && window.api?.provider?.respondUserInput) {
-          appendUserInputFailure("User input delivery failed: no active turn found for this assistant turn.");
+          appendUserInputFailure("User input delivery failed: no active turn found for this Muse turn.");
           return;
         }
         if (userInputPart) {
@@ -6285,8 +6342,8 @@ export const useAppStore = create<AppState>()(
         });
       },
       resolveApproval: ({ taskId, messageId, approved }) => {
-        if (taskId === STAVE_ASSISTANT_SESSION_ID) {
-          void get().resolveStaveAssistantApproval({ messageId, approved });
+        if (taskId === STAVE_MUSE_SESSION_ID) {
+          void get().resolveStaveMuseApproval({ messageId, approved });
           return;
         }
         const stateBefore = get();
@@ -6388,8 +6445,8 @@ export const useAppStore = create<AppState>()(
         }
       },
       resolveUserInput: ({ taskId, messageId, answers, denied }) => {
-        if (taskId === STAVE_ASSISTANT_SESSION_ID) {
-          void get().resolveStaveAssistantUserInput({ messageId, answers, denied });
+        if (taskId === STAVE_MUSE_SESSION_ID) {
+          void get().resolveStaveMuseUserInput({ messageId, answers, denied });
           return;
         }
         const stateBefore = get();
@@ -6493,12 +6550,12 @@ export const useAppStore = create<AppState>()(
         }
       },
       resolveDiff: ({ taskId, messageId, accepted, partIndex }) => {
-        if (taskId === STAVE_ASSISTANT_SESSION_ID) {
+        if (taskId === STAVE_MUSE_SESSION_ID) {
           set((state) => ({
-            staveAssistant: {
-              ...state.staveAssistant,
+            staveMuse: {
+              ...state.staveMuse,
               messages: updateMessageById({
-                messages: state.staveAssistant.messages,
+                messages: state.staveMuse.messages,
                 messageId,
                 update: (message) => ({
                   ...message,
@@ -7025,10 +7082,10 @@ export const useAppStore = create<AppState>()(
         layout: state.layout,
         settings: state.settings,
         projectName: state.projectName,
-        staveAssistant: {
-          ...state.staveAssistant,
+        staveMuse: {
+          ...state.staveMuse,
           activeTurnId: undefined,
-          messages: state.staveAssistant.messages.slice(-40),
+          messages: state.staveMuse.messages.slice(-40),
         },
       }),
       onRehydrateStorage: () => (state) => {
@@ -7182,16 +7239,16 @@ export const useAppStore = create<AppState>()(
           }));
         }
         state.layout = normalizeLayoutState(state.layout);
-        state.staveAssistant = state.staveAssistant
+        state.staveMuse = state.staveMuse
           ? {
-              ...createEmptyStaveAssistantState({
-                defaultTarget: state.settings.assistantDefaultTarget,
+              ...createEmptyStaveMuseState({
+                defaultTarget: state.settings.museDefaultTarget,
               }),
-              ...state.staveAssistant,
+              ...state.staveMuse,
               activeTurnId: undefined,
             }
-          : createEmptyStaveAssistantState({
-              defaultTarget: state.settings.assistantDefaultTarget,
+          : createEmptyStaveMuseState({
+              defaultTarget: state.settings.museDefaultTarget,
             });
         const isDark = resolveDarkModeForTheme({
           themeMode: state.settings?.themeMode ?? "dark",
