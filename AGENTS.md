@@ -239,11 +239,17 @@ This applies to `useAppStore(...)`, `useStore(...)`, and any equivalent hook bui
 - When a component needs a derived object like `{ messageId, part }`, select stable primitives / existing references first, then assemble the derived object with `useMemo` outside the store hook.
 - Derive presentation arrays (`visibleMessages`, filtered tasks, grouped items, etc.) after the selector using `useMemo`, not inside the selector.
 - A selector that returns an existing object from store state or a primitive is usually safe. A selector that creates a new container is suspicious by default.
+- Treat broad subscriptions on hot list surfaces as a performance correctness bug, not optional polish. If a parent list subscribes to a large mutable map or object and that causes unrelated rows to re-render, the selector shape is wrong for this repo.
+- On list or tree surfaces, parent components should subscribe only to structural data needed to render the collection itself. Per-item runtime state must be subscribed inside row or item components when feasible.
+- Prefer keyed child subscriptions such as `useAppStore((state) => state.workspaceRuntimeCacheById[workspaceId])` over parent subscriptions to whole maps like `workspaceRuntimeCacheById`, `workspacePrInfoById`, `messagesByTask`, or similar store-wide registries.
+- Split selectors more aggressively on hot interaction paths when different parts of the UI change at different rates. It is better to compose a few stable selectors than to centralize unrelated state in one broad subscription.
+- When a list row needs multiple store-derived fields, prefer a row-local hook that selects only that row's stable primitives or existing references. Do not pass down a parent-selected status blob when the row can subscribe by ID instead.
 
 ### Required verification
 
 - Any change to hot renderer surfaces using Zustand subscriptions must check for selector stability before the work is considered complete.
 - High-risk surfaces include `ChatInput`, `PlanViewer`, `ChatPanel`, `ProjectWorkspaceSidebar`, `WorkspaceTaskTabs`, and task/workspace switch flows.
+- For those hot surfaces, evaluate selector granularity during authoring, not only during later performance audits. Ask whether inactive rows, tabs, or panes would re-render when one item's runtime state changes.
 - After changing selector logic on those surfaces, run `bun run typecheck` and the most relevant `bun test` targets.
 - If the change affects task switching, workspace switching, plan mode, replay drawers, or streaming UI, do a manual smoke check for those flows as well.
 - See `docs/developer/zustand-selector-stability.md` for examples and review checklist.
