@@ -26,6 +26,7 @@ import {
   resolveRootDirectoryPath,
   resolveRootFilePath,
   revisionFromStat,
+  writeFileWithExpectedRevision,
 } from "../utils/filesystem";
 import { getOrCreateRepoMap } from "../utils/repo-map";
 import { readWorkspaceSourceFiles } from "./filesystem-source-files";
@@ -443,17 +444,11 @@ export function registerFilesystemHandlers() {
       return { ok: false, stderr: "Invalid file path." };
     }
     try {
-      const beforeStat = await fs.stat(absolutePath);
-      const currentRevision = revisionFromStat({ size: beforeStat.size, mtimeMs: beforeStat.mtimeMs });
-      if (parsed.data.expectedRevision && parsed.data.expectedRevision !== currentRevision) {
-        return { ok: false, conflict: true, revision: currentRevision };
-      }
-      await fs.writeFile(absolutePath, parsed.data.content, "utf8");
-      const nextStat = await fs.stat(absolutePath);
-      return {
-        ok: true,
-        revision: revisionFromStat({ size: nextStat.size, mtimeMs: nextStat.mtimeMs }),
-      };
+      return await writeFileWithExpectedRevision({
+        filePath: absolutePath,
+        content: parsed.data.content,
+        expectedRevision: parsed.data.expectedRevision,
+      });
     } catch (error) {
       return { ok: false, stderr: String(error) };
     }

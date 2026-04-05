@@ -29,10 +29,11 @@ import type {
 import { buildExecutableLookupEnv } from "../../providers/executable-path";
 import {
   deleteWorkspaceScriptProcess,
+  getWorkspaceScriptStatusesForWorkspace,
   getScriptProcessKey,
+  recordWorkspaceScriptEvent,
   getWorkspaceScriptProcess,
   listWorkspaceScriptProcessKeys,
-  listWorkspaceScriptProcessesForWorkspace,
   setWorkspaceScriptProcess,
   type WorkspaceScriptProcess,
 } from "./state";
@@ -61,6 +62,7 @@ function emitScriptEvent(args: {
   source: WorkspaceScriptRunSource;
   event: WorkspaceScriptEvent;
 }) {
+  recordWorkspaceScriptEvent(args);
   broadcastScriptEvent(args);
 }
 
@@ -122,6 +124,7 @@ function createProcessEntry(args: {
     process: args.process,
     aborted: false,
     sessionId: args.sessionId,
+    log: "",
   };
   setWorkspaceScriptProcess(
     createProcessKey({
@@ -629,14 +632,7 @@ export async function runScriptHook(args: {
 export function getScriptStatuses(args: {
   workspaceId: string;
 }): WorkspaceScriptStatusEntry[] {
-  return listWorkspaceScriptProcessesForWorkspace(args.workspaceId).map((entry) => ({
-    scriptId: entry.scriptId,
-    scriptKind: entry.scriptKind,
-    running: !entry.aborted,
-    runId: entry.runId,
-    sessionId: entry.sessionId,
-    source: entry.source,
-  }));
+  return getWorkspaceScriptStatusesForWorkspace(args.workspaceId);
 }
 
 export async function stopAllWorkspaceScriptProcesses(args: {

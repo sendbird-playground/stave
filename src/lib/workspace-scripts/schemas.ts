@@ -42,8 +42,6 @@ export const ScriptHooksSchema = z.object({
   "task.archiving": z.array(ScriptHookRefSchema).optional(),
   "turn.started": z.array(ScriptHookRefSchema).optional(),
   "turn.completed": z.array(ScriptHookRefSchema).optional(),
-  "workspace.created": z.array(ScriptHookRefSchema).optional(),
-  "workspace.archiving": z.array(ScriptHookRefSchema).optional(),
   "pr.beforeOpen": z.array(ScriptHookRefSchema).optional(),
   "pr.afterOpen": z.array(ScriptHookRefSchema).optional(),
 });

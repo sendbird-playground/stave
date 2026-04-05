@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -8,7 +8,13 @@ import {
   FilesystemRootArgsSchema,
   FilesystemWriteFileArgsSchema,
 } from "../electron/main/ipc/schemas";
-import { listDirectoryEntries, listFilesRecursive, resolveRootFilePath } from "../electron/main/utils/filesystem";
+import {
+  listDirectoryEntries,
+  listFilesRecursive,
+  resolveRootFilePath,
+  revisionFromStat,
+  writeFileWithExpectedRevision,
+} from "../electron/main/utils/filesystem";
 
 const tempDirs: string[] = [];
 
@@ -165,5 +171,39 @@ describe("filesystem path helpers", () => {
 
     expect(rootEntries).toContainEqual({ name: "src", path: "src", type: "folder" });
     expect(srcEntries.some((entry) => entry.path === "src/self")).toBe(false);
+  });
+
+  test("writes a brand-new file when no revision is expected", async () => {
+    const workspaceRoot = createTempWorkspace();
+    mkdirSync(path.join(workspaceRoot, ".stave"), { recursive: true });
+    const filePath = path.join(workspaceRoot, ".stave", "scripts.json");
+
+    const result = await writeFileWithExpectedRevision({
+      filePath,
+      content: "{\n  \"version\": 2\n}\n",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.conflict).toBeUndefined();
+    expect(result.revision).toBeString();
+  });
+
+  test("treats a deleted file as a conflict when a prior revision is expected", async () => {
+    const workspaceRoot = createTempWorkspace();
+    mkdirSync(path.join(workspaceRoot, ".stave"), { recursive: true });
+    const filePath = path.join(workspaceRoot, ".stave", "scripts.json");
+    writeText(filePath, "{\n  \"version\": 1\n}\n");
+
+    const currentStat = statSync(filePath);
+    rmSync(filePath);
+
+    const result = await writeFileWithExpectedRevision({
+      filePath,
+      content: "{\n  \"version\": 2\n}\n",
+      expectedRevision: revisionFromStat({ size: currentStat.size, mtimeMs: currentStat.mtimeMs }),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.conflict).toBe(true);
   });
 });

@@ -7,6 +7,7 @@ import type { ScriptTrigger } from "./types";
 export const STAVE_CONFIG_DIR = ".stave";
 export const SCRIPTS_CONFIG_FILENAME = "scripts.json";
 export const SCRIPTS_LOCAL_CONFIG_FILENAME = "scripts.local.json";
+export const SCRIPT_LOG_HISTORY_LIMIT = 12_000;
 
 export const SCRIPT_TRIGGER_IDS: readonly ScriptTrigger[] = [
   "task.created",
@@ -15,14 +16,11 @@ export const SCRIPT_TRIGGER_IDS: readonly ScriptTrigger[] = [
   "turn.completed",
   "pr.beforeOpen",
   "pr.afterOpen",
-  "workspace.created",
-  "workspace.archiving",
 ] as const;
 
 export const SCRIPT_TRIGGER_METADATA: Record<ScriptTrigger, {
   label: string;
   description: string;
-  legacy?: boolean;
 }> = {
   "task.created": {
     label: "Task Created",
@@ -47,16 +45,6 @@ export const SCRIPT_TRIGGER_METADATA: Record<ScriptTrigger, {
   "pr.afterOpen": {
     label: "PR After Open",
     description: "Runs after Stave opens a pull request.",
-  },
-  "workspace.created": {
-    label: "Workspace Created",
-    description: "Legacy trigger for worktree creation bootstrap flows.",
-    legacy: true,
-  },
-  "workspace.archiving": {
-    label: "Workspace Archiving",
-    description: "Legacy trigger for workspace teardown flows.",
-    legacy: true,
   },
 };
 

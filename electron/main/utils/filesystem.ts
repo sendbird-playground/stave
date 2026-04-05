@@ -47,6 +47,43 @@ export function revisionFromStat(args: { size: number; mtimeMs: number }) {
   return `node:${args.size}:${Math.floor(args.mtimeMs)}`;
 }
 
+async function statIfExists(targetPath: string) {
+  try {
+    return await fs.stat(targetPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function writeFileWithExpectedRevision(args: {
+  filePath: string;
+  content: string;
+  expectedRevision?: string | null;
+}) {
+  const beforeStat = await statIfExists(args.filePath);
+  if (beforeStat) {
+    if (!beforeStat.isFile()) {
+      return { ok: false as const, stderr: "A folder already exists at this path." };
+    }
+    const currentRevision = revisionFromStat({ size: beforeStat.size, mtimeMs: beforeStat.mtimeMs });
+    if (args.expectedRevision && args.expectedRevision !== currentRevision) {
+      return { ok: false as const, conflict: true as const, revision: currentRevision };
+    }
+  } else if (args.expectedRevision) {
+    return { ok: false as const, conflict: true as const };
+  }
+
+  await fs.writeFile(args.filePath, args.content, "utf8");
+  const nextStat = await fs.stat(args.filePath);
+  return {
+    ok: true as const,
+    revision: revisionFromStat({ size: nextStat.size, mtimeMs: nextStat.mtimeMs }),
+  };
+}
+
 export function isIgnoredDirectory(args: { name: string }) {
   return IGNORED_DIRECTORY_NAMES.has(args.name);
 }

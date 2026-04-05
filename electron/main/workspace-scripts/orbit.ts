@@ -10,9 +10,14 @@ import type { ResolvedWorkspaceScriptOrbitConfig } from "../../../src/lib/worksp
 const require = createRequire(import.meta.url);
 
 export const ORBIT_URL_MARKER = "__STAVE_ORBIT_URL__=";
+export const DEFAULT_ORBIT_PROXY_PORT = 1355;
 
 function shellQuote(value: string) {
   return `'${value.replaceAll("'", `'\"'\"'`)}'`;
+}
+
+function shellAssign(name: string, value: string) {
+  return `${name}=${shellQuote(value)}`;
 }
 
 export function sanitizeOrbitName(value: string | undefined) {
@@ -62,11 +67,12 @@ export function buildOrbitCommand(args: {
   portlessCommand: string;
 }) {
   const childScript = `printf '%s%s\n' ${shellQuote(ORBIT_URL_MARKER)} "$PORTLESS_URL"; ${args.command}`;
+  const proxyPort = String(args.orbit.proxyPort ?? DEFAULT_ORBIT_PROXY_PORT);
   const segments = [
+    shellAssign("PORTLESS_PORT", proxyPort),
+    ...(args.orbit.noTls ? [shellAssign("PORTLESS_HTTPS", "0")] : []),
     shellQuote(args.portlessCommand),
     "run",
-    ...(args.orbit.noTls ? ["--no-tls"] : []),
-    ...(args.orbit.proxyPort ? ["-p", String(args.orbit.proxyPort)] : []),
     "--name",
     shellQuote(sanitizeOrbitName(args.orbit.name || args.defaultName)),
     "sh",

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
-import { SCRIPT_TRIGGER_METADATA } from "@/lib/workspace-scripts";
+import { SCRIPT_LOG_HISTORY_LIMIT, SCRIPT_TRIGGER_METADATA } from "@/lib/workspace-scripts";
 import type {
   ScriptKind,
   ScriptTrigger,
@@ -36,8 +36,6 @@ interface ScriptUiState {
   sourceLabel?: string;
 }
 
-const MAX_LOG_LENGTH = 12_000;
-
 function scriptKey(args: { scriptId: string; scriptKind: ScriptKind }) {
   return `${args.scriptKind}:${args.scriptId}`;
 }
@@ -48,10 +46,10 @@ function scriptEntryKey(args: { id: string; kind: ScriptKind }) {
 
 function appendLog(current: string, chunk: string) {
   const next = current + chunk;
-  if (next.length <= MAX_LOG_LENGTH) {
+  if (next.length <= SCRIPT_LOG_HISTORY_LIMIT) {
     return next;
   }
-  return next.slice(next.length - MAX_LOG_LENGTH);
+  return next.slice(next.length - SCRIPT_LOG_HISTORY_LIMIT);
 }
 
 function sourceLabel(event: WorkspaceScriptEventEnvelope) {
@@ -75,11 +73,6 @@ function HookRow(props: {
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium text-foreground">{triggerMeta.label}</p>
-            {triggerMeta.legacy ? (
-              <Badge variant="secondary" className="rounded-sm px-2 py-0">
-                Legacy
-              </Badge>
-            ) : null}
             <Badge variant="outline" className="rounded-sm px-2 py-0">
               {props.refs.length} linked
             </Badge>
@@ -292,7 +285,9 @@ export function WorkspaceScriptsPanel(props: {
           running: status.running,
           runId: status.runId,
           sessionId: status.sessionId,
-          log: "",
+          log: status.log,
+          error: status.error,
+          orbitUrl: status.orbitUrl,
           sourceLabel: status.source?.kind === "hook" ? `Hook · ${SCRIPT_TRIGGER_METADATA[status.source.trigger].label}` : "Manual",
         };
       });
@@ -323,6 +318,7 @@ export function WorkspaceScriptsPanel(props: {
       const key = scriptKey(payload);
       setEntryStateByKey((current) => {
         const existing = current[key] ?? { running: false, log: "" };
+        const isNewRun = Boolean(payload.runId && payload.runId !== existing.runId);
         const next: ScriptUiState = {
           ...existing,
           runId: payload.runId,
@@ -334,7 +330,10 @@ export function WorkspaceScriptsPanel(props: {
           case "started":
             next.running = true;
             next.error = undefined;
-            next.orbitUrl = undefined;
+            if (isNewRun) {
+              next.log = "";
+              next.orbitUrl = undefined;
+            }
             break;
           case "orbit-url":
             next.orbitUrl = payload.event.url;

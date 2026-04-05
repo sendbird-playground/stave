@@ -55,8 +55,6 @@ const ScriptTriggerSchema = z.union([
   z.literal("task.archiving"),
   z.literal("turn.started"),
   z.literal("turn.completed"),
-  z.literal("workspace.created"),
-  z.literal("workspace.archiving"),
   z.literal("pr.beforeOpen"),
   z.literal("pr.afterOpen"),
 ]);

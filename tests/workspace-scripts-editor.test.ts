@@ -75,7 +75,7 @@ describe("buildScriptEditorState", () => {
     const config: WorkspaceScriptsConfig = {
       version: 2,
       hooks: {
-        "workspace.created": ["bootstrap"],
+        "pr.beforeOpen": ["bootstrap"],
       },
     };
     const resolvedConfig: ResolvedWorkspaceScriptsConfig = {
@@ -114,7 +114,7 @@ describe("buildScriptEditorState", () => {
     };
 
     const editorState = buildScriptEditorState({ config, resolvedConfig });
-    expect(editorState.hooks["workspace.created"]).toEqual([
+    expect(editorState.hooks["pr.beforeOpen"]).toEqual([
       {
         scriptId: "bootstrap",
         scriptKind: "action",

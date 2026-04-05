@@ -80,6 +80,10 @@ interface EditorFileState {
   error: string;
 }
 
+function snapshotScriptEditorState(state: ScriptEditorState) {
+  return JSON.stringify(state);
+}
+
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -355,11 +359,6 @@ function HookTriggerEditor(props: {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-medium text-foreground">{triggerMeta.label}</p>
-            {triggerMeta.legacy ? (
-              <Badge variant="secondary" className="rounded-sm px-2 py-0">
-                Legacy
-              </Badge>
-            ) : null}
           </div>
           <p className="text-xs text-muted-foreground">{triggerMeta.description}</p>
         </div>
@@ -442,10 +441,13 @@ export function WorkspaceScriptsManager(props: {
     }),
     [props.projectPath, props.workspacePath],
   );
-  const [selectedScopeId, setSelectedScopeId] = useState<ScriptEditorScopeId>("project");
+  const [selectedScopeId, setSelectedScopeId] = useState<ScriptEditorScopeId | null>(null);
+  const [initialScopeResolved, setInitialScopeResolved] = useState(false);
   const selectedScope = useMemo(
-    () => scopes.find((scope) => scope.id === selectedScopeId) ?? scopes[0] ?? null,
-    [scopes, selectedScopeId],
+    () => initialScopeResolved
+      ? (scopes.find((scope) => scope.id === selectedScopeId) ?? scopes[0] ?? null)
+      : null,
+    [initialScopeResolved, scopes, selectedScopeId],
   );
 
   const [fileState, setFileState] = useState<EditorFileState>({
@@ -458,6 +460,9 @@ export function WorkspaceScriptsManager(props: {
   });
   const [editorState, setEditorState] = useState<ScriptEditorState>(createEmptyScriptEditorState());
   const [savedContentSnapshot, setSavedContentSnapshot] = useState("");
+  const [savedEditorStateSnapshot, setSavedEditorStateSnapshot] = useState(
+    snapshotScriptEditorState(createEmptyScriptEditorState()),
+  );
   const [saving, setSaving] = useState(false);
   const [expandedActions, setExpandedActions] = useState<string[]>([]);
   const [expandedServices, setExpandedServices] = useState<string[]>([]);
@@ -468,14 +473,36 @@ export function WorkspaceScriptsManager(props: {
   }, [props.resolvedConfig]);
 
   useEffect(() => {
+    setInitialScopeResolved(false);
+    setSelectedScopeId(null);
+  }, [props.projectPath]);
+
+  useEffect(() => {
+    if (!initialScopeResolved) {
+      return;
+    }
+    if (!selectedScopeId || !scopes.some((scope) => scope.id === selectedScopeId)) {
+      setSelectedScopeId(scopes[0]?.id ?? null);
+    }
+  }, [initialScopeResolved, scopes, selectedScopeId]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function chooseDefaultScope() {
+      if (scopes.length === 0) {
+        if (!cancelled) {
+          setInitialScopeResolved(true);
+        }
+        return;
+      }
+
       const workspaceScope = scopes.find((scope) => scope.id === "workspace");
       const readFile = window.api?.fs?.readFile;
       if (!workspaceScope || !readFile) {
         if (!cancelled) {
-          setSelectedScopeId("project");
+          setSelectedScopeId(scopes[0]?.id ?? "project");
+          setInitialScopeResolved(true);
         }
         return;
       }
@@ -486,17 +513,18 @@ export function WorkspaceScriptsManager(props: {
       });
       if (!cancelled) {
         setSelectedScopeId(workspaceFile.ok ? "workspace" : "project");
+        setInitialScopeResolved(true);
       }
     }
 
-    if (scopes.length > 0) {
+    if (!initialScopeResolved) {
       void chooseDefaultScope();
     }
 
     return () => {
       cancelled = true;
     };
-  }, [scopes]);
+  }, [initialScopeResolved, scopes]);
 
   const loadSelectedScope = useCallback(async (scope: ScriptEditorScope) => {
     const readFile = window.api?.fs?.readFile;
@@ -536,6 +564,7 @@ export function WorkspaceScriptsManager(props: {
         setExpandedActions([]);
         setExpandedServices([]);
         setSavedContentSnapshot(initialContent);
+        setSavedEditorStateSnapshot(snapshotScriptEditorState(emptyState));
         setFileState({
           status: "ready",
           exists: false,
@@ -614,6 +643,7 @@ export function WorkspaceScriptsManager(props: {
     setExpandedActions([]);
     setExpandedServices([]);
     setSavedContentSnapshot(initialContent);
+    setSavedEditorStateSnapshot(snapshotScriptEditorState(nextEditorState));
     setFileState({
       status: "ready",
       exists: true,
@@ -644,7 +674,14 @@ export function WorkspaceScriptsManager(props: {
     ),
     [currentConfig, fileState.rawConfig],
   );
-  const isDirty = fileState.status === "ready" && currentSaveContent !== savedContentSnapshot;
+  const currentEditorStateSnapshot = useMemo(
+    () => snapshotScriptEditorState(editorState),
+    [editorState],
+  );
+  const isDirty = fileState.status === "ready" && (
+    currentSaveContent !== savedContentSnapshot
+    || currentEditorStateSnapshot !== savedEditorStateSnapshot
+  );
 
   const targetOptions = useMemo(() => {
     const next = new Map<string, string>([
@@ -925,6 +962,18 @@ export function WorkspaceScriptsManager(props: {
   }, [isDirty]);
 
   if (!selectedScope) {
+    if (!initialScopeResolved) {
+      return (
+        <Card size="sm" className="border border-border/70 bg-background/80">
+          <CardContent className="space-y-3 pt-4">
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+              Loading scripts manager...
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
     return (
       <Empty className="border border-dashed border-border/70 bg-muted/15">
         <EmptyHeader>
@@ -1141,7 +1190,7 @@ export function WorkspaceScriptsManager(props: {
                   <div>
                     <p className="text-sm font-medium text-foreground">Hooks</p>
                     <p className="text-xs text-muted-foreground">
-                      Wire actions and services into task, turn, PR, and legacy workspace lifecycle triggers.
+                      Wire actions and services into task, turn, and PR lifecycle triggers.
                     </p>
                   </div>
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DEFAULT_ORBIT_PROXY_PORT,
   ORBIT_URL_MARKER,
   buildOrbitCommand,
   extractOrbitOutput,
@@ -26,10 +27,25 @@ describe("buildOrbitCommand", () => {
       },
     });
 
-    expect(command).toContain("'/tmp/portless' run --no-tls -p 1355 --name 'stave-desktop'");
+    expect(command).toContain(`PORTLESS_PORT='1355' PORTLESS_HTTPS='0' '/tmp/portless' run --name 'stave-desktop'`);
     expect(command).toContain(ORBIT_URL_MARKER);
     expect(command).toContain("\"$PORTLESS_URL\"");
     expect(command).toContain("bun run dev -- --mode local");
+  });
+
+  test("defaults orbit runs to the unprivileged proxy port", () => {
+    const command = buildOrbitCommand({
+      command: "yarn start",
+      defaultName: "stave",
+      portlessCommand: "/tmp/portless",
+      orbit: {
+        noTls: false,
+      },
+    });
+
+    expect(command).toContain(`PORTLESS_PORT='${DEFAULT_ORBIT_PROXY_PORT}'`);
+    expect(command).not.toContain("--no-tls");
+    expect(command).not.toContain(" -p ");
   });
 });
 

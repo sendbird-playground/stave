@@ -52,9 +52,7 @@ export type ScriptTrigger =
   | "turn.started"
   | "turn.completed"
   | "pr.beforeOpen"
-  | "pr.afterOpen"
-  | "workspace.created"
-  | "workspace.archiving";
+  | "pr.afterOpen";
 
 export interface ScriptHookContext {
   taskId?: string;
@@ -191,8 +189,11 @@ export interface WorkspaceScriptStatusEntry {
   scriptId: string;
   scriptKind: ScriptKind;
   running: boolean;
+  log: string;
   runId?: string;
   sessionId?: string;
+  error?: string;
+  orbitUrl?: string;
   source?: WorkspaceScriptRunSource;
 }
 
