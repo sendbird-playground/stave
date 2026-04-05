@@ -588,7 +588,7 @@ export function PromptInput(args: PromptInputProps) {
       className="relative space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-colors focus-within:border-ring/60"
     >
       {promptSuggestions && promptSuggestions.length > 0 ? (
-        <Suggestions aria-label="Suggestions" className="mb-0">
+        <Suggestions aria-label="Suggestions" className="-mb-1">
           {promptSuggestions.map((suggestion) => (
             <Suggestion
               key={suggestion}
@@ -596,7 +596,7 @@ export function PromptInput(args: PromptInputProps) {
               onClick={onSuggestionSelect}
               title={suggestion}
               variant="ghost"
-              className="h-7 rounded-full bg-muted/40 px-3 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              className="h-7 rounded-full bg-muted/40 px-3.5 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground"
             />
           ))}
         </Suggestions>
