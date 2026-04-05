@@ -588,7 +588,7 @@ export function PromptInput(args: PromptInputProps) {
       className="relative space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-colors focus-within:border-ring/60"
     >
       {promptSuggestions && promptSuggestions.length > 0 ? (
-        <Suggestions aria-label="Suggestions" className="-mb-1">
+        <Suggestions aria-label="Suggestions" className="-ml-1.5 mb-0.5">
           {promptSuggestions.map((suggestion) => (
             <Suggestion
               key={suggestion}
