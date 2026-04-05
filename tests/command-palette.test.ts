@@ -79,6 +79,7 @@ function createContext(
       createTask: () => {},
       continueWorkspace: () => {},
       focusFileSearch: () => {},
+      openStaveAssistant: () => {},
       openLatestCompletedTurnTask: async () => {},
       openInTerminal: async () => {},
       openInVSCode: async () => {},
@@ -113,6 +114,7 @@ describe("command palette registry", () => {
     const view = groups.find((group) => group.key === "view");
 
     expect(navigation?.items.some((item) => item.id === "navigation.quick-open-file")).toBe(true);
+    expect(navigation?.items.some((item) => item.id === "navigation.open-stave-assistant")).toBe(true);
     expect(navigation?.items.some((item) => item.id === "navigation.latest-completed-turn-task")).toBe(true);
     expect(navigation?.items.some((item) => item.id === "task.select.task-2")).toBe(true);
     expect(navigation?.items.some((item) => item.id === "workspace.select.ws-feature")).toBe(true);

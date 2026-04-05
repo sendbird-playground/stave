@@ -5,6 +5,7 @@ import {
   FolderOpen,
   ChevronDown,
   PanelLeft,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -53,7 +54,16 @@ function formatWorkspacePathLabel(args: {
 }
 
 export function TopBar() {
-  const [activeWorkspaceId, workspacePathById, projectPath, workspaceSidebarCollapsed, setLayout] = useAppStore(
+  const [
+    activeWorkspaceId,
+    workspacePathById,
+    projectPath,
+    workspaceSidebarCollapsed,
+    staveAssistantOpen,
+    setLayout,
+    focusStaveAssistant,
+    setStaveAssistantOpen,
+  ] = useAppStore(
     useShallow(
       (state) =>
         [
@@ -61,7 +71,10 @@ export function TopBar() {
           state.workspacePathById,
           state.projectPath,
           state.layout.workspaceSidebarCollapsed,
+          state.staveAssistant.open,
           state.setLayout,
+          state.focusStaveAssistant,
+          state.setStaveAssistantOpen,
         ] as const,
     ),
   );
@@ -224,6 +237,29 @@ export function TopBar() {
             <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
           ) : null}
         </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={staveAssistantOpen ? "default" : "ghost"}
+                size="sm"
+                className="h-8 gap-1.5 rounded-md px-2.5"
+                style={TOP_BAR_NO_DRAG_STYLE}
+                onClick={() => {
+                  if (staveAssistantOpen) {
+                    setStaveAssistantOpen({ open: false });
+                    return;
+                  }
+                  focusStaveAssistant();
+                }}
+              >
+                <Sparkles className="size-3.5" />
+                <span className="hidden xl:inline">Assistant</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Open Stave Assistant</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         {hasProjectContext ? (
           <TopBarNotifications noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
         ) : null}

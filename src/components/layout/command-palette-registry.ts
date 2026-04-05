@@ -92,6 +92,7 @@ export interface CommandPaletteCommandHandlers {
   createTask: () => void;
   continueWorkspace: () => Promise<void> | void;
   focusFileSearch: () => void;
+  openStaveAssistant: () => void;
   openLatestCompletedTurnTask: () => Promise<void> | void;
   openInTerminal: (path: string) => Promise<void> | void;
   openInVSCode: (path: string) => Promise<void> | void;
@@ -236,6 +237,24 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       icon: Home,
       keywords: ["home", "dashboard", "clear task selection"],
       run: args.commands.clearTaskSelection,
+      source: "core",
+    }),
+  },
+  {
+    id: "navigation.open-stave-assistant",
+    title: "Open Stave Assistant",
+    description: "Open the global Stave Assistant widget.",
+    group: "navigation",
+    icon: Sparkles,
+    keywords: ["assistant", "operator", "global chat", "widget"],
+    build: (args) => ({
+      id: "navigation.open-stave-assistant",
+      title: "Open Stave Assistant",
+      subtitle: "Open the global control-plane assistant.",
+      group: "navigation",
+      icon: Sparkles,
+      keywords: ["assistant", "operator", "global chat", "widget"],
+      run: args.commands.openStaveAssistant,
       source: "core",
     }),
   },
