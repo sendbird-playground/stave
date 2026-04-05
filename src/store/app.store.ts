@@ -4778,7 +4778,7 @@ export const useAppStore = create<AppState>()(
               get().setLayout({
                 patch: {
                   sidebarOverlayVisible: localAction.open ?? true,
-                  sidebarOverlayTab: "automation",
+                  sidebarOverlayTab: "scripts",
                 },
               });
               break;
