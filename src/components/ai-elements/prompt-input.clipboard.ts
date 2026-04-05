@@ -51,3 +51,28 @@ export function partitionClipboardFiles(files: readonly File[]) {
 
   return { imageFiles, nonImageFiles };
 }
+
+export function mergeClipboardImageAttachments<T extends { dataUrl: string }>(args: {
+  existing?: readonly T[] | null;
+  incoming: readonly T[];
+}) {
+  const deduped = new Map<string, T>();
+
+  for (const attachment of args.existing ?? []) {
+    const key = attachment.dataUrl.trim();
+    if (!key || deduped.has(key)) {
+      continue;
+    }
+    deduped.set(key, attachment);
+  }
+
+  for (const attachment of args.incoming) {
+    const key = attachment.dataUrl.trim();
+    if (!key || deduped.has(key)) {
+      continue;
+    }
+    deduped.set(key, attachment);
+  }
+
+  return Array.from(deduped.values());
+}

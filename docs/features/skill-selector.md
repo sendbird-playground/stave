@@ -42,12 +42,10 @@ Important behavior:
 
 On send, Stave resolves compatible skills for the active provider and strips recognized `$skill-name` tokens from the provider-facing prompt.
 
-- Claude
-  - selected skills are serialized as native slash skill commands like `/skill-name`
-  - the fallback prompt body excludes the injected `[Selected Skills]` block
-- Codex
-  - selected skills are normalized into a `[Selected Skills]` prompt section with the resolved skill instructions
-  - this is used because the current Codex SDK transport does not expose a dedicated skill field
+- Claude and Codex
+  - selected skills are normalized into an `[Activated Skills]` prompt section with the resolved skill instructions
+  - Stave-managed `$skill` activations are prompt-context based, not provider-native slash skill registrations
+  - provider-native `/` commands remain separate and are not generated from `$skill` tokens
 
 ## Verification
 

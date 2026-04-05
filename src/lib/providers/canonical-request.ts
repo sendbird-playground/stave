@@ -319,7 +319,11 @@ export function buildLegacyPromptFromCanonicalRequest(args: {
       if (args.includeSkillContext === false || part.skills.length === 0) {
         return;
       }
-      sections.push("[Selected Skills]");
+      sections.push(
+        "[Activated Skills]",
+        "These skills are already activated by Stave via `$skill` tokens.",
+        "Run their instructions directly in this turn instead of calling provider-native Skill tools for the same slug.",
+      );
       for (const skill of part.skills) {
         sections.push(
           `name: ${skill.name}`,
@@ -349,7 +353,7 @@ export function buildLegacyPromptFromCanonicalRequest(args: {
   if (trimmedInput.length === 0 && hasVisibleSkillContext) {
     sections.push(
       "[Skill Invocation]",
-      "The user intentionally invoked the selected skill without additional text. Follow the selected skill instructions.",
+      "The user intentionally activated one or more skills without additional text. Follow the activated skill instructions.",
     );
   }
 

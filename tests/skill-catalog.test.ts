@@ -237,7 +237,7 @@ describe("provider skill prompt serialization", () => {
     // Skill instructions must be embedded in the prompt body so Claude Code
     // can execute them directly — Stave skills are not in Claude's native
     // skill registry, so /token prefixes caused "skill not found" errors.
-    expect(prompt.includes("[Selected Skills]")).toBeTrue();
+    expect(prompt.includes("[Activated Skills]")).toBeTrue();
     expect(prompt.includes("Review the code for regressions and missing tests.")).toBeTrue();
     expect(prompt.startsWith("/reviewer")).toBeFalse();
   });
@@ -255,7 +255,7 @@ describe("provider skill prompt serialization", () => {
       fallbackPrompt: "Inspect the patch.",
     });
 
-    expect(prompt.includes("[Selected Skills]")).toBeTrue();
+    expect(prompt.includes("[Activated Skills]")).toBeTrue();
     expect(prompt.includes("Review the code for regressions and missing tests.")).toBeTrue();
   });
 });

@@ -84,11 +84,11 @@ describe("provider request translators", () => {
       }),
     });
 
-    expect(prompt).toContain("[Selected Skills]");
+    expect(prompt).toContain("[Activated Skills]");
     expect(prompt).toContain("[Current User Input]");
     expect(prompt).toContain("(none)");
     expect(prompt).toContain("[Skill Invocation]");
-    expect(prompt).toContain("Follow the selected skill instructions.");
+    expect(prompt).toContain("Follow the activated skill instructions.");
   });
 
   test("omits replayed history when the canonical request carries a resume conversation id", () => {
