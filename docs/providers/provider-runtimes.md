@@ -1,5 +1,7 @@
 # Provider Runtimes
 
+For a task-oriented guide to choosing Claude and Codex sandbox, approval, and plan settings in the UI, see [Provider Sandbox And Approval Guide](../features/provider-sandbox-and-approval.md).
+
 ## Stave Model Router
 
 The Stave Model Router is a meta-provider that sits above the real Claude and Codex runtimes. When a task uses the `stave` provider, Stave Auto classifies each prompt by intent and either routes it directly to a single model or escalates it into orchestration.
@@ -111,6 +113,34 @@ Claude-specific runtime controls come from the UI and runtime options:
 - provider timeout
 - debug stream logging
 
+### Claude settings quick guide
+
+If you want the user-facing setup workflow instead of the runtime internals, use [Provider Sandbox And Approval Guide](../features/provider-sandbox-and-approval.md).
+
+- `permission mode`
+  - `default`: use Claude's standard behavior.
+  - `acceptEdits`: good default for normal implementation work with guardrails.
+  - `bypassPermissions`: highest-autonomy Claude path; use carefully.
+  - `plan`: planning-only flow in Stave.
+  - `dontAsk`: avoid interactive permission pauses during the turn.
+  - `auto`: let Claude choose.
+- `setting sources`
+  - `project`: load repo-local Claude config such as `CLAUDE.md`.
+  - `local`: load machine-local or workspace-local runtime settings.
+  - `user`: load user-wide Claude settings.
+- `thinking mode`
+  - `adaptive`: think more only when useful.
+  - `enabled`: always request extra thinking.
+  - `disabled`: prefer direct answers.
+- `effort`
+  - `low`: fastest.
+  - `medium`: balanced default.
+  - `high` / `max`: more deliberate, slower, better for hard tasks.
+- Example presets
+  - Daily coding: `acceptEdits` + `adaptive` + `medium`
+  - Architecture / design review: `plan` + `enabled` + `high`
+  - Trusted local automation: `bypassPermissions` + sandbox settings reviewed first
+
 In the chat composer, Stave mirrors the active provider runtime in a status line under the prompt box so the current turn settings stay visible. Permission/approval plus the most-used provider controls can also be adjusted inline there.
 
 When Claude `agentProgressSummaries` is enabled, Stave forwards the SDK flag explicitly and renders incoming `task_progress.summary` updates as inline system events in the active assistant message.
@@ -216,6 +246,37 @@ public runtime contract canonical (`never`, `on-request`, `untrusted`) and
 normalizes legacy persisted `on-failure` settings to `on-request` during
 settings hydration/runtime resolution. It is no longer shown in the UI or
 accepted as a new selection.
+
+### Codex settings quick guide
+
+If you want the user-facing setup workflow instead of the runtime internals, use [Provider Sandbox And Approval Guide](../features/provider-sandbox-and-approval.md).
+
+- `sandbox mode`
+  - `read-only`: inspect only, no writes.
+  - `workspace-write`: edit inside the workspace / writable roots.
+  - `danger-full-access`: broad filesystem access; highest risk.
+- `approval policy`
+  - `never`: do not pause for approval.
+  - `on-request`: ask when approval is needed.
+  - `untrusted`: pause only for actions treated as untrusted.
+- `reasoning effort`
+  - `minimal` / `low`: fastest.
+  - `medium`: balanced default.
+  - `high` / `xhigh`: slower, more deliberate.
+- `reasoning summary`
+  - `auto`: let Codex decide.
+  - `concise`: short summary.
+  - `detailed`: fuller summary.
+  - `none`: no summary.
+- `web search mode`
+  - `disabled`: fully local.
+  - `cached`: lower-volatility search path when available.
+  - `live`: allow current web lookup.
+- Example presets
+  - Safe review / audit: `read-only` + `on-request` + `medium`
+  - Normal implementation: `workspace-write` + `never` + `medium`
+  - Deep debugging: `workspace-write` + `on-request` + `high`
+  - Latest-docs research: `workspace-write` + `never` + `live`
 
 New Codex defaults enable raw agent reasoning, request `detailed` reasoning summaries, and force reasoning-summary capability support to `enabled` unless the user changes those toggles.
 
