@@ -49,7 +49,11 @@ import { resolveCommandInput } from "@/lib/commands";
 import {
   buildCanonicalConversationRequest,
 } from "@/lib/providers/canonical-request";
-import { getDefaultModelForProvider, listProviderIds } from "@/lib/providers/model-catalog";
+import {
+  getDefaultModelForProvider,
+  inferProviderIdFromModel,
+  listProviderIds,
+} from "@/lib/providers/model-catalog";
 import {
   DEFAULT_PROMPT_RESPONSE_STYLE,
   DEFAULT_PROMPT_PR_DESCRIPTION,
@@ -79,14 +83,38 @@ import {
 } from "@/lib/tasks";
 import { resolveSkillSelections } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry, SkillCatalogRoot } from "@/lib/skills/types";
+import { replayProviderEventsToTaskState } from "@/lib/session/provider-event-replay";
 import {
   DEFAULT_PROVIDER_TIMEOUT_MS,
   PROVIDER_TIMEOUT_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
 import {
   createEmptyWorkspaceInformation,
+  createWorkspaceConfluencePage,
+  createWorkspaceFigmaResource,
+  createWorkspaceInfoCustomField,
+  createWorkspaceJiraIssue,
+  createWorkspaceLinkedPullRequest,
+  createWorkspaceSlackThread,
+  createWorkspaceTodoItem,
   type WorkspaceInformationState,
 } from "@/lib/workspace-information";
+import {
+  buildStaveAssistantContextSnapshot,
+  buildStaveAssistantLocalActionResponse,
+  buildStaveAssistantSummaryResponse,
+  createEmptyStaveAssistantState,
+  formatStaveAssistantTargetLabel,
+  resolveStaveAssistantLocalAction,
+  STAVE_ASSISTANT_SESSION_ID,
+  type StaveAssistantDefaultTarget,
+  type StaveAssistantLocalAction,
+  type StaveAssistantLocalActionContext,
+  type StaveAssistantProjectSummary,
+  type StaveAssistantState,
+  type StaveAssistantTaskSummary,
+  type StaveAssistantWorkspaceSummary,
+} from "@/lib/stave-assistant";
 import {
   findLatestPendingApprovalPart,
   findPendingApprovalMessageByRequestId,
@@ -305,6 +333,13 @@ export interface AppSettings {
   staveAutoMaxParallelSubtasks: number;
   staveAutoAllowCrossProviderWorkers: boolean;
   staveAutoFastMode: boolean;
+  /** Control-plane defaults used by the global Stave Assistant widget. */
+  assistantDefaultTarget: StaveAssistantDefaultTarget;
+  assistantRouterModel: string;
+  assistantChatModel: string;
+  assistantPlannerModel: string;
+  assistantAutoHandoffToTask: boolean;
+  assistantAllowDirectWorkspaceInfoEdits: boolean;
   rulesPresetPrimary: string;
   rulesPresetSecondary: string;
   permissionMode: "require-approval" | "auto-safe";
@@ -438,6 +473,7 @@ interface AppState {
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
   taskWorkspaceIdById: Record<string, string>;
+  staveAssistant: StaveAssistantState;
   hydrateProjectRegistry: () => Promise<void>;
   flushProjectRegistry: () => Promise<void>;
   hydrateWorkspaces: () => Promise<void>;
@@ -511,6 +547,19 @@ interface AppState {
   markAllNotificationsRead: () => Promise<void>;
   openNotificationContext: (args: { notificationId: string }) => Promise<NotificationContextOpenResult>;
   resolveNotificationApproval: (args: { notificationId: string; approved: boolean }) => Promise<void>;
+  setStaveAssistantOpen: (args: { open: boolean }) => void;
+  focusStaveAssistant: () => void;
+  setStaveAssistantTarget: (args: { kind: StaveAssistantState["target"]["kind"] }) => void;
+  clearStaveAssistantConversation: () => void;
+  updateStaveAssistantPromptDraft: (args: { patch: Partial<PromptDraft> }) => void;
+  sendStaveAssistantMessage: (args: { content: string }) => Promise<void>;
+  abortStaveAssistantTurn: () => void;
+  resolveStaveAssistantApproval: (args: { messageId: string; approved: boolean }) => Promise<void>;
+  resolveStaveAssistantUserInput: (args: {
+    messageId: string;
+    answers?: Record<string, string>;
+    denied?: boolean;
+  }) => Promise<void>;
   sendUserMessage: (args: {
     taskId: string;
     content: string;
@@ -732,6 +781,10 @@ function buildApprovalNotificationInputs(args: {
 }
 
 const ARCHIVED_TASK_TURN_NOTICE = "Generation stopped because the task was archived before this turn completed.";
+export const STAVE_ASSISTANT_OPEN_SETTINGS_EVENT = "stave:assistant-open-settings";
+const DEFAULT_STAVE_AUTO_MODEL_SETTINGS = buildStaveAutoModelSettingsPatch({
+  presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
+});
 
 const defaultSettings: AppSettings = {
   themeMode: "dark",
@@ -761,12 +814,18 @@ const defaultSettings: AppSettings = {
   modelClaude: getDefaultModelForProvider({ providerId: "claude-code" }),
   modelCodex: getDefaultModelForProvider({ providerId: "codex" }),
   modelStave: getDefaultModelForProvider({ providerId: "stave" }),
-  ...buildStaveAutoModelSettingsPatch({ presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID }),
+  ...DEFAULT_STAVE_AUTO_MODEL_SETTINGS,
   staveAutoOrchestrationMode: "auto",
   staveAutoMaxSubtasks: 3,
   staveAutoMaxParallelSubtasks: 2,
   staveAutoAllowCrossProviderWorkers: true,
   staveAutoFastMode: false,
+  assistantDefaultTarget: "current-project",
+  assistantRouterModel: DEFAULT_STAVE_AUTO_MODEL_SETTINGS.staveAutoClassifierModel,
+  assistantChatModel: DEFAULT_STAVE_AUTO_MODEL_SETTINGS.staveAutoGeneralModel,
+  assistantPlannerModel: DEFAULT_STAVE_AUTO_MODEL_SETTINGS.staveAutoPlanModel,
+  assistantAutoHandoffToTask: true,
+  assistantAllowDirectWorkspaceInfoEdits: true,
   rulesPresetPrimary: "typescript-best-practices",
   rulesPresetSecondary: "no-target-brand-keyword",
   permissionMode: "auto-safe",
@@ -950,6 +1009,363 @@ function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspa
   }
   return snapshot.tasks.length
     + Object.values(snapshot.messageCountByTask).reduce((sum, count) => sum + count, 0);
+}
+
+function buildStaveAssistantLocalActionContextFromState(state: Pick<
+  AppState,
+  | "activeWorkspaceId"
+  | "projectName"
+  | "projectPath"
+  | "recentProjects"
+  | "workspaces"
+  | "workspaceBranchById"
+  | "workspaceDefaultById"
+  | "workspaceInformation"
+  | "tasks"
+  | "activeTaskId"
+  | "activeTurnIdsByTask"
+>) {
+  const projects: StaveAssistantProjectSummary[] = state.recentProjects.map((project) => ({
+    projectName: project.projectName,
+    projectPath: project.projectPath,
+    isCurrent: project.projectPath === state.projectPath,
+  }));
+  const workspaces: StaveAssistantWorkspaceSummary[] = state.workspaces.map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    branch: state.workspaceBranchById[workspace.id],
+    isActive: workspace.id === state.activeWorkspaceId,
+    isDefault: Boolean(state.workspaceDefaultById[workspace.id]),
+  }));
+  const tasks: StaveAssistantTaskSummary[] = state.tasks
+    .filter((task) => !isTaskArchived(task))
+    .map((task) => ({
+      id: task.id,
+      title: task.title,
+      isActive: task.id === state.activeTaskId,
+      isResponding: Boolean(state.activeTurnIdsByTask[task.id]),
+    }));
+
+  return {
+    projectName: state.projectName,
+    projectPath: state.projectPath,
+    projects,
+    workspaces,
+    tasks,
+    activeTaskId: state.activeTaskId,
+    workspaceInformation: state.workspaceInformation,
+  } satisfies StaveAssistantLocalActionContext;
+}
+
+function createStaveAssistantUserMessage(args: {
+  content: string;
+  existingMessages: ChatMessage[];
+}): ChatMessage {
+  return {
+    id: buildMessageId({
+      taskId: STAVE_ASSISTANT_SESSION_ID,
+      count: args.existingMessages.length,
+    }),
+    role: "user",
+    model: "user",
+    providerId: "user",
+    content: args.content,
+    parts: [createUserTextPart({ text: args.content })],
+  };
+}
+
+function createStaveAssistantAssistantMessage(args: {
+  content: string;
+  existingMessages: ChatMessage[];
+  providerId: ProviderId;
+  model: string;
+}): ChatMessage {
+  const timestamp = buildRecentTimestamp();
+  return {
+    id: buildMessageId({
+      taskId: STAVE_ASSISTANT_SESSION_ID,
+      count: args.existingMessages.length + 1,
+    }),
+    role: "assistant",
+    model: args.model,
+    providerId: args.providerId,
+    content: args.content,
+    startedAt: timestamp,
+    completedAt: timestamp,
+    isStreaming: false,
+    parts: args.content.trim()
+      ? [createUserTextPart({ text: args.content })]
+      : [],
+  };
+}
+
+function appendStaveAssistantStandaloneMessage(args: {
+  assistant: StaveAssistantState;
+  content: string;
+  providerId?: ProviderId;
+  model?: string;
+}) {
+  const assistantMessage = createStaveAssistantAssistantMessage({
+    content: args.content,
+    existingMessages: args.assistant.messages,
+    providerId: args.providerId ?? "stave",
+    model: args.model ?? "stave-assistant",
+  });
+
+  return {
+    ...args.assistant,
+    messages: [...args.assistant.messages, assistantMessage],
+    open: true,
+    focusNonce: args.assistant.focusNonce + 1,
+  } satisfies StaveAssistantState;
+}
+
+function hasSelectedAssistantWorkspace(state: Pick<AppState, "activeWorkspaceId" | "workspaces">) {
+  return Boolean(state.activeWorkspaceId)
+    && state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId);
+}
+
+function coerceAssistantCustomFieldValue(args: {
+  field: WorkspaceInformationState["customFields"][number];
+  value: string;
+}) {
+  const rawValue = args.value.trim();
+  switch (args.field.type) {
+    case "number": {
+      if (!rawValue) {
+        return null;
+      }
+      const nextValue = Number.parseFloat(rawValue);
+      return Number.isFinite(nextValue) ? nextValue : args.field.value;
+    }
+    case "boolean": {
+      const normalized = rawValue.toLowerCase();
+      if (["true", "yes", "on", "1", "done"].includes(normalized)) {
+        return true;
+      }
+      if (["false", "no", "off", "0"].includes(normalized)) {
+        return false;
+      }
+      return args.field.value;
+    }
+    case "single_select":
+      return rawValue;
+    case "text":
+    case "textarea":
+    case "date":
+    case "url":
+    default:
+      return rawValue;
+  }
+}
+
+function updateAssistantCustomField(args: {
+  field: WorkspaceInformationState["customFields"][number];
+  value: string;
+}): WorkspaceInformationState["customFields"][number] {
+  const nextValue = coerceAssistantCustomFieldValue(args);
+  switch (args.field.type) {
+    case "number":
+      return {
+        ...args.field,
+        value: typeof nextValue === "number" || nextValue === null ? nextValue : args.field.value,
+      };
+    case "boolean":
+      return {
+        ...args.field,
+        value: typeof nextValue === "boolean" ? nextValue : args.field.value,
+      };
+    case "single_select":
+      return {
+        ...args.field,
+        value: typeof nextValue === "string" ? nextValue : args.field.value,
+      };
+    case "text":
+    case "textarea":
+    case "date":
+    case "url":
+    default:
+      return {
+        ...args.field,
+        value: typeof nextValue === "string" ? nextValue : args.field.value,
+      };
+  }
+}
+
+function appendStaveAssistantLocalExchange(args: {
+  assistant: StaveAssistantState;
+  content: string;
+  responseText: string;
+  providerId?: ProviderId;
+  model?: string;
+}) {
+  const userMessage = createStaveAssistantUserMessage({
+    content: args.content,
+    existingMessages: args.assistant.messages,
+  });
+  const messagesWithUser = [...args.assistant.messages, userMessage];
+  const assistantMessage = createStaveAssistantAssistantMessage({
+    content: args.responseText,
+    existingMessages: messagesWithUser,
+    providerId: args.providerId ?? "stave",
+    model: args.model ?? "stave-assistant",
+  });
+
+  return {
+    ...args.assistant,
+    messages: [...messagesWithUser, assistantMessage],
+    promptDraft: {
+      text: "",
+      attachedFilePaths: [],
+      attachments: [],
+      ...(args.assistant.promptDraft.runtimeOverrides
+        ? { runtimeOverrides: args.assistant.promptDraft.runtimeOverrides }
+        : {}),
+    },
+    open: true,
+    focusNonce: args.assistant.focusNonce + 1,
+  } satisfies StaveAssistantState;
+}
+
+function appendStaveAssistantPendingTurn(args: {
+  assistant: StaveAssistantState;
+  content: string;
+  providerId: ProviderId;
+  model: string;
+  turnId: string;
+}) {
+  const currentMessages = args.assistant.messages;
+  const userMessage = createStaveAssistantUserMessage({
+    content: args.content,
+    existingMessages: currentMessages,
+  });
+  const assistantMessage: ChatMessage = {
+    id: buildMessageId({
+      taskId: STAVE_ASSISTANT_SESSION_ID,
+      count: currentMessages.length + 1,
+    }),
+    role: "assistant",
+    model: args.model,
+    providerId: args.providerId,
+    content: "",
+    startedAt: buildRecentTimestamp(),
+    isStreaming: true,
+    parts: [],
+  };
+
+  return {
+    ...args.assistant,
+    messages: [...currentMessages, userMessage, assistantMessage],
+    activeTurnId: args.turnId,
+    promptDraft: {
+      text: "",
+      attachedFilePaths: [],
+      attachments: [],
+      ...(args.assistant.promptDraft.runtimeOverrides
+        ? { runtimeOverrides: args.assistant.promptDraft.runtimeOverrides }
+        : {}),
+    },
+    open: true,
+    focusNonce: args.assistant.focusNonce + 1,
+  } satisfies StaveAssistantState;
+}
+
+function applyProviderEventsToStaveAssistant(args: {
+  assistant: StaveAssistantState;
+  events: NormalizedProviderEvent[];
+  provider: ProviderId;
+  model: string;
+  turnId: string;
+}) {
+  if (args.assistant.activeTurnId !== args.turnId) {
+    return args.assistant;
+  }
+
+  const replayed = replayProviderEventsToTaskState({
+    taskId: STAVE_ASSISTANT_SESSION_ID,
+    messages: args.assistant.messages,
+    events: args.events,
+    provider: args.provider,
+    model: args.model,
+    turnId: args.turnId,
+    nativeSessionReady: args.assistant.nativeSessionReady,
+    providerSession: args.assistant.providerSession,
+  });
+
+  return {
+    ...args.assistant,
+    messages: replayed.messages,
+    activeTurnId: replayed.activeTurnId,
+    nativeSessionReady: replayed.nativeSessionReady,
+    providerSession: replayed.providerSession,
+  } satisfies StaveAssistantState;
+}
+
+async function collectStaveAssistantRoutingDecision(args: {
+  content: string;
+  model: string;
+  settings: AppSettings;
+  contextSnapshot: string;
+}) {
+  const provider = inferProviderIdFromModel({ model: args.model });
+  const prompt = [
+    "You route requests for the Stave Assistant widget.",
+    "Return JSON only with keys mode and reason.",
+    'mode must be one of: "chat", "planner", "handoff".',
+    'Use "handoff" for code changes, debugging, terminal or git-heavy work, or long-running implementation.',
+    'Use "planner" for workflow planning, settings strategy, or app-configuration design that should stay in the assistant.',
+    'Use "chat" for questions, summaries, explanations, and direct Stave control that does not need a task.',
+    "",
+    "Current Stave context:",
+    args.contextSnapshot,
+    "",
+    "User request:",
+    args.content,
+  ].join("\n");
+
+  return new Promise<{ mode: "chat" | "planner" | "handoff"; reason: string }>((resolve) => {
+    let responseText = "";
+    runProviderTurn({
+      provider,
+      prompt,
+      taskId: `${STAVE_ASSISTANT_SESSION_ID}-router`,
+      runtimeOptions: buildProviderRuntimeOptions({
+        provider,
+        model: args.model,
+        settings: args.settings,
+      }),
+      onEvent: ({ event }) => {
+        if (event.type === "text") {
+          responseText += event.text;
+          return;
+        }
+        if (event.type === "done") {
+          const cleaned = responseText
+            .replace(/^```json\s*/i, "")
+            .replace(/^```\s*/i, "")
+            .replace(/\s*```$/i, "")
+            .trim();
+          try {
+            const parsed = JSON.parse(cleaned) as { mode?: string; reason?: string };
+            if (
+              parsed.mode === "chat"
+              || parsed.mode === "planner"
+              || parsed.mode === "handoff"
+            ) {
+              resolve({
+                mode: parsed.mode,
+                reason: typeof parsed.reason === "string" ? parsed.reason : "",
+              });
+              return;
+            }
+          } catch {
+            // fall through
+          }
+          resolve({ mode: "chat", reason: "" });
+        }
+      },
+    });
+  });
 }
 
 export const useAppStore = create<AppState>()(
@@ -1469,6 +1885,9 @@ export const useAppStore = create<AppState>()(
       providerSessionByTask: {},
       workspaceRuntimeCacheById: {},
       taskWorkspaceIdById: {},
+      staveAssistant: createEmptyStaveAssistantState({
+        defaultTarget: defaultSettings.assistantDefaultTarget,
+      }),
       hydrateProjectRegistry: async () => {
         const rawPersistedProjects = (await loadProjectRegistrySnapshot()) as RecentProjectState[];
         const persistedProjects = normalizeRecentProjectStates({
@@ -4154,6 +4573,692 @@ export const useAppStore = create<AppState>()(
         });
         await latestState.markNotificationRead({ id: notification.id });
       },
+      setStaveAssistantOpen: ({ open }) => {
+        set((state) => {
+          if (state.staveAssistant.open === open) {
+            return state;
+          }
+          return {
+            staveAssistant: {
+              ...state.staveAssistant,
+              open,
+            },
+          };
+        });
+      },
+      focusStaveAssistant: () => {
+        set((state) => ({
+          staveAssistant: {
+            ...state.staveAssistant,
+            open: true,
+            focusNonce: state.staveAssistant.focusNonce + 1,
+          },
+        }));
+      },
+      setStaveAssistantTarget: ({ kind }) => {
+        set((state) => {
+          if (state.staveAssistant.target.kind === kind) {
+            return state;
+          }
+          return {
+            staveAssistant: {
+              ...state.staveAssistant,
+              open: true,
+              target: { kind },
+            },
+          };
+        });
+      },
+      clearStaveAssistantConversation: () => {
+        const activeTurnId = get().staveAssistant.activeTurnId;
+        if (activeTurnId) {
+          void window.api?.provider?.abortTurn?.({ turnId: activeTurnId });
+        }
+        void window.api?.provider?.cleanupTask?.({ taskId: STAVE_ASSISTANT_SESSION_ID });
+        set((state) => ({
+          staveAssistant: {
+            ...createEmptyStaveAssistantState(),
+            open: state.staveAssistant.open,
+            target: state.staveAssistant.target,
+            focusNonce: state.staveAssistant.focusNonce + 1,
+          },
+        }));
+      },
+      updateStaveAssistantPromptDraft: ({ patch }) => {
+        set((state) => {
+          const currentDraft = state.staveAssistant.promptDraft;
+          const nextDraft = {
+            text: currentDraft.text,
+            attachedFilePaths: currentDraft.attachedFilePaths,
+            attachments: currentDraft.attachments,
+            runtimeOverrides: currentDraft.runtimeOverrides,
+            ...patch,
+          };
+          const textChanged = nextDraft.text !== currentDraft.text;
+          const attachedFilePathsChanged =
+            nextDraft.attachedFilePaths.length !== currentDraft.attachedFilePaths.length
+            || nextDraft.attachedFilePaths.some((path, index) => path !== currentDraft.attachedFilePaths[index]);
+          const attachmentsChanged =
+            nextDraft.attachments.length !== currentDraft.attachments.length
+            || nextDraft.attachments.some((attachment, index) => attachment !== currentDraft.attachments[index]);
+          const runtimeOverridesChanged = !arePromptDraftRuntimeOverridesEqual(
+            nextDraft.runtimeOverrides,
+            currentDraft.runtimeOverrides,
+          );
+          if (!textChanged && !attachedFilePathsChanged && !attachmentsChanged && !runtimeOverridesChanged) {
+            return state;
+          }
+          return {
+            staveAssistant: {
+              ...state.staveAssistant,
+              promptDraft: nextDraft,
+            },
+          };
+        });
+      },
+      sendStaveAssistantMessage: async ({ content }) => {
+        const trimmedContent = content.trim();
+        if (!trimmedContent) {
+          return;
+        }
+
+        if (get().staveAssistant.activeTurnId) {
+          return;
+        }
+
+        const appendLocalExchange = (responseText: string, args?: {
+          providerId?: ProviderId;
+          model?: string;
+        }) => {
+          set((state) => ({
+            staveAssistant: appendStaveAssistantLocalExchange({
+              assistant: state.staveAssistant,
+              content: trimmedContent,
+              responseText,
+              providerId: args?.providerId,
+              model: args?.model,
+            }),
+          }));
+        };
+
+        const appendStandalone = (responseText: string, args?: {
+          providerId?: ProviderId;
+          model?: string;
+        }) => {
+          set((state) => ({
+            staveAssistant: appendStaveAssistantStandaloneMessage({
+              assistant: state.staveAssistant,
+              content: responseText,
+              providerId: args?.providerId,
+              model: args?.model,
+            }),
+          }));
+        };
+
+        const buildAssistantContext = () => buildStaveAssistantLocalActionContextFromState(get());
+        const ensureWorkspaceInfoContext = () => {
+          const state = get();
+          if (hasSelectedAssistantWorkspace(state)) {
+            return true;
+          }
+          appendLocalExchange("Select a workspace first.");
+          return false;
+        };
+        const applyWorkspaceInformationUpdate = (
+          updater: (current: WorkspaceInformationState) => WorkspaceInformationState,
+        ) => {
+          if (!ensureWorkspaceInfoContext()) {
+            return false;
+          }
+          get().updateWorkspaceInformation({ updater });
+          return true;
+        };
+
+        const stateBeforeRouting = get();
+        const localAction = resolveStaveAssistantLocalAction({
+          input: trimmedContent,
+          context: buildAssistantContext(),
+          allowDirectWorkspaceInfoEdits: stateBeforeRouting.settings.assistantAllowDirectWorkspaceInfoEdits,
+        });
+
+        if (localAction) {
+          switch (localAction.kind) {
+            case "show_summary":
+              appendLocalExchange(buildStaveAssistantSummaryResponse({
+                target: get().staveAssistant.target,
+                context: buildAssistantContext(),
+              }));
+              return;
+            case "show_information_summary":
+              appendLocalExchange(buildStaveAssistantLocalActionResponse({
+                action: localAction,
+                context: buildAssistantContext(),
+              }));
+              return;
+            case "open_settings":
+              window.dispatchEvent(new CustomEvent(STAVE_ASSISTANT_OPEN_SETTINGS_EVENT, {
+                detail: { section: "assistant" },
+              }));
+              break;
+            case "toggle_information_panel":
+              get().setLayout({
+                patch: {
+                  sidebarOverlayVisible: localAction.open ?? true,
+                  sidebarOverlayTab: "information",
+                },
+              });
+              break;
+            case "toggle_changes_panel":
+              get().setLayout({
+                patch: {
+                  sidebarOverlayVisible: localAction.open ?? true,
+                  sidebarOverlayTab: "changes",
+                },
+              });
+              break;
+            case "toggle_explorer_panel":
+              get().setLayout({
+                patch: {
+                  sidebarOverlayVisible: localAction.open ?? true,
+                  sidebarOverlayTab: "explorer",
+                },
+              });
+              break;
+            case "toggle_automation_panel":
+              get().setLayout({
+                patch: {
+                  sidebarOverlayVisible: localAction.open ?? true,
+                  sidebarOverlayTab: "automation",
+                },
+              });
+              break;
+            case "toggle_editor":
+              get().setLayout({
+                patch: {
+                  editorVisible: localAction.open ?? !get().layout.editorVisible,
+                },
+              });
+              break;
+            case "toggle_terminal":
+              get().setLayout({
+                patch: {
+                  terminalDocked: localAction.open ?? !get().layout.terminalDocked,
+                },
+              });
+              break;
+            case "toggle_workspace_sidebar":
+              get().setLayout({
+                patch: {
+                  workspaceSidebarCollapsed: localAction.open === undefined
+                    ? !get().layout.workspaceSidebarCollapsed
+                    : !localAction.open,
+                },
+              });
+              break;
+            case "switch_workspace":
+              await get().switchWorkspace({ workspaceId: localAction.workspaceId });
+              break;
+            case "open_project":
+              await get().openProject({ projectPath: localAction.projectPath });
+              break;
+            case "create_task":
+              if (!hasSelectedAssistantWorkspace(get())) {
+                appendLocalExchange("Open a project workspace first.");
+                return;
+              }
+              get().createTask({ title: localAction.title });
+              break;
+            case "select_task":
+              get().selectTask({ taskId: localAction.taskId });
+              break;
+            case "replace_notes":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                notes: localAction.text,
+              }))) {
+                return;
+              }
+              break;
+            case "append_notes":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                notes: current.notes.trim()
+                  ? `${current.notes.trim()}\n${localAction.text}`
+                  : localAction.text,
+              }))) {
+                return;
+              }
+              break;
+            case "clear_notes":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                notes: "",
+              }))) {
+                return;
+              }
+              break;
+            case "add_todo":
+              if (!applyWorkspaceInformationUpdate((current) => {
+                const nextTodo = createWorkspaceTodoItem();
+                nextTodo.text = localAction.text;
+                return {
+                  ...current,
+                  todos: [...current.todos, nextTodo],
+                };
+              })) {
+                return;
+              }
+              break;
+            case "complete_todo":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                todos: current.todos.map((todo) => (
+                  todo.id === localAction.todoId
+                    ? { ...todo, completed: true }
+                    : todo
+                )),
+              }))) {
+                return;
+              }
+              break;
+            case "delete_todo":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                todos: current.todos.filter((todo) => todo.id !== localAction.todoId),
+              }))) {
+                return;
+              }
+              break;
+            case "add_jira_link":
+              if (!applyWorkspaceInformationUpdate((current) => {
+                const nextLink = createWorkspaceJiraIssue();
+                nextLink.issueKey = localAction.issueKey;
+                nextLink.title = localAction.issueKey;
+                nextLink.url = localAction.url;
+                return {
+                  ...current,
+                  jiraIssues: [...current.jiraIssues, nextLink],
+                };
+              })) {
+                return;
+              }
+              break;
+            case "add_pull_request_link":
+              if (!applyWorkspaceInformationUpdate((current) => {
+                const nextLink = createWorkspaceLinkedPullRequest();
+                nextLink.title = localAction.title;
+                nextLink.url = localAction.url;
+                return {
+                  ...current,
+                  linkedPullRequests: [...current.linkedPullRequests, nextLink],
+                };
+              })) {
+                return;
+              }
+              break;
+            case "add_confluence_link":
+              if (!applyWorkspaceInformationUpdate((current) => {
+                const nextLink = createWorkspaceConfluencePage();
+                nextLink.title = localAction.title;
+                nextLink.url = localAction.url;
+                return {
+                  ...current,
+                  confluencePages: [...current.confluencePages, nextLink],
+                };
+              })) {
+                return;
+              }
+              break;
+            case "add_figma_link":
+              if (!applyWorkspaceInformationUpdate((current) => {
+                const nextLink = createWorkspaceFigmaResource();
+                nextLink.title = localAction.title;
+                nextLink.url = localAction.url;
+                nextLink.nodeId = localAction.nodeId;
+                return {
+                  ...current,
+                  figmaResources: [...current.figmaResources, nextLink],
+                };
+              })) {
+                return;
+              }
+              break;
+            case "add_slack_link":
+              if (!applyWorkspaceInformationUpdate((current) => {
+                const nextLink = createWorkspaceSlackThread();
+                nextLink.url = localAction.url;
+                nextLink.channelName = localAction.channelName;
+                return {
+                  ...current,
+                  slackThreads: [...current.slackThreads, nextLink],
+                };
+              })) {
+                return;
+              }
+              break;
+            case "add_custom_field":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                customFields: [
+                  ...current.customFields,
+                  createWorkspaceInfoCustomField({
+                    type: localAction.fieldType,
+                    label: localAction.label,
+                  }),
+                ],
+              }))) {
+                return;
+              }
+              break;
+            case "set_custom_field":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                customFields: current.customFields.map((field) => (
+                  field.id === localAction.fieldId
+                    ? updateAssistantCustomField({
+                        field,
+                        value: localAction.value,
+                      })
+                    : field
+                )),
+              }))) {
+                return;
+              }
+              break;
+          }
+
+          appendLocalExchange(buildStaveAssistantLocalActionResponse({
+            action: localAction,
+            context: buildAssistantContext(),
+          }));
+          return;
+        }
+
+        const contextSnapshot = buildStaveAssistantContextSnapshot({
+          target: stateBeforeRouting.staveAssistant.target,
+          context: buildAssistantContext(),
+        });
+        const routingDecision = await collectStaveAssistantRoutingDecision({
+          content: trimmedContent,
+          model: stateBeforeRouting.settings.assistantRouterModel,
+          settings: stateBeforeRouting.settings,
+          contextSnapshot,
+        });
+
+        if (routingDecision.mode === "handoff" && stateBeforeRouting.settings.assistantAutoHandoffToTask) {
+          const currentState = get();
+          if (!hasSelectedAssistantWorkspace(currentState)) {
+            appendLocalExchange("Open a project workspace first so I can hand this off to a task.");
+            return;
+          }
+
+          const nextTitle = normalizeSuggestedTaskTitle({ title: trimmedContent }) ?? "Assistant Task";
+          currentState.createTask({ title: nextTitle });
+          const nextTaskId = get().activeTaskId;
+          get().sendUserMessage({
+            taskId: nextTaskId,
+            content: trimmedContent,
+          });
+          appendLocalExchange(
+            `Created task "${nextTitle}" and handed the request off to task chat.${routingDecision.reason ? ` ${routingDecision.reason}` : ""}`,
+            { model: "stave-assistant-router" },
+          );
+          return;
+        }
+
+        const activeModel = routingDecision.mode === "planner"
+          ? stateBeforeRouting.settings.assistantPlannerModel
+          : stateBeforeRouting.settings.assistantChatModel;
+        const provider = inferProviderIdFromModel({ model: activeModel });
+        const turnId = crypto.randomUUID();
+        const workspaceId = get().activeWorkspaceId || undefined;
+        const workspaceCwd = get().workspacePathById[get().activeWorkspaceId] ?? get().projectPath ?? undefined;
+        const existingHistory = get().staveAssistant.messages;
+        const providerSession = get().staveAssistant.providerSession;
+        const retrievedContextParts: CanonicalRetrievedContextPart[] = [{
+          type: "retrieved_context",
+          sourceId: "stave:assistant-context",
+          title: "Stave Assistant Context",
+          content: contextSnapshot,
+        }];
+        if (existingHistory.length === 0 && workspaceCwd) {
+          const repoMapText = getRepoMapContextCache(workspaceCwd);
+          if (repoMapText) {
+            retrievedContextParts.push({
+              type: "retrieved_context",
+              sourceId: "stave:repo-map",
+              title: "Codebase Map",
+              content: repoMapText,
+            });
+          }
+        }
+
+        const conversation = buildCanonicalConversationRequest({
+          turnId,
+          taskId: STAVE_ASSISTANT_SESSION_ID,
+          workspaceId,
+          providerId: provider,
+          model: activeModel,
+          history: existingHistory,
+          userInput: trimmedContent,
+          mode: "chat",
+          nativeSessionId: providerSession?.[provider] ?? null,
+          retrievedContextParts,
+        });
+
+        set((state) => ({
+          staveAssistant: appendStaveAssistantPendingTurn({
+            assistant: state.staveAssistant,
+            content: trimmedContent,
+            providerId: provider,
+            model: activeModel,
+            turnId,
+          }),
+        }));
+
+        const providerTurnEventController = createProviderTurnEventController({
+          flushEvents: (pendingEvents) => {
+            set((state) => ({
+              staveAssistant: applyProviderEventsToStaveAssistant({
+                assistant: state.staveAssistant,
+                events: pendingEvents,
+                provider,
+                model: activeModel,
+                turnId,
+              }),
+            }));
+          },
+        });
+
+        runProviderTurn({
+          turnId,
+          provider,
+          prompt: trimmedContent,
+          conversation,
+          taskId: STAVE_ASSISTANT_SESSION_ID,
+          workspaceId,
+          cwd: workspaceCwd,
+          runtimeOptions: buildProviderRuntimeOptions({
+            provider,
+            model: activeModel,
+            settings: get().settings,
+            providerSession,
+          }),
+          onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
+        });
+      },
+      abortStaveAssistantTurn: () => {
+        const stateBefore = get();
+        const activeTurnId = stateBefore.staveAssistant.activeTurnId;
+        if (activeTurnId) {
+          void window.api?.provider?.abortTurn?.({ turnId: activeTurnId });
+        }
+        void window.api?.provider?.cleanupTask?.({ taskId: STAVE_ASSISTANT_SESSION_ID });
+        set((state) => {
+          const current = state.staveAssistant.messages;
+          const target = current[current.length - 1];
+          if (!target || target.role !== "assistant" || !target.isStreaming) {
+            return {
+              staveAssistant: {
+                ...state.staveAssistant,
+                activeTurnId: undefined,
+                providerSession: undefined,
+                nativeSessionReady: false,
+              },
+            };
+          }
+          const aborted: ChatMessage = {
+            ...target,
+            completedAt: buildRecentTimestamp(),
+            isStreaming: false,
+            parts: [
+              ...target.parts,
+              { type: "system_event", content: "Generation aborted by user." },
+            ],
+          };
+          return {
+            staveAssistant: {
+              ...state.staveAssistant,
+              messages: [...current.slice(0, -1), aborted],
+              activeTurnId: undefined,
+              providerSession: undefined,
+              nativeSessionReady: false,
+            },
+          };
+        });
+      },
+      resolveStaveAssistantApproval: async ({ messageId, approved }) => {
+        const stateBefore = get();
+        const activeTurnId = stateBefore.staveAssistant.activeTurnId;
+        const message = stateBefore.staveAssistant.messages.find((item) => item.id === messageId);
+        const approvalPart = findLatestPendingApprovalPart({ message });
+
+        const appendApprovalFailure = (failureText: string) => {
+          set((state) => ({
+            staveAssistant: appendStaveAssistantStandaloneMessage({
+              assistant: state.staveAssistant,
+              content: failureText,
+              providerId: "stave",
+              model: "system",
+            }),
+          }));
+        };
+
+        const applyApprovalResponse = (requestId: string) => {
+          set((state) => ({
+            staveAssistant: {
+              ...state.staveAssistant,
+              messages: updateMessageById({
+                messages: state.staveAssistant.messages,
+                messageId,
+                update: (currentMessage) => ({
+                  ...currentMessage,
+                  parts: updateApprovalPartsByRequestId({
+                    parts: currentMessage.parts,
+                    requestId,
+                    approved,
+                  }),
+                }),
+              }),
+            },
+          }));
+        };
+
+        if (activeTurnId && approvalPart) {
+          const respondApproval = window.api?.provider?.respondApproval;
+          if (respondApproval) {
+            void respondApproval({
+              turnId: activeTurnId,
+              requestId: approvalPart.requestId,
+              approved,
+            }).then((result) => {
+              if (!result.ok) {
+                appendApprovalFailure(`Approval delivery failed: ${result.message ?? "unknown"}`);
+                return;
+              }
+              applyApprovalResponse(approvalPart.requestId);
+            }).catch((error) => {
+              appendApprovalFailure(`Approval delivery failed: ${String(error)}`);
+            });
+            return;
+          }
+        }
+
+        if (!activeTurnId && approvalPart && window.api?.provider?.respondApproval) {
+          appendApprovalFailure("Approval delivery failed: no active turn found for this assistant turn.");
+          return;
+        }
+        if (approvalPart) {
+          applyApprovalResponse(approvalPart.requestId);
+        }
+      },
+      resolveStaveAssistantUserInput: async ({ messageId, answers, denied }) => {
+        const stateBefore = get();
+        const activeTurnId = stateBefore.staveAssistant.activeTurnId;
+        const message = stateBefore.staveAssistant.messages.find((item) => item.id === messageId);
+        const userInputPart = findLatestPendingUserInputPart({ message });
+
+        const appendUserInputFailure = (failureText: string) => {
+          set((state) => ({
+            staveAssistant: appendStaveAssistantStandaloneMessage({
+              assistant: state.staveAssistant,
+              content: failureText,
+              providerId: "stave",
+              model: "system",
+            }),
+          }));
+        };
+
+        const applyUserInputResponse = (requestId: string) => {
+          set((state) => ({
+            staveAssistant: {
+              ...state.staveAssistant,
+              messages: updateMessageById({
+                messages: state.staveAssistant.messages,
+                messageId,
+                update: (currentMessage) => ({
+                  ...currentMessage,
+                  parts: updateUserInputPartsByRequestId({
+                    parts: currentMessage.parts,
+                    requestId,
+                    answers,
+                    denied,
+                  }),
+                }),
+              }),
+            },
+          }));
+        };
+
+        if (activeTurnId && userInputPart) {
+          const respondUserInput = window.api?.provider?.respondUserInput;
+          if (respondUserInput) {
+            void respondUserInput({
+              turnId: activeTurnId,
+              requestId: userInputPart.requestId,
+              answers,
+              denied,
+            }).then((result) => {
+              if (!result.ok) {
+                appendUserInputFailure(`User input delivery failed: ${result.message ?? "unknown"}`);
+                return;
+              }
+              applyUserInputResponse(userInputPart.requestId);
+            }).catch((error) => {
+              appendUserInputFailure(`User input delivery failed: ${String(error)}`);
+            });
+            return;
+          }
+        }
+
+        if (!activeTurnId && userInputPart && window.api?.provider?.respondUserInput) {
+          appendUserInputFailure("User input delivery failed: no active turn found for this assistant turn.");
+          return;
+        }
+        if (userInputPart) {
+          applyUserInputResponse(userInputPart.requestId);
+        }
+      },
       sendUserMessage: ({ taskId, content, fileContexts, imageContexts }) => {
         const turnId = crypto.randomUUID();
         let state = get();
@@ -4661,6 +5766,10 @@ export const useAppStore = create<AppState>()(
         });
       },
       resolveApproval: ({ taskId, messageId, approved }) => {
+        if (taskId === STAVE_ASSISTANT_SESSION_ID) {
+          void get().resolveStaveAssistantApproval({ messageId, approved });
+          return;
+        }
         const stateBefore = get();
         if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
           return;
@@ -4760,6 +5869,10 @@ export const useAppStore = create<AppState>()(
         }
       },
       resolveUserInput: ({ taskId, messageId, answers, denied }) => {
+        if (taskId === STAVE_ASSISTANT_SESSION_ID) {
+          void get().resolveStaveAssistantUserInput({ messageId, answers, denied });
+          return;
+        }
         const stateBefore = get();
         if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
           return;
@@ -4861,6 +5974,33 @@ export const useAppStore = create<AppState>()(
         }
       },
       resolveDiff: ({ taskId, messageId, accepted, partIndex }) => {
+        if (taskId === STAVE_ASSISTANT_SESSION_ID) {
+          set((state) => ({
+            staveAssistant: {
+              ...state.staveAssistant,
+              messages: updateMessageById({
+                messages: state.staveAssistant.messages,
+                messageId,
+                update: (message) => ({
+                  ...message,
+                  parts: message.parts.map((part, index) => {
+                    if (part.type !== "code_diff") {
+                      return part;
+                    }
+                    if (partIndex != null && index !== partIndex) {
+                      return part;
+                    }
+                    return {
+                      ...part,
+                      status: accepted ? "accepted" : "rejected",
+                    };
+                  }),
+                }),
+              }),
+            },
+          }));
+          return;
+        }
         set((state) => {
           const current = state.messagesByTask[taskId] ?? [];
           return {
@@ -5366,6 +6506,11 @@ export const useAppStore = create<AppState>()(
         layout: state.layout,
         settings: state.settings,
         projectName: state.projectName,
+        staveAssistant: {
+          ...state.staveAssistant,
+          activeTurnId: undefined,
+          messages: state.staveAssistant.messages.slice(-40),
+        },
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) {
@@ -5518,6 +6663,17 @@ export const useAppStore = create<AppState>()(
           }));
         }
         state.layout = normalizeLayoutState(state.layout);
+        state.staveAssistant = state.staveAssistant
+          ? {
+              ...createEmptyStaveAssistantState({
+                defaultTarget: state.settings.assistantDefaultTarget,
+              }),
+              ...state.staveAssistant,
+              activeTurnId: undefined,
+            }
+          : createEmptyStaveAssistantState({
+              defaultTarget: state.settings.assistantDefaultTarget,
+            });
         const isDark = resolveDarkModeForTheme({
           themeMode: state.settings?.themeMode ?? "dark",
           fallback: state.isDarkMode,

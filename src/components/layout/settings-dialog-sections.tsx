@@ -64,6 +64,7 @@ import {
 } from "@/lib/thinking-phrases";
 import type { ResolvedWorkspaceScriptsConfig } from "@/lib/workspace-scripts/types";
 import { DeveloperSection } from "./settings-dialog-developer-section";
+import { AssistantSection } from "./settings-dialog-assistant-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
 import { ToolingSection } from "./settings-dialog-tooling-section";
 import { WorkspaceScriptsManager } from "./WorkspaceScriptsManager";
@@ -2384,6 +2385,8 @@ export function SettingsDialogSectionContent(args: {
       return <TerminalSection />;
     case "chat":
       return <ChatSection />;
+    case "assistant":
+      return <AssistantSection />;
     case "tooling":
       return <ToolingSection />;
     case "skills":

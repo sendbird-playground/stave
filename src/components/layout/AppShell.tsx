@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { GlobalCommandPalette } from "@/components/layout/GlobalCommandPalette";
+import { StaveAssistantWidget } from "@/components/layout/StaveAssistantWidget";
 import { TopBar } from "@/components/layout/TopBar";
 import { ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
@@ -13,7 +14,12 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
 import { isTaskArchived } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
-import { MIN_EDITOR_PANEL_WIDTH, WORKSPACE_SIDEBAR_MIN_WIDTH, useAppStore } from "@/store/app.store";
+import {
+  MIN_EDITOR_PANEL_WIDTH,
+  STAVE_ASSISTANT_OPEN_SETTINGS_EVENT,
+  WORKSPACE_SIDEBAR_MIN_WIDTH,
+  useAppStore,
+} from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
 import { isEditableShortcutTarget, shouldAbortTaskOnEscape } from "@/components/layout/app-shell.shortcuts";
@@ -87,6 +93,7 @@ export function AppShell() {
     openProject,
     switchWorkspace,
     abortTaskTurn,
+    focusStaveAssistant,
     setLayout,
   ] = useAppStore(useShallow((state) => [
     state.projectPath,
@@ -122,6 +129,7 @@ export function AppShell() {
     state.openProject,
     state.switchWorkspace,
     state.abortTaskTurn,
+    state.focusStaveAssistant,
     state.setLayout,
   ] as const));
   const hasProject = Boolean(projectPath);
@@ -176,6 +184,9 @@ export function AppShell() {
   const handleOpenCommandPalette = useCallback(() => {
     setCommandPaletteOpen(true);
   }, []);
+  const handleOpenStaveAssistant = useCallback(() => {
+    focusStaveAssistant();
+  }, [focusStaveAssistant]);
   const handleCreatePullRequest = useCallback(() => {
     dispatchTopBarPrAction("create-pr");
   }, []);
@@ -484,6 +495,21 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
+    const handleAssistantOpenSettings = (event: Event) => {
+      const customEvent = event as CustomEvent<{ projectPath?: string | null; section?: SectionId }>;
+      handleOpenSettings({
+        projectPath: customEvent.detail?.projectPath ?? null,
+        section: customEvent.detail?.section ?? "assistant",
+      });
+    };
+
+    window.addEventListener(STAVE_ASSISTANT_OPEN_SETTINGS_EVENT, handleAssistantOpenSettings as EventListener);
+    return () => {
+      window.removeEventListener(STAVE_ASSISTANT_OPEN_SETTINGS_EVENT, handleAssistantOpenSettings as EventListener);
+    };
+  }, [handleOpenSettings]);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return undefined;
     }
@@ -665,6 +691,7 @@ export function AppShell() {
       createTask: () => createTask({ title: "" }),
       continueWorkspace: handleContinueWorkspace,
       focusFileSearch: handleFocusFileSearch,
+      openStaveAssistant: handleOpenStaveAssistant,
       openLatestCompletedTurnTask: handleOpenLatestCompletedTurnTask,
       openInTerminal: async (path: string) => {
         await window.api?.shell?.openInTerminal?.({ path });
@@ -715,6 +742,7 @@ export function AppShell() {
     createTask,
     editorVisible,
     handleFocusFileSearch,
+    handleOpenStaveAssistant,
     handleOpenLatestCompletedTurnTask,
     handleOpenKeyboardShortcuts,
     handleOpenSettings,
@@ -966,6 +994,7 @@ export function AppShell() {
           <RightRail />
         </div>
       </div>
+      <StaveAssistantWidget />
     </div>
   );
 }

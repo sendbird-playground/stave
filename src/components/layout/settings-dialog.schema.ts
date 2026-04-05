@@ -8,6 +8,7 @@ import {
   ScrollText,
   SearchCheck,
   Shield,
+  Sparkles,
   TerminalSquare,
   Wrench,
 } from "lucide-react";
@@ -17,6 +18,7 @@ export const settingsSections = [
   { id: "projects", label: "Projects", icon: Folder },
   { id: "theme", label: "Design", icon: Palette },
   { id: "chat", label: "Chat", icon: Bot },
+  { id: "assistant", label: "Assistant", icon: Sparkles },
   { id: "providers", label: "Providers", icon: Wrench },
   { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "skills", label: "Skills", icon: SearchCheck },
@@ -33,6 +35,6 @@ export type SectionId = (typeof settingsSections)[number]["id"];
 export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
   { label: "Workspace", ids: ["general", "projects"] },
   { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
-  { label: "Providers", ids: ["providers", "prompts", "skills", "commandPalette", "commands"] },
+  { label: "Providers", ids: ["assistant", "providers", "prompts", "skills", "commandPalette", "commands"] },
   { label: "System", ids: ["tooling", "developer"] },
 ];
