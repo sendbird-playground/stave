@@ -1,0 +1,130 @@
+# Provider Sandbox And Approval Guide
+
+## Summary
+
+- Stave exposes separate runtime safety controls for Claude and Codex.
+- Use this guide to choose the right combination for review-only work, normal edits, planning, or higher-autonomy automation.
+
+## When To Use It
+
+- You want to limit whether a turn can edit files, use the network, or stop for approval.
+- You switch between Claude and Codex and want comparable safety levels.
+- You use Stave Auto and need to understand what happens when the routed turn lands on Codex plan mode.
+
+## Before You Start
+
+- Claude controls affect `claude-code` turns and Claude-backed Stave Auto turns.
+- Codex controls affect `codex` turns and Codex-backed Stave Auto turns.
+- The composer runtime chips under the prompt box show the effective settings for the next turn.
+- If you need strict no-write behavior, Codex exposes an explicit `read-only` mode. Claude does not expose an equivalent read/write scope selector in Stave.
+
+## Quick Start
+
+1. Open **Settings → Providers**.
+2. Under **Claude Runtime Controls**, choose a permission mode and decide whether Claude should run in a sandbox and whether sandbox escape fallbacks are allowed.
+3. Under **Codex Runtime Controls**, choose a sandbox mode, approval policy, and network setting.
+4. Check the runtime chips under the composer before sending the turn.
+
+Recommended starting points:
+
+- Review only: Claude `acceptEdits` + `Sandbox Enabled = On` + `Allow Unsandboxed Commands = Off`; Codex `read-only` + `on-request` + `Network Access = Off`.
+- Normal implementation: Claude `acceptEdits` + `Sandbox Enabled = On`; Codex `workspace-write` + `on-request` or `untrusted`.
+- Planning only: Claude `Permission Mode = plan`; Codex composer plan toggle `On`, which makes the turn effectively `read-only` + `never`.
+
+## Interface Walkthrough
+
+### Entry Points
+
+- **Settings → Providers → Claude Runtime Controls**
+- **Settings → Providers → Codex Runtime Controls**
+- The composer runtime chips below the prompt box, which show the current sandbox, approval, network, and plan state before send
+- The composer plan toggle switches Claude turns into `Permission Mode = plan`
+- The composer plan toggle enables experimental plan mode for the current Codex draft turn
+
+### Key Controls
+
+| Provider | Control | What it changes | Good default |
+|---|---|---|---|
+| Claude | `Permission Mode` | Main autonomy dial for Claude turns | `auto` or `acceptEdits` |
+| Claude | `Dangerous Skip Permissions` | Skips permission prompts more aggressively when `bypassPermissions` is active | `Off` |
+| Claude | `Sandbox Enabled` | Requests Claude tool execution inside its sandbox path | `On` for guarded work |
+| Claude | `Allow Unsandboxed Commands` | Lets Claude fall back to commands outside the sandbox when sandboxed execution cannot proceed | `Off` unless you intentionally want looser fallbacks |
+| Codex | `Sandbox Mode` | Sets disk access scope directly | `workspace-write` for normal work, `read-only` for inspection |
+| Codex | `Approval Policy` | Controls when Codex pauses before acting | `on-request` |
+| Codex | `Network Access` | Allows or blocks network use | `On` only when needed |
+| Codex | `Skip Git Repo Check` | Lets Codex run outside a Git repository | `Off` |
+| Codex | Composer `Plan` toggle | Enables experimental plan mode for the turn | `Off` unless you want planning-only behavior |
+
+Provider differences that matter in practice:
+
+- Claude gives you a sandbox toggle plus a sandbox-escape toggle.
+- Codex gives you an explicit sandbox scope: `read-only`, `workspace-write`, or `danger-full-access`.
+- Codex approval is a separate axis from sandboxing. Claude autonomy is more concentrated in `Permission Mode`.
+
+## Common Workflows
+
+### Create Or Configure Something
+
+1. Pick the outcome first: inspect only, edit inside the repo, or run with high autonomy.
+2. If you need explicit no-write behavior, prefer Codex `read-only`.
+3. If you want Claude to stay contained, use `Sandbox Enabled = On` and `Allow Unsandboxed Commands = Off`.
+4. If you want fewer pauses in Codex without going fully hands-off, use `Approval Policy = untrusted`.
+5. If you want planning only, use Claude `plan` or the Codex composer plan toggle.
+
+### Run Or Verify Something
+
+1. Confirm the runtime chips under the composer match the intended settings.
+2. Send a harmless prompt such as “summarize repo status” or “list likely files to inspect first.”
+3. Success looks like the runtime chips reflecting the expected state before send. For Codex plan mode, look for `Plan: Experimental` and an effective `Sandbox: Read Only`. For Claude turns, look for `Sandbox: Enabled/Disabled` and `Unsandboxed: On/Off`.
+
+## Files And Data
+
+- These settings live in Stave application settings, not in your repository files.
+- The current Claude defaults are `Permission Mode = auto`, `Sandbox Enabled = false`, and `Allow Unsandboxed Commands = false`.
+- The current Codex defaults are `Sandbox Mode = workspace-write`, `Approval Policy = on-request`, `Network Access = true`, and `Plan = Off`.
+
+```json
+{
+  "claudePermissionMode": "acceptEdits",
+  "claudeSandboxEnabled": true,
+  "claudeAllowUnsandboxedCommands": false,
+  "codexSandboxMode": "workspace-write",
+  "codexApprovalPolicy": "on-request",
+  "codexNetworkAccessEnabled": true,
+  "codexExperimentalPlanMode": false
+}
+```
+
+## Limitations And Advanced Options
+
+- Claude in Stave does not expose a Codex-style `read-only` / `workspace-write` / `danger-full-access` selector.
+- `Dangerous Skip Permissions` is only meaningful when Claude is already in `bypassPermissions`.
+- Codex experimental plan mode rewrites the effective runtime for that turn to `read-only` + `never`, regardless of the normal Codex settings.
+- `Skip Git Repo Check` broadens where Codex can start, but it does not replace sandboxing.
+- Claude SDK has deeper sandbox settings internally, but Stave currently supports the user-facing controls documented here.
+
+## Troubleshooting
+
+### Codex Still Shows Read Only
+
+- Symptom: the composer shows `Sandbox: Read Only` even though you chose `workspace-write` or `danger-full-access`.
+- Cause: Codex experimental plan mode is enabled for the draft turn, or Stave Auto routed a plan turn into Codex.
+- Fix: turn off the Codex composer plan toggle, or switch the task out of plan mode before sending.
+
+### Claude Refuses A Command In Sandbox
+
+- Symptom: Claude stops or refuses a command that needs broader access.
+- Cause: `Sandbox Enabled` is on and `Allow Unsandboxed Commands` is off, so Stave will not allow sandbox escape fallbacks.
+- Fix: keep the safer setting for review-style work, or enable `Allow Unsandboxed Commands` only if you trust the task and want looser fallbacks.
+
+### I Need A Strict No-Write Claude Mode
+
+- Symptom: you want Claude to inspect only and never mutate files.
+- Cause: Stave does not expose a Codex-style explicit read-only scope for Claude.
+- Fix: use Codex `read-only` for strict inspection tasks, or keep Claude sandboxed with unsandboxed fallbacks off when you only need a more guarded Claude path.
+
+## Related Docs
+
+- [Provider Runtimes](../providers/provider-runtimes.md)
+- [Stave Model Router](stave-model-router.md)
+- [Install Guide](../install-guide.md)
