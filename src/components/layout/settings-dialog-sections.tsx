@@ -50,6 +50,7 @@ import {
   normalizeProjectWorkspaceRootNodeModulesSymlinkPreference,
   type RecentProjectState,
 } from "@/store/project.utils";
+import { resolveSettingsProjectSelection } from "@/components/layout/settings-dialog.utils";
 import {
   DEFAULT_PROMPT_RESPONSE_STYLE,
   DEFAULT_PROMPT_PR_DESCRIPTION,
@@ -515,6 +516,8 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
   );
   const removeProjectFromList = useAppStore((state) => state.removeProjectFromList);
   const projectMenuRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const allowHighlightedOverrideRef = useRef(true);
+  const lastHighlightedProjectPathRef = useRef<string | null>(null);
   const [projectToRemove, setProjectToRemove] = useState<{
     projectPath: string;
     projectName: string;
@@ -547,35 +550,29 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
   );
 
   useEffect(() => {
-    if (projects.length === 0) {
-      setSelectedProjectPath(null);
-      return;
-    }
-
     const highlightedProjectPath = args.highlightedProjectPath?.trim();
-    const highlightedProject = highlightedProjectPath
-      ? projects.find((project) => project.projectPath === highlightedProjectPath) ?? null
-      : null;
+    const normalizedHighlightedProjectPath = highlightedProjectPath || null;
+    if (normalizedHighlightedProjectPath !== lastHighlightedProjectPathRef.current) {
+      lastHighlightedProjectPathRef.current = normalizedHighlightedProjectPath;
+      allowHighlightedOverrideRef.current = true;
+    }
 
-    if (highlightedProject && selectedProjectPath !== highlightedProject.projectPath) {
-      setSelectedProjectPath(highlightedProject.projectPath);
+    const nextSelectedProjectPath = resolveSettingsProjectSelection({
+      projects,
+      selectedProjectPath,
+      highlightedProjectPath: normalizedHighlightedProjectPath,
+      currentProjectPath: projectPath,
+      allowHighlightedOverride: allowHighlightedOverrideRef.current,
+    });
+    if (nextSelectedProjectPath === selectedProjectPath) {
       return;
     }
 
-    if (selectedProjectPath && projects.some((project) => project.projectPath === selectedProjectPath)) {
-      return;
-    }
-
-    const currentProject = projectPath
-      ? projects.find((project) => project.projectPath === projectPath) ?? null
-      : null;
-    const fallbackProject = currentProject ?? projects[0] ?? null;
-
-    setSelectedProjectPath(fallbackProject?.projectPath ?? null);
+    setSelectedProjectPath(nextSelectedProjectPath);
   }, [args.highlightedProjectPath, projectPath, projects, selectedProjectPath]);
 
   useEffect(() => {
-    const activeProjectPath = args.highlightedProjectPath?.trim() || selectedProjectPath;
+    const activeProjectPath = selectedProjectPath ?? args.highlightedProjectPath?.trim() ?? null;
     if (!activeProjectPath) {
       return;
     }
@@ -634,6 +631,7 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
                     }}
                     type="button"
                     onClick={() => {
+                      allowHighlightedOverrideRef.current = false;
                       setSelectedProjectPath(project.projectPath);
                     }}
                     className={cn(
