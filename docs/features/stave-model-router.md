@@ -152,7 +152,7 @@ Stave emits its own meta-events (prefixed `stave:`) alongside the provider's nat
 
 **Supervisor prompts:** edit `buildSupervisorBreakdownPrompt(...)` / `SUPERVISOR_SYNTHESIS_PROMPT` in `stave-orchestrator.ts`.
 
-**New model tier:** add it to `CLAUDE_SDK_MODEL_OPTIONS` or `CODEX_SDK_MODEL_OPTIONS` in `model-catalog.ts`, then map it into the Stave Auto role settings.
+**New model tier:** add it to `CLAUDE_SDK_MODEL_OPTIONS` or `CODEX_MODEL_OPTIONS` in `model-catalog.ts`, then map it into the Stave Auto role settings.
 
 ## Limitations
 

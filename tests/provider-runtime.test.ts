@@ -93,6 +93,7 @@ describe("parseNormalizedEvent", () => {
       payload: {
         type: "plan_ready",
         planText: "Ship it.",
+        sourceSegmentId: "plan-segment-1",
       },
     });
 

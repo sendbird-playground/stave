@@ -479,6 +479,42 @@ function stripPlanTagsFromMessage(message: ChatMessage): ChatMessage {
   return { ...message, content, parts };
 }
 
+/**
+ * Remove text parts from a specific provider segment. Codex structured plan
+ * items stream through the normal text path before they are promoted into a
+ * dedicated plan response, so replay needs the source segment id to strip that
+ * transient preview without dropping unrelated commentary from other segments.
+ */
+function stripTextSegmentFromMessage(args: {
+  message: ChatMessage;
+  segmentId?: string;
+}): ChatMessage {
+  const segmentId = args.segmentId?.trim();
+  if (!segmentId) {
+    return args.message;
+  }
+
+  let removed = false;
+  const parts = args.message.parts.filter((part) => {
+    if (part.type === "text" && part.segmentId === segmentId) {
+      removed = true;
+      return false;
+    }
+    return true;
+  });
+
+  if (!removed) {
+    return args.message;
+  }
+
+  const content = parts.reduce((acc, part) => part.type === "text" ? `${acc}${part.text}` : acc, "");
+  return {
+    ...args.message,
+    content,
+    parts,
+  };
+}
+
 function createPlanAssistantMessage(args: {
   taskId: string;
   count: number;
@@ -921,7 +957,10 @@ export function replayProviderEventsToTaskState(args: {
 
       // Strip raw <proposed_plan> tags that leaked into the streaming
       // message so the prior assistant bubble isn't garbled.
-      const cleanedTarget = stripPlanTagsFromMessage(target);
+      const cleanedTarget = stripPlanTagsFromMessage(stripTextSegmentFromMessage({
+        message: target,
+        segmentId: event.sourceSegmentId,
+      }));
       const shouldAppendSeparatePlanMessage =
         !cleanedTarget.isPlanResponse
         && hasRenderableAssistantContent({ message: cleanedTarget });

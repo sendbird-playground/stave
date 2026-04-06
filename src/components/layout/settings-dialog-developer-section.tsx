@@ -121,7 +121,7 @@ export function ProviderTimeoutCard() {
   return (
     <SettingsCard
       title="Provider Timeout"
-      description="Maximum time to wait for a Claude or Codex SDK response before showing a timeout error."
+      description="Maximum time to wait for a Claude or Codex runtime response before showing a timeout error."
     >
       <LabeledField
         title="Timeout Window"
@@ -174,7 +174,7 @@ export function CodexBinaryPathCard() {
           Supported Codex baseline
         </p>
         <p className="mt-1">
-          Stave targets Codex SDK `0.118.0` and expects a local `codex` CLI around `0.118.0`.
+          Stave targets the Codex App Server path in local `codex` CLI `0.118.0`.
           If your installed CLI is older, update it or point this field at the version you want Stave to use.
         </p>
       </div>

@@ -9,6 +9,10 @@ import {
   resolveCodexExecutablePath,
   streamCodexWithSdk,
 } from "./codex-sdk-runtime";
+import {
+  cleanupCodexAppServerTask,
+  streamCodexWithAppServer,
+} from "./codex-app-server-runtime";
 import { getProviderConnectedToolStatus } from "./connected-tool-status";
 import {
   buildStaveResolvedArgs,
@@ -52,6 +56,11 @@ const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
 ] as const;
+const CODEX_RUNTIME_SELECTOR = process.env.STAVE_CODEX_RUNTIME?.trim().toLowerCase();
+
+function shouldUseLegacyCodexRuntime() {
+  return CODEX_RUNTIME_SELECTOR === "legacy-sdk";
+}
 
 function upsertActiveSession(args: {
   turnId: string;
@@ -84,7 +93,7 @@ function toClaudeErrorEvents(args: { message: string }): BridgeEvent[] {
 
 function toCodexErrorEvents(args: { message: string }): BridgeEvent[] {
   return [
-    { type: "system", content: "codex SDK turn failed" },
+    { type: "system", content: "codex turn failed" },
     { type: "text", text: args.message },
     { type: "done" as const },
   ];
@@ -515,7 +524,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
   let timedOut = false;
   try {
     const events = await withTimeout({
-      task: streamCodexWithSdk({
+      task: (shouldUseLegacyCodexRuntime() ? streamCodexWithSdk : streamCodexWithAppServer)({
         ...args,
         onEvent: (event) => {
           if (timedOut) {
@@ -531,6 +540,22 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
             abort: aborter,
           });
         },
+        registerApprovalResponder: (responder) => {
+          upsertActiveSession({
+            turnId,
+            providerId: args.providerId,
+            taskId: args.taskId,
+            respondApproval: responder,
+          });
+        },
+        registerUserInputResponder: (responder) => {
+          upsertActiveSession({
+            turnId,
+            providerId: args.providerId,
+            taskId: args.taskId,
+            respondUserInput: responder,
+          });
+        },
       }),
       timeoutMs: turnTimeoutMs,
       onTimeout: () => {
@@ -542,7 +567,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       return events;
     }
     const fallback = toCodexErrorEvents({
-      message: `Codex SDK unavailable/timeout. Check codex auth and SDK environment. timeout=${turnTimeoutMs}ms`,
+      message: `Codex unavailable/timeout. Check codex auth and runtime environment. timeout=${turnTimeoutMs}ms`,
     });
     fallback.forEach((event) => args.onEvent?.(event));
     return fallback;
@@ -639,6 +664,7 @@ export const providerRuntime: ProviderRuntime = {
     clearActiveTaskSessions({ taskId });
     cleanupClaudeTask(taskId);
     cleanupCodexTask(taskId);
+    cleanupCodexAppServerTask(taskId);
     return { ok: true, message: `Cleaned provider runtime state for task ${taskId}.` };
   },
   respondApproval: ({ turnId, requestId, approved }) => ({

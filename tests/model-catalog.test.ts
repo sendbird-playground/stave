@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  CODEX_SDK_MODEL_OPTIONS,
+  CODEX_MODEL_OPTIONS,
   STAVE_META_MODEL_OPTIONS,
   getDefaultModelForProvider,
   getNextProviderId,
@@ -15,7 +15,7 @@ import {
 
 describe("model catalog", () => {
   test("includes the verified Codex model set", () => {
-    expect(CODEX_SDK_MODEL_OPTIONS).toEqual([
+    expect(CODEX_MODEL_OPTIONS).toEqual([
       "gpt-5.4",
       "gpt-5.4-mini",
       "gpt-5.3-codex",

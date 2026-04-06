@@ -60,7 +60,7 @@ export type BridgeEvent =
     }>;
   }
   | { type: "tool_progress"; toolUseId: string; toolName: string; elapsedSeconds: number }
-  | { type: "plan_ready"; planText: string }
+  | { type: "plan_ready"; planText: string; sourceSegmentId?: string }
   | {
     type: "system";
     content: string;

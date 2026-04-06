@@ -664,7 +664,9 @@ export function mapCodexItemEvent(args: {
       const planText = (planItem.plan_markdown ?? planItem.text ?? "").trim();
       if (lifecycle === "item.completed") {
         codexItemTextLength.delete(itemId);
-        return planText ? [{ type: "plan_ready", planText }] : [];
+        return planText
+          ? [{ type: "plan_ready", planText, ...(itemId ? { sourceSegmentId: itemId } : {}) }]
+          : [];
       }
       // For started/updated, stream the plan text as regular text so the
       // user can see progress while the plan is being generated.

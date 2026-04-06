@@ -104,6 +104,7 @@ const UserInputEventSchema = z.object({
 const PlanReadyEventSchema = z.object({
   type: z.literal("plan_ready"),
   planText: z.string(),
+  sourceSegmentId: z.string().optional(),
 });
 
 const SystemEventSchema = z.object({

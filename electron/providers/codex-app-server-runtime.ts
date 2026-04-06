@@ -1,0 +1,1456 @@
+import type { BridgeEvent, StreamTurnArgs } from "./types";
+import type {
+  ConnectedToolId,
+  ConnectedToolStatusEntry,
+  ConnectedToolStatusResponse,
+} from "../../src/lib/providers/connected-tool-status";
+import { resolveExecutablePath, resolveLoginShellEnvVarValue } from "./executable-path";
+import { createTurnDiffTracker } from "./turn-diff-tracker";
+import { toText } from "./utils";
+import {
+  buildProviderTurnPrompt,
+  resolveProviderResumeSessionId,
+} from "../../src/lib/providers/provider-request-translators";
+import {
+  resolveEffectiveCodexApprovalPolicy,
+  resolveEffectiveCodexSandboxMode,
+} from "../../src/lib/providers/codex-runtime-options";
+import { homedir } from "node:os";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { accessSync, constants } from "node:fs";
+import path from "node:path";
+import { createInterface } from "node:readline";
+import {
+  buildRuntimeProcessEnv,
+  parseBooleanEnv,
+  probeExecutableVersion,
+} from "./runtime-shared";
+import {
+  getConnectedToolLabel,
+  normalizeConnectedToolIds,
+} from "../../src/lib/providers/connected-tool-status";
+
+const threadIdByTask = new Map<string, string>();
+const clientByExecutablePath = new Map<string, CodexAppServerClient>();
+
+const CODEX_LOOKUP_PATHS = [
+  `${homedir()}/.bun/bin`,
+  `${homedir()}/.local/bin`,
+] as const;
+const CODEX_SHARED_RUNTIME_DIRECTORIES = [
+  `${homedir()}/.agents`,
+  `${homedir()}/.codex`,
+  `${homedir()}/.stave`,
+] as const;
+const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
+  "SLACK_OAUTH_TOKEN",
+  "STAVE_LOCAL_MCP_TOKEN",
+] as const;
+
+type JsonRpcId = string | number;
+type JsonRpcMessage = {
+  jsonrpc?: string;
+  id?: JsonRpcId;
+  method?: string;
+  params?: unknown;
+  result?: unknown;
+  error?: { code?: number; message?: string; data?: unknown };
+};
+
+type ServerRequestMethod =
+  | "item/commandExecution/requestApproval"
+  | "item/fileChange/requestApproval"
+  | "item/permissions/requestApproval"
+  | "item/tool/requestUserInput"
+  | "mcpServer/elicitation/request"
+  | "applyPatchApproval"
+  | "execCommandApproval"
+  | "item/tool/call"
+  | "account/chatgptAuthTokens/refresh";
+
+interface PendingApprovalRequest {
+  serverRequestId: JsonRpcId;
+  responseKind: "review" | "commandExecution" | "fileChange" | "permissions";
+  permissions?: {
+    network?: unknown;
+    fileSystem?: unknown;
+  } | null;
+}
+
+interface PendingUserInputRequest {
+  serverRequestId: JsonRpcId;
+}
+
+interface CodexMcpServerStatus {
+  name: string;
+  authStatus?: string | null;
+}
+
+function resolveSandboxMode(args: {
+  runtimeValue?: "read-only" | "workspace-write" | "danger-full-access";
+  envValue?: string;
+  planMode?: boolean;
+  fallback: "read-only" | "workspace-write" | "danger-full-access";
+}) {
+  return resolveEffectiveCodexSandboxMode({
+    sandboxMode: args.runtimeValue ?? args.envValue,
+    planMode: args.planMode,
+    fallback: args.fallback,
+  });
+}
+
+function resolveApprovalPolicy(args: {
+  runtimeValue?: "never" | "on-request" | "untrusted";
+  envValue?: string;
+  planMode?: boolean;
+  fallback?: "never" | "on-request" | "untrusted";
+}): "never" | "on-request" | "untrusted" | undefined {
+  const candidate = args.runtimeValue ?? args.envValue;
+  if (candidate !== "never" && candidate !== "on-request" && candidate !== "on-failure" && candidate !== "untrusted") {
+    return args.fallback == null
+      ? undefined
+      : resolveEffectiveCodexApprovalPolicy({
+        planMode: args.planMode,
+        fallback: args.fallback,
+      });
+  }
+  return resolveEffectiveCodexApprovalPolicy({
+    approvalPolicy: candidate,
+    planMode: args.planMode,
+    fallback: args.fallback,
+  });
+}
+
+function buildCodexEnv(args: { executablePath?: string } = {}) {
+  const env = buildRuntimeProcessEnv({
+    executablePath: args.executablePath,
+    extraPaths: CODEX_LOOKUP_PATHS,
+  });
+  for (const key of CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS) {
+    if (env[key]?.trim()) {
+      continue;
+    }
+    const fallbackValue = resolveLoginShellEnvVarValue({ key });
+    if (fallbackValue) {
+      env[key] = fallbackValue;
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
+function toCodexUserFacingErrorMessage(args: { message: string }) {
+  const lower = args.message.toLowerCase();
+  if (lower.includes("auth") || lower.includes("api key") || lower.includes("login") || lower.includes("unauthorized")) {
+    return "Codex authentication failed. Run `codex login` and retry.";
+  }
+  if (lower.includes("rate limit") || lower.includes("quota") || lower.includes("insufficient_quota")) {
+    return "Codex rate limit/quota reached. Retry after reset or check account limits.";
+  }
+  if (lower.includes("billing") || lower.includes("payment")) {
+    return "Codex billing/subscription issue detected. Check account payment status.";
+  }
+  if (lower.includes("stream disconnected") || lower.includes("error sending request for url")) {
+    return "Codex network/model endpoint is unreachable. Check internet/proxy/firewall and retry.";
+  }
+  return args.message;
+}
+
+function buildCodexConfigOverrides(args: {
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  const config: Record<string, string | boolean> = {};
+  const summaryMode = args.runtimeOptions?.codexReasoningSummary;
+  const supportsSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries;
+  const hasExplicitRawReasoningToggle = Object.prototype.hasOwnProperty.call(
+    args.runtimeOptions ?? {},
+    "codexShowRawAgentReasoning",
+  );
+
+  if (hasExplicitRawReasoningToggle) {
+    config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawAgentReasoning);
+  }
+  if (summaryMode && summaryMode !== "auto") {
+    config.model_reasoning_summary = summaryMode;
+  }
+  if (supportsSummaries === "enabled") {
+    config.model_supports_reasoning_summaries = true;
+  } else if (supportsSummaries === "disabled") {
+    config.model_supports_reasoning_summaries = false;
+  }
+  if (typeof args.runtimeOptions?.codexNetworkAccessEnabled === "boolean") {
+    config.network_access = args.runtimeOptions.codexNetworkAccessEnabled;
+  }
+  if (args.runtimeOptions?.codexWebSearchMode) {
+    config.web_search = args.runtimeOptions.codexWebSearchMode;
+  }
+  const codexFastMode = args.runtimeOptions?.codexFastMode;
+  if (codexFastMode !== undefined) {
+    config["features.fast_mode"] = codexFastMode;
+  }
+
+  return Object.keys(config).length > 0 ? config : undefined;
+}
+
+function buildThreadKey(args: {
+  taskId?: string;
+  cwd: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  const model = args.runtimeOptions?.model?.trim() || "default";
+  const mode = args.runtimeOptions?.codexExperimentalPlanMode ? "plan" : "chat";
+  return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}`;
+}
+
+function resolveThreadId(args: { threadKey: string; fallbackThreadId?: string }) {
+  return threadIdByTask.get(args.threadKey) ?? args.fallbackThreadId?.trim();
+}
+
+function rememberThreadId(args: { threadKey: string; threadId?: string }) {
+  const nextThreadId = args.threadId?.trim();
+  if (!nextThreadId) {
+    return;
+  }
+  threadIdByTask.set(args.threadKey, nextThreadId);
+}
+
+function resolveCodexResumeThreadFallback(args: {
+  conversation?: StreamTurnArgs["conversation"];
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  return resolveProviderResumeSessionId({
+    conversation: args.conversation,
+    fallbackResumeId: args.runtimeOptions?.codexResumeThreadId,
+  });
+}
+
+function buildCodexThreadStartedEvents(args: { threadId?: string }): BridgeEvent[] {
+  const threadId = args.threadId?.trim();
+  if (!threadId) {
+    return [];
+  }
+  return [{
+    type: "provider_session",
+    providerId: "codex",
+    nativeSessionId: threadId,
+  }];
+}
+
+function isExecutableFile(args: { path: string }) {
+  try {
+    accessSync(args.path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isReadableDirectory(args: { path: string }) {
+  try {
+    accessSync(args.path, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveCodexExecutablePath(args: { explicitPath?: string } = {}) {
+  if (args.explicitPath?.trim()) {
+    return args.explicitPath.trim();
+  }
+
+  const baseResolved = resolveExecutablePath({
+    absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
+    commandEnvVar: "STAVE_CODEX_CMD",
+    defaultCommand: "codex",
+    extraPaths: [...CODEX_LOOKUP_PATHS],
+  }) ?? "";
+
+  const candidates = [
+    process.env.STAVE_CODEX_CLI_PATH?.trim() || "",
+    `${homedir()}/.bun/bin/codex`,
+    `${homedir()}/.local/bin/codex`,
+    baseResolved,
+  ].filter((value, index, arr) => value.length > 0 && arr.indexOf(value) === index);
+
+  for (const candidate of candidates) {
+    if (!isExecutableFile({ path: candidate })) {
+      continue;
+    }
+    const env = buildCodexEnv({ executablePath: candidate });
+    const versionProbe = probeExecutableVersion({
+      executablePath: candidate,
+      env,
+    });
+    if (versionProbe.status === 0) {
+      return candidate;
+    }
+  }
+
+  return baseResolved;
+}
+
+function resolveCodexAdditionalDirectories(args: {
+  cwd: string;
+  candidates?: readonly string[];
+  pathExists?: (value: string) => boolean;
+}) {
+  const resolvedCwd = path.resolve(args.cwd);
+  return (args.candidates ?? CODEX_SHARED_RUNTIME_DIRECTORIES)
+    .map((candidate) => candidate.trim())
+    .filter(Boolean)
+    .map((candidate) => path.resolve(candidate))
+    .filter((candidate, index, entries) => entries.indexOf(candidate) === index)
+    .filter((candidate) => candidate !== resolvedCwd)
+    .filter((candidate) => !resolvedCwd.startsWith(`${candidate}${path.sep}`))
+    .filter((candidate) => (args.pathExists ?? ((value: string) => isReadableDirectory({ path: value })))(candidate));
+}
+
+function buildSandboxPolicy(args: {
+  cwd: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode === true;
+  const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccessEnabled
+    ?? parseBooleanEnv({
+      value: process.env.STAVE_CODEX_NETWORK_ACCESS,
+      fallback: true,
+    });
+  const sandboxMode = resolveSandboxMode({
+    runtimeValue: args.runtimeOptions?.codexSandboxMode,
+    envValue: process.env.STAVE_CODEX_SANDBOX_MODE?.trim(),
+    planMode: experimentalPlanMode,
+    fallback: "workspace-write",
+  });
+  const readableRoots = [
+    args.cwd,
+    ...resolveCodexAdditionalDirectories({ cwd: args.cwd }),
+  ];
+
+  switch (sandboxMode) {
+    case "danger-full-access":
+      return { type: "dangerFullAccess" as const };
+    case "read-only":
+      return {
+        type: "readOnly" as const,
+        access: {
+          type: "restricted" as const,
+          includePlatformDefaults: true,
+          readableRoots,
+        },
+        networkAccess: networkAccessEnabled,
+      };
+    case "workspace-write":
+    default:
+      return {
+        type: "workspaceWrite" as const,
+        writableRoots: [args.cwd],
+        readOnlyAccess: {
+          type: "restricted" as const,
+          includePlatformDefaults: true,
+          readableRoots,
+        },
+        networkAccess: networkAccessEnabled,
+        excludeTmpdirEnvVar: false,
+        excludeSlashTmp: false,
+      };
+  }
+}
+
+function buildApprovalDescription(args: {
+  method: ServerRequestMethod;
+  params: Record<string, unknown>;
+}) {
+  const reason = typeof args.params.reason === "string" && args.params.reason.trim().length > 0
+    ? args.params.reason.trim()
+    : null;
+  if (typeof args.params.command === "string" && args.params.command.trim().length > 0) {
+    return reason ? `${args.params.command}\n\n${reason}` : args.params.command;
+  }
+  if (args.method === "item/fileChange/requestApproval") {
+    const grantRoot = typeof args.params.grantRoot === "string" ? args.params.grantRoot.trim() : "";
+    if (grantRoot) {
+      return reason ? `${reason}\n\nGrant root: ${grantRoot}` : `Grant root: ${grantRoot}`;
+    }
+  }
+  return reason ?? `Codex requested approval for ${args.method}.`;
+}
+
+function mapApprovalToolName(method: ServerRequestMethod) {
+  switch (method) {
+    case "item/commandExecution/requestApproval":
+    case "execCommandApproval":
+      return "bash";
+    case "item/fileChange/requestApproval":
+    case "applyPatchApproval":
+      return "apply_patch";
+    case "item/permissions/requestApproval":
+      return "permissions";
+    default:
+      return method;
+  }
+}
+
+function mapUserInputQuestions(questions: Array<Record<string, unknown>>) {
+  return questions.map((question) => ({
+    header: typeof question.header === "string" ? question.header : "",
+    question: typeof question.question === "string" ? question.question : "",
+    multiSelect: false,
+    options: Array.isArray(question.options)
+      ? question.options.map((option) => ({
+        label: typeof option?.label === "string" ? option.label : "",
+        description: typeof option?.description === "string" ? option.description : "",
+      }))
+      : [],
+  }));
+}
+
+function mapCodexMcpServerStatus(args: {
+  toolId: ConnectedToolId;
+  servers: CodexMcpServerStatus[];
+}) {
+  if (args.toolId === "github") {
+    return createCodexConnectedToolStatusEntry({
+      id: "github",
+      state: "unknown",
+      available: true,
+      detail: "GitHub app status is not exposed by mcpServerStatus/list.",
+    });
+  }
+
+  const serverName = args.toolId === "atlassian" ? "atlassian" : args.toolId;
+  const server = args.servers.find((candidate) => candidate.name.trim().toLowerCase() === serverName);
+  if (!server) {
+    return createCodexConnectedToolStatusEntry({
+      id: args.toolId,
+      state: "unsupported",
+      available: false,
+      detail: `${getConnectedToolLabel(args.toolId)} is not configured for Codex.`,
+    });
+  }
+
+  switch (server.authStatus) {
+    case "oAuth":
+    case "bearerToken":
+      return createCodexConnectedToolStatusEntry({
+        id: args.toolId,
+        state: "ready",
+        available: true,
+        detail: `${getConnectedToolLabel(args.toolId)} is ready for Codex.`,
+      });
+    case "notLoggedIn":
+      return createCodexConnectedToolStatusEntry({
+        id: args.toolId,
+        state: "needs-auth",
+        available: false,
+        detail: `${getConnectedToolLabel(args.toolId)} needs authentication in Codex.`,
+      });
+    case "unsupported":
+    default:
+      return createCodexConnectedToolStatusEntry({
+        id: args.toolId,
+        state: "unknown",
+        available: true,
+        detail: `${getConnectedToolLabel(args.toolId)} auth state is ${server.authStatus ?? "unknown"} in Codex.`,
+      });
+  }
+}
+
+function createCodexConnectedToolStatusEntry(args: {
+  id: ConnectedToolId;
+  state: ConnectedToolStatusEntry["state"];
+  available: boolean;
+  detail: string;
+}) {
+  return {
+    id: args.id,
+    label: getConnectedToolLabel(args.id),
+    state: args.state,
+    available: args.available,
+    detail: args.detail,
+  } satisfies ConnectedToolStatusEntry;
+}
+
+class CodexAppServerClient {
+  private process: ChildProcessWithoutNullStreams | null = null;
+  private startupPromise: Promise<void> | null = null;
+  private nextRequestId = 1;
+  private pendingResponses = new Map<JsonRpcId, {
+    resolve: (value: unknown) => void;
+    reject: (reason?: unknown) => void;
+  }>();
+  private listeners = new Set<(message: JsonRpcMessage) => void>();
+  private initialized = false;
+  private lastErrorMessage: string | null = null;
+
+  constructor(
+    private readonly executablePath: string,
+  ) {}
+
+  async ensureStarted() {
+    if (this.process && this.initialized) {
+      return;
+    }
+    if (this.startupPromise) {
+      return this.startupPromise;
+    }
+    this.startupPromise = this.start();
+    try {
+      await this.startupPromise;
+    } finally {
+      this.startupPromise = null;
+    }
+  }
+
+  subscribe(listener: (message: JsonRpcMessage) => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  async request<T = unknown>(method: string, params: unknown): Promise<T> {
+    await this.ensureStarted();
+    return this.sendRequest<T>(method, params);
+  }
+
+  async respond(requestId: JsonRpcId, result: unknown) {
+    await this.ensureStarted();
+    this.process?.stdin.write(JSON.stringify({
+      jsonrpc: "2.0",
+      id: requestId,
+      result,
+    }) + "\n");
+  }
+
+  getLastErrorMessage() {
+    return this.lastErrorMessage;
+  }
+
+  private async start() {
+    if (this.process) {
+      this.teardownProcess("Restarting Codex App Server.");
+    }
+
+    const child = spawn(this.executablePath, ["app-server", "--listen", "stdio://"], {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: buildCodexEnv({ executablePath: this.executablePath }),
+      cwd: process.cwd(),
+    });
+    this.process = child;
+    this.initialized = false;
+
+    const stdout = createInterface({ input: child.stdout });
+    stdout.on("line", (line) => {
+      this.handleMessage(line);
+    });
+
+    child.stderr.on("data", (chunk) => {
+      const text = String(chunk);
+      if (text.trim().length > 0) {
+        this.lastErrorMessage = text.trim();
+      }
+    });
+
+    child.once("exit", (_code, signal) => {
+      this.teardownProcess(signal ? `Codex App Server exited with signal ${signal}.` : "Codex App Server exited.");
+    });
+
+    await this.sendRequest("initialize", {
+      clientInfo: {
+        name: "stave",
+        version: "0.0.36",
+      },
+      capabilities: {
+        experimentalApi: true,
+      },
+    });
+    child.stdin.write(JSON.stringify({
+      jsonrpc: "2.0",
+      method: "initialized",
+      params: {},
+    }) + "\n");
+    this.initialized = true;
+  }
+
+  private async sendRequest<T = unknown>(method: string, params: unknown): Promise<T> {
+    const child = this.process;
+    if (!child) {
+      throw new Error("Codex App Server is not running.");
+    }
+
+    const requestId = this.nextRequestId++;
+    return new Promise<T>((resolve, reject) => {
+      this.pendingResponses.set(requestId, { resolve, reject });
+      child.stdin.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        method,
+        params,
+      }) + "\n");
+    });
+  }
+
+  private handleMessage(line: string) {
+    let message: JsonRpcMessage;
+    try {
+      message = JSON.parse(line) as JsonRpcMessage;
+    } catch {
+      return;
+    }
+
+    const hasResponseId = Object.prototype.hasOwnProperty.call(message, "id")
+      && (Object.prototype.hasOwnProperty.call(message, "result") || Object.prototype.hasOwnProperty.call(message, "error"));
+    if (hasResponseId) {
+      const id = message.id as JsonRpcId;
+      const pending = this.pendingResponses.get(id);
+      if (!pending) {
+        return;
+      }
+      this.pendingResponses.delete(id);
+      if (message.error) {
+        pending.reject(new Error(message.error.message || "Codex App Server request failed."));
+      } else {
+        pending.resolve(message.result);
+      }
+      return;
+    }
+
+    for (const listener of this.listeners) {
+      listener(message);
+    }
+  }
+
+  private teardownProcess(message: string) {
+    const current = this.process;
+    this.process = null;
+    this.initialized = false;
+    this.lastErrorMessage = message;
+    if (current && !current.killed) {
+      current.kill();
+    }
+    for (const pending of this.pendingResponses.values()) {
+      pending.reject(new Error(message));
+    }
+    this.pendingResponses.clear();
+  }
+}
+
+function getCodexAppServerClient(args: { executablePath: string }) {
+  const key = args.executablePath.trim();
+  const existing = clientByExecutablePath.get(key);
+  if (existing) {
+    return existing;
+  }
+  const client = new CodexAppServerClient(key);
+  clientByExecutablePath.set(key, client);
+  return client;
+}
+
+async function ensureCodexThread(args: {
+  client: CodexAppServerClient;
+  taskId?: string;
+  cwd: string;
+  conversation?: StreamTurnArgs["conversation"];
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  const threadKey = buildThreadKey({
+    taskId: args.taskId,
+    cwd: args.cwd,
+    runtimeOptions: args.runtimeOptions,
+  });
+  const resumeThreadId = resolveThreadId({
+    threadKey,
+    fallbackThreadId: resolveCodexResumeThreadFallback({
+      conversation: args.conversation,
+      runtimeOptions: args.runtimeOptions,
+    }),
+  });
+
+  const config = buildCodexConfigOverrides({ runtimeOptions: args.runtimeOptions });
+  const params = {
+    ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
+    cwd: args.cwd,
+    ...(config ? { config } : {}),
+    experimentalRawEvents: true,
+    persistExtendedHistory: true,
+  };
+
+  const response = resumeThreadId
+    ? await args.client.request<{ thread: { id: string } }>("thread/resume", {
+      threadId: resumeThreadId,
+      ...params,
+    })
+    : await args.client.request<{ thread: { id: string } }>("thread/start", params);
+  const threadId = response.thread.id;
+  rememberThreadId({ threadKey, threadId });
+  return { threadId, threadKey };
+}
+
+export function cleanupCodexAppServerTask(taskId: string) {
+  const keyPrefix = `${taskId}:`;
+  for (const threadKey of threadIdByTask.keys()) {
+    if (threadKey.startsWith(keyPrefix)) {
+      threadIdByTask.delete(threadKey);
+    }
+  }
+}
+
+export async function getCodexConnectedToolStatus(args: {
+  cwd?: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  toolIds?: ConnectedToolId[];
+}): Promise<ConnectedToolStatusResponse> {
+  const toolIds = normalizeConnectedToolIds(args.toolIds);
+  const executablePath = resolveCodexExecutablePath({
+    explicitPath: args.runtimeOptions?.codexPathOverride,
+  });
+  if (!executablePath) {
+    return {
+      ok: false,
+      providerId: "codex",
+      detail: "Codex executable not found.",
+      tools: toolIds.map((toolId) => createCodexConnectedToolStatusEntry({
+        id: toolId,
+        state: "error",
+        available: false,
+        detail: "Codex executable not found.",
+      })),
+    };
+  }
+
+  try {
+    const client = getCodexAppServerClient({ executablePath });
+    const response = await client.request<{ data: CodexMcpServerStatus[] }>("mcpServerStatus/list", {});
+    return {
+      ok: true,
+      providerId: "codex",
+      detail: "Loaded Codex MCP server status from App Server.",
+      tools: toolIds.map((toolId) => mapCodexMcpServerStatus({
+        toolId,
+        servers: response.data ?? [],
+      })),
+    };
+  } catch (error) {
+    const detail = toCodexUserFacingErrorMessage({
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      ok: false,
+      providerId: "codex",
+      detail,
+      tools: toolIds.map((toolId) => createCodexConnectedToolStatusEntry({
+        id: toolId,
+        state: "error",
+        available: false,
+        detail,
+      })),
+    };
+  }
+}
+
+export async function streamCodexWithAppServer(args: StreamTurnArgs & {
+  onEvent?: (event: BridgeEvent) => void;
+  registerAbort?: (aborter: () => void) => void;
+  registerApprovalResponder?: (responder: (args: { requestId: string; approved: boolean }) => boolean) => void;
+  registerUserInputResponder?: (responder: (args: {
+    requestId: string;
+    answers?: Record<string, string>;
+    denied?: boolean;
+  }) => boolean) => void;
+}): Promise<BridgeEvent[] | null> {
+  const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+  const codexExecutablePath = resolveCodexExecutablePath({
+    explicitPath: args.runtimeOptions?.codexPathOverride,
+  });
+  if (!codexExecutablePath) {
+    const unavailableEvents: BridgeEvent[] = [
+      {
+        type: "error",
+        message: "Codex runtime failure: Codex CLI not found in runtime override, STAVE_CODEX_CLI_PATH, login-shell PATH, or home-bin candidates. Install `codex` or configure a Codex path override.",
+        recoverable: true,
+      },
+      { type: "done" },
+    ];
+    unavailableEvents.forEach((event) => args.onEvent?.(event));
+    return unavailableEvents;
+  }
+
+  const client = getCodexAppServerClient({ executablePath: codexExecutablePath });
+  try {
+    const account = await client.request<{ account: unknown | null; requiresOpenaiAuth: boolean }>("account/read", {});
+    if (!account.account && account.requiresOpenaiAuth) {
+      const events: BridgeEvent[] = [
+        {
+          type: "error",
+          message: "Codex authentication failed. Run `codex login` and retry.",
+          recoverable: true,
+        },
+        { type: "done" },
+      ];
+      events.forEach((event) => args.onEvent?.(event));
+      return events;
+    }
+  } catch (error) {
+    const events: BridgeEvent[] = [
+      {
+        type: "error",
+        message: toCodexUserFacingErrorMessage({
+          message: error instanceof Error ? error.message : String(error),
+        }),
+        recoverable: true,
+      },
+      { type: "done" },
+    ];
+    events.forEach((event) => args.onEvent?.(event));
+    return events;
+  }
+
+  const { threadId } = await ensureCodexThread({
+    client,
+    taskId: args.taskId,
+    cwd: runtimeCwd,
+    conversation: args.conversation,
+    runtimeOptions: args.runtimeOptions,
+  });
+
+  const events: BridgeEvent[] = [];
+  const emitBridgeEvent = (event: BridgeEvent) => {
+    events.push(event);
+    args.onEvent?.(event);
+  };
+  const emitBridgeEvents = (nextEvents: BridgeEvent[]) => {
+    nextEvents.forEach(emitBridgeEvent);
+  };
+
+  emitBridgeEvents(buildCodexThreadStartedEvents({ threadId }));
+  const diffTracker = await createTurnDiffTracker({ cwd: runtimeCwd });
+
+  let providerPrompt = buildProviderTurnPrompt({
+    providerId: args.providerId,
+    prompt: args.prompt,
+    conversation: args.conversation,
+  });
+  const responseStyle = args.runtimeOptions?.responseStylePrompt?.trim();
+  if (responseStyle) {
+    providerPrompt = `<system>\n${responseStyle}\n</system>\n\n${providerPrompt}`;
+  }
+
+  const toolOutputBuffers = new Map<string, string>();
+  const agentMessageBuffers = new Map<string, string>();
+  const streamedAgentMessageIds = new Set<string>();
+  const streamedReasoningIds = new Set<string>();
+  const planBuffers = new Map<string, string>();
+  const pendingApprovalRequests = new Map<string, PendingApprovalRequest>();
+  const pendingUserInputRequests = new Map<string, PendingUserInputRequest>();
+  let latestUsage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number } | null = null;
+  let appServerTurnId = "";
+  let completed = false;
+  let lastAgentMessageSegmentId = "";
+  let sawNativePlan = false;
+  let shouldInterruptPlanTurn = false;
+  let sentPlanInterrupt = false;
+
+  const requestPlanInterrupt = () => {
+    if (
+      !args.runtimeOptions?.codexExperimentalPlanMode
+      || sentPlanInterrupt
+      || !appServerTurnId
+      || completed
+    ) {
+      return;
+    }
+    sentPlanInterrupt = true;
+    void client.request("turn/interrupt", {
+      threadId,
+      turnId: appServerTurnId,
+    }).catch(() => {});
+  };
+
+  args.registerApprovalResponder?.(({ requestId, approved }) => {
+    const pending = pendingApprovalRequests.get(requestId);
+    if (!pending) {
+      return false;
+    }
+    pendingApprovalRequests.delete(requestId);
+    void client.respond(pending.serverRequestId, (() => {
+      if (pending.responseKind === "commandExecution") {
+        return { decision: approved ? "accept" : "decline" };
+      }
+      if (pending.responseKind === "fileChange") {
+        return { decision: approved ? "accept" : "decline" };
+      }
+      if (pending.responseKind === "permissions") {
+        return approved
+          ? {
+            permissions: {
+              ...(pending.permissions?.network ? { network: pending.permissions.network } : {}),
+              ...(pending.permissions?.fileSystem ? { fileSystem: pending.permissions.fileSystem } : {}),
+            },
+            scope: "turn",
+          }
+          : { permissions: {}, scope: "turn" };
+      }
+      return { decision: approved ? "approved" : "denied" };
+    })());
+    return true;
+  });
+
+  args.registerUserInputResponder?.(({ requestId, answers, denied }) => {
+    const pending = pendingUserInputRequests.get(requestId);
+    if (!pending) {
+      return false;
+    }
+    pendingUserInputRequests.delete(requestId);
+    const responseAnswers = Object.fromEntries(
+      Object.entries(answers ?? {}).map(([key, value]) => [key, { answers: [value] }]),
+    );
+    void client.respond(pending.serverRequestId, {
+      answers: denied ? {} : responseAnswers,
+    });
+    return true;
+  });
+
+  const unsubscribe = client.subscribe((message) => {
+    if (completed) {
+      return;
+    }
+    if (!message.method) {
+      return;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(message, "id")) {
+      const requestId = String(message.id);
+      switch (message.method as ServerRequestMethod) {
+        case "item/commandExecution/requestApproval": {
+          const params = (message.params ?? {}) as Record<string, unknown>;
+          pendingApprovalRequests.set(requestId, {
+            serverRequestId: message.id as JsonRpcId,
+            responseKind: "commandExecution",
+          });
+          emitBridgeEvent({
+            type: "approval",
+            toolName: "bash",
+            requestId,
+            description: buildApprovalDescription({
+              method: "item/commandExecution/requestApproval",
+              params,
+            }),
+          });
+          return;
+        }
+        case "item/fileChange/requestApproval": {
+          const params = (message.params ?? {}) as Record<string, unknown>;
+          pendingApprovalRequests.set(requestId, {
+            serverRequestId: message.id as JsonRpcId,
+            responseKind: "fileChange",
+          });
+          emitBridgeEvent({
+            type: "approval",
+            toolName: "apply_patch",
+            requestId,
+            description: buildApprovalDescription({
+              method: "item/fileChange/requestApproval",
+              params,
+            }),
+          });
+          return;
+        }
+        case "item/permissions/requestApproval": {
+          const params = (message.params ?? {}) as Record<string, unknown>;
+          pendingApprovalRequests.set(requestId, {
+            serverRequestId: message.id as JsonRpcId,
+            responseKind: "permissions",
+            permissions: typeof params.permissions === "object" && params.permissions
+              ? params.permissions as PendingApprovalRequest["permissions"]
+              : null,
+          });
+          emitBridgeEvent({
+            type: "approval",
+            toolName: "permissions",
+            requestId,
+            description: buildApprovalDescription({
+              method: "item/permissions/requestApproval",
+              params,
+            }),
+          });
+          return;
+        }
+        case "applyPatchApproval":
+        case "execCommandApproval": {
+          const params = (message.params ?? {}) as Record<string, unknown>;
+          pendingApprovalRequests.set(requestId, {
+            serverRequestId: message.id as JsonRpcId,
+            responseKind: "review",
+          });
+          emitBridgeEvent({
+            type: "approval",
+            toolName: mapApprovalToolName(message.method as ServerRequestMethod),
+            requestId,
+            description: buildApprovalDescription({
+              method: message.method as ServerRequestMethod,
+              params,
+            }),
+          });
+          return;
+        }
+        case "item/tool/requestUserInput": {
+          const params = (message.params ?? {}) as Record<string, unknown>;
+          const questions = Array.isArray(params.questions)
+            ? mapUserInputQuestions(params.questions as Array<Record<string, unknown>>)
+            : [];
+          pendingUserInputRequests.set(requestId, {
+            serverRequestId: message.id as JsonRpcId,
+          });
+          emitBridgeEvent({
+            type: "user_input",
+            toolName: "request_user_input",
+            requestId,
+            questions,
+          });
+          return;
+        }
+        case "mcpServer/elicitation/request": {
+          emitBridgeEvent({
+            type: "error",
+            message: "Codex MCP elicitation is not supported in Stave yet.",
+            recoverable: true,
+          });
+          void client.respond(message.id as JsonRpcId, {
+            action: "cancel",
+            content: null,
+            _meta: null,
+          });
+          return;
+        }
+        case "item/tool/call":
+        case "account/chatgptAuthTokens/refresh":
+          emitBridgeEvent({
+            type: "error",
+            message: `${message.method} is not supported in Stave yet.`,
+            recoverable: true,
+          });
+          void client.respond(message.id as JsonRpcId, {});
+          return;
+        default:
+          return;
+      }
+    }
+
+    const params = (message.params ?? {}) as Record<string, unknown>;
+    if (typeof params.turnId === "string" && appServerTurnId && params.turnId !== appServerTurnId) {
+      return;
+    }
+    if (typeof params.threadId === "string" && params.threadId !== threadId) {
+      return;
+    }
+
+    switch (message.method) {
+      case "item/agentMessage/delta": {
+        const itemId = typeof params.itemId === "string" ? params.itemId : "";
+        const delta = typeof params.delta === "string" ? params.delta : "";
+        if (!delta) {
+          return;
+        }
+        streamedAgentMessageIds.add(itemId);
+        if (itemId) {
+          agentMessageBuffers.set(itemId, `${agentMessageBuffers.get(itemId) ?? ""}${delta}`);
+          lastAgentMessageSegmentId = itemId;
+        }
+        emitBridgeEvent({
+          type: "text",
+          text: delta,
+          ...(itemId ? { segmentId: itemId } : {}),
+        });
+        return;
+      }
+      case "item/reasoning/textDelta": {
+        const itemId = typeof params.itemId === "string" ? params.itemId : "";
+        const delta = typeof params.delta === "string" ? params.delta : "";
+        if (!delta) {
+          return;
+        }
+        streamedReasoningIds.add(itemId);
+        emitBridgeEvent({
+          type: "thinking",
+          text: delta,
+          isStreaming: true,
+        });
+        return;
+      }
+      case "item/reasoning/summaryTextDelta": {
+        const itemId = typeof params.itemId === "string" ? params.itemId : "";
+        const delta = typeof params.delta === "string" ? params.delta : "";
+        if (!delta) {
+          return;
+        }
+        streamedReasoningIds.add(itemId);
+        emitBridgeEvent({
+          type: "thinking",
+          text: delta,
+          isStreaming: true,
+        });
+        return;
+      }
+      case "item/plan/delta": {
+        const itemId = typeof params.itemId === "string" ? params.itemId : "";
+        const delta = typeof params.delta === "string" ? params.delta : "";
+        if (!delta) {
+          return;
+        }
+        sawNativePlan = true;
+        const next = `${planBuffers.get(itemId) ?? ""}${delta}`;
+        planBuffers.set(itemId, next);
+        emitBridgeEvent({
+          type: "plan_ready",
+          planText: next,
+          ...(itemId ? { sourceSegmentId: itemId } : {}),
+        });
+        return;
+      }
+      case "item/commandExecution/outputDelta": {
+        const itemId = typeof params.itemId === "string" ? params.itemId : "";
+        const delta = typeof params.delta === "string" ? params.delta : "";
+        if (!itemId || !delta) {
+          return;
+        }
+        const next = `${toolOutputBuffers.get(itemId) ?? ""}${delta}`;
+        toolOutputBuffers.set(itemId, next);
+        emitBridgeEvent({
+          type: "tool_result",
+          tool_use_id: itemId,
+          output: next,
+          isPartial: true,
+        });
+        return;
+      }
+      case "item/mcpToolCall/progress": {
+        const itemId = typeof params.itemId === "string" ? params.itemId : "";
+        const progressMessage = typeof params.message === "string" ? params.message : "";
+        if (!progressMessage) {
+          return;
+        }
+        emitBridgeEvent({
+          type: "subagent_progress",
+          ...(itemId ? { toolUseId: itemId } : {}),
+          content: progressMessage,
+        });
+        return;
+      }
+      case "thread/tokenUsage/updated": {
+        const tokenUsage = params.tokenUsage as {
+          last?: {
+            inputTokens?: number;
+            outputTokens?: number;
+            cachedInputTokens?: number;
+          };
+        } | undefined;
+        if (!tokenUsage?.last) {
+          return;
+        }
+        latestUsage = {
+          inputTokens: tokenUsage.last.inputTokens ?? 0,
+          outputTokens: tokenUsage.last.outputTokens ?? 0,
+          ...(typeof tokenUsage.last.cachedInputTokens === "number" && tokenUsage.last.cachedInputTokens > 0
+            ? { cacheReadTokens: tokenUsage.last.cachedInputTokens }
+            : {}),
+        };
+        return;
+      }
+      case "error": {
+        const errorMessage = typeof params.message === "string"
+          ? params.message
+          : "Codex App Server error.";
+        emitBridgeEvent({
+          type: "error",
+          message: toCodexUserFacingErrorMessage({ message: errorMessage }),
+          recoverable: true,
+        });
+        return;
+      }
+      case "item/completed": {
+        const item = params.item as { type?: string; id?: string } | undefined;
+        if (!item?.type) {
+          return;
+        }
+        const itemId = typeof item.id === "string" ? item.id : "";
+        switch (item.type) {
+          case "agentMessage": {
+            const text = typeof (item as { text?: unknown }).text === "string"
+              ? String((item as { text?: unknown }).text)
+              : "";
+            if (itemId && text) {
+              agentMessageBuffers.set(itemId, text);
+              lastAgentMessageSegmentId = itemId;
+            }
+            if (!streamedAgentMessageIds.has(itemId) && text) {
+              emitBridgeEvent({
+                type: "text",
+                text,
+                ...(itemId ? { segmentId: itemId } : {}),
+              });
+            }
+            return;
+          }
+          case "plan": {
+            const text = typeof (item as { text?: unknown }).text === "string"
+              ? String((item as { text?: unknown }).text)
+              : "";
+            const planText = text || planBuffers.get(itemId) || "";
+            if (planText.trim().length > 0) {
+              sawNativePlan = true;
+              emitBridgeEvent({
+                type: "plan_ready",
+                planText,
+                ...(itemId ? { sourceSegmentId: itemId } : {}),
+              });
+            }
+            if (args.runtimeOptions?.codexExperimentalPlanMode) {
+              shouldInterruptPlanTurn = true;
+              requestPlanInterrupt();
+            }
+            return;
+          }
+          case "reasoning": {
+            const reasoningItem = item as { content?: string[]; summary?: string[] };
+            if (!streamedReasoningIds.has(itemId)) {
+              const text = [...(reasoningItem.summary ?? []), ...(reasoningItem.content ?? [])].join("\n");
+              if (text.trim().length > 0) {
+                emitBridgeEvent({
+                  type: "thinking",
+                  text,
+                  isStreaming: false,
+                });
+                return;
+              }
+              return;
+            }
+            emitBridgeEvent({
+              type: "thinking",
+              text: "",
+              isStreaming: false,
+            });
+            return;
+          }
+          case "commandExecution": {
+            const commandItem = item as {
+              command?: string;
+              aggregatedOutput?: string | null;
+              status?: string;
+            };
+            const output = typeof commandItem.aggregatedOutput === "string"
+              ? commandItem.aggregatedOutput
+              : (toolOutputBuffers.get(itemId) ?? "");
+            emitBridgeEvents([
+              {
+                type: "tool",
+                ...(itemId ? { toolUseId: itemId } : {}),
+                toolName: "bash",
+                input: typeof commandItem.command === "string" ? commandItem.command : "",
+                state: "input-available",
+              },
+              {
+                type: "tool_result",
+                tool_use_id: itemId,
+                output,
+                ...(commandItem.status === "failed" || commandItem.status === "declined" ? { isError: true } : {}),
+              },
+            ]);
+            return;
+          }
+          case "mcpToolCall": {
+            const mcpItem = item as {
+              server?: string;
+              tool?: string;
+              arguments?: unknown;
+              result?: unknown;
+              error?: { message?: string | null } | null;
+              status?: string;
+            };
+            const toolLabel = `${mcpItem.server ?? "mcp"}:${mcpItem.tool ?? "tool"}`;
+            emitBridgeEvents([
+              {
+                type: "tool",
+                ...(itemId ? { toolUseId: itemId } : {}),
+                toolName: toolLabel,
+                input: toText(mcpItem.arguments ?? {}),
+                state: "input-available",
+              },
+              {
+                type: "tool_result",
+                tool_use_id: itemId,
+                output: mcpItem.error?.message
+                  ? `[error] ${mcpItem.error.message}`
+                  : toText(mcpItem.result ?? ""),
+                ...(mcpItem.status === "failed" ? { isError: true } : {}),
+              },
+            ]);
+            return;
+          }
+          case "webSearch": {
+            const query = typeof (item as { query?: unknown }).query === "string"
+              ? String((item as { query?: unknown }).query)
+              : "";
+            emitBridgeEvents([
+              {
+                type: "tool",
+                ...(itemId ? { toolUseId: itemId } : {}),
+                toolName: "web_search",
+                input: query,
+                state: "input-available",
+              },
+              {
+                type: "tool_result",
+                tool_use_id: itemId,
+                output: "",
+              },
+            ]);
+            return;
+          }
+          case "fileChange": {
+            const fileChangeItem = item as {
+              changes?: Array<{ path?: string }>;
+              status?: string;
+            };
+            if (fileChangeItem.status === "failed") {
+              emitBridgeEvent({
+                type: "error",
+                message: `File change failed: ${(fileChangeItem.changes ?? []).map((change) => change.path ?? "").filter(Boolean).join(", ")}`,
+                recoverable: false,
+              });
+              return;
+            }
+            const changedPaths = (fileChangeItem.changes ?? []).map((change) => change.path ?? "").filter(Boolean);
+            void diffTracker.buildDiffEvents({ changedPaths })
+              .then(({ diffEvents, unresolvedPaths }) => {
+                const fallbackEvents = diffTracker.buildFallbackEvents({
+                  appliedPaths: diffEvents.length === 0 ? changedPaths : [],
+                  skippedPaths: unresolvedPaths,
+                });
+                emitBridgeEvents([...diffEvents, ...fallbackEvents]);
+              })
+              .catch(() => {
+                emitBridgeEvents(diffTracker.buildFallbackEvents({
+                  appliedPaths: changedPaths,
+                }));
+              });
+            return;
+          }
+          default:
+            return;
+        }
+      }
+      case "turn/completed": {
+        const turn = params.turn as {
+          status?: string;
+          error?: { message?: string | null } | null;
+        } | undefined;
+        if (args.runtimeOptions?.codexExperimentalPlanMode && !sawNativePlan) {
+          const fallbackSegmentId = lastAgentMessageSegmentId.trim();
+          const fallbackPlanText = fallbackSegmentId
+            ? (agentMessageBuffers.get(fallbackSegmentId) ?? "")
+            : "";
+          if (fallbackPlanText.trim().length > 0) {
+            emitBridgeEvent({
+              type: "plan_ready",
+              planText: fallbackPlanText,
+              ...(fallbackSegmentId ? { sourceSegmentId: fallbackSegmentId } : {}),
+            });
+          }
+        }
+        if (turn?.status === "failed") {
+          emitBridgeEvent({
+            type: "error",
+            message: toCodexUserFacingErrorMessage({
+              message: turn.error?.message ?? "Codex App Server turn failed.",
+            }),
+            recoverable: true,
+          });
+        }
+        if (latestUsage) {
+          emitBridgeEvent({
+            type: "usage",
+            ...latestUsage,
+          });
+        }
+        emitBridgeEvent({ type: "done" });
+        completed = true;
+        return;
+      }
+      default:
+        return;
+    }
+  });
+
+  try {
+    const approvalPolicy = resolveApprovalPolicy({
+      runtimeValue: args.runtimeOptions?.codexApprovalPolicy,
+      envValue: process.env.STAVE_CODEX_APPROVAL_POLICY?.trim(),
+      planMode: args.runtimeOptions?.codexExperimentalPlanMode === true,
+      fallback: "on-request",
+    });
+    const turnResponse = await client.request<{ turn: { id: string } }>("turn/start", {
+      threadId,
+      input: [{
+        type: "text",
+        text: providerPrompt,
+        text_elements: [],
+      }],
+      cwd: runtimeCwd,
+      ...(approvalPolicy ? { approvalPolicy } : {}),
+      sandboxPolicy: buildSandboxPolicy({
+        cwd: runtimeCwd,
+        runtimeOptions: args.runtimeOptions,
+      }),
+      ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
+      ...(args.runtimeOptions?.codexModelReasoningEffort ? { effort: args.runtimeOptions.codexModelReasoningEffort } : {}),
+      ...(args.runtimeOptions?.codexReasoningSummary ? { summary: args.runtimeOptions.codexReasoningSummary } : {}),
+      ...(args.runtimeOptions?.codexExperimentalPlanMode
+        ? {
+          collaborationMode: {
+            mode: "plan",
+            settings: {
+              model: args.runtimeOptions?.model?.trim() || "gpt-5.4",
+              reasoning_effort: args.runtimeOptions?.codexModelReasoningEffort ?? null,
+              developer_instructions: null,
+            },
+          },
+        }
+        : {}),
+    });
+    appServerTurnId = turnResponse.turn.id;
+    if (shouldInterruptPlanTurn) {
+      requestPlanInterrupt();
+    }
+
+    args.registerAbort?.(() => {
+      if (!appServerTurnId) {
+        return;
+      }
+      void client.request("turn/interrupt", {
+        threadId,
+        turnId: appServerTurnId,
+      }).catch(() => {});
+    });
+
+    while (!completed) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+
+    return events;
+  } catch (error) {
+    const errorEvent: BridgeEvent = {
+      type: "error",
+      message: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+      recoverable: true,
+    };
+    emitBridgeEvent(errorEvent);
+    emitBridgeEvent({ type: "done" });
+    return events;
+  } finally {
+    unsubscribe();
+  }
+}

@@ -21,7 +21,7 @@ git restore --source=<gitRef> --staged --worktree .
 
 - Restore is file-system only. It does not rewind Claude/Codex native conversation state.
 - Existing historical checkpoints created before `gitRef` capture was added cannot be restored from the card.
-- Codex has no equivalent compact-boundary event in the current SDK stream.
+- Codex has no equivalent compact-boundary event in the current runtime path, including the App Server transport.
 
 ## Future backlog
 
@@ -29,7 +29,7 @@ git restore --source=<gitRef> --staged --worktree .
 - If the SDK exposes a stable “resume from compact boundary” primitive, wire checkpoint cards to native session rewind/fork instead of file-only git restore.
 
 2. Codex checkpoint parity
-- If Codex SDK adds checkpoint/compaction boundary events, map them into the same `system_event.compactBoundary` model and enable restore cards for Codex tasks.
+- If a future Codex runtime surface adds checkpoint/compaction boundary events, map them into the same `system_event.compactBoundary` model and enable restore cards for Codex tasks.
 
 3. Checkpoint UX upgrades
 - Add explicit “restore scope” messaging (files only vs session state).
