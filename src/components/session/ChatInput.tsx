@@ -533,7 +533,6 @@ export function ChatInput(args: ChatInputProps = {}) {
     modelStave,
     skillsEnabled,
     skillsAutoSuggest,
-    customCommands,
     providerTimeoutMs,
   ] = useAppStore(useShallow((state) => [
     state.settings.modelClaude,
@@ -541,7 +540,6 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.settings.modelStave,
     state.settings.skillsEnabled,
     state.settings.skillsAutoSuggest,
-    state.settings.customCommands,
     state.settings.providerTimeoutMs,
   ] as const));
   const [
@@ -967,11 +965,8 @@ export function ChatInput(args: ChatInputProps = {}) {
 
   const commandPalette = useMemo(() => buildCommandPaletteItems({
     provider: activeProvider,
-    settings: {
-      customCommands,
-    },
     providerCommandCatalog,
-  }), [activeProvider, customCommands, providerCommandCatalog]);
+  }), [activeProvider, providerCommandCatalog]);
   const skillPalette = useMemo(() => getEffectiveSkillEntries({
     skills: skillCatalog.skills,
     providerId: activeProvider,

@@ -35,7 +35,7 @@ export function getInitialProviderCommandCatalog(args: { providerId: ProviderId 
       providerId: args.providerId,
       status: "unsupported",
       commands: [],
-      detail: `${getProviderLabel({ providerId: args.providerId, variant: "full" })} does not expose a native slash-command catalog through the current SDK path.`,
+      detail: `${getProviderLabel({ providerId: args.providerId, variant: "full" })} does not expose a native slash-command catalog through the current SDK/CLI path. Slash commands are passed through unchanged.`,
     };
   }
 

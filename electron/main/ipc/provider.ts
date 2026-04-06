@@ -330,7 +330,6 @@ export function registerProviderHandlers() {
       return {
         ok: false,
         detail: "Invalid Codex MCP status request.",
-        pluginSupport: "unsupported" as const,
         servers: [],
       };
     }

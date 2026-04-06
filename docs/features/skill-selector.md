@@ -32,10 +32,10 @@ Important behavior:
 
 ## Composer UX
 
-- Typing `$` opens the skill palette in `PromptInput`.
+- Typing `$` near the current caret position opens the skill palette in `PromptInput`.
 - The visible draft stays inline as `$skill-name`.
 - `Tab` inserts the highlighted skill token.
-- `Enter` still sends unless the user explicitly highlighted a skill entry.
+- `Enter` still sends unless the user explicitly selected or highlighted a matching skill entry.
 - The Settings dialog shows the detected roots and a sampled catalog for the current workspace.
 
 ## Send Path

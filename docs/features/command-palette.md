@@ -10,6 +10,7 @@
 
 - `Cmd/Ctrl+Shift+P` opens the global command palette anywhere in the app.
 - `Cmd/Ctrl+P` still focuses top-bar file quick open.
+- Provider slash-command suggestions in the composer now follow the current caret position instead of only matching the first token in the draft.
 - The palette is for executable IDE actions:
   - navigation
   - view toggles
@@ -17,7 +18,7 @@
   - provider switching
   - settings entry points
   - external workspace actions
-- Slash commands stay in the composer and are configured separately under Settings → Slash Commands.
+- Slash commands stay in the composer and are documented separately under Settings → Composer Commands.
 
 ## Default Command Groups
 
@@ -42,7 +43,7 @@
   - set provider to Claude, Codex, or Stave Auto
 - `Settings`
   - open settings
-  - jump to Design, Providers, Slash Commands, or Command Palette settings
+  - jump to Design, Providers, Composer Commands, or Command Palette settings
   - open keyboard shortcuts
 - `External`
   - reveal active workspace

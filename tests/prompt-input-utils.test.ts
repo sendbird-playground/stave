@@ -12,17 +12,19 @@ import type { CommandPaletteItem } from "@/lib/commands";
 const items: CommandPaletteItem[] = [
   {
     id: "status",
-    command: "/stave:status",
-    insertText: "/stave:status",
+    command: "/status",
+    insertText: "/status",
     description: "Show workspace status.",
-    source: "stave_builtin",
+    source: "provider_native",
+    searchText: "/status status show workspace status",
   },
   {
     id: "usage",
-    command: "/stave:usage",
-    insertText: "/stave:usage",
+    command: "/usage",
+    insertText: "/usage",
     description: "Show token usage.",
-    source: "stave_builtin",
+    source: "provider_native",
+    searchText: "/usage usage show token usage",
   },
 ];
 

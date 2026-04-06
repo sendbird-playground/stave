@@ -24,7 +24,7 @@ export const settingsSections = [
   { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "skills", label: "Skills", icon: SearchCheck },
   { id: "commandPalette", label: "Command Palette", icon: KeyRound },
-  { id: "commands", label: "Slash Commands", icon: KeyRound },
+  { id: "commands", label: "Composer Commands", icon: KeyRound },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "editor", label: "Editor", icon: Code2 },
   { id: "tooling", label: "Tooling", icon: Shield },

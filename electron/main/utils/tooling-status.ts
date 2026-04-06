@@ -609,7 +609,6 @@ async function inspectCodexStatus(args: { codexPathOverride?: string }) {
 export async function getCodexMcpStatus(args: {
   codexPathOverride?: string;
 }): Promise<CodexMcpStatusResponse> {
-  const pluginSupport = "unsupported" as const;
   const executablePath = resolveCodexExecutablePath({
     explicitPath: args.codexPathOverride,
   }) || null;
@@ -618,7 +617,6 @@ export async function getCodexMcpStatus(args: {
     return {
       ok: false,
       detail: "Codex CLI is unavailable. Configure a Codex binary path or install `codex` first.",
-      pluginSupport,
       servers: [],
     };
   }
@@ -634,7 +632,6 @@ export async function getCodexMcpStatus(args: {
     return {
       ok: false,
       detail: combineCommandDetail(result) || "Codex MCP status command failed.",
-      pluginSupport,
       servers: [],
     };
   }
@@ -648,7 +645,6 @@ export async function getCodexMcpStatus(args: {
     return {
       ok: false,
       detail: "Codex MCP status returned unreadable JSON.",
-      pluginSupport,
       servers: [],
     };
   }
@@ -658,7 +654,6 @@ export async function getCodexMcpStatus(args: {
     detail: servers.length > 0
       ? `Loaded ${servers.length} Codex MCP server configuration${servers.length === 1 ? "" : "s"}.`
       : "No Codex MCP servers are configured.",
-    pluginSupport,
     servers,
   };
 }
