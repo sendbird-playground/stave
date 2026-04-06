@@ -219,9 +219,12 @@ Experimental Codex plan mode:
   `plan_ready` response, with a todo-list markdown fallback.
 - Finalized plan reviews are persisted as workspace markdown files under
   `.stave/context/plans/<taskId>_<timestamp>.md`.
-- The workspace information panel indexes those saved plan files and also
+- The workspace information panel indexes those saved plan files, keeps the
+  newest plan at the top, shows at most the latest five entries, and also
   continues to show legacy `.stave/plans/*.md` entries for backward
   compatibility.
+- Saved plan files can be previewed, edited, opened in the editor, and sent to
+  the active task as file context directly from the Information panel.
 
 Codex checkpoint support:
 
