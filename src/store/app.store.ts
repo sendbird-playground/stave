@@ -18,6 +18,7 @@ import {
   loadProjectRegistrySnapshot,
   saveProjectRegistrySnapshot,
   type TaskProviderSessionState,
+  type WorkspaceShell,
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
 import type {
@@ -1184,6 +1185,30 @@ function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspa
   }
   return snapshot.tasks.length
     + Object.values(snapshot.messageCountByTask).reduce((sum, count) => sum + count, 0);
+}
+
+function summarizeWorkspaceSession(session?: WorkspaceSessionState | null) {
+  if (!session) {
+    return 0;
+  }
+  return session.tasks.length
+    + Object.values(session.messageCountByTask).reduce((sum, count) => sum + count, 0);
+}
+
+function shouldReloadWorkspaceShellFromPersistence(args: {
+  cachedWorkspaceState?: WorkspaceSessionState;
+}) {
+  return summarizeWorkspaceSession(args.cachedWorkspaceState) === 0;
+}
+
+function shouldPreferLoadedWorkspaceState(args: {
+  cachedWorkspaceState?: WorkspaceSessionState;
+  loadedWorkspaceShellState?: { shell: WorkspaceShell | null; workspaceState: WorkspaceSessionState } | null;
+}) {
+  if (!args.loadedWorkspaceShellState) {
+    return false;
+  }
+  return summarizeWorkspaceShell(args.loadedWorkspaceShellState.shell) > summarizeWorkspaceSession(args.cachedWorkspaceState);
 }
 
 function buildStaveMuseLocalActionContextFromState(state: Pick<
@@ -2691,11 +2716,18 @@ export const useAppStore = create<AppState>()(
         const cachedWorkspaceState = preferredWorkspaceId
           ? stateBeforeHydrate.workspaceRuntimeCacheById[preferredWorkspaceId]
           : undefined;
-        const loadedWorkspaceShellState = preferredWorkspaceId && !cachedWorkspaceState
+        const loadedWorkspaceShellState = preferredWorkspaceId && (
+          !cachedWorkspaceState
+          || shouldReloadWorkspaceShellFromPersistence({ cachedWorkspaceState })
+        )
           ? await loadWorkspaceShellStateFromPersistence({
               workspaceId: preferredWorkspaceId,
             })
           : null;
+        const preferLoadedWorkspaceState = shouldPreferLoadedWorkspaceState({
+          cachedWorkspaceState,
+          loadedWorkspaceShellState,
+        });
 
         const preferredWorkspacePath = pathById[preferredWorkspaceId] ?? null;
         let projectFiles = stateBeforeHydrate.projectFiles;
@@ -2713,9 +2745,16 @@ export const useAppStore = create<AppState>()(
         }
 
         set((state) => {
-          const workspaceState = cachedWorkspaceState
-            ?? loadedWorkspaceShellState?.workspaceState
-            ?? buildWorkspaceSessionState({ snapshot: null });
+          const workspaceState = (
+            preferLoadedWorkspaceState
+            ? loadedWorkspaceShellState?.workspaceState
+            : (cachedWorkspaceState ?? loadedWorkspaceShellState?.workspaceState)
+          ) ?? buildWorkspaceSessionState({ snapshot: null });
+          const nextRuntimeCacheById = preferLoadedWorkspaceState && preferredWorkspaceId
+            ? Object.fromEntries(
+                Object.entries(state.workspaceRuntimeCacheById).filter(([workspaceId]) => workspaceId !== preferredWorkspaceId),
+              )
+            : state.workspaceRuntimeCacheById;
           const staleWorkspacePaths = rememberedRows
             .filter((workspace) => !rows.some((row) => row.id === workspace.id))
             .map((workspace) => (
@@ -2771,6 +2810,7 @@ export const useAppStore = create<AppState>()(
               workspacePath: preferredWorkspacePath,
               files: projectFiles,
             }),
+            workspaceRuntimeCacheById: nextRuntimeCacheById,
             taskWorkspaceIdById: registerTaskWorkspaceOwnership({
               taskWorkspaceIdById: state.taskWorkspaceIdById,
               workspaceId: preferredWorkspaceId,
@@ -2779,7 +2819,7 @@ export const useAppStore = create<AppState>()(
             ...workspaceState,
           };
         });
-        if (loadedWorkspaceShellState) {
+        if (loadedWorkspaceShellState && (preferLoadedWorkspaceState || !cachedWorkspaceState)) {
           hydrateWorkspaceMessagesInBackground({
             workspaceId: preferredWorkspaceId,
             taskIds: loadedWorkspaceShellState.initialTaskIds,
@@ -3819,11 +3859,14 @@ export const useAppStore = create<AppState>()(
         });
         const switchMetricToken = ++workspaceSwitchMetricTokenCounter;
         const switchStartedAt = getWorkspaceSwitchMetricNow();
-        let shellResolvedAt = current.workspaceRuntimeCacheById[workspaceId]
+        const cachedWorkspaceState = current.workspaceRuntimeCacheById[workspaceId];
+        const shouldLoadWorkspaceShellState = !cachedWorkspaceState
+          || shouldReloadWorkspaceShellFromPersistence({ cachedWorkspaceState });
+        let shellResolvedAt = !shouldLoadWorkspaceShellState
           ? switchStartedAt
           : undefined;
         let setRootResolvedAt = switchStartedAt;
-        const loadedWorkspaceShellState = current.workspaceRuntimeCacheById[workspaceId]
+        const loadedWorkspaceShellState = !shouldLoadWorkspaceShellState
           ? null
           : loadWorkspaceShellStateFromPersistence({
               workspaceId,
@@ -3842,13 +3885,22 @@ export const useAppStore = create<AppState>()(
           }),
         ]);
         const nextWorkspaces = current.workspaces;
-        const resolvedWorkspaceShellState = current.workspaceRuntimeCacheById[workspaceId]
+        const resolvedWorkspaceShellState = !shouldLoadWorkspaceShellState
           ? null
           : await loadedWorkspaceShellState;
-        const workspaceState = current.workspaceRuntimeCacheById[workspaceId]
-          ?? resolvedWorkspaceShellState?.workspaceState
-          ?? buildWorkspaceSessionState({ snapshot: null });
+        const preferLoadedWorkspaceState = shouldPreferLoadedWorkspaceState({
+          cachedWorkspaceState,
+          loadedWorkspaceShellState: resolvedWorkspaceShellState,
+        });
+        const workspaceState = (
+          preferLoadedWorkspaceState
+          ? resolvedWorkspaceShellState?.workspaceState
+          : (cachedWorkspaceState ?? resolvedWorkspaceShellState?.workspaceState)
+        ) ?? buildWorkspaceSessionState({ snapshot: null });
         const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({ state: current });
+        if (preferLoadedWorkspaceState) {
+          delete nextRuntimeCacheById[workspaceId];
+        }
 
         set((state) => {
           return {
@@ -3879,7 +3931,7 @@ export const useAppStore = create<AppState>()(
           metric: {
             token: switchMetricToken,
             startedAt: switchStartedAt,
-            cacheHit: Boolean(current.workspaceRuntimeCacheById[workspaceId]),
+            cacheHit: Boolean(cachedWorkspaceState) && !preferLoadedWorkspaceState,
             ...(shellResolvedAt !== undefined ? { shellResolvedAt } : {}),
             setRootResolvedAt,
           },
