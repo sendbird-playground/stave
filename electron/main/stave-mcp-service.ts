@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { webContents } from "electron";
 import { buildCanonicalConversationRequest } from "../../src/lib/providers/canonical-request";
 import { getDefaultModelForProvider } from "../../src/lib/providers/model-catalog";
 import type {
@@ -10,6 +11,23 @@ import type {
 } from "../../src/lib/providers/provider.types";
 import type { AppNotificationCreateInput } from "../../src/lib/notifications/notification.types";
 import { workspaceHasActiveTurns } from "../../src/lib/notifications/notification.types";
+import {
+  createWorkspaceConfluencePage,
+  createWorkspaceFigmaResource,
+  createWorkspaceInfoCustomField,
+  createWorkspaceJiraIssue,
+  createWorkspaceLinkedPullRequest,
+  createWorkspaceSlackThread,
+  createWorkspaceTodoItem,
+  extractConfluencePageReference,
+  extractFigmaResourceReference,
+  extractJiraIssueReference,
+  extractSlackThreadReference,
+  type WorkspaceInfoCustomField,
+  type WorkspaceInformationState,
+  type WorkspaceInfoFieldType,
+  type WorkspaceLinkedPrStatus,
+} from "../../src/lib/workspace-information";
 import {
   buildPendingProviderTurnState,
   buildRecentTimestamp,
@@ -41,17 +59,6 @@ import {
   defaultWorkspaceName,
   type WorkspaceSessionState,
 } from "../../src/store/workspace-session-state";
-import {
-  createWorkspaceConfluencePage,
-  createWorkspaceFigmaResource,
-  createWorkspaceJiraIssue,
-  createWorkspaceSlackThread,
-  extractConfluencePageReference,
-  extractFigmaResourceReference,
-  extractJiraIssueReference,
-  extractSlackThreadReference,
-  type WorkspaceInformationState,
-} from "../../src/lib/workspace-information";
 import { applyProviderEventsToWorkspaceSession } from "../../src/store/workspace-turn-replay";
 import {
   findLatestPendingApprovalPart,
@@ -130,6 +137,15 @@ export interface TaskStatusResult {
 
 const workspaceSessionCacheById = new Map<string, WorkspaceSessionState>();
 const workspacePersistChainById = new Map<string, Promise<void>>();
+
+type WorkspaceInformationResourceKind =
+  | "jira"
+  | "pull_request"
+  | "confluence"
+  | "figma"
+  | "slack";
+
+type WorkspaceCustomFieldValueInput = string | number | boolean | null;
 
 function normalizeProjectPath(projectPath: string) {
   return path.resolve(projectPath.trim());
@@ -368,24 +384,147 @@ function cacheWorkspaceSession(workspaceId: string, session: WorkspaceSessionSta
   return session;
 }
 
+function broadcastWorkspaceInformationUpdate(args: {
+  workspaceId: string;
+  workspaceInformation: WorkspaceInformationState;
+}) {
+  for (const contents of webContents.getAllWebContents()) {
+    if (contents.isDestroyed()) {
+      continue;
+    }
+    contents.send("local-mcp:workspace-information-updated", {
+      workspaceId: args.workspaceId,
+      workspaceInformation: args.workspaceInformation,
+    });
+  }
+}
+
+function normalizeWorkspaceResourceKind(value: string): WorkspaceInformationResourceKind {
+  switch (value.trim()) {
+    case "jira":
+    case "pull_request":
+    case "confluence":
+    case "figma":
+    case "slack":
+      return value.trim();
+    default:
+      throw new Error(`Unsupported workspace resource kind: ${value}`);
+  }
+}
+
+function normalizeWorkspaceFieldType(value: string): WorkspaceInfoFieldType {
+  switch (value.trim()) {
+    case "text":
+    case "textarea":
+    case "number":
+    case "boolean":
+    case "date":
+    case "url":
+    case "single_select":
+      return value.trim();
+    default:
+      throw new Error(`Unsupported workspace custom field type: ${value}`);
+  }
+}
+
+function normalizeLinkedPullRequestStatus(value?: string): WorkspaceLinkedPrStatus {
+  switch (value?.trim()) {
+    case "open":
+    case "review":
+    case "merged":
+    case "closed":
+    case "planned":
+      return value.trim();
+    default:
+      return "planned";
+  }
+}
+
+function normalizeStringList(value?: string[]) {
+  const seen = new Set<string>();
+  return (value ?? []).flatMap((entry) => {
+    const trimmed = entry.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      return [];
+    }
+    seen.add(trimmed);
+    return [trimmed];
+  });
+}
+
+function coerceWorkspaceCustomFieldValue(args: {
+  field: WorkspaceInfoCustomField;
+  value: WorkspaceCustomFieldValueInput;
+}) {
+  const { field, value } = args;
+  switch (field.type) {
+    case "number":
+      if (value === null || value === "") {
+        return { ...field, value: null };
+      }
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return { ...field, value };
+      }
+      if (typeof value === "string") {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+          return { ...field, value: parsed };
+        }
+      }
+      throw new Error(`Invalid numeric value for custom field ${field.id}.`);
+    case "boolean":
+      if (typeof value === "boolean") {
+        return { ...field, value };
+      }
+      if (typeof value === "string") {
+        if (value === "true") {
+          return { ...field, value: true };
+        }
+        if (value === "false") {
+          return { ...field, value: false };
+        }
+      }
+      throw new Error(`Invalid boolean value for custom field ${field.id}.`);
+    case "text":
+    case "textarea":
+    case "date":
+    case "url":
+      return {
+        ...field,
+        value: value == null ? "" : String(value).trim(),
+      };
+    case "single_select": {
+      const nextValue = value == null ? "" : String(value).trim();
+      if (nextValue && !field.options.includes(nextValue)) {
+        throw new Error(`Value "${nextValue}" is not a valid option for custom field ${field.id}.`);
+      }
+      return {
+        ...field,
+        value: nextValue,
+      };
+    }
+    default:
+      return {
+        ...field,
+        value: value == null ? "" : String(value).trim(),
+      };
+  }
+}
+
 function normalizeWorkspaceInfoString(value?: string) {
   return value?.trim() || "";
 }
 
-async function updateWorkspaceInformationSession(args: {
+async function updateWorkspaceInformationState(args: {
   workspaceId: string;
   updater: (current: WorkspaceInformationState) => WorkspaceInformationState;
 }) {
+  const session = await loadWorkspaceSession(args.workspaceId);
   const { projects } = await loadNormalizedProjects();
   const registration = findWorkspaceRegistration({
     projects,
     workspaceId: args.workspaceId,
   });
-  if (!registration) {
-    throw new Error(`Workspace not found: ${args.workspaceId}`);
-  }
-
-  const session = await loadWorkspaceSession(args.workspaceId);
   const nextWorkspaceInformation = args.updater(session.workspaceInformation);
   const nextSession = cacheWorkspaceSession(args.workspaceId, {
     ...session,
@@ -393,11 +532,17 @@ async function updateWorkspaceInformationSession(args: {
   });
   await queueWorkspaceSessionPersist({
     workspaceId: args.workspaceId,
-    workspaceName: registration.workspace.name,
+    workspaceName: registration?.workspace.name ?? args.workspaceId,
     session: nextSession,
   });
-
-  return nextWorkspaceInformation;
+  broadcastWorkspaceInformationUpdate({
+    workspaceId: args.workspaceId,
+    workspaceInformation: nextWorkspaceInformation,
+  });
+  return {
+    workspaceId: args.workspaceId,
+    workspaceInformation: nextWorkspaceInformation,
+  };
 }
 
 export async function getWorkspaceInformation(args: {
@@ -410,6 +555,390 @@ export async function getWorkspaceInformation(args: {
   };
 }
 
+export async function replaceWorkspaceNotes(args: {
+  workspaceId: string;
+  notes: string;
+}) {
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => ({
+      ...current,
+      notes: args.notes,
+    }),
+  });
+}
+
+export async function appendWorkspaceNotes(args: {
+  workspaceId: string;
+  text: string;
+}) {
+  const text = args.text.trim();
+  if (!text) {
+    throw new Error("Workspace notes append text is required.");
+  }
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => ({
+      ...current,
+      notes: current.notes.trim()
+        ? `${current.notes.trim()}\n${text}`
+        : text,
+    }),
+  });
+}
+
+export async function clearWorkspaceNotes(args: {
+  workspaceId: string;
+}) {
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => ({
+      ...current,
+      notes: "",
+    }),
+  });
+}
+
+export async function addWorkspaceTodo(args: {
+  workspaceId: string;
+  text: string;
+}) {
+  const text = args.text.trim();
+  if (!text) {
+    throw new Error("Workspace todo text is required.");
+  }
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      const nextTodo = createWorkspaceTodoItem();
+      nextTodo.text = text;
+      return {
+        ...current,
+        todos: [...current.todos, nextTodo],
+      };
+    },
+  });
+}
+
+export async function updateWorkspaceTodo(args: {
+  workspaceId: string;
+  todoId: string;
+  text?: string;
+  completed?: boolean;
+}) {
+  if (args.text === undefined && args.completed === undefined) {
+    throw new Error("Workspace todo update requires text or completed.");
+  }
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      let found = false;
+      const todos = current.todos.map((todo) => {
+        if (todo.id !== args.todoId) {
+          return todo;
+        }
+        found = true;
+        return {
+          ...todo,
+          ...(args.text !== undefined ? { text: args.text.trim() } : {}),
+          ...(args.completed !== undefined ? { completed: args.completed } : {}),
+        };
+      });
+      if (!found) {
+        throw new Error(`Workspace todo not found: ${args.todoId}`);
+      }
+      return {
+        ...current,
+        todos,
+      };
+    },
+  });
+}
+
+export async function removeWorkspaceTodo(args: {
+  workspaceId: string;
+  todoId: string;
+}) {
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      const todos = current.todos.filter((todo) => todo.id !== args.todoId);
+      if (todos.length === current.todos.length) {
+        throw new Error(`Workspace todo not found: ${args.todoId}`);
+      }
+      return {
+        ...current,
+        todos,
+      };
+    },
+  });
+}
+
+export async function addWorkspaceResource(args: {
+  workspaceId: string;
+  kind: string;
+  url: string;
+  title?: string;
+  issueKey?: string;
+  status?: string;
+  note?: string;
+  nodeId?: string;
+  channelName?: string;
+  spaceKey?: string;
+}) {
+  const kind = normalizeWorkspaceResourceKind(args.kind);
+  const url = args.url.trim();
+  if (!url) {
+    throw new Error("Workspace resource URL is required.");
+  }
+  const title = args.title?.trim() ?? "";
+  const note = args.note?.trim() ?? "";
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      switch (kind) {
+        case "jira": {
+          const nextLink = createWorkspaceJiraIssue();
+          nextLink.issueKey = args.issueKey?.trim() ?? "";
+          nextLink.title = title || nextLink.issueKey || url;
+          nextLink.url = url;
+          nextLink.status = args.status?.trim() ?? "";
+          nextLink.note = note;
+          return {
+            ...current,
+            jiraIssues: [...current.jiraIssues, nextLink],
+          };
+        }
+        case "pull_request": {
+          const nextLink = createWorkspaceLinkedPullRequest();
+          nextLink.title = title || url;
+          nextLink.url = url;
+          nextLink.status = normalizeLinkedPullRequestStatus(args.status);
+          nextLink.note = note;
+          return {
+            ...current,
+            linkedPullRequests: [...current.linkedPullRequests, nextLink],
+          };
+        }
+        case "confluence": {
+          const nextLink = createWorkspaceConfluencePage();
+          nextLink.title = title || url;
+          nextLink.url = url;
+          nextLink.spaceKey = args.spaceKey?.trim() ?? "";
+          nextLink.note = note;
+          return {
+            ...current,
+            confluencePages: [...current.confluencePages, nextLink],
+          };
+        }
+        case "figma": {
+          const nextLink = createWorkspaceFigmaResource();
+          nextLink.title = title || url;
+          nextLink.url = url;
+          nextLink.nodeId = args.nodeId?.trim() ?? "";
+          nextLink.note = note;
+          return {
+            ...current,
+            figmaResources: [...current.figmaResources, nextLink],
+          };
+        }
+        case "slack": {
+          const nextLink = createWorkspaceSlackThread();
+          nextLink.url = url;
+          nextLink.channelName = args.channelName?.trim() ?? "";
+          nextLink.note = note;
+          return {
+            ...current,
+            slackThreads: [...current.slackThreads, nextLink],
+          };
+        }
+      }
+    },
+  });
+}
+
+export async function removeWorkspaceResource(args: {
+  workspaceId: string;
+  kind: string;
+  itemId: string;
+}) {
+  const kind = normalizeWorkspaceResourceKind(args.kind);
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      switch (kind) {
+        case "jira": {
+          const jiraIssues = current.jiraIssues.filter((item) => item.id !== args.itemId);
+          if (jiraIssues.length === current.jiraIssues.length) {
+            throw new Error(`Workspace resource not found: ${args.itemId}`);
+          }
+          return {
+            ...current,
+            jiraIssues,
+          };
+        }
+        case "pull_request": {
+          const linkedPullRequests = current.linkedPullRequests.filter((item) => item.id !== args.itemId);
+          if (linkedPullRequests.length === current.linkedPullRequests.length) {
+            throw new Error(`Workspace resource not found: ${args.itemId}`);
+          }
+          return {
+            ...current,
+            linkedPullRequests,
+          };
+        }
+        case "confluence": {
+          const confluencePages = current.confluencePages.filter((item) => item.id !== args.itemId);
+          if (confluencePages.length === current.confluencePages.length) {
+            throw new Error(`Workspace resource not found: ${args.itemId}`);
+          }
+          return {
+            ...current,
+            confluencePages,
+          };
+        }
+        case "figma": {
+          const figmaResources = current.figmaResources.filter((item) => item.id !== args.itemId);
+          if (figmaResources.length === current.figmaResources.length) {
+            throw new Error(`Workspace resource not found: ${args.itemId}`);
+          }
+          return {
+            ...current,
+            figmaResources,
+          };
+        }
+        case "slack": {
+          const slackThreads = current.slackThreads.filter((item) => item.id !== args.itemId);
+          if (slackThreads.length === current.slackThreads.length) {
+            throw new Error(`Workspace resource not found: ${args.itemId}`);
+          }
+          return {
+            ...current,
+            slackThreads,
+          };
+        }
+      }
+    },
+  });
+}
+
+export async function addWorkspaceCustomField(args: {
+  workspaceId: string;
+  fieldType: string;
+  label: string;
+  value?: WorkspaceCustomFieldValueInput;
+  options?: string[];
+}) {
+  const fieldType = normalizeWorkspaceFieldType(args.fieldType);
+  const label = args.label.trim();
+  if (!label) {
+    throw new Error("Workspace custom field label is required.");
+  }
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      let nextField = createWorkspaceInfoCustomField({
+        type: fieldType,
+        label,
+      });
+      if (nextField.type === "single_select") {
+        const options = normalizeStringList(args.options);
+        nextField = {
+          ...nextField,
+          options,
+          value: options.includes(nextField.value)
+            ? nextField.value
+            : (options[0] ?? ""),
+        };
+      }
+      if (args.value !== undefined) {
+        nextField = coerceWorkspaceCustomFieldValue({
+          field: nextField,
+          value: args.value,
+        });
+      }
+      return {
+        ...current,
+        customFields: [...current.customFields, nextField],
+      };
+    },
+  });
+}
+
+export async function setWorkspaceCustomField(args: {
+  workspaceId: string;
+  fieldId: string;
+  value?: WorkspaceCustomFieldValueInput;
+  label?: string;
+  options?: string[];
+}) {
+  if (args.value === undefined && args.label === undefined && args.options === undefined) {
+    throw new Error("Workspace custom field update requires value, label, or options.");
+  }
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      let found = false;
+      const customFields = current.customFields.map((field) => {
+        if (field.id !== args.fieldId) {
+          return field;
+        }
+        found = true;
+        let nextField: WorkspaceInfoCustomField = field;
+        if (args.label !== undefined) {
+          nextField = {
+            ...nextField,
+            label: args.label.trim(),
+          };
+        }
+        if (nextField.type === "single_select" && args.options !== undefined) {
+          const options = normalizeStringList(args.options);
+          nextField = {
+            ...nextField,
+            options,
+            value: options.includes(nextField.value)
+              ? nextField.value
+              : (options[0] ?? ""),
+          };
+        }
+        if (args.value !== undefined) {
+          nextField = coerceWorkspaceCustomFieldValue({
+            field: nextField,
+            value: args.value,
+          });
+        }
+        return nextField;
+      });
+      if (!found) {
+        throw new Error(`Workspace custom field not found: ${args.fieldId}`);
+      }
+      return {
+        ...current,
+        customFields,
+      };
+    },
+  });
+}
+
+export async function removeWorkspaceCustomField(args: {
+  workspaceId: string;
+  fieldId: string;
+}) {
+  return updateWorkspaceInformationState({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      const customFields = current.customFields.filter((field) => field.id !== args.fieldId);
+      if (customFields.length === current.customFields.length) {
+        throw new Error(`Workspace custom field not found: ${args.fieldId}`);
+      }
+      return {
+        ...current,
+        customFields,
+      };
+    },
+  });
+}
+
 export async function addWorkspaceJiraIssue(args: {
   workspaceId: string;
   url: string;
@@ -419,27 +948,19 @@ export async function addWorkspaceJiraIssue(args: {
   note?: string;
 }) {
   const parsed = extractJiraIssueReference(args.url);
-  let added = createWorkspaceJiraIssue();
-  const workspaceInformation = await updateWorkspaceInformationSession({
+  const workspaceInformation = await addWorkspaceResource({
     workspaceId: args.workspaceId,
-    updater: (current) => {
-      added = createWorkspaceJiraIssue();
-      added.issueKey = normalizeWorkspaceInfoString(args.issueKey) || parsed?.issueKey || "";
-      added.title = normalizeWorkspaceInfoString(args.title) || added.issueKey || "Jira issue";
-      added.url = normalizeWorkspaceInfoString(args.url);
-      added.status = normalizeWorkspaceInfoString(args.status);
-      added.note = normalizeWorkspaceInfoString(args.note);
-      return {
-        ...current,
-        jiraIssues: [...current.jiraIssues, added],
-      };
-    },
+    kind: "jira",
+    url: normalizeWorkspaceInfoString(args.url),
+    issueKey: normalizeWorkspaceInfoString(args.issueKey) || parsed?.issueKey || "",
+    title: normalizeWorkspaceInfoString(args.title) || normalizeWorkspaceInfoString(args.issueKey) || parsed?.issueKey || "Jira issue",
+    status: normalizeWorkspaceInfoString(args.status),
+    note: normalizeWorkspaceInfoString(args.note),
   });
-
   return {
-    workspaceId: args.workspaceId,
-    added,
-    workspaceInformation,
+    workspaceId: workspaceInformation.workspaceId,
+    added: workspaceInformation.workspaceInformation.jiraIssues.at(-1) ?? null,
+    workspaceInformation: workspaceInformation.workspaceInformation,
   };
 }
 
@@ -451,26 +972,18 @@ export async function addWorkspaceConfluencePage(args: {
   note?: string;
 }) {
   const parsed = extractConfluencePageReference(args.url);
-  let added = createWorkspaceConfluencePage();
-  const workspaceInformation = await updateWorkspaceInformationSession({
+  const workspaceInformation = await addWorkspaceResource({
     workspaceId: args.workspaceId,
-    updater: (current) => {
-      added = createWorkspaceConfluencePage();
-      added.title = normalizeWorkspaceInfoString(args.title) || parsed?.title || parsed?.spaceKey || "Confluence page";
-      added.url = normalizeWorkspaceInfoString(args.url);
-      added.spaceKey = normalizeWorkspaceInfoString(args.spaceKey) || parsed?.spaceKey || "";
-      added.note = normalizeWorkspaceInfoString(args.note);
-      return {
-        ...current,
-        confluencePages: [...current.confluencePages, added],
-      };
-    },
+    kind: "confluence",
+    url: normalizeWorkspaceInfoString(args.url),
+    title: normalizeWorkspaceInfoString(args.title) || parsed?.title || parsed?.spaceKey || "Confluence page",
+    spaceKey: normalizeWorkspaceInfoString(args.spaceKey) || parsed?.spaceKey || "",
+    note: normalizeWorkspaceInfoString(args.note),
   });
-
   return {
-    workspaceId: args.workspaceId,
-    added,
-    workspaceInformation,
+    workspaceId: workspaceInformation.workspaceId,
+    added: workspaceInformation.workspaceInformation.confluencePages.at(-1) ?? null,
+    workspaceInformation: workspaceInformation.workspaceInformation,
   };
 }
 
@@ -482,26 +995,18 @@ export async function addWorkspaceFigmaResource(args: {
   note?: string;
 }) {
   const parsed = extractFigmaResourceReference(args.url);
-  let added = createWorkspaceFigmaResource();
-  const workspaceInformation = await updateWorkspaceInformationSession({
+  const workspaceInformation = await addWorkspaceResource({
     workspaceId: args.workspaceId,
-    updater: (current) => {
-      added = createWorkspaceFigmaResource();
-      added.title = normalizeWorkspaceInfoString(args.title) || parsed?.title || parsed?.fileKey || "Figma resource";
-      added.url = normalizeWorkspaceInfoString(args.url);
-      added.nodeId = normalizeWorkspaceInfoString(args.nodeId) || parsed?.nodeId || "";
-      added.note = normalizeWorkspaceInfoString(args.note);
-      return {
-        ...current,
-        figmaResources: [...current.figmaResources, added],
-      };
-    },
+    kind: "figma",
+    url: normalizeWorkspaceInfoString(args.url),
+    title: normalizeWorkspaceInfoString(args.title) || parsed?.title || parsed?.fileKey || "Figma resource",
+    nodeId: normalizeWorkspaceInfoString(args.nodeId) || parsed?.nodeId || "",
+    note: normalizeWorkspaceInfoString(args.note),
   });
-
   return {
-    workspaceId: args.workspaceId,
-    added,
-    workspaceInformation,
+    workspaceId: workspaceInformation.workspaceId,
+    added: workspaceInformation.workspaceInformation.figmaResources.at(-1) ?? null,
+    workspaceInformation: workspaceInformation.workspaceInformation,
   };
 }
 
@@ -512,25 +1017,17 @@ export async function addWorkspaceSlackThread(args: {
   note?: string;
 }) {
   const parsed = extractSlackThreadReference(args.url);
-  let added = createWorkspaceSlackThread();
-  const workspaceInformation = await updateWorkspaceInformationSession({
+  const workspaceInformation = await addWorkspaceResource({
     workspaceId: args.workspaceId,
-    updater: (current) => {
-      added = createWorkspaceSlackThread();
-      added.url = normalizeWorkspaceInfoString(args.url);
-      added.channelName = normalizeWorkspaceInfoString(args.channelName) || parsed?.channelId || "";
-      added.note = normalizeWorkspaceInfoString(args.note);
-      return {
-        ...current,
-        slackThreads: [...current.slackThreads, added],
-      };
-    },
+    kind: "slack",
+    url: normalizeWorkspaceInfoString(args.url),
+    channelName: normalizeWorkspaceInfoString(args.channelName) || parsed?.channelId || "",
+    note: normalizeWorkspaceInfoString(args.note),
   });
-
   return {
-    workspaceId: args.workspaceId,
-    added,
-    workspaceInformation,
+    workspaceId: workspaceInformation.workspaceId,
+    added: workspaceInformation.workspaceInformation.slackThreads.at(-1) ?? null,
+    workspaceInformation: workspaceInformation.workspaceInformation,
   };
 }
 
