@@ -9,10 +9,17 @@ import {
   resolveCurrentProjectDefaultWorkspaceId,
 } from "@/store/project.utils";
 
+const PROJECT_PATH = "/tmp/workspace/stave";
+const FOREIGN_PROJECT_PATH = "/tmp/sbdashboard";
+const FEATURE_WORKSPACE_PATH = `${PROJECT_PATH}/.stave/workspaces/feat__auto-update-on-mac`;
+const DEFAULT_WORKSPACE_ID = buildProjectDefaultWorkspaceId({
+  projectPath: PROJECT_PATH,
+});
+
 describe("project name normalization", () => {
   test("replaces the generic placeholder name with the folder basename", () => {
     expect(normalizeProjectDisplayName({
-      projectPath: "/Users/jacob.kim/workspace/stave",
+      projectPath: PROJECT_PATH,
       projectName: "project",
     })).toBe("stave");
   });
@@ -20,19 +27,19 @@ describe("project name normalization", () => {
   test("normalizes persisted recent projects that still carry the placeholder name", () => {
     const projects = normalizeRecentProjectStates({
       projects: [{
-        projectPath: "/Users/jacob.kim/workspace/stave",
+        projectPath: PROJECT_PATH,
         projectName: "project",
         lastOpenedAt: "2026-03-30T13:35:33.466Z",
         defaultBranch: "main",
         workspaces: [{
-          id: "base:75px8d",
+          id: DEFAULT_WORKSPACE_ID,
           name: "Default Workspace",
           updatedAt: "2026-03-30T13:06:25.031Z",
         }],
-        activeWorkspaceId: "base:75px8d",
-        workspaceBranchById: { "base:75px8d": "main" },
-        workspacePathById: { "base:75px8d": "/Users/jacob.kim/workspace/stave" },
-        workspaceDefaultById: { "base:75px8d": true },
+        activeWorkspaceId: DEFAULT_WORKSPACE_ID,
+        workspaceBranchById: { [DEFAULT_WORKSPACE_ID]: "main" },
+        workspacePathById: { [DEFAULT_WORKSPACE_ID]: PROJECT_PATH },
+        workspaceDefaultById: { [DEFAULT_WORKSPACE_ID]: true },
       }],
     });
 
@@ -61,7 +68,7 @@ describe("project name normalization", () => {
 
   test("rejects a foreign default workspace when its path points at another project", () => {
     expect(resolveCurrentProjectDefaultWorkspaceId({
-      projectPath: "/Users/jacob.kim/workspace/stave",
+      projectPath: PROJECT_PATH,
       workspaces: [{
         id: "base:1i2znya",
         name: "Default Workspace",
@@ -69,17 +76,17 @@ describe("project name normalization", () => {
       }],
       workspaceDefaultById: { "base:1i2znya": true },
       workspacePathById: {
-        "base:1i2znya": "/Users/jacob.kim/projects/sbdashboard",
+        "base:1i2znya": FOREIGN_PROJECT_PATH,
       },
     })).toBe(buildProjectDefaultWorkspaceId({
-      projectPath: "/Users/jacob.kim/workspace/stave",
+      projectPath: PROJECT_PATH,
     }));
   });
 
   test("repairs a corrupted project registry entry whose default workspace came from another project", () => {
     const projects = normalizeRecentProjectStates({
       projects: [{
-        projectPath: "/Users/jacob.kim/workspace/stave",
+        projectPath: PROJECT_PATH,
         projectName: "stave",
         lastOpenedAt: "2026-03-31T13:36:33.211Z",
         defaultBranch: "main",
@@ -101,8 +108,8 @@ describe("project name normalization", () => {
           "3158a1b0-acfa-4413-b0c3-e5c7c7441c86": "feat/auto-update-on-mac",
         },
         workspacePathById: {
-          "base:1i2znya": "/Users/jacob.kim/projects/sbdashboard",
-          "3158a1b0-acfa-4413-b0c3-e5c7c7441c86": "/Users/jacob.kim/workspace/stave/.stave/workspaces/feat__auto-update-on-mac",
+          "base:1i2znya": FOREIGN_PROJECT_PATH,
+          "3158a1b0-acfa-4413-b0c3-e5c7c7441c86": FEATURE_WORKSPACE_PATH,
         },
         workspaceDefaultById: { "base:1i2znya": true },
       }],
@@ -110,13 +117,13 @@ describe("project name normalization", () => {
 
     expect(projects).toHaveLength(1);
     expect(projects[0]).toEqual({
-      projectPath: "/Users/jacob.kim/workspace/stave",
+      projectPath: PROJECT_PATH,
       projectName: "stave",
       lastOpenedAt: "2026-03-31T13:36:33.211Z",
       defaultBranch: "main",
       workspaces: [
         {
-          id: "base:75px8d",
+          id: DEFAULT_WORKSPACE_ID,
           name: "Default Workspace",
           updatedAt: "2026-03-31T13:36:33.211Z",
         },
@@ -126,17 +133,17 @@ describe("project name normalization", () => {
           updatedAt: "2026-03-31T13:28:16.529Z",
         },
       ],
-      activeWorkspaceId: "base:75px8d",
+      activeWorkspaceId: DEFAULT_WORKSPACE_ID,
       workspaceBranchById: {
-        "base:75px8d": "main",
+        [DEFAULT_WORKSPACE_ID]: "main",
         "3158a1b0-acfa-4413-b0c3-e5c7c7441c86": "feat/auto-update-on-mac",
       },
       workspacePathById: {
-        "base:75px8d": "/Users/jacob.kim/workspace/stave",
-        "3158a1b0-acfa-4413-b0c3-e5c7c7441c86": "/Users/jacob.kim/workspace/stave/.stave/workspaces/feat__auto-update-on-mac",
+        [DEFAULT_WORKSPACE_ID]: PROJECT_PATH,
+        "3158a1b0-acfa-4413-b0c3-e5c7c7441c86": FEATURE_WORKSPACE_PATH,
       },
       workspaceDefaultById: {
-        "base:75px8d": true,
+        [DEFAULT_WORKSPACE_ID]: true,
         "3158a1b0-acfa-4413-b0c3-e5c7c7441c86": false,
       },
       projectBasePrompt: "",
@@ -147,7 +154,7 @@ describe("project name normalization", () => {
 
   test("normalizes the current project workspace state against the repaired registry entry", () => {
     const normalized = normalizeCurrentProjectState({
-      projectPath: "/Users/jacob.kim/workspace/stave",
+      projectPath: PROJECT_PATH,
       projectName: "stave",
       defaultBranch: "main",
       workspaces: [{
@@ -157,10 +164,10 @@ describe("project name normalization", () => {
       }],
       activeWorkspaceId: "base:1i2znya",
       workspaceBranchById: { "base:1i2znya": "master" },
-      workspacePathById: { "base:1i2znya": "/Users/jacob.kim/projects/sbdashboard" },
+      workspacePathById: { "base:1i2znya": FOREIGN_PROJECT_PATH },
       workspaceDefaultById: { "base:1i2znya": true },
       recentProjects: [{
-        projectPath: "/Users/jacob.kim/workspace/stave",
+        projectPath: PROJECT_PATH,
         projectName: "stave",
         lastOpenedAt: "2026-03-31T13:36:33.211Z",
         defaultBranch: "main",
@@ -171,16 +178,16 @@ describe("project name normalization", () => {
         }],
         activeWorkspaceId: "base:1i2znya",
         workspaceBranchById: { "base:1i2znya": "master" },
-        workspacePathById: { "base:1i2znya": "/Users/jacob.kim/projects/sbdashboard" },
+        workspacePathById: { "base:1i2znya": FOREIGN_PROJECT_PATH },
         workspaceDefaultById: { "base:1i2znya": true },
       }],
     });
 
     expect(normalized).toMatchObject({
-      activeWorkspaceId: "base:75px8d",
-      workspaceBranchById: { "base:75px8d": "main" },
-      workspacePathById: { "base:75px8d": "/Users/jacob.kim/workspace/stave" },
-      workspaceDefaultById: { "base:75px8d": true },
+      activeWorkspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceBranchById: { [DEFAULT_WORKSPACE_ID]: "main" },
+      workspacePathById: { [DEFAULT_WORKSPACE_ID]: PROJECT_PATH },
+      workspaceDefaultById: { [DEFAULT_WORKSPACE_ID]: true },
     });
   });
 

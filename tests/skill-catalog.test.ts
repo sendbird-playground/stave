@@ -48,12 +48,14 @@ describe("skill discovery", () => {
   const originalHome = process.env.HOME;
   const originalClaudeHome = process.env.CLAUDE_HOME;
   const originalCodexHome = process.env.CODEX_HOME;
+  const originalSharedSkillsHome = process.env.STAVE_SHARED_SKILLS_HOME;
 
   beforeEach(async () => {
     tempHome = await mkdtemp(path.join(os.tmpdir(), "stave-skills-"));
     process.env.HOME = tempHome;
     delete process.env.CLAUDE_HOME;
     delete process.env.CODEX_HOME;
+    delete process.env.STAVE_SHARED_SKILLS_HOME;
   });
 
   afterEach(async () => {
@@ -72,13 +74,18 @@ describe("skill discovery", () => {
     } else {
       process.env.CODEX_HOME = originalCodexHome;
     }
+    if (originalSharedSkillsHome === undefined) {
+      delete process.env.STAVE_SHARED_SKILLS_HOME;
+    } else {
+      process.env.STAVE_SHARED_SKILLS_HOME = originalSharedSkillsHome;
+    }
     if (tempHome) {
       await rm(tempHome, { recursive: true, force: true });
     }
   });
 
   test("discovers user and local roots from provider home overrides", async () => {
-    const agentsRoot = path.join(tempHome, ".agents");
+    const agentsRoot = path.join(tempHome, "shared-agent-home");
     const claudeHomeReal = path.join(agentsRoot, "claude");
     const codexHomeReal = path.join(agentsRoot, "codex");
     const claudeHome = path.join(tempHome, ".claude-link");
@@ -113,6 +120,29 @@ describe("skill discovery", () => {
       root.scope === "local"
       && root.provider === "codex"
       && root.path === path.join(workspacePath, ".codex", "skills")
+    )).toBeTrue();
+  });
+
+  test("prefers the Settings shared root override over the environment root", async () => {
+    const sharedRootFromEnv = path.join(tempHome, "env-shared-home");
+    const sharedRootFromSettings = path.join(tempHome, "settings-shared-home");
+
+    process.env.STAVE_SHARED_SKILLS_HOME = sharedRootFromEnv;
+    await writeSkill(path.join(sharedRootFromEnv, "skills"), "env-shared", "env shared skill");
+    await writeSkill(path.join(sharedRootFromSettings, "skills"), "settings-shared", "settings shared skill");
+
+    const result = await discoverSkillCatalog({
+      sharedSkillsHome: sharedRootFromSettings,
+    });
+
+    expect(result.ok).toBeTrue();
+    expect(result.catalog.sharedSkillsHome).toBe(sharedRootFromSettings);
+    expect(result.catalog.skills.map((skill) => skill.slug)).toContain("settings-shared");
+    expect(result.catalog.skills.map((skill) => skill.slug)).not.toContain("env-shared");
+    expect(result.catalog.roots.some((root) =>
+      root.provider === "shared"
+      && root.path === path.join(sharedRootFromSettings, "skills")
+      && root.detail === "Shared skills root configured in Settings."
     )).toBeTrue();
   });
 });

@@ -11,9 +11,9 @@
 - Settings already expose `skillsEnabled` and `skillsAutoSuggest`, but there is no installed-skill catalog or selection UI yet.
 - The Electron bridge exposes provider runtime APIs, but no skill catalog API.
 - The current local agent layout supports a natural shared-plus-provider model:
-  - `~/.agents/skills` for shared skills
-  - `~/.agents/claude/skills` for Claude-specific overlays
-  - `~/.agents/codex/skills` for Codex-specific overlays
+  - `<shared-agent-home>/skills` for shared skills
+  - `<shared-agent-home>/claude/skills` for Claude-specific overlays
+  - `<shared-agent-home>/codex/skills` for Codex-specific overlays
 
 ## Delivery Split
 
@@ -61,7 +61,7 @@
 - Creating or deleting symlinks
 - Provider-specific enable/disable mutation
 - Chip-based multi-select UI
-- Workspace-local skill directories beyond the current `~/.agents/...` layout
+- Workspace-local skill directories beyond the current shared-agent-home layout
 
 #### Done Criteria
 

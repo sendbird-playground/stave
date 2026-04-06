@@ -510,7 +510,7 @@ contextBridge.exposeInMainWorld("api", {
       }>,
   },
   skills: {
-    getCatalog: (args?: { workspacePath?: string }) =>
+    getCatalog: (args?: { workspacePath?: string; sharedSkillsHome?: string }) =>
       ipcRenderer.invoke(
         "skills:get-catalog",
         args ?? {},

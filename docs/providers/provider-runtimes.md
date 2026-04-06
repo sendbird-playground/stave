@@ -154,6 +154,8 @@ Stave also forwards Claude `taskBudget` when configured, and the `Settings → P
 
 After a plugin reload, Stave invalidates the Claude command-catalog view so the chat composer re-fetches the latest native slash commands.
 
+When the user explicitly references `stave task id` values in the prompt, Stave injects the latest loaded assistant replies for those task IDs as retrieved context and instructs the provider not to scan the filesystem or home directory to discover task history.
+
 Claude path and approval handling:
 
 - Stave runs Claude with the active workspace `cwd`
@@ -317,7 +319,7 @@ Stave does not hardcode one binary path. It probes a small set of candidates, me
 
 1. `runtimeOptions.codexPathOverride`
 2. `STAVE_CODEX_CLI_PATH`
-3. explicit probes of `~/.bun/bin/codex` and `~/.local/bin/codex`
+3. explicit probes of `<user-home>/.bun/bin/codex` and `<user-home>/.local/bin/codex`
 4. `STAVE_CODEX_CMD` resolved through the merged PATH
 5. default `codex` resolved through the merged PATH
 
@@ -327,9 +329,9 @@ If multiple executable candidates exist, Stave runs `candidate --version`, parse
 
 1. `STAVE_CLAUDE_CLI_PATH`
 2. `CLAUDE_CODE_PATH`
-3. `~/.claude/local/claude`
-4. `~/.bun/bin/claude`
-5. `~/.local/bin/claude`
+3. `<user-home>/.claude/local/claude`
+4. `<user-home>/.bun/bin/claude`
+5. `<user-home>/.local/bin/claude`
 6. `STAVE_CLAUDE_CMD` resolved through the merged PATH
 7. default `claude` resolved through the merged PATH
 

@@ -100,7 +100,7 @@ This is better than trying to mirror the full renderer state remotely.
 ### Step 1
 
 - ship the local embedded MCP endpoint
-- validate same-machine flows with `agentize`
+- validate same-machine flows with a local automation client
 
 ### Step 2
 

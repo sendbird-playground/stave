@@ -292,6 +292,7 @@ interface WindowFsApi {
 interface WindowSkillsApi {
   getCatalog?: (args?: {
     workspacePath?: string;
+    sharedSkillsHome?: string;
   }) => Promise<SkillCatalogResponse>;
 }
 

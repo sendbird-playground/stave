@@ -11,11 +11,11 @@
 Stave reads three scope layers:
 
 - `global`
-  - shared agent root: `~/.agents/skills` when present
+  - shared agent root: resolved from Settings when configured, otherwise from `STAVE_SHARED_SKILLS_HOME` when set
   - provider system roots such as `<provider-home>/skills/.system`
 - `user`
-  - Claude user root: resolved from `CLAUDE_HOME` when set, otherwise the active `~/.claude` home
-  - Codex user root: resolved from `CODEX_HOME` when set, otherwise the active `~/.codex` home
+  - Claude user root: resolved from `CLAUDE_HOME` when set, otherwise the active Claude home directory
+  - Codex user root: resolved from `CODEX_HOME` when set, otherwise the active Codex home directory
 - `local`
   - `<workspace>/skills`
   - `<workspace>/.agents/skills`
@@ -37,6 +37,7 @@ Important behavior:
 - `Tab` inserts the highlighted skill token.
 - `Enter` still sends unless the user explicitly selected or highlighted a matching skill entry.
 - The Settings dialog shows the detected roots and a sampled catalog for the current workspace.
+- The Settings dialog can override the shared global skill root without editing shell environment variables.
 
 ## Send Path
 

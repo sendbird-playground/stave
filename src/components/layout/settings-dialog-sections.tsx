@@ -1769,10 +1769,11 @@ function ChatSection() {
 }
 
 function SkillsSection() {
-  const [skillsEnabled, skillsAutoSuggest, subagentsEnabled, subagentsProfile, skillCatalog, activeWorkspaceId, projectPath, workspacePathById] = useAppStore(
+  const [skillsEnabled, skillsAutoSuggest, sharedSkillsHome, subagentsEnabled, subagentsProfile, skillCatalog, activeWorkspaceId, projectPath, workspacePathById] = useAppStore(
     useShallow((state) => [
       state.settings.skillsEnabled,
       state.settings.skillsAutoSuggest,
+      state.settings.sharedSkillsHome,
       state.settings.subagentsEnabled,
       state.settings.subagentsProfile,
       state.skillCatalog,
@@ -1812,10 +1813,18 @@ function SkillsSection() {
     if (!skillsEnabled) {
       return;
     }
-    if (skillCatalog.status === "loading" && skillCatalog.workspacePath === workspacePath) {
+    if (
+      skillCatalog.status === "loading"
+      && skillCatalog.workspacePath === workspacePath
+      && skillCatalog.sharedSkillsHome === (sharedSkillsHome.trim() || null)
+    ) {
       return;
     }
-    if (skillCatalog.status === "ready" && skillCatalog.workspacePath === workspacePath) {
+    if (
+      skillCatalog.status === "ready"
+      && skillCatalog.workspacePath === workspacePath
+      && skillCatalog.sharedSkillsHome === (sharedSkillsHome.trim() || null)
+    ) {
       const CATALOG_TTL_MS = 5 * 60 * 1000;
       const fetchedAtMs = skillCatalog.fetchedAt ? Date.parse(skillCatalog.fetchedAt) : 0;
       if (Date.now() - fetchedAtMs < CATALOG_TTL_MS) {
@@ -1823,7 +1832,16 @@ function SkillsSection() {
       }
     }
     void refreshSkillCatalog({ workspacePath });
-  }, [refreshSkillCatalog, skillCatalog.status, skillCatalog.workspacePath, skillCatalog.fetchedAt, skillsEnabled, workspacePath]);
+  }, [
+    refreshSkillCatalog,
+    sharedSkillsHome,
+    skillCatalog.status,
+    skillCatalog.workspacePath,
+    skillCatalog.sharedSkillsHome,
+    skillCatalog.fetchedAt,
+    skillsEnabled,
+    workspacePath,
+  ]);
 
   return (
     <>
@@ -1850,6 +1868,17 @@ function SkillsSection() {
               ]}
             />
           </LabeledField>
+          <LabeledField
+            title="Shared Skills Root"
+            description="Optional shared global skill directory. Leave blank to follow STAVE_SHARED_SKILLS_HOME when present. Supports ~/..."
+          >
+            <DraftInput
+              className="h-10 rounded-md border-border/80 bg-background"
+              placeholder="~/shared-skills"
+              value={sharedSkillsHome}
+              onCommit={(nextValue) => updateSettings({ patch: { sharedSkillsHome: nextValue } })}
+            />
+          </LabeledField>
         </SettingsCard>
         <SettingsCard title="Subagent" description="Control whether subagents are offered by default and which profile they use.">
           <LabeledField title="Enabled">
@@ -1872,7 +1901,7 @@ function SkillsSection() {
         </SettingsCard>
         <SettingsCard
           title="Detected Skills"
-          description="Stave scans global, user, and workspace-local skill roots. User roots follow the active Claude/Codex home resolution instead of hardcoded directories."
+          description="Stave scans global, user, and workspace-local skill roots. The shared global root follows Settings first, then STAVE_SHARED_SKILLS_HOME."
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createJSONStorage } from "zustand/middleware";
+import { buildProjectDefaultWorkspaceId } from "@/store/project.utils";
 
 interface StorageLike {
   getItem: (key: string) => string | null;
@@ -9,6 +10,11 @@ interface StorageLike {
 }
 
 const originalWindow = (globalThis as { window?: unknown }).window;
+const PROJECT_PATH = "/tmp/stave-project";
+const FOREIGN_PROJECT_PATH = "/tmp/sbdashboard";
+const DEFAULT_WORKSPACE_ID = buildProjectDefaultWorkspaceId({
+  projectPath: PROJECT_PATH,
+});
 
 function createMemoryStorage(): StorageLike {
   const values = new Map<string, string>();
@@ -208,7 +214,7 @@ describe("workspace integrity regressions", () => {
 
     localStorage.setItem("stave-store", JSON.stringify({
       state: {
-        projectPath: "/Users/jacob.kim/workspace/stave",
+        projectPath: PROJECT_PATH,
         projectName: "stave",
         defaultBranch: "main",
         workspaces: [{
@@ -218,7 +224,7 @@ describe("workspace integrity regressions", () => {
         }],
         activeWorkspaceId: "base:1i2znya",
         recentProjects: [{
-          projectPath: "/Users/jacob.kim/workspace/stave",
+          projectPath: PROJECT_PATH,
           projectName: "stave",
           lastOpenedAt: "2026-03-31T13:36:33.211Z",
           defaultBranch: "main",
@@ -229,11 +235,11 @@ describe("workspace integrity regressions", () => {
           }],
           activeWorkspaceId: "base:1i2znya",
           workspaceBranchById: { "base:1i2znya": "master" },
-          workspacePathById: { "base:1i2znya": "/Users/jacob.kim/projects/sbdashboard" },
+          workspacePathById: { "base:1i2znya": FOREIGN_PROJECT_PATH },
           workspaceDefaultById: { "base:1i2znya": true },
         }],
         workspaceBranchById: { "base:1i2znya": "master" },
-        workspacePathById: { "base:1i2znya": "/Users/jacob.kim/projects/sbdashboard" },
+        workspacePathById: { "base:1i2znya": FOREIGN_PROJECT_PATH },
         workspaceDefaultById: { "base:1i2znya": true },
       },
       version: 0,
@@ -250,12 +256,12 @@ describe("workspace integrity regressions", () => {
     });
     await persistedStore.persist.rehydrate();
 
-    expect(useAppStore.getState().activeWorkspaceId).toBe("base:75px8d");
+    expect(useAppStore.getState().activeWorkspaceId).toBe(DEFAULT_WORKSPACE_ID);
     expect(useAppStore.getState().workspacePathById).toEqual({
-      "base:75px8d": "/Users/jacob.kim/workspace/stave",
+      [DEFAULT_WORKSPACE_ID]: PROJECT_PATH,
     });
     expect(useAppStore.getState().workspaceDefaultById).toEqual({
-      "base:75px8d": true,
+      [DEFAULT_WORKSPACE_ID]: true,
     });
   });
 });

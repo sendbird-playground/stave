@@ -123,6 +123,7 @@ export const GetPrStatusByUrlArgsSchema = z
 export const SkillCatalogArgsSchema = z
   .object({
     workspacePath: z.string().max(4096).optional(),
+    sharedSkillsHome: z.string().max(4096).optional(),
   })
   .strict();
 

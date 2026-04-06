@@ -47,7 +47,6 @@ const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.local/bin`,
 ] as const;
 const CODEX_SHARED_RUNTIME_DIRECTORIES = [
-  `${homedir()}/.agents`,
   `${homedir()}/.codex`,
   `${homedir()}/.stave`,
 ] as const;

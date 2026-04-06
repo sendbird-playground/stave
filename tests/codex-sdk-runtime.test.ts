@@ -340,14 +340,12 @@ describe("resolveCodexAdditionalDirectories", () => {
     expect(resolveCodexAdditionalDirectories({
       cwd: "/tmp/stave-muse",
       candidates: [
-        "/Users/demo/.agents",
         "/Users/demo/.codex",
         "/Users/demo/.stave",
-        "/Users/demo/.agents",
+        "/Users/demo/.codex",
       ],
       pathExists: () => true,
     })).toEqual([
-      "/Users/demo/.agents",
       "/Users/demo/.codex",
       "/Users/demo/.stave",
     ]);
@@ -355,14 +353,14 @@ describe("resolveCodexAdditionalDirectories", () => {
 
   test("drops candidate directories that already contain the working directory", () => {
     expect(resolveCodexAdditionalDirectories({
-      cwd: "/Users/demo/.agents/plugin-cache",
+      cwd: "/Users/demo/.codex/plugin-cache",
       candidates: [
-        "/Users/demo/.agents",
         "/Users/demo/.codex",
+        "/Users/demo/.stave",
       ],
       pathExists: () => true,
     })).toEqual([
-      "/Users/demo/.codex",
+      "/Users/demo/.stave",
     ]);
   });
 });
