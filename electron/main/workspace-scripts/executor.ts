@@ -2,7 +2,7 @@
 // Workspace Scripts – Execution Engine (Electron main process)
 // ---------------------------------------------------------------------------
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { webContents } from "electron";
@@ -38,9 +38,14 @@ import {
   type WorkspaceScriptProcess,
 } from "./state";
 import {
+  buildOrbitDisplayCommand,
+  buildOrbitEnv,
+  buildOrbitGetArgs,
   buildOrbitCommand,
+  buildOrbitRunArgs,
   extractOrbitOutput,
   resolvePortlessCommand,
+  tokenizeOrbitCommand,
 } from "./orbit";
 
 const SIGTERM_GRACE_MS = 5_000;
@@ -391,7 +396,6 @@ async function runServiceScript(args: {
   });
 
   const runId = randomUUID();
-  const env = buildScriptEnv(args);
   const cwd = resolveScriptCwd(args);
   const prefixCommands = args.scriptEntry.commands.slice(0, -1);
   const lastCommand = args.scriptEntry.commands[args.scriptEntry.commands.length - 1];
@@ -431,23 +435,53 @@ async function runServiceScript(args: {
     };
   }
 
-  const commandToRun = args.scriptEntry.orbit && orbitCommand
-    ? buildOrbitCommand({
-        command: lastCommand,
+  const orbitEnv = args.scriptEntry.orbit
+    ? buildOrbitEnv({ orbit: args.scriptEntry.orbit })
+    : null;
+  const env = orbitEnv
+    ? { ...buildScriptEnv(args), ...orbitEnv }
+    : buildScriptEnv(args);
+  const orbitCommandArgs = args.scriptEntry.orbit
+    ? tokenizeOrbitCommand(lastCommand)
+    : null;
+  const orbitRunArgs = args.scriptEntry.orbit && orbitCommand && orbitCommandArgs
+    ? buildOrbitRunArgs({
+        commandArgs: orbitCommandArgs,
         orbit: args.scriptEntry.orbit,
         defaultName: path.basename(args.projectPath),
-        portlessCommand: orbitCommand,
       })
+    : null;
+  const orbitUsesShellWrapper = Boolean(args.scriptEntry.orbit && orbitCommand && !orbitRunArgs);
+  const commandToRun = args.scriptEntry.orbit && orbitCommand
+    ? (orbitRunArgs
+        ? buildOrbitDisplayCommand({
+            portlessCommand: orbitCommand,
+            orbitArgs: orbitRunArgs,
+          })
+        : buildOrbitCommand({
+            command: lastCommand,
+            orbit: args.scriptEntry.orbit,
+            defaultName: path.basename(args.projectPath),
+            portlessCommand: orbitCommand,
+          }))
     : lastCommand;
 
   const shellExe = args.scriptEntry.target.shell || process.env.SHELL || "/bin/bash";
-  const ptyProcess = pty.spawn(shellExe, ["-c", commandToRun], {
-    name: "xterm-color",
-    cols: 120,
-    rows: 30,
-    cwd,
-    env: env as Record<string, string>,
-  });
+  const ptyProcess = args.scriptEntry.orbit && orbitCommand && orbitRunArgs
+    ? pty.spawn(orbitCommand, orbitRunArgs, {
+        name: "xterm-color",
+        cols: 120,
+        rows: 30,
+        cwd,
+        env: env as Record<string, string>,
+      })
+    : pty.spawn(shellExe, ["-c", commandToRun], {
+        name: "xterm-color",
+        cols: 120,
+        rows: 30,
+        cwd,
+        env: env as Record<string, string>,
+      });
   const sessionId = randomUUID();
 
   createProcessEntry({
@@ -475,9 +509,34 @@ async function runServiceScript(args: {
     },
   });
 
+  if (args.scriptEntry.orbit && orbitCommand && orbitRunArgs) {
+    const orbitUrlResult = spawnSync(orbitCommand, buildOrbitGetArgs({
+      orbit: args.scriptEntry.orbit,
+      defaultName: path.basename(args.projectPath),
+    }), {
+      cwd,
+      env,
+      encoding: "utf8",
+    });
+    const orbitUrl = orbitUrlResult.status === 0
+      ? orbitUrlResult.stdout.trim()
+      : "";
+    if (orbitUrl) {
+      emitScriptEvent({
+        workspaceId: args.workspaceId,
+        scriptId: args.scriptEntry.id,
+        scriptKind: args.scriptEntry.kind,
+        runId,
+        sessionId,
+        source: args.source,
+        event: { type: "orbit-url", url: orbitUrl },
+      });
+    }
+  }
+
   let orbitBuffer = "";
   ptyProcess.onData((data) => {
-    if (args.scriptEntry.orbit) {
+    if (args.scriptEntry.orbit && orbitUsesShellWrapper) {
       const parsed = extractOrbitOutput({
         buffer: orbitBuffer,
         chunk: data,
@@ -524,7 +583,7 @@ async function runServiceScript(args: {
   });
 
   ptyProcess.onExit(({ exitCode }) => {
-    if (orbitBuffer) {
+    if (orbitUsesShellWrapper && orbitBuffer) {
       emitScriptEvent({
         workspaceId: args.workspaceId,
         scriptId: args.scriptEntry.id,
