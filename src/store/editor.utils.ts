@@ -106,8 +106,20 @@ export function canSendEditorContextToTask(args: {
   hasActiveEditorTab: boolean;
   isTaskResponding: boolean;
 }) {
+  return canSendWorkspaceFileToTask({
+    taskId: args.taskId,
+    filePath: args.hasActiveEditorTab ? "__active-editor-tab__" : "",
+    isTaskResponding: args.isTaskResponding,
+  });
+}
+
+export function canSendWorkspaceFileToTask(args: {
+  taskId?: string | null;
+  filePath?: string | null;
+  isTaskResponding: boolean;
+}) {
   return Boolean(
-    args.hasActiveEditorTab
+    args.filePath?.trim()
     && args.taskId
     && !args.isTaskResponding,
   );

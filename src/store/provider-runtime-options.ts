@@ -96,6 +96,24 @@ export function normalizeClaudeSettingSources(args: {
   return CLAUDE_SETTING_SOURCE_ORDER.filter((source) => normalizedSet.has(source));
 }
 
+export function applyProjectBasePromptToRuntimeOptions(args: {
+  runtimeOptions: ProviderRuntimeOptions;
+  projectBasePrompt?: string | null;
+}): ProviderRuntimeOptions {
+  const projectBasePrompt = args.projectBasePrompt?.trim();
+  if (!projectBasePrompt) {
+    return args.runtimeOptions;
+  }
+
+  const currentSystemPrompt = args.runtimeOptions.claudeSystemPrompt?.trim();
+  return {
+    ...args.runtimeOptions,
+    claudeSystemPrompt: currentSystemPrompt
+      ? `${projectBasePrompt}\n\n${currentSystemPrompt}`
+      : projectBasePrompt,
+  };
+}
+
 export function buildProviderRuntimeOptions(args: {
   provider: ProviderId;
   model: string;

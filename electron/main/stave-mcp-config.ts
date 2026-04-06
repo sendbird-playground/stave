@@ -10,6 +10,8 @@ const DEFAULT_LOCAL_MCP_CONFIG: StaveLocalMcpConfig = {
   enabled: true,
   port: 0,
   token: "",
+  claudeCodeAutoRegister: false,
+  codexAutoRegister: false,
 };
 
 function normalizePort(value: unknown) {
@@ -29,6 +31,10 @@ function normalizeToken(value: unknown) {
   return value.trim().slice(0, 4096);
 }
 
+function normalizeBoolean(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function buildNormalizedConfig(input?: Partial<StaveLocalMcpConfig> | null): StaveLocalMcpConfig {
   const candidate = input ?? {};
   return {
@@ -37,6 +43,14 @@ function buildNormalizedConfig(input?: Partial<StaveLocalMcpConfig> | null): Sta
       : DEFAULT_LOCAL_MCP_CONFIG.enabled,
     port: normalizePort(candidate.port),
     token: normalizeToken(candidate.token) || randomUUID(),
+    claudeCodeAutoRegister: normalizeBoolean(
+      candidate.claudeCodeAutoRegister,
+      DEFAULT_LOCAL_MCP_CONFIG.claudeCodeAutoRegister ?? false,
+    ),
+    codexAutoRegister: normalizeBoolean(
+      candidate.codexAutoRegister,
+      DEFAULT_LOCAL_MCP_CONFIG.codexAutoRegister ?? false,
+    ),
   };
 }
 
@@ -64,6 +78,8 @@ export async function readStaveLocalMcpConfig() {
       normalized.enabled !== parsed.enabled
       || normalized.port !== parsed.port
       || normalized.token !== parsed.token
+      || normalized.claudeCodeAutoRegister !== parsed.claudeCodeAutoRegister
+      || normalized.codexAutoRegister !== parsed.codexAutoRegister
     ) {
       await writeConfig(normalized);
     }

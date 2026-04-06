@@ -110,6 +110,7 @@ export interface PersistenceProjectRegistryEntry {
   workspaceBranchById: Record<string, string>;
   workspacePathById: Record<string, string>;
   workspaceDefaultById: Record<string, boolean>;
+  projectBasePrompt?: string;
   newWorkspaceInitCommand?: string;
   newWorkspaceUseRootNodeModulesSymlink?: boolean;
 }

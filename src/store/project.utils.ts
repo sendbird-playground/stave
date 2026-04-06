@@ -15,6 +15,7 @@ export interface RecentProjectState {
   workspaceBranchById: Record<string, string>;
   workspacePathById: Record<string, string>;
   workspaceDefaultById: Record<string, boolean>;
+  projectBasePrompt?: string;
   newWorkspaceInitCommand?: string;
   newWorkspaceUseRootNodeModulesSymlink?: boolean;
 }
@@ -25,6 +26,10 @@ export function normalizeWorkspaceInitCommand(args: { value?: string | null }) {
 
 export function normalizeProjectWorkspaceInitCommand(args: { value?: string | null }) {
   return normalizeWorkspaceInitCommand({ value: args.value });
+}
+
+export function normalizeProjectBasePrompt(args: { value?: string | null }) {
+  return args.value?.trim() ?? "";
 }
 
 export function normalizeProjectWorkspaceRootNodeModulesSymlinkPreference(args: { value?: boolean | null }) {
@@ -55,6 +60,18 @@ export function resolveProjectWorkspaceRootNodeModulesSymlinkPreference(args: {
   return normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
     value: project?.newWorkspaceUseRootNodeModulesSymlink,
   });
+}
+
+export function resolveProjectBasePrompt(args: {
+  projectPath?: string | null;
+  recentProjects: RecentProjectState[];
+}) {
+  const projectPath = args.projectPath?.trim();
+  if (!projectPath) {
+    return "";
+  }
+  const project = args.recentProjects.find((item) => item.projectPath === projectPath);
+  return normalizeProjectBasePrompt({ value: project?.projectBasePrompt });
 }
 
 export function summarizeTerminalCommandDetail(args: { stdout?: string; stderr?: string; fallback: string }) {
@@ -443,6 +460,9 @@ function normalizeRecentProjectStateEntry(project: RecentProjectState): RecentPr
     workspaceBranchById: nextWorkspaceBranchById,
     workspacePathById: nextWorkspacePathById,
     workspaceDefaultById: nextWorkspaceDefaultById,
+    projectBasePrompt: normalizeProjectBasePrompt({
+      value: project.projectBasePrompt,
+    }),
     newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
       value: project.newWorkspaceInitCommand,
     }),
@@ -481,6 +501,7 @@ export function normalizeCurrentProjectState(args: {
     workspaceBranchById: args.workspaceBranchById,
     workspacePathById: args.workspacePathById,
     workspaceDefaultById: args.workspaceDefaultById,
+    projectBasePrompt: rememberedProject?.projectBasePrompt,
     newWorkspaceInitCommand: rememberedProject?.newWorkspaceInitCommand,
     newWorkspaceUseRootNodeModulesSymlink: rememberedProject?.newWorkspaceUseRootNodeModulesSymlink,
   });
@@ -514,6 +535,9 @@ export function cloneRecentProjectState(project: RecentProjectState): RecentProj
     workspaceBranchById: { ...project.workspaceBranchById },
     workspacePathById: { ...project.workspacePathById },
     workspaceDefaultById: { ...project.workspaceDefaultById },
+    projectBasePrompt: normalizeProjectBasePrompt({
+      value: project.projectBasePrompt,
+    }),
     newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
       value: project.newWorkspaceInitCommand,
     }),
@@ -583,6 +607,10 @@ export function captureCurrentProjectState(args: {
       workspaceBranchById: args.workspaceBranchById,
       workspacePathById: args.workspacePathById,
       workspaceDefaultById: args.workspaceDefaultById,
+      projectBasePrompt: resolveProjectBasePrompt({
+        projectPath: args.projectPath,
+        recentProjects: args.recentProjects,
+      }),
       newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
         projectPath: args.projectPath,
         recentProjects: args.recentProjects,

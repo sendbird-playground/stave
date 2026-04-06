@@ -2,6 +2,30 @@ export interface StaveLocalMcpConfig {
   enabled: boolean;
   port: number;
   token: string;
+  claudeCodeAutoRegister?: boolean;
+  codexAutoRegister?: boolean;
+}
+
+export interface ClaudeCodeMcpRegistrationStatus {
+  autoRegister: boolean;
+  configPath: string;
+  installed: boolean;
+  matchesCurrentManifest: boolean;
+  transportType: string | null;
+  url: string | null;
+  detail: string;
+  error?: string;
+}
+
+export interface CodexMcpRegistrationStatus {
+  autoRegister: boolean;
+  configPath: string;
+  installed: boolean;
+  matchesCurrentManifest: boolean;
+  url: string | null;
+  bearerTokenEnvVar: string | null;
+  detail: string;
+  error?: string;
 }
 
 export interface StaveLocalMcpManifest {
@@ -32,6 +56,8 @@ export interface StaveLocalMcpStatus {
   manifest: StaveLocalMcpManifest | null;
   manifestPaths: string[];
   configPath: string;
+  claudeCodeRegistration?: ClaudeCodeMcpRegistrationStatus;
+  codexRegistration?: CodexMcpRegistrationStatus;
 }
 
 export interface StaveLocalMcpRequestLog {
