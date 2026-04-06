@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildOrbitDisplayCommand,
+  buildOrbitEnv,
+  buildOrbitGetArgs,
   DEFAULT_ORBIT_PROXY_PORT,
   ORBIT_URL_MARKER,
   buildOrbitCommand,
+  buildOrbitRunArgs,
   extractOrbitOutput,
   sanitizeOrbitName,
+  tokenizeOrbitCommand,
 } from "../electron/main/workspace-scripts/orbit";
 
 describe("sanitizeOrbitName", () => {
@@ -15,7 +20,60 @@ describe("sanitizeOrbitName", () => {
 });
 
 describe("buildOrbitCommand", () => {
-  test("wraps commands with portless and preserves overrides", () => {
+  test("builds orbit env variables from config", () => {
+    expect(buildOrbitEnv({
+      orbit: {
+        noTls: true,
+        proxyPort: 1355,
+      },
+    })).toEqual({
+      PORTLESS_PORT: "1355",
+      PORTLESS_HTTPS: "0",
+    });
+  });
+
+  test("builds direct portless argv for simple commands", () => {
+    const orbitArgs = buildOrbitRunArgs({
+      commandArgs: ["yarn", "start"],
+      defaultName: "stave",
+      orbit: {
+        name: "Stave Desktop",
+        noTls: false,
+      },
+    });
+
+    expect(orbitArgs).toEqual(["run", "--name", "stave-desktop", "yarn", "start"]);
+    expect(buildOrbitGetArgs({
+      defaultName: "stave",
+      orbit: {
+        name: "Stave Desktop",
+        noTls: false,
+      },
+    })).toEqual(["get", "stave-desktop"]);
+    expect(buildOrbitDisplayCommand({
+      portlessCommand: "/tmp/portless",
+      orbitArgs,
+    })).toBe("'/tmp/portless' 'run' '--name' 'stave-desktop' 'yarn' 'start'");
+  });
+
+  test("tokenizes simple shell-free commands and rejects shell syntax", () => {
+    expect(tokenizeOrbitCommand("yarn start --host 0.0.0.0")).toEqual([
+      "yarn",
+      "start",
+      "--host",
+      "0.0.0.0",
+    ]);
+    expect(tokenizeOrbitCommand("pnpm --filter web dev")).toEqual([
+      "pnpm",
+      "--filter",
+      "web",
+      "dev",
+    ]);
+    expect(tokenizeOrbitCommand("FOO=1 yarn start")).toBeNull();
+    expect(tokenizeOrbitCommand("yarn start && echo ready")).toBeNull();
+  });
+
+  test("wraps shell commands with portless fallback when direct argv is unavailable", () => {
     const command = buildOrbitCommand({
       command: "bun run dev -- --mode local",
       defaultName: "stave",
@@ -27,25 +85,20 @@ describe("buildOrbitCommand", () => {
       },
     });
 
-    expect(command).toContain(`PORTLESS_PORT='1355' PORTLESS_HTTPS='0' '/tmp/portless' run --name 'stave-desktop'`);
+    expect(command).toContain(`'/tmp/portless' 'run' '--name' 'stave-desktop' 'sh' '-lc'`);
     expect(command).toContain(ORBIT_URL_MARKER);
     expect(command).toContain("\"$PORTLESS_URL\"");
     expect(command).toContain("bun run dev -- --mode local");
   });
 
-  test("defaults orbit runs to the unprivileged proxy port", () => {
-    const command = buildOrbitCommand({
-      command: "yarn start",
-      defaultName: "stave",
-      portlessCommand: "/tmp/portless",
+  test("defaults orbit env to the unprivileged proxy port", () => {
+    expect(buildOrbitEnv({
       orbit: {
         noTls: false,
       },
+    })).toEqual({
+      PORTLESS_PORT: String(DEFAULT_ORBIT_PROXY_PORT),
     });
-
-    expect(command).toContain(`PORTLESS_PORT='${DEFAULT_ORBIT_PROXY_PORT}'`);
-    expect(command).not.toContain("--no-tls");
-    expect(command).not.toContain(" -p ");
   });
 });
 
