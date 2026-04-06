@@ -85,6 +85,8 @@ describe("canonical request builder", () => {
 
   test("rebuilds the current legacy prompt from the canonical request history and input", () => {
     const request = buildCanonicalConversationRequest({
+      taskId: "task-1",
+      workspaceId: "workspace-1",
       providerId: "codex",
       model: "gpt-5.4",
       history,
@@ -96,6 +98,9 @@ describe("canonical request builder", () => {
       request,
     });
 
+    expect(prompt).toContain("[Stave Workspace Context]");
+    expect(prompt).toContain("workspaceId: workspace-1");
+    expect(prompt).toContain("taskId: task-1");
     expect(prompt).toContain("[Task Shared Context]");
     expect(prompt).toContain("assistant: 1. Check git status");
     expect(prompt).toContain("[Current User Input]");

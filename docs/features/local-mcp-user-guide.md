@@ -26,6 +26,9 @@ Both transports provide the same tools and task flows:
 - run a task prompt in that workspace
 - read task status and turn events
 - answer approval and user-input requests
+- read and update the workspace Information panel
+
+When the bundled Claude provider runs inside Stave, it also injects the same local MCP server directly into the in-app Claude runtime. That means Claude task chats can call the workspace-information tools even when Claude setting sources are limited to project-local config.
 
 When Lens is open in a workspace, the same Local MCP server also exposes optional `stave_lens_*` inspection tools for that workspace browser session. Use those when an external agent needs screenshots, DOM, console logs, network logs, or element-level inspection from the live page.
 
@@ -43,11 +46,27 @@ You can manage:
 
 - `Server`: turn the local MCP server on or off
 - `Port`: use `0` for automatic port selection, or set a fixed localhost port
+- `Claude Code`: automatically add or remove Stave's managed MCP entry in `~/.claude/settings.json`
+- `Codex`: automatically add or remove Stave's managed MCP entry in `~/.codex/config.toml`
 - `Token`: the Bearer token required by local clients
 - `Rotate`: immediately replace the token and restart the server
 - `Local MCP Request Log`: inspect recent inbound `/mcp` requests with paginated browsing, latest-page auto-refresh, response codes, timings, and on-demand sanitized payload loading
 
 Every change is applied by restarting the local MCP server inside the app.
+
+Both `Claude Code` and `Codex` auto-registration toggles are opt-in and default to off. Stave only writes to the user's CLI config files after the user explicitly enables those settings.
+
+When `Claude Code` is on, Stave also keeps a user-scoped `stave-local-mcp` entry in:
+
+- `~/.claude/settings.json`
+
+Turning that setting off removes only Stave's managed entry. Other Claude Code MCP servers remain untouched.
+
+When `Codex` is on, Stave also keeps a managed `stave-local` entry in:
+
+- `~/.codex/config.toml`
+
+That toggle removes only Stave's managed Codex block. Other Codex MCP servers remain untouched.
 
 ## Connection Info
 
@@ -68,6 +87,10 @@ The manifest includes:
 - `url` and `token` for loopback HTTP clients
 - `stdioProxyScript` for subprocess-based clients that should launch `node <stdioProxyScript>`
 
+If `Claude Code` auto-registration is enabled, Stave also keeps the current loopback URL and bearer token synced into `~/.claude/settings.json` under `mcpServers.stave-local-mcp`.
+
+If `Codex` auto-registration is enabled, Stave also keeps the current loopback URL synced into `~/.codex/config.toml` under `[mcp_servers.stave-local]`.
+
 ## Typical `agentize` Flow
 
 1. Start Stave
@@ -82,6 +105,21 @@ The manifest includes:
    - `stave_run_task`
    - `stave_get_task` or `stave_list_turn_events`
    - `stave_respond_approval` or `stave_respond_user_input` when needed
+
+For workspace Information panel management, also use:
+
+- `stave_get_workspace_information`
+- `stave_replace_workspace_notes`
+- `stave_append_workspace_notes`
+- `stave_clear_workspace_notes`
+- `stave_add_workspace_todo`
+- `stave_update_workspace_todo`
+- `stave_remove_workspace_todo`
+- `stave_add_workspace_resource`
+- `stave_remove_workspace_resource`
+- `stave_add_workspace_custom_field`
+- `stave_set_workspace_custom_field`
+- `stave_remove_workspace_custom_field`
 
 If the workflow also needs live UI inspection:
 
@@ -152,6 +190,20 @@ These responses continue the same Stave turn. They do not create a new task.
 ### The bot gets `401 Unauthorized`
 
 The token is wrong or stale. Copy the token again from Settings or rotate it and refresh the bot-side manifest cache.
+
+### Claude Code does not see the Stave MCP tools
+
+- confirm `Claude Code` is enabled in `Settings → Providers → Stave`
+- inspect `~/.claude/settings.json` and verify `mcpServers.stave-local-mcp` exists
+- refresh Claude Code or restart it after Stave rewrites the MCP entry
+- if you turned the toggle off intentionally, Stave removes the managed Claude Code entry by design
+
+### Codex does not see the Stave MCP tools
+
+- confirm `Codex` is enabled in `Settings → Providers → Stave`
+- inspect `~/.codex/config.toml` and verify `[mcp_servers.stave-local]` exists
+- inside Stave, the in-app Codex runtime receives `STAVE_LOCAL_MCP_TOKEN` automatically
+- for an external shell-launched Codex CLI, make sure `STAVE_LOCAL_MCP_TOKEN` is available in that shell if the local server requires bearer auth
 
 ### The UI and bot seem out of sync
 

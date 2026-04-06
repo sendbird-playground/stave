@@ -2,12 +2,17 @@ import { normalizePlanText } from "@/lib/plan-text";
 
 export const WORKSPACE_PLANS_DIRECTORY = ".stave/context/plans";
 export const LEGACY_WORKSPACE_PLANS_DIRECTORY = ".stave/plans";
+export const MAX_WORKSPACE_PLANS = 5;
 
 export interface WorkspacePlanEntry {
   filePath: string;
   label: string;
   timestamp: string;
   taskIdPrefix: string;
+}
+
+export interface WorkspacePlanListEntry extends WorkspacePlanEntry {
+  source: "current" | "legacy";
 }
 
 function toTimestampToken(value: Date) {
@@ -49,6 +54,34 @@ export function isWorkspacePlanFilePath(filePath: string) {
 export function sortWorkspacePlansNewestFirst<T extends WorkspacePlanEntry>(entries: T[]) {
   return [...entries].sort((left, right) => right.timestamp.localeCompare(left.timestamp));
 }
+
+export function buildWorkspacePlanListEntries(args: {
+  currentFilePaths?: string[];
+  legacyFilePaths?: string[];
+  maxEntries?: number;
+}) {
+  const nextEntries = [
+    ...(args.currentFilePaths ?? []).map((filePath) => ({
+      ...parseWorkspacePlanFilePath(filePath),
+      source: "current" as const,
+    })),
+    ...(args.legacyFilePaths ?? []).map((filePath) => ({
+      ...parseWorkspacePlanFilePath(filePath),
+      source: "legacy" as const,
+    })),
+  ];
+
+  const dedupedEntries = new Map<string, WorkspacePlanListEntry>();
+  nextEntries.forEach((entry) => {
+    dedupedEntries.set(entry.filePath, entry);
+  });
+
+  return sortWorkspacePlansNewestFirst([...dedupedEntries.values()]).slice(
+    0,
+    args.maxEntries ?? MAX_WORKSPACE_PLANS,
+  );
+}
+
 export const normalizeWorkspacePlanText = normalizePlanText;
 
 export async function persistWorkspacePlanFile(args: {

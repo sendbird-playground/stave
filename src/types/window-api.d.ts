@@ -305,6 +305,8 @@ interface WindowLocalMcpApi {
     enabled?: boolean;
     port?: number;
     token?: string;
+    claudeCodeAutoRegister?: boolean;
+    codexAutoRegister?: boolean;
   }) => Promise<{
     ok: boolean;
     status: StaveLocalMcpStatus | null;
@@ -368,6 +370,12 @@ interface WindowLocalMcpApi {
       denied?: boolean;
     };
   }>;
+  subscribeWorkspaceInformationUpdates?: (
+    listener: (payload: {
+      workspaceId: string;
+      workspaceInformation: WorkspaceInformationState;
+    }) => void,
+  ) => () => void;
 }
 
 type LspLanguageId = "python" | "typescript";

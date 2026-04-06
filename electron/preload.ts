@@ -17,6 +17,7 @@ import type {
   StaveLocalMcpRequestLogQuery,
   StaveLocalMcpStatus,
 } from "../src/lib/local-mcp";
+import type { WorkspaceInformationState } from "../src/lib/workspace-information";
 import type { RepoMapResponse } from "../src/lib/fs/repo-map.types";
 import type {
   AppNotification,
@@ -90,6 +91,11 @@ interface StreamEventPayload {
   turnId: string | null;
 }
 
+interface WorkspaceInformationUpdatePayload {
+  workspaceId: string;
+  workspaceInformation: WorkspaceInformationState;
+}
+
 const streamEventSubscribers = new Set<(payload: StreamEventPayload) => void>();
 ipcRenderer.on(
   "provider:stream-event",
@@ -119,6 +125,18 @@ ipcRenderer.on(
   "terminal:session-output",
   (_event, payload: TerminalSessionOutputPayload) => {
     for (const subscriber of terminalSessionOutputSubscribers) {
+      subscriber(payload);
+    }
+  },
+);
+
+const workspaceInformationUpdateSubscribers = new Set<
+  (payload: WorkspaceInformationUpdatePayload) => void
+>();
+ipcRenderer.on(
+  "local-mcp:workspace-information-updated",
+  (_event, payload: WorkspaceInformationUpdatePayload) => {
+    for (const subscriber of workspaceInformationUpdateSubscribers) {
       subscriber(payload);
     }
   },
@@ -509,6 +527,8 @@ contextBridge.exposeInMainWorld("api", {
       enabled?: boolean;
       port?: number;
       token?: string;
+      claudeCodeAutoRegister?: boolean;
+      codexAutoRegister?: boolean;
     }) =>
       ipcRenderer.invoke("local-mcp:update-config", args) as Promise<{
         ok: boolean;
@@ -579,6 +599,14 @@ contextBridge.exposeInMainWorld("api", {
           denied?: boolean;
         };
       }>,
+    subscribeWorkspaceInformationUpdates: (
+      listener: (payload: WorkspaceInformationUpdatePayload) => void,
+    ) => {
+      workspaceInformationUpdateSubscribers.add(listener);
+      return () => {
+        workspaceInformationUpdateSubscribers.delete(listener);
+      };
+    },
   },
   lsp: {
     syncDocument: (args: {

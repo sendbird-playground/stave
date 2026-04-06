@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultStaveAutoRoleRuntimeOverrides } from "@/lib/providers/stave-auto-profile";
-import { buildProviderRuntimeOptions, normalizeCodexApprovalPolicy } from "@/store/provider-runtime-options";
+import {
+  applyProjectBasePromptToRuntimeOptions,
+  buildProviderRuntimeOptions,
+  normalizeCodexApprovalPolicy,
+} from "@/store/provider-runtime-options";
 
 const settings = {
   chatStreamingEnabled: true,
@@ -55,6 +59,30 @@ describe("normalizeCodexApprovalPolicy", () => {
 });
 
 describe("buildProviderRuntimeOptions", () => {
+  test("prepends the project base prompt ahead of an existing system prompt", () => {
+    expect(applyProjectBasePromptToRuntimeOptions({
+      runtimeOptions: {
+        model: "claude-sonnet-4-6",
+        claudeSystemPrompt: "Existing system prompt",
+      },
+      projectBasePrompt: "Project rules",
+    })).toMatchObject({
+      claudeSystemPrompt: "Project rules\n\nExisting system prompt",
+    });
+  });
+
+  test("leaves runtime options unchanged when the project base prompt is empty", () => {
+    const runtimeOptions = {
+      model: "gpt-5.4",
+      codexSandboxMode: "workspace-write" as const,
+    };
+
+    expect(applyProjectBasePromptToRuntimeOptions({
+      runtimeOptions,
+      projectBasePrompt: "   ",
+    })).toBe(runtimeOptions);
+  });
+
   test("forces Codex plan turns onto a read-only sandbox", () => {
     expect(buildProviderRuntimeOptions({
       provider: "codex",

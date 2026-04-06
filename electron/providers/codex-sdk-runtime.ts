@@ -30,6 +30,12 @@ import {
   getConnectedToolLabel,
   normalizeConnectedToolIds,
 } from "../../src/lib/providers/connected-tool-status";
+import {
+  readPrimaryStaveLocalMcpManifestSync,
+} from "../main/stave-local-mcp-manifest";
+import {
+  CODEX_STAVE_MCP_TOKEN_ENV_VAR,
+} from "../main/codex-mcp";
 
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
@@ -123,6 +129,10 @@ function buildCodexEnv(args: { executablePath?: string } = {}) {
     executablePath: args.executablePath,
     extraPaths: CODEX_LOOKUP_PATHS,
   });
+  const localMcpManifest = readPrimaryStaveLocalMcpManifestSync();
+  if (localMcpManifest?.token?.trim()) {
+    env[CODEX_STAVE_MCP_TOKEN_ENV_VAR] = localMcpManifest.token;
+  }
   for (const key of CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS) {
     if (env[key]?.trim()) {
       continue;
@@ -999,12 +1009,16 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
       conversation: args.conversation,
     });
 
-    // Inject response-style guidance into the prompt for Codex (which has no
-    // separate system-prompt channel). Prepended so the model sees style rules
-    // before the actual user request.
+    // Codex has no separate system-prompt channel, so runtime prompt overrides
+    // are prepended as explicit <system> blocks before the turn prompt.
+    const baseSystemPrompt = args.runtimeOptions?.claudeSystemPrompt?.trim();
     const responseStyle = args.runtimeOptions?.responseStylePrompt?.trim();
-    if (responseStyle) {
-      providerPrompt = `<system>\n${responseStyle}\n</system>\n\n${providerPrompt}`;
+    const systemBlocks = [
+      baseSystemPrompt ? `<system>\n${baseSystemPrompt}\n</system>` : null,
+      responseStyle ? `<system>\n${responseStyle}\n</system>` : null,
+    ].filter((value): value is string => Boolean(value));
+    if (systemBlocks.length > 0) {
+      providerPrompt = `${systemBlocks.join("\n\n")}\n\n${providerPrompt}`;
     }
 
     const streamed = await thread.runStreamed(providerPrompt, turnOptions);

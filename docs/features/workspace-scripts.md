@@ -69,6 +69,10 @@
 5. Optionally set `Orbit Name`, `Orbit Proxy Port`, or `Plain HTTP` for local routing preferences.
 6. Save, then use `Run` / `Stop` from the right-rail `Scripts Runtime` to manage the service.
 
+Orbit works best when the service command is a direct dev-server command such as `yarn start`, `pnpm dev`, or `bun run dev`.
+For those commands, Stave passes the argv directly to `portless run`, which lets Portless assign an ephemeral app port and inject `--port` / `--host` flags for supported frameworks.
+If the command relies on shell-only syntax such as `&&`, pipes, redirects, command substitution, or inline env assignments, Stave falls back to a shell wrapper and the underlying app must still honor `PORT` / `HOST` on its own.
+
 ### Wire A Hook
 
 1. Open `Settings > Projects` and scroll to `Hooks`.
@@ -152,6 +156,12 @@ Minimal shared config example:
 - Symptom: the right-rail `Scripts Runtime` still shows older entries.
 - Cause: a higher-priority workspace shared config is overriding the project shared config for the current workspace.
 - Fix: check the selected `Config Scope` in `Settings > Projects`, then refresh the runtime panel.
+
+### An Orbit Service Still Crashes With `port already in use`
+
+- Symptom: an Orbit-enabled service still tries to bind a fixed port such as `8888` and exits.
+- Cause: the underlying app ignores `PORT` / `HOST`, or the configured command uses shell syntax that prevents Portless from applying its normal direct-command port injection path.
+- Fix: prefer a direct command such as `yarn start` or `pnpm dev` instead of shell chains, or update the app script so it respects `PORT`.
 
 ### A Hook Entry Is Marked As Unresolved
 

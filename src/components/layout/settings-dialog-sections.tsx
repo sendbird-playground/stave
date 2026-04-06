@@ -46,6 +46,7 @@ import {
 } from "@/store/app.store";
 import {
   captureCurrentProjectState,
+  normalizeProjectBasePrompt,
   normalizeProjectWorkspaceInitCommand,
   normalizeProjectWorkspaceRootNodeModulesSymlinkPreference,
   type RecentProjectState,
@@ -168,6 +169,9 @@ function ProjectSettingsPanel(args: {
   highlighted: boolean;
   onRequestRemove: (args: { projectPath: string; projectName: string }) => void;
 }) {
+  const setProjectBasePrompt = useAppStore(
+    (state) => state.setProjectBasePrompt,
+  );
   const setProjectWorkspaceInitCommand = useAppStore(
     (state) => state.setProjectWorkspaceInitCommand,
   );
@@ -183,6 +187,9 @@ function ProjectSettingsPanel(args: {
   );
   const projectWorkspaceInitCommand = normalizeProjectWorkspaceInitCommand({
     value: args.project.newWorkspaceInitCommand,
+  });
+  const projectBasePrompt = normalizeProjectBasePrompt({
+    value: args.project.projectBasePrompt,
   });
   const projectUseRootNodeModulesSymlink =
     normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
@@ -351,6 +358,22 @@ function ProjectSettingsPanel(args: {
         description="Repository-specific defaults, git metadata, and list management for this project."
         className={cn(args.highlighted && "ring-1 ring-primary/20")}
       >
+        <LabeledField
+          title="Project Instructions"
+          description="Prepended to every Claude and Codex turn for this project. Use it for repo-specific guardrails, tooling preferences, and workflow rules."
+        >
+          <DraftTextarea
+            className="min-h-[140px] rounded-md border-border/80 bg-background text-sm"
+            value={projectBasePrompt}
+            onCommit={(nextValue) =>
+              setProjectBasePrompt({
+                projectPath: args.project.projectPath,
+                prompt: nextValue,
+              })}
+            placeholder="Prefer bun over npm. Preserve existing Zustand selector stability patterns. Keep documentation in sync with user-facing changes."
+          />
+        </LabeledField>
+
         <LabeledField
           title="Post-Create Command"
           description="Runs once in the new workspace root after creation. Useful for `bun install`, `npm install`, or multi-line bootstrap commands."

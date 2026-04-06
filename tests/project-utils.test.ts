@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildProjectDefaultWorkspaceId,
   normalizeCurrentProjectState,
+  normalizeProjectBasePrompt,
   normalizeProjectDisplayName,
   normalizeRecentProjectStates,
   resolveTaskWorkspaceContext,
@@ -36,6 +37,26 @@ describe("project name normalization", () => {
     });
 
     expect(projects[0]?.projectName).toBe("stave");
+  });
+
+  test("trims and preserves the project base prompt", () => {
+    const projects = normalizeRecentProjectStates({
+      projects: [{
+        projectPath: "/Users/jacob.kim/workspace/stave",
+        projectName: "stave",
+        lastOpenedAt: "2026-03-30T13:35:33.466Z",
+        defaultBranch: "main",
+        workspaces: [],
+        activeWorkspaceId: "",
+        workspaceBranchById: {},
+        workspacePathById: {},
+        workspaceDefaultById: {},
+        projectBasePrompt: "  Prefer bun over npm.  ",
+      }],
+    });
+
+    expect(projects[0]?.projectBasePrompt).toBe("Prefer bun over npm.");
+    expect(normalizeProjectBasePrompt({ value: undefined })).toBe("");
   });
 
   test("rejects a foreign default workspace when its path points at another project", () => {
@@ -118,6 +139,7 @@ describe("project name normalization", () => {
         "base:75px8d": true,
         "3158a1b0-acfa-4413-b0c3-e5c7c7441c86": false,
       },
+      projectBasePrompt: "",
       newWorkspaceInitCommand: "",
       newWorkspaceUseRootNodeModulesSymlink: false,
     });

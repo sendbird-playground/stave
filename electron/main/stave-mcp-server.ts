@@ -639,6 +639,179 @@ function createToolServer() {
     }),
   }));
 
+  server.registerTool("stave_get_workspace_information", {
+    description: "Read the current workspace information shown in Stave's Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+    },
+  }, async ({ workspaceId }) => toStructuredResult({
+    workspace: await getWorkspaceInformation({ workspaceId }),
+  }));
+
+  server.registerTool("stave_replace_workspace_notes", {
+    description: "Replace the workspace notes block in Stave's Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      notes: z.string().describe("Complete notes text to store."),
+    },
+  }, async ({ workspaceId, notes }) => toStructuredResult({
+    result: await replaceWorkspaceNotes({
+      workspaceId,
+      notes,
+    }),
+  }));
+
+  server.registerTool("stave_append_workspace_notes", {
+    description: "Append text to the workspace notes block in Stave's Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      text: z.string().min(1).describe("Text to append."),
+    },
+  }, async ({ workspaceId, text }) => toStructuredResult({
+    result: await appendWorkspaceNotes({
+      workspaceId,
+      text,
+    }),
+  }));
+
+  server.registerTool("stave_clear_workspace_notes", {
+    description: "Clear the workspace notes block in Stave's Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+    },
+  }, async ({ workspaceId }) => toStructuredResult({
+    result: await clearWorkspaceNotes({
+      workspaceId,
+    }),
+  }));
+
+  server.registerTool("stave_add_workspace_todo", {
+    description: "Add a todo item to the workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      text: z.string().min(1).describe("Todo text."),
+    },
+  }, async ({ workspaceId, text }) => toStructuredResult({
+    result: await addWorkspaceTodo({
+      workspaceId,
+      text,
+    }),
+  }));
+
+  server.registerTool("stave_update_workspace_todo", {
+    description: "Update an existing workspace todo item.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      todoId: z.string().min(1).describe("Todo id."),
+      text: z.string().optional().describe("Updated todo text."),
+      completed: z.boolean().optional().describe("Optional completion flag."),
+    },
+  }, async ({ workspaceId, todoId, text, completed }) => toStructuredResult({
+    result: await updateWorkspaceTodo({
+      workspaceId,
+      todoId,
+      text,
+      completed,
+    }),
+  }));
+
+  server.registerTool("stave_remove_workspace_todo", {
+    description: "Remove a workspace todo item.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      todoId: z.string().min(1).describe("Todo id."),
+    },
+  }, async ({ workspaceId, todoId }) => toStructuredResult({
+    result: await removeWorkspaceTodo({
+      workspaceId,
+      todoId,
+    }),
+  }));
+
+  server.registerTool("stave_add_workspace_resource", {
+    description: "Add a Jira issue, PR, Confluence page, Figma resource, or Slack thread to the workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      kind: z.enum(["jira", "pull_request", "confluence", "figma", "slack"]).describe("Resource kind."),
+      url: z.string().url().describe("Resource URL."),
+      title: z.string().optional().describe("Optional display title."),
+      issueKey: z.string().optional().describe("Jira issue key when kind=`jira`."),
+      status: z.string().optional().describe("Optional status, used by Jira and PR links."),
+      note: z.string().optional().describe("Optional note."),
+      nodeId: z.string().optional().describe("Optional Figma node id."),
+      channelName: z.string().optional().describe("Optional Slack channel label."),
+      spaceKey: z.string().optional().describe("Optional Confluence space key."),
+    },
+  }, async (input) => toStructuredResult({
+    result: await addWorkspaceResource(input),
+  }));
+
+  server.registerTool("stave_remove_workspace_resource", {
+    description: "Remove a linked Jira issue, PR, Confluence page, Figma resource, or Slack thread from the workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      kind: z.enum(["jira", "pull_request", "confluence", "figma", "slack"]).describe("Resource kind."),
+      itemId: z.string().min(1).describe("Stored resource id."),
+    },
+  }, async ({ workspaceId, kind, itemId }) => toStructuredResult({
+    result: await removeWorkspaceResource({
+      workspaceId,
+      kind,
+      itemId,
+    }),
+  }));
+
+  server.registerTool("stave_add_workspace_custom_field", {
+    description: "Add a custom field to the workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      fieldType: z.enum(["text", "textarea", "number", "boolean", "date", "url", "single_select"]).describe("Custom field type."),
+      label: z.string().min(1).describe("Field label."),
+      value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional().describe("Optional initial field value."),
+      options: z.array(z.string()).optional().describe("Allowed options when fieldType=`single_select`."),
+    },
+  }, async ({ workspaceId, fieldType, label, value, options }) => toStructuredResult({
+    result: await addWorkspaceCustomField({
+      workspaceId,
+      fieldType,
+      label,
+      value,
+      options,
+    }),
+  }));
+
+  server.registerTool("stave_set_workspace_custom_field", {
+    description: "Update an existing workspace custom field value, label, or select options.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      fieldId: z.string().min(1).describe("Field id."),
+      value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional().describe("Updated field value."),
+      label: z.string().optional().describe("Updated field label."),
+      options: z.array(z.string()).optional().describe("Updated options when the field is a single select."),
+    },
+  }, async ({ workspaceId, fieldId, value, label, options }) => toStructuredResult({
+    result: await setWorkspaceCustomField({
+      workspaceId,
+      fieldId,
+      value,
+      label,
+      options,
+    }),
+  }));
+
+  server.registerTool("stave_remove_workspace_custom_field", {
+    description: "Remove a custom field from the workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      fieldId: z.string().min(1).describe("Field id."),
+    },
+  }, async ({ workspaceId, fieldId }) => toStructuredResult({
+    result: await removeWorkspaceCustomField({
+      workspaceId,
+      fieldId,
+    }),
+  }));
+
   // ---- Browser tools (navigate, screenshot, DOM, evaluate, etc.) ----
   registerBrowserTools(server);
 
@@ -655,14 +828,14 @@ export async function startStaveMcpServer() {
     currentManifest = null;
     await removeManifestFiles();
     const claudeRegistration = await syncClaudeCodeMcpRegistration({
-      autoRegister: config.claudeCodeAutoRegister ?? false,
+      autoRegister: config.claudeCodeAutoRegister,
       manifest: null,
     });
     if (claudeRegistration.error) {
       console.warn("[stave-mcp] failed to remove Claude Code MCP registration", claudeRegistration.error);
     }
     const codexRegistration = await syncCodexMcpRegistration({
-      autoRegister: config.codexAutoRegister ?? false,
+      autoRegister: config.codexAutoRegister,
       manifest: null,
     });
     if (codexRegistration.error) {
@@ -805,14 +978,14 @@ export async function startStaveMcpServer() {
   await writeManifest(manifest);
   currentManifest = manifest;
   const claudeRegistration = await syncClaudeCodeMcpRegistration({
-    autoRegister: config.claudeCodeAutoRegister ?? false,
+    autoRegister: config.claudeCodeAutoRegister,
     manifest,
   });
   if (claudeRegistration.error) {
     console.warn("[stave-mcp] failed to sync Claude Code MCP registration", claudeRegistration.error);
   }
   const codexRegistration = await syncCodexMcpRegistration({
-    autoRegister: config.codexAutoRegister ?? false,
+    autoRegister: config.codexAutoRegister,
     manifest,
   });
   if (codexRegistration.error) {
@@ -832,14 +1005,14 @@ export async function stopStaveMcpServer() {
   await removeManifestFiles();
   if (config) {
     const claudeRegistration = await syncClaudeCodeMcpRegistration({
-      autoRegister: config.claudeCodeAutoRegister ?? false,
+      autoRegister: config.claudeCodeAutoRegister,
       manifest: null,
     });
     if (claudeRegistration.error) {
       console.warn("[stave-mcp] failed to clear Claude Code MCP registration", claudeRegistration.error);
     }
     const codexRegistration = await syncCodexMcpRegistration({
-      autoRegister: config.codexAutoRegister ?? false,
+      autoRegister: config.codexAutoRegister,
       manifest: null,
     });
     if (codexRegistration.error) {
@@ -868,11 +1041,11 @@ export async function restartStaveMcpServer() {
 export async function getStaveMcpServerStatus(): Promise<StaveLocalMcpStatus> {
   const config = await readStaveLocalMcpConfig();
   const claudeCodeRegistration = await getClaudeCodeMcpRegistrationStatus({
-    autoRegister: config.claudeCodeAutoRegister ?? false,
+    autoRegister: config.claudeCodeAutoRegister,
     manifest: currentManifest,
   });
   const codexRegistration = await getCodexMcpRegistrationStatus({
-    autoRegister: config.codexAutoRegister ?? false,
+    autoRegister: config.codexAutoRegister,
     manifest: currentManifest,
   });
   return {

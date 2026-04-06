@@ -45,11 +45,11 @@ function buildNormalizedConfig(input?: Partial<StaveLocalMcpConfig> | null): Sta
     token: normalizeToken(candidate.token) || randomUUID(),
     claudeCodeAutoRegister: normalizeBoolean(
       candidate.claudeCodeAutoRegister,
-      DEFAULT_LOCAL_MCP_CONFIG.claudeCodeAutoRegister ?? false,
+      DEFAULT_LOCAL_MCP_CONFIG.claudeCodeAutoRegister,
     ),
     codexAutoRegister: normalizeBoolean(
       candidate.codexAutoRegister,
-      DEFAULT_LOCAL_MCP_CONFIG.codexAutoRegister ?? false,
+      DEFAULT_LOCAL_MCP_CONFIG.codexAutoRegister,
     ),
   };
 }

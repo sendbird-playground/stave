@@ -283,6 +283,15 @@ export function buildLegacyPromptFromCanonicalRequest(args: {
       && args.includeSkillContext !== false,
   );
   const sections = [
+    ...((args.request.workspaceId || args.request.taskId)
+      ? [
+          "[Stave Workspace Context]",
+          [
+            args.request.workspaceId ? `workspaceId: ${args.request.workspaceId}` : null,
+            args.request.taskId ? `taskId: ${args.request.taskId}` : null,
+          ].filter(Boolean).join("\n"),
+        ]
+      : []),
     ...(args.includeHistory !== false
       ? [
           "[Task Shared Context]",

@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import path from "node:path";
+import { isDevToolsShortcut } from "./keyboard-shortcuts";
 import { openExternalWithFallback } from "./utils/external-url";
 
 const MIN_ZOOM_FACTOR = 0.5;
@@ -11,6 +12,13 @@ let mainWindow: BrowserWindow | null = null;
 /** Return the main BrowserWindow instance (used by browser-manager for WebContentsView). */
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
+}
+
+export function toggleMainWindowDevTools() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.toggleDevTools();
 }
 
 function clampZoomFactor(value: number) {
@@ -93,12 +101,7 @@ export function createMainWindow() {
       window.webContents.send("shortcut:close-tab-or-task");
       return;
     }
-    const isF12 = input.key === "F12" && input.type === "keyDown";
-    const isInspectorChord =
-      input.type === "keyDown" &&
-      input.key.toLowerCase() === "i" &&
-      input.shift &&
-      hasMod;
+    const isDevToolsToggle = isDevToolsShortcut(input);
     const isZoomIn =
       input.type === "keyDown" &&
       hasMod &&
@@ -114,7 +117,7 @@ export function createMainWindow() {
       hasMod &&
       !input.alt &&
       (input.key === "0" || input.code === "Numpad0");
-    if (!isF12 && !isInspectorChord) {
+    if (!isDevToolsToggle) {
       if (!isZoomIn && !isZoomOut && !isZoomReset) {
         return;
       }
@@ -133,6 +136,6 @@ export function createMainWindow() {
       return;
     }
     event.preventDefault();
-    window.webContents.toggleDevTools();
+    toggleMainWindowDevTools();
   });
 }

@@ -11,13 +11,31 @@ const require = createRequire(import.meta.url);
 
 export const ORBIT_URL_MARKER = "__STAVE_ORBIT_URL__=";
 export const DEFAULT_ORBIT_PROXY_PORT = 1355;
+const UNSUPPORTED_SHELL_META_CHARS = new Set([
+  "|",
+  "&",
+  ";",
+  "<",
+  ">",
+  "(",
+  ")",
+  "$",
+  "`",
+  "*",
+  "?",
+  "[",
+  "]",
+  "{",
+  "}",
+  "~",
+]);
 
 function shellQuote(value: string) {
   return `'${value.replaceAll("'", `'\"'\"'`)}'`;
 }
 
-function shellAssign(name: string, value: string) {
-  return `${name}=${shellQuote(value)}`;
+function formatCommandForDisplay(args: string[]) {
+  return args.map(shellQuote).join(" ");
 }
 
 export function sanitizeOrbitName(value: string | undefined) {
@@ -60,6 +78,126 @@ export function resolvePortlessCommand() {
   });
 }
 
+export function buildOrbitEnv(args: {
+  orbit: ResolvedWorkspaceScriptOrbitConfig;
+}) {
+  return {
+    PORTLESS_PORT: String(args.orbit.proxyPort ?? DEFAULT_ORBIT_PROXY_PORT),
+    ...(args.orbit.noTls ? { PORTLESS_HTTPS: "0" } : {}),
+  };
+}
+
+export function tokenizeOrbitCommand(command: string) {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: "'" | "\"" | null = null;
+  let escaping = false;
+
+  const pushCurrent = () => {
+    if (current.length > 0) {
+      tokens.push(current);
+      current = "";
+    }
+  };
+
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+
+    if (escaping) {
+      current += char;
+      escaping = false;
+      continue;
+    }
+
+    if (quote === "'") {
+      if (char === "'") {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (quote === "\"") {
+      if (char === "\"") {
+        quote = null;
+      } else if (char === "\\") {
+        escaping = true;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (char === "'" || char === "\"") {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      pushCurrent();
+      continue;
+    }
+
+    if (UNSUPPORTED_SHELL_META_CHARS.has(char)) {
+      return null;
+    }
+
+    current += char;
+  }
+
+  if (escaping || quote) {
+    return null;
+  }
+
+  pushCurrent();
+
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  if (tokens[0] && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[0])) {
+    return null;
+  }
+
+  return tokens;
+}
+
+export function buildOrbitRunArgs(args: {
+  commandArgs: string[];
+  orbit: ResolvedWorkspaceScriptOrbitConfig;
+  defaultName: string;
+}) {
+  return [
+    "run",
+    "--name",
+    sanitizeOrbitName(args.orbit.name || args.defaultName),
+    ...args.commandArgs,
+  ];
+}
+
+export function buildOrbitGetArgs(args: {
+  orbit: ResolvedWorkspaceScriptOrbitConfig;
+  defaultName: string;
+}) {
+  return [
+    "get",
+    sanitizeOrbitName(args.orbit.name || args.defaultName),
+  ];
+}
+
+export function buildOrbitDisplayCommand(args: {
+  portlessCommand: string;
+  orbitArgs: string[];
+}) {
+  return formatCommandForDisplay([args.portlessCommand, ...args.orbitArgs]);
+}
+
 export function buildOrbitCommand(args: {
   command: string;
   orbit: ResolvedWorkspaceScriptOrbitConfig;
@@ -67,21 +205,14 @@ export function buildOrbitCommand(args: {
   portlessCommand: string;
 }) {
   const childScript = `printf '%s%s\n' ${shellQuote(ORBIT_URL_MARKER)} "$PORTLESS_URL"; ${args.command}`;
-  // portless >=0.7 reads configuration from env vars instead of CLI flags.
-  // PORTLESS_PORT sets the proxy listen port; PORTLESS_HTTPS=0 disables TLS.
-  const proxyPort = String(args.orbit.proxyPort ?? DEFAULT_ORBIT_PROXY_PORT);
-  const segments = [
-    shellAssign("PORTLESS_PORT", proxyPort),
-    ...(args.orbit.noTls ? [shellAssign("PORTLESS_HTTPS", "0")] : []),
-    shellQuote(args.portlessCommand),
-    "run",
-    "--name",
-    shellQuote(sanitizeOrbitName(args.orbit.name || args.defaultName)),
-    "sh",
-    "-lc",
-    shellQuote(childScript),
-  ];
-  return segments.join(" ");
+  return buildOrbitDisplayCommand({
+    portlessCommand: args.portlessCommand,
+    orbitArgs: buildOrbitRunArgs({
+      commandArgs: ["sh", "-lc", childScript],
+      orbit: args.orbit,
+      defaultName: args.defaultName,
+    }),
+  });
 }
 
 export function extractOrbitOutput(args: {

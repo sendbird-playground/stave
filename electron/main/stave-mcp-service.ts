@@ -340,6 +340,7 @@ async function ensureProjectRegistryEntry(args: {
         workspaceBranchById: { [defaultWorkspaceId]: defaultBranch },
         workspacePathById: { [defaultWorkspaceId]: projectPath },
         workspaceDefaultById: { [defaultWorkspaceId]: true },
+        projectBasePrompt: "",
         newWorkspaceInitCommand: "",
         newWorkspaceUseRootNodeModulesSymlink: false,
       };
@@ -514,7 +515,6 @@ function coerceWorkspaceCustomFieldValue(args: {
 function normalizeWorkspaceInfoString(value?: string) {
   return value?.trim() || "";
 }
-
 async function updateWorkspaceInformationState(args: {
   workspaceId: string;
   updater: (current: WorkspaceInformationState) => WorkspaceInformationState;
@@ -1030,7 +1030,6 @@ export async function addWorkspaceSlackThread(args: {
     workspaceInformation: workspaceInformation.workspaceInformation,
   };
 }
-
 function buildTaskTitleFromPrompt(prompt: string) {
   return prompt
     .split("\n")
