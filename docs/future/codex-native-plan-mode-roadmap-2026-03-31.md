@@ -1,53 +1,35 @@
-# Codex Native Plan Mode Roadmap (2026-03-31)
+# Codex Native Plan Mode Roadmap (Historical, 2026-03-31)
 
-## Current state
+## Status
 
-Stave now exposes an experimental Codex plan toggle on top of the TypeScript
-SDK path (`@openai/codex-sdk` + `codex exec --experimental-json`).
+This roadmap is now mostly historical.
 
-Current implementation details:
+As of 2026-04-07, Stave's primary Codex runtime uses the App Server transport
+instead of the older TypeScript SDK exec bridge. Native plan mode is therefore
+available on the main path.
 
-- Stave enables Codex plan turns with `collaboration_mode_kind = "plan"`.
-- Stave forwards `plan_mode_reasoning_effort` from the active Codex reasoning setting.
-- Stave forces Codex plan turns onto a `read-only` sandbox so plan turns do
-  not mutate the workspace even if normal Codex turns use a writable sandbox.
-- Stave forces the effective Codex approval policy to `never` during plan
-  turns so the read-only planning loop does not keep pausing for approval.
-- The current TypeScript SDK path does not surface first-class `plan` items or
-  `item/plan/delta` events.
-- In practice, the exec JSON stream currently exposes plan-mode progress as
-  `todo_list` items plus a final `agent_message`.
-- Stave therefore treats the last plan-mode agent message as the final plan
-  response, with a todo-list markdown fallback when no final plan message is available.
+## What Shipped
 
-This keeps the UI usable today, but it is still a bridge implementation rather
-than true Codex-native plan parity.
+- Codex plan turns now use the App Server `collaborationMode.mode = "plan"` path.
+- Native `plan` items and `item/plan/delta` events are mapped directly into
+  Stave `plan_ready` events.
+- Plan turns still force the effective Codex runtime to `read-only` plus
+  `approvalPolicy = never`.
+- Stave keeps plan threads separate from normal Codex turns so plan-only context
+  does not leak into implementation threads.
+- Some models still return plain assistant text instead of native `plan` items.
+  Stave now keeps a fallback that promotes the final assistant segment into a
+  plan response when native plan items are absent.
 
-## Graduation trigger
+## Legacy Context
 
-Promote Codex plan mode from experimental to first-class support when one of
-the following becomes available in the TypeScript SDK surface Stave uses:
+The original March 31 plan described the older bridge implementation built on
+`@openai/codex-sdk` plus `codex exec --experimental-json`. That path remains in
+the repo only as a rollback target and still contains the old final-agent-message
+promotion and `todo_list` fallback logic.
 
-1. `ThreadItem` includes a stable `plan` item type.
-2. `ThreadEvent` exposes stable plan-specific streaming events.
-3. Stave migrates Codex plan turns from the exec JSON path to the app-server
-   protocol path with stable `plan` item and plan delta support.
+## Remaining Follow-ups
 
-## Migration plan
-
-When the SDK or transport is ready:
-
-1. Remove the final-agent-message promotion fallback from `electron/providers/codex-sdk-runtime.ts`.
-2. Map native Codex `plan` items directly to Stave `plan_ready` events.
-3. Prefer native plan deltas over todo-list-derived fallback plan text.
-4. Drop the `experimental` labeling in the Codex plan UI.
-5. Revisit persisted plan-thread behavior so native Codex conversation ids can
-   be resumed safely across sessions without sharing one slot with normal Codex turns.
-
-## Notes
-
-- The current experimental toggle should remain compatible with future native
-  support because it already threads a distinct `codexExperimentalPlanMode`
-  runtime option through renderer, IPC, and provider runtime layers.
-- The intended end state is Claude-like plan handling without relying on
-  heuristic promotion of the final agent message.
+1. Remove or archive the rollback-only SDK path after the App Server runtime has soaked long enough.
+2. Add dedicated App Server runtime tests instead of relying only on provider/replay coverage plus live smoke checks.
+3. Decide whether the Codex UI should still use the `experimental` label now that the primary transport is native.

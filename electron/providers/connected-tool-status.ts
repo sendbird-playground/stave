@@ -7,7 +7,7 @@ import {
   type ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
 import { reloadClaudePlugins } from "./claude-sdk-runtime";
-import { getCodexConnectedToolStatus } from "./codex-sdk-runtime";
+import { getCodexConnectedToolStatus } from "./codex-app-server-runtime";
 import type { ProviderId, StreamTurnArgs } from "./types";
 
 function createStatusEntry(args: {

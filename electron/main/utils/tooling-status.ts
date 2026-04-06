@@ -3,7 +3,7 @@ import {
   buildClaudeEnv,
   resolveClaudeExecutablePath,
 } from "../../providers/claude-sdk-runtime";
-import { resolveCodexExecutablePath } from "../../providers/codex-sdk-runtime";
+import { resolveCodexExecutablePath } from "../../providers/codex-app-server-runtime";
 import {
   canExecutePath,
   resolveExecutablePath,

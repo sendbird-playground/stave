@@ -41,7 +41,7 @@ Recommended starting points:
 - **Settings → Developer → Provider Timeout**
 - The composer runtime chips below the prompt box, which show the current sandbox, approval, network, and plan state before send
 - The composer plan toggle switches Claude turns into `Permission Mode = plan`
-- The composer plan toggle enables experimental plan mode for the current Codex draft turn
+- The composer plan toggle enables experimental Codex plan mode for the current draft turn, backed by native App Server plan items
 
 ### Key Controls
 

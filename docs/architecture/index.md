@@ -31,8 +31,10 @@ This file is the fast entrypoint for codebase orientation.
   - read targeted slices instead of the whole file
 - `electron/providers/claude-sdk-runtime.ts`
   - Claude turn execution, event normalization, subagent progress
+- `electron/providers/codex-app-server-runtime.ts`
+  - primary Codex App Server execution path, auth/bootstrap, native plan handling
 - `electron/providers/codex-sdk-runtime.ts`
-  - Codex turn execution, thread reuse, diff tracking
+  - rollback-only legacy Codex SDK bridge
 - `electron/main/ipc/schemas.ts`
   - strict IPC validation boundary
 - `src/lib/session/provider-event-replay.ts`

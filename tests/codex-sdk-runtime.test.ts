@@ -140,7 +140,7 @@ describe("mapCodexItemEvent", () => {
       } as any,
     });
     expect(events).toEqual([
-      { type: "plan_ready", planText: "## Plan\n- Step 1\n- Step 2" },
+      { type: "plan_ready", planText: "## Plan\n- Step 1\n- Step 2", sourceSegmentId: "plan-structured-1" },
     ]);
   });
 
@@ -169,7 +169,7 @@ describe("mapCodexItemEvent", () => {
       item: { ...item, plan_markdown: "Step 1 done\nStep 2 done" },
     });
     expect(completed).toEqual([
-      { type: "plan_ready", planText: "Step 1 done\nStep 2 done" },
+      { type: "plan_ready", planText: "Step 1 done\nStep 2 done", sourceSegmentId: "plan-stream-1" },
     ]);
   });
 

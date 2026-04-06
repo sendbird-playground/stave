@@ -200,7 +200,7 @@ export type NormalizedProviderEvent =
   | { type: "diff"; filePath: string; oldContent: string; newContent: string; status?: CodeDiffPart["status"] }
   | { type: "approval"; toolName: string; requestId: string; description: string }
   | { type: "user_input"; toolName: string; requestId: string; questions: UserInputQuestion[] }
-  | { type: "plan_ready"; planText: string }
+  | { type: "plan_ready"; planText: string; sourceSegmentId?: string }
   | {
     type: "system";
     content: string;

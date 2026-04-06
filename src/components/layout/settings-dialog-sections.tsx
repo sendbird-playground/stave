@@ -22,7 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CLAUDE_SDK_MODEL_OPTIONS,
-  CODEX_SDK_MODEL_OPTIONS,
+  CODEX_MODEL_OPTIONS,
   getDefaultModelForProvider,
   normalizeModelSelection,
 } from "@/lib/providers/model-catalog";
@@ -1506,7 +1506,7 @@ function ModelsSection() {
             ))}
           </datalist>
           <datalist id="codex-model-options">
-            {CODEX_SDK_MODEL_OPTIONS.map((model) => (
+            {CODEX_MODEL_OPTIONS.map((model) => (
               <option key={model} value={model} />
             ))}
           </datalist>

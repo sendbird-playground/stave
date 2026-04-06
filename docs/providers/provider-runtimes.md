@@ -169,25 +169,27 @@ Compaction checkpoint UI support:
 
 ## Codex runtime
 
-Codex turns are handled in `electron/providers/codex-sdk-runtime.ts`.
+Codex turns are handled in `electron/providers/codex-app-server-runtime.ts`.
+The older `electron/providers/codex-sdk-runtime.ts` path remains available only
+as a rollback target behind `STAVE_CODEX_RUNTIME=legacy-sdk`.
 
 High-level flow:
 
 1. The renderer submits a turn through the same provider bridge.
-2. `streamCodexWithSdk(...)` imports `@openai/codex-sdk`.
-3. Stave creates a `Codex` instance in Electron and starts or reuses a thread for the current task and runtime configuration.
-4. `thread.runStreamed(...)` yields Codex `ThreadEvent` items.
-5. Stave maps those items into the same `BridgeEvent` format used by Claude.
+2. `streamCodexWithAppServer(...)` resolves a local `codex` binary and starts or reuses a singleton `codex app-server --listen stdio://` subprocess.
+3. Stave calls `account/read` so an existing CLI login can be reused without extra setup when possible.
+4. Stave starts or resumes an App Server thread for the current task and runtime configuration.
+5. `turn/start` streams App Server notifications into the same `BridgeEvent` format used by Claude.
 6. File changes are post-processed through `turn-diff-tracker.ts` so the UI can render diffs.
 
 Codex event mapping:
 
-- agent messages -> `text`
-- reasoning -> `thinking`
+- native `agentMessage` items -> `text`
+- native `reasoning` items -> `thinking`
+- native `plan` items and `item/plan/delta` -> `plan_ready`
 - command execution -> `tool`
 - MCP tool calls -> `tool`
 - web search -> `tool`
-- todo list -> `tool`
 - file changes -> diff events
 - failures -> `error`
 
@@ -205,18 +207,20 @@ Codex text-boundary note:
 Experimental Codex plan mode:
 
 - When `codexExperimentalPlanMode` is enabled, Stave forwards
-  `collaboration_mode_kind = "plan"` and `plan_mode_reasoning_effort`.
+  `collaborationMode.mode = "plan"` on the App Server turn.
 - Stave also forces Codex plan turns onto a `read-only` sandbox, even if the
   normal Codex runtime setting is `workspace-write` or `danger-full-access`, so
   plan turns cannot mutate the workspace.
 - Stave also forces the effective Codex approval policy to `never` during plan
   turns so read-only planning does not keep stopping on inline approval prompts.
-- The current TypeScript SDK exec stream still exposes plan-mode progress as
-  `todo_list` items plus a final `agent_message`, not as a first-class `plan`
-  item.
-- Stave therefore keeps experimental plan threads separate from normal Codex
-  turns and promotes the final plan-mode agent message into a Stave
-  `plan_ready` response, with a todo-list markdown fallback.
+- The App Server path exposes first-class `plan` items and streaming
+  `item/plan/delta` events, so the primary runtime no longer relies on the old
+  final-agent-message promotion fallback.
+- Stave still keeps plan threads separate from normal Codex turns so planning
+  context does not get mixed into implementation threads.
+- Native plan turns stay open after the final plan item is emitted. Stave
+  interrupts the active turn once the plan is complete so the thread returns to
+  idle and the UI can treat the plan response as terminal.
 - Finalized plan reviews are persisted as workspace markdown files under
   `.stave/context/plans/<taskId>_<timestamp>.md`.
 - The workspace information panel indexes those saved plan files and also
@@ -225,7 +229,8 @@ Experimental Codex plan mode:
 
 Codex checkpoint support:
 
-- As of March 29, 2026, the Codex SDK stream does not emit checkpoint/compaction boundary events equivalent to Claude `compact_boundary`.
+- The App Server path still does not expose checkpoint/compaction boundary
+  events equivalent to Claude `compact_boundary`.
 - Stave therefore does not expose restore-to-checkpoint behavior for Codex turns yet.
 
 Codex-specific runtime controls come from the UI and runtime options:
@@ -243,7 +248,7 @@ Codex-specific runtime controls come from the UI and runtime options:
 
 Codex slash-command behavior:
 
-- The current Codex SDK/CLI path does not expose a native slash-command catalog that Stave can enumerate.
+- The current Codex App Server/CLI path does not expose a native slash-command catalog that Stave can enumerate.
 - Stave therefore forwards Codex slash commands unchanged instead of trying to validate or block them locally.
 - The Settings developer surface mirrors the native Codex MCP/runtime status rather than synthesizing a Claude-style plugin list.
 
@@ -294,7 +299,8 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 
 ## Supported Codex baseline
 
-- Codex SDK: `@openai/codex-sdk@0.118.0`
+- Codex App Server transport: local `codex app-server` from Codex CLI `0.118.0`
+- Legacy rollback path: `@openai/codex-sdk@0.118.0`
 - Codex CLI baseline: `0.118.0`
 - Current Stave-supported Codex model IDs: `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
 

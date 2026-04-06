@@ -21,9 +21,9 @@ export const CLAUDE_SDK_MODEL_OPTIONS = [
 ] as const;
 
 // Source:
-// - @openai/codex-sdk/dist/index.d.ts (ThreadOptions.model?: string)
+// - local `codex app-server` / CLI baseline support
 // - https://developers.openai.com/codex/models
-export const CODEX_SDK_MODEL_OPTIONS = [
+export const CODEX_MODEL_OPTIONS = [
   "gpt-5.4",
   "gpt-5.4-mini",
   "gpt-5.3-codex",
@@ -84,7 +84,7 @@ export const PROVIDER_DESCRIPTORS = [
     shortLabel: "Codex",
     iconUrl: CODEX_COLOR_ICON_URL,
     fallbackLabel: "O",
-    models: CODEX_SDK_MODEL_OPTIONS,
+    models: CODEX_MODEL_OPTIONS,
     defaultModel: "gpt-5.4",
     sessionLabel: "Codex thread ID",
     capabilities: {

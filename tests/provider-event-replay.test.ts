@@ -418,6 +418,53 @@ describe("plan response replay", () => {
     });
   });
 
+  test("replaces a structured Codex plan preview with the final plan response", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "text", text: "## Plan\n- Step 1", segmentId: "plan-stream-1" },
+        { type: "text", text: "\n- Step 2", segmentId: "plan-stream-1" },
+        { type: "plan_ready", planText: "## Plan\n- Step 1\n- Step 2", sourceSegmentId: "plan-stream-1" },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "o3",
+    });
+
+    expect(replayed.messages).toHaveLength(1);
+    expect(replayed.messages[0]).toMatchObject({
+      content: "## Plan\n- Step 1\n- Step 2",
+      isPlanResponse: true,
+      planText: "## Plan\n- Step 1\n- Step 2",
+      isStreaming: false,
+    });
+  });
+
+  test("keeps non-plan commentary when a structured Codex plan preview is removed", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "text", text: "Analyzing the codebase.\n\n", segmentId: "commentary-1" },
+        { type: "text", text: "## Plan\n- Step 1", segmentId: "plan-stream-1" },
+        { type: "plan_ready", planText: "## Plan\n- Step 1\n- Step 2", sourceSegmentId: "plan-stream-1" },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "o3",
+    });
+
+    expect(replayed.messages).toHaveLength(2);
+    expect(replayed.messages[0]?.content.trim()).toBe("Analyzing the codebase.");
+    expect(replayed.messages[0]?.isPlanResponse).not.toBe(true);
+    expect(replayed.messages[1]).toMatchObject({
+      content: "## Plan\n- Step 1\n- Step 2",
+      isPlanResponse: true,
+      planText: "## Plan\n- Step 1\n- Step 2",
+    });
+  });
+
   test("handles partial <proposed_plan> tag from streaming cut-off", () => {
     const replayed = replayProviderEventsToTaskState({
       taskId: "task-1",
