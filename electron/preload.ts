@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type {
   CanonicalConversationRequest,
   ClaudeContextUsageResponse,
+  CodexMcpStatusResponse,
   ClaudePluginReloadResponse,
   ProviderId,
   ProviderRuntimeOptions,
@@ -343,6 +344,14 @@ contextBridge.exposeInMainWorld("api", {
         "provider:reload-claude-plugins",
         args,
       ) as Promise<ClaudePluginReloadResponse>,
+    getCodexMcpStatus: (args: {
+      cwd?: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:get-codex-mcp-status",
+        args,
+      ) as Promise<CodexMcpStatusResponse>,
     suggestTaskName: (args: {
       prompt: string;
       history?: Array<{ role: string; content: string }>;

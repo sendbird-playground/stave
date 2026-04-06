@@ -4,7 +4,7 @@ import {
   buildModelSelectorValue,
   ModelSelector,
 } from "@/components/ai-elements/model-selector";
-import { Badge, Button } from "@/components/ui";
+import { Badge, Button, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CLAUDE_EFFORT_OPTIONS,
@@ -12,9 +12,6 @@ import {
   CLAUDE_THINKING_OPTIONS,
   CODEX_APPROVAL_POLICY_OPTIONS,
   CODEX_EFFORT_OPTIONS,
-  DEFAULT_PROVIDER_TIMEOUT_MS,
-  formatProviderTimeoutLabel,
-  PROVIDER_TIMEOUT_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
 import type { ClaudeSettingSource, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import {
@@ -42,6 +39,13 @@ import {
   SettingsFieldGuide,
   SettingsCard,
 } from "./settings-dialog.shared";
+import {
+  ClaudeRuntimeToolsCard,
+  CodexBinaryPathCard,
+  CodexMcpStatusCard,
+  LocalMcpRequestLogCard,
+  LocalMcpServerCard,
+} from "./settings-dialog-developer-section";
 
 const STAVE_AUTO_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
 const STAVE_AUTO_ROLE_MODEL_OPTIONS = buildModelSelectorOptions({
@@ -78,27 +82,6 @@ type ExplainedSelectOption<T extends string> = {
   description: string;
   example?: string;
 };
-
-const PROVIDER_TIMEOUT_HELP: ReadonlyArray<ExplainedSelectOption<string>> = PROVIDER_TIMEOUT_OPTIONS.map((value) => ({
-  value: String(value),
-  label: formatProviderTimeoutLabel(value),
-  description:
-    value <= 1_800_000
-      ? "Fail faster when you mostly use short chats, quick edits, or lightweight reviews."
-      : value <= 3_600_000
-        ? "Balanced default for normal coding, debugging, and medium-length tool runs."
-        : value <= 7_200_000
-          ? "Leave room for long refactors, large test suites, or slow external tools."
-          : "Best for very long research or automation turns that may stay active for hours.",
-  example:
-    value <= 1_800_000
-      ? "Use this if a turn hanging for half an hour is already a signal that something went wrong."
-      : value <= 3_600_000
-        ? "Good default when you switch between quick questions and real implementation work."
-        : value <= 7_200_000
-          ? "Useful when you often run builds, migrations, or repo-wide edits in a single turn."
-          : "Choose this only if you intentionally want Codex or Claude to stay attached for very long-running work.",
-}));
 
 const CLAUDE_PERMISSION_MODE_HELP = [
   {
@@ -902,7 +885,6 @@ function StaveAutoCard() {
 
 export function ProvidersSection() {
   const [
-    providerTimeoutMs,
     claudePermissionMode,
     claudeAllowDangerouslySkipPermissions,
     claudeSandboxEnabled,
@@ -925,7 +907,6 @@ export function ProvidersSection() {
     codexFastMode,
   ] = useAppStore(
     useShallow((state) => [
-      state.settings.providerTimeoutMs,
       state.settings.claudePermissionMode,
       state.settings.claudeAllowDangerouslySkipPermissions,
       state.settings.claudeSandboxEnabled,
@@ -961,37 +942,25 @@ export function ProvidersSection() {
 
   return (
     <>
-      <SectionHeading title="Providers" description="Runtime controls for Claude and Codex execution behavior." />
-      <SectionStack>
-        <SettingsCard
-          title="Provider Timeout"
-          description="Maximum time to wait for a Claude or Codex SDK response before showing a timeout error."
-        >
-          <LabeledField
-            title="Timeout Window"
-            guide={(
-              <SettingsFieldGuide
-                title="Provider Timeout"
-                summary="Longer timeouts are safer for big turns, but shorter timeouts surface stuck sessions faster."
-                items={buildGuideItems(PROVIDER_TIMEOUT_HELP)}
-                examples={buildGuideExamples(PROVIDER_TIMEOUT_HELP)}
-                tooltip="Compare timeout values"
-              />
-            )}
-          >
-            <div className="flex flex-wrap items-start gap-3">
-              <DescribedSelect
-                value={String(providerTimeoutMs || DEFAULT_PROVIDER_TIMEOUT_MS)}
-                options={PROVIDER_TIMEOUT_HELP}
-                onValueChange={(value) => updateSettings({ patch: { providerTimeoutMs: readInt(value, providerTimeoutMs) } })}
-                triggerClassName="w-40"
-              />
-              <span className="pt-2 text-sm text-muted-foreground">{formatProviderTimeoutLabel(providerTimeoutMs || DEFAULT_PROVIDER_TIMEOUT_MS)}</span>
-            </div>
-          </LabeledField>
-        </SettingsCard>
+      <SectionHeading title="Providers" description="Provider-specific runtime controls and connected feature status for Stave, Claude, and Codex." />
+      <Tabs defaultValue="stave" className="gap-4">
+        <TabsList className="h-auto w-full justify-start rounded-xl border border-border/70 bg-muted/30 p-1">
+          <TabsTrigger value="stave" className="h-8 flex-none rounded-lg px-3 text-xs font-medium">Stave</TabsTrigger>
+          <TabsTrigger value="claude" className="h-8 flex-none rounded-lg px-3 text-xs font-medium">Claude</TabsTrigger>
+          <TabsTrigger value="codex" className="h-8 flex-none rounded-lg px-3 text-xs font-medium">Codex</TabsTrigger>
+        </TabsList>
 
-        <SettingsCard title="Claude Runtime Controls" description="Permission, sandbox, thinking, and subagent progress behavior passed into each Claude turn.">
+        <TabsContent value="stave">
+          <SectionStack>
+            <StaveAutoCard />
+            <LocalMcpServerCard />
+            <LocalMcpRequestLogCard />
+          </SectionStack>
+        </TabsContent>
+
+        <TabsContent value="claude">
+          <SectionStack>
+            <SettingsCard title="Claude Runtime Controls" description="Permission, sandbox, thinking, and subagent progress behavior passed into each Claude turn.">
           <LabeledField
             title="Permission Mode"
             description="Controls how aggressively Claude asks for permission during a turn."
@@ -1179,9 +1148,14 @@ export function ProvidersSection() {
               ]}
             />
           </LabeledField>
-        </SettingsCard>
+            </SettingsCard>
+            <ClaudeRuntimeToolsCard />
+          </SectionStack>
+        </TabsContent>
 
-        <SettingsCard title="Codex Runtime Controls" description="Per-turn Codex sandbox, approval, reasoning, and web-search settings.">
+        <TabsContent value="codex">
+          <SectionStack>
+            <SettingsCard title="Codex Runtime Controls" description="Per-turn Codex sandbox, approval, reasoning, and web-search settings.">
           <LabeledField
             title="Network Access"
             description="Controls whether Codex may use networked capabilities during a turn."
@@ -1383,10 +1357,12 @@ export function ProvidersSection() {
               ]}
             />
           </LabeledField>
-        </SettingsCard>
-
-        <StaveAutoCard />
-      </SectionStack>
+            </SettingsCard>
+            <CodexBinaryPathCard />
+            <CodexMcpStatusCard />
+          </SectionStack>
+        </TabsContent>
+      </Tabs>
     </>
   );
 }

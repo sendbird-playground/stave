@@ -10,6 +10,10 @@ import {
 } from "../../providers/executable-path";
 import { buildRuntimeProcessEnv } from "../../providers/runtime-shared";
 import type {
+  CodexMcpServerStatusSnapshot,
+  CodexMcpStatusResponse,
+} from "../../../src/lib/providers/provider.types";
+import type {
   SyncOriginMainRequest,
   SyncOriginMainResult,
   ToolingAuthState,
@@ -214,6 +218,78 @@ export function parseClaudeAuthState(args: {
     authState: args.ok ? "unknown" : "unauthenticated",
     authDetail: detail || "Unable to determine Claude CLI authentication state.",
   };
+}
+
+function toCodexMcpServerStatusSnapshot(value: unknown): CodexMcpServerStatusSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const transport = record.transport && typeof record.transport === "object" && !Array.isArray(record.transport)
+    ? record.transport as Record<string, unknown>
+    : null;
+
+  return {
+    name: typeof record.name === "string" ? record.name : "unknown",
+    enabled: record.enabled === true,
+    disabledReason: typeof record.disabled_reason === "string" ? record.disabled_reason : null,
+    transportType: typeof transport?.type === "string" ? transport.type : "unknown",
+    url: typeof transport?.url === "string" ? transport.url : null,
+    bearerTokenEnvVar: typeof transport?.bearer_token_env_var === "string"
+      ? transport.bearer_token_env_var
+      : null,
+    authStatus: typeof record.auth_status === "string" ? record.auth_status : null,
+    startupTimeoutSec: typeof record.startup_timeout_sec === "number" ? record.startup_timeout_sec : null,
+    toolTimeoutSec: typeof record.tool_timeout_sec === "number" ? record.tool_timeout_sec : null,
+  };
+}
+
+function findJsonStart(value: string) {
+  const objectStart = value.indexOf("{");
+  const arrayStart = value.indexOf("[");
+
+  if (objectStart === -1) {
+    return arrayStart;
+  }
+  if (arrayStart === -1) {
+    return objectStart;
+  }
+  return Math.min(objectStart, arrayStart);
+}
+
+export function parseCodexMcpServerList(args: {
+  stdout: string;
+  stderr: string;
+}): CodexMcpServerStatusSnapshot[] | null {
+  const candidates = [
+    args.stdout,
+    args.stderr,
+    `${args.stdout}\n${args.stderr}`,
+    `${args.stderr}\n${args.stdout}`,
+  ];
+
+  for (const candidate of candidates) {
+    const startIndex = findJsonStart(candidate);
+    if (startIndex === -1) {
+      continue;
+    }
+
+    const jsonText = candidate.slice(startIndex).trim();
+    try {
+      const parsed = JSON.parse(jsonText) as unknown;
+      if (!Array.isArray(parsed)) {
+        continue;
+      }
+      return parsed
+        .map((item) => toCodexMcpServerStatusSnapshot(item))
+        .filter((item): item is CodexMcpServerStatusSnapshot => item !== null);
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return null;
 }
 
 function formatToolSummary(args: {
@@ -528,6 +604,63 @@ async function inspectCodexStatus(args: { codexPathOverride?: string }) {
     authState,
     authDetail,
   });
+}
+
+export async function getCodexMcpStatus(args: {
+  codexPathOverride?: string;
+}): Promise<CodexMcpStatusResponse> {
+  const pluginSupport = "unsupported" as const;
+  const executablePath = resolveCodexExecutablePath({
+    explicitPath: args.codexPathOverride,
+  }) || null;
+
+  if (!executablePath) {
+    return {
+      ok: false,
+      detail: "Codex CLI is unavailable. Configure a Codex binary path or install `codex` first.",
+      pluginSupport,
+      servers: [],
+    };
+  }
+
+  const env = buildRuntimeProcessEnv({ executablePath });
+  const result = await runCommandArgs({
+    command: executablePath,
+    commandArgs: ["mcp", "list", "--json"],
+    env,
+  });
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      detail: combineCommandDetail(result) || "Codex MCP status command failed.",
+      pluginSupport,
+      servers: [],
+    };
+  }
+
+  const servers = parseCodexMcpServerList({
+    stdout: result.stdout,
+    stderr: result.stderr,
+  });
+
+  if (!servers) {
+    return {
+      ok: false,
+      detail: "Codex MCP status returned unreadable JSON.",
+      pluginSupport,
+      servers: [],
+    };
+  }
+
+  return {
+    ok: true,
+    detail: servers.length > 0
+      ? `Loaded ${servers.length} Codex MCP server configuration${servers.length === 1 ? "" : "s"}.`
+      : "No Codex MCP servers are configured.",
+    pluginSupport,
+    servers,
+  };
 }
 
 export async function inspectWorkspaceSyncStatus(args: {

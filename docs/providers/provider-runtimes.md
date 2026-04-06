@@ -147,7 +147,7 @@ When Claude `agentProgressSummaries` is enabled, Stave forwards the SDK flag exp
 
 Stave now forwards Claude `settingSources` explicitly. The default Stave setting enables `project`, which allows `CLAUDE.md`, project settings, and project-native slash commands to participate in turns; `local` and `user` can be toggled from Settings.
 
-Stave also forwards Claude `taskBudget` when configured, and the Developer settings now expose two Claude SDK control helpers directly:
+Stave also forwards Claude `taskBudget` when configured, and the `Settings → Providers → Claude` tab now exposes two Claude SDK control helpers directly:
 
 - `getContextUsage()` for inspecting current workspace/session context pressure
 - `reloadPlugins()` for refreshing plugin-provided commands, agents, and MCP state

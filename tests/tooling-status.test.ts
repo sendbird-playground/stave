@@ -3,6 +3,7 @@ import {
   parseAheadBehindCounts,
   parseClaudeAuthState,
   parseCodexAuthState,
+  parseCodexMcpServerList,
   parseGhAuthState,
 } from "../electron/main/utils/tooling-status";
 
@@ -49,5 +50,39 @@ describe("tooling status helpers", () => {
       authState: "authenticated",
       authDetail: "Authenticated · dev@example.com · org: Acme",
     });
+  });
+
+  test("parses Codex MCP JSON output with warning preamble", () => {
+    expect(parseCodexMcpServerList({
+      stdout: "",
+      stderr: `WARNING: proceeding, even though we could not update PATH: Operation not permitted (os error 1)
+[
+  {
+    "name": "stave-local",
+    "enabled": true,
+    "disabled_reason": null,
+    "transport": {
+      "type": "streamable_http",
+      "url": "http://127.0.0.1:64281/mcp",
+      "bearer_token_env_var": "STAVE_LOCAL_MCP_TOKEN"
+    },
+    "startup_timeout_sec": null,
+    "tool_timeout_sec": null,
+    "auth_status": "bearer_token"
+  }
+]`,
+    })).toEqual([
+      {
+        name: "stave-local",
+        enabled: true,
+        disabledReason: null,
+        transportType: "streamable_http",
+        url: "http://127.0.0.1:64281/mcp",
+        bearerTokenEnvVar: "STAVE_LOCAL_MCP_TOKEN",
+        authStatus: "bearer_token",
+        startupTimeoutSec: null,
+        toolTimeoutSec: null,
+      },
+    ]);
   });
 });
