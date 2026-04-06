@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { resolveSettingsProjectSelection } from "@/components/layout/settings-dialog.utils";
+import {
+  resolveSettingsProjectSelection,
+  shouldCloseSettingsDialogFromMouseDown,
+} from "@/components/layout/settings-dialog.utils";
 import type { RecentProjectState } from "@/store/project.utils";
 
 function createProject(args: {
@@ -68,5 +71,26 @@ describe("resolveSettingsProjectSelection", () => {
       currentProjectPath: "/tmp/project-b",
       allowHighlightedOverride: false,
     })).toBe("/tmp/project-b");
+  });
+});
+
+describe("shouldCloseSettingsDialogFromMouseDown", () => {
+  test("closes when the backdrop itself receives the mouse event", () => {
+    const backdrop = { id: "settings-backdrop" };
+
+    expect(shouldCloseSettingsDialogFromMouseDown({
+      target: backdrop,
+      currentTarget: backdrop,
+    })).toBe(true);
+  });
+
+  test("stays open for portal interactions such as Select content", () => {
+    const backdrop = { id: "settings-backdrop" };
+    const portaledSelectItem = { id: "select-item" };
+
+    expect(shouldCloseSettingsDialogFromMouseDown({
+      target: portaledSelectItem,
+      currentTarget: backdrop,
+    })).toBe(false);
   });
 });
