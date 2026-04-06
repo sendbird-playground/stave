@@ -6,6 +6,9 @@ import { STAVE_LOGO_URL } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
+export const SIDEBAR_HOME_BUTTON_CLASS =
+  "h-10 w-10 rounded-md border border-border/80 bg-background/70 p-0 hover:bg-secondary/70";
+
 export function StaveAppMenuButton(args?: {
   compact?: boolean;
   className?: string;
@@ -52,7 +55,7 @@ export function StaveAppMenuButton(args?: {
             aria-label="Open Stave menu"
             className={cn(
               compact
-                ? "h-10 w-10 rounded-md border border-border/80 bg-background/70 p-0 hover:bg-secondary/70"
+                ? SIDEBAR_HOME_BUTTON_CLASS
                 : "h-8 gap-1.5 rounded-md border border-border/80 bg-card px-2.5 hover:bg-secondary/70",
               open && "border-primary/70 bg-secondary/80",
               args?.className,
