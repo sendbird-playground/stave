@@ -4,7 +4,7 @@ import { GlobalCommandPalette } from "@/components/layout/GlobalCommandPalette";
 import { StaveMuseWidget } from "@/components/layout/StaveMuseWidget";
 import { resolveStaveMuseRightInset } from "@/components/layout/stave-muse-widget.utils";
 import { TopBar } from "@/components/layout/TopBar";
-import { ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
+import { COLLAPSED_PROJECT_SIDEBAR_WIDTH, ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
 import { resolveLatestCompletedTurnTarget } from "@/components/layout/command-palette-navigation";
 import { dispatchTopBarPrAction } from "@/components/layout/top-bar-pr-events";
@@ -629,6 +629,13 @@ export function AppShell() {
   );
   const activeWorkspacePath = workspacePathById[activeWorkspaceId] ?? projectPath;
   const hasProjectContext = Boolean(projectPath?.trim());
+  const museLeftInset = isLargeViewport
+    ? (
+      workspaceSidebarCollapsed
+        ? COLLAPSED_PROJECT_SIDEBAR_WIDTH
+        : Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)
+    ) + 12
+    : undefined;
   const museRightInset = resolveStaveMuseRightInset({
     hasProjectContext,
     isLargeViewport,
@@ -1017,7 +1024,11 @@ export function AppShell() {
           <RightRail />
         </div>
       </div>
-      <StaveMuseWidget rightInset={museRightInset} />
+      <StaveMuseWidget
+        leftInset={museLeftInset}
+        rightInset={museRightInset}
+        showFloatingTrigger={!isLargeViewport}
+      />
     </div>
   );
 }
