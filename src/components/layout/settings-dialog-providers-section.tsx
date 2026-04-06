@@ -55,26 +55,10 @@ const STAVE_AUTO_RECOMMENDED_MODEL_OPTIONS = buildRecommendedModelSelectorOption
   options: STAVE_AUTO_ROLE_MODEL_OPTIONS,
 });
 
-const STAVE_AUTO_INHERIT_VALUE = "__inherit__";
 const STAVE_AUTO_BOOLEAN_OVERRIDE_OPTIONS = [
-  { value: STAVE_AUTO_INHERIT_VALUE, label: "inherit" },
   { value: "on", label: "on" },
   { value: "off", label: "off" },
 ] as const;
-
-function toOverrideBooleanValue(value?: boolean) {
-  if (value === undefined) {
-    return STAVE_AUTO_INHERIT_VALUE;
-  }
-  return value ? "on" : "off";
-}
-
-function fromOverrideBooleanValue(value: string) {
-  if (value === STAVE_AUTO_INHERIT_VALUE) {
-    return undefined;
-  }
-  return value === "on";
-}
 
 type ExplainedSelectOption<T extends string> = {
   value: T;
@@ -412,11 +396,11 @@ function StaveAutoRoleField(args: {
   onModelSelect: (model: string) => void;
   onClaudeOverrideChange: <K extends keyof StaveAutoClaudeRoleRuntimeOverrides>(
     key: K,
-    value: StaveAutoClaudeRoleRuntimeOverrides[K] | undefined,
+    value: StaveAutoClaudeRoleRuntimeOverrides[K],
   ) => void;
   onCodexOverrideChange: <K extends keyof StaveAutoCodexRoleRuntimeOverrides>(
     key: K,
-    value: StaveAutoCodexRoleRuntimeOverrides[K] | undefined,
+    value: StaveAutoCodexRoleRuntimeOverrides[K],
   ) => void;
 }) {
   const providerId = resolveStaveProviderForModel({ model: args.value });
@@ -445,19 +429,16 @@ function StaveAutoRoleField(args: {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StaveAutoOverrideField label="Permission Mode">
                 <Select
-                  value={args.overrides.claude.permissionMode ?? STAVE_AUTO_INHERIT_VALUE}
+                  value={args.overrides.claude.permissionMode ?? "auto"}
                   onValueChange={(value) => args.onClaudeOverrideChange(
                     "permissionMode",
-                    value === STAVE_AUTO_INHERIT_VALUE
-                      ? undefined
-                      : value as StaveAutoClaudeRoleRuntimeOverrides["permissionMode"],
+                    value as StaveAutoClaudeRoleRuntimeOverrides["permissionMode"],
                   )}
                 >
                   <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
                     {CLAUDE_PERMISSION_MODE_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
@@ -466,19 +447,16 @@ function StaveAutoRoleField(args: {
               </StaveAutoOverrideField>
               <StaveAutoOverrideField label="Thinking">
                 <Select
-                  value={args.overrides.claude.thinkingMode ?? STAVE_AUTO_INHERIT_VALUE}
+                  value={args.overrides.claude.thinkingMode ?? "adaptive"}
                   onValueChange={(value) => args.onClaudeOverrideChange(
                     "thinkingMode",
-                    value === STAVE_AUTO_INHERIT_VALUE
-                      ? undefined
-                      : value as StaveAutoClaudeRoleRuntimeOverrides["thinkingMode"],
+                    value as StaveAutoClaudeRoleRuntimeOverrides["thinkingMode"],
                   )}
                 >
                   <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
                     {CLAUDE_THINKING_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
@@ -487,19 +465,16 @@ function StaveAutoRoleField(args: {
               </StaveAutoOverrideField>
               <StaveAutoOverrideField label="Effort">
                 <Select
-                  value={args.overrides.claude.effort ?? STAVE_AUTO_INHERIT_VALUE}
+                  value={args.overrides.claude.effort ?? "medium"}
                   onValueChange={(value) => args.onClaudeOverrideChange(
                     "effort",
-                    value === STAVE_AUTO_INHERIT_VALUE
-                      ? undefined
-                      : value as StaveAutoClaudeRoleRuntimeOverrides["effort"],
+                    value as StaveAutoClaudeRoleRuntimeOverrides["effort"],
                   )}
                 >
                   <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
                     {CLAUDE_EFFORT_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
@@ -508,10 +483,10 @@ function StaveAutoRoleField(args: {
               </StaveAutoOverrideField>
               <StaveAutoOverrideField label="Fast">
                 <Select
-                  value={toOverrideBooleanValue(args.overrides.claude.fastMode)}
+                  value={(args.overrides.claude.fastMode ?? false) ? "on" : "off"}
                   onValueChange={(value) => args.onClaudeOverrideChange(
                     "fastMode",
-                    fromOverrideBooleanValue(value),
+                    value === "on",
                   )}
                 >
                   <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
@@ -530,19 +505,16 @@ function StaveAutoRoleField(args: {
             <div className="grid gap-3 md:grid-cols-3">
               <StaveAutoOverrideField label="Approval Policy">
                 <Select
-                  value={args.overrides.codex.approvalPolicy ?? STAVE_AUTO_INHERIT_VALUE}
+                  value={args.overrides.codex.approvalPolicy ?? "on-request"}
                   onValueChange={(value) => args.onCodexOverrideChange(
                     "approvalPolicy",
-                    value === STAVE_AUTO_INHERIT_VALUE
-                      ? undefined
-                      : value as StaveAutoCodexRoleRuntimeOverrides["approvalPolicy"],
+                    value as StaveAutoCodexRoleRuntimeOverrides["approvalPolicy"],
                   )}
                 >
                   <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
                     {CODEX_APPROVAL_POLICY_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
@@ -551,19 +523,16 @@ function StaveAutoRoleField(args: {
               </StaveAutoOverrideField>
               <StaveAutoOverrideField label="Effort">
                 <Select
-                  value={args.overrides.codex.reasoningEffort ?? STAVE_AUTO_INHERIT_VALUE}
+                  value={args.overrides.codex.reasoningEffort ?? "medium"}
                   onValueChange={(value) => args.onCodexOverrideChange(
                     "reasoningEffort",
-                    value === STAVE_AUTO_INHERIT_VALUE
-                      ? undefined
-                      : value as StaveAutoCodexRoleRuntimeOverrides["reasoningEffort"],
+                    value as StaveAutoCodexRoleRuntimeOverrides["reasoningEffort"],
                   )}
                 >
                   <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={STAVE_AUTO_INHERIT_VALUE}>inherit</SelectItem>
                     {CODEX_EFFORT_OPTIONS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                     ))}
@@ -572,10 +541,10 @@ function StaveAutoRoleField(args: {
               </StaveAutoOverrideField>
               <StaveAutoOverrideField label="Fast">
                 <Select
-                  value={toOverrideBooleanValue(args.overrides.codex.fastMode)}
+                  value={(args.overrides.codex.fastMode ?? false) ? "on" : "off"}
                   onValueChange={(value) => args.onCodexOverrideChange(
                     "fastMode",
-                    fromOverrideBooleanValue(value),
+                    value === "on",
                   )}
                 >
                   <SelectTrigger className="h-9 rounded-md border-border/80 bg-background">
@@ -664,7 +633,7 @@ function StaveAutoCard() {
   const updateClaudeRoleOverride = <K extends keyof StaveAutoClaudeRoleRuntimeOverrides>(
     role: StaveAutoRoleName,
     key: K,
-    value: StaveAutoClaudeRoleRuntimeOverrides[K] | undefined,
+    value: StaveAutoClaudeRoleRuntimeOverrides[K],
   ) => {
     updateSettings({
       patch: {
@@ -685,7 +654,7 @@ function StaveAutoCard() {
   const updateCodexRoleOverride = <K extends keyof StaveAutoCodexRoleRuntimeOverrides>(
     role: StaveAutoRoleName,
     key: K,
-    value: StaveAutoCodexRoleRuntimeOverrides[K] | undefined,
+    value: StaveAutoCodexRoleRuntimeOverrides[K],
   ) => {
     updateSettings({
       patch: {
@@ -835,7 +804,7 @@ function StaveAutoCard() {
       </LabeledField>
       <LabeledField
         title="Role Runtime Overrides"
-        description="Each role can inherit the global Claude/Codex runtime controls or override them per selected model provider."
+        description="Each role has its own default settings that you can customize per selected model provider."
       >
         <div className="space-y-3">
           {roleFields.map((field) => (

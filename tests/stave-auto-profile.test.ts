@@ -24,6 +24,22 @@ function createSettings(overrides: Partial<Parameters<typeof buildStaveAutoProfi
   };
 }
 
+describe("createDefaultStaveAutoRoleRuntimeOverrides", () => {
+  test("returns explicit provider defaults (no undefined/inherit values)", () => {
+    const defaults = createDefaultStaveAutoRoleRuntimeOverrides();
+
+    for (const role of Object.values(defaults)) {
+      expect(role.claude.permissionMode).toBe("auto");
+      expect(role.claude.thinkingMode).toBe("adaptive");
+      expect(role.claude.effort).toBe("medium");
+      expect(role.claude.fastMode).toBe(false);
+      expect(role.codex.approvalPolicy).toBe("on-request");
+      expect(role.codex.reasoningEffort).toBe("medium");
+      expect(role.codex.fastMode).toBe(false);
+    }
+  });
+});
+
 describe("stave auto profile presets", () => {
   test("uses GPT-5.4 as the recommended verify model", () => {
     const recommended = buildStaveAutoModelSettingsPatch({ presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID });
@@ -109,7 +125,8 @@ describe("stave auto profile presets", () => {
 
     expect(profile.roleRuntimeOverrides?.implement.codex.reasoningEffort).toBe("xhigh");
     expect(profile.roleRuntimeOverrides?.implement.codex.fastMode).toBe(true);
-    expect(profile.roleRuntimeOverrides?.general.claude.permissionMode).toBeUndefined();
+    // Per-role defaults are now explicit (not undefined/inherit) — general role keeps the default value.
+    expect(profile.roleRuntimeOverrides?.general.claude.permissionMode).toBe("auto");
   });
 });
 
@@ -181,5 +198,26 @@ describe("applyStaveRoleRuntimeOverrides", () => {
       codexModelReasoningEffort: "xhigh",
       codexFastMode: false,
     });
+  });
+
+  test("plan role default permissionMode is 'auto' and can be overridden — callers must re-apply 'plan' mode after override", () => {
+    // This test documents the invariant that runtime.ts enforces: after applyStaveRoleRuntimeOverrides
+    // for the plan role, the caller MUST reset claudePermissionMode back to "plan" to prevent freeze.
+    const profile = buildStaveAutoProfileFromSettings({
+      settings: createSettings(),
+    });
+
+    // Default plan role sets permissionMode to "auto" (explicit default, not inherit).
+    // If runtime.ts did NOT re-apply "plan", the Claude runtime would never call ExitPlanMode.
+    const result = applyStaveRoleRuntimeOverrides({
+      profile,
+      role: "plan",
+      model: "opusplan",
+      runtimeOptions: { claudePermissionMode: "plan" },
+    });
+
+    // The default permissionMode override ("auto") clobbers the "plan" value —
+    // runtime.ts must restore it after this call.
+    expect(result.claudePermissionMode).toBe("auto");
   });
 });

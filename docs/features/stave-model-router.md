@@ -124,12 +124,13 @@ Stave Auto now uses presets plus role-based settings under **Settings → Provid
 
 ### Per-role runtime overrides
 
-Each Stave Auto role now has provider-aware runtime overrides in **Settings → Providers → Stave Auto**. Overrides default to `inherit`, which keeps the current global Claude/Codex runtime controls. When a role switches providers, the settings UI shows only the controls relevant to that provider.
+Each Stave Auto role has provider-aware runtime defaults in **Settings → Providers → Stave Auto**. The settings UI starts from explicit provider defaults for every role instead of an `inherit` placeholder, and when a role switches providers it shows only the controls relevant to that provider.
 
 - Claude-backed roles can override `Permission Mode`, `Thinking`, `Effort`, and `Fast`.
 - Codex-backed roles can override `Approval Policy`, `Effort`, and `Fast`.
 - Overrides apply to the selected role when Stave resolves that role's model during direct routing or orchestration worker execution.
 - Classifier and supervisor roles also expose these overrides, but they still keep their single-turn orchestration-specific defaults unless a role override replaces them.
+- In the chat composer, Stave Auto keeps only the `Plan` toggle in the toolbar. Other runtime controls now live in the Stave Auto provider settings.
 
 ## BridgeEvents emitted by Stave
 

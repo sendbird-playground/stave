@@ -60,8 +60,17 @@ export const STAVE_AUTO_ROLE_NAMES = [
 
 function createEmptyRoleRuntimeOverrides(): StaveAutoRoleRuntimeOverrides {
   return {
-    claude: {},
-    codex: {},
+    claude: {
+      permissionMode: "auto",
+      thinkingMode: "adaptive",
+      effort: "medium",
+      fastMode: false,
+    },
+    codex: {
+      approvalPolicy: "on-request",
+      reasoningEffort: "medium",
+      fastMode: false,
+    },
   };
 }
 

@@ -115,7 +115,7 @@ interface ChatInputComposerProps {
   skillsEnabled: boolean;
   skillsAutoSuggest: boolean;
   skillPaletteItems: readonly SkillCatalogEntry[];
-  permissionMode: PermissionModeValue;
+  permissionMode?: PermissionModeValue;
   runtimeQuickControls: readonly PromptInputRuntimeControl[];
   runtimeStatusItems: readonly PromptInputRuntimeStatusItem[];
   effortLabel?: string;
@@ -128,7 +128,7 @@ interface ChatInputComposerProps {
   thinkingMode?: "adaptive" | "enabled" | "disabled";
   onThinkingModeChange?: (value: "adaptive" | "enabled" | "disabled") => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
-  onPermissionModeChange: (value: PermissionModeValue) => void;
+  onPermissionModeChange?: (value: PermissionModeValue) => void;
 }
 
 function ChatInputComposer(args: ChatInputComposerProps) {
@@ -433,10 +433,12 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           permissionMode={args.permissionMode}
           runtimeQuickControls={args.runtimeQuickControls}
           runtimeStatusItems={args.runtimeStatusItems}
-          onPermissionModeChange={(value) => {
-            commitCurrentDraftText();
-            args.onPermissionModeChange(value);
-          }}
+          onPermissionModeChange={args.onPermissionModeChange
+            ? (value) => {
+                commitCurrentDraftText();
+                args.onPermissionModeChange?.(value);
+              }
+            : undefined}
           effortLabel={args.effortLabel}
           effortValue={args.effortValue}
           onEffortCycle={args.onEffortCycle
@@ -1014,7 +1016,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       skillsEnabled={skillsEnabled}
       skillsAutoSuggest={skillsAutoSuggest}
       skillPaletteItems={deferredSkillPalette}
-      permissionMode={permissionMode}
+      permissionMode={activeProvider === "stave" ? undefined : permissionMode}
       runtimeQuickControls={runtimeQuickControls}
       runtimeStatusItems={runtimeStatusItems}
       effortLabel={effortLabel}
@@ -1053,19 +1055,17 @@ export function ChatInput(args: ChatInputProps = {}) {
           },
         });
       }}
-      fastMode={activeProvider === "stave" ? staveAutoFastMode : activeProvider === "codex" ? codexFastMode : claudeFastMode}
+      fastMode={activeProvider === "codex" ? codexFastMode : activeProvider === "claude-code" ? claudeFastMode : undefined}
       onFastModeChange={
-        activeProvider === "stave"
-          ? (enabled) => updateSettings({ patch: { staveAutoFastMode: enabled } })
-          : (activeProvider === "codex" ? codexFastModeVisible : claudeFastModeVisible)
-            ? (enabled) => {
-                if (activeProvider === "codex") {
-                  updateSettings({ patch: { codexFastMode: enabled } });
-                } else {
-                  updateSettings({ patch: { claudeFastMode: enabled } });
-                }
+        (activeProvider === "codex" ? codexFastModeVisible : activeProvider === "claude-code" ? claudeFastModeVisible : false)
+          ? (enabled) => {
+              if (activeProvider === "codex") {
+                updateSettings({ patch: { codexFastMode: enabled } });
+              } else {
+                updateSettings({ patch: { claudeFastMode: enabled } });
               }
-            : undefined
+            }
+          : undefined
       }
       planMode={
         activeProvider === "codex"
@@ -1101,14 +1101,14 @@ export function ChatInput(args: ChatInputProps = {}) {
             }
           : undefined
       }
-      thinkingMode={activeProvider === "claude-code" || activeProvider === "stave" ? claudeThinkingMode : undefined}
+      thinkingMode={activeProvider === "claude-code" ? claudeThinkingMode : undefined}
       onThinkingModeChange={
-        activeProvider === "claude-code" || activeProvider === "stave"
+        activeProvider === "claude-code"
           ? (value) => updateSettings({ patch: { claudeThinkingMode: value } })
           : undefined
       }
-      onPermissionModeChange={(value) => {
-        if (activeProvider === "claude-code" || activeProvider === "stave") {
+      onPermissionModeChange={activeProvider === "stave" ? undefined : (value) => {
+        if (activeProvider === "claude-code") {
           updatePromptDraft({
             taskId: providerSelectionTarget,
             patch: {
