@@ -96,6 +96,7 @@ export function AppShell() {
     abortTaskTurn,
     focusStaveMuse,
     setLayout,
+    applyExternalWorkspaceInformationUpdate,
   ] = useAppStore(useShallow((state) => [
     state.projectPath,
     state.projectName,
@@ -132,6 +133,7 @@ export function AppShell() {
     state.abortTaskTurn,
     state.focusStaveMuse,
     state.setLayout,
+    state.applyExternalWorkspaceInformationUpdate,
   ] as const));
   const hasProject = Boolean(projectPath);
   const panelRowRef = useRef<HTMLDivElement>(null);
@@ -296,6 +298,15 @@ export function AppShell() {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = window.api?.localMcp?.subscribeWorkspaceInformationUpdates?.((payload) => {
+      applyExternalWorkspaceInformationUpdate(payload);
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [applyExternalWorkspaceInformationUpdate]);
 
   useEffect(() => {
     const unsubscribe = window.api?.window?.subscribeZoomChanges?.(({ percent }) => {

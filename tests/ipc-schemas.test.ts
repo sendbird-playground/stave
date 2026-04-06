@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { FilesystemRepoMapArgsSchema, StreamTurnArgsSchema } from "../electron/main/ipc/schemas";
+import {
+  FilesystemRepoMapArgsSchema,
+  LocalMcpConfigUpdateArgsSchema,
+  StreamTurnArgsSchema,
+} from "../electron/main/ipc/schemas";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 
 describe("provider IPC schemas", () => {
@@ -170,6 +174,20 @@ describe("provider IPC schemas", () => {
     expect(FilesystemRepoMapArgsSchema.safeParse({
       rootPath: "/tmp/project",
       refresh: "yes",
+    }).success).toBe(false);
+  });
+
+  test("accepts Claude Code auto-registration in local MCP config updates", () => {
+    expect(LocalMcpConfigUpdateArgsSchema.safeParse({
+      enabled: true,
+      claudeCodeAutoRegister: false,
+      codexAutoRegister: false,
+    }).success).toBe(true);
+    expect(LocalMcpConfigUpdateArgsSchema.safeParse({
+      claudeCodeAutoRegister: "off",
+    }).success).toBe(false);
+    expect(LocalMcpConfigUpdateArgsSchema.safeParse({
+      codexAutoRegister: "off",
     }).success).toBe(false);
   });
 

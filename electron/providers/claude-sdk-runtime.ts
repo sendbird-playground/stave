@@ -12,6 +12,7 @@ import type {
 } from "../../src/lib/providers/provider.types";
 import type {
   CanUseTool,
+  McpServerConfig,
   McpServerStatus,
   Query,
   SDKMessage,
@@ -30,6 +31,11 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { canExecutePath, resolveExecutablePath } from "./executable-path";
+import {
+  readPrimaryStaveLocalMcpManifest,
+  STAVE_LOCAL_MCP_SERVER_NAME,
+  toClaudeSdkMcpServerConfig,
+} from "../main/stave-local-mcp-manifest";
 import {
   buildRuntimeProcessEnv,
   compareSemverVersions,
@@ -73,6 +79,20 @@ const CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES = new Set(
 );
 const CLAUDE_AUTO_ALLOWED_TOOL_NAMES = new Set([
   "exitplanmode",
+]);
+const CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES = new Set([
+  "stave_get_workspace_information",
+  "stave_replace_workspace_notes",
+  "stave_append_workspace_notes",
+  "stave_clear_workspace_notes",
+  "stave_add_workspace_todo",
+  "stave_update_workspace_todo",
+  "stave_remove_workspace_todo",
+  "stave_add_workspace_resource",
+  "stave_remove_workspace_resource",
+  "stave_add_workspace_custom_field",
+  "stave_set_workspace_custom_field",
+  "stave_remove_workspace_custom_field",
 ]);
 const CLAUDE_MUTATING_BASH_PATTERNS = [
   /(^|[;&|]\s*)(mkdir|mktemp|rm|rmdir|mv|cp|install|touch|chmod|chown|ln|truncate)\b/i,
@@ -421,7 +441,22 @@ export function shouldDenyClaudeToolInPlanMode(args: {
 export function shouldAutoAllowClaudeTool(args: {
   toolName: string;
 }) {
-  return CLAUDE_AUTO_ALLOWED_TOOL_NAMES.has(args.toolName.trim().toLowerCase());
+  const normalizedToolName = args.toolName.trim().toLowerCase();
+  if (CLAUDE_AUTO_ALLOWED_TOOL_NAMES.has(normalizedToolName)) {
+    return true;
+  }
+  const leafToolName = normalizedToolName.split("__").at(-1) ?? normalizedToolName;
+  return CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES.has(leafToolName);
+}
+
+async function resolveEmbeddedStaveLocalMcpServers(): Promise<Record<string, McpServerConfig> | undefined> {
+  const manifest = await readPrimaryStaveLocalMcpManifest();
+  if (!manifest) {
+    return undefined;
+  }
+  return {
+    [STAVE_LOCAL_MCP_SERVER_NAME]: toClaudeSdkMcpServerConfig(manifest),
+  };
 }
 
 function buildClaudePlanModeDenyMessage(args: {
@@ -661,6 +696,7 @@ function buildClaudeQueryOptions(args: {
   includePartialMessages?: boolean;
   promptSuggestions?: boolean;
   canUseTool?: CanUseTool;
+  mcpServers?: Record<string, McpServerConfig>;
 }) {
   const permissionMode = args.permissionMode
     ?? resolveClaudePermissionMode({
@@ -712,6 +748,7 @@ function buildClaudeQueryOptions(args: {
     ...(settingSources !== undefined ? { settingSources } : {}),
     ...(args.runtimeOptions?.claudeFastMode ? { settings: { fastMode: true } } : {}),
     ...(args.canUseTool ? { canUseTool: args.canUseTool } : {}),
+    ...(args.mcpServers ? { mcpServers: args.mcpServers } : {}),
     sandbox: {
       enabled: claudeSandboxEnabled,
       allowUnsandboxedCommands: claudeAllowUnsandboxedCommands,
@@ -1243,6 +1280,7 @@ export async function getClaudeCommandCatalog(args: {
     }
 
     const claudeExecutablePath = getPrewarmedExecutablePath();
+    const embeddedMcpServers = await resolveEmbeddedStaveLocalMcpServers();
 
     stream = queryFn({
       prompt: "",
@@ -1252,6 +1290,7 @@ export async function getClaudeCommandCatalog(args: {
         runtimeOptions: args.runtimeOptions,
         systemPrompt: args.runtimeOptions?.claudeSystemPrompt,
         promptSuggestions: false,
+        mcpServers: embeddedMcpServers,
       }),
     }) as Query;
 
@@ -1294,6 +1333,7 @@ export async function getClaudeContextUsage(args: {
     }
 
     const claudeExecutablePath = getPrewarmedExecutablePath();
+    const embeddedMcpServers = await resolveEmbeddedStaveLocalMcpServers();
     stream = queryFn({
       prompt: "",
       options: buildClaudeQueryOptions({
@@ -1302,6 +1342,7 @@ export async function getClaudeContextUsage(args: {
         runtimeOptions: args.runtimeOptions,
         systemPrompt: args.runtimeOptions?.claudeSystemPrompt,
         promptSuggestions: false,
+        mcpServers: embeddedMcpServers,
       }),
     }) as Query;
 
@@ -1339,6 +1380,7 @@ export async function reloadClaudePlugins(args: {
     }
 
     const claudeExecutablePath = getPrewarmedExecutablePath();
+    const embeddedMcpServers = await resolveEmbeddedStaveLocalMcpServers();
     stream = queryFn({
       prompt: "",
       options: buildClaudeQueryOptions({
@@ -1347,6 +1389,7 @@ export async function reloadClaudePlugins(args: {
         runtimeOptions: args.runtimeOptions,
         systemPrompt: args.runtimeOptions?.claudeSystemPrompt,
         promptSuggestions: false,
+        mcpServers: embeddedMcpServers,
       }),
     }) as Query;
 
@@ -1465,6 +1508,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       baseSystemPrompt: args.runtimeOptions?.claudeSystemPrompt,
       responseStylePrompt: args.runtimeOptions?.responseStylePrompt,
     });
+    const embeddedMcpServers = await resolveEmbeddedStaveLocalMcpServers();
     const claudePermissionMode = resolveClaudePermissionMode({
       runtimeValue: args.runtimeOptions?.claudePermissionMode,
       envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
@@ -1489,6 +1533,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         systemPrompt: claudeSystemPrompt,
         includePartialMessages: true,
         promptSuggestions: true,
+        mcpServers: embeddedMcpServers,
         canUseTool: async (toolName, input, options) => {
           const normalizedInput = normalizeClaudeToolInput(input);
           const requestId = options.toolUseID;

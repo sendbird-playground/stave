@@ -82,6 +82,38 @@ function formatCodexMcpEnabledState(server: CodexMcpServerStatusSnapshot) {
   return server.disabledReason ? `disabled (${server.disabledReason})` : "disabled";
 }
 
+function formatClaudeCodeRegistrationState(status: StaveLocalMcpStatus["claudeCodeRegistration"]) {
+  if (status.error) {
+    return "error";
+  }
+  if (!status.autoRegister) {
+    return "not managed";
+  }
+  if (status.installed && status.matchesCurrentManifest) {
+    return "registered";
+  }
+  if (status.installed) {
+    return "stale";
+  }
+  return "not installed";
+}
+
+function formatCodexRegistrationState(status: StaveLocalMcpStatus["codexRegistration"]) {
+  if (status.error) {
+    return "error";
+  }
+  if (!status.autoRegister) {
+    return "not managed";
+  }
+  if (status.installed && status.matchesCurrentManifest) {
+    return "registered";
+  }
+  if (status.installed) {
+    return "stale";
+  }
+  return "not installed";
+}
+
 export function ProviderTimeoutCard() {
   const providerTimeoutMs = useAppStore((state) => state.settings.providerTimeoutMs);
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -653,6 +685,8 @@ export function LocalMcpServerCard() {
     enabled?: boolean;
     port?: number;
     token?: string;
+    claudeCodeAutoRegister?: boolean;
+    codexAutoRegister?: boolean;
   }) {
     const updateConfig = window.api?.localMcp?.updateConfig;
     if (!updateConfig) {
@@ -777,14 +811,20 @@ export function LocalMcpServerCard() {
   const snapshot = state.snapshot;
   const config = snapshot?.config;
   const manifest = snapshot?.manifest;
+  const claudeCodeRegistration = snapshot?.claudeCodeRegistration;
+  const codexRegistration = snapshot?.codexRegistration;
 
   return (
     <SettingsCard
       title="Local MCP Server"
-      description="Manage the packaged-app loopback MCP endpoint used by same-machine bots and helpers."
+      description="Manage the packaged-app loopback MCP endpoint used by same-machine bots and helpers. CLI auto-registration stays off until you explicitly enable it."
     >
       {snapshot && config ? (
         <>
+          <p className="rounded-md border border-border/80 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+            `Claude Code` and `Codex` are opt-in. Stave only writes its managed MCP entry to your user-level CLI config files after you turn those settings on.
+          </p>
+
           <LabeledField
             title="Server"
             description="Enable or disable the localhost MCP surface exposed by the desktop app."
@@ -811,6 +851,34 @@ export function LocalMcpServerCard() {
               onCommit={(nextValue) => void applyConfigPatch({
                 port: Math.max(0, Math.min(65_535, readInt(nextValue.trim(), 0))),
               })}
+            />
+          </LabeledField>
+
+          <LabeledField
+            title="Claude Code"
+            description="Opt-in and off by default. When enabled, Stave manages only its own MCP entry in `~/.claude/settings.json` for the external Claude Code app. This does not affect Stave's internal Claude runtime."
+          >
+            <ChoiceButtons
+              value={config.claudeCodeAutoRegister ? "on" : "off"}
+              onChange={(value) => void applyConfigPatch({ claudeCodeAutoRegister: value === "on" })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
+
+          <LabeledField
+            title="Codex"
+            description="Opt-in and off by default. When enabled, Stave manages only its own MCP entry in `~/.codex/config.toml` for Codex. Stave also injects the current token into the in-app Codex runtime env."
+          >
+            <ChoiceButtons
+              value={config.codexAutoRegister ? "on" : "off"}
+              onChange={(value) => void applyConfigPatch({ codexAutoRegister: value === "on" })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
             />
           </LabeledField>
 
@@ -856,6 +924,26 @@ export function LocalMcpServerCard() {
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">Config file</span>
               <span className="font-mono text-foreground">{snapshot.configPath}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Claude Code</span>
+              <span className="font-mono text-foreground">
+                {formatClaudeCodeRegistrationState(snapshot.claudeCodeRegistration)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Claude settings</span>
+              <span className="font-mono text-foreground">{snapshot.claudeCodeRegistration.configPath}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Codex</span>
+              <span className="font-mono text-foreground">
+                {formatCodexRegistrationState(snapshot.codexRegistration)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Codex config</span>
+              <span className="font-mono text-foreground">{snapshot.codexRegistration.configPath}</span>
             </div>
             {manifest ? (
               <>
@@ -914,6 +1002,16 @@ export function LocalMcpServerCard() {
       {state.detail ? (
         <p className="rounded-md border border-border/80 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
           {state.detail}
+        </p>
+      ) : null}
+      {claudeCodeRegistration?.detail ? (
+        <p className="rounded-md border border-border/80 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+          {claudeCodeRegistration.detail}
+        </p>
+      ) : null}
+      {codexRegistration?.detail ? (
+        <p className="rounded-md border border-border/80 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+          {codexRegistration.detail}
         </p>
       ) : null}
     </SettingsCard>

@@ -627,6 +627,10 @@ interface AppState {
   updateWorkspaceInformation: (args: {
     updater: (current: WorkspaceInformationState) => WorkspaceInformationState;
   }) => void;
+  applyExternalWorkspaceInformationUpdate: (args: {
+    workspaceId: string;
+    workspaceInformation: WorkspaceInformationState;
+  }) => void;
   clearPromptDraft: (args: { taskId: string }) => void;
   createTask: (args: { title?: string }) => void;
   renameTask: (args: { taskId: string; title: string }) => void;
@@ -4344,6 +4348,36 @@ export const useAppStore = create<AppState>()(
             workspaceInformation: nextWorkspaceInformation,
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
+        });
+      },
+      applyExternalWorkspaceInformationUpdate: ({ workspaceId, workspaceInformation }) => {
+        set((state) => {
+          const cachedSession = state.workspaceRuntimeCacheById[workspaceId];
+          const nextRuntimeCacheById = cachedSession
+            ? {
+                ...state.workspaceRuntimeCacheById,
+                [workspaceId]: {
+                  ...cachedSession,
+                  workspaceInformation,
+                },
+              }
+            : state.workspaceRuntimeCacheById;
+
+          if (workspaceId === state.activeWorkspaceId) {
+            return {
+              workspaceInformation,
+              workspaceRuntimeCacheById: nextRuntimeCacheById,
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+            };
+          }
+
+          if (cachedSession) {
+            return {
+              workspaceRuntimeCacheById: nextRuntimeCacheById,
+            };
+          }
+
+          return state;
         });
       },
       clearPromptDraft: ({ taskId }) => {
