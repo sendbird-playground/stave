@@ -47,12 +47,30 @@ describe("resolveStaveMuseFastPathDecision", () => {
     });
   });
 
+  test("keeps code-ish connected tool workflows in chat when they are not about Stave internals", () => {
+    expect(resolveStaveMuseFastPathDecision({
+      input: "Read this Slack thread and create a Jira issue for the DB migration.",
+    })).toEqual({
+      mode: "chat",
+      reason: "connected tool workflow",
+    });
+  });
+
   test("routes planning requests to planner", () => {
     expect(resolveStaveMuseFastPathDecision({
       input: "Muse workflow planning strategy만 잡아줘",
     })).toEqual({
       mode: "planner",
       reason: "planning request",
+    });
+  });
+
+  test("routes Stave repository inspection to handoff", () => {
+    expect(resolveStaveMuseFastPathDecision({
+      input: "Investigate the Stave sidebar bug in the repository and debug it.",
+    })).toEqual({
+      mode: "handoff",
+      reason: "stave implementation work",
     });
   });
 });

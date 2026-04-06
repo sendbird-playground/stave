@@ -66,6 +66,41 @@ describe("resolveStaveMuseLocalAction", () => {
     workspaceInformation: {
       ...createEmptyWorkspaceInformation(),
       todos: [todo],
+      jiraIssues: [{
+        id: "jira-1",
+        issueKey: "APP-123",
+        title: "Muse workflow support",
+        url: "https://acme.atlassian.net/browse/APP-123",
+        status: "Open",
+        note: "",
+      }],
+      linkedPullRequests: [{
+        id: "pr-1",
+        title: "acme/stave#77",
+        url: "https://github.com/acme/stave/pull/77",
+        status: "open",
+        note: "",
+      }],
+      confluencePages: [{
+        id: "confluence-1",
+        title: "Muse spec",
+        url: "https://acme.atlassian.net/wiki/spaces/APP/pages/123",
+        spaceKey: "APP",
+        note: "",
+      }],
+      figmaResources: [{
+        id: "figma-1",
+        title: "Muse board",
+        url: "https://www.figma.com/design/abc123/muse",
+        nodeId: "1:2",
+        note: "",
+      }],
+      slackThreads: [{
+        id: "slack-1",
+        url: "https://acme.slack.com/archives/C123/p1234567890123456",
+        channelName: "proj-support",
+        note: "",
+      }],
       customFields: [ownerField],
     },
   } as const;
@@ -134,10 +169,80 @@ describe("resolveStaveMuseLocalAction", () => {
       allowDirectWorkspaceInfoEdits: false,
     })).toBeNull();
   });
+
+  it("parses linked-resource delete intents", () => {
+    expect(resolveStaveMuseLocalAction({
+      input: "remove jira APP-123",
+      context,
+      allowDirectWorkspaceInfoEdits: true,
+    })).toEqual({
+      kind: "remove_jira_link",
+      linkId: "jira-1",
+      issueKey: "APP-123",
+    });
+
+    expect(resolveStaveMuseLocalAction({
+      input: "remove pr #77",
+      context,
+      allowDirectWorkspaceInfoEdits: true,
+    })).toEqual({
+      kind: "remove_pull_request_link",
+      linkId: "pr-1",
+      title: "acme/stave#77",
+    });
+
+    expect(resolveStaveMuseLocalAction({
+      input: "delete confluence muse spec",
+      context,
+      allowDirectWorkspaceInfoEdits: true,
+    })).toEqual({
+      kind: "remove_confluence_link",
+      linkId: "confluence-1",
+      title: "Muse spec",
+    });
+
+    expect(resolveStaveMuseLocalAction({
+      input: "remove figma muse board",
+      context,
+      allowDirectWorkspaceInfoEdits: true,
+    })).toEqual({
+      kind: "remove_figma_link",
+      linkId: "figma-1",
+      title: "Muse board",
+    });
+
+    expect(resolveStaveMuseLocalAction({
+      input: "remove slack proj-support",
+      context,
+      allowDirectWorkspaceInfoEdits: true,
+    })).toEqual({
+      kind: "remove_slack_link",
+      linkId: "slack-1",
+      channelName: "proj-support",
+    });
+  });
+
+  it("only treats URLs as direct Information actions when the user is explicitly registering the link", () => {
+    expect(resolveStaveMuseLocalAction({
+      input: "add this Slack thread to the Information panel https://acme.slack.com/archives/C123/p1234567890123456",
+      context,
+      allowDirectWorkspaceInfoEdits: true,
+    })).toEqual({
+      kind: "add_slack_link",
+      url: "https://acme.slack.com/archives/C123/p1234567890123456",
+      channelName: "C123",
+    });
+
+    expect(resolveStaveMuseLocalAction({
+      input: "Read this Slack thread and create a Jira issue https://acme.slack.com/archives/C123/p1234567890123456",
+      context,
+      allowDirectWorkspaceInfoEdits: true,
+    })).toBeNull();
+  });
 });
 
 describe("buildStaveMuseContextSnapshot", () => {
-  it("includes scope, project, workspaces, and information summary", () => {
+  it("includes scope, project, workspaces, and detailed workspace information", () => {
     const snapshot = buildStaveMuseContextSnapshot({
       target: { kind: "workspace" },
       context: {
@@ -158,14 +263,41 @@ describe("buildStaveMuseContextSnapshot", () => {
           isResponding: false,
         }],
         activeTaskId: "task-1",
-        workspaceInformation: createEmptyWorkspaceInformation(),
+        workspaceInformation: {
+          ...createEmptyWorkspaceInformation(),
+          notes: "Slack thread captured. Waiting for Jira sync.",
+          jiraIssues: [{
+            id: "jira-1",
+            issueKey: "APP-123",
+            title: "Support Muse workflow",
+            url: "https://acme.atlassian.net/browse/APP-123",
+            status: "Open",
+            note: "",
+          }],
+          slackThreads: [{
+            id: "slack-1",
+            url: "https://acme.slack.com/archives/C123/p1234567890123456",
+            channelName: "proj-support",
+            note: "",
+          }],
+          customFields: [{
+            id: "field-1",
+            type: "text",
+            label: "Owner",
+            value: "platform",
+          }],
+        },
       },
     });
 
     expect(snapshot).toContain("Stave Muse scope: Current Workspace");
     expect(snapshot).toContain("Current project: Stave");
     expect(snapshot).toContain("Default Workspace");
-    expect(snapshot).toContain("Workspace Information:");
+    expect(snapshot).toContain("Workspace Information Summary:");
+    expect(snapshot).toContain("Workspace Information Details:");
+    expect(snapshot).toContain("APP-123");
+    expect(snapshot).toContain("proj-support");
+    expect(snapshot).toContain("Owner = platform");
   });
 });
 

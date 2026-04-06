@@ -5594,6 +5594,14 @@ export const useAppStore = create<AppState>()(
                 return;
               }
               break;
+            case "remove_jira_link":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                jiraIssues: current.jiraIssues.filter((issue) => issue.id !== localAction.linkId),
+              }))) {
+                return;
+              }
+              break;
             case "add_pull_request_link":
               if (!applyWorkspaceInformationUpdate((current) => {
                 const nextLink = createWorkspaceLinkedPullRequest();
@@ -5607,6 +5615,14 @@ export const useAppStore = create<AppState>()(
                 return;
               }
               break;
+            case "remove_pull_request_link":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                linkedPullRequests: current.linkedPullRequests.filter((pullRequest) => pullRequest.id !== localAction.linkId),
+              }))) {
+                return;
+              }
+              break;
             case "add_confluence_link":
               if (!applyWorkspaceInformationUpdate((current) => {
                 const nextLink = createWorkspaceConfluencePage();
@@ -5617,6 +5633,14 @@ export const useAppStore = create<AppState>()(
                   confluencePages: [...current.confluencePages, nextLink],
                 };
               })) {
+                return;
+              }
+              break;
+            case "remove_confluence_link":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                confluencePages: current.confluencePages.filter((page) => page.id !== localAction.linkId),
+              }))) {
                 return;
               }
               break;
@@ -5634,6 +5658,14 @@ export const useAppStore = create<AppState>()(
                 return;
               }
               break;
+            case "remove_figma_link":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                figmaResources: current.figmaResources.filter((resource) => resource.id !== localAction.linkId),
+              }))) {
+                return;
+              }
+              break;
             case "add_slack_link":
               if (!applyWorkspaceInformationUpdate((current) => {
                 const nextLink = createWorkspaceSlackThread();
@@ -5644,6 +5676,14 @@ export const useAppStore = create<AppState>()(
                   slackThreads: [...current.slackThreads, nextLink],
                 };
               })) {
+                return;
+              }
+              break;
+            case "remove_slack_link":
+              if (!applyWorkspaceInformationUpdate((current) => ({
+                ...current,
+                slackThreads: current.slackThreads.filter((thread) => thread.id !== localAction.linkId),
+              }))) {
                 return;
               }
               break;

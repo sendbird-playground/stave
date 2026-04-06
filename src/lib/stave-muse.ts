@@ -83,10 +83,15 @@ export type StaveMuseLocalAction =
   | { kind: "complete_todo"; todoId: string; todoText: string }
   | { kind: "delete_todo"; todoId: string; todoText: string }
   | { kind: "add_jira_link"; url: string; issueKey: string }
+  | { kind: "remove_jira_link"; linkId: string; issueKey: string }
   | { kind: "add_pull_request_link"; url: string; title: string }
+  | { kind: "remove_pull_request_link"; linkId: string; title: string }
   | { kind: "add_confluence_link"; url: string; title: string }
+  | { kind: "remove_confluence_link"; linkId: string; title: string }
   | { kind: "add_figma_link"; url: string; title: string; nodeId: string }
+  | { kind: "remove_figma_link"; linkId: string; title: string }
   | { kind: "add_slack_link"; url: string; channelName: string }
+  | { kind: "remove_slack_link"; linkId: string; channelName: string }
   | { kind: "add_custom_field"; fieldType: WorkspaceInfoFieldType; label: string }
   | { kind: "set_custom_field"; fieldId: string; fieldLabel: string; value: string }
   | { kind: "show_information_summary" };
@@ -113,6 +118,14 @@ function normalizeWhitespace(value: string) {
 
 function normalizeSearch(value: string) {
   return normalizeWhitespace(value).toLowerCase();
+}
+
+function truncateMuseContextValue(value: string, max = 180) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (normalized.length <= max) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, max - 1))}…`;
 }
 
 function quoteWrapped(value: string) {
@@ -227,6 +240,65 @@ function findCustomFieldByText(args: {
   return args.workspaceInformation.customFields.find((field) => normalizeSearch(field.label).includes(query)) ?? null;
 }
 
+function includesInCandidates(args: { query: string; candidates: string[] }) {
+  return args.candidates.some((candidate) => normalizeSearch(candidate).includes(args.query));
+}
+
+function findJiraIssueByText(args: {
+  input: string;
+  workspaceInformation: WorkspaceInformationState;
+}) {
+  const query = normalizeSearch(args.input);
+  return args.workspaceInformation.jiraIssues.find((issue) => includesInCandidates({
+    query,
+    candidates: [issue.issueKey, issue.title, issue.url, issue.status, issue.note],
+  })) ?? null;
+}
+
+function findLinkedPullRequestByText(args: {
+  input: string;
+  workspaceInformation: WorkspaceInformationState;
+}) {
+  const query = normalizeSearch(args.input);
+  return args.workspaceInformation.linkedPullRequests.find((pullRequest) => includesInCandidates({
+    query,
+    candidates: [pullRequest.title, pullRequest.url, pullRequest.status, pullRequest.note],
+  })) ?? null;
+}
+
+function findConfluencePageByText(args: {
+  input: string;
+  workspaceInformation: WorkspaceInformationState;
+}) {
+  const query = normalizeSearch(args.input);
+  return args.workspaceInformation.confluencePages.find((page) => includesInCandidates({
+    query,
+    candidates: [page.title, page.url, page.spaceKey, page.note],
+  })) ?? null;
+}
+
+function findFigmaResourceByText(args: {
+  input: string;
+  workspaceInformation: WorkspaceInformationState;
+}) {
+  const query = normalizeSearch(args.input);
+  return args.workspaceInformation.figmaResources.find((resource) => includesInCandidates({
+    query,
+    candidates: [resource.title, resource.url, resource.nodeId, resource.note],
+  })) ?? null;
+}
+
+function findSlackThreadByText(args: {
+  input: string;
+  workspaceInformation: WorkspaceInformationState;
+}) {
+  const query = normalizeSearch(args.input);
+  return args.workspaceInformation.slackThreads.find((thread) => includesInCandidates({
+    query,
+    candidates: [thread.channelName, thread.url, thread.note],
+  })) ?? null;
+}
+
 function detectWorkspaceInfoFieldType(input: string): WorkspaceInfoFieldType | null {
   const normalized = normalizeSearch(input);
   for (const entry of INFO_FIELD_TYPE_ALIASES) {
@@ -252,6 +324,39 @@ function isTaskSelectionIntent(input: string) {
     );
 }
 
+const STAVE_MUSE_WORKSPACE_INFO_LINK_PATTERNS = [
+  /\b(add|save|register|link|attach|pin|store|remember)\b/i,
+  /\b(add|put|save|register).*\b(information|info panel)\b/i,
+  /\b(information|info panel).*\b(add|save|register|link|attach|pin)\b/i,
+  /(추가|등록|저장|링크|붙여|고정|핀)/i,
+  /(정보\s*패널|인포\s*패널).*(추가|등록|저장|링크|붙여|고정|핀)/i,
+] as const;
+
+const STAVE_MUSE_COMPLEX_WORKFLOW_PATTERNS = [
+  /\b(read|summari[sz]e|analy[sz]e|create|update|edit|sync|draft|reply|triage|investigate)\b/i,
+  /(읽|요약|분석|생성|만들|업데이트|수정|동기화|작성|답장|분류|조사)/i,
+] as const;
+
+function shouldResolveWorkspaceInfoLinkAction(args: {
+  rawInput: string;
+  urlMatch: string;
+}) {
+  const normalized = normalizeWhitespace(args.rawInput);
+  if (!normalized) {
+    return false;
+  }
+  if (normalized === args.urlMatch) {
+    return true;
+  }
+
+  const explicitLinkIntent = STAVE_MUSE_WORKSPACE_INFO_LINK_PATTERNS.some((pattern) => pattern.test(normalized));
+  if (!explicitLinkIntent) {
+    return false;
+  }
+
+  return !STAVE_MUSE_COMPLEX_WORKFLOW_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
 function summarizeInformationState(info: WorkspaceInformationState) {
   return [
     `Notes: ${info.notes.trim() ? "present" : "empty"}`,
@@ -263,6 +368,101 @@ function summarizeInformationState(info: WorkspaceInformationState) {
     `Slack: ${info.slackThreads.length}`,
     `Custom fields: ${info.customFields.length}`,
   ].join("\n");
+}
+
+function formatMuseContextList(args: {
+  label: string;
+  items: string[];
+  emptyLabel: string;
+}) {
+  if (args.items.length === 0) {
+    return [`${args.label}:`, `- ${args.emptyLabel}`];
+  }
+  return [
+    `${args.label}:`,
+    ...args.items.map((item) => `- ${truncateMuseContextValue(item)}`),
+  ];
+}
+
+function buildWorkspaceInformationDetailLines(info: WorkspaceInformationState) {
+  const noteSummary = info.notes.trim()
+    ? truncateMuseContextValue(info.notes, 320)
+    : "empty";
+  const todoItems = info.todos
+    .slice(0, 5)
+    .map((todo) => `${todo.completed ? "[done]" : "[open]"} ${todo.text}`);
+  const jiraItems = info.jiraIssues
+    .slice(0, 5)
+    .map((issue) => [issue.issueKey || "Jira", issue.title, issue.status, issue.url]
+      .filter((value) => value.trim().length > 0)
+      .join(" | "));
+  const confluenceItems = info.confluencePages
+    .slice(0, 5)
+    .map((page) => [page.title || "Confluence page", page.spaceKey, page.url]
+      .filter((value) => value.trim().length > 0)
+      .join(" | "));
+  const figmaItems = info.figmaResources
+    .slice(0, 5)
+    .map((resource) => [
+      resource.title || "Figma resource",
+      resource.nodeId ? `node ${resource.nodeId}` : "",
+      resource.url,
+    ].filter((value) => value.trim().length > 0).join(" | "));
+  const slackItems = info.slackThreads
+    .slice(0, 5)
+    .map((thread) => [thread.channelName || "Slack thread", thread.url]
+      .filter((value) => value.trim().length > 0)
+      .join(" | "));
+  const customFieldItems = info.customFields
+    .slice(0, 8)
+    .map((field) => {
+      const value = field.type === "single_select"
+        ? field.value || "(empty)"
+        : field.type === "boolean"
+          ? String(field.value)
+          : field.type === "number"
+            ? (field.value == null ? "(empty)" : String(field.value))
+            : field.value.trim() || "(empty)";
+      return `${field.label} = ${value}`;
+    });
+
+  return [
+    ...formatMuseContextList({
+      label: "Notes",
+      items: [noteSummary],
+      emptyLabel: "empty",
+    }),
+    ...formatMuseContextList({
+      label: "Todos",
+      items: todoItems,
+      emptyLabel: "none",
+    }),
+    ...formatMuseContextList({
+      label: "Jira issues",
+      items: jiraItems,
+      emptyLabel: "none",
+    }),
+    ...formatMuseContextList({
+      label: "Confluence pages",
+      items: confluenceItems,
+      emptyLabel: "none",
+    }),
+    ...formatMuseContextList({
+      label: "Figma resources",
+      items: figmaItems,
+      emptyLabel: "none",
+    }),
+    ...formatMuseContextList({
+      label: "Slack threads",
+      items: slackItems,
+      emptyLabel: "none",
+    }),
+    ...formatMuseContextList({
+      label: "Custom fields",
+      items: customFieldItems,
+      emptyLabel: "none",
+    }),
+  ];
 }
 
 export function buildStaveMuseContextSnapshot(args: {
@@ -295,8 +495,11 @@ export function buildStaveMuseContextSnapshot(args: {
     "Tasks:",
     ...taskLines,
     "",
-    "Workspace Information:",
+    "Workspace Information Summary:",
     summarizeInformationState(args.context.workspaceInformation),
+    "",
+    "Workspace Information Details:",
+    ...buildWorkspaceInformationDetailLines(args.context.workspaceInformation),
   ].join("\n");
 }
 
@@ -513,7 +716,7 @@ export function resolveStaveMuseLocalAction(args: {
   }
 
   const urlMatch = raw.match(/https?:\/\/\S+/i)?.[0];
-  if (urlMatch) {
+  if (urlMatch && shouldResolveWorkspaceInfoLinkAction({ rawInput: raw, urlMatch })) {
     const jira = extractJiraIssueReference(urlMatch);
     if (jira) {
       return { kind: "add_jira_link", url: urlMatch, issueKey: jira.issueKey };
@@ -598,6 +801,96 @@ export function resolveStaveMuseLocalAction(args: {
     });
     if (todo) {
       return { kind: "delete_todo", todoId: todo.id, todoText: todo.text };
+    }
+  }
+
+  const removeJiraValue = extractTrailingValue({
+    input: raw,
+    prefixes: ["remove jira ", "delete jira ", "jira 삭제 ", "jira remove "],
+  });
+  if (removeJiraValue) {
+    const issue = findJiraIssueByText({
+      input: removeJiraValue,
+      workspaceInformation: args.context.workspaceInformation,
+    });
+    if (issue) {
+      return {
+        kind: "remove_jira_link",
+        linkId: issue.id,
+        issueKey: issue.issueKey || issue.title || "Jira issue",
+      };
+    }
+  }
+
+  const removePullRequestValue = extractTrailingValue({
+    input: raw,
+    prefixes: ["remove pull request ", "delete pull request ", "remove pr ", "delete pr ", "pr 삭제 "],
+  });
+  if (removePullRequestValue) {
+    const pullRequest = findLinkedPullRequestByText({
+      input: removePullRequestValue,
+      workspaceInformation: args.context.workspaceInformation,
+    });
+    if (pullRequest) {
+      return {
+        kind: "remove_pull_request_link",
+        linkId: pullRequest.id,
+        title: pullRequest.title || "Linked pull request",
+      };
+    }
+  }
+
+  const removeConfluenceValue = extractTrailingValue({
+    input: raw,
+    prefixes: ["remove confluence ", "delete confluence ", "confluence 삭제 "],
+  });
+  if (removeConfluenceValue) {
+    const page = findConfluencePageByText({
+      input: removeConfluenceValue,
+      workspaceInformation: args.context.workspaceInformation,
+    });
+    if (page) {
+      return {
+        kind: "remove_confluence_link",
+        linkId: page.id,
+        title: page.title || "Confluence page",
+      };
+    }
+  }
+
+  const removeFigmaValue = extractTrailingValue({
+    input: raw,
+    prefixes: ["remove figma ", "delete figma ", "figma 삭제 "],
+  });
+  if (removeFigmaValue) {
+    const resource = findFigmaResourceByText({
+      input: removeFigmaValue,
+      workspaceInformation: args.context.workspaceInformation,
+    });
+    if (resource) {
+      return {
+        kind: "remove_figma_link",
+        linkId: resource.id,
+        title: resource.title || "Figma resource",
+      };
+    }
+  }
+
+  const removeSlackValue = extractTrailingValue({
+    input: raw,
+    prefixes: ["remove slack ", "delete slack ", "slack 삭제 "],
+  });
+  if (removeSlackValue) {
+    const thread = findSlackThreadByText({
+      input: removeSlackValue,
+      workspaceInformation: args.context.workspaceInformation,
+    });
+    if (thread) {
+      return {
+        kind: "remove_slack_link",
+        linkId: thread.id,
+        channelName: thread.channelName || "Slack thread",
+      };
     }
   }
 
@@ -686,14 +979,24 @@ export function buildStaveMuseLocalActionResponse(args: {
       return `Deleted todo: ${args.action.todoText}.`;
     case "add_jira_link":
       return `Added Jira link: ${args.action.issueKey}.`;
+    case "remove_jira_link":
+      return `Removed Jira link: ${args.action.issueKey}.`;
     case "add_pull_request_link":
       return `Added linked pull request: ${args.action.title}.`;
+    case "remove_pull_request_link":
+      return `Removed linked pull request: ${args.action.title}.`;
     case "add_confluence_link":
       return `Added Confluence page: ${args.action.title}.`;
+    case "remove_confluence_link":
+      return `Removed Confluence page: ${args.action.title}.`;
     case "add_figma_link":
       return `Added Figma resource: ${args.action.title}.`;
+    case "remove_figma_link":
+      return `Removed Figma resource: ${args.action.title}.`;
     case "add_slack_link":
       return `Added Slack thread: ${args.action.channelName}.`;
+    case "remove_slack_link":
+      return `Removed Slack thread: ${args.action.channelName}.`;
     case "add_custom_field":
       return `Added custom field: ${args.action.label}.`;
     case "set_custom_field":

@@ -333,9 +333,9 @@ export function StaveMuseWidget(args: {
                   <EmptyMedia variant="icon">
                     <Music4 className="size-5 text-muse" />
                   </EmptyMedia>
-                  <EmptyTitle>Muse for Stave control</EmptyTitle>
+                  <EmptyTitle>Muse for project workflows</EmptyTitle>
                   <EmptyDescription>
-                    Ask about Stave, switch workspace, open panels, or update the Information panel.
+                    Ask Muse to navigate Stave, work across Slack/Jira/Confluence/Figma/GitHub, and update the Information panel.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -369,7 +369,7 @@ export function StaveMuseWidget(args: {
                 ref={textareaRef}
                 value={promptText}
                 rows={3}
-                placeholder="Ask Muse to explain, navigate, or prepare a task handoff..."
+                placeholder="Ask Muse to navigate, coordinate tools, update Information, or hand work off to task chat..."
                 className="min-h-[5.5rem] resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0"
                 onChange={(event) => updatePromptDraft({ patch: { text: event.target.value } })}
                 onCompositionStart={() => setIsComposing(true)}
