@@ -1057,7 +1057,10 @@ export function PromptInput(args: PromptInputProps) {
             recommendedOptions={recommendedModelOptions}
             disabled={interactionsDisabled}
             openToken={modelSelectorOpenNonce > 0 ? modelSelectorOpenNonce : undefined}
-            onSelect={({ selection }) => onModelSelect({ selection })}
+            onSelect={({ selection }) => {
+              onModelSelect({ selection });
+              window.requestAnimationFrame(() => focusComposer());
+            }}
           />
           {onPlanModeChange ? (
             <Tooltip>
