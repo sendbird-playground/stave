@@ -263,6 +263,15 @@ interface WindowFsApi {
     files: Array<{ content: string; filePath: string }>;
     stderr?: string;
   }>;
+  searchContent?: (args: {
+    rootPath: string;
+    query: string;
+  }) => Promise<{
+    ok: boolean;
+    results: Array<{ file: string; matches: Array<{ line: number; text: string }> }>;
+    limitHit: boolean;
+    stderr?: string;
+  }>;
 }
 
 interface WindowSkillsApi {

@@ -463,6 +463,13 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("fs:read-type-defs", args),
     readSourceFiles: (args: { rootPath: string; entryFilePath?: string }) =>
       ipcRenderer.invoke("fs:read-source-files", args),
+    searchContent: (args: { rootPath: string; query: string }) =>
+      ipcRenderer.invoke("fs:search-content", args) as Promise<{
+        ok: boolean;
+        results: Array<{ file: string; matches: Array<{ line: number; text: string }> }>;
+        limitHit: boolean;
+        stderr?: string;
+      }>,
   },
   skills: {
     getCatalog: (args?: { workspacePath?: string }) =>
