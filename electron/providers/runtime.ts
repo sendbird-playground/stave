@@ -724,7 +724,7 @@ export const providerRuntime: ProviderRuntime = {
       ok: true,
       supported: false,
       commands: [],
-      detail: "Codex does not expose a native slash-command catalog through the current SDK transport.",
+      detail: "Codex does not expose a native slash-command catalog through the current SDK/CLI transport. Slash commands are passed through unchanged.",
     };
   },
   getConnectedToolStatus: async (args) => getProviderConnectedToolStatus(args),

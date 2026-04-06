@@ -53,7 +53,6 @@ import {
   type NotificationSoundMode,
   type NotificationSoundPreset,
 } from "@/lib/notifications/notification-sound";
-import { resolveCommandInput } from "@/lib/commands";
 import {
   buildCanonicalConversationRequest,
 } from "@/lib/providers/canonical-request";
@@ -81,7 +80,6 @@ import {
   DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
   normalizeStaveAutoRoleRuntimeOverrides,
 } from "@/lib/providers/stave-auto-profile";
-import { getCachedProviderCommandCatalog } from "@/lib/providers/provider-command-catalog";
 import {
   canTakeOverTask,
   getArchiveFallbackTaskId,
@@ -160,7 +158,6 @@ import {
   normalizeCodexApprovalPolicy,
 } from "@/store/provider-runtime-options";
 import {
-  buildLocalCommandResponseState,
   buildMessageId,
   buildPendingProviderTurnState,
   buildRecentTimestamp,
@@ -451,9 +448,6 @@ export interface AppSettings {
   commandPalettePinnedCommandIds: string[];
   commandPaletteHiddenCommandIds: string[];
   commandPaletteRecentCommandIds: string[];
-  commandPolicy: "confirm" | "auto-safe";
-  commandAllowlist: string;
-  customCommands: string;
   reviewStrictMode: boolean;
   reviewChecklistPreset: string;
   terminalFontSize: number;
@@ -1017,9 +1011,6 @@ const defaultSettings: AppSettings = {
   commandPalettePinnedCommandIds: [],
   commandPaletteHiddenCommandIds: [],
   commandPaletteRecentCommandIds: [],
-  commandPolicy: "confirm",
-  commandAllowlist: "bun,git,rg",
-  customCommands: "/stave:clear = @clear\n/stave:meow = Meow from {provider} ({model})",
   reviewStrictMode: true,
   reviewChecklistPreset: "safety-first",
   terminalFontSize: 12,
@@ -6072,126 +6063,11 @@ export const useAppStore = create<AppState>()(
             codexExperimentalPlanMode: state.settings.codexExperimentalPlanMode,
           },
         });
-
-        // ── Slash-command interception ────────────────────────────────────
-        // Check BEFORE building the prompt or touching the provider.
-        // Stave-local commands are handled here. Claude native commands are
-        // validated against the most recently loaded SDK catalog for the
-        // current workspace so unsupported slash commands do not get sent as
-        // ordinary prompts.
         const activeModel = provider === "claude-code"
           ? state.settings.modelClaude
           : provider === "stave"
             ? state.settings.modelStave
             : state.settings.modelCodex;
-        const providerCommandCatalog = getCachedProviderCommandCatalog({
-          providerId: provider,
-          cwd: workspaceCwd,
-        });
-
-        const commandResult = resolveCommandInput(content, {
-          provider,
-          model: activeModel,
-          messages: existingHistory,
-          settings: state.settings,
-          taskId: resolvedTaskId,
-          taskTitle: task?.title,
-          workspaceCwd,
-          checkpoint: state.taskCheckpointById[resolvedTaskId],
-          isTurnActive: Boolean(state.activeTurnIdsByTask[resolvedTaskId]),
-          providerCommandCatalog,
-        });
-
-        if (commandResult.kind === "local-response") {
-          const responseText = commandResult.response ?? "";
-          const shouldClearProviderSession = commandResult.action === "clear";
-          set((nextState) =>
-            buildLocalCommandResponseState({
-              tasks: nextState.tasks,
-              messagesByTask: nextState.messagesByTask,
-              messageCountByTask: nextState.messageCountByTask,
-              activeTurnIdsByTask: nextState.activeTurnIdsByTask,
-              nativeSessionReadyByTask: nextState.nativeSessionReadyByTask,
-              providerSessionByTask: nextState.providerSessionByTask,
-              taskWorkspaceIdById: nextState.taskWorkspaceIdById,
-              workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
-              taskId: resolvedTaskId,
-              taskWorkspaceId,
-              provider,
-              activeModel,
-              content,
-              responseText,
-              shouldClearProviderSession,
-            })
-          );
-          if (shouldClearProviderSession) {
-            void window.api?.provider?.cleanupTask?.({ taskId: resolvedTaskId });
-          }
-
-          // ── /stave:sync – async git fetch + pull ─────────────────────────
-          if (commandResult.action === "sync" && runCommand && workspaceCwd) {
-            const syncTaskId = resolvedTaskId;
-            // Compute the assistant message ID deterministically so we can
-            // update the same message once the async operations finish.
-            const currentForSync = get().messagesByTask[syncTaskId] ?? [];
-            const syncAssistantMessageId = currentForSync[currentForSync.length - 1]?.id;
-
-            void (async () => {
-              const parts: string[] = [];
-
-              // 1. git fetch --all --prune
-              const fetchResult = await runCommand({ cwd: workspaceCwd, command: "git fetch --all --prune" });
-              if (fetchResult.ok) {
-                parts.push("- ✓ `git fetch --all --prune`");
-              } else {
-                parts.push(`- ✗ \`git fetch --all --prune\` (exit ${fetchResult.code})`);
-                if (fetchResult.stderr.trim()) {
-                  parts.push("", `> ${fetchResult.stderr.trim().replaceAll("\n", "\n> ")}`);
-                }
-              }
-
-              // 2. git pull --ff-only (only attempt if fetch succeeded)
-              if (fetchResult.ok) {
-                const pullResult = await runCommand({ cwd: workspaceCwd, command: "git pull --ff-only" });
-                if (pullResult.ok) {
-                  const pullSummary = pullResult.stdout.trim() || "Already up to date.";
-                  parts.push("- ✓ `git pull --ff-only`");
-                  parts.push("", "```", pullSummary, "```");
-                } else {
-                  parts.push(`- ✗ \`git pull --ff-only\` (exit ${pullResult.code})`);
-                  if (pullResult.stderr.trim()) {
-                    parts.push("", `> ${pullResult.stderr.trim().replaceAll("\n", "\n> ")}`);
-                  }
-                  parts.push("", "> **Tip:** If fast-forward is not possible, resolve manually with `git merge` or `git rebase`.");
-                }
-              }
-
-              // 3. Update the assistant message with the final result
-              const resultText = parts.join("\n");
-              if (syncAssistantMessageId) {
-                set((state) => ({
-                  messagesByTask: {
-                    ...state.messagesByTask,
-                    [syncTaskId]: updateMessageById({
-                      messages: state.messagesByTask[syncTaskId] ?? [],
-                      messageId: syncAssistantMessageId,
-                      update: (message) => ({
-                        ...message,
-                        content: resultText,
-                        parts: [createUserTextPart({ text: resultText })],
-                      }),
-                    }),
-                  },
-                  workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-                }));
-              }
-            })();
-          }
-          // ── End /stave:sync ──────────────────────────────────────────────
-
-          return; // skip runProviderTurn entirely
-        }
-        // ── End slash-command interception ────────────────────────────────
 
         const skillSelection = resolveSkillSelections({
           text: content,

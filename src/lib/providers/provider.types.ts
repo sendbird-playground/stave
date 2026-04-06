@@ -90,7 +90,6 @@ export interface CodexMcpServerStatusSnapshot {
 export interface CodexMcpStatusResponse {
   ok: boolean;
   detail: string;
-  pluginSupport: "unsupported";
   servers: CodexMcpServerStatusSnapshot[];
 }
 

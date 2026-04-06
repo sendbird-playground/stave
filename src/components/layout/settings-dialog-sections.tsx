@@ -2117,48 +2117,25 @@ function CommandPaletteSection() {
 }
 
 function CommandsSection() {
-  const [commandPolicy, commandAllowlist, customCommands] = useAppStore(
-    useShallow((state) => [
-      state.settings.commandPolicy,
-      state.settings.commandAllowlist,
-      state.settings.customCommands,
-    ] as const),
-  );
-  const updateSettings = useAppStore((state) => state.updateSettings);
-
   return (
     <>
-      <SectionHeading title="Slash Commands" description="Control Stave-local slash commands and provider passthrough behavior in the chat input." />
+      <SectionHeading title="Composer Commands" description="Inspect how slash commands behave for the active provider in the chat input." />
       <SectionStack>
-        <SettingsCard title="Slash Command Defaults" description="`/stave:*` commands are handled locally by Stave. Claude-native commands are validated against the current SDK catalog before passthrough; Codex slash commands are still forwarded unchanged.">
-          <LabeledField title="Command Policy">
-            <ChoiceButtons
-              value={commandPolicy}
-              onChange={(value) => updateSettings({ patch: { commandPolicy: value } })}
-              options={[
-                { value: "confirm", label: "Confirm" },
-                { value: "auto-safe", label: "Auto Safe" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField title="Allowlist">
-            <DraftInput
-              className="h-10 rounded-md border-border/80 bg-background"
-              value={commandAllowlist}
-              onCommit={(nextValue) => updateSettings({ patch: { commandAllowlist: nextValue } })}
-            />
-          </LabeledField>
-          <LabeledField
-            title="Custom Commands"
-            description="One per line. Format: `/stave:name = response` or `/stave:name => response`. Legacy `/name` entries are normalized into the Stave namespace."
-          >
-            <DraftTextarea
-              className="min-h-[140px] rounded-md border-border/80 bg-background font-mono text-sm"
-              value={customCommands}
-              onCommit={(nextValue) => updateSettings({ patch: { customCommands: nextValue } })}
-              placeholder="/stave:clear = @clear&#10;/stave:hello = Hello from {provider} ({model})&#10;/stave:stats = Users: {user_count}, Assistant: {assistant_count}"
-            />
-          </LabeledField>
+        <SettingsCard
+          title="Provider-Native Slash Commands"
+          description="Stave no longer reserves `/stave:*` commands. Slash commands typed in the composer are passed through to the active provider."
+        >
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Claude Code exposes a native command catalog through the current SDK, so Stave can list known Claude commands in the composer while still passing through valid unlisted commands such as plugin-provided commands.
+            </p>
+            <p>
+              Codex does not currently expose a native slash-command catalog through the installed SDK/CLI path, so Stave forwards Codex slash commands unchanged and reflects its native MCP/runtime surface elsewhere in Settings.
+            </p>
+            <p>
+              Composer command suggestions now activate from the current caret position instead of only at the beginning of the draft.
+            </p>
+          </div>
         </SettingsCard>
       </SectionStack>
     </>

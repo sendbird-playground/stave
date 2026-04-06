@@ -58,7 +58,6 @@ interface CodexMcpViewState {
   servers: CodexMcpServerStatusSnapshot[];
   detail: string;
   busy: boolean;
-  pluginSupport: "unsupported";
 }
 
 const LOCAL_MCP_REQUEST_LOG_PAGE_SIZE = 25;
@@ -364,7 +363,6 @@ export function CodexMcpStatusCard() {
     servers: [],
     detail: "Loading Codex MCP status...",
     busy: false,
-    pluginSupport: "unsupported",
   });
 
   async function refreshStatus() {
@@ -375,7 +373,6 @@ export function CodexMcpStatusCard() {
         servers: [],
         detail: "Codex MCP status API unavailable.",
         busy: false,
-        pluginSupport: "unsupported",
       });
       return;
     }
@@ -398,7 +395,6 @@ export function CodexMcpStatusCard() {
         servers: result.servers,
         detail: result.detail,
         busy: false,
-        pluginSupport: result.pluginSupport,
       });
     } catch (error) {
       setState({
@@ -406,7 +402,6 @@ export function CodexMcpStatusCard() {
         servers: [],
         detail: error instanceof Error ? error.message : "Failed to load Codex MCP status.",
         busy: false,
-        pluginSupport: "unsupported",
       });
     }
   }
@@ -420,11 +415,11 @@ export function CodexMcpStatusCard() {
 
   return (
     <SettingsCard
-      title="Codex MCP Status"
-      description="Inspect MCP servers configured for the current Codex CLI. The current Codex CLI does not expose a native plugin surface."
+      title="Codex Native Runtime"
+      description="Inspect the provider-native MCP surface exposed by the current Codex CLI."
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="grid gap-2 sm:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-3">
           <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2 text-sm">
             <p className="text-muted-foreground">Servers</p>
             <p className="font-mono text-foreground">{state.servers.length}</p>
@@ -436,10 +431,6 @@ export function CodexMcpStatusCard() {
           <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2 text-sm">
             <p className="text-muted-foreground">Bearer Token</p>
             <p className="font-mono text-foreground">{tokenAuthCount}</p>
-          </div>
-          <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2 text-sm">
-            <p className="text-muted-foreground">Plugins</p>
-            <p className="font-mono text-foreground">{state.pluginSupport === "unsupported" ? "unsupported" : state.pluginSupport}</p>
           </div>
         </div>
         <Button
@@ -483,9 +474,12 @@ export function CodexMcpStatusCard() {
       ) : null}
 
       {state.detail ? (
-        <p className="rounded-md border border-border/80 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
-          {state.detail}
-        </p>
+        <div className="space-y-2 rounded-md border border-border/80 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+          <p>{state.detail}</p>
+          <p>
+            Stave mirrors the Codex-native MCP surface here and forwards slash commands to Codex unchanged.
+          </p>
+        </div>
       ) : null}
     </SettingsCard>
   );

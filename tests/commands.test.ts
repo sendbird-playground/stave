@@ -2,16 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   buildCommandPaletteItems,
   filterCommandPaletteItems,
-  getSlashCommandSearchQuery,
+  getActiveSlashCommandTokenMatch,
   resolveCommandInput,
   type CommandContext,
 } from "@/lib/commands";
 import type { ProviderCommandCatalogState } from "@/lib/providers/provider-command-catalog";
-import type { AppSettings } from "@/store/app.store";
-
-const settings = {
-  customCommands: "/stave:clear = @clear\n/meow = Meow from {provider} ({model})",
-} as Pick<AppSettings, "customCommands">;
 
 const claudeCommandCatalog: ProviderCommandCatalogState = {
   providerId: "claude-code",
@@ -39,111 +34,18 @@ const claudeCommandCatalog: ProviderCommandCatalogState = {
 function createContext(overrides: Partial<CommandContext> = {}): CommandContext {
   return {
     provider: "codex",
-    model: "gpt-5.4",
-    messages: [],
-    settings,
-    taskId: "task-1",
-    taskTitle: "Demo task",
-    workspaceCwd: "/tmp/demo",
-    checkpoint: "abc123",
-    isTurnActive: false,
-    providerCommandCatalog: undefined,
     ...overrides,
   };
 }
 
 describe("resolveCommandInput", () => {
-  test("routes stave status locally under explicit namespace", () => {
-    const result = resolveCommandInput("/stave:status", createContext());
-
-    expect(result.kind).toBe("local-response");
-    if (result.kind !== "local-response") {
-      return;
-    }
-    expect(result.command).toBe("/stave:status");
-    expect(result.response).toContain("Demo task");
-    expect(result.response).toContain("Codex (gpt-5.4)");
-    expect(result.response).toContain("/tmp/demo");
-    expect(result.response).toContain("| **Turn** | idle |");
-  });
-
-  test("routes custom Stave commands locally even when settings omit the namespace", () => {
-    const result = resolveCommandInput("/stave:meow", createContext({ provider: "claude-code", model: "claude-sonnet-4-6" }));
-
-    expect(result).toEqual({
-      kind: "local-response",
-      source: "stave_custom",
-      command: "/stave:meow",
-      response: "Meow from claude-code (claude-sonnet-4-6)",
+  test("returns not-command for plain text", () => {
+    expect(resolveCommandInput("hello world", createContext())).toEqual({
+      kind: "not-command",
     });
   });
 
-  test("sums token usage across assistant messages for /stave:usage", () => {
-    const result = resolveCommandInput("/stave:usage", createContext({
-      messages: [
-        {
-          id: "user-1",
-          role: "user",
-          model: "user",
-          providerId: "user",
-          content: "hello",
-          parts: [],
-        },
-        {
-          id: "assistant-1",
-          role: "assistant",
-          model: "gpt-5.4",
-          providerId: "codex",
-          content: "hi",
-          usage: {
-            inputTokens: 1200,
-            outputTokens: 300,
-            cacheReadTokens: 50,
-            totalCostUsd: 0.0123,
-          },
-          parts: [],
-        },
-        {
-          id: "assistant-2",
-          role: "assistant",
-          model: "gpt-5.4",
-          providerId: "codex",
-          content: "follow-up",
-          usage: {
-            inputTokens: 800,
-            outputTokens: 200,
-            cacheCreationTokens: 25,
-            totalCostUsd: 0.01,
-          },
-          parts: [],
-        },
-      ],
-    }));
-
-    expect(result.kind).toBe("local-response");
-    if (result.kind !== "local-response") {
-      return;
-    }
-    expect(result.response).toContain("| **Assistant turns with usage** | 2 |");
-    expect(result.response).toContain("| **Input tokens** | 2,000 |");
-    expect(result.response).toContain("| **Output tokens** | 500 |");
-    expect(result.response).toContain("| **Cache read tokens** | 50 |");
-    expect(result.response).toContain("| **Cache creation tokens** | 25 |");
-    expect(result.response).toContain("$0.0223");
-    expect(result.response).toContain("in 800 / out 200");
-  });
-
-  test("preserves clear behavior under /stave:clear", () => {
-    expect(resolveCommandInput("/stave:clear", createContext())).toEqual({
-      kind: "local-response",
-      source: "stave_builtin",
-      command: "/stave:clear",
-      response: "Conversation cleared.",
-      action: "clear",
-    });
-  });
-
-  test("passes unprefixed slash commands through to the provider", () => {
+  test("passes slash commands through to the provider unchanged", () => {
     expect(resolveCommandInput("/review", createContext())).toEqual({
       kind: "provider-passthrough",
       command: "/review",
@@ -151,44 +53,13 @@ describe("resolveCommandInput", () => {
     });
   });
 
-  test("passes supported Claude native commands through when the catalog is loaded", () => {
-    expect(resolveCommandInput("/simplify", createContext({
-      provider: "claude-code",
-      providerCommandCatalog: claudeCommandCatalog,
-    }))).toEqual({
-      kind: "provider-passthrough",
-      command: "/simplify",
-      rawArgs: "",
-    });
-  });
-
-  test("passes unlisted Claude commands through instead of blocking them", () => {
-    // Skills (loop, schedule, update-config) and plugin commands (ralph-loop)
-    // are valid but not returned by supportedCommands(). They must pass through.
-    const result = resolveCommandInput("/loop", createContext({
-      provider: "claude-code",
-      providerCommandCatalog: claudeCommandCatalog,
-    }));
-
-    expect(result).toEqual({
-      kind: "provider-passthrough",
-      command: "/loop",
-      rawArgs: "",
-    });
-  });
-
-  test("passes plugin commands through even when not in catalog", () => {
-    expect(resolveCommandInput("/ralph-loop", createContext({
-      provider: "claude-code",
-      providerCommandCatalog: claudeCommandCatalog,
-    }))).toEqual({
+  test("keeps provider-native and plugin-provided slash commands untouched", () => {
+    expect(resolveCommandInput("/ralph-loop", createContext({ provider: "claude-code" }))).toEqual({
       kind: "provider-passthrough",
       command: "/ralph-loop",
       rawArgs: "",
     });
-  });
 
-  test("keeps provider-namespaced commands untouched for passthrough", () => {
     expect(resolveCommandInput("/claude:review", createContext({ provider: "claude-code" }))).toEqual({
       kind: "provider-passthrough",
       command: "/claude:review",
@@ -196,95 +67,95 @@ describe("resolveCommandInput", () => {
     });
   });
 
-  test("returns an explanatory local response for unknown /stave commands", () => {
-    const result = resolveCommandInput("/stave:unknown", createContext());
-
-    expect(result.kind).toBe("local-response");
-    if (result.kind !== "local-response") {
-      return;
-    }
-    expect(result.source).toBe("stave_meta");
-    expect(result.response).toContain("Unknown Stave command");
-    expect(result.response).toContain("/stave:unknown");
-    expect(result.response).toContain("/stave:help");
-  });
-
-  test("returns sync action with workspace path for /stave:sync", () => {
-    const result = resolveCommandInput("/stave:sync", createContext({ workspaceCwd: "/home/user/project" }));
-
-    expect(result.kind).toBe("local-response");
-    if (result.kind !== "local-response") {
-      return;
-    }
-    expect(result.source).toBe("stave_builtin");
-    expect(result.command).toBe("/stave:sync");
-    expect(result.action).toBe("sync");
-    expect(result.response).toContain("/home/user/project");
-  });
-
-  test("returns sync action even without workspace path", () => {
-    const result = resolveCommandInput("/stave:sync", createContext({ workspaceCwd: undefined }));
-
-    expect(result.kind).toBe("local-response");
-    if (result.kind !== "local-response") {
-      return;
-    }
-    expect(result.action).toBe("sync");
-    expect(result.response).toContain("unknown workspace");
+  test("no longer intercepts /stave:* locally", () => {
+    expect(resolveCommandInput("/stave:status", createContext())).toEqual({
+      kind: "provider-passthrough",
+      command: "/stave:status",
+      rawArgs: "",
+    });
   });
 });
 
-describe("getSlashCommandSearchQuery", () => {
-  test("opens palette only while editing the first slash token", () => {
-    expect(getSlashCommandSearchQuery("/st")).toBe("/st");
-    expect(getSlashCommandSearchQuery("   /stave:cl")).toBe("/stave:cl");
-    expect(getSlashCommandSearchQuery("/stave:status now")).toBeNull();
-    expect(getSlashCommandSearchQuery("hello")).toBeNull();
+describe("getActiveSlashCommandTokenMatch", () => {
+  test("detects slash commands at the start of the draft", () => {
+    expect(getActiveSlashCommandTokenMatch({
+      value: "/simp",
+      caretIndex: 5,
+    })).toEqual({
+      start: 0,
+      end: 5,
+      query: "simp",
+      token: "/simp",
+    });
+  });
+
+  test("detects slash commands anywhere in the current line", () => {
+    const value = "Please run /claude-a";
+    expect(getActiveSlashCommandTokenMatch({
+      value,
+      caretIndex: value.length,
+    })).toEqual({
+      start: 11,
+      end: value.length,
+      query: "claude-a",
+      token: "/claude-a",
+    });
+  });
+
+  test("ignores slash text inside other words or after arguments", () => {
+    expect(getActiveSlashCommandTokenMatch({
+      value: "abc/review",
+      caretIndex: 10,
+    })).toBeNull();
+
+    expect(getActiveSlashCommandTokenMatch({
+      value: "/review now",
+      caretIndex: 11,
+    })).toBeNull();
   });
 });
 
 describe("buildCommandPaletteItems", () => {
-  test("lists builtin, normalized custom, and Claude native commands", () => {
+  test("lists only provider-native commands from the loaded catalog", () => {
     const palette = buildCommandPaletteItems({
       provider: "claude-code",
-      settings,
       providerCommandCatalog: claudeCommandCatalog,
     });
 
-    expect(palette.items.map((item) => item.command)).toContain("/stave:status");
-    expect(palette.items.map((item) => item.command)).toContain("/stave:sync");
-    expect(palette.items.map((item) => item.command)).toContain("/stave:meow");
-    expect(palette.items.map((item) => item.command)).toContain("/simplify");
+    expect(palette.items.map((item) => item.command)).toEqual([
+      "/claude-api",
+      "/keybindings-help",
+      "/simplify",
+    ]);
     expect(palette.providerNote.title).toBe("Claude native commands");
+  });
+
+  test("returns passthrough guidance for Codex without synthesizing a fake catalog", () => {
+    const palette = buildCommandPaletteItems({
+      provider: "codex",
+    });
+
+    expect(palette.items).toEqual([]);
+    expect(palette.providerNote.title).toBe("Codex passthrough");
+    expect(palette.providerNote.description).toContain("forwards slash commands to Codex unchanged");
   });
 });
 
 describe("filterCommandPaletteItems", () => {
-  test("matches explicit Stave commands by bare command name", () => {
+  test("matches provider-native commands by bare command name", () => {
     const palette = buildCommandPaletteItems({
       provider: "claude-code",
-      settings,
       providerCommandCatalog: claudeCommandCatalog,
     });
 
     expect(filterCommandPaletteItems({
       items: palette.items,
-      query: "/clear",
-    }).map((item) => item.command)).toContain("/stave:clear");
+      query: "simp",
+    }).map((item) => item.command)).toEqual(["/simplify"]);
 
     expect(filterCommandPaletteItems({
       items: palette.items,
-      query: "/meow",
-    }).map((item) => item.command)).toContain("/stave:meow");
-
-    expect(filterCommandPaletteItems({
-      items: palette.items,
-      query: "/simp",
-    }).map((item) => item.command)).toContain("/simplify");
-
-    expect(filterCommandPaletteItems({
-      items: palette.items,
-      query: "/sync",
-    }).map((item) => item.command)).toContain("/stave:sync");
+      query: "/claude",
+    }).map((item) => item.command)).toEqual(["/claude-api"]);
   });
 });

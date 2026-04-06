@@ -41,7 +41,7 @@ The Stave router is considered available when at least one underlying provider i
 
 ### Native command catalog
 
-The Stave provider does not expose a native command catalog. Switching to `claude-code` or `codex` directly gives access to the full provider-specific slash command sets.
+The Stave provider does not expose a native command catalog. Switching to `claude-code` or `codex` directly gives access to the provider-native command behavior for that runtime. Claude currently exposes a catalog through the SDK; Codex does not, so Stave forwards Codex slash commands unchanged.
 
 ### Source file
 
@@ -240,6 +240,12 @@ Codex-specific runtime controls come from the UI and runtime options:
 - binary path override
 - provider timeout
 - debug stream logging
+
+Codex slash-command behavior:
+
+- The current Codex SDK/CLI path does not expose a native slash-command catalog that Stave can enumerate.
+- Stave therefore forwards Codex slash commands unchanged instead of trying to validate or block them locally.
+- The Settings developer surface mirrors the native Codex MCP/runtime status rather than synthesizing a Claude-style plugin list.
 
 The `on-failure` Codex approval policy is **deprecated**. Stave now keeps the
 public runtime contract canonical (`never`, `on-request`, `untrusted`) and
