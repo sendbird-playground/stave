@@ -1,3 +1,14 @@
+export type CreatePrDialogStep =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "committing"
+  | "pushing"
+  | "creating-pr"
+  | "action";
+
+export type CreatePrSubmitAction = "pr" | "draft";
+
 function normalizeRemoteBranchName(branch: string) {
   const trimmed = branch.trim();
   if (!trimmed) {
@@ -66,4 +77,17 @@ export function buildCreatePrTargetBranchOptions(args: {
     return prioritizedBranches;
   }
   return [normalizedDefaultBranch];
+}
+
+export function shouldShowCreatePrSubmitSpinner(args: {
+  step: CreatePrDialogStep;
+  activeSubmitAction: CreatePrSubmitAction | null;
+  buttonAction: CreatePrSubmitAction;
+}) {
+  const isSubmitStep =
+    args.step === "committing"
+    || args.step === "pushing"
+    || args.step === "creating-pr";
+
+  return isSubmitStep && args.activeSubmitAction === args.buttonAction;
 }
