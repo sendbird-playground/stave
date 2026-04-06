@@ -1,5 +1,6 @@
 import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
 import { sanitizeMessagePartPayload } from "@/lib/file-context-sanitization";
+import { hasMeaningfulPlanText, normalizePlanText } from "@/lib/plan-text";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import {
   hasRenderableAssistantContent,
@@ -487,16 +488,17 @@ function createPlanAssistantMessage(args: {
   isStreaming?: boolean;
 }): ChatMessage {
   const startedAt = buildRecentTimestamp();
+  const normalizedPlanText = normalizePlanText(args.planText);
   return {
     id: buildMessageId({ taskId: args.taskId, count: args.count }),
     role: "assistant",
     model: args.model,
     providerId: args.provider,
-    content: args.planText,
+    content: normalizedPlanText,
     startedAt,
     isStreaming: args.isStreaming ?? true,
     isPlanResponse: true,
-    planText: args.planText,
+    planText: normalizedPlanText,
     parts: [],
   };
 }
@@ -646,11 +648,16 @@ export function appendProviderEventToAssistant(args: {
   }
 
   if (args.event.type === "plan_ready") {
+    const normalizedPlanText = normalizePlanText(args.event.planText);
+    if (!hasMeaningfulPlanText(normalizedPlanText)) {
+      return message;
+    }
+
     return {
       ...message,
-      content: args.event.planText,
+      content: normalizedPlanText,
       isPlanResponse: true,
-      planText: args.event.planText,
+      planText: normalizedPlanText,
     };
   }
 
@@ -908,6 +915,10 @@ export function replayProviderEventsToTaskState(args: {
     }
 
     if (event.type === "plan_ready") {
+      if (!hasMeaningfulPlanText(event.planText)) {
+        continue;
+      }
+
       // Strip raw <proposed_plan> tags that leaked into the streaming
       // message so the prior assistant bubble isn't garbled.
       const cleanedTarget = stripPlanTagsFromMessage(target);
