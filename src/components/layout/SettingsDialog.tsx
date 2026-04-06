@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { settingsSectionGroups, settingsSections, type SectionId } from "./settings-dialog.schema";
+import { shouldCloseSettingsDialogFromMouseDown } from "./settings-dialog.utils";
 import { SettingsDialogSectionContent } from "./settings-dialog-sections";
 
 interface SettingsDialogProps {
@@ -52,7 +53,15 @@ export function SettingsDialog(args: SettingsDialogProps) {
   return (
     <div
       className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]"
-      onMouseDown={() => onOpenChange({ open: false })}
+      onMouseDown={(event) => {
+        if (!shouldCloseSettingsDialogFromMouseDown({
+          target: event.target,
+          currentTarget: event.currentTarget,
+        })) {
+          return;
+        }
+        onOpenChange({ open: false });
+      }}
     >
       <Card
         className="animate-dropdown-in flex h-[92vh] w-full max-w-6xl flex-col gap-0 overflow-hidden rounded-2xl border-border/80 bg-background py-0 shadow-2xl"
