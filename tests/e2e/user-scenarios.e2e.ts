@@ -130,6 +130,61 @@ test("prompt input is focused after creating a task", async ({ page }) => {
   await expect(page.getByPlaceholder(PROMPT_PLACEHOLDER)).toBeFocused();
 });
 
+test("empty task keeps the intro card above the prompt input", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("stave:workspace-fallback:v1", JSON.stringify([{
+      id: "ws-main",
+      name: "main",
+      updatedAt: "2026-03-06T01:00:00.000Z",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [{
+          id: "task-1",
+          title: "New Task",
+          provider: "claude-code",
+          updatedAt: "2026-03-06T01:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        }],
+        messagesByTask: {
+          "task-1": [],
+        },
+      },
+    }]));
+    window.localStorage.setItem("stave-store", JSON.stringify({
+      state: {
+        projectPath: "/tmp/stave-project",
+        projectName: "stave-project",
+        workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-03-06T01:00:00.000Z" }],
+        activeWorkspaceId: "ws-main",
+        workspaceBranchById: { "ws-main": "main" },
+        workspacePathById: { "ws-main": "/tmp/stave-project" },
+        workspaceDefaultById: { "ws-main": true },
+        activeTaskId: "task-1",
+        tasks: [{
+          id: "task-1",
+          title: "New Task",
+          provider: "claude-code",
+          updatedAt: "2026-03-06T01:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        }],
+        messagesByTask: {
+          "task-1": [],
+        },
+      },
+      version: 0,
+    }));
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+
+  await expect(page.getByTestId("empty-splash")).toBeVisible();
+  await expect(page.getByText("Start this task")).toBeVisible();
+  await expect(page.getByPlaceholder(PROMPT_PLACEHOLDER)).toBeVisible();
+});
+
 test("shortcut creates a new task in the selected workspace", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem("stave:workspace-fallback:v1", JSON.stringify([{
