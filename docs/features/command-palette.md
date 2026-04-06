@@ -18,7 +18,7 @@
   - provider switching
   - settings entry points
   - external workspace actions
-- Slash commands stay in the composer and are documented separately under Settings → Composer Commands.
+- Slash commands stay in the composer and follow provider-native behavior.
 
 ## Default Command Groups
 
@@ -43,7 +43,7 @@
   - set provider to Claude, Codex, or Stave Auto
 - `Settings`
   - open settings
-  - jump to Design, Providers, Composer Commands, or Command Palette settings
+  - jump to Design, Providers, or Command Palette settings
   - open keyboard shortcuts
 - `External`
   - reveal active workspace

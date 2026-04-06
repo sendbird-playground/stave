@@ -2168,32 +2168,6 @@ function CommandPaletteSection() {
   );
 }
 
-function CommandsSection() {
-  return (
-    <>
-      <SectionHeading title="Composer Commands" description="Inspect how slash commands behave for the active provider in the chat input." />
-      <SectionStack>
-        <SettingsCard
-          title="Provider-Native Slash Commands"
-          description="Stave no longer reserves `/stave:*` commands. Slash commands typed in the composer are passed through to the active provider."
-        >
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              Claude Code exposes a native command catalog through the current SDK, so Stave can list known Claude commands in the composer while still passing through valid unlisted commands such as plugin-provided commands.
-            </p>
-            <p>
-              Codex does not currently expose a native slash-command catalog through the installed SDK/CLI path, so Stave forwards Codex slash commands unchanged and reflects its native MCP/runtime surface elsewhere in Settings.
-            </p>
-            <p>
-              Composer command suggestions now activate from the current caret position instead of only at the beginning of the draft.
-            </p>
-          </div>
-        </SettingsCard>
-      </SectionStack>
-    </>
-  );
-}
-
 function EditorSection() {
   const [
     editorFontSize,
@@ -2420,8 +2394,6 @@ export function SettingsDialogSectionContent(args: {
       return <SkillsSection />;
     case "commandPalette":
       return <CommandPaletteSection />;
-    case "commands":
-      return <CommandsSection />;
     case "editor":
       return <EditorSection />;
     case "providers":

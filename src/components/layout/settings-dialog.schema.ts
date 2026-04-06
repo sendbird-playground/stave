@@ -24,7 +24,6 @@ export const settingsSections = [
   { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "skills", label: "Skills", icon: SearchCheck },
   { id: "commandPalette", label: "Command Palette", icon: KeyRound },
-  { id: "commands", label: "Composer Commands", icon: KeyRound },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "editor", label: "Editor", icon: Code2 },
   { id: "tooling", label: "Tooling", icon: Shield },
@@ -37,6 +36,6 @@ export type SectionId = (typeof settingsSections)[number]["id"];
 export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
   { label: "Workspace", ids: ["general", "projects"] },
   { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
-  { label: "Providers", ids: ["muse", "providers", "prompts", "skills", "commandPalette", "commands"] },
+  { label: "Providers", ids: ["muse", "providers", "prompts", "skills", "commandPalette"] },
   { label: "System", ids: ["tooling", "lens", "developer"] },
 ];
