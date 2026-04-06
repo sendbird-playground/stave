@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildWorkspacePlanListEntries,
   buildWorkspacePlanFilePath,
   isWorkspacePlanFilePath,
+  MAX_WORKSPACE_PLANS,
   parseWorkspacePlanFilePath,
   sortWorkspacePlansNewestFirst,
 } from "@/lib/plans";
@@ -32,6 +34,38 @@ describe("workspace plans helpers", () => {
       older.filePath,
     ]);
     expect(newer.label).toBe("2026-04-01 04:05:06");
+  });
+
+  test("builds a newest-first workspace plan list and caps it to the latest five entries", () => {
+    const entries = buildWorkspacePlanListEntries({
+      currentFilePaths: [
+        ".stave/context/plans/task0001_2026-04-01T01-00-00.md",
+        ".stave/context/plans/task0002_2026-04-02T01-00-00.md",
+        ".stave/context/plans/task0003_2026-04-03T01-00-00.md",
+        ".stave/context/plans/task0004_2026-04-04T01-00-00.md",
+      ],
+      legacyFilePaths: [
+        ".stave/plans/task0005_2026-04-05T01-00-00.md",
+        ".stave/plans/task0006_2026-04-06T01-00-00.md",
+      ],
+    });
+
+    expect(entries).toHaveLength(MAX_WORKSPACE_PLANS);
+    expect(entries[0]?.filePath).toBe(".stave/plans/task0006_2026-04-06T01-00-00.md");
+    expect(entries[0]?.source).toBe("legacy");
+    expect(entries.at(-1)?.filePath).toBe(".stave/context/plans/task0002_2026-04-02T01-00-00.md");
+  });
+
+  test("dedupes exact duplicate plan paths before sorting", () => {
+    const entries = buildWorkspacePlanListEntries({
+      currentFilePaths: [
+        ".stave/context/plans/task0001_2026-04-01T01-00-00.md",
+        ".stave/context/plans/task0001_2026-04-01T01-00-00.md",
+      ],
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.filePath).toBe(".stave/context/plans/task0001_2026-04-01T01-00-00.md");
   });
 
   test("strips leading commentary before a structured plan block", () => {

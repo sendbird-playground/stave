@@ -1,5 +1,6 @@
 import {
   CalendarIcon,
+  ClipboardCheck,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -77,6 +78,7 @@ import {
 } from "@/lib/pr-status";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { WorkspacePlansSection } from "./WorkspacePlansSection";
 
 // ---------------------------------------------------------------------------
 // Utility helpers (unchanged business logic)
@@ -115,6 +117,7 @@ const WORKSPACE_INFORMATION_SECTION_IDS = [
   "overview",
   "todo",
   "note",
+  "plans",
   "github",
   "jira",
   "confluence",
@@ -932,6 +935,9 @@ export function WorkspaceInformationPanel() {
     prInfo,
     fetchWorkspacePrStatus,
     infoPanelScale,
+    workspacePlansRefreshNonce,
+    openFileFromTree,
+    sendWorkspaceFileToChat,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -946,8 +952,15 @@ export function WorkspaceInformationPanel() {
           state.workspacePrInfoById[state.activeWorkspaceId] ?? null,
           state.fetchWorkspacePrStatus,
           state.settings.infoPanelScale,
+          state.workspacePlansRefreshNonce,
+          state.openFileFromTree,
+          state.sendWorkspaceFileToChat,
         ] as const,
     ),
+  );
+  const activeTaskId = useAppStore((state) => state.activeTaskId);
+  const activeTaskIsResponding = useAppStore((state) =>
+    Boolean(state.activeTurnIdsByTask[state.activeTaskId])
   );
 
   const [openSections, setOpenSections] = useState<
@@ -1203,6 +1216,29 @@ export function WorkspaceInformationPanel() {
                 }))
               }
               placeholder="Notes, blockers, handoff details..."
+            />
+          </SectionHeader>
+
+          <SectionHeader
+            value="plans"
+            title="Plans"
+            icon={<ClipboardCheck className="size-4" />}
+          >
+            <WorkspacePlansSection
+              embedded
+              workspacePath={workspacePath}
+              refreshNonce={workspacePlansRefreshNonce}
+              onOpenFile={({ filePath }) => openFileFromTree({ filePath })}
+              onSendToAgent={
+                activeTaskId
+                  ? ({ filePath }) =>
+                      sendWorkspaceFileToChat({
+                        taskId: activeTaskId,
+                        filePath,
+                      })
+                  : undefined
+              }
+              sendToAgentDisabled={!activeTaskId || activeTaskIsResponding}
             />
           </SectionHeader>
 

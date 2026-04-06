@@ -271,6 +271,7 @@ import {
   normalizeProviderTimeoutMs,
   isImageFilePath,
   canSendEditorContextToTask,
+  canSendWorkspaceFileToTask,
   updateMessageById,
   applyApprovalState,
   applyUserInputState,
@@ -697,6 +698,7 @@ interface AppState {
   updateEditorContent: (args: { tabId: string; content: string }) => void;
   saveActiveEditorTab: () => Promise<{ ok: boolean; conflict?: boolean }>;
   checkOpenTabConflicts: () => Promise<void>;
+  sendWorkspaceFileToChat: (args: { taskId: string; filePath: string }) => void;
   sendEditorContextToChat: (args: { taskId: string; instruction?: string }) => void;
 }
 
@@ -7043,18 +7045,32 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        // Attach the file to the prompt draft so the user can type their instruction first.
+        get().sendWorkspaceFileToChat({
+          taskId,
+          filePath: activeTab.filePath,
+        });
+      },
+      sendWorkspaceFileToChat: ({ taskId, filePath }) => {
+        const state = get();
+        const normalizedFilePath = filePath.trim();
+        if (!canSendWorkspaceFileToTask({
+          taskId,
+          filePath: normalizedFilePath,
+          isTaskResponding: Boolean(taskId && state.activeTurnIdsByTask[taskId]),
+        })) {
+          return;
+        }
+
         const currentDraft = state.promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
-        if (!currentDraft.attachedFilePaths.includes(activeTab.filePath)) {
+        if (!currentDraft.attachedFilePaths.includes(normalizedFilePath)) {
           get().updatePromptDraft({
             taskId,
             patch: {
-              attachedFilePaths: [...currentDraft.attachedFilePaths, activeTab.filePath],
+              attachedFilePaths: [...currentDraft.attachedFilePaths, normalizedFilePath],
             },
           });
         }
 
-        // Increment the focus nonce so ChatInput focuses the textarea.
         set((s) => ({ promptFocusNonce: s.promptFocusNonce + 1 }));
       },
       });
