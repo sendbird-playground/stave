@@ -102,6 +102,9 @@ describe("new workspace init command", () => {
       command: "bun install",
     });
     expect(useAppStore.getState().workspaces).toHaveLength(1);
+    expect(useAppStore.getState().tasks).toHaveLength(1);
+    expect(useAppStore.getState().tasks[0]?.title).toBe("New Task");
+    expect(useAppStore.getState().activeTaskId).toBe(useAppStore.getState().tasks[0]?.id);
   });
 
   test("reuses the repository root node_modules via symlink before the post-create command when configured", async () => {

@@ -594,6 +594,7 @@ interface AppState {
     fromBranch?: string;
     initCommand?: string;
     useRootNodeModulesSymlink?: boolean;
+    initialTaskTitle?: string;
   }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
   continueWorkspaceFromSummary: (args: {
     name: string;
@@ -3301,7 +3302,14 @@ export const useAppStore = create<AppState>()(
           return nextProjects === currentProjects ? state : { recentProjects: nextProjects };
         });
       },
-      createWorkspace: async ({ name, mode, fromBranch, initCommand, useRootNodeModulesSymlink: requestedRootNodeModulesSymlink }) => {
+      createWorkspace: async ({
+        name,
+        mode,
+        fromBranch,
+        initCommand,
+        useRootNodeModulesSymlink: requestedRootNodeModulesSymlink,
+        initialTaskTitle,
+      }) => {
         const trimmed = name.trim();
         if (!trimmed) {
           return { ok: false, message: "Workspace name is required." };
@@ -3358,14 +3366,28 @@ export const useAppStore = create<AppState>()(
         }
 
         const empty = createEmptyWorkspaceState();
+        const seededTask: Task = {
+          id: crypto.randomUUID(),
+          title: (initialTaskTitle ?? "").trim() || "New Task",
+          provider: current.draftProvider,
+          updatedAt: buildRecentTimestamp(),
+          unread: false,
+          archivedAt: null,
+          controlMode: "interactive",
+          controlOwner: "stave",
+        };
         const snapshot = createWorkspaceSnapshot({
-          activeTaskId: empty.activeTaskId,
-          tasks: empty.tasks,
-          messagesByTask: empty.messagesByTask,
+          activeTaskId: seededTask.id,
+          tasks: [seededTask],
+          messagesByTask: {
+            [seededTask.id]: [],
+          },
           promptDraftByTask: empty.promptDraftByTask,
           editorTabs: empty.editorTabs,
           activeEditorTabId: empty.activeEditorTabId,
-          providerSessionByTask: empty.providerSessionByTask,
+          providerSessionByTask: {
+            [seededTask.id]: {},
+          },
         });
         await persistWorkspaceSnapshot({
           workspaceId,
@@ -3491,6 +3513,12 @@ export const useAppStore = create<AppState>()(
           ...workspaceState,
           projectFiles: files,
         }));
+        runScriptHookInBackground({
+          workspaceId,
+          trigger: "task.created",
+          taskId: seededTask.id,
+          taskTitle: seededTask.title,
+        });
         const creationNotice = buildWorkspaceCreationNotice({
           notices: creationNotices,
         });
@@ -3586,6 +3614,7 @@ export const useAppStore = create<AppState>()(
           name,
           mode: "branch",
           fromBranch: baseBranch,
+          initialTaskTitle: `Continue from ${sourceWorkspaceName}`,
         });
         if (!creationResult.ok) {
           return creationResult;
@@ -3635,10 +3664,6 @@ export const useAppStore = create<AppState>()(
         } else {
           warnings.push("The new workspace path is unavailable, so the continuation brief could not be created.");
         }
-
-        get().createTask({
-          title: `Continue from ${sourceWorkspaceName}`,
-        });
 
         const continuedTaskId = get().activeTaskId;
         if (continuedTaskId && attachedSummary) {

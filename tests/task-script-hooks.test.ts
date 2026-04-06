@@ -34,6 +34,89 @@ afterEach(() => {
 });
 
 describe("task script hooks", () => {
+  test("fires task.created for the seeded workspace task", async () => {
+    const localStorage = createMemoryStorage();
+    const hookCalls: Array<Record<string, unknown>> = [];
+
+    (globalThis as { window?: unknown }).window = {
+      localStorage,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        scripts: {
+          runHook: async (args: Record<string, unknown>) => {
+            hookCalls.push(args);
+            return {
+              ok: true,
+              summary: {
+                trigger: args.trigger,
+                totalEntries: 0,
+                executedEntries: 0,
+                failures: [],
+              },
+            };
+          },
+        },
+        terminal: {
+          runCommand: async () => ({
+            ok: true,
+            code: 0,
+            stdout: "",
+            stderr: "",
+          }),
+        },
+      },
+    };
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+
+    useAppStore.setState({
+      ...initialState,
+      projectPath: "/tmp/stave-project",
+      projectName: "stave-project",
+      defaultBranch: "main",
+      recentProjects: [{
+        projectPath: "/tmp/stave-project",
+        projectName: "stave-project",
+        lastOpenedAt: "2026-04-06T00:00:00.000Z",
+        defaultBranch: "main",
+        workspaces: [],
+        activeWorkspaceId: "",
+        workspaceBranchById: {},
+        workspacePathById: {},
+        workspaceDefaultById: {},
+      }],
+      workspaces: [],
+      activeWorkspaceId: "",
+      workspaceBranchById: {},
+      workspacePathById: {},
+      workspaceDefaultById: {},
+      projectFiles: [],
+    });
+
+    await useAppStore.getState().createWorkspace({
+      name: "feature/seeded-task",
+      mode: "branch",
+      fromBranch: "main",
+    });
+    await Bun.sleep(0);
+
+    const nextState = useAppStore.getState();
+    expect(nextState.tasks).toHaveLength(1);
+    expect(hookCalls).toHaveLength(1);
+    expect(hookCalls[0]).toMatchObject({
+      workspaceId: nextState.activeWorkspaceId,
+      trigger: "task.created",
+      projectPath: "/tmp/stave-project",
+      workspacePath: "/tmp/stave-project/.stave/workspaces/feature__seeded-task",
+      workspaceName: "feature/seeded-task",
+      branch: "feature/seeded-task",
+      taskTitle: "New Task",
+    });
+    expect(hookCalls[0]?.taskId).toBe(nextState.tasks[0]?.id);
+  });
+
   test("fires task.created with task context", async () => {
     const localStorage = createMemoryStorage();
     const hookCalls: Array<Record<string, unknown>> = [];
