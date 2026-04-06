@@ -6,7 +6,8 @@
 // ---------------------------------------------------------------------------
 
 import { WebContentsView, session as electronSession } from "electron";
-import { getMainWindow } from "../window";
+import { isDevToolsShortcut } from "../keyboard-shortcuts";
+import { getMainWindow, toggleMainWindowDevTools } from "../window";
 import { openExternalWithFallback } from "../utils/external-url";
 import type {
   BrowserConsoleEventPayload,
@@ -115,6 +116,15 @@ export function createBrowserSession(
 
   // Start hidden (0-size) until the renderer sends bounds
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+
+  // Keep app DevTools shortcuts working while the native browser view holds focus.
+  view.webContents.on("before-input-event", (event, input) => {
+    if (!isDevToolsShortcut(input)) {
+      return;
+    }
+    event.preventDefault();
+    toggleMainWindowDevTools();
+  });
 
   // Add to the main window's content view
   win.contentView.addChildView(view);
