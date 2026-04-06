@@ -20,6 +20,7 @@ asarUnpack:
   # external processes can execute it with `node`.
   - out/main/stave-mcp-stdio-proxy.mjs
   - node_modules/@anthropic-ai/claude-agent-sdk/vendor/**
+  - node_modules/@vscode/ripgrep/bin/**
 npmRebuild: false
 linux:
   target:

@@ -19,6 +19,7 @@ import {
   OpenPathArgsSchema,
 } from "./schemas";
 import { openExternalWithFallback } from "../utils/external-url";
+import { toAsarUnpackedPath } from "../../providers/executable-path";
 import {
   listDirectoryEntries,
   listFilesRecursive,
@@ -484,5 +485,87 @@ export function registerFilesystemHandlers() {
     } catch (error) {
       return { ok: false, files: [], stderr: String(error) };
     }
+  });
+
+  ipcMain.handle("fs:search-content", async (_event, args: { rootPath: string; query: string }) => {
+    if (!args.query || !args.rootPath) {
+      return { ok: false, results: [], stderr: "Missing query or rootPath.", limitHit: false };
+    }
+    const resolvedRoot = path.resolve(args.rootPath);
+    try {
+      await fs.access(resolvedRoot);
+    } catch {
+      return { ok: false, results: [], stderr: "Root path not accessible.", limitHit: false };
+    }
+
+    const MAX_MATCHES = 20_000;
+
+    return new Promise<{
+      ok: boolean;
+      results: Array<{ file: string; matches: Array<{ line: number; text: string }> }>;
+      limitHit: boolean;
+      stderr?: string;
+    }>((resolve) => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { rgPath: rawRgPath } = require("@vscode/ripgrep") as { rgPath: string };
+      const rgPath = toAsarUnpackedPath(rawRgPath);
+      const rgArgs = [
+        "--line-number",
+        "--no-heading",
+        "--fixed-strings",
+        "--color=never",
+        "--",
+        args.query,
+        ".",
+      ];
+      const child = spawn(rgPath, rgArgs, { cwd: resolvedRoot });
+
+      const fileMap = new Map<string, Array<{ line: number; text: string }>>();
+      let remainder = "";
+      let matchCount = 0;
+      let limitHit = false;
+      const lineRegex = /^\.\/(.+?):(\d+):(.*)$/;
+
+      const parseLine = (raw: string) => {
+        if (limitHit) return;
+        const m = lineRegex.exec(raw);
+        if (!m) return;
+        const [, file, lineNum, text] = m;
+        if (!file || !lineNum) return;
+        let entries = fileMap.get(file);
+        if (!entries) {
+          entries = [];
+          fileMap.set(file, entries);
+        }
+        entries.push({ line: Number(lineNum), text: text?.trimEnd() ?? "" });
+        matchCount += 1;
+        if (matchCount >= MAX_MATCHES) {
+          limitHit = true;
+          child.kill("SIGTERM");
+        }
+      };
+
+      child.stdout.on("data", (chunk: Buffer) => {
+        if (limitHit) return;
+        const data = remainder + chunk.toString();
+        const lines = data.split("\n");
+        remainder = lines.pop() ?? "";
+        for (const line of lines) {
+          parseLine(line);
+          if (limitHit) break;
+        }
+      });
+      child.stderr.on("data", () => {});
+      child.on("error", (error) => {
+        resolve({ ok: false, results: [], stderr: String(error), limitHit: false });
+      });
+      child.on("close", () => {
+        if (remainder && !limitHit) {
+          parseLine(remainder);
+        }
+        const results = Array.from(fileMap.entries()).map(([file, matches]) => ({ file, matches }));
+        resolve({ ok: true, results, limitHit });
+      });
+    });
   });
 }

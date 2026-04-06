@@ -485,8 +485,8 @@ export function EditorPanel(props: EditorPanelProps) {
     }
   }
 
-  function handleOpenExplorerFile(filePath: string) {
-    void openFileFromTree({ filePath });
+  function handleOpenExplorerFile(filePath: string, line?: number) {
+    void openFileFromTree({ filePath, line });
     setLayout({ patch: { editorVisible: true } });
   }
 
@@ -866,6 +866,7 @@ export function EditorPanel(props: EditorPanelProps) {
               onRefreshExplorerDirectory={handleRefreshExplorerDirectory}
               onRequestDeleteExplorerFile={handleRequestDeleteExplorerFile}
               onRequestDeleteExplorerFolder={handleRequestDeleteExplorerFolder}
+              workspaceCwd={workspaceCwd}
             />
           ) : null}
 

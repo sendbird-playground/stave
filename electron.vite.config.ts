@@ -13,6 +13,7 @@ const mainExternalDeps = [
   "node-pty",
   "@anthropic-ai/claude-agent-sdk",
   "@openai/codex-sdk",
+  "@vscode/ripgrep",
 ];
 
 const preloadExternalDeps = [
