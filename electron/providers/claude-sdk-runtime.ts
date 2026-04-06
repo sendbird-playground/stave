@@ -1851,7 +1851,8 @@ export async function suggestClaudePRDescription(args: {
   fileList: string;
   baseBranch: string;
   headBranch: string;
-  guideContent?: string;
+  prTemplateContent?: string;
+  agentsContent?: string;
   promptTemplate?: string;
 }): Promise<{ ok: boolean; title?: string; body?: string }> {
   try {
@@ -1870,6 +1871,17 @@ export async function suggestClaudePRDescription(args: {
     const baseTemplate = args.promptTemplate?.trim() || DEFAULT_PROMPT_PR_DESCRIPTION;
 
     const prPrompt = [
+      ...(args.prTemplateContent ? [
+        "Repository pull request template (highest priority for PR body structure):",
+        args.prTemplateContent.slice(0, 2000),
+        "",
+      ] : []),
+      ...(args.agentsContent ? [
+        "Repository guidelines from AGENTS.md (apply when consistent with the pull request template):",
+        args.agentsContent.slice(0, 2000),
+        "",
+      ] : []),
+      "Fallback PR generation instructions (use only for gaps not specified above):",
       baseTemplate,
       "",
       `Base branch: ${args.baseBranch}`,
@@ -1889,11 +1901,6 @@ export async function suggestClaudePRDescription(args: {
         "",
         "Uncommitted working tree diff (may be truncated):",
         args.workingTreeDiff.slice(0, 4000),
-      ] : []),
-      ...(args.guideContent ? [
-        "",
-        "Project guidelines (follow these conventions):",
-        args.guideContent.slice(0, 2000),
       ] : []),
     ].join("\n");
 
