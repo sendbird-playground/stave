@@ -18,6 +18,7 @@ import {
   ApprovalResponseArgsSchema,
   ClaudeRuntimeActionArgsSchema,
   CheckAvailabilityArgsSchema,
+  ConnectedToolStatusArgsSchema,
   CleanupTaskArgsSchema,
   ProviderCommandCatalogArgsSchema,
   StreamReadArgsSchema,
@@ -279,6 +280,19 @@ export function registerProviderHandlers() {
       cwd: parsedArgs.data.cwd,
       runtimeOptions: parsedArgs.data.runtimeOptions,
     });
+  });
+
+  ipcMain.handle("provider:get-connected-tool-status", (_event, args: unknown) => {
+    const parsedArgs = ConnectedToolStatusArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        providerId: "stave" as const,
+        detail: "Invalid connected-tool status request.",
+        tools: [],
+      };
+    }
+    return providerRuntime.getConnectedToolStatus(parsedArgs.data);
   });
 
   ipcMain.handle("provider:get-claude-context-usage", (_event, args: unknown) => {

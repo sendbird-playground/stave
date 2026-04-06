@@ -21,8 +21,8 @@
 
 ## Quick Start
 
-1. Open `Stave Muse` from the top bar, command palette, or the floating launcher above the Home item in the lower-left corner.
-2. Pick the target scope: `App`, `Current Project`, or `Current Workspace`.
+1. Open `Muse` from the top bar, command palette, or the floating launcher above the Home item in the lower-left corner.
+2. Pick the target scope: `App`, `Project`, or `Workspace`.
 3. Ask a question or give a control command such as `open information`, `switch workspace release`, or `summarize stave`.
 
 ## Interface Walkthrough
@@ -41,7 +41,8 @@
 - Settings button: opens `Settings → Muse`.
 - Prompt settings: let you customise Muse router, chat, and planner instructions.
 - Clear button: clears the Muse conversation without affecting task chat history.
-- Stop button: aborts the current Muse turn.
+- Send / stop button: sends the prompt, then turns into the abort control while Muse is responding.
+- Minimize button: collapses the widget without clearing the conversation.
 
 ## Common Workflows
 
@@ -96,6 +97,12 @@
 - Symptom: Muse opens a new task and forwards the request.
 - Cause: the router classified the request as implementation-heavy and `Auto Handoff To Task` is enabled.
 - Fix: disable `Auto Handoff To Task` in `Settings → Muse` if you want those requests to stay in the widget.
+
+### A Connected Tool Request Fails Before Muse Starts Responding
+
+- Symptom: Muse immediately returns a system-style error for Slack, Jira, Confluence, or Figma instead of starting an AI turn.
+- Cause: the selected provider is unavailable, the connected tool is disabled, or authentication is missing for the current Claude/Codex integration.
+- Fix: re-authenticate or re-enable the integration, or switch Muse to `Claude Code` or `Codex` if `Stave Auto` was selected for a connected-tool workflow.
 
 ## Related Docs
 

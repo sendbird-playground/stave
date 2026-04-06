@@ -4,8 +4,8 @@ import {
   SquareTerminal,
   FolderOpen,
   ChevronDown,
+  Music4,
   PanelLeft,
-  Sparkles,
 } from "lucide-react";
 import { useEffect, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -253,11 +253,11 @@ export function TopBar() {
                   focusStaveMuse();
                 }}
               >
-                <Sparkles className="size-3.5" />
+                <Music4 className="size-3.5" />
                 <span className="hidden xl:inline">Muse</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">Open Stave Muse</TooltipContent>
+            <TooltipContent side="bottom">Open Muse</TooltipContent>
           </Tooltip>
         </TooltipProvider>
         {hasProjectContext ? (

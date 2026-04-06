@@ -9,6 +9,7 @@ import {
   resolveCodexExecutablePath,
   streamCodexWithSdk,
 } from "./codex-sdk-runtime";
+import { getProviderConnectedToolStatus } from "./connected-tool-status";
 import {
   buildStaveResolvedArgs,
   resolveForcedStavePlanTarget,
@@ -720,4 +721,5 @@ export const providerRuntime: ProviderRuntime = {
       detail: "Codex does not expose a native slash-command catalog through the current SDK transport.",
     };
   },
+  getConnectedToolStatus: async (args) => getProviderConnectedToolStatus(args),
 };

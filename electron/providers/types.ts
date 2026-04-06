@@ -1,4 +1,8 @@
 import type { CanonicalConversationRequest, ProviderRuntimeOptions } from "../../src/lib/providers/provider.types";
+import type {
+  ConnectedToolStatusRequest,
+  ConnectedToolStatusResponse,
+} from "../../src/lib/providers/connected-tool-status";
 
 export type ProviderId = "claude-code" | "codex" | "stave";
 
@@ -115,4 +119,5 @@ export interface ProviderRuntime {
     cwd?: string;
     runtimeOptions?: StreamTurnArgs["runtimeOptions"];
   }) => Promise<ProviderCommandCatalogResult>;
+  getConnectedToolStatus: (args: ConnectedToolStatusRequest) => Promise<ConnectedToolStatusResponse>;
 }

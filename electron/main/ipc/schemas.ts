@@ -625,6 +625,13 @@ export const CheckAvailabilityArgsSchema = z
   })
   .strict();
 
+const ConnectedToolIdSchema = z.union([
+  z.literal("slack"),
+  z.literal("atlassian"),
+  z.literal("figma"),
+  z.literal("github"),
+]);
+
 const UserInputOptionSchema = z
   .object({
     label: z.string().max(500),
@@ -898,6 +905,15 @@ export const ProviderCommandCatalogArgsSchema = z
     providerId: ProviderIdSchema,
     cwd: z.string().max(4096).optional(),
     runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const ConnectedToolStatusArgsSchema = z
+  .object({
+    providerId: ProviderIdSchema,
+    cwd: z.string().max(4096).optional(),
+    runtimeOptions: RuntimeOptionsSchema,
+    toolIds: z.array(ConnectedToolIdSchema).max(8).optional(),
   })
   .strict();
 

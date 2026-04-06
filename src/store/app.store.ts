@@ -28,6 +28,7 @@ import type {
   ProviderTurnRequest,
   StaveAutoRoleRuntimeOverridesMap,
 } from "@/lib/providers/provider.types";
+import type { ConnectedToolStatusEntry } from "@/lib/providers/connected-tool-status";
 import { getRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
 import {
   buildWorkspaceContinueSummaryFilePath,
@@ -133,6 +134,11 @@ import {
   DEFAULT_STAVE_MUSE_PLANNER_PROMPT,
   DEFAULT_STAVE_MUSE_ROUTER_PROMPT,
 } from "@/lib/stave-muse-prompts";
+import {
+  buildStaveMuseConnectedToolPreflightMessage,
+  buildStaveMuseProviderUnavailableMessage,
+  resolveRequestedStaveMuseConnectedTools,
+} from "@/lib/stave-muse-connected-tools";
 import {
   DEFAULT_STAVE_MUSE_ROUTING_DECISION,
   isStaveMuseExplicitTaskRequest,
@@ -1396,6 +1402,17 @@ function updateMuseCustomField(args: {
         value: typeof nextValue === "string" ? nextValue : args.field.value,
       };
   }
+}
+
+function getBlockingConnectedToolStatuses(args: {
+  statuses: readonly ConnectedToolStatusEntry[];
+}) {
+  return args.statuses.filter((entry) => (
+    entry.state === "needs-auth"
+    || entry.state === "disabled"
+    || entry.state === "error"
+    || entry.state === "unsupported"
+  ));
 }
 
 function appendStaveMuseLocalExchange(args: {
@@ -5601,6 +5618,23 @@ export const useAppStore = create<AppState>()(
           ? stateBeforeRouting.settings.musePlannerModel
           : stateBeforeRouting.settings.museChatModel;
         const provider = inferProviderIdFromModel({ model: activeModel });
+        const providerRuntimeOptions = {
+          ...buildProviderRuntimeOptions({
+            provider,
+            model: activeModel,
+            settings: get().settings,
+          }),
+          ...(provider === "claude-code"
+            ? {
+                claudeDisallowedTools: ["Bash", "Glob", "Grep", "LS", "NotebookRead", "Read"],
+                claudePermissionMode: "plan" as const,
+              }
+            : {
+                codexApprovalPolicy: "never" as const,
+                codexSandboxMode: "read-only" as const,
+              }),
+        };
+        const connectedToolIds = resolveRequestedStaveMuseConnectedTools({ input: trimmedContent });
         const turnId = crypto.randomUUID();
         const workspaceId = get().activeWorkspaceId || undefined;
         const museRuntimeCwd = getStaveMuseRuntimeCwd();
@@ -5619,6 +5653,73 @@ export const useAppStore = create<AppState>()(
             content: contextSnapshot,
           },
         ];
+
+        if (window.api?.provider?.checkAvailability) {
+          try {
+            const availability = await window.api.provider.checkAvailability({
+              providerId: provider,
+              runtimeOptions: providerRuntimeOptions,
+            });
+            if (!availability.ok || !availability.available) {
+              appendMuseResponse(buildStaveMuseProviderUnavailableMessage({
+                providerId: provider,
+                detail: availability.detail,
+              }), {
+                providerId: "stave",
+                model: "system",
+              });
+              return;
+            }
+          } catch (error) {
+            appendMuseResponse(buildStaveMuseProviderUnavailableMessage({
+              providerId: provider,
+              detail: String(error),
+            }), {
+              providerId: "stave",
+              model: "system",
+            });
+            return;
+          }
+        }
+
+        if (connectedToolIds.length > 0 && window.api?.provider?.getConnectedToolStatus) {
+          try {
+            const connectedToolStatus = await window.api.provider.getConnectedToolStatus({
+              providerId: provider,
+              cwd: museRuntimeCwd,
+              runtimeOptions: providerRuntimeOptions,
+              toolIds: connectedToolIds,
+            });
+            const blockingStatuses = getBlockingConnectedToolStatuses({
+              statuses: connectedToolStatus.tools,
+            });
+            if (blockingStatuses.length > 0) {
+              appendMuseResponse(buildStaveMuseConnectedToolPreflightMessage({
+                providerId: provider,
+                blockingTools: blockingStatuses,
+              }), {
+                providerId: "stave",
+                model: "system",
+              });
+              return;
+            }
+          } catch (error) {
+            appendMuseResponse(buildStaveMuseConnectedToolPreflightMessage({
+              providerId: provider,
+              blockingTools: connectedToolIds.map((toolId) => ({
+                id: toolId,
+                label: toolId,
+                state: "error" as const,
+                available: false,
+                detail: String(error),
+              })),
+            }), {
+              providerId: "stave",
+              model: "system",
+            });
+            return;
+          }
+        }
 
         const conversation = buildCanonicalConversationRequest({
           turnId,
@@ -5663,22 +5764,7 @@ export const useAppStore = create<AppState>()(
           taskId: STAVE_MUSE_SESSION_ID,
           workspaceId,
           cwd: museRuntimeCwd,
-          runtimeOptions: {
-            ...buildProviderRuntimeOptions({
-              provider,
-              model: activeModel,
-              settings: get().settings,
-            }),
-            ...(provider === "claude-code"
-              ? {
-                  claudeDisallowedTools: ["Bash", "Glob", "Grep", "LS", "NotebookRead", "Read"],
-                  claudePermissionMode: "plan" as const,
-                }
-              : {
-                  codexApprovalPolicy: "never" as const,
-                  codexSandboxMode: "read-only" as const,
-                }),
-          },
+          runtimeOptions: providerRuntimeOptions,
           onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
         });
       },

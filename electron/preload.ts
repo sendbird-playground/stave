@@ -7,6 +7,10 @@ import type {
   ProviderRuntimeOptions,
 } from "../src/lib/providers/provider.types";
 import type {
+  ConnectedToolId,
+  ConnectedToolStatusResponse,
+} from "../src/lib/providers/connected-tool-status";
+import type {
   StaveLocalMcpRequestLog,
   StaveLocalMcpRequestLogPage,
   StaveLocalMcpRequestLogQuery,
@@ -327,6 +331,13 @@ contextBridge.exposeInMainWorld("api", {
         commands: ProviderSlashCommand[];
         detail: string;
       }>,
+    getConnectedToolStatus: (args: {
+      providerId: ProviderId;
+      cwd?: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+      toolIds?: ConnectedToolId[];
+    }) =>
+      ipcRenderer.invoke("provider:get-connected-tool-status", args) as Promise<ConnectedToolStatusResponse>,
     getClaudeContextUsage: (args: {
       cwd?: string;
       runtimeOptions?: StreamTurnArgs["runtimeOptions"];

@@ -49,6 +49,7 @@ interface PromptInputProps {
   skillPaletteItems?: readonly SkillCatalogEntry[];
   onValueChange: (value: string) => void;
   onSuggestionSelect?: (suggestion: string) => void;
+  onFocus?: () => void;
   onBlur?: () => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
   onAttachFilesChange: (args: { filePaths: string[] }) => void;
@@ -112,6 +113,7 @@ export function PromptInput(args: PromptInputProps) {
     skillPaletteItems,
     onValueChange,
     onSuggestionSelect,
+    onFocus,
     onBlur,
     onModelSelect,
     onAttachFilesChange,
@@ -589,7 +591,7 @@ export function PromptInput(args: PromptInputProps) {
       onBlurCapture={() => {
         window.requestAnimationFrame(syncComposerFocus);
       }}
-      className="relative space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-colors focus-within:border-ring/60"
+      className="relative space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-[border-color,box-shadow,background-color] focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10"
     >
       {promptSuggestions && promptSuggestions.length > 0 ? (
         <Suggestions aria-label="Suggestions" className="-ml-1.5 mb-0.5">
@@ -638,6 +640,10 @@ export function PromptInput(args: PromptInputProps) {
               onChange={(event) => {
                 syncCaretPosition(event.target);
                 onValueChange(event.target.value);
+              }}
+              onFocus={(event) => {
+                syncCaretPosition(event.currentTarget);
+                onFocus?.();
               }}
               onBlur={() => onBlur?.()}
               onClick={(event) => syncCaretPosition(event.currentTarget)}

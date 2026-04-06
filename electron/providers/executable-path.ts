@@ -14,7 +14,9 @@ interface ResolveExecutablePathArgs {
 }
 
 const LOGIN_SHELL_PATH_MARKER = "__STAVE_LOGIN_SHELL_PATH__";
+const LOGIN_SHELL_ENV_MARKER_PREFIX = "__STAVE_LOGIN_SHELL_ENV__";
 let cachedLoginShellPath: string | null | undefined;
+const cachedLoginShellEnvVarValues = new Map<string, string | null>();
 
 function sanitizeCommandName(args: { value: string }) {
   const trimmed = args.value.trim();
@@ -57,18 +59,29 @@ export function canExecutePath(args: { path: string }) {
   }
 }
 
-function parseMarkedPath(args: { value: string }) {
-  const start = args.value.indexOf(LOGIN_SHELL_PATH_MARKER);
+function parseMarkedValue(args: { value: string; marker: string }) {
+  const start = args.value.indexOf(args.marker);
   if (start < 0) {
     return null;
   }
-  const valueStart = start + LOGIN_SHELL_PATH_MARKER.length;
-  const end = args.value.indexOf(LOGIN_SHELL_PATH_MARKER, valueStart);
+  const valueStart = start + args.marker.length;
+  const end = args.value.indexOf(args.marker, valueStart);
   if (end < 0) {
     return null;
   }
   const extracted = args.value.slice(valueStart, end).trim();
   return extracted.length > 0 ? extracted : null;
+}
+
+function sanitizeEnvVarName(args: { value: string }) {
+  const trimmed = args.value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!/^[A-Z0-9_]+$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
 }
 
 function getLoginShellCandidates() {
@@ -102,8 +115,9 @@ function resolveLoginShellPath() {
       timeout: 4_000,
       maxBuffer: 1024 * 1024,
     });
-    const parsed = parseMarkedPath({
+    const parsed = parseMarkedValue({
       value: `${result.stdout ?? ""}\n${result.stderr ?? ""}`,
+      marker: LOGIN_SHELL_PATH_MARKER,
     });
     if (parsed) {
       cachedLoginShellPath = parsed;
@@ -113,6 +127,48 @@ function resolveLoginShellPath() {
 
   cachedLoginShellPath = null;
   return cachedLoginShellPath;
+}
+
+export function resolveLoginShellEnvVarValue(args: { key: string }) {
+  const safeKey = sanitizeEnvVarName({ value: args.key });
+  if (!safeKey) {
+    return null;
+  }
+  if (cachedLoginShellEnvVarValues.has(safeKey)) {
+    return cachedLoginShellEnvVarValues.get(safeKey) ?? null;
+  }
+  if (process.platform === "win32") {
+    cachedLoginShellEnvVarValues.set(safeKey, null);
+    return null;
+  }
+
+  const marker = `${LOGIN_SHELL_ENV_MARKER_PREFIX}${safeKey}__`;
+  for (const shell of getLoginShellCandidates()) {
+    const result = spawnSync(
+      shell,
+      ["-ilc", `printf '${marker}%s${marker}' "\${${safeKey}:-}"`],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          TERM: process.env.TERM || "dumb",
+        },
+        timeout: 4_000,
+        maxBuffer: 1024 * 1024,
+      },
+    );
+    const parsed = parseMarkedValue({
+      value: `${result.stdout ?? ""}\n${result.stderr ?? ""}`,
+      marker,
+    });
+    if (parsed) {
+      cachedLoginShellEnvVarValues.set(safeKey, parsed);
+      return parsed;
+    }
+  }
+
+  cachedLoginShellEnvVarValues.set(safeKey, null);
+  return null;
 }
 
 export function resolveExecutableLookupPath(args: {

@@ -6,7 +6,9 @@ import {
   extractProposedPlan,
   looksLikeCodexPlanText,
   mapCodexItemEvent,
+  parseCodexMcpServerListJson,
   resolveApprovalPolicy,
+  resolveCodexAdditionalDirectories,
   resolveCodexResumeThreadFallback,
   resolveCodexPlanReadyText,
   shouldBufferCompletedCodexPlanCandidate,
@@ -330,6 +332,70 @@ describe("buildCodexThreadStartedEvents", () => {
     expect(buildCodexThreadStartedEvents({
       threadId: "   ",
     })).toEqual([]);
+  });
+});
+
+describe("resolveCodexAdditionalDirectories", () => {
+  test("keeps shared runtime asset directories outside the working root", () => {
+    expect(resolveCodexAdditionalDirectories({
+      cwd: "/tmp/stave-muse",
+      candidates: [
+        "/Users/demo/.agents",
+        "/Users/demo/.codex",
+        "/Users/demo/.stave",
+        "/Users/demo/.agents",
+      ],
+      pathExists: () => true,
+    })).toEqual([
+      "/Users/demo/.agents",
+      "/Users/demo/.codex",
+      "/Users/demo/.stave",
+    ]);
+  });
+
+  test("drops candidate directories that already contain the working directory", () => {
+    expect(resolveCodexAdditionalDirectories({
+      cwd: "/Users/demo/.agents/plugin-cache",
+      candidates: [
+        "/Users/demo/.agents",
+        "/Users/demo/.codex",
+      ],
+      pathExists: () => true,
+    })).toEqual([
+      "/Users/demo/.codex",
+    ]);
+  });
+});
+
+describe("parseCodexMcpServerListJson", () => {
+  test("parses Codex MCP server JSON output", () => {
+    expect(parseCodexMcpServerListJson({
+      stdout: JSON.stringify([
+        {
+          name: "slack",
+          enabled: true,
+          disabled_reason: null,
+          transport: {
+            bearer_token_env_var: "SLACK_OAUTH_TOKEN",
+          },
+        },
+      ]),
+    })).toEqual([
+      {
+        name: "slack",
+        enabled: true,
+        disabled_reason: null,
+        transport: {
+          bearer_token_env_var: "SLACK_OAUTH_TOKEN",
+        },
+      },
+    ]);
+  });
+
+  test("ignores non-json output", () => {
+    expect(parseCodexMcpServerListJson({
+      stdout: "not-json",
+    })).toBeNull();
   });
 });
 

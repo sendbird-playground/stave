@@ -1,6 +1,11 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
 import type { Thread, ThreadEvent, ThreadItem, TurnCompletedEvent, TurnOptions } from "@openai/codex-sdk";
-import { resolveExecutablePath } from "./executable-path";
+import type {
+  ConnectedToolId,
+  ConnectedToolStatusEntry,
+  ConnectedToolStatusResponse,
+} from "../../src/lib/providers/connected-tool-status";
+import { resolveExecutablePath, resolveLoginShellEnvVarValue } from "./executable-path";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -20,6 +25,11 @@ import {
   parseSemverVersion,
   probeExecutableVersion,
 } from "./runtime-shared";
+import { runCommandArgs } from "../main/utils/command";
+import {
+  getConnectedToolLabel,
+  normalizeConnectedToolIds,
+} from "../../src/lib/providers/connected-tool-status";
 
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
@@ -30,6 +40,24 @@ const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
 ] as const;
+const CODEX_SHARED_RUNTIME_DIRECTORIES = [
+  `${homedir()}/.agents`,
+  `${homedir()}/.codex`,
+  `${homedir()}/.stave`,
+] as const;
+const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
+  "SLACK_OAUTH_TOKEN",
+  "STAVE_LOCAL_MCP_TOKEN",
+] as const;
+
+interface CodexMcpServerListEntry {
+  name: string;
+  enabled?: boolean;
+  disabled_reason?: string | null;
+  transport?: {
+    bearer_token_env_var?: string | null;
+  } | null;
+}
 
 function resolveSandboxMode(args: {
   runtimeValue?: "read-only" | "workspace-write" | "danger-full-access";
@@ -91,10 +119,22 @@ function toCodexUserFacingErrorMessage(args: { message: string }) {
 }
 
 function buildCodexEnv(args: { executablePath?: string } = {}) {
-  return buildRuntimeProcessEnv({
+  const env = buildRuntimeProcessEnv({
     executablePath: args.executablePath,
     extraPaths: CODEX_LOOKUP_PATHS,
-  }) as Record<string, string>;
+  });
+  for (const key of CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS) {
+    if (env[key]?.trim()) {
+      continue;
+    }
+    const fallbackValue = resolveLoginShellEnvVarValue({ key });
+    if (fallbackValue) {
+      env[key] = fallbackValue;
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
 }
 
 function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }) {
@@ -236,6 +276,31 @@ function isExecutableFile(args: { path: string }) {
   }
 }
 
+function isReadableDirectory(args: { path: string }) {
+  try {
+    accessSync(args.path, constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveCodexAdditionalDirectories(args: {
+  cwd: string;
+  candidates?: readonly string[];
+  pathExists?: (value: string) => boolean;
+}) {
+  const resolvedCwd = path.resolve(args.cwd);
+  return (args.candidates ?? CODEX_SHARED_RUNTIME_DIRECTORIES)
+    .map((candidate) => candidate.trim())
+    .filter(Boolean)
+    .map((candidate) => path.resolve(candidate))
+    .filter((candidate, index, entries) => entries.indexOf(candidate) === index)
+    .filter((candidate) => candidate !== resolvedCwd)
+    .filter((candidate) => !resolvedCwd.startsWith(`${candidate}${path.sep}`))
+    .filter((candidate) => (args.pathExists ?? ((value: string) => isReadableDirectory({ path: value })))(candidate));
+}
+
 export function resolveCodexExecutablePath(args: { explicitPath?: string } = {}) {
   if (args.explicitPath?.trim()) {
     return args.explicitPath.trim();
@@ -284,6 +349,165 @@ export function resolveCodexExecutablePath(args: { explicitPath?: string } = {})
   }
 
   return selectedPath;
+}
+
+export function parseCodexMcpServerListJson(args: { stdout: string }) {
+  const trimmed = args.stdout.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const jsonStart = trimmed.indexOf("[");
+  if (jsonStart < 0) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed.slice(jsonStart)) as unknown;
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    return parsed.filter((entry): entry is CodexMcpServerListEntry => {
+      if (!entry || typeof entry !== "object") {
+        return false;
+      }
+      const candidate = entry as Record<string, unknown>;
+      return typeof candidate.name === "string";
+    });
+  } catch {
+    return null;
+  }
+}
+
+function createCodexConnectedToolStatusEntry(args: {
+  id: ConnectedToolId;
+  state: ConnectedToolStatusEntry["state"];
+  available: boolean;
+  detail: string;
+}) {
+  return {
+    id: args.id,
+    label: getConnectedToolLabel(args.id),
+    state: args.state,
+    available: args.available,
+    detail: args.detail,
+  } satisfies ConnectedToolStatusEntry;
+}
+
+function mapCodexConnectedToolStatus(args: {
+  toolId: ConnectedToolId;
+  servers: CodexMcpServerListEntry[];
+  env: Record<string, string>;
+}) {
+  if (args.toolId === "github") {
+    return createCodexConnectedToolStatusEntry({
+      id: "github",
+      state: "unknown",
+      available: true,
+      detail: "GitHub tool status is not exposed by `codex mcp list`.",
+    });
+  }
+
+  const serverName = args.toolId === "atlassian" ? "atlassian" : args.toolId;
+  const server = args.servers.find((candidate) => candidate.name.trim().toLowerCase() === serverName);
+  if (!server) {
+    return createCodexConnectedToolStatusEntry({
+      id: args.toolId,
+      state: "unsupported",
+      available: false,
+      detail: `${getConnectedToolLabel(args.toolId)} is not configured for Codex.`,
+    });
+  }
+
+  if (server.enabled === false) {
+    return createCodexConnectedToolStatusEntry({
+      id: args.toolId,
+      state: "disabled",
+      available: false,
+      detail: server.disabled_reason?.trim() || `${getConnectedToolLabel(args.toolId)} is disabled in Codex MCP config.`,
+    });
+  }
+
+  const bearerTokenEnvVar = server.transport?.bearer_token_env_var?.trim();
+  if (bearerTokenEnvVar && !args.env[bearerTokenEnvVar]?.trim()) {
+    return createCodexConnectedToolStatusEntry({
+      id: args.toolId,
+      state: "needs-auth",
+      available: false,
+      detail: `Missing ${bearerTokenEnvVar} in the Codex runtime environment.`,
+    });
+  }
+
+  return createCodexConnectedToolStatusEntry({
+    id: args.toolId,
+    state: "ready",
+    available: true,
+    detail: `${getConnectedToolLabel(args.toolId)} is configured for Codex.`,
+  });
+}
+
+export async function getCodexConnectedToolStatus(args: {
+  cwd?: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  toolIds?: ConnectedToolId[];
+}): Promise<ConnectedToolStatusResponse> {
+  const toolIds = normalizeConnectedToolIds(args.toolIds);
+  const executablePath = resolveCodexExecutablePath({
+    explicitPath: args.runtimeOptions?.codexPathOverride,
+  });
+
+  if (!executablePath) {
+    const detail = "Codex executable not found from runtime override, env vars, login-shell PATH, or home-bin candidates.";
+    return {
+      ok: false,
+      providerId: "codex",
+      detail,
+      tools: toolIds.map((toolId) => createCodexConnectedToolStatusEntry({
+        id: toolId,
+        state: "error",
+        available: false,
+        detail,
+      })),
+    };
+  }
+
+  const env = buildCodexEnv({ executablePath });
+  const result = await runCommandArgs({
+    command: executablePath,
+    commandArgs: ["mcp", "list", "--json"],
+    cwd: args.cwd,
+    env,
+  });
+  const servers = parseCodexMcpServerListJson({ stdout: result.stdout });
+  const detail = result.ok
+    ? `Loaded Codex MCP status from ${executablePath}.`
+    : `Codex MCP status check failed: ${(result.stderr || result.stdout).trim() || "unknown error"}`;
+
+  if (!result.ok || !servers) {
+    return {
+      ok: false,
+      providerId: "codex",
+      detail,
+      tools: toolIds.map((toolId) => createCodexConnectedToolStatusEntry({
+        id: toolId,
+        state: "error",
+        available: false,
+        detail,
+      })),
+    };
+  }
+
+  return {
+    ok: true,
+    providerId: "codex",
+    detail,
+    tools: toolIds.map((toolId) => mapCodexConnectedToolStatus({
+      toolId,
+      servers,
+      env,
+    })),
+  };
 }
 
 // Tracks accumulated text length per item to emit only deltas for streaming.
@@ -675,9 +899,11 @@ function ensureThread(args: {
       runtimeOptions: args.runtimeOptions,
     }),
   });
+  const additionalDirectories = resolveCodexAdditionalDirectories({ cwd: args.cwd });
   const threadOptions = {
     ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
     workingDirectory: args.cwd,
+    ...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
     sandboxMode,
     ...(args.runtimeOptions?.codexSkipGitRepoCheck ? { skipGitRepoCheck: true } : {}),
     networkAccessEnabled,

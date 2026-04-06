@@ -45,6 +45,7 @@ export const EXTENDED_THEME_TOKEN_NAMES = [
   "success-foreground",
   "warning",
   "warning-foreground",
+  "muse",
   "overlay",
   "surface",
   "editor",
