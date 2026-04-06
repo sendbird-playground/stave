@@ -381,13 +381,14 @@ export function registerProviderHandlers() {
     const baseBranch = parsed.data.baseBranch || "main";
     const safeBaseBranch = quotePath({ value: baseBranch });
 
-    const [diffResult, workingTreeDiffResult, logResult, statResult, statusResult, guideResult] = await Promise.all([
+    const [diffResult, workingTreeDiffResult, logResult, statResult, statusResult, prTemplateResult, agentsResult] = await Promise.all([
       runCommand({ command: `git diff "${safeBaseBranch}"...HEAD`, cwd }),
       runCommand({ command: "git diff HEAD", cwd }),
       runCommand({ command: `git log "${safeBaseBranch}"..HEAD --pretty=format:"%h %s" --no-merges`, cwd }),
       runCommand({ command: `git diff "${safeBaseBranch}"...HEAD --stat`, cwd }),
       runCommand({ command: "git status --porcelain", cwd }),
-      runCommand({ command: "cat AGENTS.md 2>/dev/null || cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true", cwd }),
+      runCommand({ command: "cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true", cwd }),
+      runCommand({ command: "cat AGENTS.md 2>/dev/null || true", cwd }),
     ]);
 
     const branchResult = await runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd });
@@ -399,7 +400,8 @@ export function registerProviderHandlers() {
       statResult.ok ? statResult.stdout.trim() : "",
       statusResult.ok ? statusResult.stdout.trim() : "",
     ].filter(Boolean).join("\n");
-    const guideContent = guideResult.ok ? guideResult.stdout.trim() : undefined;
+    const prTemplateContent = prTemplateResult.ok ? prTemplateResult.stdout.trim() : undefined;
+    const agentsContent = agentsResult.ok ? agentsResult.stdout.trim() : undefined;
     const headBranch = branchResult.ok ? branchResult.stdout.trim() : "HEAD";
     const fallbackDraft = generateFallbackPullRequestDraft({
       baseBranch,
@@ -416,7 +418,8 @@ export function registerProviderHandlers() {
       fileList,
       baseBranch,
       headBranch,
-      guideContent,
+      prTemplateContent,
+      agentsContent,
       promptTemplate: parsed.data.promptTemplate,
     });
     const mergedDraft = mergePullRequestDraft({
