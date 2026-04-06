@@ -22,6 +22,10 @@ import type { SkillCatalogResponse } from "@/lib/skills/types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { PromptDraft } from "@/types/chat";
 import type {
+  AppUpdateInstallResult,
+  AppUpdateStatusSnapshot,
+} from "@/lib/app-update";
+import type {
   SyncOriginMainResult,
   ToolingStatusRequest,
   ToolingStatusSnapshot,
@@ -529,6 +533,8 @@ interface WindowTerminalApi {
 interface WindowToolingApi {
   getStatus?: (args: ToolingStatusRequest) => Promise<ToolingStatusSnapshot>;
   syncOriginMain?: (args: { cwd?: string }) => Promise<SyncOriginMainResult>;
+  getAppUpdateStatus?: () => Promise<AppUpdateStatusSnapshot>;
+  installAppUpdateAndRestart?: () => Promise<AppUpdateInstallResult>;
 }
 
 interface WindowScriptsApi {

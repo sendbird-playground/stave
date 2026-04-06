@@ -45,6 +45,16 @@ That installer script:
 - removes the macOS quarantine attribute from the installed app
 - opens Stave after installation
 
+## In-App Update Button
+
+Packaged macOS builds also show an app update action in the top bar.
+
+- It checks the latest authenticated GitHub release for `sendbird-playground/stave`
+- It compares that tag against the installed app version
+- If a newer release is available, it can install the update and restart Stave automatically
+
+This uses the same authenticated `gh`-based release flow as the terminal installer, so `gh auth login` is still required.
+
 ## Automatic Daily Updates
 
 Keep Stave up-to-date automatically with a macOS LaunchAgent that checks for new releases every day at 10:00 AM:

@@ -20,6 +20,10 @@ import type {
 } from "../src/lib/notifications/notification.types";
 import type { SkillCatalogResponse } from "../src/lib/skills/types";
 import type {
+  AppUpdateInstallResult,
+  AppUpdateStatusSnapshot,
+} from "../src/lib/app-update";
+import type {
   SyncOriginMainResult,
   ToolingStatusRequest,
   ToolingStatusSnapshot,
@@ -661,6 +665,14 @@ contextBridge.exposeInMainWorld("api", {
         "tooling:sync-origin-main",
         args,
       ) as Promise<SyncOriginMainResult>,
+    getAppUpdateStatus: () =>
+      ipcRenderer.invoke(
+        "tooling:get-app-update-status",
+      ) as Promise<AppUpdateStatusSnapshot>,
+    installAppUpdateAndRestart: () =>
+      ipcRenderer.invoke(
+        "tooling:install-app-update-and-restart",
+      ) as Promise<AppUpdateInstallResult>,
   },
   scripts: scriptsApi,
   sourceControl: {
