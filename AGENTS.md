@@ -12,6 +12,15 @@ Project policy entrypoint for this repository root, regardless of the local chec
 
 If no local overlay exists, load and prioritize user's `AGENTS.md` as the primary policy source.
 
+## Installable Product Rule
+
+Stave is an installable product. Do not bake author-specific machine paths, usernames, personal home-directory layouts, or private harness conventions into product code, prompts, docs, tests, or examples.
+
+- Do not add personal absolute paths such as `/Users/<name>/...`.
+- Do not add author-private home-dotdir shortcuts as if they were universal product defaults.
+- Prefer generic placeholders such as `<workspace>`, `<user-home>`, `<provider-home>`, or test-safe paths under `/tmp`.
+- If a real user-home lookup is part of runtime behavior, keep it configurable and describe it generically rather than as one developer's local setup.
+
 ## PR Workflow
 
 Use `$stave-worktree-pr-flow` for any request that asks to create a pull request from current in-progress work.

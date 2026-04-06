@@ -1,6 +1,6 @@
 # Local MCP User Guide
 
-This guide explains how a packaged Stave desktop user can expose the built-in local MCP server to same-machine tools such as `agentize`.
+This guide explains how a packaged Stave desktop user can expose the built-in local MCP server to same-machine automation tools.
 
 ## Who This Is For
 
@@ -79,7 +79,7 @@ When the server is running, the Settings card shows:
 
 Stave also writes a machine-readable manifest for local tools:
 
-- `~/.stave/local-mcp.json`
+- `<user-home>/.stave/local-mcp.json`
 - `<Stave userData>/stave-local-mcp.json`
 
 The manifest includes:
@@ -91,11 +91,11 @@ If `Claude Code` auto-registration is enabled, Stave also keeps the current loop
 
 If `Codex` auto-registration is enabled, Stave also keeps the current loopback URL synced into `~/.codex/config.toml` under `[mcp_servers.stave-local]`.
 
-## Typical `agentize` Flow
+## Typical Local Automation Flow
 
 1. Start Stave
 2. Enable `Local MCP Server` in Settings if needed
-3. Let `agentize` read `~/.stave/local-mcp.json`
+3. Let the automation client read `<user-home>/.stave/local-mcp.json`
 4. Choose the transport:
    - if the host can reach loopback HTTP directly, connect to the manifest `url` with `Authorization: Bearer <token>`
    - if the host cannot reach `127.0.0.1` directly, launch `node <stdioProxyScript>` and use it as the MCP stdio server

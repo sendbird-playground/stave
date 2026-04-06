@@ -14,7 +14,7 @@ import {
 
 describe("sanitizeOrbitName", () => {
   test("normalizes arbitrary labels into host-safe names", () => {
-    expect(sanitizeOrbitName("Agentize UI")).toBe("agentize-ui");
+    expect(sanitizeOrbitName("Automation UI")).toBe("automation-ui");
     expect(sanitizeOrbitName("...")).toBe("app");
   });
 });

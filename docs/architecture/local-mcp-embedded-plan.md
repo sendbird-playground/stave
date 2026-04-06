@@ -4,7 +4,7 @@ This document captures the production-side plan for exposing Stave as a same-mac
 
 ## Goal
 
-- Let local automation clients such as `~/workspace/agentize` bots talk to a running Stave desktop app over MCP.
+- Let local automation clients talk to a running Stave desktop app over MCP.
 - Support packaged desktop installs, not only `bun run dev` flows.
 - Reuse Stave's existing provider runtimes, worktree model, SQLite persistence, and task snapshots instead of building a parallel automation stack.
 
@@ -78,7 +78,7 @@ These cross-cutting concerns need explicit handling:
 
 ```mermaid
 graph TD
-    BOT[Local bot / agentize] --> MCP[Embedded MCP server]
+    BOT[Local automation client] --> MCP[Embedded MCP server]
     MCP --> SVC[Main-process automation service]
     SVC --> SCM[git / terminal helpers]
     SVC --> DB[SQLite persistence]

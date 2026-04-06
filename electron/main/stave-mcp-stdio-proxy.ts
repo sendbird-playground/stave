@@ -10,7 +10,7 @@
  *   node stave-mcp-stdio-proxy.mjs
  *
  * The script locates the running server by reading the manifest file that the
- * Stave Electron app writes to ~/.stave/local-mcp.json on startup.
+ * Stave Electron app writes to the user's `.stave/local-mcp.json` manifest on startup.
  *
  * Protocol:
  *   stdin  → newline-delimited JSON-RPC 2.0 requests / notifications

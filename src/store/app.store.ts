@@ -31,6 +31,7 @@ import type {
 } from "@/lib/providers/provider.types";
 import type { ConnectedToolStatusEntry } from "@/lib/providers/connected-tool-status";
 import { getRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
+import { buildReferencedTaskRetrievedContext } from "@/lib/task-context/referenced-task-context";
 import {
   buildWorkspaceContinueSummaryFilePath,
   buildWorkspaceContinueSummaryMarkdown,
@@ -321,6 +322,7 @@ interface WorkspaceSwitchMetric {
 interface SkillCatalogState {
   status: "idle" | "loading" | "ready" | "error";
   workspacePath: string | null;
+  sharedSkillsHome: string | null;
   fetchedAt: string | null;
   skills: SkillCatalogEntry[];
   roots: SkillCatalogRoot[];
@@ -449,6 +451,7 @@ export interface AppSettings {
   subagentsProfile: string;
   skillsEnabled: boolean;
   skillsAutoSuggest: boolean;
+  sharedSkillsHome: string;
   commandPaletteShowRecent: boolean;
   commandPalettePinnedCommandIds: string[];
   commandPaletteHiddenCommandIds: string[];
@@ -1018,6 +1021,7 @@ const defaultSettings: AppSettings = {
   subagentsProfile: "default",
   skillsEnabled: true,
   skillsAutoSuggest: true,
+  sharedSkillsHome: "",
   commandPaletteShowRecent: true,
   commandPalettePinnedCommandIds: [],
   commandPaletteHiddenCommandIds: [],
@@ -1098,6 +1102,10 @@ function incrementWorkspaceSnapshotVersion(state: Pick<AppState, "workspaceSnaps
 
 function incrementPromptDraftPersistenceVersion(state: Pick<AppState, "promptDraftPersistenceVersion">) {
   return state.promptDraftPersistenceVersion + 1;
+}
+
+function normalizeSharedSkillsHomeSetting(value?: string | null) {
+  return value?.trim() ?? "";
 }
 
 function getRetainedLoadedMessageTaskIds(args: {
@@ -2405,6 +2413,7 @@ export const useAppStore = create<AppState>()(
       skillCatalog: {
         status: "idle",
         workspacePath: null,
+        sharedSkillsHome: null,
         fetchedAt: null,
         skills: [],
         roots: [],
@@ -4247,6 +4256,11 @@ export const useAppStore = create<AppState>()(
       updateSettings: ({ patch }) => {
         const normalizedPatch: Partial<AppSettings> = {
           ...patch,
+          ...(patch.sharedSkillsHome === undefined
+            ? {}
+            : {
+                sharedSkillsHome: normalizeSharedSkillsHomeSetting(patch.sharedSkillsHome),
+              }),
           ...(patch.providerTimeoutMs === undefined
             ? {}
             : {
@@ -5179,12 +5193,14 @@ export const useAppStore = create<AppState>()(
         const workspacePath = args.workspacePath === undefined
           ? fallbackWorkspacePath
           : args.workspacePath;
+        const sharedSkillsHome = normalizeSharedSkillsHomeSetting(get().settings.sharedSkillsHome) || null;
 
         if (!getCatalog) {
           set(() => ({
             skillCatalog: {
               status: "error",
               workspacePath,
+              sharedSkillsHome,
               fetchedAt: new Date().toISOString(),
               skills: [],
               roots: [],
@@ -5199,6 +5215,7 @@ export const useAppStore = create<AppState>()(
             ...state.skillCatalog,
             status: "loading",
             workspacePath,
+            sharedSkillsHome,
             detail: "Loading skill catalog...",
           },
         }));
@@ -5206,11 +5223,13 @@ export const useAppStore = create<AppState>()(
         try {
           const result = await getCatalog({
             ...(workspacePath ? { workspacePath } : {}),
+            ...(sharedSkillsHome ? { sharedSkillsHome } : {}),
           });
           set(() => ({
             skillCatalog: {
               status: result.ok ? "ready" : "error",
               workspacePath: result.catalog.workspacePath,
+              sharedSkillsHome: result.catalog.sharedSkillsHome,
               fetchedAt: result.catalog.fetchedAt,
               skills: result.catalog.skills,
               roots: result.catalog.roots,
@@ -5224,6 +5243,7 @@ export const useAppStore = create<AppState>()(
             skillCatalog: {
               status: "error",
               workspacePath,
+              sharedSkillsHome,
               fetchedAt: new Date().toISOString(),
               skills: [],
               roots: [],
@@ -6330,6 +6350,15 @@ export const useAppStore = create<AppState>()(
             });
           }
         }
+        const referencedTaskContext = buildReferencedTaskRetrievedContext({
+          prompt: normalizedPrompt || content,
+          currentTaskId: resolvedTaskId,
+          tasks: state.tasks,
+          messagesByTask: state.messagesByTask,
+        });
+        if (referencedTaskContext) {
+          retrievedContextParts.push(referencedTaskContext);
+        }
         // ──────────────────────────────────────────────────────────────────────
 
         const conversation = buildCanonicalConversationRequest({
@@ -7347,6 +7376,7 @@ export const useAppStore = create<AppState>()(
         state.settings.commandPaletteShowRecent = typeof raw.commandPaletteShowRecent === "boolean"
           ? raw.commandPaletteShowRecent
           : defaultSettings.commandPaletteShowRecent;
+        state.settings.sharedSkillsHome = normalizeSharedSkillsHomeSetting(raw.sharedSkillsHome);
         state.settings.commandPalettePinnedCommandIds = Array.isArray(raw.commandPalettePinnedCommandIds)
           ? raw.commandPalettePinnedCommandIds.filter((value: unknown): value is string => typeof value === "string")
           : defaultSettings.commandPalettePinnedCommandIds;
