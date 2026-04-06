@@ -85,6 +85,25 @@ describe("mergeClipboardImageAttachments", () => {
     })).toEqual([first]);
   });
 
+  test("dedupes identical base64 payloads even when mime headers differ", () => {
+    const first = {
+      kind: "image" as const,
+      id: "image-1",
+      label: "Clipboard PNG",
+      dataUrl: "data:image/png;base64,AAA",
+    };
+    const duplicate = {
+      kind: "image" as const,
+      id: "image-2",
+      label: "Clipboard octet-stream",
+      dataUrl: "data:application/octet-stream;base64,AAA",
+    };
+
+    expect(mergeClipboardImageAttachments({
+      incoming: [first, duplicate],
+    })).toEqual([first]);
+  });
+
   test("preserves existing images and appends only new clipboard content", () => {
     const existing = {
       kind: "image" as const,
