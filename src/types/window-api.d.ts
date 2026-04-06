@@ -7,6 +7,10 @@ import type {
   ProviderRuntimeOptions,
 } from "@/lib/providers/provider.types";
 import type {
+  ConnectedToolId,
+  ConnectedToolStatusResponse,
+} from "@/lib/providers/connected-tool-status";
+import type {
   StaveLocalMcpRequestLog,
   StaveLocalMcpRequestLogQuery,
   StaveLocalMcpStatus,
@@ -127,6 +131,12 @@ interface WindowProviderApi {
     commands: ProviderSlashCommand[];
     detail: string;
   }>;
+  getConnectedToolStatus?: (args: {
+    providerId: ProviderId;
+    cwd?: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+    toolIds?: ConnectedToolId[];
+  }) => Promise<ConnectedToolStatusResponse>;
   getClaudeContextUsage?: (args: {
     cwd?: string;
     runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];

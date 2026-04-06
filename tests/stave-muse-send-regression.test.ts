@@ -292,4 +292,95 @@ describe("stave muse send flow", () => {
     expect(sourceIds).toContain("stave:muse-context");
     expect(sourceIds).not.toContain("stave:repo-map");
   });
+
+  test("connected tool preflight returns a system message instead of starting a turn when auth is missing", async () => {
+    let startedTurn = false;
+    const localStorage = createMemoryStorage();
+
+    Object.defineProperty(globalThis, "window", {
+      value: {
+        localStorage,
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+        api: {
+          provider: {
+            checkAvailability: async () => ({
+              ok: true,
+              available: true,
+              detail: "ready",
+            }),
+            getConnectedToolStatus: async () => ({
+              ok: true,
+              providerId: "codex" as const,
+              detail: "loaded",
+              tools: [
+                {
+                  id: "slack" as const,
+                  label: "Slack",
+                  state: "needs-auth" as const,
+                  available: false,
+                  detail: "Missing SLACK_OAUTH_TOKEN in the Codex runtime environment.",
+                },
+              ],
+            }),
+            startPushTurn: async () => {
+              startedTurn = true;
+              return {
+                ok: true,
+                streamId: "stream-connected-tools",
+                turnId: "turn-connected-tools",
+              };
+            },
+            subscribeStreamEvents: () => () => {},
+            abortTurn: async () => ({ ok: true, message: "aborted" }),
+            cleanupTask: async () => ({ ok: true, message: "cleaned" }),
+          },
+        },
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    const persistedStore = useAppStore as typeof useAppStore & {
+      persist: {
+        setOptions: (options: { storage: ReturnType<typeof createJSONStorage> }) => void;
+      };
+    };
+
+    persistedStore.persist.setOptions({
+      storage: createJSONStorage(() => localStorage as Storage),
+    });
+
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      projectName: "Stave",
+      projectPath: "/tmp/stave-project",
+      workspaces: [{ id: "ws-main", name: "Default Workspace", updatedAt: "2026-04-05T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      workspacePathById: { "ws-main": "/tmp/stave-project/.stave/workspaces/main" },
+      workspaceBranchById: { "ws-main": "main" },
+      workspaceDefaultById: { "ws-main": true },
+      draftProvider: "codex",
+      staveMuse: {
+        ...initialState.staveMuse,
+        open: true,
+      },
+    });
+
+    await useAppStore.getState().sendStaveMuseMessage({
+      content: "Send a Slack message to the team channel.",
+    });
+
+    await Bun.sleep(0);
+
+    const stateAfter = useAppStore.getState();
+    expect(startedTurn).toBe(false);
+    expect(stateAfter.staveMuse.messages).toHaveLength(2);
+    expect(stateAfter.staveMuse.messages[1]?.role).toBe("assistant");
+    expect(stateAfter.staveMuse.messages[1]?.content).toContain("Slack");
+    expect(stateAfter.staveMuse.messages[1]?.content).toContain("SLACK_OAUTH_TOKEN");
+  });
 });

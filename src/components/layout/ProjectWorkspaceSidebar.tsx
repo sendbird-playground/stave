@@ -19,8 +19,8 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
-  Folder,
   FolderOpen,
+  FolderTree,
   GripVertical,
   LoaderCircle,
   PanelLeft,
@@ -933,7 +933,7 @@ export function ProjectWorkspaceSidebar(args: {
                                               <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
                                             ) : (
                                               <>
-                                                <Folder
+                                                <FolderTree
                                                   className={cn(
                                                     "size-4 transition-all duration-200",
                                                     "group-hover/project-row:scale-75 group-hover/project-row:opacity-0",

@@ -11,11 +11,9 @@ import {
   MessageAction,
   MessageActions,
   MessageContent,
-  ModelIcon,
 } from "@/components/ai-elements";
 import { getMessageScrollFingerprint, shouldShowConversationLoadingState } from "@/components/session/chat-panel.utils";
 import { canTakeOverTask, getTaskControlOwner, isTaskManaged, formatTaskUpdatedAt } from "@/lib/tasks";
-import { toHumanModelName } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, MessagePart } from "@/types/chat";
@@ -130,16 +128,6 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
             )}
           >
             <div className="flex min-w-0 items-center gap-1">
-              {message.providerId !== "user" && message.model ? (
-                <MessageAction
-                  key="provider-action"
-                  label={toHumanModelName({ model: message.model })}
-                  className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-background/80 px-2 text-sm font-normal text-foreground opacity-100 supports-backdrop-filter:backdrop-blur-xs"
-                >
-                  <ModelIcon providerId={message.providerId} className="size-3.5" />
-                  {toHumanModelName({ model: message.model })}
-                </MessageAction>
-              ) : null}
               {message.role === "assistant" && elapsedLabel ? (
                 <MessageAction
                   key="elapsed-action"

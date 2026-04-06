@@ -142,6 +142,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     openFileFromTree,
     abortTaskTurn,
     resolveUserInput,
+    setStaveMuseOpen,
   ] = useAppStore(useShallow((state) => [
     state.promptDraftByTask[args.providerSelectionTarget] ?? EMPTY_PROMPT_DRAFT,
     state.promptFocusNonce,
@@ -151,6 +152,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     state.openFileFromTree,
     state.abortTaskTurn,
     state.resolveUserInput,
+    state.setStaveMuseOpen,
   ] as const));
   const [pendingUserInputMessageId, pendingUserInputPart] = useAppStore(useShallow((state) => {
     const messages = state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
@@ -450,6 +452,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           onPasteFiles={handlePasteFiles}
           onAttachmentsChange={({ attachments }) =>
             updateNonTextPromptDraft({ attachments })}
+          onFocus={() => setStaveMuseOpen({ open: false })}
           onSubmit={async ({ text, filePaths }) => {
             cancelPendingDraftSave();
             for (const fp of filePaths) {

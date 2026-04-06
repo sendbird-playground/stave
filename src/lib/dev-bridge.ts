@@ -1,4 +1,5 @@
 import type { CanonicalConversationRequest, ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
+import type { ConnectedToolId } from "@/lib/providers/connected-tool-status";
 
 const DEV_API_BASE = "http://127.0.0.1:3001";
 
@@ -77,6 +78,23 @@ export function installDevApiBridge() {
       checkAvailability: (args: { providerId: ProviderId }) => postJson({
         path: "/api/provider/check",
         body: args,
+      }),
+      getConnectedToolStatus: async (args: {
+        providerId: ProviderId;
+        cwd?: string;
+        runtimeOptions?: ProviderRuntimeOptions;
+        toolIds?: ConnectedToolId[];
+      }) => ({
+        ok: false,
+        providerId: args.providerId,
+        detail: "Connected-tool preflight is unavailable in the web dev bridge.",
+        tools: (args.toolIds ?? []).map((toolId) => ({
+          id: toolId,
+          label: toolId,
+          state: "unknown" as const,
+          available: true,
+          detail: "Connected-tool preflight is unavailable in the web dev bridge.",
+        })),
       }),
     },
     terminal: {

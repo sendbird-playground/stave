@@ -231,6 +231,7 @@ export function TopBar() {
             <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
           ) : null}
         </div>
+
         {hasProjectContext ? (
           <TopBarNotifications noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
         ) : null}
