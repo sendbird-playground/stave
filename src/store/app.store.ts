@@ -152,6 +152,7 @@ import {
   updateUserInputPartsByRequestId,
 } from "@/store/provider-message.utils";
 import {
+  applyProjectBasePromptToRuntimeOptions,
   buildProviderRuntimeOptions,
   normalizeClaudeSettingSources,
   normalizeClaudeTaskBudgetTokens,
@@ -230,9 +231,11 @@ import {
 } from "@/lib/themes";
 import {
   type RecentProjectState,
+  normalizeProjectBasePrompt,
   normalizeWorkspaceInitCommand,
   normalizeProjectWorkspaceInitCommand,
   normalizeProjectWorkspaceRootNodeModulesSymlinkPreference,
+  resolveProjectBasePrompt,
   resolveProjectWorkspaceInitCommand,
   resolveProjectWorkspaceRootNodeModulesSymlinkPreference,
   summarizeTerminalCommandDetail,
@@ -606,6 +609,7 @@ interface AppState {
     workspaceId: string;
     direction: "up" | "down";
   }) => void;
+  setProjectBasePrompt: (args: { projectPath?: string; prompt: string }) => void;
   setProjectWorkspaceInitCommand: (args: { projectPath?: string; command: string }) => void;
   setProjectWorkspaceUseRootNodeModulesSymlink: (args: { projectPath?: string; enabled: boolean }) => void;
   setDarkMode: (args: { enabled: boolean }) => void;
@@ -1536,6 +1540,7 @@ async function collectStaveMuseRoutingDecision(args: {
   model: string;
   settings: AppSettings;
   contextSnapshot: string;
+  projectBasePrompt?: string;
 }) {
   const STAVE_MUSE_ROUTER_TIMEOUT_MS = 4_000;
   const runtimeCwd = getStaveMuseRuntimeCwd();
@@ -1566,10 +1571,13 @@ async function collectStaveMuseRoutingDecision(args: {
     const timeoutHandle = setTimeout(() => {
       finalize(DEFAULT_STAVE_MUSE_ROUTING_DECISION);
     }, STAVE_MUSE_ROUTER_TIMEOUT_MS);
-    const runtimeOptions = buildProviderRuntimeOptions({
-      provider,
-      model: args.model,
-      settings: args.settings,
+    const runtimeOptions = applyProjectBasePromptToRuntimeOptions({
+      runtimeOptions: buildProviderRuntimeOptions({
+        provider,
+        model: args.model,
+        settings: args.settings,
+      }),
+      projectBasePrompt: args.projectBasePrompt,
     });
     runProviderTurn({
       provider,
@@ -1707,6 +1715,10 @@ export const useAppStore = create<AppState>()(
                   workspaceBranchById: state.workspaceBranchById,
                   workspacePathById: state.workspacePathById,
                   workspaceDefaultById: state.workspaceDefaultById,
+                  projectBasePrompt: resolveProjectBasePrompt({
+                    projectPath: args.projectRootPath,
+                    recentProjects: rememberedProjects,
+                  }),
                   newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
                     projectPath: args.projectRootPath,
                     recentProjects: rememberedProjects,
@@ -1828,6 +1840,7 @@ export const useAppStore = create<AppState>()(
           workspaceBranchById: { [defaultWorkspaceId]: args.defaultBranch },
           workspacePathById: { [defaultWorkspaceId]: args.projectRootPath },
           workspaceDefaultById: { [defaultWorkspaceId]: true },
+          projectBasePrompt: "",
           newWorkspaceInitCommand: "",
           newWorkspaceUseRootNodeModulesSymlink: false,
         } satisfies RecentProjectState;
@@ -2748,6 +2761,10 @@ export const useAppStore = create<AppState>()(
                     workspaceBranchById: branchById,
                     workspacePathById: pathById,
                     workspaceDefaultById: defaultWorkspaceId ? { [defaultWorkspaceId]: true } : {},
+                    projectBasePrompt: resolveProjectBasePrompt({
+                      projectPath: state.projectPath,
+                      recentProjects: state.recentProjects,
+                    }),
                     newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
                       projectPath: state.projectPath,
                       recentProjects: state.recentProjects,
@@ -2976,6 +2993,10 @@ export const useAppStore = create<AppState>()(
                     workspaceBranchById: nextBranch,
                     workspacePathById: nextPath,
                     workspaceDefaultById: nextDefault,
+                    projectBasePrompt: resolveProjectBasePrompt({
+                      projectPath: current.projectPath,
+                      recentProjects: current.recentProjects,
+                    }),
                     newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
                       projectPath: current.projectPath,
                       recentProjects: current.recentProjects,
@@ -3939,6 +3960,10 @@ export const useAppStore = create<AppState>()(
                   workspaceBranchById: state.workspaceBranchById,
                   workspacePathById: state.workspacePathById,
                   workspaceDefaultById: state.workspaceDefaultById,
+                  projectBasePrompt: resolveProjectBasePrompt({
+                    projectPath: normalizedProjectPath,
+                    recentProjects: state.recentProjects,
+                  }),
                   newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
                     projectPath: normalizedProjectPath,
                     recentProjects: state.recentProjects,
@@ -4013,6 +4038,48 @@ export const useAppStore = create<AppState>()(
               project: {
                 ...cloneRecentProjectState(existingProject),
                 newWorkspaceInitCommand: nextCommand,
+              },
+            }),
+          };
+        });
+      },
+      setProjectBasePrompt: ({ projectPath, prompt }) => {
+        set((state) => {
+          const normalizedProjectPath = (projectPath?.trim() || state.projectPath?.trim() || "");
+          if (!normalizedProjectPath) {
+            return state;
+          }
+
+          const currentProjects = captureCurrentProjectState({
+            recentProjects: state.recentProjects,
+            projectPath: state.projectPath,
+            projectName: state.projectName,
+            defaultBranch: state.defaultBranch,
+            workspaces: state.workspaces,
+            activeWorkspaceId: state.activeWorkspaceId,
+            workspaceBranchById: state.workspaceBranchById,
+            workspacePathById: state.workspacePathById,
+            workspaceDefaultById: state.workspaceDefaultById,
+          });
+          const existingProject = currentProjects.find((project) => project.projectPath === normalizedProjectPath);
+          if (!existingProject) {
+            return state;
+          }
+
+          const nextPrompt = normalizeProjectBasePrompt({ value: prompt });
+          const currentPrompt = normalizeProjectBasePrompt({
+            value: existingProject.projectBasePrompt,
+          });
+          if (currentPrompt === nextPrompt) {
+            return state;
+          }
+
+          return {
+            recentProjects: upsertRecentProjectState({
+              projects: currentProjects,
+              project: {
+                ...cloneRecentProjectState(existingProject),
+                projectBasePrompt: nextPrompt,
               },
             }),
           };
@@ -5591,6 +5658,10 @@ export const useAppStore = create<AppState>()(
           model: stateBeforeRouting.settings.museRouterModel,
           settings: stateBeforeRouting.settings,
           contextSnapshot,
+          projectBasePrompt: resolveProjectBasePrompt({
+            projectPath: stateBeforeRouting.projectPath,
+            recentProjects: stateBeforeRouting.recentProjects,
+          }),
         });
 
         const explicitTaskRequest = isStaveMuseExplicitTaskRequest(trimmedContent);
@@ -5635,10 +5706,16 @@ export const useAppStore = create<AppState>()(
           : stateBeforeRouting.settings.museChatModel;
         const provider = inferProviderIdFromModel({ model: activeModel });
         const providerRuntimeOptions = {
-          ...buildProviderRuntimeOptions({
-            provider,
-            model: activeModel,
-            settings: get().settings,
+          ...applyProjectBasePromptToRuntimeOptions({
+            runtimeOptions: buildProviderRuntimeOptions({
+              provider,
+              model: activeModel,
+              settings: get().settings,
+            }),
+            projectBasePrompt: resolveProjectBasePrompt({
+              projectPath: stateBeforeRouting.projectPath,
+              recentProjects: stateBeforeRouting.recentProjects,
+            }),
           }),
           ...(provider === "claude-code"
             ? {
@@ -6274,15 +6351,21 @@ export const useAppStore = create<AppState>()(
           taskId: resolvedTaskId,
           workspaceId: taskWorkspaceId,
           cwd: workspaceCwd,
-          runtimeOptions: buildProviderRuntimeOptions({
-            provider,
-            model: activeModel,
-            settings: {
-              ...get().settings,
-              claudePermissionMode: resolvedPromptDraftRuntimeState.claudePermissionMode,
-              codexExperimentalPlanMode: resolvedPromptDraftRuntimeState.codexExperimentalPlanMode,
-            },
-            providerSession,
+          runtimeOptions: applyProjectBasePromptToRuntimeOptions({
+            runtimeOptions: buildProviderRuntimeOptions({
+              provider,
+              model: activeModel,
+              settings: {
+                ...get().settings,
+                claudePermissionMode: resolvedPromptDraftRuntimeState.claudePermissionMode,
+                codexExperimentalPlanMode: resolvedPromptDraftRuntimeState.codexExperimentalPlanMode,
+              },
+              providerSession,
+            }),
+            projectBasePrompt: resolveProjectBasePrompt({
+              projectPath: get().projectPath,
+              recentProjects: get().recentProjects,
+            }),
           }),
           onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
         });

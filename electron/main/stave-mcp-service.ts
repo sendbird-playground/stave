@@ -312,6 +312,7 @@ async function ensureProjectRegistryEntry(args: {
         workspaceBranchById: { [defaultWorkspaceId]: defaultBranch },
         workspacePathById: { [defaultWorkspaceId]: projectPath },
         workspaceDefaultById: { [defaultWorkspaceId]: true },
+        projectBasePrompt: "",
         newWorkspaceInitCommand: "",
         newWorkspaceUseRootNodeModulesSymlink: false,
       };
