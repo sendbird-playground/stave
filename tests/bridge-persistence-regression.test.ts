@@ -866,6 +866,103 @@ describe("workspace store hydration ordering", () => {
     expect(nextState.providerSessionByTask["task-db"]).toEqual({ codex: "thread-db-1" });
   });
 
+  test("hydrateWorkspaces recovers persisted tasks when the cached workspace session is empty", async () => {
+    const localStorage = createMemoryStorage();
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          listFiles: async () => ({ ok: true, files: ["package.json"] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [{ id: "ws-main", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" }],
+          }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          loadWorkspaceShell: async () => ({
+            ok: true,
+            shell: {
+              activeTaskId: "task-db",
+              tasks: [{
+                id: "task-db",
+                title: "Recovered Task",
+                provider: "codex",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+                unread: false,
+              }],
+              promptDraftByTask: {},
+              providerSessionByTask: {},
+              messageCountByTask: { "task-db": 0 },
+              workspaceInformation: {
+                jiraIssues: [],
+                confluencePages: [],
+                figmaResources: [],
+                linkedPullRequests: [],
+                slackThreads: [],
+                notes: "",
+                todos: [],
+                customFields: [],
+              },
+              editorTabs: [],
+              activeEditorTabId: null,
+            },
+          }),
+          listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
+          upsertWorkspace: async () => ({ ok: true }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      workspaces: [{ id: "ws-main", name: "Default Workspace", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      projectPath: "/tmp/stave-project",
+      projectName: "stave-project",
+      workspacePathById: { "ws-main": "/tmp/stave-project" },
+      workspaceBranchById: { "ws-main": "main" },
+      workspaceDefaultById: { "ws-main": true },
+      workspaceRuntimeCacheById: {
+        "ws-main": {
+          activeTaskId: "",
+          tasks: [],
+          messagesByTask: {},
+          messageCountByTask: {},
+          promptDraftByTask: {},
+          workspaceInformation: {
+            jiraIssues: [],
+            confluencePages: [],
+            figmaResources: [],
+            linkedPullRequests: [],
+            slackThreads: [],
+            notes: "",
+            todos: [],
+            customFields: [],
+          },
+          editorTabs: [],
+          activeEditorTabId: null,
+          activeTurnIdsByTask: {},
+          providerSessionByTask: {},
+          nativeSessionReadyByTask: {},
+        },
+      },
+      hasHydratedWorkspaces: false,
+      projectFiles: [],
+    });
+
+    await useAppStore.getState().hydrateWorkspaces();
+
+    const nextState = useAppStore.getState();
+    expect(nextState.activeTaskId).toBe("task-db");
+    expect(nextState.tasks.map((task) => task.id)).toEqual(["task-db"]);
+    expect(nextState.workspaceRuntimeCacheById["ws-main"]).toBeUndefined();
+  });
+
   test("hydrateWorkspaces appends an interruption note for incomplete turns from a previous app session", async () => {
     const localStorage = createMemoryStorage();
     setWindowContext({
@@ -1583,6 +1680,145 @@ describe("workspace store hydration ordering", () => {
     expect(restoredState.messagesByTask["task-main"]?.at(-1)?.content).toBe(
       "Task 1 kept updating after the workspace switch."
     );
+  });
+
+  test("switchWorkspace reloads persistence when the cached target workspace session is empty", async () => {
+    const localStorage = createMemoryStorage();
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          listFiles: async () => ({ ok: true, files: [] }),
+        },
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [
+              { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
+              { id: "ws-beta", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
+            ],
+          }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          loadWorkspaceShell: async ({ workspaceId }: { workspaceId: string }) => ({
+            ok: true,
+            shell: workspaceId === "ws-beta"
+              ? {
+                  activeTaskId: "task-beta",
+                  tasks: [{
+                    id: "task-beta",
+                    title: "Recovered Beta Task",
+                    provider: "codex",
+                    updatedAt: "2026-03-10T00:01:00.000Z",
+                    unread: false,
+                  }],
+                  promptDraftByTask: {},
+                  providerSessionByTask: {},
+                  messageCountByTask: { "task-beta": 0 },
+                  workspaceInformation: {
+                    jiraIssues: [],
+                    confluencePages: [],
+                    figmaResources: [],
+                    linkedPullRequests: [],
+                    slackThreads: [],
+                    notes: "",
+                    todos: [],
+                    customFields: [],
+                  },
+                  editorTabs: [],
+                  activeEditorTabId: null,
+                }
+              : null,
+          }),
+          listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
+          upsertWorkspace: async () => ({ ok: true }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      projectPath: "/tmp/stave-project",
+      projectName: "stave-project",
+      workspaces: [
+        { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
+        { id: "ws-beta", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
+      ],
+      activeWorkspaceId: "ws-alpha",
+      workspacePathById: {
+        "ws-alpha": "/tmp/stave-project",
+        "ws-beta": "/tmp/stave-project/.stave/workspaces/beta",
+      },
+      workspaceBranchById: {
+        "ws-alpha": "main",
+        "ws-beta": "beta",
+      },
+      workspaceDefaultById: {
+        "ws-alpha": true,
+        "ws-beta": false,
+      },
+      tasks: [{
+        id: "task-alpha",
+        title: "Alpha Task",
+        provider: "claude-code",
+        updatedAt: "2026-03-10T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      activeTaskId: "task-alpha",
+      messagesByTask: { "task-alpha": [] },
+      messageCountByTask: { "task-alpha": 0 },
+      promptDraftByTask: {},
+      workspaceInformation: {
+        jiraIssues: [],
+        confluencePages: [],
+        figmaResources: [],
+        linkedPullRequests: [],
+        slackThreads: [],
+        notes: "",
+        todos: [],
+        customFields: [],
+      },
+      editorTabs: [],
+      activeEditorTabId: null,
+      activeTurnIdsByTask: {},
+      providerSessionByTask: {},
+      nativeSessionReadyByTask: {},
+      workspaceRuntimeCacheById: {
+        "ws-beta": {
+          activeTaskId: "",
+          tasks: [],
+          messagesByTask: {},
+          messageCountByTask: {},
+          promptDraftByTask: {},
+          workspaceInformation: {
+            jiraIssues: [],
+            confluencePages: [],
+            figmaResources: [],
+            linkedPullRequests: [],
+            slackThreads: [],
+            notes: "",
+            todos: [],
+            customFields: [],
+          },
+          editorTabs: [],
+          activeEditorTabId: null,
+          activeTurnIdsByTask: {},
+          providerSessionByTask: {},
+          nativeSessionReadyByTask: {},
+        },
+      },
+    });
+
+    await useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta" });
+
+    const nextState = useAppStore.getState();
+    expect(nextState.activeWorkspaceId).toBe("ws-beta");
+    expect(nextState.activeTaskId).toBe("task-beta");
+    expect(nextState.tasks.map((task) => task.id)).toEqual(["task-beta"]);
+    expect(nextState.workspaceRuntimeCacheById["ws-beta"]).toBeUndefined();
   });
 
   test("late events after an inactive workspace turn completes do not emit redundant store updates", async () => {

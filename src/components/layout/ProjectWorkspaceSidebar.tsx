@@ -355,7 +355,7 @@ export function ProjectWorkspaceSidebar(args: {
     closeWorkspace,
     setLayout,
     fetchAllWorkspacePrStatuses,
-    refreshWorkspaces,
+    hydrateWorkspaces,
   ] = useAppStore(
     useShallow((state) => {
       return [
@@ -391,7 +391,7 @@ export function ProjectWorkspaceSidebar(args: {
         state.closeWorkspace,
         state.setLayout,
         state.fetchAllWorkspacePrStatuses,
-        state.refreshWorkspaces,
+        state.hydrateWorkspaces,
       ] as const;
     }),
   );
@@ -1012,7 +1012,7 @@ export function ProjectWorkspaceSidebar(args: {
                                                 className="h-7 w-7 rounded-md p-0"
                                                 disabled={projectBusy}
                                                 onClick={() =>
-                                                  void refreshWorkspaces()
+                                                  void hydrateWorkspaces()
                                                 }
                                                 aria-label={`refresh-workspaces-${project.projectPath}`}
                                               >
