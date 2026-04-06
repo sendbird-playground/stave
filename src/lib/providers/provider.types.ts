@@ -75,6 +75,25 @@ export interface ClaudePluginReloadResponse {
   reload?: ClaudePluginReloadSnapshot;
 }
 
+export interface CodexMcpServerStatusSnapshot {
+  name: string;
+  enabled: boolean;
+  disabledReason: string | null;
+  transportType: string;
+  url: string | null;
+  bearerTokenEnvVar: string | null;
+  authStatus: string | null;
+  startupTimeoutSec: number | null;
+  toolTimeoutSec: number | null;
+}
+
+export interface CodexMcpStatusResponse {
+  ok: boolean;
+  detail: string;
+  pluginSupport: "unsupported";
+  servers: CodexMcpServerStatusSnapshot[];
+}
+
 export interface CanonicalRetrievedContextPart {
   type: "retrieved_context";
   sourceId: string;

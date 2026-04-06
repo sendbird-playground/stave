@@ -32,7 +32,7 @@ If you are debugging repeated re-renders or `Maximum update depth exceeded`, rev
 The Settings dialog includes desktop-only diagnostics for renderer and compositor troubleshooting:
 
 - `Tooling` shows current workspace sync state against `origin/main` and the native shell / CLI auth status Stave depends on (`git`, `gh`, `claude`, `codex`)
-- `Local MCP Request Log` shows paginated inbound local MCP requests with latest-page auto-refresh and on-demand payload loading
+- `Settings → Providers → Stave → Local MCP Request Log` shows paginated inbound local MCP requests with latest-page auto-refresh and on-demand payload loading
 - `GPU Acceleration` shows Electron-reported hardware acceleration and GPU feature status
 
 The GPU status card is available only when the preload bridge exposes `window.api.window.getGpuStatus()`.

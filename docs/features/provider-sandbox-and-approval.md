@@ -21,9 +21,10 @@
 ## Quick Start
 
 1. Open **Settings → Providers**.
-2. Under **Claude Runtime Controls**, choose a permission mode and decide whether Claude should run in a sandbox and whether sandbox escape fallbacks are allowed.
-3. Under **Codex Runtime Controls**, choose a sandbox mode, approval policy, and network setting.
-4. Check the runtime chips under the composer before sending the turn.
+2. Open the **Claude** tab for Claude runtime controls, or the **Codex** tab for Codex runtime controls.
+3. Under **Claude Runtime Controls**, choose a permission mode and decide whether Claude should run in a sandbox and whether sandbox escape fallbacks are allowed.
+4. Under **Codex Runtime Controls**, choose a sandbox mode, approval policy, and network setting.
+5. Check the runtime chips under the composer before sending the turn.
 
 Recommended starting points:
 
@@ -37,6 +38,7 @@ Recommended starting points:
 
 - **Settings → Providers → Claude Runtime Controls**
 - **Settings → Providers → Codex Runtime Controls**
+- **Settings → Developer → Provider Timeout**
 - The composer runtime chips below the prompt box, which show the current sandbox, approval, network, and plan state before send
 - The composer plan toggle switches Claude turns into `Permission Mode = plan`
 - The composer plan toggle enables experimental plan mode for the current Codex draft turn
