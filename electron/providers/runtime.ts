@@ -272,6 +272,12 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
         runtimeOptions: resolvedArgs.runtimeOptions,
       });
 
+      // Plan-mode forced route: role overrides must not clobber the plan routing signal.
+      // The forceCodexPlanMode flag (set above) already handles Codex; guard Claude here.
+      if (resolvedTarget.providerId === "claude-code") {
+        resolvedArgs.runtimeOptions!.claudePermissionMode = "plan";
+      }
+
       const fastModeApplied =
         resolvedTarget.providerId === "codex"
           ? (resolvedArgs.runtimeOptions?.codexFastMode ?? false)

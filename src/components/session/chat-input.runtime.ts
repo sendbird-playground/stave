@@ -111,34 +111,9 @@ type CommandCatalogRuntimeArgs = Pick<
 
 export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): PromptInputRuntimeControl[] {
   if (args.activeProvider === "stave") {
-    return [
-      {
-        id: "orchestration-mode",
-        label: "Orchestration",
-        value: args.staveAutoOrchestrationMode,
-        options: STAVE_AUTO_ORCHESTRATION_OPTIONS,
-        onSelect: (value: string) => args.updateSettings({
-          patch: { staveAutoOrchestrationMode: value as AppSettings["staveAutoOrchestrationMode"] },
-        }),
-      },
-      {
-        id: "fast-mode",
-        label: "Fast Mode",
-        value: args.staveAutoFastMode ? "on" : "off",
-        options: [
-          { label: "Off", value: "off" },
-          { label: "On", value: "on" },
-        ],
-        onSelect: (value: string) => args.updateSettings({ patch: { staveAutoFastMode: value === "on" } }),
-      },
-      {
-        id: "max-subtasks",
-        label: "Max Subtasks",
-        value: String(args.staveAutoMaxSubtasks),
-        options: STAVE_AUTO_MAX_SUBTASK_OPTIONS,
-        onSelect: (value: string) => args.updateSettings({ patch: { staveAutoMaxSubtasks: Number(value) } }),
-      },
-    ];
+    // Stave Auto has no quick controls in the toolbar drawer — all per-model settings
+    // are configured in the Settings > Providers panel instead.
+    return [];
   }
 
   const permissionOptions = getPermissionModeOptions(args.activeProvider).map((option) => ({
@@ -236,23 +211,7 @@ export function cycleCodexEffortValue(current: AppSettings["codexModelReasoningE
 
 export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): PromptInputRuntimeStatusItem[] {
   if (args.activeProvider === "stave") {
-    return [
-      {
-        id: "timeout",
-        label: "Timeout",
-        value: formatProviderTimeoutLabel(args.providerTimeoutMs),
-      },
-      {
-        id: "cross-provider",
-        label: "Cross-Provider",
-        value: args.staveAutoAllowCrossProviderWorkers ? "On" : "Off",
-      },
-      {
-        id: "max-parallel",
-        label: "Max Parallel",
-        value: String(args.staveAutoMaxParallelSubtasks),
-      },
-    ];
+    return [];
   }
 
   if (args.activeProvider === "claude-code") {
