@@ -41,7 +41,12 @@ import {
   generateFallbackPullRequestDraft,
   isReasonablePullRequestTitle,
 } from "@/lib/source-control-pr";
-import { buildCreatePrTargetBranchOptions } from "@/components/layout/TopBarOpenPR.utils";
+import {
+  type CreatePrDialogStep,
+  type CreatePrSubmitAction,
+  buildCreatePrTargetBranchOptions,
+  shouldShowCreatePrSubmitSpinner,
+} from "@/components/layout/TopBarOpenPR.utils";
 import { TOP_BAR_PR_ACTION_EVENT, type TopBarPrActionDetail } from "@/components/layout/top-bar-pr-events";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import { useAppStore } from "@/store/app.store";
@@ -71,14 +76,7 @@ interface InlineNotice {
   description?: string;
 }
 
-type Step =
-  | "idle"
-  | "loading"       // checking status + generating PR description
-  | "ready"         // dialog open with all fields populated
-  | "committing"    // committing uncommitted changes
-  | "pushing"       // pushing to remote
-  | "creating-pr"   // running gh pr create
-  | "action";       // running a PR action (mark ready, merge, etc.)
+type Step = CreatePrDialogStep;
 
 function InlineNoticeBanner(props: { notice: InlineNotice }) {
   const toneClassName =
@@ -193,6 +191,7 @@ function PullRequestBranchFields(props: {
 
 export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const [step, setStep] = useState<Step>("idle");
+  const [activeSubmitAction, setActiveSubmitAction] = useState<CreatePrSubmitAction | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [continueDialogOpen, setContinueDialogOpen] = useState(false);
   const [continuingWorkspace, setContinuingWorkspace] = useState(false);
@@ -311,6 +310,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     setTargetBranch(defaultBaseBranch);
     setTargetBranchOptions([defaultBaseBranch]);
     setLoadingTargetBranches(Boolean(listBranches));
+    setActiveSubmitAction(null);
     setCommitMessage("");
     setChangedFiles([]);
     setChangesExpanded(true);
@@ -393,11 +393,13 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   }
 
   async function handleSubmit(options: { draft: boolean }) {
+    const submitAction: CreatePrSubmitAction = options.draft ? "draft" : "pr";
     const runCommand = window.api?.terminal?.runCommand;
     const createPR = window.api?.sourceControl?.createPR;
     const openExternal = window.api?.shell?.openExternal;
     const runScriptHook = window.api?.scripts?.runHook;
     const selectedTargetBranch = targetBranch.trim() || defaultBaseBranch;
+    setActiveSubmitAction(submitAction);
 
     if (!runCommand || !createPR) {
       setInlineNotice({
@@ -573,6 +575,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     setDialogOpen(false);
     setStep("idle");
     setInlineNotice(null);
+    setActiveSubmitAction(null);
 
     const label = options.draft ? "Draft PR created" : "PR created";
     toast.success(label, { description: prResult.prUrl ?? "Pull request created successfully." });
@@ -716,6 +719,16 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
   const isBusy = step !== "idle" && step !== "ready";
   const isDialogBusy = step === "committing" || step === "pushing" || step === "creating-pr";
+  const isCreateDraftSubmitting = shouldShowCreatePrSubmitSpinner({
+    step,
+    activeSubmitAction,
+    buttonAction: "draft",
+  });
+  const isCreatePrSubmitting = shouldShowCreatePrSubmitSpinner({
+    step,
+    activeSubmitAction,
+    buttonAction: "pr",
+  });
   const effectiveTitle = prTitle.trim() || generateFallbackPRDraft(changedFiles).title;
   const titleValidationMessage = prTitle.trim() && !isReasonablePullRequestTitle(prTitle)
     ? "Use Conventional Commits format like `fix(topbar): add create pr loading splash`."
@@ -934,6 +947,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
             suggestionRequestIdRef.current += 1;
             setInlineNotice(null);
             setLoadingTargetBranches(false);
+            setActiveSubmitAction(null);
             setTargetBranch(defaultBaseBranch);
             setTargetBranchOptions([]);
             setStep("idle");
@@ -1056,14 +1070,14 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
                   disabled={step !== "ready" || isDialogBusy || !isReasonablePullRequestTitle(effectiveTitle)}
                   onClick={() => void handleSubmit({ draft: true })}
                 >
-                  {step === "creating-pr" ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                  {isCreateDraftSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
                   Create Draft
                 </Button>
                 <Button
                   type="submit"
                   disabled={step !== "ready" || isDialogBusy || !isReasonablePullRequestTitle(effectiveTitle)}
                 >
-                  {isDialogBusy && step !== "creating-pr" ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                  {isCreatePrSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
                   Create PR
                 </Button>
               </DialogFooter>
