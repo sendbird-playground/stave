@@ -22,7 +22,12 @@ import {
 } from "./stave-mcp-config";
 import { ensurePersistenceReady } from "./state";
 import {
+  addWorkspaceConfluencePage,
+  addWorkspaceFigmaResource,
+  addWorkspaceJiraIssue,
+  addWorkspaceSlackThread,
   createWorkspace,
+  getWorkspaceInformation,
   getTaskStatus,
   listKnownProjects,
   listTurnEvents,
@@ -313,6 +318,91 @@ function createToolServer() {
       taskId,
     }),
   }));
+
+  server.registerTool("stave_get_workspace_information", {
+    description: "Read the current Workspace Information state from Stave.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+    },
+  }, async ({ workspaceId }) => toStructuredResult(
+    await getWorkspaceInformation({ workspaceId }),
+  ));
+
+  server.registerTool("stave_add_workspace_jira_issue", {
+    description: "Register a Jira issue in the Stave Workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      url: z.string().min(1).describe("Jira issue URL."),
+      issueKey: z.string().optional().describe("Optional Jira issue key override."),
+      title: z.string().optional().describe("Optional title override."),
+      status: z.string().optional().describe("Optional status label."),
+      note: z.string().optional().describe("Optional note stored with the link."),
+    },
+  }, async ({ workspaceId, url, issueKey, title, status, note }) => toStructuredResult(
+    await addWorkspaceJiraIssue({
+      workspaceId,
+      url,
+      issueKey,
+      title,
+      status,
+      note,
+    }),
+  ));
+
+  server.registerTool("stave_add_workspace_confluence_page", {
+    description: "Register a Confluence page in the Stave Workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      url: z.string().min(1).describe("Confluence page URL."),
+      title: z.string().optional().describe("Optional title override."),
+      spaceKey: z.string().optional().describe("Optional space key override."),
+      note: z.string().optional().describe("Optional note stored with the link."),
+    },
+  }, async ({ workspaceId, url, title, spaceKey, note }) => toStructuredResult(
+    await addWorkspaceConfluencePage({
+      workspaceId,
+      url,
+      title,
+      spaceKey,
+      note,
+    }),
+  ));
+
+  server.registerTool("stave_add_workspace_figma_resource", {
+    description: "Register a Figma resource in the Stave Workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      url: z.string().min(1).describe("Figma URL."),
+      title: z.string().optional().describe("Optional title override."),
+      nodeId: z.string().optional().describe("Optional node id override."),
+      note: z.string().optional().describe("Optional note stored with the link."),
+    },
+  }, async ({ workspaceId, url, title, nodeId, note }) => toStructuredResult(
+    await addWorkspaceFigmaResource({
+      workspaceId,
+      url,
+      title,
+      nodeId,
+      note,
+    }),
+  ));
+
+  server.registerTool("stave_add_workspace_slack_thread", {
+    description: "Register a Slack thread in the Stave Workspace Information panel.",
+    inputSchema: {
+      workspaceId: z.string().min(1).describe("Workspace id."),
+      url: z.string().min(1).describe("Slack thread URL."),
+      channelName: z.string().optional().describe("Optional channel label override."),
+      note: z.string().optional().describe("Optional note stored with the link."),
+    },
+  }, async ({ workspaceId, url, channelName, note }) => toStructuredResult(
+    await addWorkspaceSlackThread({
+      workspaceId,
+      url,
+      channelName,
+      note,
+    }),
+  ));
 
   server.registerTool("stave_list_turn_events", {
     description: "List persisted turn events for a Stave task run.",

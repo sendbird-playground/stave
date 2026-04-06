@@ -93,7 +93,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - moves the old workspace-bar utility toggles into a vertical strip on the far right
   - labels the git panel as `Source Control`, with `Changes` and `History` kept as the internal tabs inside that panel
   - exposes a dedicated Scripts panel for workspace actions, services, hook inspection, Orbit-enabled dev services, runtime path/status summary, and quick navigation back to project settings
-  - exposes a workspace information panel with shared accordion sections, a distinct summary card, URL-first Jira/Figma/GitHub integrations, notes, todos, saved plans, and custom structured fields
+  - exposes a workspace information panel with shared accordion sections, a distinct summary card, URL-first linked-resource sections for Jira, Confluence, Figma, Slack, and GitHub, plus notes, todos, saved plans, and custom structured fields that Muse and local MCP workflows can register against
   - surfaces workspace-level plan history from markdown files under `.stave/context/plans`, while still showing legacy `.stave/plans` files
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`
   - keeps terminal independent while making editor and explorer/changes mutually exclusive on small widths

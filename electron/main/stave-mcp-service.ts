@@ -41,6 +41,17 @@ import {
   defaultWorkspaceName,
   type WorkspaceSessionState,
 } from "../../src/store/workspace-session-state";
+import {
+  createWorkspaceConfluencePage,
+  createWorkspaceFigmaResource,
+  createWorkspaceJiraIssue,
+  createWorkspaceSlackThread,
+  extractConfluencePageReference,
+  extractFigmaResourceReference,
+  extractJiraIssueReference,
+  extractSlackThreadReference,
+  type WorkspaceInformationState,
+} from "../../src/lib/workspace-information";
 import { applyProviderEventsToWorkspaceSession } from "../../src/store/workspace-turn-replay";
 import {
   findLatestPendingApprovalPart,
@@ -181,6 +192,7 @@ async function persistWorkspaceSession(args: {
       tasks: args.session.tasks,
       messagesByTask: args.session.messagesByTask,
       promptDraftByTask: args.session.promptDraftByTask,
+      workspaceInformation: args.session.workspaceInformation,
       editorTabs: args.session.editorTabs,
       activeEditorTabId: args.session.activeEditorTabId,
       providerSessionByTask: args.session.providerSessionByTask,
@@ -354,6 +366,172 @@ async function loadWorkspaceSession(workspaceId: string) {
 function cacheWorkspaceSession(workspaceId: string, session: WorkspaceSessionState) {
   workspaceSessionCacheById.set(workspaceId, session);
   return session;
+}
+
+function normalizeWorkspaceInfoString(value?: string) {
+  return value?.trim() || "";
+}
+
+async function updateWorkspaceInformationSession(args: {
+  workspaceId: string;
+  updater: (current: WorkspaceInformationState) => WorkspaceInformationState;
+}) {
+  const { projects } = await loadNormalizedProjects();
+  const registration = findWorkspaceRegistration({
+    projects,
+    workspaceId: args.workspaceId,
+  });
+  if (!registration) {
+    throw new Error(`Workspace not found: ${args.workspaceId}`);
+  }
+
+  const session = await loadWorkspaceSession(args.workspaceId);
+  const nextWorkspaceInformation = args.updater(session.workspaceInformation);
+  const nextSession = cacheWorkspaceSession(args.workspaceId, {
+    ...session,
+    workspaceInformation: nextWorkspaceInformation,
+  });
+  await queueWorkspaceSessionPersist({
+    workspaceId: args.workspaceId,
+    workspaceName: registration.workspace.name,
+    session: nextSession,
+  });
+
+  return nextWorkspaceInformation;
+}
+
+export async function getWorkspaceInformation(args: {
+  workspaceId: string;
+}) {
+  const session = await loadWorkspaceSession(args.workspaceId);
+  return {
+    workspaceId: args.workspaceId,
+    workspaceInformation: session.workspaceInformation,
+  };
+}
+
+export async function addWorkspaceJiraIssue(args: {
+  workspaceId: string;
+  url: string;
+  issueKey?: string;
+  title?: string;
+  status?: string;
+  note?: string;
+}) {
+  const parsed = extractJiraIssueReference(args.url);
+  let added = createWorkspaceJiraIssue();
+  const workspaceInformation = await updateWorkspaceInformationSession({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      added = createWorkspaceJiraIssue();
+      added.issueKey = normalizeWorkspaceInfoString(args.issueKey) || parsed?.issueKey || "";
+      added.title = normalizeWorkspaceInfoString(args.title) || added.issueKey || "Jira issue";
+      added.url = normalizeWorkspaceInfoString(args.url);
+      added.status = normalizeWorkspaceInfoString(args.status);
+      added.note = normalizeWorkspaceInfoString(args.note);
+      return {
+        ...current,
+        jiraIssues: [...current.jiraIssues, added],
+      };
+    },
+  });
+
+  return {
+    workspaceId: args.workspaceId,
+    added,
+    workspaceInformation,
+  };
+}
+
+export async function addWorkspaceConfluencePage(args: {
+  workspaceId: string;
+  url: string;
+  title?: string;
+  spaceKey?: string;
+  note?: string;
+}) {
+  const parsed = extractConfluencePageReference(args.url);
+  let added = createWorkspaceConfluencePage();
+  const workspaceInformation = await updateWorkspaceInformationSession({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      added = createWorkspaceConfluencePage();
+      added.title = normalizeWorkspaceInfoString(args.title) || parsed?.title || parsed?.spaceKey || "Confluence page";
+      added.url = normalizeWorkspaceInfoString(args.url);
+      added.spaceKey = normalizeWorkspaceInfoString(args.spaceKey) || parsed?.spaceKey || "";
+      added.note = normalizeWorkspaceInfoString(args.note);
+      return {
+        ...current,
+        confluencePages: [...current.confluencePages, added],
+      };
+    },
+  });
+
+  return {
+    workspaceId: args.workspaceId,
+    added,
+    workspaceInformation,
+  };
+}
+
+export async function addWorkspaceFigmaResource(args: {
+  workspaceId: string;
+  url: string;
+  title?: string;
+  nodeId?: string;
+  note?: string;
+}) {
+  const parsed = extractFigmaResourceReference(args.url);
+  let added = createWorkspaceFigmaResource();
+  const workspaceInformation = await updateWorkspaceInformationSession({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      added = createWorkspaceFigmaResource();
+      added.title = normalizeWorkspaceInfoString(args.title) || parsed?.title || parsed?.fileKey || "Figma resource";
+      added.url = normalizeWorkspaceInfoString(args.url);
+      added.nodeId = normalizeWorkspaceInfoString(args.nodeId) || parsed?.nodeId || "";
+      added.note = normalizeWorkspaceInfoString(args.note);
+      return {
+        ...current,
+        figmaResources: [...current.figmaResources, added],
+      };
+    },
+  });
+
+  return {
+    workspaceId: args.workspaceId,
+    added,
+    workspaceInformation,
+  };
+}
+
+export async function addWorkspaceSlackThread(args: {
+  workspaceId: string;
+  url: string;
+  channelName?: string;
+  note?: string;
+}) {
+  const parsed = extractSlackThreadReference(args.url);
+  let added = createWorkspaceSlackThread();
+  const workspaceInformation = await updateWorkspaceInformationSession({
+    workspaceId: args.workspaceId,
+    updater: (current) => {
+      added = createWorkspaceSlackThread();
+      added.url = normalizeWorkspaceInfoString(args.url);
+      added.channelName = normalizeWorkspaceInfoString(args.channelName) || parsed?.channelId || "";
+      added.note = normalizeWorkspaceInfoString(args.note);
+      return {
+        ...current,
+        slackThreads: [...current.slackThreads, added],
+      };
+    },
+  });
+
+  return {
+    workspaceId: args.workspaceId,
+    added,
+    workspaceInformation,
+  };
 }
 
 function buildTaskTitleFromPrompt(prompt: string) {

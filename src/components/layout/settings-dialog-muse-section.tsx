@@ -131,7 +131,7 @@ export function MuseSection() {
     <SectionStack>
       <SectionHeading
         title="Stave Muse"
-        description="Configure the app-wide Muse that explains Stave, navigates workspaces, edits the Information panel, and hands complex implementation work off into task chat."
+        description="Configure the app-wide Muse that navigates Stave, orchestrates connected-tool workflows for the user's project, updates the Information panel, and hands Stave implementation work off into task chat."
       />
 
       <SettingsCard
@@ -163,7 +163,7 @@ export function MuseSection() {
 
         <LabeledField
           title="Auto Handoff To Task"
-          description="When Muse detects implementation or git-heavy work, automatically create a task and continue there."
+          description="When Muse detects Stave implementation or repository work that belongs in a workspace task, automatically create a task and continue there."
         >
           <ChoiceButtons
             value={museAutoHandoffToTask ? "on" : "off"}
@@ -202,13 +202,13 @@ export function MuseSection() {
         />
         <MuseModelField
           title="Chat Model"
-          description="Used for Stave questions, summaries, and direct control-plane requests that stay inside the Muse widget."
+          description="Used for Stave questions, Information panel actions, and connected-tool workflows that stay inside the Muse widget."
           value={museChatModel}
           onSelect={(model) => updateSettings({ patch: { museChatModel: model } })}
         />
         <MuseModelField
           title="Planner Model"
-          description="Used for more structured configuration, workflow planning, and multi-step Muse reasoning that should not enter task chat yet."
+          description="Used for structured workflow planning, configuration strategy, and multi-step reasoning that should not enter task chat yet."
           value={musePlannerModel}
           onSelect={(model) => updateSettings({ patch: { musePlannerModel: model } })}
         />

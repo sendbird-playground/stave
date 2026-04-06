@@ -32,6 +32,11 @@ const STAVE_MUSE_REPO_WORK_PATTERNS = [
   /(코드|리포|레포|파일|함수|컴포넌트|데이터베이스|db|sqlite|스키마|마이그레이션|터미널|깃)/i,
 ] as const;
 
+const STAVE_MUSE_REPO_INSPECTION_PATTERNS = [
+  /\b(inspect|investigate|debug|trace|read|check|look into|examine)\b/i,
+  /(살펴|확인|조사|읽어|추적|디버그|들여다)/i,
+] as const;
+
 const STAVE_MUSE_IMPLEMENTATION_PATTERNS = [
   /\b(fix|debug|implement|modify|patch|repair|investigate|refactor|rename)\b/i,
   /(고쳐|수정|디버그|구현|패치|조사|리팩터|리네임|버그)/i,
@@ -62,6 +67,7 @@ export function resolveStaveMuseFastPathDecision(args: {
   const requestsPlanning = matchesAny(input, STAVE_MUSE_PLANNER_PATTERNS);
   const requestsConnectedTools = matchesAny(input, STAVE_MUSE_CONNECTED_TOOL_PATTERNS);
   const requestsRepoWork = matchesAny(input, STAVE_MUSE_REPO_WORK_PATTERNS);
+  const requestsRepoInspection = matchesAny(input, STAVE_MUSE_REPO_INSPECTION_PATTERNS);
   const requestsImplementation = matchesAny(input, STAVE_MUSE_IMPLEMENTATION_PATTERNS);
   const mentionsStaveSurface = matchesAny(input, STAVE_MUSE_PRODUCT_SURFACE_PATTERNS);
 
@@ -72,17 +78,17 @@ export function resolveStaveMuseFastPathDecision(args: {
     };
   }
 
-  if ((requestsImplementation && mentionsStaveSurface) || requestsRepoWork) {
+  if (requestsImplementation && mentionsStaveSurface) {
     return {
       mode: "handoff",
       reason: "stave implementation work",
     };
   }
 
-  if (requestsConnectedTools) {
+  if (requestsRepoWork && requestsRepoInspection && mentionsStaveSurface) {
     return {
-      mode: "chat",
-      reason: "connected tool workflow",
+      mode: "handoff",
+      reason: "stave repository inspection",
     };
   }
 
@@ -90,6 +96,13 @@ export function resolveStaveMuseFastPathDecision(args: {
     return {
       mode: "planner",
       reason: "planning request",
+    };
+  }
+
+  if (requestsConnectedTools) {
+    return {
+      mode: "chat",
+      reason: "connected tool workflow",
     };
   }
 
