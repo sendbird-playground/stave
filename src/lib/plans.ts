@@ -1,3 +1,5 @@
+import { normalizePlanText } from "@/lib/plan-text";
+
 export const WORKSPACE_PLANS_DIRECTORY = ".stave/context/plans";
 export const LEGACY_WORKSPACE_PLANS_DIRECTORY = ".stave/plans";
 
@@ -47,6 +49,7 @@ export function isWorkspacePlanFilePath(filePath: string) {
 export function sortWorkspacePlansNewestFirst<T extends WorkspacePlanEntry>(entries: T[]) {
   return [...entries].sort((left, right) => right.timestamp.localeCompare(left.timestamp));
 }
+export const normalizeWorkspacePlanText = normalizePlanText;
 
 export async function persistWorkspacePlanFile(args: {
   rootPath: string;
@@ -62,7 +65,7 @@ export async function persistWorkspacePlanFile(args: {
     await window.api?.fs?.writeFile?.({
       rootPath: args.rootPath,
       filePath,
-      content: args.planText,
+      content: normalizePlanText(args.planText),
     });
     return filePath;
   } catch {

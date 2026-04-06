@@ -460,6 +460,50 @@ describe("plan response replay", () => {
       isStreaming: false,
     });
   });
+
+  test("normalizes commentary out of plan_ready content", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        {
+          type: "plan_ready",
+          planText: "...\n\n## Plan\n- Strip commentary\n- Keep steps only\n\nLet me know if you want changes.",
+        },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "o3",
+    });
+
+    expect(replayed.messages).toHaveLength(1);
+    expect(replayed.messages[0]).toMatchObject({
+      content: "## Plan\n- Strip commentary\n- Keep steps only",
+      isPlanResponse: true,
+      planText: "## Plan\n- Strip commentary\n- Keep steps only",
+      isStreaming: false,
+    });
+  });
+
+  test("ignores punctuation-only plan_ready placeholders", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        { type: "plan_ready", planText: "..." },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "o3",
+    });
+
+    expect(replayed.messages).toHaveLength(1);
+    expect(replayed.messages[0]).toMatchObject({
+      content: "No response returned.",
+      isStreaming: false,
+    });
+    expect(replayed.messages[0]?.isPlanResponse).not.toBe(true);
+  });
 });
 
 describe("subagent progress integration", () => {
