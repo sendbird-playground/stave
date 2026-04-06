@@ -59,7 +59,7 @@ export function mergeClipboardImageAttachments<T extends { dataUrl: string }>(ar
   const deduped = new Map<string, T>();
 
   for (const attachment of args.existing ?? []) {
-    const key = attachment.dataUrl.trim();
+    const key = getClipboardImageAttachmentKey(attachment.dataUrl);
     if (!key || deduped.has(key)) {
       continue;
     }
@@ -67,7 +67,7 @@ export function mergeClipboardImageAttachments<T extends { dataUrl: string }>(ar
   }
 
   for (const attachment of args.incoming) {
-    const key = attachment.dataUrl.trim();
+    const key = getClipboardImageAttachmentKey(attachment.dataUrl);
     if (!key || deduped.has(key)) {
       continue;
     }
@@ -75,4 +75,30 @@ export function mergeClipboardImageAttachments<T extends { dataUrl: string }>(ar
   }
 
   return Array.from(deduped.values());
+}
+
+function getClipboardImageAttachmentKey(dataUrl: string) {
+  const normalized = dataUrl.trim();
+  if (!normalized) {
+    return normalized;
+  }
+
+  const separatorIndex = normalized.indexOf(",");
+  if (separatorIndex === -1) {
+    return normalized;
+  }
+
+  const header = normalized.slice(0, separatorIndex).toLowerCase();
+  const payload = normalized.slice(separatorIndex + 1).trim();
+  if (!payload) {
+    return normalized;
+  }
+
+  // Clipboard providers can surface the same binary with different data URL MIME headers.
+  // Deduping by payload prevents those aliases from becoming duplicate pasted attachments.
+  if (header.startsWith("data:") && header.includes(";base64")) {
+    return payload;
+  }
+
+  return normalized;
 }
