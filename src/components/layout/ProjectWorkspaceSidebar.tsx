@@ -53,6 +53,7 @@ import { CreateWorkspaceDialog } from "@/components/layout/CreateWorkspaceDialog
 import { OpenPathDialog } from "@/components/layout/OpenPathDialog";
 import { MemoryUsagePopover } from "@/components/layout/ResourcesPopover";
 import { StaveAppMenuButton } from "@/components/layout/StaveAppMenuButton";
+import { StaveMuseTriggerButton } from "@/components/layout/StaveMuseTriggerButton";
 import { PrStatusIcon } from "@/components/layout/PrStatusIcon";
 import { WorkspaceShortcutChip } from "@/components/layout/WorkspaceShortcutChip";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
@@ -237,7 +238,7 @@ const MAC_TRAFFIC_LIGHT_CLEARANCE = 40;
 const MAC_TRAFFIC_LIGHT_LEFT_INSET = 12;
 const MAC_TRAFFIC_LIGHT_CLUSTER_WIDTH = 58;
 const MAC_TRAFFIC_LIGHT_RIGHT_GUTTER = 10;
-const COLLAPSED_PROJECT_SIDEBAR_WIDTH = IS_MAC
+export const COLLAPSED_PROJECT_SIDEBAR_WIDTH = IS_MAC
   ? Math.max(
       DEFAULT_COLLAPSED_PROJECT_SIDEBAR_WIDTH,
       MAC_TRAFFIC_LIGHT_LEFT_INSET +
@@ -1262,7 +1263,14 @@ export function ProjectWorkspaceSidebar(args: {
         >
           <TooltipProvider>
             {args.collapsed ? (
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center gap-2">
+                <StaveMuseTriggerButton />
+                <StaveAppMenuButton
+                  compact
+                  onOpenCommandPalette={args.onOpenCommandPalette}
+                  onOpenKeyboardShortcuts={args.onOpenKeyboardShortcuts}
+                  onOpenSettings={() => args.onOpenSettings()}
+                />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -1281,13 +1289,16 @@ export function ProjectWorkspaceSidebar(args: {
                 </Tooltip>
               </div>
             ) : (
-              <div className="flex items-center justify-between">
-                <StaveAppMenuButton
-                  compact
-                  onOpenCommandPalette={args.onOpenCommandPalette}
-                  onOpenKeyboardShortcuts={args.onOpenKeyboardShortcuts}
-                  onOpenSettings={() => args.onOpenSettings()}
-                />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <StaveAppMenuButton
+                    compact
+                    onOpenCommandPalette={args.onOpenCommandPalette}
+                    onOpenKeyboardShortcuts={args.onOpenKeyboardShortcuts}
+                    onOpenSettings={() => args.onOpenSettings()}
+                  />
+                  <StaveMuseTriggerButton />
+                </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

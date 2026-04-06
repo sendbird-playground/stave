@@ -14,6 +14,7 @@ import {
   suggestClaudePRDescription,
 } from "../../providers/claude-sdk-runtime";
 import type { StreamTurnArgs } from "../../providers/types";
+import { getCodexMcpStatus } from "../utils/tooling-status";
 import {
   ApprovalResponseArgsSchema,
   ClaudeRuntimeActionArgsSchema,
@@ -320,6 +321,21 @@ export function registerProviderHandlers() {
     return reloadClaudePlugins({
       cwd: parsedArgs.data.cwd,
       runtimeOptions: parsedArgs.data.runtimeOptions,
+    });
+  });
+
+  ipcMain.handle("provider:get-codex-mcp-status", (_event, args: unknown) => {
+    const parsedArgs = ClaudeRuntimeActionArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex MCP status request.",
+        pluginSupport: "unsupported" as const,
+        servers: [],
+      };
+    }
+    return getCodexMcpStatus({
+      codexPathOverride: parsedArgs.data.runtimeOptions?.codexPathOverride,
     });
   });
 

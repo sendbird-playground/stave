@@ -9,7 +9,7 @@ type Assert<T extends true> = T;
 type IsNever<T> = [T] extends [never] ? true : false;
 
 export const PROVIDER_TIMEOUT_OPTIONS = [1800000, 3600000, 7200000, 10800000] as const;
-export const DEFAULT_PROVIDER_TIMEOUT_MS = 3600000;
+export const DEFAULT_PROVIDER_TIMEOUT_MS = 10800000;
 
 export const BOOLEAN_TOGGLE_OPTIONS = [
   { value: "on", label: "On" },

@@ -12,6 +12,8 @@ import { RenderProfiler } from "@/lib/render-profiler";
 import { useAppStore } from "@/store/app.store";
 import { useShallow } from "zustand/react/shallow";
 
+const EMPTY_MESSAGES: readonly unknown[] = [];
+
 export function ChatArea() {
   const chatInputDockRef = useRef<HTMLDivElement | null>(null);
   const [chatInputDockHeight, setChatInputDockHeight] = useState(0);
@@ -34,7 +36,7 @@ export function ChatArea() {
     state.workspaces.length > 0,
     state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId),
     state.tasks.some((task) => task.id === state.activeTaskId),
-    state.messageCountByTask[state.activeTaskId] ?? (state.messagesByTask[state.activeTaskId] ?? []).length,
+    state.messageCountByTask[state.activeTaskId] ?? (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length,
     state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
     state.activeTurnIdsByTask[state.activeTaskId],
     state.refreshActiveManagedTask,
@@ -168,36 +170,57 @@ export function ChatArea() {
   if (viewMode === "no_task") {
     return (
       <div {...sessionAreaProps}>
-        <EmptySplash onCreateTask={() => createTask({ title: "" })} showCreateTaskAction />
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
+            <EmptySplash
+              layout="top-card"
+              onCreateTask={() => createTask({ title: "" })}
+              showCreateTaskAction
+            />
+          </div>
+        </div>
       </div>
     );
   }
 
-  const content = isEmpty
-    ? (
-        <section className="flex min-h-0 flex-1 items-center justify-center px-6">
-          <div className="w-full max-w-6xl">
-            <RenderProfiler id="ChatInputCompact">
-              <ChatInput compact />
-            </RenderProfiler>
-          </div>
-        </section>
-      )
-    : (
+  if (viewMode === "empty_task") {
+    return (
+      <div {...sessionAreaProps}>
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <RenderProfiler id="ChatPanel" thresholdMs={8}>
-            <ChatPanel />
-          </RenderProfiler>
-          <RenderProfiler id="PlanViewer">
-            <PlanViewer inputDockHeight={chatInputDockHeight} />
-          </RenderProfiler>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto flex w-full max-w-6xl flex-col">
+              <EmptySplash
+                layout="top-card"
+                title="Start this task"
+                description="Send the first prompt to begin work in this workspace."
+              />
+            </div>
+          </div>
           <div ref={chatInputDockRef} className="relative z-30 shrink-0">
             <RenderProfiler id="ChatInput" thresholdMs={8}>
               <ChatInput />
             </RenderProfiler>
           </div>
         </div>
-      );
+      </div>
+    );
+  }
+
+  const content = (
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <RenderProfiler id="ChatPanel" thresholdMs={8}>
+        <ChatPanel />
+      </RenderProfiler>
+      <RenderProfiler id="PlanViewer">
+        <PlanViewer inputDockHeight={chatInputDockHeight} />
+      </RenderProfiler>
+      <div ref={chatInputDockRef} className="relative z-30 shrink-0">
+        <RenderProfiler id="ChatInput" thresholdMs={8}>
+          <ChatInput />
+        </RenderProfiler>
+      </div>
+    </div>
+  );
 
   return (
     <div {...sessionAreaProps}>

@@ -5,6 +5,7 @@ import {
   parseWorkspacePlanFilePath,
   sortWorkspacePlansNewestFirst,
 } from "@/lib/plans";
+import { hasMeaningfulPlanText, normalizePlanText } from "@/lib/plan-text";
 
 describe("workspace plans helpers", () => {
   test("writes new plans into the workspace context plans directory", () => {
@@ -31,5 +32,34 @@ describe("workspace plans helpers", () => {
       older.filePath,
     ]);
     expect(newer.label).toBe("2026-04-01 04:05:06");
+  });
+
+  test("strips leading commentary before a structured plan block", () => {
+    expect(normalizePlanText(
+      "I think this approach is safest.\n\n## Plan\n1. Inspect the parser\n2. Patch the write path",
+    )).toBe("## Plan\n1. Inspect the parser\n2. Patch the write path");
+  });
+
+  test("strips trailing sign-off commentary after a structured plan block", () => {
+    expect(normalizePlanText(
+      "## Plan\n- Reproduce the issue\n- Save only normalized output\n\nLet me know if you want me to revise it.",
+    )).toBe("## Plan\n- Reproduce the issue\n- Save only normalized output");
+  });
+
+  test("extracts only the tagged proposed plan content", () => {
+    expect(normalizePlanText(
+      "Some analysis\n<proposed_plan>\n## Plan\n- Ship the fix\n</proposed_plan>\nIf you'd like, I can refine it further.",
+    )).toBe("## Plan\n- Ship the fix");
+  });
+
+  test("keeps unstructured multiline plans intact when no structured block exists", () => {
+    expect(normalizePlanText(
+      "Inspect the current output.\nPatch the persistence layer.\nRun the focused tests.",
+    )).toBe("Inspect the current output.\nPatch the persistence layer.\nRun the focused tests.");
+  });
+
+  test("does not treat ellipsis-only placeholder text as a meaningful plan", () => {
+    expect(hasMeaningfulPlanText("...")).toBe(false);
+    expect(hasMeaningfulPlanText("…")).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { hasMeaningfulPlanText, normalizePlanText } from "@/lib/plan-text";
 import type { ChatMessage } from "@/types/chat";
 
 const PLAN_VIEWER_COLLAPSED_GAP_PX = 8;
@@ -18,7 +19,7 @@ type PlanMessage = Pick<ChatMessage, "role" | "providerId" | "isPlanResponse" | 
 function hasPlanContent(message?: PlanMessage | null) {
   return message?.role === "assistant"
     && message.isPlanResponse === true
-    && Boolean(message.planText?.trim());
+    && hasMeaningfulPlanText(message.planText);
 }
 
 export function resolvePlanViewerState(args: {
@@ -29,7 +30,9 @@ export function resolvePlanViewerState(args: {
   lastMessage?: PlanMessage | null;
   isTurnActive: boolean;
 }) {
-  const planText = args.latestPlanMessage?.planText?.trim() ?? "";
+  const planText = hasMeaningfulPlanText(args.latestPlanMessage?.planText)
+    ? normalizePlanText(args.latestPlanMessage?.planText ?? "")
+    : "";
 
   const isClaudePlanMode =
     (args.activeProvider === "claude-code" || args.activeProvider === "stave")

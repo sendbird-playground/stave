@@ -11,10 +11,13 @@ import {
   FolderPlus,
   LoaderCircle,
   RefreshCcw,
+  Search,
   SquareTerminal,
   Trash2,
+  X,
 } from "lucide-react";
-import type { RefObject } from "react";
+import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
+import { Virtuoso } from "react-virtuoso";
 import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import type { WorkspaceDirectoryEntry } from "@/lib/fs/fs.types";
@@ -31,8 +34,241 @@ interface PendingExplorerCreate {
   placeholder: string;
 }
 
+interface SearchResultFile {
+  file: string;
+  matches: Array<{ line: number; text: string }>;
+}
+
 function getParentDirectoryPath(args: { path: string }) {
   return args.path.split("/").slice(0, -1).join("/");
+}
+
+function highlightMatch(text: string, query: string) {
+  if (!query) return text;
+  const index = text.toLowerCase().indexOf(query.toLowerCase());
+  if (index === -1) return text;
+  return (
+    <>
+      {text.slice(0, index)}
+      <span className="bg-yellow-300/40 text-foreground font-medium">{text.slice(index, index + query.length)}</span>
+      {text.slice(index + query.length)}
+    </>
+  );
+}
+
+type FlatSearchRow =
+  | { kind: "file"; file: string; fileName: string; dirPath: string; matchCount: number }
+  | { kind: "match"; file: string; line: number; text: string };
+
+function buildFlatRows(results: SearchResultFile[], collapsedFiles: Set<string>): FlatSearchRow[] {
+  const rows: FlatSearchRow[] = [];
+  for (const result of results) {
+    const parts = result.file.split("/");
+    rows.push({
+      kind: "file",
+      file: result.file,
+      fileName: parts.pop() ?? result.file,
+      dirPath: parts.join("/"),
+      matchCount: result.matches.length,
+    });
+    if (!collapsedFiles.has(result.file)) {
+      for (const match of result.matches) {
+        rows.push({ kind: "match", file: result.file, line: match.line, text: match.text });
+      }
+    }
+  }
+  return rows;
+}
+
+function ExplorerSearchPanel(props: {
+  workspaceCwd: string | undefined;
+  onOpenFile: (path: string, line?: number) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResultFile[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [limitHit, setLimitHit] = useState(false);
+  const [error, setError] = useState("");
+  const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const performSearch = useCallback(async (searchQuery: string) => {
+    if (!searchQuery.trim() || !props.workspaceCwd) {
+      setResults([]);
+      setHasSearched(false);
+      setLimitHit(false);
+      setError("");
+      return;
+    }
+    setIsSearching(true);
+    setError("");
+    try {
+      const searchFn = window.api?.fs?.searchContent;
+      if (!searchFn) return;
+      const response = await searchFn({
+        rootPath: props.workspaceCwd!,
+        query: searchQuery.trim(),
+      });
+      if (response?.ok) {
+        setResults(response.results);
+        setLimitHit(response.limitHit);
+        setCollapsedFiles(new Set());
+      } else {
+        setResults([]);
+        setLimitHit(false);
+        setError(response?.stderr ?? "Search failed.");
+      }
+    } catch (err) {
+      setResults([]);
+      setLimitHit(false);
+      setError(String(err));
+    } finally {
+      setIsSearching(false);
+      setHasSearched(true);
+    }
+  }, [props.workspaceCwd]);
+
+  const handleInputChange = useCallback((value: string) => {
+    setQuery(value);
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+    if (!value.trim()) {
+      setResults([]);
+      setHasSearched(false);
+      setLimitHit(false);
+      setError("");
+      return;
+    }
+    searchTimerRef.current = setTimeout(() => {
+      void performSearch(value);
+    }, 300);
+  }, [performSearch]);
+
+  const handleClear = useCallback(() => {
+    setQuery("");
+    setResults([]);
+    setHasSearched(false);
+    setLimitHit(false);
+    setError("");
+    setCollapsedFiles(new Set());
+  }, []);
+
+  const toggleFileCollapse = useCallback((file: string) => {
+    setCollapsedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(file)) {
+        next.delete(file);
+      } else {
+        next.add(file);
+      }
+      return next;
+    });
+  }, []);
+
+  const flatRows = useMemo(() => buildFlatRows(results, collapsedFiles), [results, collapsedFiles]);
+  const totalMatches = useMemo(() => results.reduce((sum, r) => sum + r.matches.length, 0), [results]);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="relative px-2 pb-1">
+        <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => handleInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+              void performSearch(query);
+            }
+          }}
+          className="h-8 rounded-sm border-border/80 bg-background pl-7 pr-7 text-sm"
+          placeholder="Search in files..."
+          autoFocus
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+
+      {isSearching ? (
+        <p className="flex items-center gap-2 px-2 py-2 text-sm text-muted-foreground">
+          <LoaderCircle className="size-4 animate-spin" />
+          Searching...
+        </p>
+      ) : null}
+
+      {!isSearching && hasSearched && results.length === 0 && !error ? (
+        <p className="px-2 py-2 text-sm text-muted-foreground">No results found.</p>
+      ) : null}
+
+      {error ? (
+        <p className="px-2 py-2 text-sm text-destructive">{error}</p>
+      ) : null}
+
+      {!isSearching && results.length > 0 ? (
+        <>
+          <p className="px-2 pb-1 text-xs text-muted-foreground">
+            {totalMatches.toLocaleString()} match{totalMatches !== 1 ? "es" : ""} in {results.length.toLocaleString()} file{results.length !== 1 ? "s" : ""}
+            {limitHit ? " (result limit reached)" : ""}
+          </p>
+          <div className="min-h-0 flex-1 bg-sidebar">
+            <Virtuoso
+              totalCount={flatRows.length}
+              fixedItemHeight={28}
+              increaseViewportBy={1200}
+              className="[&>div]:bg-sidebar"
+              itemContent={(index) => {
+                const row = flatRows[index];
+                if (!row) return null;
+                if (row.kind === "file") {
+                  const isCollapsed = collapsedFiles.has(row.file);
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => toggleFileCollapse(row.file)}
+                      className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-left text-sm hover:bg-secondary/60"
+                    >
+                      {isCollapsed
+                        ? <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                        : <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />}
+                      <File className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate font-medium">{row.fileName}</span>
+                      {row.dirPath ? (
+                        <span className="shrink-0 text-xs text-muted-foreground">{row.dirPath}</span>
+                      ) : null}
+                      <span className="ml-1 shrink-0 rounded-full bg-muted px-1.5 text-xs text-muted-foreground">
+                        {row.matchCount}
+                      </span>
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    type="button"
+                    onClick={() => props.onOpenFile(row.file, row.line)}
+                    className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-sm px-1.5 text-left text-xs hover:bg-secondary/60"
+                    style={{ paddingLeft: "24px" }}
+                  >
+                    <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
+                      {highlightMatch(row.text, query)}
+                    </span>
+                  </button>
+                );
+              }}
+            />
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 function ExplorerTreeRow(args: {
@@ -206,7 +442,7 @@ export function WorkspaceExplorerPanel(props: {
   onExpandAllFolders: () => Promise<void>;
   explorerDirectoryStateByPath: Record<string, ExplorerDirectoryState>;
   onToggleExplorerFolder: (path: string) => void;
-  onOpenExplorerFile: (path: string) => void;
+  onOpenExplorerFile: (path: string, line?: number) => void;
   onStartExplorerFileCreate: (directoryPath: string) => void;
   onStartExplorerFolderCreate: (directoryPath: string) => void;
   onCopyExplorerRelativePath: (path: string) => void;
@@ -217,13 +453,30 @@ export function WorkspaceExplorerPanel(props: {
   onRefreshExplorerDirectory: (path: string) => void;
   onRequestDeleteExplorerFile: (path: string, name: string) => void;
   onRequestDeleteExplorerFolder: (path: string, name: string) => void;
+  workspaceCwd?: string;
 }) {
+  const [showSearch, setShowSearch] = useState(false);
+
   return (
-    <div className="min-h-0 h-full overflow-auto p-2">
-      <div className="mb-1 flex items-center justify-between gap-2">
+    <div className="flex min-h-0 h-full flex-col p-2">
+      <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
         <p className="truncate text-sm text-muted-foreground">{props.projectName}</p>
         <div className="flex items-center gap-1">
           <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={`h-7 w-7 rounded-sm p-0 ${showSearch ? "bg-secondary text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => setShowSearch(!showSearch)}
+                >
+                  <Search className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Search in files</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -283,8 +536,18 @@ export function WorkspaceExplorerPanel(props: {
           </TooltipProvider>
         </div>
       </div>
-      {props.explorerError ? <p className="mb-1 text-sm text-destructive">{props.explorerError}</p> : null}
-      <div className="space-y-1">
+
+      {showSearch ? (
+        <div className="mb-2 min-h-0 flex-1">
+          <ExplorerSearchPanel
+            workspaceCwd={props.workspaceCwd}
+            onOpenFile={props.onOpenExplorerFile}
+          />
+        </div>
+      ) : null}
+
+      {!showSearch && props.explorerError ? <p className="mb-1 shrink-0 text-sm text-destructive">{props.explorerError}</p> : null}
+      {!showSearch ? <div className="min-h-0 flex-1 space-y-1 overflow-auto">
         {props.pendingExplorerCreate ? (
           <form
             className="rounded-sm border border-border/80 bg-muted/40 px-2 py-2"
@@ -366,7 +629,7 @@ export function WorkspaceExplorerPanel(props: {
             onRequestDeleteFolder={props.onRequestDeleteExplorerFolder}
           />
         ))}
-      </div>
+      </div> : null}
     </div>
   );
 }

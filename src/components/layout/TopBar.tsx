@@ -4,7 +4,6 @@ import {
   SquareTerminal,
   FolderOpen,
   ChevronDown,
-  Music4,
   PanelLeft,
 } from "lucide-react";
 import { useEffect, type CSSProperties } from "react";
@@ -59,10 +58,7 @@ export function TopBar() {
     workspacePathById,
     projectPath,
     workspaceSidebarCollapsed,
-    staveMuseOpen,
     setLayout,
-    focusStaveMuse,
-    setStaveMuseOpen,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -71,10 +67,7 @@ export function TopBar() {
           state.workspacePathById,
           state.projectPath,
           state.layout.workspaceSidebarCollapsed,
-          state.staveMuse.open,
           state.setLayout,
-          state.focusStaveMuse,
-          state.setStaveMuseOpen,
         ] as const,
     ),
   );
@@ -237,29 +230,7 @@ export function TopBar() {
             <TopBarFileSearch noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
           ) : null}
         </div>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={staveMuseOpen ? "default" : "ghost"}
-                size="sm"
-                className="h-8 gap-1.5 rounded-md px-2.5"
-                style={TOP_BAR_NO_DRAG_STYLE}
-                onClick={() => {
-                  if (staveMuseOpen) {
-                    setStaveMuseOpen({ open: false });
-                    return;
-                  }
-                  focusStaveMuse();
-                }}
-              >
-                <Music4 className="size-3.5" />
-                <span className="hidden xl:inline">Muse</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Open Muse</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+
         {hasProjectContext ? (
           <TopBarNotifications noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
         ) : null}

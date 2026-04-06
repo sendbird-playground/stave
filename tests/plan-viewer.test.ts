@@ -278,6 +278,66 @@ describe("resolvePlanViewerState", () => {
       canReplyToPlan: false,
     });
   });
+
+  test("normalizes raw plan text before showing it in the viewer", () => {
+    const state = resolvePlanViewerState({
+      activeProvider: "codex",
+      claudePermissionMode: "default",
+      codexExperimentalPlanMode: true,
+      isTurnActive: false,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "...\n\n## Plan\n- Strip commentary\n- Keep only steps\n\nLet me know if you want changes.",
+      },
+      lastMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "...\n\n## Plan\n- Strip commentary\n- Keep only steps\n\nLet me know if you want changes.",
+      },
+    });
+
+    expect(state).toEqual({
+      planText: "## Plan\n- Strip commentary\n- Keep only steps",
+      isPlanPreparing: false,
+      isPlanPending: true,
+      canReplyToPlan: true,
+    });
+  });
+
+  test("ignores punctuation-only plan placeholders", () => {
+    const state = resolvePlanViewerState({
+      activeProvider: "codex",
+      claudePermissionMode: "default",
+      codexExperimentalPlanMode: true,
+      isTurnActive: false,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "...",
+      },
+      lastMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "...",
+      },
+    });
+
+    expect(state).toEqual({
+      planText: "",
+      isPlanPreparing: false,
+      isPlanPending: false,
+      canReplyToPlan: false,
+    });
+  });
 });
 
 describe("resolvePlanViewerInsets", () => {

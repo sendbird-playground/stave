@@ -34,9 +34,10 @@ When Lens is open in a workspace, the same Local MCP server also exposes optiona
 In Stave:
 
 1. Open `Settings`
-2. Go to `Developer`
-3. Find the `Local MCP Server` card
-4. Use the separate `Local MCP Request Log` card when you want inbound MCP request visibility
+2. Go to `Providers`
+3. Open the `Stave` tab
+4. Find the `Local MCP Server` card
+5. Use the separate `Local MCP Request Log` card when you want inbound MCP request visibility
 
 You can manage:
 
@@ -121,7 +122,7 @@ If the running task asks for confirmation or structured answers:
 - answer using `stave_respond_approval` or `stave_respond_user_input`
 - Stave shows these requests for visibility, but managed tasks expect the originating client to answer them
 
-Use `Local MCP Request Log` in Developer settings when you need transport-level request visibility. The latest page auto-refreshes while older pages stay stable for pagination.
+Use `Local MCP Request Log` in `Settings → Providers → Stave` when you need transport-level request visibility. The latest page auto-refreshes while older pages stay stable for pagination.
 
 These responses continue the same Stave turn. They do not create a new task.
 

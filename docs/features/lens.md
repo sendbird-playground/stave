@@ -60,7 +60,7 @@
 
 ### Use Lens From An External Agent
 
-1. Enable `Settings > Developer > Local MCP Server`.
+1. Enable `Settings > Providers > Stave > Local MCP Server`.
 2. Open Lens for the target workspace so the browser session exists.
 3. Call the `stave_lens_*` tools through Local MCP.
 4. Use the returned page data together with normal Stave task tools or your own external workflow.

@@ -1,6 +1,7 @@
 import type {
   CanonicalConversationRequest,
   ClaudeContextUsageResponse,
+  CodexMcpStatusResponse,
   ClaudePluginReloadResponse,
   ProviderId,
   ProviderRuntimeOptions,
@@ -140,6 +141,10 @@ interface WindowProviderApi {
     cwd?: string;
     runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
   }) => Promise<ClaudePluginReloadResponse>;
+  getCodexMcpStatus?: (args: {
+    cwd?: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMcpStatusResponse>;
   /** Generates a short task title from the given prompt and optional
    *  conversation history using a lightweight single-turn Claude query
    *  isolated from the main task conversation. */
@@ -267,6 +272,15 @@ interface WindowFsApi {
   }) => Promise<{
     ok: boolean;
     files: Array<{ content: string; filePath: string }>;
+    stderr?: string;
+  }>;
+  searchContent?: (args: {
+    rootPath: string;
+    query: string;
+  }) => Promise<{
+    ok: boolean;
+    results: Array<{ file: string; matches: Array<{ line: number; text: string }> }>;
+    limitHit: boolean;
     stderr?: string;
   }>;
 }

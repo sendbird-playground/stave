@@ -14,6 +14,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
   Textarea,
   Tooltip,
   TooltipContent,
@@ -21,6 +22,8 @@ import {
   TooltipTrigger,
   WaveIndicator,
 } from "@/components/ui";
+import { ModelIcon } from "@/components/ai-elements";
+import { StaveMuseTriggerButton } from "@/components/layout/StaveMuseTriggerButton";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import { AssistantMessageBody } from "@/components/session/message/assistant-trace";
 import { STAVE_MUSE_SESSION_ID } from "@/lib/stave-muse";
@@ -36,7 +39,9 @@ const TARGET_OPTIONS = [
 const FLOATING_TOGGLE_BOTTOM_PX = 68;
 const FLOATING_TOGGLE_SIZE_PX = 40;
 const FLOATING_PANEL_GAP_PX = 12;
-const MUSE_LAYER_Z_INDEX = 45;
+const MUSE_LAYER_Z_INDEX = 120;
+const SIDEBAR_PANEL_BOTTOM_PX = 12;
+const MOBILE_FLOATING_TOGGLE_LEFT_PX = 12;
 
 const PANEL_STYLE = {
   background: "linear-gradient(180deg, color-mix(in oklab, var(--card) 94%, var(--muse) 6%) 0%, color-mix(in oklab, var(--card) 90%, var(--muse) 10%) 100%)",
@@ -78,7 +83,11 @@ function AssistantMessageBlock(args: {
   );
 }
 
-export function StaveMuseWidget(args: { rightInset?: number }) {
+export function StaveMuseWidget(args: {
+  leftInset?: number;
+  rightInset?: number;
+  showFloatingTrigger?: boolean;
+}) {
   const [
     open,
     targetKind,
@@ -90,7 +99,6 @@ export function StaveMuseWidget(args: { rightInset?: number }) {
     projectName,
     projectPath,
     activeWorkspaceName,
-    workspaceSidebarCollapsed,
     setOpen,
     setTarget,
     clearConversation,
@@ -108,7 +116,6 @@ export function StaveMuseWidget(args: { rightInset?: number }) {
     state.projectName,
     state.projectPath,
     state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
-    state.layout.workspaceSidebarCollapsed,
     state.setStaveMuseOpen,
     state.setStaveMuseTarget,
     state.clearStaveMuseConversation,
@@ -120,11 +127,15 @@ export function StaveMuseWidget(args: { rightInset?: number }) {
   const [isComposing, setIsComposing] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const floatingToggleLeftPx = workspaceSidebarCollapsed ? 8 : 12;
+  const showFloatingTrigger = args.showFloatingTrigger ?? true;
+  const floatingToggleLeftPx = MOBILE_FLOATING_TOGGLE_LEFT_PX;
+  const panelBottomPx = args.leftInset !== undefined
+    ? SIDEBAR_PANEL_BOTTOM_PX
+    : FLOATING_TOGGLE_BOTTOM_PX;
   const openContainerStyle = {
-    left: `${floatingToggleLeftPx + FLOATING_TOGGLE_SIZE_PX + FLOATING_PANEL_GAP_PX}px`,
+    left: `${args.leftInset ?? (floatingToggleLeftPx + FLOATING_TOGGLE_SIZE_PX + FLOATING_PANEL_GAP_PX)}px`,
     right: args.rightInset && args.rightInset > 0 ? `${16 + args.rightInset}px` : "16px",
-    bottom: `${FLOATING_TOGGLE_BOTTOM_PX}px`,
+    bottom: `${panelBottomPx}px`,
     zIndex: MUSE_LAYER_Z_INDEX,
   } as const;
   const floatingToggleStyle = {
@@ -185,17 +196,12 @@ export function StaveMuseWidget(args: { rightInset?: number }) {
   };
 
   if (!open) {
+    if (!showFloatingTrigger) {
+      return null;
+    }
     return (
       <div className="pointer-events-none fixed" style={floatingToggleStyle}>
-        <Button
-          variant="ghost"
-          size="icon-lg"
-          aria-label="Open Muse"
-          className="pointer-events-auto rounded-xl border border-sidebar-border/90 bg-sidebar text-sidebar-foreground shadow-2xl ring-1 ring-sidebar-border/45 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground supports-backdrop-filter:bg-sidebar/96 supports-backdrop-filter:backdrop-blur-xl"
-          onClick={() => setOpen({ open: true })}
-        >
-          <Music4 className="size-4" />
-        </Button>
+        <StaveMuseTriggerButton className="pointer-events-auto shadow-2xl" />
       </div>
     );
   }
