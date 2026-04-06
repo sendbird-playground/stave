@@ -30,6 +30,12 @@ import {
   getConnectedToolLabel,
   normalizeConnectedToolIds,
 } from "../../src/lib/providers/connected-tool-status";
+import {
+  readPrimaryStaveLocalMcpManifestSync,
+} from "../main/stave-local-mcp-manifest";
+import {
+  CODEX_STAVE_MCP_TOKEN_ENV_VAR,
+} from "../main/codex-mcp";
 
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
@@ -123,6 +129,10 @@ function buildCodexEnv(args: { executablePath?: string } = {}) {
     executablePath: args.executablePath,
     extraPaths: CODEX_LOOKUP_PATHS,
   });
+  const localMcpManifest = readPrimaryStaveLocalMcpManifestSync();
+  if (localMcpManifest?.token?.trim()) {
+    env[CODEX_STAVE_MCP_TOKEN_ENV_VAR] = localMcpManifest.token;
+  }
   for (const key of CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS) {
     if (env[key]?.trim()) {
       continue;

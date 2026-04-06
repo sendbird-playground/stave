@@ -131,6 +131,8 @@ export const LocalMcpConfigUpdateArgsSchema = z
     enabled: z.boolean().optional(),
     port: z.number().int().min(0).max(65_535).optional(),
     token: z.string().max(4096).optional(),
+    claudeCodeAutoRegister: z.boolean().optional(),
+    codexAutoRegister: z.boolean().optional(),
   })
   .strict();
 

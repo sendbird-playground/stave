@@ -285,6 +285,15 @@ describe("Claude internal tool auto-allow", () => {
     })).toBe(true);
   });
 
+  test("auto-allows managed Stave workspace-information MCP tools", () => {
+    expect(shouldAutoAllowClaudeTool({
+      toolName: "stave_replace_workspace_notes",
+    })).toBe(true);
+    expect(shouldAutoAllowClaudeTool({
+      toolName: "mcp__stave-local-mcp__stave_add_workspace_todo",
+    })).toBe(true);
+  });
+
   test("does not auto-allow ordinary tools", () => {
     expect(shouldAutoAllowClaudeTool({
       toolName: "Bash",
