@@ -19,6 +19,7 @@ import {
   OpenPathArgsSchema,
 } from "./schemas";
 import { openExternalWithFallback } from "../utils/external-url";
+import { toAsarUnpackedPath } from "../../providers/executable-path";
 import {
   listDirectoryEntries,
   listFilesRecursive,
@@ -506,7 +507,8 @@ export function registerFilesystemHandlers() {
       stderr?: string;
     }>((resolve) => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { rgPath } = require("@vscode/ripgrep") as { rgPath: string };
+      const { rgPath: rawRgPath } = require("@vscode/ripgrep") as { rgPath: string };
+      const rgPath = toAsarUnpackedPath(rawRgPath);
       const rgArgs = [
         "--line-number",
         "--no-heading",
