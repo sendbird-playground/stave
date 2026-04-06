@@ -20,6 +20,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Feature guide authoring](features/README.md)
 - [Feature guide template](templates/feature-guide-template.md)
 - [Provider sandbox and approval guide](features/provider-sandbox-and-approval.md)
+- [Project Instructions](features/project-instructions.md)
 - [Lens](features/lens.md)
 - [Local MCP user guide](features/local-mcp-user-guide.md)
 - [Stave Muse](features/stave-muse.md)
