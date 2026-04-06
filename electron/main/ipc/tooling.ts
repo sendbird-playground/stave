@@ -8,6 +8,10 @@ import {
   inspectWorkspaceSyncStatus,
   syncWorkspaceWithOriginMain,
 } from "../utils/tooling-status";
+import {
+  getAppUpdateStatusSnapshot,
+  scheduleAppUpdateInstallAndRestart,
+} from "../utils/app-update";
 
 export function registerToolingHandlers() {
   ipcMain.handle("tooling:get-status", async (_event, args: unknown) => {
@@ -29,5 +33,13 @@ export function registerToolingHandlers() {
       };
     }
     return syncWorkspaceWithOriginMain(parsed.data);
+  });
+
+  ipcMain.handle("tooling:get-app-update-status", async () => {
+    return getAppUpdateStatusSnapshot();
+  });
+
+  ipcMain.handle("tooling:install-app-update-and-restart", async () => {
+    return scheduleAppUpdateInstallAndRestart();
   });
 }

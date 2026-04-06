@@ -26,6 +26,8 @@ gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground
 
 If this is your first time using `gh`, or you need SSO/scope troubleshooting, see the full [Install Guide](docs/install-guide.md).
 
+Packaged macOS builds also expose a top-bar update action that checks the latest authenticated GitHub release and can install it in place with restart.
+
 ## Highlights
 
 - desktop-first Claude and Codex workspace

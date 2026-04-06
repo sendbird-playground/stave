@@ -25,6 +25,7 @@ import { TopBarBranchDropdown } from "@/components/layout/TopBarBranchDropdown";
 import { TopBarFileSearch } from "@/components/layout/TopBarFileSearch";
 import { TopBarNotifications } from "@/components/layout/TopBarNotifications";
 import { TopBarOpenPR } from "@/components/layout/TopBarOpenPR";
+import { TopBarUpdate } from "@/components/layout/TopBarUpdate";
 import { TopBarWindowControls } from "@/components/layout/TopBarWindowControls";
 import {
   getRepoMapContextCache,
@@ -260,6 +261,7 @@ export function TopBar() {
             <TooltipContent side="bottom">Open Stave Muse</TooltipContent>
           </Tooltip>
         </TooltipProvider>
+        <TopBarUpdate noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
         {hasProjectContext ? (
           <TopBarNotifications noDragStyle={TOP_BAR_NO_DRAG_STYLE} />
         ) : null}
