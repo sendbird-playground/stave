@@ -99,9 +99,9 @@ function InlineNoticeBanner(props: { notice: InlineNotice }) {
     <div className={cn("flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm", toneClassName)} role="status" aria-live="polite">
       <Icon className="mt-0.5 size-4 shrink-0" />
       <div className="min-w-0 space-y-1">
-        <p className="font-medium">{props.notice.title}</p>
+        <p className="break-words font-medium">{props.notice.title}</p>
         {props.notice.description ? (
-          <p className="text-xs leading-5 opacity-80">{props.notice.description}</p>
+          <p className="break-words text-xs leading-5 opacity-80">{props.notice.description}</p>
         ) : null}
       </div>
     </div>
@@ -954,7 +954,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="min-w-0 sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Pull Request</DialogTitle>
             <DialogDescription className="sr-only">
@@ -963,107 +963,112 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           </DialogHeader>
 
           {step === "loading" ? (
-            <CreatePrLoadingSplash currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
+            <div className="min-w-0 pr-1">
+              <CreatePrLoadingSplash currentBranch={currentBranch} baseBranch={effectiveTargetBranch} />
+            </div>
           ) : (
-            <form className="space-y-4" onSubmit={handleFormSubmit}>
-              <PullRequestBranchFields
-                currentBranch={currentBranch}
-                defaultBranch={defaultBaseBranch}
-                disabled={isDialogBusy}
-                loading={loadingTargetBranches}
-                targetBranch={effectiveTargetBranch}
-                targetBranchOptions={targetBranchOptions}
-                onTargetBranchChange={(nextBranch) => {
-                  setTargetBranch(nextBranch);
-                }}
-              />
-
-              {inlineNotice ? <InlineNoticeBanner notice={inlineNotice} /> : null}
-
-              {/* PR Title */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="pr-title-input">
-                  Title
-                </label>
-                <Input
-                  autoFocus
-                  id="pr-title-input"
-                  className="h-9 text-sm"
-                  placeholder="PR title"
-                  value={prTitle}
-                  onChange={(e) => {
-                    setPrTitle(e.target.value);
-                  }}
-                  aria-invalid={titleValidationMessage ? true : undefined}
+            <form className="min-w-0 space-y-4" onSubmit={handleFormSubmit}>
+              <div className="min-w-0 space-y-4 pr-1">
+                <PullRequestBranchFields
+                  currentBranch={currentBranch}
+                  defaultBranch={defaultBaseBranch}
                   disabled={isDialogBusy}
-                />
-                {titleValidationMessage ? (
-                  <p className="text-xs text-warning">{titleValidationMessage}</p>
-                ) : null}
-              </div>
-
-              {/* PR Description */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium" htmlFor="pr-body-input">
-                  Description
-                </label>
-                <Textarea
-                  id="pr-body-input"
-                  className="min-h-24 resize-y text-sm"
-                  rows={6}
-                  placeholder="Describe your changes..."
-                  value={prBody}
-                  onChange={(e) => {
-                    setPrBody(e.target.value);
+                  loading={loadingTargetBranches}
+                  targetBranch={effectiveTargetBranch}
+                  targetBranchOptions={targetBranchOptions}
+                  onTargetBranchChange={(nextBranch) => {
+                    setTargetBranch(nextBranch);
                   }}
-                  disabled={isDialogBusy}
                 />
-              </div>
 
-              {/* Uncommitted Changes */}
-              {changedFiles.length > 0 && (
+                {inlineNotice ? <InlineNoticeBanner notice={inlineNotice} /> : null}
+
+                {/* PR Title */}
                 <div className="space-y-2">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-1 text-sm font-medium text-amber-500"
-                    onClick={() => setChangesExpanded((v) => !v)}
-                  >
-                    {changesExpanded ? (
-                      <ChevronDown className="size-3.5" />
-                    ) : (
-                      <ChevronRight className="size-3.5" />
-                    )}
-                    {changedFiles.length} uncommitted file{changedFiles.length !== 1 ? "s" : ""}
-                    <span className="ml-1 text-xs font-normal text-muted-foreground">
-                      (will be committed before creating PR)
-                    </span>
-                  </button>
-
-                  {changesExpanded && (
-                    <>
-                      <div className="max-h-32 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 text-xs">
-                        {changedFiles.map((file) => (
-                          <div key={file.path} className="flex items-center gap-2 py-0.5">
-                            <span className="w-5 shrink-0 text-center font-mono font-medium text-muted-foreground">{file.code}</span>
-                            <span className="truncate font-mono">{file.path}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <Input
-                        id="commit-message-input"
-                        className="h-9 text-sm"
-                        placeholder={generateFallbackCommitMessage(changedFiles)}
-                        value={commitMessage}
-                        onChange={(e) => setCommitMessage(e.target.value)}
-                        disabled={isDialogBusy}
-                      />
-                    </>
-                  )}
+                  <label className="text-sm font-medium" htmlFor="pr-title-input">
+                    Title
+                  </label>
+                  <Input
+                    autoFocus
+                    id="pr-title-input"
+                    className="h-9 text-sm"
+                    placeholder="PR title"
+                    value={prTitle}
+                    onChange={(e) => {
+                      setPrTitle(e.target.value);
+                    }}
+                    aria-invalid={titleValidationMessage ? true : undefined}
+                    disabled={isDialogBusy}
+                  />
+                  {titleValidationMessage ? (
+                    <p className="text-xs text-warning">{titleValidationMessage}</p>
+                  ) : null}
                 </div>
-              )}
 
-              <DialogFooter>
+                {/* PR Description */}
+                <div className="min-w-0 space-y-2">
+                  <label className="text-sm font-medium" htmlFor="pr-body-input">
+                    Description
+                  </label>
+                  <Textarea
+                    id="pr-body-input"
+                    className="min-h-24 min-w-0 resize-y whitespace-pre-wrap break-words [field-sizing:fixed] [overflow-wrap:anywhere] text-sm"
+                    rows={6}
+                    wrap="soft"
+                    placeholder="Describe your changes..."
+                    value={prBody}
+                    onChange={(e) => {
+                      setPrBody(e.target.value);
+                    }}
+                    disabled={isDialogBusy}
+                  />
+                </div>
+
+                {/* Uncommitted Changes */}
+                {changedFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-1 text-sm font-medium text-amber-500"
+                      onClick={() => setChangesExpanded((v) => !v)}
+                    >
+                      {changesExpanded ? (
+                        <ChevronDown className="size-3.5" />
+                      ) : (
+                        <ChevronRight className="size-3.5" />
+                      )}
+                      {changedFiles.length} uncommitted file{changedFiles.length !== 1 ? "s" : ""}
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        (will be committed before creating PR)
+                      </span>
+                    </button>
+
+                    {changesExpanded && (
+                      <>
+                        <div className="max-h-32 overflow-y-auto rounded-md border border-border bg-muted/30 p-2 text-xs">
+                          {changedFiles.map((file) => (
+                            <div key={file.path} className="flex items-center gap-2 py-0.5">
+                              <span className="w-5 shrink-0 text-center font-mono font-medium text-muted-foreground">{file.code}</span>
+                              <span className="truncate font-mono">{file.path}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <Input
+                          id="commit-message-input"
+                          className="h-9 text-sm"
+                          placeholder={generateFallbackCommitMessage(changedFiles)}
+                          value={commitMessage}
+                          onChange={(e) => setCommitMessage(e.target.value)}
+                          disabled={isDialogBusy}
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="shrink-0">
                 <Button
                   type="button"
                   variant="outline"
