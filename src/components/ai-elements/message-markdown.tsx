@@ -194,7 +194,11 @@ export function MarkdownMessage({
   const components = useMemo(() => ({
     hr: () => <hr className="my-4 h-px border-0 bg-border first:mt-0 last:mb-0" />,
     strong: ({ children }: { children?: ReactNode }) => <strong className="font-semibold">{children}</strong>,
-    p: ({ children }: { children?: ReactNode }) => <p className="my-2 whitespace-pre-wrap first:mt-0 last:mb-0">{children}</p>,
+    p: ({ children }: { children?: ReactNode }) => (
+      <p className="my-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] first:mt-0 last:mb-0">
+        {children}
+      </p>
+    ),
     ul: ({ children }: { children?: ReactNode }) => (
       <ul className="my-2 ml-5 list-disc pl-1 marker:text-muted-foreground [&_ol]:my-1 [&_ol]:ml-5 [&_ol]:list-decimal [&_ul]:my-1 [&_ul]:ml-5 [&_ul]:list-disc">
         {children}
@@ -338,13 +342,13 @@ export function MarkdownMessage({
 
   return (
     <div
-      className={cn(className)}
+      className={cn("min-w-0 max-w-full", className)}
       style={{ fontSize: `${messageFontSize}px`, lineHeight: MESSAGE_BODY_LINE_HEIGHT }}
       data-streaming={isStreaming ? "true" : undefined}
       {...props}
     >
       {isStreaming ? (
-        <div className="whitespace-pre-wrap break-words">{content}</div>
+        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{content}</div>
       ) : (
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}

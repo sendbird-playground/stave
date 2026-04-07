@@ -58,7 +58,7 @@ export function Message({ from, className, ...props }: MessageProps) {
   return (
     <article
       className={cn(
-        "group flex flex-col gap-2",
+        "group min-w-0 flex flex-col gap-2",
         from === "user" ? "is-user" : "is-assistant",
         from === "user" ? "items-end" : "items-start",
         className
@@ -73,7 +73,7 @@ export function MessageContent({ className, ...props }: HTMLAttributes<HTMLDivEl
   return (
     <div
       className={cn(
-        "flex w-full flex-col gap-3 text-foreground",
+        "flex min-w-0 max-w-full w-full flex-col gap-3 text-foreground",
         "group-[.is-user]:rounded-md group-[.is-user]:border group-[.is-user]:border-primary/35 group-[.is-user]:bg-primary/12 group-[.is-user]:px-4 group-[.is-user]:py-3",
         className
       )}
