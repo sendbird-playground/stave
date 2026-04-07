@@ -36,6 +36,7 @@ export const SuggestPRDescriptionArgsSchema = z
     cwd: z.string().max(4096).optional(),
     baseBranch: z.string().max(200).optional(),
     promptTemplate: z.string().max(10_000).optional(),
+    workspaceContext: z.string().max(12_000).optional(),
   })
   .strict();
 

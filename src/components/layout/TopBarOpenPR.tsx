@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  buildPullRequestWorkspaceContext,
   generateFallbackPullRequestDraft,
   isReasonablePullRequestTitle,
 } from "@/lib/source-control-pr";
@@ -217,6 +218,9 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     workspacePathById,
     projectPath,
     defaultBranch,
+    activeTaskId,
+    promptDraftByTask,
+    workspaceInformation,
     tasks,
     activeTurnIdsByTask,
     workspacePrInfoById,
@@ -229,6 +233,9 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     state.workspacePathById,
     state.projectPath,
     state.defaultBranch,
+    state.activeTaskId,
+    state.promptDraftByTask,
+    state.workspaceInformation,
     state.tasks,
     state.activeTurnIdsByTask,
     state.workspacePrInfoById,
@@ -242,6 +249,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const currentBranch = workspaceBranchById[activeWorkspaceId];
   const defaultBaseBranch = defaultBranch.trim() || "main";
   const continueBaseBranch = `origin/${defaultBaseBranch}`;
+  const activeTask = tasks.find((task) => task.id === activeTaskId) ?? null;
+  const activeTaskDraft = activeTaskId ? (promptDraftByTask[activeTaskId] ?? null) : null;
 
   const prInfo = workspacePrInfoById[activeWorkspaceId];
   const prStatus: WorkspacePrStatus = prInfo?.derived ?? "no_pr";
@@ -288,9 +297,74 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     });
   }
 
+  const resetCreatePrDialogState = useCallback((args?: { closeDialog?: boolean }) => {
+    suggestionRequestIdRef.current += 1;
+    if (args?.closeDialog) {
+      setDialogOpen(false);
+    }
+    setStep("idle");
+    setActiveSubmitAction(null);
+    setTargetBranch(defaultBaseBranch);
+    setTargetBranchOptions([]);
+    setLoadingTargetBranches(false);
+    setPrTitle("");
+    setPrBody("");
+    setInlineNotice(null);
+    setChangedFiles([]);
+    setCommitMessage("");
+    setChangesExpanded(true);
+  }, [defaultBaseBranch]);
+
+  async function buildWorkspaceContextForPrDraft() {
+    const readFile = window.api?.fs?.readFile;
+    const attachedContextSnippets: Array<{ label: string; content: string }> = [];
+
+    if (readFile && workspaceCwd && activeTaskDraft?.attachedFilePaths.length) {
+      const snippetResults = await Promise.all(
+        activeTaskDraft.attachedFilePaths.slice(0, 2).map(async (filePath) => {
+          try {
+            const result = await readFile({ rootPath: workspaceCwd, filePath });
+            if (!result.ok || !result.content.trim()) {
+              return null;
+            }
+            return { label: filePath, content: result.content };
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      for (const snippet of snippetResults) {
+        if (snippet) {
+          attachedContextSnippets.push(snippet);
+        }
+      }
+    }
+
+    return buildPullRequestWorkspaceContext({
+      activeTaskTitle: activeTask?.title,
+      taskPrompt: activeTaskDraft?.text,
+      attachedContextSnippets,
+      notes: workspaceInformation.notes,
+      openTodos: workspaceInformation.todos
+        .filter((todo) => !todo.completed && todo.text.trim().length > 0)
+        .map((todo) => todo.text.trim()),
+    });
+  }
+
   // -------------------------------------------------------------------------
   // PR Creation flow
   // -------------------------------------------------------------------------
+
+  const previousWorkspaceIdRef = useRef(activeWorkspaceId);
+
+  useEffect(() => {
+    if (previousWorkspaceIdRef.current === activeWorkspaceId) {
+      return;
+    }
+    previousWorkspaceIdRef.current = activeWorkspaceId;
+    resetCreatePrDialogState({ closeDialog: true });
+  }, [activeWorkspaceId, resetCreatePrDialogState]);
 
   async function handleCreateClick() {
     const getStatus = window.api?.sourceControl?.getStatus;
@@ -325,13 +399,17 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     const branchPromise = listBranches
       ? listBranches({ cwd: workspaceCwd }).catch(() => undefined)
       : Promise.resolve(undefined);
+    const workspaceContextPromise = buildWorkspaceContextForPrDraft();
     const promptPrDescription = useAppStore.getState().settings.promptPrDescription || undefined;
     const descPromise = suggestPRDescription
-      ? suggestPRDescription({
-        cwd: workspaceCwd,
-        baseBranch: defaultBaseBranch,
-        promptTemplate: promptPrDescription,
-      }).catch(() => undefined)
+      ? workspaceContextPromise
+        .then((workspaceContext) => suggestPRDescription({
+          cwd: workspaceCwd,
+          baseBranch: defaultBaseBranch,
+          promptTemplate: promptPrDescription,
+          workspaceContext: workspaceContext || undefined,
+        }))
+        .catch(() => undefined)
       : undefined;
 
     const [status, descResult, branchResult] = await Promise.all([
@@ -345,10 +423,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
     if (!status.ok) {
       toast.error("Unable to check status", { description: status.stderr || "git status failed." });
-      setStep("idle");
-      setDialogOpen(false);
-      setInlineNotice(null);
-      setLoadingTargetBranches(false);
+      resetCreatePrDialogState({ closeDialog: true });
       return;
     }
 
@@ -395,6 +470,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
 
   async function handleSubmit(options: { draft: boolean }) {
     const submitAction: CreatePrSubmitAction = options.draft ? "draft" : "pr";
+    const getStatus = window.api?.sourceControl?.getStatus;
     const runCommand = window.api?.terminal?.runCommand;
     const createPR = window.api?.sourceControl?.createPR;
     const openExternal = window.api?.shell?.openExternal;
@@ -412,11 +488,33 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       return;
     }
 
-    const fallbackDraft = generateFallbackPRDraft(changedFiles);
+    let pendingFiles = changedFiles;
+    if (getStatus) {
+      const statusResult = await getStatus({ cwd: workspaceCwd });
+      if (!statusResult.ok) {
+        setInlineNotice({
+          tone: "error",
+          title: "Unable to refresh workspace changes",
+          description: statusResult.stderr || "git status failed.",
+        });
+        setStep("ready");
+        setActiveSubmitAction(null);
+        return;
+      }
+      pendingFiles = statusResult.items;
+      setChangedFiles(pendingFiles);
+      setChangesExpanded(pendingFiles.length > 0);
+    }
+
+    const fallbackDraft = generateFallbackPullRequestDraft({
+      baseBranch: selectedTargetBranch,
+      headBranch: currentBranch,
+      fileList: pendingFiles.map((file) => `${file.code} ${file.path}`).join("\n"),
+    });
     let title = prTitle.trim() || fallbackDraft.title;
 
     // Step 1: Commit uncommitted changes if any
-    if (changedFiles.length > 0) {
+    if (pendingFiles.length > 0) {
       const stageAll = window.api?.sourceControl?.stageAll;
       const commit = window.api?.sourceControl?.commit;
       if (!stageAll || !commit) {
@@ -455,7 +553,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
           }
         }
         if (!message) {
-          message = generateFallbackCommitMessage(changedFiles);
+          message = generateFallbackCommitMessage(pendingFiles);
         }
       }
       setCommitMessage(message);
@@ -463,7 +561,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       setInlineNotice({
         tone: "info",
         title: "Staging changes",
-        description: `Adding ${changedFiles.length} pending file${changedFiles.length !== 1 ? "s" : ""} to the automatic commit.`,
+        description: `Adding ${pendingFiles.length} pending file${pendingFiles.length !== 1 ? "s" : ""} to the automatic commit.`,
       });
       const stageResult = await stageAll({ cwd: workspaceCwd });
       if (!stageResult.ok) {
@@ -945,13 +1043,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
             setDialogOpen(open);
           }
           if (!open) {
-            suggestionRequestIdRef.current += 1;
-            setInlineNotice(null);
-            setLoadingTargetBranches(false);
-            setActiveSubmitAction(null);
-            setTargetBranch(defaultBaseBranch);
-            setTargetBranchOptions([]);
-            setStep("idle");
+            resetCreatePrDialogState();
           }
         }}
       >

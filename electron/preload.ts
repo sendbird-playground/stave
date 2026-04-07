@@ -398,7 +398,7 @@ contextBridge.exposeInMainWorld("api", {
         ok: boolean;
         message?: string;
       }>,
-    suggestPRDescription: (args: { cwd?: string; baseBranch?: string; promptTemplate?: string }) =>
+    suggestPRDescription: (args: { cwd?: string; baseBranch?: string; promptTemplate?: string; workspaceContext?: string }) =>
       ipcRenderer.invoke("provider:suggest-pr-description", args) as Promise<{
         ok: boolean;
         title?: string;

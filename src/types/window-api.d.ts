@@ -167,6 +167,7 @@ interface WindowProviderApi {
     cwd?: string;
     baseBranch?: string;
     promptTemplate?: string;
+    workspaceContext?: string;
   }) => Promise<{ ok: boolean; title?: string; body?: string }>;
 }
 

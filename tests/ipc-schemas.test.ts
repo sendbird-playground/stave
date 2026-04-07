@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   FilesystemRepoMapArgsSchema,
   LocalMcpConfigUpdateArgsSchema,
+  SuggestPRDescriptionArgsSchema,
   StreamTurnArgsSchema,
 } from "../electron/main/ipc/schemas";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
@@ -175,6 +176,14 @@ describe("provider IPC schemas", () => {
       rootPath: "/tmp/project",
       refresh: "yes",
     }).success).toBe(false);
+  });
+
+  test("accepts workspace-scoped PR drafting context", () => {
+    expect(SuggestPRDescriptionArgsSchema.safeParse({
+      cwd: "/tmp/project",
+      baseBranch: "main",
+      workspaceContext: "Use the active workspace task as the primary source of intent.",
+    }).success).toBe(true);
   });
 
   test("accepts Claude Code auto-registration in local MCP config updates", () => {

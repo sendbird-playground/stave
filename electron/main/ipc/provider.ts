@@ -420,6 +420,7 @@ export function registerProviderHandlers() {
       prTemplateContent,
       agentsContent,
       promptTemplate: parsed.data.promptTemplate,
+      workspaceContext: parsed.data.workspaceContext,
     });
     const mergedDraft = mergePullRequestDraft({
       fallbackTitle: fallbackDraft.title,

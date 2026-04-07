@@ -8,6 +8,39 @@ const GENERIC_PR_TITLE_PATTERNS = [
   /^update branch\b/i,
   /^pr\b/i,
 ];
+const MAX_WORKSPACE_CONTEXT_BLOCK_CHARS = 1_200;
+
+function sanitizeInlineText(value?: string) {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function truncateWorkspaceContextBlock(value?: string) {
+  const normalized = (value ?? "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.length <= MAX_WORKSPACE_CONTEXT_BLOCK_CHARS) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, MAX_WORKSPACE_CONTEXT_BLOCK_CHARS - 3).trimEnd()}...`;
+}
+
+function pushWorkspaceContextSection(lines: string[], title: string, bodyLines: string[]) {
+  const content = bodyLines.filter((line) => line.trim().length > 0);
+  if (content.length === 0) {
+    return;
+  }
+  lines.push("", `${title}:`, ...content);
+}
 
 function parseConventionalPullRequestTitle(title?: string) {
   const normalized = title?.trim();
@@ -156,6 +189,51 @@ export function generateFallbackPullRequestDraft(args: {
       ...changeLines,
     ].join("\n"),
   };
+}
+
+export function buildPullRequestWorkspaceContext(args: {
+  activeTaskTitle?: string;
+  taskPrompt?: string;
+  attachedContextSnippets?: Array<{ label: string; content: string }>;
+  notes?: string;
+  openTodos?: string[];
+}) {
+  const lines = [
+    "Use this workspace context as the primary source of intent for the PR draft.",
+    "Do not carry over previous workspace or earlier PR summaries unless the current diff clearly depends on them.",
+  ];
+
+  const activeTaskTitle = sanitizeInlineText(args.activeTaskTitle);
+  if (activeTaskTitle) {
+    lines.push(`- Active task: ${activeTaskTitle}`);
+  }
+
+  const normalizedTaskPrompt = truncateWorkspaceContextBlock(args.taskPrompt);
+  pushWorkspaceContextSection(lines, "Task request", normalizedTaskPrompt ? [normalizedTaskPrompt] : []);
+
+  const attachedContextLines = (args.attachedContextSnippets ?? [])
+    .slice(0, 2)
+    .flatMap((snippet, index) => {
+      const label = sanitizeInlineText(snippet.label) || `attachment-${index + 1}`;
+      const content = truncateWorkspaceContextBlock(snippet.content);
+      if (!content) {
+        return [];
+      }
+      return [`[${index + 1}] ${label}`, content];
+    });
+  pushWorkspaceContextSection(lines, "Attached workspace context", attachedContextLines);
+
+  const normalizedNotes = truncateWorkspaceContextBlock(args.notes);
+  pushWorkspaceContextSection(lines, "Workspace notes", normalizedNotes ? [normalizedNotes] : []);
+
+  const todoLines = (args.openTodos ?? [])
+    .map((todo) => sanitizeInlineText(todo))
+    .filter(Boolean)
+    .slice(0, 6)
+    .map((todo) => `- ${todo}`);
+  pushWorkspaceContextSection(lines, "Open todos", todoLines);
+
+  return lines.join("\n").trim();
 }
 
 export function resolvePullRequestTitle(args: {
