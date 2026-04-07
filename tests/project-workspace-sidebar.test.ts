@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildCollapsedWorkspaceEntries,
+  buildWorkspaceHoverPreview,
   buildVisibleWorkspaceShortcutTargets,
   getWorkspaceHoverActionVisibilityClasses,
   getWorkspaceShortcutLabel,
@@ -93,6 +94,134 @@ describe("buildCollapsedWorkspaceEntries", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0]?.startsProjectGroup).toBeFalse();
+  });
+});
+
+describe("buildWorkspaceHoverPreview", () => {
+  test("excludes archived tasks from the hover summary", () => {
+    const preview = buildWorkspaceHoverPreview({
+      tasks: [
+        {
+          id: "task-active",
+          title: "Active task",
+          updatedAt: "2026-04-07T08:00:00.000Z",
+          archivedAt: null,
+        },
+        {
+          id: "task-archived",
+          title: "Archived task",
+          updatedAt: "2026-04-07T09:00:00.000Z",
+          archivedAt: "2026-04-07T09:30:00.000Z",
+        },
+      ],
+      messageCountByTask: {
+        "task-active": 3,
+        "task-archived": 99,
+      },
+    });
+
+    expect(preview).toMatchObject({
+      isEmpty: false,
+      taskCount: 1,
+      messageCount: 3,
+      taskTitles: ["Active task"],
+      moreTaskCount: 0,
+    });
+  });
+
+  test("orders preview titles by latest task activity", () => {
+    const preview = buildWorkspaceHoverPreview({
+      tasks: [
+        {
+          id: "task-older",
+          title: "Older task",
+          updatedAt: "2026-04-07T08:00:00.000Z",
+          archivedAt: null,
+        },
+        {
+          id: "task-newer",
+          title: "Newer task",
+          updatedAt: "2026-04-07T09:00:00.000Z",
+          archivedAt: null,
+        },
+      ],
+    });
+
+    expect(preview.taskTitles).toEqual(["Newer task", "Older task"]);
+  });
+
+  test("shows at most two task titles and reports overflow count", () => {
+    const preview = buildWorkspaceHoverPreview({
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task one",
+          updatedAt: "2026-04-07T10:00:00.000Z",
+          archivedAt: null,
+        },
+        {
+          id: "task-2",
+          title: "Task two",
+          updatedAt: "2026-04-07T09:00:00.000Z",
+          archivedAt: null,
+        },
+        {
+          id: "task-3",
+          title: "Task three",
+          updatedAt: "2026-04-07T08:00:00.000Z",
+          archivedAt: null,
+        },
+      ],
+    });
+
+    expect(preview.taskTitles).toEqual(["Task one", "Task two"]);
+    expect(preview.moreTaskCount).toBe(1);
+  });
+
+  test("counts running tasks from active turns", () => {
+    const preview = buildWorkspaceHoverPreview({
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task one",
+          updatedAt: "2026-04-07T10:00:00.000Z",
+          archivedAt: null,
+        },
+        {
+          id: "task-2",
+          title: "Task two",
+          updatedAt: "2026-04-07T09:00:00.000Z",
+          archivedAt: null,
+        },
+      ],
+      activeTurnIdsByTask: {
+        "task-1": "turn-1",
+      },
+    });
+
+    expect(preview.runningTaskCount).toBe(1);
+  });
+
+  test("falls back to an empty summary when there are no visible tasks", () => {
+    const preview = buildWorkspaceHoverPreview({
+      tasks: [
+        {
+          id: "task-archived",
+          title: "Archived task",
+          updatedAt: "2026-04-07T09:00:00.000Z",
+          archivedAt: "2026-04-07T09:30:00.000Z",
+        },
+      ],
+    });
+
+    expect(preview).toMatchObject({
+      isEmpty: true,
+      taskCount: 0,
+      messageCount: 0,
+      runningTaskCount: 0,
+      taskTitles: [],
+      moreTaskCount: 0,
+    });
   });
 });
 

@@ -31,6 +31,7 @@ Replace the legacy workspace/task shell with a three-part layout:
 - Project delete removes the project from Stave's list only.
 - Workspace rows show a responding indicator if any child task is actively running, including inactive workspaces.
 - Workspace rows should show the responding-task count in the trailing action slot, then swap that slot to the workspace shortcut and `Archive` on row hover.
+- Workspace hover tooltips should show a compact task-summary preview, with inactive uncached workspaces loading shell data only on first tooltip open.
 - Default workspace icons should use a neutral gray chip, while non-default worktree icons should use deterministic name-hashed blue accents.
 - Project and workspace order should stay stable while navigating.
 - Project and workspace order can be adjusted manually from a dedicated sidebar edit mode.
@@ -78,6 +79,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - keeps workspace hover and selected states slightly stronger than the glass baseline so interaction state stays readable without losing the subdued mood
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
   - assigns `Cmd/Ctrl+1..9` to the first nine visible workspaces in sidebar order and shows those shortcuts in the expanded list plus collapsed-rail tooltips
+  - adds compact workspace-summary tooltips that prioritize recent task titles over raw message text, while lazily loading uncached workspace shells on first hover
 - `SettingsDialog`
   - includes a `Projects` section with a dedicated project menu and a single detail panel for the selected project
   - keeps repository workspace defaults, git metadata, scripts config editing, close action, and project removal inside that selected-project panel instead of the main sidebar row
