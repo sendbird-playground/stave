@@ -19,29 +19,6 @@ export type PromptInputProviderModeStatus = ProviderModePresentation & {
 
 function modeIconToneClass(status: Pick<PromptInputProviderModeStatus, "id">) {
   if (status.id === "manual") {
-    return "border-success/30 bg-success/12 text-success";
-  }
-  if (status.id === "guided") {
-    return "border-primary/20 bg-primary/15 text-primary";
-  }
-  if (status.id === "auto") {
-    return "border-warning/30 bg-warning/15 text-warning";
-  }
-  return "border-muse/30 bg-muse/12 text-muse";
-}
-
-function modeOptionActiveClass(status: Pick<PromptInputProviderModeStatus, "id">) {
-  if (status.id === "manual") {
-    return "border-success/25 bg-success/10 text-success hover:bg-success/14 hover:text-success";
-  }
-  if (status.id === "guided") {
-    return "border-primary/25 bg-primary/10 text-primary hover:bg-primary/14 hover:text-primary";
-  }
-  return "border-warning/30 bg-warning/10 text-warning hover:bg-warning/14 hover:text-warning";
-}
-
-function modeTriggerIconToneClass(status: Pick<PromptInputProviderModeStatus, "id">) {
-  if (status.id === "manual") {
     return "text-prompt-mode-manual";
   }
   if (status.id === "guided") {
@@ -51,6 +28,19 @@ function modeTriggerIconToneClass(status: Pick<PromptInputProviderModeStatus, "i
     return "text-prompt-mode-auto";
   }
   return "text-prompt-mode-custom";
+}
+
+function modeOptionActiveClass(status: Pick<PromptInputProviderModeStatus, "id">) {
+  if (status.id === "manual") {
+    return "border-prompt-mode-manual/25 bg-prompt-mode-manual/10 hover:bg-prompt-mode-manual/14";
+  }
+  if (status.id === "guided") {
+    return "border-prompt-mode-guided/25 bg-prompt-mode-guided/10 hover:bg-prompt-mode-guided/14";
+  }
+  if (status.id === "auto") {
+    return "border-prompt-mode-auto/30 bg-prompt-mode-auto/10 hover:bg-prompt-mode-auto/14";
+  }
+  return "border-prompt-mode-custom/30 bg-prompt-mode-custom/10 hover:bg-prompt-mode-custom/14";
 }
 
 function modeVisual(status: PromptInputProviderModeStatus): {
@@ -107,7 +97,7 @@ export function PromptInputProviderModePill(args: {
             args.className,
           )}
         >
-          <Icon className={cn("size-3.5 shrink-0", modeTriggerIconToneClass(args.status))} />
+          <Icon className={cn("size-3.5 shrink-0", modeIconToneClass(args.status))} />
           <span className="min-w-0 flex-1 truncate text-sm font-medium leading-none">
             {args.status.label}
           </span>
@@ -144,20 +134,13 @@ export function PromptInputProviderModePill(args: {
                     setOpen(false);
                   }}
                 >
-                  <span
-                    className={cn(
-                      "inline-flex size-7 shrink-0 items-center justify-center rounded-full border",
-                      isActive ? modeIconToneClass(presetStatus) : "border-border/70 bg-muted/60 text-muted-foreground",
-                    )}
-                  >
-                    <PresetIcon className="size-3.5" />
-                  </span>
+                  <PresetIcon className={cn("size-4 shrink-0", modeIconToneClass(presetStatus))} />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="text-sm font-medium leading-none">{preset.label}</span>
                     <span className="text-[11px] leading-4 text-muted-foreground">{presetSummary}</span>
                     <span className="text-xs leading-4 text-muted-foreground">{preset.description}</span>
                   </span>
-                  {isActive ? <Check className="size-4 shrink-0 text-current" /> : null}
+                  {isActive ? <Check className={cn("size-4 shrink-0", modeIconToneClass(presetStatus))} /> : null}
                 </Button>
               );
             })}
