@@ -14,11 +14,13 @@ Verify
 - Confirmed the normal-mode list/update restore path still matched `v0.1.0`; the remaining regression came from shared sticky intent being cleared by layout-driven `atBottomStateChange(false)` events.
 - Updated [`src/components/ai-elements/conversation.tsx`](/Users/jacob.kim/workspace/stave/.stave/workspaces/fix__zen-mode-message-scroll--continue--20260407-102858/src/components/ai-elements/conversation.tsx) so `stickToBottom` is a shared intent ref owned by `Conversation`, reused by both `ConversationContent` and `ConversationVirtualList`.
 - Stopped Virtuoso geometry changes from disabling sticky intent during dock/container resize, which allows the existing resize and extra-bottom-padding restore paths to work for both normal and zen layouts.
-- Passed `bun run typecheck` and `bun test`.
+- Patched [`src/components/ai-elements/conversation.tsx`](/Users/jacob.kim/workspace/stave/.stave/workspaces/fix__zen-scroll/src/components/ai-elements/conversation.tsx) so native container `onScroll` no longer clears sticky intent during layout-driven or internal restore scrolls.
+- Added a short sticky-intent guard window around internal scroll-to-bottom / restore operations and preserved that intent across transient Virtuoso `atBottomStateChange(false)` callbacks.
+- Passed `bun run typecheck` and `bun test` on `fix/zen-scroll`.
 
 ## Remaining Work
 - Manual UI smoke check for both normal and zen scroll behavior.
-- If either mode still drifts, capture `stave:debug:conversation-scroll=1` logs while reproducing and compare the restore reason sequence.
+- If either mode still drifts, capture `stave:debug:conversation-scroll=1` logs while reproducing and compare whether the unexpected `stickToBottom=false` now comes from a real user scroll vs. an unguarded geometry change.
 
 ## Recommended Next Actions
 1. In normal mode, verify bottom pinning while the input grows/shrinks and while switching tasks/workspaces.
@@ -36,4 +38,4 @@ Verify
 - work-handoff.md
 
 ## Notes
-- The critical distinction is now "user follow-bottom intent" vs. "current geometric at-bottom state". Layout shifts should only affect `atBottom`, not clear the sticky intent before restore logic runs.
+- The critical distinction is now "user follow-bottom intent" vs. "current geometric at-bottom state". Layout shifts and programmatic restore scrolls should update `atBottom`, but must not clear sticky intent before the restore logic finishes.
