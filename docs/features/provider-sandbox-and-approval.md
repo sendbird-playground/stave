@@ -22,15 +22,16 @@
 
 1. Open **Settings → Providers**.
 2. Open the **Claude** tab for Claude runtime controls, or the **Codex** tab for Codex runtime controls.
-3. Under **Claude Runtime Controls**, choose a permission mode and decide whether Claude should run in a sandbox and whether sandbox escape fallbacks are allowed.
-4. Under **Codex Runtime Controls**, choose file access, approvals, network access, and web search.
-5. Check the runtime chips under the composer before sending the turn.
+3. Under **Claude Runtime Controls**, pick a `Mode Preset` first, then fine-tune individual fields only if needed.
+4. Under **Codex Runtime Controls**, pick a `Mode Preset` first, then fine-tune individual fields only if needed.
+5. Check the provider mode pill next to the model selector and the runtime drawer in the composer before sending the turn.
 
 Recommended starting points:
 
-- Review only: Claude `acceptEdits` + `Sandbox Enabled = On` + `Allow Unsandboxed Commands = Off`; Codex `read-only` + `untrusted` + `Network Access = Off`.
-- Normal implementation: Claude `acceptEdits` + `Sandbox Enabled = On`; Codex `workspace-write` + `untrusted`.
-- Planning only: Claude `Permission Mode = plan`; Codex composer plan toggle `On`, which makes the turn effectively `read-only` + `never`.
+- `Manual`: guarded review-style work. Claude uses `acceptEdits` + sandbox on + unsandboxed off; Codex uses `read-only` + `on-request` + network off.
+- `Guided`: recommended day-to-day default. Claude uses `auto` + unsandboxed allowed; Codex uses `workspace-write` + `untrusted` + cached web search.
+- `Auto`: trusted local automation. Claude uses `bypassPermissions`; Codex uses `danger-full-access` + `never` + live web search.
+- Planning only: keep the base preset you want, then use the composer `Plan` toggle when you need a planning turn. For Codex, plan still forces `read-only` + `never`.
 
 ## Interface Walkthrough
 
@@ -39,7 +40,8 @@ Recommended starting points:
 - **Settings → Providers → Claude Runtime Controls**
 - **Settings → Providers → Codex Runtime Controls**
 - **Settings → Developer → Provider Timeout**
-- The composer runtime chips below the prompt box, which show the current file access, approval, network, and plan state before send
+- The provider mode pill beside the model selector, which shows whether the current provider config is `Manual`, `Guided`, `Auto`, or `Custom`
+- The composer `Runtime` drawer, which shows the effective file access, approval, network, and plan state before send
 - The composer plan toggle switches Claude turns into `Permission Mode = plan`
 - The composer plan toggle enables Codex planning for the current draft turn, backed by native App Server plan items
 
@@ -75,14 +77,14 @@ Provider differences that matter in practice:
 
 ### Run Or Verify Something
 
-1. Confirm the runtime chips under the composer match the intended settings.
+1. Confirm the provider mode pill and runtime drawer in the composer match the intended settings.
 2. Send a harmless prompt such as “summarize repo status” or “list likely files to inspect first.”
-3. Success looks like the runtime chips reflecting the expected state before send. For Codex planning, look for `Planning: On` and an effective `Files: Read Only`. For Claude turns, look for `Sandbox: Enabled/Disabled` and `Unsandboxed: On/Off`.
+3. Success looks like the runtime drawer reflecting the expected state before send. For Codex planning, look for `Planning: On` and an effective `Files: Read Only`. For Claude turns, look for `Sandbox: Enabled/Disabled` and `Unsandboxed: On/Off`.
 
 ## Files And Data
 
 - These settings live in Stave application settings, not in your repository files.
-- The current Claude defaults are `Permission Mode = auto`, `Sandbox Enabled = false`, and `Allow Unsandboxed Commands = false`.
+- The current Claude default preset is `Guided`, which maps to `Permission Mode = auto`, `Sandbox Enabled = false`, and `Allow Unsandboxed Commands = true`.
 - The current Codex defaults are `File Access = workspace-write`, `Approvals = untrusted`, `Network Access = Off`, `Web Search = cached`, and `Planning = Off`.
 
 ```json
@@ -104,6 +106,7 @@ Provider differences that matter in practice:
 - `Dangerous Skip Permissions` is only meaningful when Claude is already in `bypassPermissions`.
 - Codex plan mode rewrites the effective runtime for that turn to `read-only` + `never`, regardless of the normal Codex settings.
 - Claude SDK has deeper sandbox settings internally, but Stave currently supports the user-facing controls documented here.
+- `Custom` appears automatically when you mix fields in Settings so the combination no longer matches one of the built-in presets.
 
 ## Troubleshooting
 

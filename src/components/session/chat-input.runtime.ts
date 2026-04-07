@@ -1,66 +1,22 @@
-import type { PromptInputRuntimeControl, PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
-import { getPermissionModeOptions, type PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
+import type { PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
 import { resolveEffectiveCodexFileAccessMode } from "@/lib/providers/codex-runtime-options";
 import type { ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
-import type { ClaudePermissionMode } from "@/types/chat";
 import {
   CLAUDE_EFFORT_OPTIONS,
-  CLAUDE_THINKING_OPTIONS,
   CODEX_EFFORT_OPTIONS,
   CODEX_REASONING_SUMMARY_OPTIONS,
   CODEX_REASONING_SUPPORT_OPTIONS,
-  CODEX_WEB_SEARCH_OPTIONS,
   formatClaudeSettingSources,
   findOptionLabel,
   formatProviderTimeoutLabel,
   formatShortRuntimePath,
   formatTokenBudget,
   formatTitleCaseRuntimeValue,
-  STAVE_AUTO_MAX_SUBTASK_OPTIONS,
-  STAVE_AUTO_ORCHESTRATION_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
 import type { AppSettings } from "@/store/app.store";
 
-type UpdateSettings = (args: { patch: Partial<AppSettings> }) => void;
-
-/**
- * Transition Claude permission mode while maintaining the "before-plan"
- * save/restore contract.  Used by the toggle button, drawer, and quick
- * controls — keep them in sync through this single helper.
- */
-export function transitionClaudePermissionMode(args: {
-  nextMode: AppSettings["claudePermissionMode"];
-  currentMode: AppSettings["claudePermissionMode"];
-  beforePlan: AppSettings["claudePermissionModeBeforePlan"];
-  updateSettings: UpdateSettings;
-}): void {
-  const { nextMode, currentMode, beforePlan, updateSettings } = args;
-  if (nextMode === currentMode) return;
-
-  if (nextMode === "plan") {
-    // Entering plan mode — save current mode
-    updateSettings({
-      patch: {
-        claudePermissionModeBeforePlan: currentMode !== "plan" ? currentMode : beforePlan,
-        claudePermissionMode: "plan",
-      },
-    });
-  } else if (currentMode === "plan") {
-    // Leaving plan mode — clear saved mode
-    updateSettings({
-      patch: {
-        claudePermissionMode: nextMode,
-        claudePermissionModeBeforePlan: null,
-      },
-    });
-  } else {
-    updateSettings({ patch: { claudePermissionMode: nextMode } });
-  }
-}
-
 interface ChatInputRuntimeArgs {
   activeProvider: ProviderId;
-  permissionMode: PermissionModeValue;
   providerTimeoutMs: number;
   claudePermissionMode: AppSettings["claudePermissionMode"];
   claudePermissionModeBeforePlan: AppSettings["claudePermissionModeBeforePlan"];
@@ -89,8 +45,6 @@ interface ChatInputRuntimeArgs {
   staveAutoMaxSubtasks: number;
   staveAutoAllowCrossProviderWorkers: boolean;
   staveAutoMaxParallelSubtasks: number;
-  onClaudePermissionModeChange?: (value: ClaudePermissionMode) => void;
-  updateSettings: UpdateSettings;
 }
 
 type CommandCatalogRuntimeArgs = Pick<
@@ -107,72 +61,6 @@ type CommandCatalogRuntimeArgs = Pick<
 > & {
   modelClaude: string;
 };
-
-export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): PromptInputRuntimeControl[] {
-  if (args.activeProvider === "stave") {
-    // Stave Auto has no quick controls in the toolbar drawer — all per-model settings
-    // are configured in the Settings > Providers panel instead.
-    return [];
-  }
-
-  const permissionOptions = getPermissionModeOptions(args.activeProvider).map((option) => ({
-    value: option.value,
-    label: option.label,
-  }));
-
-  if (args.activeProvider === "claude-code") {
-    return [
-      {
-        id: "permission-mode",
-        label: "Permission",
-        value: args.permissionMode,
-        options: permissionOptions,
-        onSelect: (value: string) => {
-          if (args.onClaudePermissionModeChange) {
-            args.onClaudePermissionModeChange(value as ClaudePermissionMode);
-            return;
-          }
-          transitionClaudePermissionMode({
-            nextMode: value as typeof args.claudePermissionMode,
-            currentMode: args.claudePermissionMode,
-            beforePlan: args.claudePermissionModeBeforePlan,
-            updateSettings: args.updateSettings,
-          });
-        },
-      },
-      {
-        id: "thinking-mode",
-        label: "Thinking",
-        value: args.claudeThinkingMode,
-        options: CLAUDE_THINKING_OPTIONS,
-        onSelect: (value: string) => args.updateSettings({
-          patch: { claudeThinkingMode: value as typeof args.claudeThinkingMode },
-        }),
-      },
-    ];
-  }
-
-  return [
-    {
-      id: "permission-mode",
-      label: "Approvals",
-      value: args.permissionMode,
-      options: permissionOptions,
-      onSelect: (value: string) => args.updateSettings({
-        patch: { codexApprovalPolicy: value as typeof args.codexApprovalPolicy },
-      }),
-    },
-    {
-      id: "web-search",
-      label: "Web Search",
-      value: args.codexWebSearch,
-      options: CODEX_WEB_SEARCH_OPTIONS,
-      onSelect: (value: string) => args.updateSettings({
-        patch: { codexWebSearch: value as typeof args.codexWebSearch },
-      }),
-    },
-  ];
-}
 
 const CLAUDE_EFFORT_CYCLE_ORDER = CLAUDE_EFFORT_OPTIONS.map((option) => option.value);
 const CODEX_EFFORT_CYCLE_ORDER = [
