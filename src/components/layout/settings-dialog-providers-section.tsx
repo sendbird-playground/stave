@@ -356,20 +356,25 @@ function DescribedSelect<T extends string>(args: {
   triggerClassName?: string;
 }) {
   const selected = findExplainedOption(args.options, args.value);
+  const fallbackValue = args.options[0]?.value;
+  const selectValue = selected?.value ?? fallbackValue;
+  const triggerLabel = selected?.label ?? fallbackValue ?? args.value;
 
   return (
     <div className="space-y-2">
-      <Select value={args.value} onValueChange={(value) => args.onValueChange(value as T)}>
-        <SelectTrigger className={args.triggerClassName ?? "w-64"}>
-          <span className="line-clamp-1">{selected?.label ?? args.value}</span>
+      <Select value={selectValue} onValueChange={(value) => args.onValueChange(value as T)}>
+        <SelectTrigger className={args.triggerClassName ?? "w-64 rounded-md border-border/80 bg-background"}>
+          <SelectValue placeholder={triggerLabel} />
         </SelectTrigger>
-        <SelectContent className="max-w-sm">
+        <SelectContent
+          position="popper"
+          align="start"
+          sideOffset={6}
+          className="z-[80] min-w-[var(--radix-select-trigger-width)] max-w-sm bg-popover"
+        >
           {args.options.map((option) => (
             <SelectItem key={option.value} value={option.value} textValue={option.label}>
-              <div className="flex max-w-[20rem] flex-col items-start gap-0.5 py-0.5">
-                <span className="text-sm font-medium">{option.label}</span>
-                <span className="text-xs leading-5 text-muted-foreground">{option.description}</span>
-              </div>
+              {option.label}
             </SelectItem>
           ))}
         </SelectContent>
