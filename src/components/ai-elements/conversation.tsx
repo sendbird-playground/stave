@@ -10,7 +10,7 @@ interface ConversationContextValue {
   containerEl: HTMLDivElement | null;
   setContainerEl: (next: HTMLDivElement | null) => void;
   atBottom: boolean;
-  stickToBottom: boolean;
+  stickToBottomRef: MutableRefObject<boolean>;
   setAtBottom: (next: boolean) => void;
   setStickToBottom: (next: boolean) => void;
   scrollToBottom: (args?: { behavior?: ScrollBehavior }) => void;
@@ -125,13 +125,13 @@ export function Conversation(props: HTMLAttributes<HTMLDivElement>) {
   }, []);
 
   // Context value only depends on containerEl and atBottom (for scroll button).
-  // stickToBottom is read from ref to avoid cascading re-renders.
+  // stickToBottom intent is read from the shared ref to avoid cascading re-renders.
   const contextValue = useMemo(() => ({
     containerRef,
     containerEl,
     setContainerEl,
     atBottom,
-    stickToBottom: stickToBottomRef.current,
+    stickToBottomRef,
     setAtBottom,
     setStickToBottom,
     scrollToBottom,
@@ -156,7 +156,7 @@ interface ConversationContentProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export function ConversationContent(props: ConversationContentProps) {
-  const { containerRef, setContainerEl, setAtBottom, setStickToBottom, scrollToBottom } = useConversationContext();
+  const { containerRef, setContainerEl, setAtBottom, stickToBottomRef, setStickToBottom, scrollToBottom } = useConversationContext();
   const {
     children,
     autoScrollKey,
@@ -178,14 +178,6 @@ export function ConversationContent(props: ConversationContentProps) {
     scope: forceScrollScopeKey,
     key: forceScrollKey,
   });
-  // Read stickToBottom from the parent ref to avoid dependency on context value changes.
-  const stickToBottomRef = useRef(true);
-
-  // Sync ref from context setter calls.
-  const wrappedSetStickToBottom = useCallback((next: boolean) => {
-    stickToBottomRef.current = next;
-    setStickToBottom(next);
-  }, [setStickToBottom]);
 
   useEffect(() => {
     const previous = lastAutoScrollScopeRef.current;
@@ -197,8 +189,7 @@ export function ConversationContent(props: ConversationContentProps) {
     if (scopeChanged) {
       // Reset auto-scroll intent for the new scope so subsequent content
       // updates (streaming) keep pinning to the bottom.
-      stickToBottomRef.current = true;
-      wrappedSetStickToBottom(true);
+      setStickToBottom(true);
       // Flush the container toward the bottom immediately so the user
       // doesn't see the stale scroll position from the previous scope
       // while Virtuoso finishes its initial item measurement.
@@ -208,7 +199,7 @@ export function ConversationContent(props: ConversationContentProps) {
     if (stickToBottomRef.current) {
       scrollToBottom({ behavior: autoScrollBehavior ?? "auto" });
     }
-  }, [autoScrollBehavior, autoScrollKey, scrollScopeKey, scrollToBottom, wrappedSetStickToBottom]);
+  }, [autoScrollBehavior, autoScrollKey, scrollScopeKey, scrollToBottom, setStickToBottom, stickToBottomRef]);
 
   useEffect(() => {
     const previous = lastForceScrollRequestRef.current;
@@ -220,14 +211,14 @@ export function ConversationContent(props: ConversationContentProps) {
     };
     if (scopeChanged) {
       // Align with the auto-scroll effect — assume bottom intent for a new scope.
-      stickToBottomRef.current = true;
+      setStickToBottom(true);
     }
     if (!shouldForceScroll) {
       return;
     }
     // Re-enable auto-scroll so subsequent content updates (streaming) keep
     // following the bottom after this forced scroll.
-    stickToBottomRef.current = true;
+    setStickToBottom(true);
     const behavior = autoScrollBehavior ?? "auto";
     // Single RAF is sufficient — the double/triple RAF pattern caused jitter
     // by issuing multiple scroll commands across successive frames.
@@ -262,7 +253,7 @@ export function ConversationContent(props: ConversationContentProps) {
         const distance = target.scrollHeight - target.scrollTop - target.clientHeight;
         const nextAtBottom = distance < AT_BOTTOM_THRESHOLD;
         setAtBottom(nextAtBottom);
-        wrappedSetStickToBottom(nextAtBottom);
+        setStickToBottom(nextAtBottom);
 
         if (onScrollPositionChange) {
           // Debounce scroll position tracking to avoid expensive DOM queries on every frame.
@@ -304,12 +295,12 @@ interface ConversationVirtualListProps<T> {
 }
 
 export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T>) {
-  const { containerEl, setAtBottom, setScrollToBottomOverride } = useConversationContext();
+  const { containerEl, setAtBottom, setScrollToBottomOverride, stickToBottomRef } = useConversationContext();
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
-  const stickToBottomRef = useRef(true);
   // Guard flag: while restoring to bottom, suppress Virtuoso's transient
   // "not-at-bottom" reports that would disable followOutput prematurely.
   const isRestoringRef = useRef(false);
+  const restoreRafIdsRef = useRef<number[]>([]);
   const lastForceScrollRequestRef = useRef<{ scope?: string | number; key?: string | number }>({
     scope: props.forceScrollScopeKey,
     key: props.forceScrollKey,
@@ -318,8 +309,96 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     initialized: false,
     scope: props.listKey,
   });
+  const lastContainerHeightRef = useRef<number | null>(null);
   const lastIndex = props.data.length - 1;
   const extraBottomPadding = props.extraBottomPadding ?? 0;
+  const lastExtraBottomPaddingRef = useRef(extraBottomPadding);
+  const queueRestoreFrame = useCallback((callback: FrameRequestCallback) => {
+    const frameId = requestAnimationFrame((timestamp) => {
+      restoreRafIdsRef.current = restoreRafIdsRef.current.filter((candidate) => candidate !== frameId);
+      callback(timestamp);
+    });
+    restoreRafIdsRef.current.push(frameId);
+    return frameId;
+  }, []);
+  const cancelPendingRestoreFrames = useCallback(() => {
+    for (const frameId of restoreRafIdsRef.current) {
+      cancelAnimationFrame(frameId);
+    }
+    restoreRafIdsRef.current = [];
+  }, []);
+  const scheduleContainerBottomSync = useCallback((reason: string) => {
+    if (!containerEl) {
+      isRestoringRef.current = false;
+      return;
+    }
+
+    const MAX_SYNC_ATTEMPTS = 4;
+
+    const finishRestore = () => {
+      isRestoringRef.current = false;
+      const finalDistance = getDistanceFromBottom(containerEl);
+      if (finalDistance <= AT_BOTTOM_THRESHOLD) {
+        stickToBottomRef.current = true;
+        setAtBottom(true);
+      }
+      debugConversationScroll("container-bottom-sync-done", {
+        reason,
+        finalDistance: Math.round(finalDistance),
+        stickToBottom: stickToBottomRef.current,
+      });
+    };
+
+    const runSync = (attempt: number) => {
+      containerEl.scrollTo({ top: containerEl.scrollHeight, behavior: "auto" });
+      const distanceFromBottom = Math.round(getDistanceFromBottom(containerEl));
+      debugConversationScroll("container-bottom-sync", {
+        reason,
+        attempt,
+        distanceFromBottom,
+      });
+      if (attempt >= MAX_SYNC_ATTEMPTS) {
+        finishRestore();
+        return;
+      }
+      queueRestoreFrame(() => {
+        if (getDistanceFromBottom(containerEl) > AT_BOTTOM_THRESHOLD) {
+          runSync(attempt + 1);
+        } else {
+          finishRestore();
+        }
+      });
+    };
+
+    queueRestoreFrame(() => runSync(1));
+  }, [containerEl, queueRestoreFrame, setAtBottom]);
+  const restoreToBottom = useCallback((reason: string) => {
+    if (lastIndex < 0) {
+      return;
+    }
+    cancelPendingRestoreFrames();
+    // Enable stickToBottom so followOutput keeps pinning new content.
+    stickToBottomRef.current = true;
+    isRestoringRef.current = true;
+    virtuosoRef.current?.scrollToIndex({
+      index: lastIndex,
+      align: "end",
+      behavior: "auto",
+    });
+    debugConversationScroll("restore-to-bottom", {
+      reason,
+      listKey: props.listKey ?? null,
+      forceScrollScopeKey: props.forceScrollScopeKey ?? null,
+      lastIndex,
+    });
+    scheduleContainerBottomSync(reason);
+  }, [
+    cancelPendingRestoreFrames,
+    lastIndex,
+    props.forceScrollScopeKey,
+    props.listKey,
+    scheduleContainerBottomSync,
+  ]);
   const components = useMemo(() => {
     const listLayout = props.layout ?? "default";
     return {
@@ -379,6 +458,8 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     };
   }, [containerEl, lastIndex, setScrollToBottomOverride]);
 
+  useEffect(() => cancelPendingRestoreFrames, [cancelPendingRestoreFrames]);
+
   // Restore scroll position on task switch or data changes.
   // Uses a local stickToBottomRef to avoid re-running when the parent
   // stickToBottom state toggles during normal scrolling.
@@ -388,75 +469,6 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     }
 
     const rafIds: number[] = [];
-
-    const MAX_SYNC_ATTEMPTS = 4;
-
-    const scheduleContainerBottomSync = (reason: string) => {
-      if (!containerEl) {
-        isRestoringRef.current = false;
-        return;
-      }
-
-      const finishRestore = () => {
-        isRestoringRef.current = false;
-        // Re-assert stickToBottom after the sync completes — Virtuoso may
-        // have fired atBottomStateChange(false) during the scroll.
-        const finalDistance = getDistanceFromBottom(containerEl);
-        if (finalDistance <= AT_BOTTOM_THRESHOLD) {
-          stickToBottomRef.current = true;
-          setAtBottom(true);
-        }
-        debugConversationScroll("container-bottom-sync-done", {
-          reason,
-          finalDistance: Math.round(finalDistance),
-          stickToBottom: stickToBottomRef.current,
-        });
-      };
-
-      const runSync = (attempt: number) => {
-        containerEl.scrollTo({ top: containerEl.scrollHeight, behavior: "auto" });
-        const distanceFromBottom = Math.round(getDistanceFromBottom(containerEl));
-        debugConversationScroll("container-bottom-sync", {
-          reason,
-          attempt,
-          distanceFromBottom,
-        });
-        if (attempt >= MAX_SYNC_ATTEMPTS) {
-          finishRestore();
-          return;
-        }
-        rafIds.push(requestAnimationFrame(() => {
-          if (getDistanceFromBottom(containerEl) > AT_BOTTOM_THRESHOLD) {
-            runSync(attempt + 1);
-          } else {
-            finishRestore();
-          }
-        }));
-      };
-
-      rafIds.push(requestAnimationFrame(() => runSync(1)));
-    };
-
-    const restoreToBottom = (reason: string) => {
-      if (lastIndex < 0) {
-        return;
-      }
-      // Enable stickToBottom so followOutput keeps pinning new content.
-      stickToBottomRef.current = true;
-      isRestoringRef.current = true;
-      virtuosoRef.current?.scrollToIndex({
-        index: lastIndex,
-        align: "end",
-        behavior: "auto",
-      });
-      debugConversationScroll("restore-to-bottom", {
-        reason,
-        listKey: props.listKey ?? null,
-        forceScrollScopeKey: props.forceScrollScopeKey ?? null,
-        lastIndex,
-      });
-      scheduleContainerBottomSync(reason);
-    };
 
     const restoreToSavedAnchor = (index: number, offset: number) => {
       virtuosoRef.current?.scrollToIndex({
@@ -570,7 +582,6 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       rafIds.forEach((id) => cancelAnimationFrame(id));
     };
   }, [
-    containerEl,
     lastIndex,
     props.data.length,
     props.forceScrollKey,
@@ -579,20 +590,63 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     props.restoreItemId,
     props.restoreItemIndex,
     props.restoreItemOffset,
+    restoreToBottom,
     // stickToBottom intentionally NOT in deps — read from ref to avoid
     // re-running this effect on every scroll near the bottom threshold.
   ]);
 
-  // Sync stickToBottom ref from Virtuoso's atBottomStateChange.
-  // During a restore-to-bottom operation, suppress transient "not at bottom"
-  // reports — Virtuoso fires these while it re-measures items but before our
-  // RAF-based container sync has finished scrolling.
+  useEffect(() => {
+    if (!containerEl) {
+      lastContainerHeightRef.current = null;
+      return;
+    }
+
+    lastContainerHeightRef.current = containerEl.clientHeight;
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      const previousHeight = lastContainerHeightRef.current;
+      const nextHeight = containerEl.clientHeight;
+      lastContainerHeightRef.current = nextHeight;
+      if (
+        previousHeight == null
+        || previousHeight === nextHeight
+        || lastIndex < 0
+        || !stickToBottomRef.current
+      ) {
+        return;
+      }
+      restoreToBottom("container-resize");
+    });
+    observer.observe(containerEl);
+
+    return () => observer.disconnect();
+  }, [containerEl, lastIndex, restoreToBottom]);
+
+  useEffect(() => {
+    const previousExtraBottomPadding = lastExtraBottomPaddingRef.current;
+    lastExtraBottomPaddingRef.current = extraBottomPadding;
+    if (
+      previousExtraBottomPadding === extraBottomPadding
+      || lastIndex < 0
+      || !stickToBottomRef.current
+    ) {
+      return;
+    }
+    restoreToBottom("bottom-padding-change");
+  }, [extraBottomPadding, lastIndex, restoreToBottom]);
+
+  // Virtuoso's atBottom signal reflects current geometry, not user intent.
+  // Preserve stickToBottom until actual user scroll or explicit scroll-to-bottom
+  // changes it, otherwise layout shifts (dock resize, viewport resize) break
+  // followOutput before the restore logic can run.
   const handleAtBottomChange = useCallback((isAtBottom: boolean) => {
     if (!isAtBottom && isRestoringRef.current) {
       debugConversationScroll("suppress-not-at-bottom", { isRestoring: true });
       return;
     }
-    stickToBottomRef.current = isAtBottom;
     setAtBottom(isAtBottom);
   }, [setAtBottom]);
 

@@ -1,52 +1,39 @@
 # Work Handoff
 
 ## Objective
-Stabilize provider approval semantics so pending approvals/user-inputs block further progression instead of being locally advanced by Stave.
+Restore chat scroll behavior after the zen-mode merge so normal mode matches the pre-`v0.1.0` sticky-bottom semantics and zen mode inherits the same fix for dock/viewport layout shifts.
 
 ## Active Task Path
-tracking/sessions/2026-04-07_approval-semantics/features/provider-approval/tasks/block-pending-turns
+.
 
 ## Current Status
 Verify
 
 ## Completed
-- Blocked follow-up `sendUserMessage` calls while approval or user-input remains pending.
-- Disabled `ChatInput` submission while a pending approval or user-input exists, even if `activeTurnId` has already dropped.
-- Added plain `Enter` approval for the latest pending approval in the active task when focus is not inside an editable or interactive control.
-- Removed local fallback that marked approval/user-input as responded without an active provider turn.
-- Kept replayed turns blocked when `done` arrives before the pending approval is resolved.
-- Filtered stale `taskWorkspaceIdById` ownership to current workspaces during project/workspace activation.
-- Added regression tests and passed targeted verification.
+- Compared the current shared chat scroll implementation against `v0.1.0`, `47b6a5e`, and `1565857`.
+- Confirmed the normal-mode list/update restore path still matched `v0.1.0`; the remaining regression came from shared sticky intent being cleared by layout-driven `atBottomStateChange(false)` events.
+- Updated [`src/components/ai-elements/conversation.tsx`](/Users/jacob.kim/workspace/stave/.stave/workspaces/fix__zen-mode-message-scroll--continue--20260407-102858/src/components/ai-elements/conversation.tsx) so `stickToBottom` is a shared intent ref owned by `Conversation`, reused by both `ConversationContent` and `ConversationVirtualList`.
+- Stopped Virtuoso geometry changes from disabling sticky intent during dock/container resize, which allows the existing resize and extra-bottom-padding restore paths to work for both normal and zen layouts.
+- Passed `bun run typecheck` and `bun test`.
 
 ## Remaining Work
-- Manual in-app repro check for the original approval flow.
-- If cross-project conversation bleed still occurs, inspect provider session reuse and cached workspace restoration next.
+- Manual UI smoke check for both normal and zen scroll behavior.
+- If either mode still drifts, capture `stave:debug:conversation-scroll=1` logs while reproducing and compare the restore reason sequence.
 
 ## Recommended Next Actions
-1. Reproduce a Claude approval flow and a Codex approval flow end-to-end in the app UI.
-2. Verify that approving/denying from the chat bubble still works after workspace switches.
-3. Verify that `Enter` does not auto-approve while focus is inside buttons, inputs, or editable fields.
-4. If project A content still appears in project B conversations, instrument provider session resume paths and workspace cache restores.
+1. In normal mode, verify bottom pinning while the input grows/shrinks and while switching tasks/workspaces.
+2. In zen mode, verify bottom pinning while the overlay dock height changes and after turn completion.
+3. In both modes, scroll upward, receive new content, and confirm the view does not jump back to bottom until explicitly restored.
+
+## Nice-to-Have Follow-Ups
+- Add a focused scroll-behavior regression test once there is a lightweight component test harness for Virtuoso-backed chat surfaces.
 
 ## Open Questions
-- Whether unresolved approval + unexpected `done` should emit a dedicated warning message in chat.
+- None at the code level; only manual repro confirmation remains.
 
 ## Changed Files
-- tracking/sessions/2026-04-07_approval-semantics/features/provider-approval/tasks/block-pending-turns/handoff.md
-- src/store/provider-message.utils.ts
-- src/lib/session/provider-event-replay.ts
-- src/store/app.store.ts
-- src/store/project.utils.ts
-- src/components/session/ChatInput.tsx
-- src/components/ai-elements/confirmation.tsx
-- src/components/session/chat-input.utils.ts
-- tests/provider-event-replay.test.ts
-- tests/provider-request-sanitization.test.ts
-- tests/bridge-persistence-regression.test.ts
-- tests/chat-input-utils.test.ts
+- src/components/ai-elements/conversation.tsx
+- work-handoff.md
 
 ## Notes
-- Verification run:
-  - `bun run typecheck`
-  - `bun test tests/provider-event-replay.test.ts tests/provider-request-sanitization.test.ts tests/bridge-persistence-regression.test.ts`
-  - `bun test tests/chat-input-utils.test.ts`
+- The critical distinction is now "user follow-bottom intent" vs. "current geometric at-bottom state". Layout shifts should only affect `atBottom`, not clear the sticky intent before restore logic runs.
