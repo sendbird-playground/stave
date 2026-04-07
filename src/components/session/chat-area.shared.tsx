@@ -1,5 +1,5 @@
 import { FolderOpen, Layers } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { SessionLoadingState } from "@/components/session/SessionLoadingState";
 import {
@@ -17,6 +17,10 @@ import { useAppStore } from "@/store/app.store";
 import { useShallow } from "zustand/react/shallow";
 
 const EMPTY_MESSAGES: readonly unknown[] = [];
+const ZEN_INPUT_DOCK_FADE_STYLE = {
+  background:
+    "linear-gradient(180deg, color-mix(in oklab, var(--background) 16%, transparent) 0%, color-mix(in oklab, var(--background) 72%, transparent) 58%, var(--background) 100%)",
+} as CSSProperties;
 
 export function useChatAreaShellState() {
   const chatInputDockRef = useRef<HTMLDivElement | null>(null);
@@ -132,10 +136,12 @@ interface ChatAreaScaffoldProps {
   input: ReactNode;
   panel: ReactNode;
   planViewer?: ReactNode;
+  inputDockMode?: "flow" | "overlay";
 }
 
 export function ChatAreaScaffold(args: ChatAreaScaffoldProps) {
   const { sessionAreaProps, viewMode, chatInputDockRef, createProject, createTask } = args.state;
+  const inputDockMode = args.inputDockMode ?? "flow";
 
   if (viewMode === "no_project") {
     return (
@@ -229,8 +235,21 @@ export function ChatAreaScaffold(args: ChatAreaScaffoldProps) {
       <div className="relative flex min-h-0 flex-1 flex-col">
         {args.panel}
         {args.planViewer ?? null}
-        <div ref={chatInputDockRef} className="relative z-30 shrink-0">
-          {args.input}
+        <div
+          ref={chatInputDockRef}
+          className={inputDockMode === "overlay" ? "pointer-events-none absolute inset-x-0 bottom-0 z-30" : "relative z-30 shrink-0"}
+        >
+          {inputDockMode === "overlay" ? (
+            <div className="relative">
+              <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-24 h-24" style={ZEN_INPUT_DOCK_FADE_STYLE} />
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-background/94 supports-backdrop-filter:backdrop-blur-xl" />
+              <div className="pointer-events-auto relative">
+                {args.input}
+              </div>
+            </div>
+          ) : (
+            args.input
+          )}
         </div>
       </div>
     </div>

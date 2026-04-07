@@ -37,6 +37,7 @@
 - Assistant thinking, orchestration, subagent progress, and other trace detail are suppressed.
 - Final assistant responses, changed-file results, approval cards, and user-input cards remain visible.
 - The composer removes the usual model/runtime toggles, shows branch/worktree status above the prompt, and uses a terminal-style monospace layout.
+- The composer sits on an opaque bottom dock with a soft top fade so transcript lines visually disappear underneath the input instead of ending abruptly.
 - The transcript uses terminal-like `USER` / `AGENT` markers and a darker, thinner Zen-only scrollbar treatment.
 
 ## Common Workflows
