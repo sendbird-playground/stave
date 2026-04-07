@@ -413,6 +413,10 @@ export function shouldAutoOpenToolGroup(states: Array<ToolUsePart["state"] | und
   return states.some((state) => state !== undefined && shouldAutoOpenToolPart(state));
 }
 
+export function getReasoningTraceExpansionMode(args: { reasoningExpansionMode: "auto" | "manual" }): "auto" | "manual" {
+  return args.reasoningExpansionMode;
+}
+
 export type MessageBodyFallbackState = "content" | "streaming-placeholder" | "empty-completed";
 
 export function getMessageBodyFallbackState(args: {

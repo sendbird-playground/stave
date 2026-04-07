@@ -418,7 +418,7 @@ export interface AppSettings {
   messageKoreanFontFamily: string;
   /** Zoom scale for the workspace information panel (0.8 – 1.3, default 1). */
   infoPanelScale: number;
-  reasoningDefaultExpanded: boolean;
+  reasoningExpansionMode: "auto" | "manual";
   thinkingPhraseAnimationStyle: ThinkingPhraseAnimationStyle;
   claudeFastModeVisible: boolean;
   codexFastModeVisible: boolean;
@@ -981,6 +981,10 @@ function normalizeAppShellMode(value: unknown): AppShellMode {
   return value === "zen" ? "zen" : "stave";
 }
 
+function normalizeReasoningExpansionMode(value: unknown): "auto" | "manual" {
+  return value === "auto" ? "auto" : "manual";
+}
+
 const defaultSettings: AppSettings = {
   appShellMode: "stave",
   themeMode: "dark",
@@ -1003,7 +1007,7 @@ const defaultSettings: AppSettings = {
   messageMonoFontFamily: "JetBrains Mono",
   messageKoreanFontFamily: "Pretendard Variable",
   infoPanelScale: 1,
-  reasoningDefaultExpanded: false,
+  reasoningExpansionMode: "manual",
   thinkingPhraseAnimationStyle: "soft",
   claudeFastModeVisible: true,
   codexFastModeVisible: true,
@@ -4321,6 +4325,11 @@ export const useAppStore = create<AppState>()(
             : {
                 sharedSkillsHome: normalizeSharedSkillsHomeSetting(patch.sharedSkillsHome),
               }),
+          ...(patch.reasoningExpansionMode === undefined
+            ? {}
+            : {
+                reasoningExpansionMode: normalizeReasoningExpansionMode(patch.reasoningExpansionMode),
+              }),
           ...(patch.providerTimeoutMs === undefined
             ? {}
             : {
@@ -7567,6 +7576,13 @@ export const useAppStore = create<AppState>()(
           state.settings.codexFastModeVisible ??= raw.fastModeVisible;
           delete raw.fastModeVisible;
         }
+        if (
+          typeof raw.reasoningDefaultExpanded === "boolean"
+          && typeof persistedSettings?.reasoningExpansionMode !== "string"
+        ) {
+          raw.reasoningExpansionMode = raw.reasoningDefaultExpanded ? "auto" : "manual";
+        }
+        delete raw.reasoningDefaultExpanded;
         delete raw.codexSandboxMode;
         delete raw.codexSkipGitRepoCheck;
         delete raw.codexNetworkAccessEnabled;
@@ -7593,6 +7609,9 @@ export const useAppStore = create<AppState>()(
         state.settings.claudeSettingSources = normalizeClaudeSettingSources({
           value: state.settings.claudeSettingSources,
         });
+        state.settings.reasoningExpansionMode = normalizeReasoningExpansionMode(
+          state.settings.reasoningExpansionMode,
+        );
         state.settings.staveAutoRoleRuntimeOverrides = normalizeStaveAutoRoleRuntimeOverrides({
           value: raw.staveAutoRoleRuntimeOverrides,
         });

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getReasoningTraceExpansionMode,
   getVisibleMessageParts,
   getLatestUserMessageId,
   getMessageBodyFallbackState,
@@ -210,6 +211,11 @@ describe("groupMessageParts", () => {
 });
 
 describe("tool auto-open behavior", () => {
+  test("returns the configured reasoning expansion mode", () => {
+    expect(getReasoningTraceExpansionMode({ reasoningExpansionMode: "auto" })).toBe("auto");
+    expect(getReasoningTraceExpansionMode({ reasoningExpansionMode: "manual" })).toBe("manual");
+  });
+
   test("auto-opens individual tool cards only while streaming", () => {
     expect(shouldAutoOpenToolPart("input-streaming")).toBe(true);
     expect(shouldAutoOpenToolPart("input-available")).toBe(false);

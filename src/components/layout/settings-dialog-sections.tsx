@@ -1595,7 +1595,7 @@ function RulesSection() {
 }
 
 function ChatSection() {
-  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningDefaultExpanded, thinkingPhraseAnimationStyle, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
+  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningExpansionMode, thinkingPhraseAnimationStyle, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
     useShallow((state) => [
       state.settings.smartSuggestions,
       state.settings.chatSendPreview,
@@ -1606,7 +1606,7 @@ function ChatSection() {
       state.settings.messageMonoFontFamily,
       state.settings.messageKoreanFontFamily,
       state.settings.infoPanelScale,
-      state.settings.reasoningDefaultExpanded,
+      state.settings.reasoningExpansionMode,
       state.settings.thinkingPhraseAnimationStyle,
       state.settings.claudeFastModeVisible,
       state.settings.codexFastModeVisible,
@@ -1730,15 +1730,15 @@ function ChatSection() {
             />
           </LabeledField>
           <LabeledField
-            title="Reasoning Expanded by Default"
-            description="When enabled, thinking/reasoning blocks start expanded. When disabled, they start collapsed."
+            title="Reasoning Expansion"
+            description="Auto expands the reasoning trace while a turn is streaming, then collapses it again. Manual keeps it collapsed until you open it."
           >
-            <ChoiceButtons
-              value={reasoningDefaultExpanded ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { reasoningDefaultExpanded: value === "on" } })}
+            <ChoiceButtons<"auto" | "manual">
+              value={reasoningExpansionMode}
+              onChange={(value) => updateSettings({ patch: { reasoningExpansionMode: value } })}
               options={[
-                { value: "on", label: "Expanded" },
-                { value: "off", label: "Collapsed" },
+                { value: "auto", label: "Auto" },
+                { value: "manual", label: "Manual" },
               ]}
             />
           </LabeledField>
