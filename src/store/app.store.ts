@@ -147,7 +147,9 @@ import {
   type StaveMuseRoutingDecision,
 } from "@/lib/stave-muse-routing";
 import {
+  findLatestPendingApproval,
   findLatestPendingApprovalPart,
+  findLatestPendingUserInput,
   findPendingApprovalMessageByRequestId,
   findLatestPendingUserInputPart,
   updateApprovalPartsByRequestId,
@@ -245,6 +247,7 @@ import {
   buildWorkspaceRootNodeModulesSymlinkCommand,
   buildWorkspaceCreationNotice,
   registerTaskWorkspaceOwnership,
+  retainTaskWorkspaceOwnership,
   resolveWorkspaceName,
   removeWorkspaceRuntimeCacheEntries,
   areStringArraysEqual,
@@ -1793,6 +1796,7 @@ export const useAppStore = create<AppState>()(
             defaultBranch: args.defaultBranch,
             lastOpenedAt: new Date().toISOString(),
           };
+          const nextProjectWorkspaceIds = nextProject.workspaces.map((workspace) => workspace.id);
           const emptyWorkspaceState = buildWorkspaceSessionState({ snapshot: null });
           set(() => ({
             hasHydratedWorkspaces: false,
@@ -1812,6 +1816,10 @@ export const useAppStore = create<AppState>()(
             projectFiles: args.files,
             workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
             workspaceRuntimeCacheById: savedWorkspaceRuntimeCacheById,
+            taskWorkspaceIdById: retainTaskWorkspaceOwnership({
+              taskWorkspaceIdById: stateBeforeSwitch.taskWorkspaceIdById,
+              workspaceIds: nextProjectWorkspaceIds,
+            }),
             ...emptyWorkspaceState,
           }));
           await get().hydrateWorkspaces();
@@ -1882,6 +1890,7 @@ export const useAppStore = create<AppState>()(
           newWorkspaceInitCommand: "",
           newWorkspaceUseRootNodeModulesSymlink: false,
         } satisfies RecentProjectState;
+        const nextProjectWorkspaceIds = nextProject.workspaces.map((workspace) => workspace.id);
 
         set(() => ({
           hasHydratedWorkspaces: true,
@@ -1903,7 +1912,10 @@ export const useAppStore = create<AppState>()(
           workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
           workspaceRuntimeCacheById: savedWorkspaceRuntimeCacheById,
           taskWorkspaceIdById: registerTaskWorkspaceOwnership({
-            taskWorkspaceIdById: stateBeforeSwitch.taskWorkspaceIdById,
+            taskWorkspaceIdById: retainTaskWorkspaceOwnership({
+              taskWorkspaceIdById: stateBeforeSwitch.taskWorkspaceIdById,
+              workspaceIds: nextProjectWorkspaceIds,
+            }),
             workspaceId: nextProject.activeWorkspaceId,
             tasks: workspaceState.tasks,
           }),
@@ -2777,6 +2789,7 @@ export const useAppStore = create<AppState>()(
             ? loadedWorkspaceShellState?.workspaceState
             : (cachedWorkspaceState ?? loadedWorkspaceShellState?.workspaceState)
           ) ?? buildWorkspaceSessionState({ snapshot: null });
+          const workspaceIds = rows.map((workspace) => workspace.id);
           const nextRuntimeCacheById = preferLoadedWorkspaceState && preferredWorkspaceId
             ? Object.fromEntries(
                 Object.entries(state.workspaceRuntimeCacheById).filter(([workspaceId]) => workspaceId !== preferredWorkspaceId),
@@ -2843,7 +2856,10 @@ export const useAppStore = create<AppState>()(
             }),
             workspaceRuntimeCacheById: nextRuntimeCacheById,
             taskWorkspaceIdById: registerTaskWorkspaceOwnership({
-              taskWorkspaceIdById: state.taskWorkspaceIdById,
+              taskWorkspaceIdById: retainTaskWorkspaceOwnership({
+                taskWorkspaceIdById: state.taskWorkspaceIdById,
+                workspaceIds,
+              }),
               workspaceId: preferredWorkspaceId,
               tasks: workspaceState.tasks,
             }),
@@ -3953,6 +3969,7 @@ export const useAppStore = create<AppState>()(
           ? resolvedWorkspaceShellState?.workspaceState
           : (cachedWorkspaceState ?? resolvedWorkspaceShellState?.workspaceState)
         ) ?? buildWorkspaceSessionState({ snapshot: null });
+        const workspaceIds = nextWorkspaces.map((workspace) => workspace.id);
         const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({ state: current });
         if (preferLoadedWorkspaceState) {
           delete nextRuntimeCacheById[workspaceId];
@@ -3967,7 +3984,10 @@ export const useAppStore = create<AppState>()(
             taskMessagesLoadingByTask: {},
             workspaceRuntimeCacheById: nextRuntimeCacheById,
             taskWorkspaceIdById: registerTaskWorkspaceOwnership({
-              taskWorkspaceIdById: state.taskWorkspaceIdById,
+              taskWorkspaceIdById: retainTaskWorkspaceOwnership({
+                taskWorkspaceIdById: state.taskWorkspaceIdById,
+                workspaceIds,
+              }),
               workspaceId,
               tasks: workspaceState.tasks,
             }),
@@ -6131,7 +6151,7 @@ export const useAppStore = create<AppState>()(
           return;
         }
         if (approvalPart) {
-          applyApprovalResponse(approvalPart.requestId);
+          appendApprovalFailure("Approval delivery failed: no active turn found for this Muse turn.");
         }
       },
       resolveStaveMuseUserInput: async ({ messageId, answers, denied }) => {
@@ -6198,7 +6218,7 @@ export const useAppStore = create<AppState>()(
           return;
         }
         if (userInputPart) {
-          applyUserInputResponse(userInputPart.requestId);
+          appendUserInputFailure("User input delivery failed: no active turn found for this Muse turn.");
         }
       },
       sendUserMessage: ({ taskId, content, fileContexts, imageContexts }) => {
@@ -6299,6 +6319,15 @@ export const useAppStore = create<AppState>()(
         }
 
         const existingHistory = state.messagesByTask[resolvedTaskId] ?? [];
+        if (state.activeTurnIdsByTask[resolvedTaskId]) {
+          return;
+        }
+        if (findLatestPendingApproval({ messages: existingHistory })) {
+          return;
+        }
+        if (findLatestPendingUserInput({ messages: existingHistory })) {
+          return;
+        }
         const promptDraft = state.promptDraftByTask[resolvedTaskId] ?? sourcePromptDraft;
         const resolvedPromptDraftRuntimeState = resolvePromptDraftRuntimeState({
           promptDraft,
@@ -6706,7 +6735,7 @@ export const useAppStore = create<AppState>()(
           return;
         }
         if (approvalPart) {
-          applyApprovalResponse(approvalPart.requestId);
+          appendApprovalFailure("Approval delivery failed: no active turn found for this task.");
           return;
         }
       },
@@ -6812,7 +6841,7 @@ export const useAppStore = create<AppState>()(
           return;
         }
         if (userInputPart) {
-          applyUserInputResponse(userInputPart.requestId);
+          appendUserInputFailure("User input delivery failed: no active turn found for this task.");
         }
       },
       resolveDiff: ({ taskId, messageId, accepted, partIndex }) => {

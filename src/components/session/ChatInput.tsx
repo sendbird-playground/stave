@@ -35,7 +35,10 @@ import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import { findLatestPendingUserInputPart } from "@/store/provider-message.utils";
+import {
+  findLatestPendingApproval,
+  findLatestPendingUserInputPart,
+} from "@/store/provider-message.utils";
 import {
   resolvePromptDraftRuntimeState,
   transitionClaudePromptDraftPermissionMode,
@@ -50,7 +53,12 @@ import {
   cycleCodexEffortValue,
 } from "./chat-input.runtime";
 import { toWorkspaceRelativeFilePath } from "./chat-input.attachments";
-import { getLatestPromptSuggestions, getPromptHistoryEntries, mergePromptSuggestionWithDraft } from "./chat-input.utils";
+import {
+  getLatestPromptSuggestions,
+  getPromptHistoryEntries,
+  mergePromptSuggestionWithDraft,
+  shouldHandleApprovalEnterShortcut,
+} from "./chat-input.utils";
 
 interface ChatInputProps {
   compact?: boolean;
@@ -140,6 +148,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     sendUserMessage,
     openFileFromTree,
     abortTaskTurn,
+    resolveApproval,
     resolveUserInput,
     setStaveMuseOpen,
   ] = useAppStore(useShallow((state) => [
@@ -150,6 +159,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     state.sendUserMessage,
     state.openFileFromTree,
     state.abortTaskTurn,
+    state.resolveApproval,
     state.resolveUserInput,
     state.setStaveMuseOpen,
   ] as const));
@@ -172,13 +182,18 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     };
   }, [pendingUserInputMessageId, pendingUserInputPart]);
   const activeTaskMessages = useAppStore((state) => state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES);
+  const pendingApproval = useMemo(
+    () => findLatestPendingApproval({ messages: activeTaskMessages }),
+    [activeTaskMessages],
+  );
+  const isInputBlocked = args.isTurnActive || pendingApproval != null || pendingUserInput != null;
   const promptHistoryEntries = useMemo(
     () => getPromptHistoryEntries(activeTaskMessages),
     [activeTaskMessages],
   );
   const promptSuggestions = useMemo(
-    () => (args.isTurnActive ? [] : getLatestPromptSuggestions(activeTaskMessages)),
-    [activeTaskMessages, args.isTurnActive],
+    () => (isInputBlocked ? [] : getLatestPromptSuggestions(activeTaskMessages)),
+    [activeTaskMessages, isInputBlocked],
   );
   const [draftText, setDraftText] = useState(promptDraft.text);
   const draftTextRef = useRef(promptDraft.text);
@@ -351,6 +366,42 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     return () => window.removeEventListener("beforeunload", flushDraftText);
   }, []);
 
+  useEffect(() => {
+    if (!pendingApproval) {
+      return;
+    }
+
+    const handleApprovalShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (!shouldHandleApprovalEnterShortcut({
+        key: event.key,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        isComposing: event.isComposing,
+        targetTagName: target?.tagName,
+        targetRole: target?.getAttribute("role"),
+        targetIsContentEditable: target?.isContentEditable,
+      })) {
+        return;
+      }
+
+      event.preventDefault();
+      resolveApproval({
+        taskId: args.activeTaskId,
+        messageId: pendingApproval.messageId,
+        approved: true,
+      });
+    };
+
+    window.addEventListener("keydown", handleApprovalShortcut);
+    return () => window.removeEventListener("keydown", handleApprovalShortcut);
+  }, [args.activeTaskId, pendingApproval, resolveApproval]);
+
   return (
     <div
       className={cn(
@@ -363,7 +414,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           focusToken={`${args.providerSelectionTarget}:${focusNonce}`}
           value={draftText}
           onBlur={commitCurrentDraftText}
-          disabled={args.isTurnActive}
+          disabled={isInputBlocked}
           isTurnActive={args.isTurnActive}
           selectedModel={args.selectedModelOption}
           modelOptions={args.modelOptions}

@@ -2614,4 +2614,71 @@ describe("workspace store hydration ordering", () => {
     // providerSessionByTask should no longer hold the stale thread id
     expect(afterAbort.providerSessionByTask["task-abort-1"]).toBeUndefined();
   });
+
+  test("resolveApproval keeps pending state when no active turn exists", async () => {
+    setWindowContext({
+      localStorage: createMemoryStorage(),
+      api: {},
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-1",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: { "ws-main": "/tmp/stave-project" },
+      workspaceBranchById: { "ws-main": "main" },
+      workspaceDefaultById: { "ws-main": true },
+      tasks: [{
+        id: "task-1",
+        title: "Task 1",
+        provider: "codex",
+        updatedAt: "2026-04-07T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      messagesByTask: {
+        "task-1": [{
+          id: "task-1-m-1",
+          role: "assistant",
+          model: "gpt-5.4",
+          providerId: "codex",
+          content: "",
+          isStreaming: false,
+          parts: [{
+            type: "approval",
+            toolName: "bash",
+            requestId: "approval-1",
+            description: "Run npm test",
+            state: "approval-requested",
+          }],
+        }],
+      },
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
+    });
+
+    useAppStore.getState().resolveApproval({
+      taskId: "task-1",
+      messageId: "task-1-m-1",
+      approved: true,
+    });
+
+    const messages = useAppStore.getState().messagesByTask["task-1"] ?? [];
+    expect(messages).toHaveLength(2);
+    expect(messages[0]?.parts[0]).toMatchObject({
+      type: "approval",
+      requestId: "approval-1",
+      state: "approval-requested",
+    });
+    expect(messages[1]).toMatchObject({
+      role: "assistant",
+      content: "Approval delivery failed: no active turn found for this task.",
+    });
+  });
 });

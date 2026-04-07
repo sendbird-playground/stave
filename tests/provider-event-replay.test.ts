@@ -333,6 +333,33 @@ describe("appendProviderEventToAssistant", () => {
       state: "approval-responded",
     });
   });
+
+  test("keeps the turn active when done arrives before a pending approval is resolved", () => {
+    const replayed = replayProviderEventsToTaskState({
+      taskId: "task-1",
+      messages: [],
+      events: [
+        {
+          type: "approval",
+          toolName: "bash",
+          requestId: "tool-1",
+          description: "Run npm test",
+        },
+        { type: "done" },
+      ],
+      provider: "codex",
+      model: "gpt-5.4",
+      turnId: "turn-1",
+    });
+
+    expect(replayed.activeTurnId).toBe("turn-1");
+    expect(replayed.messages[0]?.parts[0]).toMatchObject({
+      type: "approval",
+      requestId: "tool-1",
+      state: "approval-requested",
+    });
+    expect(replayed.messages[0]?.isStreaming).toBe(false);
+  });
 });
 
 describe("plan response replay", () => {

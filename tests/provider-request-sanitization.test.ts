@@ -196,6 +196,95 @@ describe("provider request sanitization", () => {
     expect(String(historyParts?.[0]?.output).length).toBeLessThanOrEqual(MAX_FILE_CONTEXT_CONTENT_CHARS);
   });
 
+  test("does not start a follow-up turn while an approval remains pending", async () => {
+    let startTurnCallCount = 0;
+
+    (globalThis as { window?: unknown }).window = {
+      localStorage: {
+        getItem: () => null,
+        setItem: () => {},
+        removeItem: () => {},
+        clear: () => {},
+      },
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        provider: {
+          startPushTurn: async () => {
+            startTurnCallCount += 1;
+            return {
+              ok: true,
+              streamId: "stream-pending-approval",
+              turnId: "turn-pending-approval",
+            };
+          },
+          subscribeStreamEvents: () => () => {},
+          abortTurn: async () => ({ ok: true, message: "aborted" }),
+          cleanupTask: async () => ({ ok: true, message: "cleaned" }),
+        },
+      },
+    };
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-15T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: { "ws-main": "/tmp/stave-project" },
+      workspaceBranchById: { "ws-main": "main" },
+      workspaceDefaultById: { "ws-main": true },
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task 1",
+          provider: "codex",
+          updatedAt: "2026-03-15T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
+      activeTaskId: "task-1",
+      draftProvider: "codex",
+      messagesByTask: {
+        "task-1": [
+          {
+            id: "task-1-m-1",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "",
+            isStreaming: false,
+            parts: [{
+              type: "approval",
+              toolName: "bash",
+              requestId: "approval-1",
+              description: "Run npm test",
+              state: "approval-requested",
+            }],
+          },
+        ],
+      },
+      activeTurnIdsByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
+    });
+
+    useAppStore.getState().sendUserMessage({
+      taskId: "task-1",
+      content: "Please continue anyway.",
+    });
+
+    await Bun.sleep(0);
+
+    expect(startTurnCallCount).toBe(0);
+    expect(useAppStore.getState().messagesByTask["task-1"]).toHaveLength(1);
+    expect(useAppStore.getState().activeTurnIdsByTask["task-1"]).toBeUndefined();
+  });
+
   test("strips renderer-only tool metadata from historical tool parts before follow-up turns", async () => {
     let startedConversation: Record<string, unknown> | undefined;
 
