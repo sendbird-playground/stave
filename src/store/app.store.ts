@@ -2412,6 +2412,7 @@ export const useAppStore = create<AppState>()(
         sidebarOverlayTab: "explorer",
         terminalDocked: false,
         editorDiffMode: false,
+        zenMode: false,
       },
       settings: defaultSettings,
       editorTabs: [],

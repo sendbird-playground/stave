@@ -36,6 +36,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Workspace PR Status](features/workspace-pr-status.md)
 - [Notifications](features/notifications.md)
 - [Command Palette](features/command-palette.md)
+- [Zen Mode](features/zen-mode.md)
 - [Session Replay](features/session-replay.md)
 - [Skill selector](features/skill-selector.md)
 - [Attachments](features/attachments.md)

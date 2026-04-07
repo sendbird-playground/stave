@@ -14,7 +14,11 @@ import { useShallow } from "zustand/react/shallow";
 
 const EMPTY_MESSAGES: readonly unknown[] = [];
 
-export function ChatArea() {
+interface ChatAreaProps {
+  zenMode?: boolean;
+}
+
+export function ChatArea({ zenMode = false }: ChatAreaProps) {
   const chatInputDockRef = useRef<HTMLDivElement | null>(null);
   const [chatInputDockHeight, setChatInputDockHeight] = useState(0);
   const sessionAreaRef = useRef<HTMLDivElement>(null);
@@ -198,7 +202,7 @@ export function ChatArea() {
           </div>
           <div ref={chatInputDockRef} className="relative z-30 shrink-0">
             <RenderProfiler id="ChatInput" thresholdMs={8}>
-              <ChatInput />
+              <ChatInput compact={zenMode} />
             </RenderProfiler>
           </div>
         </div>
@@ -209,14 +213,16 @@ export function ChatArea() {
   const content = (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <RenderProfiler id="ChatPanel" thresholdMs={8}>
-        <ChatPanel />
+        <ChatPanel zenMode={zenMode} />
       </RenderProfiler>
-      <RenderProfiler id="PlanViewer">
-        <PlanViewer inputDockHeight={chatInputDockHeight} />
-      </RenderProfiler>
+      {!zenMode ? (
+        <RenderProfiler id="PlanViewer">
+          <PlanViewer inputDockHeight={chatInputDockHeight} />
+        </RenderProfiler>
+      ) : null}
       <div ref={chatInputDockRef} className="relative z-30 shrink-0">
         <RenderProfiler id="ChatInput" thresholdMs={8}>
-          <ChatInput />
+          <ChatInput compact={zenMode} />
         </RenderProfiler>
       </div>
     </div>

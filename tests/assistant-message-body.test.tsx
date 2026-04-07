@@ -80,6 +80,23 @@ describe("AssistantMessageBody", () => {
     expect(html.match(/<button/g)?.length ?? 0).toBe(2);
   });
 
+  test("suppresses reasoning details in zen mode while keeping a minimal working state", async () => {
+    const AssistantMessageBody = await loadAssistantMessageBody();
+    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+      message: createAssistantMessage({
+        isStreaming: true,
+        parts: [{ type: "thinking", text: "Inspecting files.", isStreaming: true }],
+      }),
+      taskId: "task-1",
+      messageId: "message-1",
+      streamingEnabled: true,
+      zenMode: true,
+    }));
+
+    expect(html).not.toContain("Inspecting files.");
+    expect(html).toContain("Working...");
+  });
+
   test("keeps assistant trace collapsed in manual expansion mode", async () => {
     const AssistantMessageBody = await loadAssistantMessageBody();
     const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
@@ -126,5 +143,24 @@ describe("AssistantMessageBody", () => {
     expect(html).toContain("<h2");
     expect(html).toContain("<ul");
     expect(html).toContain("Keep markdown");
+  });
+
+  test("keeps final response text visible in zen mode", async () => {
+    const AssistantMessageBody = await loadAssistantMessageBody();
+    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+      message: createAssistantMessage({
+        parts: [
+          { type: "thinking", text: "Inspecting files.", isStreaming: false },
+          { type: "text", text: "Patch applied successfully." },
+        ],
+      }),
+      taskId: "task-1",
+      messageId: "message-1",
+      streamingEnabled: true,
+      zenMode: true,
+    }));
+
+    expect(html).not.toContain("Inspecting files.");
+    expect(html).toContain("Patch applied successfully.");
   });
 });

@@ -12,6 +12,7 @@ export interface LayoutState {
   sidebarOverlayTab: RightRailPanelId;
   terminalDocked: boolean;
   editorDiffMode: boolean;
+  zenMode: boolean;
 }
 
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 290;
@@ -43,6 +44,7 @@ export function normalizeLayoutState(layout: LayoutState): LayoutState {
     sidebarOverlayTab: RIGHT_RAIL_PANEL_IDS.includes(layout.sidebarOverlayTab)
       ? layout.sidebarOverlayTab
       : "explorer",
+    zenMode: layout.zenMode === true,
   };
 }
 

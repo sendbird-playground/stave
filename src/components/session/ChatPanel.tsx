@@ -20,8 +20,8 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, MessagePart } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
-import { CopyButton, toProviderWaveToneClass } from "./chat-panel-message-parts";
-import { AssistantMessageBody } from "./message/assistant-trace";
+import { CopyButton, toProviderStartCase, toProviderWaveToneClass } from "./chat-panel-message-parts";
+import { AssistantMessageBody, hasVisibleAssistantMessageBody } from "./message/assistant-trace";
 import { SessionLoadingState } from "./SessionLoadingState";
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
@@ -79,6 +79,7 @@ interface MessageRowProps {
   elapsedAnchorMs?: number;
   isFirst?: boolean;
   liveStreamingMessageId?: string;
+  zenMode?: boolean;
   message: {
     id: string;
     role: "user" | "assistant";
@@ -95,7 +96,11 @@ interface MessageRowProps {
 
 
 const MessageRow = memo(function MessageRow(args: MessageRowProps) {
-  const { activeTaskId, activeTurnId, chatStreamingEnabled, elapsedAnchorMs, isFirst, liveStreamingMessageId, message } = args;
+  const { activeTaskId, activeTurnId, chatStreamingEnabled, elapsedAnchorMs, isFirst, liveStreamingMessageId, message, zenMode = false } = args;
+  const hasVisibleZenBody = useMemo(
+    () => (!zenMode ? true : hasVisibleAssistantMessageBody({ message, zenMode: true })),
+    [message, zenMode],
+  );
   const showRespondingWave =
     Boolean(activeTurnId)
     && message.id === liveStreamingMessageId
@@ -106,108 +111,150 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
     [elapsedAnchorMs, message]
   );
 
+  if (zenMode && message.role === "assistant" && !hasVisibleZenBody) {
+    return null;
+  }
+
   return (
     <div data-message-id={message.id} className={cn(isFirst && "pt-3 sm:pt-4")}>
       <Message from={message.role}>
         <div
           className={cn(
             "group/message-shell flex flex-col items-stretch",
-            message.role === "assistant" ? "w-full max-w-4xl gap-1.5" : "max-w-[88%] w-fit gap-1",
+            zenMode
+              ? "w-full gap-2"
+              : message.role === "assistant"
+                ? "w-full max-w-4xl gap-1.5"
+                : "max-w-[88%] w-fit gap-1",
           )}
         >
-          <MessageContent className={message.role === "assistant" ? "pb-1" : undefined}>
+          {zenMode ? (
+            <div
+              className={cn(
+                "mb-1 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em]",
+                message.role === "user"
+                  ? "justify-end text-primary/80"
+                  : "justify-start text-muted-foreground/80",
+              )}
+            >
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  message.role === "user" ? "bg-primary" : "bg-muted-foreground/70",
+                )}
+                aria-hidden="true"
+              />
+              <span>{message.role === "user" ? "USER" : "AGENT"}</span>
+              {message.role === "assistant" ? (
+                <span className="text-muted-foreground/55">
+                  {message.providerId === "user" ? "Assistant" : toProviderStartCase({ providerId: message.providerId })}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          <MessageContent
+            minimal={zenMode}
+            className={cn(
+              message.role === "assistant" && !zenMode ? "pb-1" : undefined,
+              zenMode && message.role === "assistant" && "w-full max-w-[72ch] self-start pb-0 text-left text-[0.98em] tracking-[-0.01em]",
+              zenMode && message.role === "user" && "w-full max-w-[38ch] self-end pb-0 text-right text-[0.98em] tracking-[-0.01em]",
+            )}
+          >
             <MemoizedAssistantMessageBody
               message={message}
               taskId={activeTaskId}
               messageId={message.id}
               streamingEnabled={chatStreamingEnabled}
+              zenMode={zenMode}
             />
           </MessageContent>
-          <MessageActions
-            className={cn(
-              message.role === "user" && "pointer-events-none self-end !ml-0 !mt-1 opacity-0 transition-opacity group-hover/message-shell:pointer-events-auto group-hover/message-shell:opacity-100",
-              message.role === "assistant" && "self-stretch !ml-0 !mt-1",
-            )}
-          >
-            <div className="flex min-w-0 items-center gap-1">
-              {message.providerId !== "user" && message.model ? (
-                <MessageAction
-                  key="provider-action"
-                  label={toHumanModelName({ model: message.model })}
-                  className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-background/80 px-2 text-sm font-normal text-foreground opacity-100 supports-backdrop-filter:backdrop-blur-xs"
-                >
-                  <ModelIcon providerId={message.providerId} className="size-3.5" />
-                  {toHumanModelName({ model: message.model })}
-                </MessageAction>
-              ) : null}
-              {message.role === "assistant" && elapsedLabel ? (
-                <MessageAction
-                  key="elapsed-action"
-                  label="Elapsed time"
-                  className="pointer-events-none h-7 cursor-default rounded-sm px-2 text-sm font-normal text-muted-foreground opacity-100 gap-1.5"
-                >
-                  {showRespondingWave ? (
-                    <WaveIndicator className={cn("size-3.5", toProviderWaveToneClass({ providerId: message.providerId, model: message.model }))} animate />
-                  ) : null}
-                  {elapsedLabel}
-                </MessageAction>
-              ) : null}
-              <CopyButton key="copy-action" text={message.content} />
-              {message.role === "assistant" && message.usage && !showRespondingWave ? (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="flex cursor-default items-center gap-1.5 pl-1 text-[11px] leading-none text-muted-foreground/40">
-                        <span className="inline-flex items-center gap-0.5">
-                          <ArrowUpRight className="size-2.5" />
-                          {formatTokenCount(message.usage.inputTokens)}
-                        </span>
-                        <span className="inline-flex items-center gap-0.5">
-                          <ArrowDownRight className="size-2.5" />
-                          {formatTokenCount(message.usage.outputTokens)}
-                        </span>
-                        {message.usage.cacheReadTokens ? (
+          {!zenMode ? (
+            <MessageActions
+              className={cn(
+                message.role === "user" && "pointer-events-none self-end !ml-0 !mt-1 opacity-0 transition-opacity group-hover/message-shell:pointer-events-auto group-hover/message-shell:opacity-100",
+                message.role === "assistant" && "self-stretch !ml-0 !mt-1",
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-1">
+                {message.providerId !== "user" && message.model ? (
+                  <MessageAction
+                    key="provider-action"
+                    label={toHumanModelName({ model: message.model })}
+                    className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-background/80 px-2 text-sm font-normal text-foreground opacity-100 supports-backdrop-filter:backdrop-blur-xs"
+                  >
+                    <ModelIcon providerId={message.providerId} className="size-3.5" />
+                    {toHumanModelName({ model: message.model })}
+                  </MessageAction>
+                ) : null}
+                {message.role === "assistant" && elapsedLabel ? (
+                  <MessageAction
+                    key="elapsed-action"
+                    label="Elapsed time"
+                    className="pointer-events-none h-7 cursor-default rounded-sm px-2 text-sm font-normal text-muted-foreground opacity-100 gap-1.5"
+                  >
+                    {showRespondingWave ? (
+                      <WaveIndicator className={cn("size-3.5", toProviderWaveToneClass({ providerId: message.providerId, model: message.model }))} animate />
+                    ) : null}
+                    {elapsedLabel}
+                  </MessageAction>
+                ) : null}
+                <CopyButton key="copy-action" text={message.content} />
+                {message.role === "assistant" && message.usage && !showRespondingWave ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex cursor-default items-center gap-1.5 pl-1 text-[11px] leading-none text-muted-foreground/40">
                           <span className="inline-flex items-center gap-0.5">
-                            <Zap className="size-2.5" />
-                            {formatTokenCount(message.usage.cacheReadTokens)}
+                            <ArrowUpRight className="size-2.5" />
+                            {formatTokenCount(message.usage.inputTokens)}
                           </span>
-                        ) : null}
-                        {message.usage.totalCostUsd != null ? (
-                          <span>{formatCostUsd(message.usage.totalCostUsd)}</span>
-                        ) : null}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-                        <span className="text-muted-foreground">Input</span>
-                        <span className="text-right font-mono">{message.usage.inputTokens.toLocaleString()} tokens</span>
-                        <span className="text-muted-foreground">Output</span>
-                        <span className="text-right font-mono">{message.usage.outputTokens.toLocaleString()} tokens</span>
-                        {message.usage.cacheReadTokens ? (
-                          <>
-                            <span className="text-muted-foreground">Cache read</span>
-                            <span className="text-right font-mono">{message.usage.cacheReadTokens.toLocaleString()} tokens</span>
-                          </>
-                        ) : null}
-                        {message.usage.cacheCreationTokens ? (
-                          <>
-                            <span className="text-muted-foreground">Cache write</span>
-                            <span className="text-right font-mono">{message.usage.cacheCreationTokens.toLocaleString()} tokens</span>
-                          </>
-                        ) : null}
-                        {message.usage.totalCostUsd != null ? (
-                          <>
-                            <span className="text-muted-foreground">Cost</span>
-                            <span className="text-right font-mono">{formatCostUsd(message.usage.totalCostUsd)}</span>
-                          </>
-                        ) : null}
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ) : null}
-            </div>
-          </MessageActions>
+                          <span className="inline-flex items-center gap-0.5">
+                            <ArrowDownRight className="size-2.5" />
+                            {formatTokenCount(message.usage.outputTokens)}
+                          </span>
+                          {message.usage.cacheReadTokens ? (
+                            <span className="inline-flex items-center gap-0.5">
+                              <Zap className="size-2.5" />
+                              {formatTokenCount(message.usage.cacheReadTokens)}
+                            </span>
+                          ) : null}
+                          {message.usage.totalCostUsd != null ? (
+                            <span>{formatCostUsd(message.usage.totalCostUsd)}</span>
+                          ) : null}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                          <span className="text-muted-foreground">Input</span>
+                          <span className="text-right font-mono">{message.usage.inputTokens.toLocaleString()} tokens</span>
+                          <span className="text-muted-foreground">Output</span>
+                          <span className="text-right font-mono">{message.usage.outputTokens.toLocaleString()} tokens</span>
+                          {message.usage.cacheReadTokens ? (
+                            <>
+                              <span className="text-muted-foreground">Cache read</span>
+                              <span className="text-right font-mono">{message.usage.cacheReadTokens.toLocaleString()} tokens</span>
+                            </>
+                          ) : null}
+                          {message.usage.cacheCreationTokens ? (
+                            <>
+                              <span className="text-muted-foreground">Cache write</span>
+                              <span className="text-right font-mono">{message.usage.cacheCreationTokens.toLocaleString()} tokens</span>
+                            </>
+                          ) : null}
+                          {message.usage.totalCostUsd != null ? (
+                            <>
+                              <span className="text-muted-foreground">Cost</span>
+                              <span className="text-right font-mono">{formatCostUsd(message.usage.totalCostUsd)}</span>
+                            </>
+                          ) : null}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : null}
+              </div>
+            </MessageActions>
+          ) : null}
         </div>
       </Message>
     </div>
@@ -290,7 +337,7 @@ function ChatPanelHeader() {
 
 const MemoizedChatPanelHeader = memo(ChatPanelHeader);
 
-function ChatPanelMessageList() {
+function ChatPanelMessageList(args: { zenMode?: boolean }) {
   const [activeWorkspaceId, activeTaskId, activeTurnId, chatStreamingEnabled, loadTaskMessages] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
     state.activeTaskId,
@@ -302,11 +349,23 @@ function ChatPanelMessageList() {
   const totalMessageCount = useAppStore((state) => state.messageCountByTask[state.activeTaskId] ?? 0);
   const taskMessagesLoading = useAppStore((state) => state.taskMessagesLoadingByTask[state.activeTaskId] === true);
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+  const zenScrollRef = useRef<HTMLDivElement | null>(null);
+  const zenStickToBottomRef = useRef(true);
   const [elapsedAnchorMs, setElapsedAnchorMs] = useState(() => Date.now());
   const [turnCompletionScrollTick, setTurnCompletionScrollTick] = useState(0);
   const previousActiveTurnIdRef = useRef<string | undefined>(activeTurnId);
 
-  const visibleMessages = useMemo(() => messages.filter((message) => !message.isPlanResponse), [messages]);
+  const visibleMessages = useMemo(
+    () => messages.filter((message) => (
+      !message.isPlanResponse
+      && (
+        !args.zenMode
+        || message.role !== "assistant"
+        || hasVisibleAssistantMessageBody({ message, zenMode: true })
+      )
+    )),
+    [args.zenMode, messages],
+  );
   const hasOlderMessages = messages.length < totalMessageCount;
   const showConversationLoadingState = shouldShowConversationLoadingState({
     visibleMessageCount: visibleMessages.length,
@@ -339,6 +398,83 @@ function ChatPanelMessageList() {
     }, 1000);
     return () => window.clearInterval(handle);
   }, [activeTurnId]);
+
+  useEffect(() => {
+    if (!args.zenMode) {
+      return;
+    }
+    const node = zenScrollRef.current;
+    if (!node || !zenStickToBottomRef.current) {
+      return;
+    }
+    node.scrollTop = node.scrollHeight;
+  }, [args.zenMode, autoScrollKey, forceScrollKey]);
+
+  if (args.zenMode) {
+    return (
+      <div
+        ref={zenScrollRef}
+        className="zen-conversation-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+        onScroll={(event) => {
+          const target = event.currentTarget;
+          const distance = target.scrollHeight - target.scrollTop - target.clientHeight;
+          zenStickToBottomRef.current = distance < 40;
+        }}
+      >
+        {hasOlderMessages ? (
+          <div className="mx-auto mb-3 flex w-full max-w-[82ch] px-2 pt-3 sm:px-0">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={taskMessagesLoading}
+              className="h-8 rounded-sm"
+              onClick={() => {
+                void loadTaskMessages({ taskId: activeTaskId, mode: "older" });
+              }}
+            >
+              {taskMessagesLoading
+                ? "Loading older messages..."
+                : `Load older messages (${totalMessageCount - messages.length} remaining)`}
+            </Button>
+          </div>
+        ) : null}
+        {showConversationLoadingState ? (
+          <SessionLoadingState
+            testId="conversation-loading-state"
+            title="Loading conversation"
+            description="Fetching the latest messages for this task."
+          />
+        ) : visibleMessages.length === 0 ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <MessageSquareIcon />
+              </EmptyMedia>
+              <EmptyTitle>Start a conversation</EmptyTitle>
+              <EmptyDescription>Send a prompt to begin this task.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="mx-auto flex w-full max-w-[82ch] flex-col gap-8 px-2 py-4 sm:px-0">
+            {visibleMessages.map((message, index) => (
+              <MessageRow
+                key={message.id}
+                activeTaskId={activeTaskId}
+                activeTurnId={activeTurnId}
+                chatStreamingEnabled={chatStreamingEnabled}
+                elapsedAnchorMs={message.id === liveStreamingMessageId ? elapsedAnchorMs : undefined}
+                isFirst={index === 0}
+                liveStreamingMessageId={liveStreamingMessageId}
+                zenMode
+                message={message}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <ConversationContent
@@ -399,6 +535,7 @@ function ChatPanelMessageList() {
               elapsedAnchorMs={message.id === liveStreamingMessageId ? elapsedAnchorMs : undefined}
               isFirst={index === 0}
               liveStreamingMessageId={liveStreamingMessageId}
+              zenMode={args.zenMode}
               message={message}
             />
           )}
@@ -410,12 +547,12 @@ function ChatPanelMessageList() {
 
 const MemoizedChatPanelMessageList = memo(ChatPanelMessageList);
 
-export function ChatPanel() {
+export function ChatPanel(args: { zenMode?: boolean }) {
   return (
     <Conversation>
       <div className="flex h-full w-full flex-col">
-        <MemoizedChatPanelHeader />
-        <MemoizedChatPanelMessageList />
+        {args.zenMode ? null : <MemoizedChatPanelHeader />}
+        <MemoizedChatPanelMessageList zenMode={args.zenMode} />
       </div>
       <ConversationScrollButton tooltip="Scroll to bottom" />
     </Conversation>

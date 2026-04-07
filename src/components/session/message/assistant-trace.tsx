@@ -599,8 +599,9 @@ export function AssistantMessageBody(args: {
   messageId: string;
   streamingEnabled: boolean;
   traceExpansionMode?: "auto" | "manual";
+  zenMode?: boolean;
 }) {
-  const { message, taskId, messageId, streamingEnabled, traceExpansionMode = "auto" } = args;
+  const { message, taskId, messageId, streamingEnabled, traceExpansionMode = "auto", zenMode = false } = args;
   const isActivelyStreaming = Boolean(message.isStreaming);
   const isStreaming = streamingEnabled && isActivelyStreaming;
   const shouldAutoExpandTrace = traceExpansionMode === "auto";
@@ -625,9 +626,37 @@ export function AssistantMessageBody(args: {
     },
     [allDiffParts, fileChangeSummaryRows],
   );
+  const zenVisibleParts = useMemo(
+    () => (
+      zenMode
+        ? trace.entries.flatMap((entry) => (
+          entry.kind === "approval" || entry.kind === "user_input"
+            ? [entry.part]
+            : []
+        ))
+        : []
+    ),
+    [trace.entries, zenMode],
+  );
+  const showDiffResults = allDiffParts.length > 0 && !isStreaming;
+  const showFileChangeSummary = unresolvedFileChangeRows.length > 0 && !isStreaming;
+  const showZenWorkingPlaceholder =
+    zenMode
+    && isActivelyStreaming
+    && trace.responseParts.length === 0
+    && zenVisibleParts.length === 0
+    && !showDiffResults
+    && !showFileChangeSummary;
+  const hasVisibleZenContent =
+    zenVisibleParts.length > 0
+    || trace.responseParts.length > 0
+    || showDiffResults
+    || showFileChangeSummary
+    || showZenWorkingPlaceholder;
 
   if (
-    !trace.showStreamingPlaceholder
+    !zenMode
+    && !trace.showStreamingPlaceholder
     && trace.entries.length === 0
     && trace.responseParts.length === 0
     && trace.fileContextParts.length === 0
@@ -636,9 +665,13 @@ export function AssistantMessageBody(args: {
     return <p className="text-[0.875em] italic text-muted-foreground">No response.</p>;
   }
 
+  if (zenMode && !hasVisibleZenContent) {
+    return null;
+  }
+
   return (
     <>
-      {(trace.showStreamingPlaceholder || trace.entries.length > 0) ? (
+      {!zenMode && (trace.showStreamingPlaceholder || trace.entries.length > 0) ? (
         <ChainOfThought
           isStreaming={isStreaming}
           defaultOpen={shouldAutoExpandTrace && isStreaming}
@@ -664,8 +697,30 @@ export function AssistantMessageBody(args: {
         </ChainOfThought>
       ) : null}
 
+      {zenMode && zenVisibleParts.length > 0 ? (
+        <div className="space-y-4">
+          {zenVisibleParts.map((part, index) => (
+            <MessagePartRenderer
+              key={`${messageId}-zen-visible-${part.type}-${index}`}
+              part={part}
+              taskId={taskId}
+              messageId={messageId}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {showZenWorkingPlaceholder ? (
+        <p className="text-[0.875em] italic text-muted-foreground">Working...</p>
+      ) : null}
+
       {trace.responseParts.length > 0 ? (
-        <div className={cn(trace.entries.length > 0 && "mt-4", "space-y-3")}>
+        <div
+          className={cn(
+            ((zenMode && zenVisibleParts.length > 0) || (!zenMode && trace.entries.length > 0)) && "mt-4",
+            "space-y-3",
+          )}
+        >
           {trace.responseParts.map((part, index) => (
             <MessageResponse
               key={`${messageId}-response-${index}`}
@@ -677,29 +732,69 @@ export function AssistantMessageBody(args: {
         </div>
       ) : null}
 
-      {allDiffParts.length > 0 && !isStreaming ? (
+      {showDiffResults ? (
         <div className="mt-4">
           <ChangedFilesBlock parts={allDiffParts} taskId={taskId} messageId={messageId} />
         </div>
       ) : null}
 
-      {unresolvedFileChangeRows.length > 0 && !isStreaming ? (
+      {showFileChangeSummary ? (
         <div className="mt-4">
           <FileChangeSummaryBlock rows={unresolvedFileChangeRows} />
         </div>
       ) : null}
 
-      {trace.fileContextParts.length > 0 ? (
+      {!zenMode && trace.fileContextParts.length > 0 ? (
         <div className="mt-4">
           <ReferencedFilesBlock parts={trace.fileContextParts} />
         </div>
       ) : null}
 
-      {trace.imageContextParts.length > 0 ? (
+      {!zenMode && trace.imageContextParts.length > 0 ? (
         <div className="mt-4">
           <ImageAttachmentBlock parts={trace.imageContextParts} />
         </div>
       ) : null}
     </>
+  );
+}
+
+export function hasVisibleAssistantMessageBody(args: {
+  message: Pick<ChatMessage, "content" | "parts" | "isStreaming">;
+  zenMode?: boolean;
+}) {
+  const trace = buildAssistantTrace({ message: args.message });
+  if (!args.zenMode) {
+    return (
+      trace.showStreamingPlaceholder
+      || trace.entries.length > 0
+      || trace.responseParts.length > 0
+      || trace.fileContextParts.length > 0
+      || trace.imageContextParts.length > 0
+    );
+  }
+
+  const allDiffParts = trace.entries.flatMap((entry) => entry.kind === "diff" ? entry.parts : []);
+  const fileChangeSummaryRows = trace.entries.flatMap((entry) => (
+    entry.kind === "tool" && entry.part.toolName.trim().toLowerCase() === "file_change"
+      ? parseFileChangeToolInput(entry.part.input)
+      : []
+  ));
+  const diffPaths = new Set(allDiffParts.map((part) => part.filePath));
+  const unresolvedFileChangeRows = fileChangeSummaryRows.filter((row) => row.status !== "applied" || !diffPaths.has(row.filePath));
+  const zenVisibleParts = trace.entries.filter((entry) => entry.kind === "approval" || entry.kind === "user_input");
+  const showZenWorkingPlaceholder =
+    Boolean(args.message.isStreaming)
+    && trace.responseParts.length === 0
+    && zenVisibleParts.length === 0
+    && allDiffParts.length === 0
+    && unresolvedFileChangeRows.length === 0;
+
+  return (
+    zenVisibleParts.length > 0
+    || trace.responseParts.length > 0
+    || allDiffParts.length > 0
+    || unresolvedFileChangeRows.length > 0
+    || showZenWorkingPlaceholder
   );
 }

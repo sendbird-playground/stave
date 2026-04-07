@@ -1,9 +1,11 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { GlobalCommandPalette } from "@/components/layout/GlobalCommandPalette";
 import { StaveMuseWidget } from "@/components/layout/StaveMuseWidget";
 import { resolveStaveMuseRightInset } from "@/components/layout/stave-muse-widget.utils";
 import { TopBar } from "@/components/layout/TopBar";
+import { TopBarWindowControls } from "@/components/layout/TopBarWindowControls";
+import { ZenProjectSidebar } from "@/components/layout/ZenProjectSidebar";
 import { COLLAPSED_PROJECT_SIDEBAR_WIDTH, ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
 import { resolveLatestCompletedTurnTarget } from "@/components/layout/command-palette-navigation";
@@ -21,9 +23,16 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
   useAppStore,
 } from "@/store/app.store";
+import { cn } from "@/lib/utils";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
-import { isEditableShortcutTarget, shouldAbortTaskOnEscape } from "@/components/layout/app-shell.shortcuts";
+import {
+  isEditableShortcutTarget,
+  resolveShortcutChord,
+  shouldAbortTaskOnEscape,
+  type PendingShortcutChord,
+  ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS,
+} from "@/components/layout/app-shell.shortcuts";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import type { RightRailPanelId } from "@/lib/right-rail-panels";
 import type { WorkspacePrStatus } from "@/lib/pr-status";
@@ -54,6 +63,9 @@ const WORKSPACE_SIDEBAR_MAX_WIDTH = 340;
 const MIN_CHAT_PANEL_WIDTH = 420;
 const MIN_EXPLORER_PANEL_WIDTH = 200;
 const PANEL_SEPARATOR_WIDTH = 1;
+const IS_MAC = window.api?.platform === "darwin";
+const ZEN_DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
+const ZEN_NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
 function clampPanelWidth(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -82,6 +94,7 @@ export function AppShell() {
     explorerPanelWidth,
     terminalDocked,
     terminalDockHeight,
+    zenMode,
     activeEditorTabId,
     settings,
     createTask,
@@ -119,6 +132,7 @@ export function AppShell() {
     state.layout.explorerPanelWidth,
     state.layout.terminalDocked,
     state.layout.terminalDockHeight ?? 210,
+    state.layout.zenMode,
     state.activeEditorTabId,
     state.settings,
     state.createTask,
@@ -153,6 +167,8 @@ export function AppShell() {
     typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches
   );
   const zoomHudTimerRef = useRef<number | null>(null);
+  const pendingShortcutChordRef = useRef<PendingShortcutChord | null>(null);
+  const pendingShortcutChordTimerRef = useRef<number | null>(null);
   const handleFocusFileSearch = useCallback(() => {
     const input = document.querySelector<HTMLInputElement>("[data-file-search-input]");
     input?.focus();
@@ -195,6 +211,10 @@ export function AppShell() {
   }, []);
   const handleContinueWorkspace = useCallback(() => {
     dispatchTopBarPrAction("continue");
+  }, []);
+  const handleToggleZenMode = useCallback(() => {
+    const store = useAppStore.getState();
+    store.setLayout({ patch: { zenMode: !store.layout.zenMode } });
   }, []);
   const handleOpenLatestCompletedTurnTask = useCallback(async () => {
     const stateBefore = useAppStore.getState();
@@ -354,9 +374,55 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
+    const clearPendingShortcutChord = () => {
+      pendingShortcutChordRef.current = null;
+      if (pendingShortcutChordTimerRef.current !== null) {
+        window.clearTimeout(pendingShortcutChordTimerRef.current);
+        pendingShortcutChordTimerRef.current = null;
+      }
+    };
+
+    const setPendingShortcutChord = (nextPendingChord: PendingShortcutChord | null) => {
+      clearPendingShortcutChord();
+      pendingShortcutChordRef.current = nextPendingChord;
+      if (!nextPendingChord) {
+        return;
+      }
+      pendingShortcutChordTimerRef.current = window.setTimeout(() => {
+        pendingShortcutChordRef.current = null;
+        pendingShortcutChordTimerRef.current = null;
+      }, ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS);
+    };
+
     const onKeyDown = (event: KeyboardEvent) => {
       const store = useAppStore.getState();
       const hasMod = event.ctrlKey || event.metaKey;
+      const shortcutChord = resolveShortcutChord({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        pendingChord: pendingShortcutChordRef.current,
+      });
+
+      if (shortcutChord.nextPendingChord !== pendingShortcutChordRef.current) {
+        setPendingShortcutChord(shortcutChord.nextPendingChord);
+      }
+
+      if (shortcutChord.preventDefault) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      if (shortcutChord.action === "toggle-zen-mode") {
+        handleToggleZenMode();
+        return;
+      }
+
+      if (shortcutChord.preventDefault) {
+        return;
+      }
 
       if (hasMod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
         if (!store.projectPath?.trim()) {
@@ -475,8 +541,11 @@ export function AppShell() {
     };
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleFocusFileSearch, handleOpenCommandPalette, handleOpenKeyboardShortcuts]);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      clearPendingShortcutChord();
+    };
+  }, [handleFocusFileSearch, handleOpenCommandPalette, handleOpenKeyboardShortcuts, handleToggleZenMode]);
 
   useEffect(() => () => {
     if (resizeFrameRef.current !== null) {
@@ -629,7 +698,13 @@ export function AppShell() {
     }
   }
 
-  const showOverlayRightPanel = overlayRightPanelMode !== null;
+  if (zenMode) {
+    showDesktopEditor = false;
+    showDesktopSidebar = false;
+    overlayRightPanelMode = null;
+  }
+
+  const showOverlayRightPanel = !zenMode && overlayRightPanelMode !== null;
   const modifierLabel = useMemo<"Cmd" | "Ctrl">(
     () => (
       typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
@@ -641,6 +716,7 @@ export function AppShell() {
   const activeWorkspacePath = workspacePathById[activeWorkspaceId] ?? projectPath;
   const hasProjectContext = Boolean(projectPath?.trim());
   const museLeftInset = isLargeViewport
+    && !zenMode
     ? (
       workspaceSidebarCollapsed
         ? COLLAPSED_PROJECT_SIDEBAR_WIDTH
@@ -650,11 +726,11 @@ export function AppShell() {
   const museRightInset = resolveStaveMuseRightInset({
     hasProjectContext,
     isLargeViewport,
-    sidebarOverlayVisible,
-    sidebarOverlayTab,
-    showDesktopSidebar,
-    desktopSidebarWidth,
-    overlayRightPanelMode,
+    sidebarOverlayVisible: zenMode ? false : sidebarOverlayVisible,
+    sidebarOverlayTab: zenMode ? "explorer" : sidebarOverlayTab,
+    showDesktopSidebar: zenMode ? false : showDesktopSidebar,
+    desktopSidebarWidth: zenMode ? 0 : desktopSidebarWidth,
+    overlayRightPanelMode: zenMode ? null : overlayRightPanelMode,
     viewportWidth: typeof window === "undefined" ? 1440 : window.innerWidth,
   });
   const activeWorkspaceIsDefault = Boolean(workspaceDefaultById[activeWorkspaceId]);
@@ -677,6 +753,7 @@ export function AppShell() {
       sidebarOverlayVisible,
       terminalDocked,
       workspaceSidebarCollapsed,
+      zenMode,
     },
     modifierLabel,
     preferences: {
@@ -760,6 +837,7 @@ export function AppShell() {
         setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "information" } });
       },
       toggleTerminal: () => setLayout({ patch: { terminalDocked: !useAppStore.getState().layout.terminalDocked } }),
+      toggleZenMode: handleToggleZenMode,
       toggleWorkspaceSidebar: () => setLayout({ patch: { workspaceSidebarCollapsed: !useAppStore.getState().layout.workspaceSidebarCollapsed } }),
     },
   }), [
@@ -800,6 +878,7 @@ export function AppShell() {
     sidebarOverlayTab,
     tasks,
     terminalDocked,
+    zenMode,
     workspaceBranchById,
     workspaceDefaultById,
     workspacePathById,
@@ -807,10 +886,20 @@ export function AppShell() {
     workspaceSidebarCollapsed,
     workspaces,
     switchWorkspace,
+    handleToggleZenMode,
   ]);
 
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
+      {zenMode ? (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-10" style={ZEN_DRAG_STYLE}>
+          {!IS_MAC ? (
+            <div className="pointer-events-auto absolute right-3 top-1.5">
+              <TopBarWindowControls noDragStyle={ZEN_NO_DRAG_STYLE} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {zoomHudPercent !== null ? (
         <div className="pointer-events-none absolute left-1/2 top-16 z-50 -translate-x-1/2">
           <div className="rounded-full border border-border/80 bg-card/95 px-3 py-1 text-sm font-medium text-foreground shadow-lg backdrop-blur-sm">
@@ -851,18 +940,22 @@ export function AppShell() {
           />
         </Suspense>
       ) : null}
-      <RenderProfiler id="ProjectWorkspaceSidebar">
-        <ProjectWorkspaceSidebar
-          width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)}
-          collapsed={workspaceSidebarCollapsed}
-          animate={!sidebarResizing}
-          onOpenCommandPalette={handleOpenCommandPalette}
-          onOpenKeyboardShortcuts={handleOpenKeyboardShortcuts}
-          onOpenSettings={handleOpenSettings}
-          onPreloadSettings={handlePreloadSettings}
-        />
-      </RenderProfiler>
-      {!workspaceSidebarCollapsed ? (
+      {zenMode ? (
+        <ZenProjectSidebar />
+      ) : (
+        <RenderProfiler id="ProjectWorkspaceSidebar">
+          <ProjectWorkspaceSidebar
+            width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)}
+            collapsed={workspaceSidebarCollapsed}
+            animate={!sidebarResizing}
+            onOpenCommandPalette={handleOpenCommandPalette}
+            onOpenKeyboardShortcuts={handleOpenKeyboardShortcuts}
+            onOpenSettings={handleOpenSettings}
+            onPreloadSettings={handlePreloadSettings}
+          />
+        </RenderProfiler>
+      )}
+      {!zenMode && !workspaceSidebarCollapsed ? (
         <div
           className="group relative hidden w-[9px] -mx-[4px] z-50 shrink-0 cursor-col-resize lg:block"
           onMouseDown={(event) => {
@@ -890,20 +983,20 @@ export function AppShell() {
           <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
         </div>
       ) : null}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar />
+      <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", zenMode && "pt-8 sm:pt-10")}>
+        {!zenMode ? <TopBar /> : null}
         <div ref={panelRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <div ref={contentRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              {hasProject ? <WorkspaceTaskTabs /> : null}
+              {hasProject && !zenMode ? <WorkspaceTaskTabs /> : null}
               <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                     <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
-                      <ChatArea />
+                      <ChatArea zenMode={zenMode} />
                     </div>
                   </div>
-                  <div className={terminalDocked ? undefined : "hidden"}>
+                  <div className={terminalDocked && !zenMode ? undefined : "hidden"}>
                       <div
                         className="group relative z-10 h-[9px] -my-[4px] shrink-0 cursor-row-resize"
                         onMouseDown={(event) => {
@@ -1032,14 +1125,16 @@ export function AppShell() {
               </div>
             ) : null}
           </div>
-          <RightRail />
+          {!zenMode ? <RightRail /> : null}
         </div>
       </div>
-      <StaveMuseWidget
-        leftInset={museLeftInset}
-        rightInset={museRightInset}
-        showFloatingTrigger={!isLargeViewport}
-      />
+      {!zenMode ? (
+        <StaveMuseWidget
+          leftInset={museLeftInset}
+          rightInset={museRightInset}
+          showFloatingTrigger={!isLargeViewport}
+        />
+      ) : null}
     </div>
   );
 }

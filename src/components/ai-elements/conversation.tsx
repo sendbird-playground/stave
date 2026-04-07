@@ -256,7 +256,7 @@ export function ConversationContent(props: ConversationContentProps) {
         containerRef.current = node;
         setContainerEl(node);
       }}
-      className={cn("min-h-0 flex-1 overflow-y-auto", rest.className)}
+      className={cn("min-h-0 flex-1 overflow-x-hidden overflow-y-auto", rest.className)}
       onScroll={(event) => {
         const target = event.currentTarget;
         const distance = target.scrollHeight - target.scrollTop - target.clientHeight;
