@@ -291,7 +291,6 @@ export function buildLegacyPromptFromCanonicalRequest(args: {
             args.request.taskId ? `taskId: ${args.request.taskId}` : null,
             "workspacePlanDirectory: .stave/context/plans",
             "newWorkspacePlanFiles: .stave/context/plans/<taskIdPrefix>_<timestamp>.md",
-            "legacyWorkspacePlanDirectory: .stave/plans (legacy only; do not use for new plan files)",
           ].filter(Boolean).join("\n"),
         ]
       : []),

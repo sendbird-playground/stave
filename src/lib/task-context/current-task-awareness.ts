@@ -170,7 +170,6 @@ export function buildCurrentTaskAwarenessRetrievedContext(args: {
   const workspaceConventionLines = [
     "- new workspace plan files belong under `.stave/context/plans`",
     "- use `.stave/context/plans/<taskIdPrefix>_<timestamp>.md` for new plan markdown files",
-    "- `.stave/plans` is legacy compatibility only",
   ];
 
   return {

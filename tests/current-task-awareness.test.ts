@@ -51,7 +51,6 @@ describe("buildCurrentTaskAwarenessRetrievedContext", () => {
     expect(context.content).toContain("title: Make task chat understand the information panel");
     expect(context.content).toContain("Workspace Conventions:");
     expect(context.content).toContain("new workspace plan files belong under `.stave/context/plans`");
-    expect(context.content).toContain("`.stave/plans` is legacy compatibility only");
     expect(context.content).toContain("Prompt Input Redesign | node 1:2 | https://www.figma.com/design/FILE123/Prompt?node-id=1-2 | Latest approved mock");
   });
 
