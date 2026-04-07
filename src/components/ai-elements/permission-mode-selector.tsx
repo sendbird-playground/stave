@@ -1,5 +1,6 @@
 import { Check, ChevronDown, Shield } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import type { ClaudePermissionMode } from "@/types/chat";
 export type { ClaudePermissionMode } from "@/types/chat";
@@ -79,7 +80,7 @@ export function PermissionModeSelector(args: PermissionModeSelectorProps) {
         <ChevronDown className="size-3.5 text-muted-foreground" />
       </button>
       {open ? (
-        <div className="absolute bottom-[calc(100%+0.375rem)] left-0 z-40 w-44 rounded-sm border border-border/90 bg-card p-1 shadow-xl">
+        <div className={cn(UI_LAYER_CLASS.floatingChrome, "absolute bottom-[calc(100%+0.375rem)] left-0 w-44 rounded-sm border border-border/90 bg-card p-1 shadow-xl")}>
           {options.map((option) => (
             <button
               key={option.value}

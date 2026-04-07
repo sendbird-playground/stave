@@ -14,6 +14,7 @@ import {
   parseFileChangeToolInput,
   summarizeDiffLineChanges,
 } from "@/components/session/chat-panel.utils";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { CodeDiffPart, FileContextPart, ImageContextPart } from "@/types/chat";
@@ -384,7 +385,7 @@ export function ImageAttachmentBlock(args: { parts: ImageContextPart[] }) {
       </div>
       {previewSrc ? (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]"
+          className={cn(UI_LAYER_CLASS.lightbox, "fixed inset-0 flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]")}
           role="dialog"
           aria-modal="true"
           aria-label="Image full screen preview"

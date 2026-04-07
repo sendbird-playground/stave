@@ -1,6 +1,8 @@
 import { FolderOpen } from "lucide-react";
 import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button, Card, Input } from "@/components/ui";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
+import { cn } from "@/lib/utils";
 
 type OpenPathDialogSubmitResult = { ok: boolean; stderr?: string };
 
@@ -89,7 +91,7 @@ export function OpenPathDialog(args: OpenPathDialogProps) {
 
   return (
     <div
-      className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]"
+      className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")}
       onMouseDown={close}
     >
       <Card

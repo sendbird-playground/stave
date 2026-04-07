@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getProviderSessionLabel, listProviderSessions } from "@/lib/providers/provider-sessions";
 import { filterTasksByName, getRespondingProviderId, isTaskArchived, isTaskManaged } from "@/lib/tasks";
@@ -426,7 +427,7 @@ export function WorkspaceTaskTabs() {
         }}
       />
       {taskToRename ? (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]" onMouseDown={() => setTaskToRename(null)}>
+        <div className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")} onMouseDown={() => setTaskToRename(null)}>
           <Card className="w-full max-w-md rounded-lg border-border/80 bg-card p-4 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
             <h3 className="text-base font-semibold text-foreground">Rename Task</h3>
             <p className="mt-2 text-sm text-muted-foreground">Enter a new name for this task.</p>
@@ -454,7 +455,7 @@ export function WorkspaceTaskTabs() {
         </div>
       ) : null}
       {taskToViewSession ? (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]" onMouseDown={() => setTaskToViewSession(null)}>
+        <div className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")} onMouseDown={() => setTaskToViewSession(null)}>
           <Card className="w-full max-w-lg rounded-lg border-border/80 bg-card p-4 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
