@@ -112,7 +112,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
         <div
           className={cn(
             "group/message-shell flex flex-col items-stretch",
-            message.role === "assistant" ? "w-full max-w-4xl gap-1.5" : "max-w-[88%] w-fit gap-1",
+            message.role === "assistant" ? "w-full max-w-4xl gap-1.5" : "min-w-0 max-w-[88%] w-fit gap-1",
           )}
         >
           <MessageContent className={message.role === "assistant" ? "pb-1" : undefined}>

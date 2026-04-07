@@ -245,6 +245,33 @@ describe("MarkdownMessage", () => {
     expect(html).toContain('style="font-size:18px;line-height:1.68"');
     expect(html).toContain('style="font-size:14px"');
   });
+
+  test("adds aggressive wrapping classes to rendered markdown paragraphs", () => {
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "averylongtokenthatshouldstillwrapinsideauserbubblewithoutoverflowingthelayout",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+    }));
+
+    expect(html).toContain("break-words");
+    expect(html).toContain("[overflow-wrap:anywhere]");
+    expect(html).toContain("min-w-0");
+    expect(html).toContain("max-w-full");
+  });
+
+  test("adds aggressive wrapping classes to streaming text fallback", () => {
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "averylongstreamingtokenthatshouldstillwrapinsideauserbubblewithoutoverflowingthelayout",
+      isStreaming: true,
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+    }));
+
+    expect(html).toContain("break-words");
+    expect(html).toContain("[overflow-wrap:anywhere]");
+    expect(html).toContain("min-w-0");
+    expect(html).toContain("max-w-full");
+  });
 });
 
 describe("resolveWorkspaceFileLink", () => {
