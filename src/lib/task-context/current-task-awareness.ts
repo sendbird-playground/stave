@@ -167,6 +167,11 @@ export function buildCurrentTaskAwarenessRetrievedContext(args: {
     `- title: ${currentTask?.title?.trim() || "(unknown)"}`,
     `- provider: ${currentTask?.provider ?? "(unknown)"}`,
   ];
+  const workspaceConventionLines = [
+    "- new workspace plan files belong under `.stave/context/plans`",
+    "- use `.stave/context/plans/<taskIdPrefix>_<timestamp>.md` for new plan markdown files",
+    "- `.stave/plans` is legacy compatibility only",
+  ];
 
   return {
     type: "retrieved_context",
@@ -187,6 +192,9 @@ export function buildCurrentTaskAwarenessRetrievedContext(args: {
       "",
       "Task:",
       ...taskLines,
+      "",
+      "Workspace Conventions:",
+      ...workspaceConventionLines,
       "",
       "Visible tasks in this workspace:",
       ...(visibleTasks.length > 0 ? visibleTasks.map((task) => `- ${task}`) : ["- none"]),
