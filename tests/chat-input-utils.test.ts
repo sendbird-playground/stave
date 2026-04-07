@@ -3,6 +3,7 @@ import {
   getLatestPromptSuggestions,
   getPromptHistoryEntries,
   mergePromptSuggestionWithDraft,
+  shouldHandleApprovalEnterShortcut,
 } from "@/components/session/chat-input.utils";
 
 describe("getPromptHistoryEntries", () => {
@@ -135,5 +136,44 @@ describe("mergePromptSuggestionWithDraft", () => {
       currentDraft: "Open a PR",
       suggestion: "Open a PR",
     })).toBe("Open a PR");
+  });
+});
+
+describe("shouldHandleApprovalEnterShortcut", () => {
+  test("accepts plain Enter on non-interactive targets", () => {
+    expect(shouldHandleApprovalEnterShortcut({
+      key: "Enter",
+      targetTagName: "div",
+    })).toBe(true);
+  });
+
+  test("rejects Enter when modifiers or composition are active", () => {
+    expect(shouldHandleApprovalEnterShortcut({
+      key: "Enter",
+      metaKey: true,
+      targetTagName: "div",
+    })).toBe(false);
+    expect(shouldHandleApprovalEnterShortcut({
+      key: "Enter",
+      isComposing: true,
+      targetTagName: "div",
+    })).toBe(false);
+  });
+
+  test("rejects Enter from editable or interactive controls", () => {
+    expect(shouldHandleApprovalEnterShortcut({
+      key: "Enter",
+      targetTagName: "textarea",
+    })).toBe(false);
+    expect(shouldHandleApprovalEnterShortcut({
+      key: "Enter",
+      targetTagName: "div",
+      targetRole: "button",
+    })).toBe(false);
+    expect(shouldHandleApprovalEnterShortcut({
+      key: "Enter",
+      targetTagName: "div",
+      targetIsContentEditable: true,
+    })).toBe(false);
   });
 });

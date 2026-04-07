@@ -95,6 +95,24 @@ export function findLatestPendingApprovalPart(args: {
   return undefined;
 }
 
+export function findLatestPendingToolInteractionPart(args: {
+  message?: Pick<ChatMessage, "parts">;
+}): ApprovalPart | UserInputPart | undefined {
+  const parts = args.message?.parts ?? [];
+
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (part?.type === "approval" && part.state === "approval-requested") {
+      return part;
+    }
+    if (part?.type === "user_input" && part.state === "input-requested") {
+      return part;
+    }
+  }
+
+  return undefined;
+}
+
 export function findLatestPendingApproval(args: {
   messages: ChatMessage[];
 }): { messageId: string; part: ApprovalPart } | null {
@@ -105,6 +123,27 @@ export function findLatestPendingApproval(args: {
     }
 
     const part = findLatestPendingApprovalPart({ message });
+    if (part) {
+      return {
+        messageId: message.id,
+        part,
+      };
+    }
+  }
+
+  return null;
+}
+
+export function findLatestPendingToolInteraction(args: {
+  messages: ChatMessage[];
+}): { messageId: string; part: ApprovalPart | UserInputPart } | null {
+  for (let messageIndex = args.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const message = args.messages[messageIndex];
+    if (!message) {
+      continue;
+    }
+
+    const part = findLatestPendingToolInteractionPart({ message });
     if (part) {
       return {
         messageId: message.id,
@@ -156,6 +195,27 @@ export function findLatestPendingUserInputPart(args: {
   }
 
   return undefined;
+}
+
+export function findLatestPendingUserInput(args: {
+  messages: ChatMessage[];
+}): { messageId: string; part: UserInputPart } | null {
+  for (let messageIndex = args.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    const message = args.messages[messageIndex];
+    if (!message) {
+      continue;
+    }
+
+    const part = findLatestPendingUserInputPart({ message });
+    if (part) {
+      return {
+        messageId: message.id,
+        part,
+      };
+    }
+  }
+
+  return null;
 }
 
 export function updateApprovalPartsByRequestId(args: {

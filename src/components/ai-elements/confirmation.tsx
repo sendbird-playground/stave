@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui";
+import { Button, Kbd } from "@/components/ui";
 
 interface ConfirmationCompactProps {
   toolName: string;
@@ -26,6 +26,11 @@ export function ConfirmationCompact(args: ConfirmationCompactProps) {
             <Button size="sm" disabled={disabled} onClick={onApprove}>Approve</Button>
             <Button size="sm" variant="outline" disabled={disabled} onClick={onReject}>Reject</Button>
           </div>
+          {!disabled && onApprove ? (
+            <p className="mt-2 text-[0.75em] text-muted-foreground">
+              Press <Kbd className="mx-1 h-5 px-1.5 text-[0.75rem]">Enter</Kbd> to approve.
+            </p>
+          ) : null}
         </>
       ) : (
         <p className="mt-2 text-muted-foreground">Decision: {state}</p>

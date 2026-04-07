@@ -4,6 +4,7 @@ import { hasMeaningfulPlanText, normalizePlanText } from "@/lib/plan-text";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import {
   hasRenderableAssistantContent,
+  findLatestPendingToolInteractionPart,
   mergePromptSuggestions,
   mergeToolResultIntoPart,
   resolvePendingToolInteractionPartsByRequestId,
@@ -1006,7 +1007,12 @@ export function replayProviderEventsToTaskState(args: {
     }
 
     if (event.type === "done") {
-      nextActiveTurnId = undefined;
+      const pendingToolInteraction = findLatestPendingToolInteractionPart({
+        message: updated,
+      });
+      if (!pendingToolInteraction) {
+        nextActiveTurnId = undefined;
+      }
     }
   }
 

@@ -132,6 +132,20 @@ export function registerTaskWorkspaceOwnership(args: {
   return next;
 }
 
+export function retainTaskWorkspaceOwnership(args: {
+  taskWorkspaceIdById: Record<string, string>;
+  workspaceIds: string[];
+}) {
+  if (args.workspaceIds.length === 0) {
+    return {};
+  }
+
+  const workspaceIds = new Set(args.workspaceIds);
+  return Object.fromEntries(
+    Object.entries(args.taskWorkspaceIdById).filter(([, workspaceId]) => workspaceIds.has(workspaceId)),
+  );
+}
+
 export function resolveWorkspaceName(args: {
   state: Pick<{ workspaces: WorkspaceSummary[]; recentProjects: RecentProjectState[] }, "workspaces" | "recentProjects">;
   workspaceId: string;
