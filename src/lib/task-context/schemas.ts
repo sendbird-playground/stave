@@ -149,23 +149,25 @@ const AttachmentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("image"), id: z.string(), dataUrl: z.string(), label: z.string() }),
 ]);
 
-const PromptDraftRuntimeOverridesSchema = z.object({
-  claudePermissionMode: z.union([
-    z.literal("default"),
-    z.literal("acceptEdits"),
-    z.literal("bypassPermissions"),
-    z.literal("plan"),
-    z.literal("dontAsk"),
-  ]).optional(),
-  claudePermissionModeBeforePlan: z.union([
-    z.literal("default"),
-    z.literal("acceptEdits"),
-    z.literal("bypassPermissions"),
-    z.literal("dontAsk"),
-    z.null(),
-  ]).optional(),
-  codexExperimentalPlanMode: z.boolean().optional(),
-});
+const PromptDraftRuntimeOverridesSchema = z
+  .object({
+    claudePermissionMode: z.union([
+      z.literal("default"),
+      z.literal("acceptEdits"),
+      z.literal("bypassPermissions"),
+      z.literal("plan"),
+      z.literal("dontAsk"),
+    ]).optional(),
+    claudePermissionModeBeforePlan: z.union([
+      z.literal("default"),
+      z.literal("acceptEdits"),
+      z.literal("bypassPermissions"),
+      z.literal("dontAsk"),
+      z.null(),
+    ]).optional(),
+    codexPlanMode: z.boolean().optional(),
+  })
+  .strict();
 
 const ChatMessageSchema = z.object({
   id: z.string(),

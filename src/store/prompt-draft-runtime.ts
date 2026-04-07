@@ -8,7 +8,7 @@ import type {
 export interface ResolvedPromptDraftRuntimeState {
   claudePermissionMode: ClaudePermissionMode;
   claudePermissionModeBeforePlan: ClaudePermissionModeBeforePlan;
-  codexExperimentalPlanMode: boolean;
+  codexPlanMode: boolean;
 }
 
 export function resolvePromptDraftRuntimeState(args: {
@@ -20,8 +20,7 @@ export function resolvePromptDraftRuntimeState(args: {
     claudePermissionMode: runtimeOverrides?.claudePermissionMode ?? args.fallback.claudePermissionMode,
     claudePermissionModeBeforePlan:
       runtimeOverrides?.claudePermissionModeBeforePlan ?? args.fallback.claudePermissionModeBeforePlan,
-    codexExperimentalPlanMode:
-      runtimeOverrides?.codexExperimentalPlanMode ?? args.fallback.codexExperimentalPlanMode,
+    codexPlanMode: runtimeOverrides?.codexPlanMode ?? args.fallback.codexPlanMode,
   };
 }
 
@@ -65,5 +64,5 @@ export function arePromptDraftRuntimeOverridesEqual(
 ) {
   return left?.claudePermissionMode === right?.claudePermissionMode
     && left?.claudePermissionModeBeforePlan === right?.claudePermissionModeBeforePlan
-    && left?.codexExperimentalPlanMode === right?.codexExperimentalPlanMode;
+    && left?.codexPlanMode === right?.codexPlanMode;
 }

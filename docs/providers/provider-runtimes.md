@@ -15,7 +15,7 @@ High-level flow:
 5. For direct execution, Stave resolves the configured model for that intent from the profile, emits `stave:execution_processing`, rewrites the `StreamTurnArgs`, and re-enters the normal provider runtime.
 6. For orchestration, `electron/providers/stave-orchestrator.ts` asks the supervisor to produce role-based subtasks (`plan`, `analyze`, `implement`, `verify`, `general`), resolves each role to a configured model, executes subtasks, then synthesises the result.
 
-When Stave plan mode resolves to a Codex-family `planModel`, Stave also forces `codexExperimentalPlanMode: true` on the rewritten direct turn so the underlying Codex runtime still gets `read-only` sandboxing plus `approvalPolicy = never`.
+When Stave plan mode resolves to a Codex-family `planModel`, Stave also forces `codexPlanMode: true` on the rewritten direct turn so the underlying Codex runtime still gets `read-only` sandboxing plus `approvalPolicy = never`.
 
 ### Direct intent table
 
@@ -206,11 +206,11 @@ Codex text-boundary note:
   commentary block and a later final response block to collapse into one
   markdown segment.
 
-Experimental Codex plan mode:
+Codex plan mode:
 
-- When `codexExperimentalPlanMode` is enabled, Stave forwards
+- When `codexPlanMode` is enabled, Stave forwards
   `collaborationMode.mode = "plan"` on the App Server turn.
-- Stave also forces Codex plan turns onto a `read-only` sandbox, even if the
+- Stave also forces Codex plan turns onto `read-only` file access, even if the
   normal Codex runtime setting is `workspace-write` or `danger-full-access`, so
   plan turns cannot mutate the workspace.
 - Stave also forces the effective Codex approval policy to `never` during plan
@@ -241,12 +241,11 @@ Codex checkpoint support:
 Codex-specific runtime controls come from the UI and runtime options:
 
 - network access
-- skip Git repository check
-- sandbox mode
-- approval policy (`never`, `on-request`, `untrusted`; `on-failure` is deprecated and normalizes to `on-request`)
+- file access
+- approval policy (`never`, `on-request`, `untrusted`)
 - reasoning effort
 - reasoning summary and raw reasoning toggles
-- experimental plan mode
+- plan mode
 - binary path override
 - provider timeout
 - debug stream logging
@@ -257,24 +256,21 @@ Codex slash-command behavior:
 - Stave therefore forwards Codex slash commands unchanged instead of trying to validate or block them locally.
 - The Settings developer surface mirrors the native Codex MCP/runtime status rather than synthesizing a Claude-style plugin list.
 
-The `on-failure` Codex approval policy is **deprecated**. Stave now keeps the
-public runtime contract canonical (`never`, `on-request`, `untrusted`) and
-normalizes legacy persisted `on-failure` settings to `on-request` during
-settings hydration/runtime resolution. It is no longer shown in the UI or
-accepted as a new selection.
+Stave only accepts the canonical Codex approval policies: `never`,
+`on-request`, and `untrusted`.
 
 ### Codex settings quick guide
 
 If you want the user-facing setup workflow instead of the runtime internals, use [Provider Sandbox And Approval Guide](../features/provider-sandbox-and-approval.md).
 
-- `sandbox mode`
+- `file access`
   - `read-only`: inspect only, no writes.
   - `workspace-write`: edit inside the workspace / writable roots.
   - `danger-full-access`: broad filesystem access; highest risk.
 - `approval policy`
   - `never`: do not pause for approval.
+  - `untrusted`: App Server-aligned low-friction default; pause only for actions treated as untrusted.
   - `on-request`: ask when approval is needed.
-  - `untrusted`: pause only for actions treated as untrusted.
 - `reasoning effort`
   - `minimal` / `low`: fastest.
   - `medium`: balanced default.
@@ -286,19 +282,19 @@ If you want the user-facing setup workflow instead of the runtime internals, use
   - `none`: no summary.
 - `web search mode`
   - `disabled`: fully local.
-  - `cached`: lower-volatility search path when available.
+  - `cached`: App Server-aligned default; lower-volatility search path when available.
   - `live`: allow current web lookup.
 - Example presets
-  - Safe review / audit: `read-only` + `on-request` + `medium`
-  - Normal implementation: `workspace-write` + `never` + `medium`
+  - Safe review / audit: `read-only` + `untrusted` + `medium`
+  - Normal implementation: `workspace-write` + `untrusted` + `medium`
   - Deep debugging: `workspace-write` + `on-request` + `high`
   - Latest-docs research: `workspace-write` + `never` + `live`
 
-New Codex defaults enable raw agent reasoning, request `detailed` reasoning summaries, and force reasoning-summary capability support to `enabled` unless the user changes those toggles.
+Current Codex defaults follow the App Server-aligned baseline in Stave: `workspace-write` file access, `untrusted` approvals, `network access = off`, `web search = cached`, `reasoning effort = medium`, raw reasoning off, and reasoning summary auto-detection enabled.
 
 Stave now forwards an explicit `show_raw_agent_reasoning: false` override when the Codex UI toggle is off, so local CLI defaults or config files do not leave raw reasoning enabled unexpectedly.
 
-Codex threads are keyed by task/cwd plus the active sandbox, network, approval, model, reasoning, and web-search settings so Stave can preserve thread context without mixing incompatible runtime modes.
+Codex threads are keyed by task/cwd plus the active file-access, network, approval, model, reasoning, and web-search settings so Stave can preserve thread context without mixing incompatible runtime modes.
 
 When a task switches from one Codex model to another, Stave does not attempt to resume the older native thread. Instead it replays the task history into a fresh Codex thread so model-bound session errors do not break the next turn.
 
@@ -309,7 +305,7 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 - Codex CLI baseline: `0.118.0`
 - Current Stave-supported Codex model IDs: `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`
 
-Stave requires a user-installed Codex CLI (`codex` ≥ 0.118.0). Users must have Codex CLI available in their PATH or configured via `runtimeOptions.codexPathOverride` / `STAVE_CODEX_CLI_PATH`. A user-configured binary path still takes precedence over auto-discovery.
+Stave requires a user-installed Codex CLI (`codex` ≥ 0.118.0). Users must have Codex CLI available in their PATH or configured via `runtimeOptions.codexBinaryPath` / `STAVE_CODEX_CLI_PATH`. A user-configured binary path still takes precedence over auto-discovery.
 
 ## Executable path resolution
 
@@ -317,7 +313,7 @@ Stave does not hardcode one binary path. It probes a small set of candidates, me
 
 ### Codex CLI lookup order
 
-1. `runtimeOptions.codexPathOverride`
+1. `runtimeOptions.codexBinaryPath`
 2. `STAVE_CODEX_CLI_PATH`
 3. explicit probes of `<user-home>/.bun/bin/codex` and `<user-home>/.local/bin/codex`
 4. `STAVE_CODEX_CMD` resolved through the merged PATH

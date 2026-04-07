@@ -25,7 +25,7 @@ function hasPlanContent(message?: PlanMessage | null) {
 export function resolvePlanViewerState(args: {
   activeProvider: "claude-code" | "codex" | "stave";
   claudePermissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
-  codexExperimentalPlanMode?: boolean;
+  codexPlanMode?: boolean;
   latestPlanMessage?: PlanMessage | null;
   lastMessage?: PlanMessage | null;
   isTurnActive: boolean;
@@ -37,7 +37,7 @@ export function resolvePlanViewerState(args: {
   const isClaudePlanMode =
     (args.activeProvider === "claude-code" || args.activeProvider === "stave")
     && args.claudePermissionMode === "plan";
-  const isCodexPlanMode = args.activeProvider === "codex" && args.codexExperimentalPlanMode === true;
+  const isCodexPlanMode = args.activeProvider === "codex" && args.codexPlanMode === true;
   const isPlanModeActive = isClaudePlanMode || isCodexPlanMode;
   const lastMessageHasPlan = hasPlanContent(args.lastMessage);
   const hasHistoricalPlan = hasPlanContent(args.latestPlanMessage);

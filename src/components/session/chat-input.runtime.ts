@@ -1,6 +1,6 @@
 import type { PromptInputRuntimeControl, PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
 import { getPermissionModeOptions, type PermissionModeValue } from "@/components/ai-elements/permission-mode-selector";
-import { resolveEffectiveCodexSandboxMode } from "@/lib/providers/codex-runtime-options";
+import { resolveEffectiveCodexFileAccessMode } from "@/lib/providers/codex-runtime-options";
 import type { ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import type { ClaudePermissionMode } from "@/types/chat";
 import {
@@ -73,18 +73,17 @@ interface ChatInputRuntimeArgs {
   claudeThinkingMode: AppSettings["claudeThinkingMode"];
   claudeAgentProgressSummaries: boolean;
   claudeFastMode: boolean;
-  codexSandboxMode: AppSettings["codexSandboxMode"];
-  codexSkipGitRepoCheck: boolean;
-  codexNetworkAccessEnabled: boolean;
+  codexFileAccess: AppSettings["codexFileAccess"];
+  codexNetworkAccess: boolean;
   codexApprovalPolicy: AppSettings["codexApprovalPolicy"];
-  codexModelReasoningEffort: AppSettings["codexModelReasoningEffort"];
-  codexWebSearchMode: AppSettings["codexWebSearchMode"];
-  codexShowRawAgentReasoning: boolean;
+  codexReasoningEffort: AppSettings["codexReasoningEffort"];
+  codexWebSearch: AppSettings["codexWebSearch"];
+  codexShowRawReasoning: boolean;
   codexReasoningSummary: AppSettings["codexReasoningSummary"];
-  codexSupportsReasoningSummaries: AppSettings["codexSupportsReasoningSummaries"];
+  codexReasoningSummarySupport: AppSettings["codexReasoningSummarySupport"];
   codexFastMode: boolean;
-  codexExperimentalPlanMode: boolean;
-  codexPathOverride: string;
+  codexPlanMode: boolean;
+  codexBinaryPath: string;
   staveAutoFastMode: boolean;
   staveAutoOrchestrationMode: AppSettings["staveAutoOrchestrationMode"];
   staveAutoMaxSubtasks: number;
@@ -156,7 +155,7 @@ export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): 
   return [
     {
       id: "permission-mode",
-      label: "Approval",
+      label: "Approvals",
       value: args.permissionMode,
       options: permissionOptions,
       onSelect: (value: string) => args.updateSettings({
@@ -166,10 +165,10 @@ export function buildChatInputRuntimeQuickControls(args: ChatInputRuntimeArgs): 
     {
       id: "web-search",
       label: "Web Search",
-      value: args.codexWebSearchMode,
+      value: args.codexWebSearch,
       options: CODEX_WEB_SEARCH_OPTIONS,
       onSelect: (value: string) => args.updateSettings({
-        patch: { codexWebSearchMode: value as typeof args.codexWebSearchMode },
+        patch: { codexWebSearch: value as typeof args.codexWebSearch },
       }),
     },
   ];
@@ -182,7 +181,7 @@ const CODEX_EFFORT_CYCLE_ORDER = [
   "high",
   "xhigh",
   "minimal",
-] as const satisfies readonly AppSettings["codexModelReasoningEffort"][];
+] as const satisfies readonly AppSettings["codexReasoningEffort"][];
 
 function cycleOptionValue<T extends string>(args: {
   current: T;
@@ -202,7 +201,7 @@ export function cycleClaudeEffortValue(current: AppSettings["claudeEffort"]) {
   });
 }
 
-export function cycleCodexEffortValue(current: AppSettings["codexModelReasoningEffort"]) {
+export function cycleCodexEffortValue(current: AppSettings["codexReasoningEffort"]) {
   return cycleOptionValue({
     current,
     order: CODEX_EFFORT_CYCLE_ORDER,
@@ -261,9 +260,9 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
     ];
   }
 
-  const effectiveCodexSandboxMode = resolveEffectiveCodexSandboxMode({
-    sandboxMode: args.codexSandboxMode,
-    planMode: args.codexExperimentalPlanMode,
+  const effectiveCodexFileAccess = resolveEffectiveCodexFileAccessMode({
+    fileAccessMode: args.codexFileAccess,
+    planMode: args.codexPlanMode,
     fallback: "workspace-write",
   });
 
@@ -275,24 +274,19 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
     },
     {
       id: "sandbox",
-      label: "Sandbox",
-      value: formatTitleCaseRuntimeValue(effectiveCodexSandboxMode),
-      tone: effectiveCodexSandboxMode === "danger-full-access" ? "warning" : "default",
+      label: "Files",
+      value: formatTitleCaseRuntimeValue(effectiveCodexFileAccess),
+      tone: effectiveCodexFileAccess === "danger-full-access" ? "warning" : "default",
     },
     {
       id: "network",
       label: "Network",
-      value: args.codexNetworkAccessEnabled ? "On" : "Off",
-    },
-    {
-      id: "git-check",
-      label: "Git Check",
-      value: args.codexSkipGitRepoCheck ? "Skipped" : "Required",
+      value: args.codexNetworkAccess ? "On" : "Off",
     },
     {
       id: "raw-reasoning",
       label: "Raw Reasoning",
-      value: args.codexShowRawAgentReasoning ? "On" : "Off",
+      value: args.codexShowRawReasoning ? "On" : "Off",
     },
     {
       id: "summary",
@@ -302,13 +296,13 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
     {
       id: "summary-support",
       label: "Summary Support",
-      value: findOptionLabel(CODEX_REASONING_SUPPORT_OPTIONS, args.codexSupportsReasoningSummaries),
+      value: findOptionLabel(CODEX_REASONING_SUPPORT_OPTIONS, args.codexReasoningSummarySupport),
     },
     {
       id: "plan-mode",
-      label: "Plan",
-      value: args.codexExperimentalPlanMode ? "Experimental" : "Off",
-      tone: args.codexExperimentalPlanMode ? "warning" : "default",
+      label: "Planning",
+      value: args.codexPlanMode ? "On" : "Off",
+      tone: args.codexPlanMode ? "warning" : "default",
     },
     {
       id: "fast-mode",
@@ -316,11 +310,11 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
       value: args.codexFastMode ? "On" : "Off",
       tone: args.codexFastMode ? "warning" : "default",
     },
-    ...(args.codexPathOverride.trim()
+    ...(args.codexBinaryPath.trim()
       ? [{
           id: "codex-binary",
-          label: "Binary",
-          value: formatShortRuntimePath(args.codexPathOverride),
+          label: "Codex Binary",
+          value: formatShortRuntimePath(args.codexBinaryPath),
         } satisfies PromptInputRuntimeStatusItem]
       : []),
   ];

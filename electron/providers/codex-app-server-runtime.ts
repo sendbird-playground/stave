@@ -13,7 +13,7 @@ import {
 } from "../../src/lib/providers/provider-request-translators";
 import {
   resolveEffectiveCodexApprovalPolicy,
-  resolveEffectiveCodexSandboxMode,
+  resolveEffectiveCodexFileAccessMode,
 } from "../../src/lib/providers/codex-runtime-options";
 import { homedir } from "node:os";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -86,14 +86,14 @@ interface CodexMcpServerStatus {
   authStatus?: string | null;
 }
 
-function resolveSandboxMode(args: {
+function resolveFileAccessMode(args: {
   runtimeValue?: "read-only" | "workspace-write" | "danger-full-access";
   envValue?: string;
   planMode?: boolean;
   fallback: "read-only" | "workspace-write" | "danger-full-access";
 }) {
-  return resolveEffectiveCodexSandboxMode({
-    sandboxMode: args.runtimeValue ?? args.envValue,
+  return resolveEffectiveCodexFileAccessMode({
+    fileAccessMode: args.runtimeValue ?? args.envValue,
     planMode: args.planMode,
     fallback: args.fallback,
   });
@@ -106,7 +106,7 @@ function resolveApprovalPolicy(args: {
   fallback?: "never" | "on-request" | "untrusted";
 }): "never" | "on-request" | "untrusted" | undefined {
   const candidate = args.runtimeValue ?? args.envValue;
-  if (candidate !== "never" && candidate !== "on-request" && candidate !== "on-failure" && candidate !== "untrusted") {
+  if (candidate !== "never" && candidate !== "on-request" && candidate !== "untrusted") {
     return args.fallback == null
       ? undefined
       : resolveEffectiveCodexApprovalPolicy({
@@ -162,14 +162,14 @@ function buildCodexConfigOverrides(args: {
 }) {
   const config: Record<string, string | boolean> = {};
   const summaryMode = args.runtimeOptions?.codexReasoningSummary;
-  const supportsSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries;
+  const supportsSummaries = args.runtimeOptions?.codexReasoningSummarySupport;
   const hasExplicitRawReasoningToggle = Object.prototype.hasOwnProperty.call(
     args.runtimeOptions ?? {},
-    "codexShowRawAgentReasoning",
+    "codexShowRawReasoning",
   );
 
   if (hasExplicitRawReasoningToggle) {
-    config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawAgentReasoning);
+    config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawReasoning);
   }
   if (summaryMode && summaryMode !== "auto") {
     config.model_reasoning_summary = summaryMode;
@@ -179,11 +179,11 @@ function buildCodexConfigOverrides(args: {
   } else if (supportsSummaries === "disabled") {
     config.model_supports_reasoning_summaries = false;
   }
-  if (typeof args.runtimeOptions?.codexNetworkAccessEnabled === "boolean") {
-    config.network_access = args.runtimeOptions.codexNetworkAccessEnabled;
+  if (typeof args.runtimeOptions?.codexNetworkAccess === "boolean") {
+    config.network_access = args.runtimeOptions.codexNetworkAccess;
   }
-  if (args.runtimeOptions?.codexWebSearchMode) {
-    config.web_search = args.runtimeOptions.codexWebSearchMode;
+  if (args.runtimeOptions?.codexWebSearch) {
+    config.web_search = args.runtimeOptions.codexWebSearch;
   }
   const codexFastMode = args.runtimeOptions?.codexFastMode;
   if (codexFastMode !== undefined) {
@@ -199,7 +199,7 @@ function buildThreadKey(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
   const model = args.runtimeOptions?.model?.trim() || "default";
-  const mode = args.runtimeOptions?.codexExperimentalPlanMode ? "plan" : "chat";
+  const mode = args.runtimeOptions?.codexPlanMode ? "plan" : "chat";
   return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}`;
 }
 
@@ -311,16 +311,16 @@ function buildSandboxPolicy(args: {
   cwd: string;
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
-  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode === true;
-  const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccessEnabled
+  const planModeEnabled = args.runtimeOptions?.codexPlanMode === true;
+  const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccess
     ?? parseBooleanEnv({
       value: process.env.STAVE_CODEX_NETWORK_ACCESS,
-      fallback: true,
+      fallback: false,
     });
-  const sandboxMode = resolveSandboxMode({
-    runtimeValue: args.runtimeOptions?.codexSandboxMode,
+  const fileAccessMode = resolveFileAccessMode({
+    runtimeValue: args.runtimeOptions?.codexFileAccess,
     envValue: process.env.STAVE_CODEX_SANDBOX_MODE?.trim(),
-    planMode: experimentalPlanMode,
+    planMode: planModeEnabled,
     fallback: "workspace-write",
   });
   const readableRoots = [
@@ -328,7 +328,7 @@ function buildSandboxPolicy(args: {
     ...resolveCodexAdditionalDirectories({ cwd: args.cwd }),
   ];
 
-  switch (sandboxMode) {
+  switch (fileAccessMode) {
     case "danger-full-access":
       return { type: "dangerFullAccess" as const };
     case "read-only":
@@ -704,7 +704,7 @@ export async function getCodexConnectedToolStatus(args: {
 }): Promise<ConnectedToolStatusResponse> {
   const toolIds = normalizeConnectedToolIds(args.toolIds);
   const executablePath = resolveCodexExecutablePath({
-    explicitPath: args.runtimeOptions?.codexPathOverride,
+    explicitPath: args.runtimeOptions?.codexBinaryPath,
   });
   if (!executablePath) {
     return {
@@ -762,7 +762,7 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
 }): Promise<BridgeEvent[] | null> {
   const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
   const codexExecutablePath = resolveCodexExecutablePath({
-    explicitPath: args.runtimeOptions?.codexPathOverride,
+    explicitPath: args.runtimeOptions?.codexBinaryPath,
   });
   if (!codexExecutablePath) {
     const unavailableEvents: BridgeEvent[] = [
@@ -854,7 +854,7 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
 
   const requestPlanInterrupt = () => {
     if (
-      !args.runtimeOptions?.codexExperimentalPlanMode
+      !args.runtimeOptions?.codexPlanMode
       || sentPlanInterrupt
       || !appServerTurnId
       || completed
@@ -1206,7 +1206,7 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
                 ...(itemId ? { sourceSegmentId: itemId } : {}),
               });
             }
-            if (args.runtimeOptions?.codexExperimentalPlanMode) {
+            if (args.runtimeOptions?.codexPlanMode) {
               shouldInterruptPlanTurn = true;
               requestPlanInterrupt();
             }
@@ -1346,7 +1346,7 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
           status?: string;
           error?: { message?: string | null } | null;
         } | undefined;
-        if (args.runtimeOptions?.codexExperimentalPlanMode && !sawNativePlan) {
+        if (args.runtimeOptions?.codexPlanMode && !sawNativePlan) {
           const fallbackSegmentId = lastAgentMessageSegmentId.trim();
           const fallbackPlanText = fallbackSegmentId
             ? (agentMessageBuffers.get(fallbackSegmentId) ?? "")
@@ -1387,8 +1387,8 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
     const approvalPolicy = resolveApprovalPolicy({
       runtimeValue: args.runtimeOptions?.codexApprovalPolicy,
       envValue: process.env.STAVE_CODEX_APPROVAL_POLICY?.trim(),
-      planMode: args.runtimeOptions?.codexExperimentalPlanMode === true,
-      fallback: "on-request",
+      planMode: args.runtimeOptions?.codexPlanMode === true,
+      fallback: "untrusted",
     });
     const turnResponse = await client.request<{ turn: { id: string } }>("turn/start", {
       threadId,
@@ -1404,15 +1404,15 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
         runtimeOptions: args.runtimeOptions,
       }),
       ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
-      ...(args.runtimeOptions?.codexModelReasoningEffort ? { effort: args.runtimeOptions.codexModelReasoningEffort } : {}),
+      ...(args.runtimeOptions?.codexReasoningEffort ? { effort: args.runtimeOptions.codexReasoningEffort } : {}),
       ...(args.runtimeOptions?.codexReasoningSummary ? { summary: args.runtimeOptions.codexReasoningSummary } : {}),
-      ...(args.runtimeOptions?.codexExperimentalPlanMode
+      ...(args.runtimeOptions?.codexPlanMode
         ? {
           collaborationMode: {
             mode: "plan",
             settings: {
               model: args.runtimeOptions?.model?.trim() || "gpt-5.4",
-              reasoning_effort: args.runtimeOptions?.codexModelReasoningEffort ?? null,
+              reasoning_effort: args.runtimeOptions?.codexReasoningEffort ?? null,
               developer_instructions: null,
             },
           },

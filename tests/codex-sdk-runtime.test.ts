@@ -401,7 +401,7 @@ describe("resolveCodexResumeThreadFallback", () => {
   test("preserves persisted resume ids in plan mode", () => {
     expect(resolveCodexResumeThreadFallback({
       runtimeOptions: {
-        codexExperimentalPlanMode: true,
+        codexPlanMode: true,
         codexResumeThreadId: "thread-plan-1",
       },
     })).toBe("thread-plan-1");
@@ -410,7 +410,7 @@ describe("resolveCodexResumeThreadFallback", () => {
   test("falls back to the canonical conversation resume id in plan mode", () => {
     expect(resolveCodexResumeThreadFallback({
       runtimeOptions: {
-        codexExperimentalPlanMode: true,
+        codexPlanMode: true,
       },
       conversation: {
         target: {
@@ -445,9 +445,9 @@ describe("buildCodexConfigOverrides", () => {
   test("returns explicit Codex config overrides including raw reasoning on", () => {
     expect(buildCodexConfigOverrides({
       runtimeOptions: {
-        codexShowRawAgentReasoning: true,
+        codexShowRawReasoning: true,
         codexReasoningSummary: "detailed",
-        codexSupportsReasoningSummaries: "enabled",
+        codexReasoningSummarySupport: "enabled",
       },
     })).toEqual({
       show_raw_agent_reasoning: true,
@@ -459,9 +459,9 @@ describe("buildCodexConfigOverrides", () => {
   test("keeps an explicit raw reasoning off toggle so the UI can disable it reliably", () => {
     expect(buildCodexConfigOverrides({
       runtimeOptions: {
-        codexShowRawAgentReasoning: false,
+        codexShowRawReasoning: false,
         codexReasoningSummary: "auto",
-        codexSupportsReasoningSummaries: "auto",
+        codexReasoningSummarySupport: "auto",
       },
     })).toEqual({
       show_raw_agent_reasoning: false,
@@ -472,7 +472,7 @@ describe("buildCodexConfigOverrides", () => {
     expect(buildCodexConfigOverrides({
       runtimeOptions: {
         codexReasoningSummary: "auto",
-        codexSupportsReasoningSummaries: "auto",
+        codexReasoningSummarySupport: "auto",
       },
     })).toBeUndefined();
   });
@@ -480,8 +480,8 @@ describe("buildCodexConfigOverrides", () => {
   test("adds plan-mode config overrides for experimental Codex plan mode", () => {
     expect(buildCodexConfigOverrides({
       runtimeOptions: {
-        codexExperimentalPlanMode: true,
-        codexModelReasoningEffort: "low",
+        codexPlanMode: true,
+        codexReasoningEffort: "low",
       },
     })).toEqual({
       collaboration_mode_kind: "plan",
@@ -496,21 +496,9 @@ describe("resolveApprovalPolicy", () => {
     expect(resolveApprovalPolicy({ envValue: "bogus-policy" })).toBeUndefined();
   });
 
-  test("normalizes deprecated on-failure to on-request", () => {
-    expect(resolveApprovalPolicy({ envValue: "on-failure" })).toBe("on-request");
-  });
-
   test("forces never in plan mode when a fallback policy is provided", () => {
     expect(resolveApprovalPolicy({
       runtimeValue: "on-request",
-      planMode: true,
-      fallback: "on-request",
-    })).toBe("never");
-  });
-
-  test("forces never in plan mode even when deprecated on-failure is set", () => {
-    expect(resolveApprovalPolicy({
-      envValue: "on-failure",
       planMode: true,
       fallback: "on-request",
     })).toBe("never");

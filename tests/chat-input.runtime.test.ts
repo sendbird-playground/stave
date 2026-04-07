@@ -22,18 +22,17 @@ const baseArgs = {
   claudeThinkingMode: "adaptive" as const,
   claudeAgentProgressSummaries: true,
   claudeFastMode: false,
-  codexSandboxMode: "workspace-write" as const,
-  codexSkipGitRepoCheck: false,
-  codexNetworkAccessEnabled: true,
+  codexFileAccess: "workspace-write" as const,
+  codexNetworkAccess: true,
   codexApprovalPolicy: "on-request" as const,
-  codexModelReasoningEffort: "high" as const,
-  codexWebSearchMode: "live" as const,
-  codexShowRawAgentReasoning: true,
+  codexReasoningEffort: "high" as const,
+  codexWebSearch: "live" as const,
+  codexShowRawReasoning: true,
   codexReasoningSummary: "detailed" as const,
-  codexSupportsReasoningSummaries: "enabled" as const,
+  codexReasoningSummarySupport: "enabled" as const,
   codexFastMode: true,
-  codexExperimentalPlanMode: true,
-  codexPathOverride: "/opt/homebrew/bin/codex",
+  codexPlanMode: true,
+  codexBinaryPath: "/opt/homebrew/bin/codex",
   staveAutoFastMode: false,
   staveAutoOrchestrationMode: "auto" as const,
   staveAutoMaxSubtasks: 3,
@@ -73,7 +72,7 @@ describe("chat-input runtime helpers", () => {
 
     expect(items.find((item) => item.id === "timeout")?.value).toBe("1 hour");
     expect(items.find((item) => item.id === "sandbox")?.value).toBe("Read Only");
-    expect(items.find((item) => item.id === "plan-mode")?.value).toBe("Experimental");
+    expect(items.find((item) => item.id === "plan-mode")?.value).toBe("On");
     expect(items.find((item) => item.id === "summary")?.value).toBe("Detailed");
     expect(items.find((item) => item.id === "codex-binary")?.value).toBe(".../bin/codex");
   });

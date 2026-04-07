@@ -23,7 +23,7 @@ export type ClaudePermissionModeBeforePlan = Exclude<ClaudePermissionMode, "plan
 export interface PromptDraftRuntimeOverrides {
   claudePermissionMode?: ClaudePermissionMode;
   claudePermissionModeBeforePlan?: ClaudePermissionModeBeforePlan;
-  codexExperimentalPlanMode?: boolean;
+  codexPlanMode?: boolean;
 }
 
 export interface PromptDraft {

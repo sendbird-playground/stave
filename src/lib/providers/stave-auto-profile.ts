@@ -67,7 +67,7 @@ function createEmptyRoleRuntimeOverrides(): StaveAutoRoleRuntimeOverrides {
       fastMode: false,
     },
     codex: {
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       reasoningEffort: "medium",
       fastMode: false,
     },
@@ -403,7 +403,7 @@ export function applyStaveRoleRuntimeOverrides(args: {
     nextRuntimeOptions.codexApprovalPolicy = overrides.codex.approvalPolicy;
   }
   if (overrides.codex.reasoningEffort !== undefined) {
-    nextRuntimeOptions.codexModelReasoningEffort = overrides.codex.reasoningEffort;
+    nextRuntimeOptions.codexReasoningEffort = overrides.codex.reasoningEffort;
   }
   if (overrides.codex.fastMode !== undefined) {
     nextRuntimeOptions.codexFastMode = overrides.codex.fastMode;

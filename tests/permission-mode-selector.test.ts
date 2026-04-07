@@ -4,14 +4,14 @@ import { cyclePermissionMode, getPermissionModeOptions } from "../src/components
 describe("Codex permission mode options", () => {
   test("lists the supported approval policies", () => {
     expect(getPermissionModeOptions("codex").map((option) => option.value)).toEqual([
-      "never",
-      "on-request",
       "untrusted",
+      "on-request",
+      "never",
     ]);
   });
 
-  test("cycles through on-request to untrusted", () => {
-    expect(cyclePermissionMode({ providerId: "codex", current: "on-request" })).toBe("untrusted");
+  test("cycles through untrusted to on-request", () => {
+    expect(cyclePermissionMode({ providerId: "codex", current: "untrusted" })).toBe("on-request");
   });
 });
 

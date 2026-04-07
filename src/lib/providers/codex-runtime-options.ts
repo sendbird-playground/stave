@@ -1,7 +1,7 @@
 import type { ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 
 export type CodexApprovalPolicy = NonNullable<ProviderRuntimeOptions["codexApprovalPolicy"]>;
-export type CodexSandboxMode = NonNullable<ProviderRuntimeOptions["codexSandboxMode"]>;
+export type CodexFileAccessMode = NonNullable<ProviderRuntimeOptions["codexFileAccess"]>;
 
 export function resolveEffectiveCodexApprovalPolicy(args: {
   approvalPolicy?: string;
@@ -12,11 +12,6 @@ export function resolveEffectiveCodexApprovalPolicy(args: {
     return "never";
   }
 
-  // "on-failure" is deprecated — normalize to "on-request" for backward compat.
-  if (args.approvalPolicy === "on-failure") {
-    return "on-request";
-  }
-
   if (
     args.approvalPolicy === "never"
     || args.approvalPolicy === "on-request"
@@ -25,24 +20,24 @@ export function resolveEffectiveCodexApprovalPolicy(args: {
     return args.approvalPolicy;
   }
 
-  return args.fallback ?? "on-request";
+  return args.fallback ?? "untrusted";
 }
 
-export function resolveEffectiveCodexSandboxMode(args: {
-  sandboxMode?: ProviderRuntimeOptions["codexSandboxMode"];
+export function resolveEffectiveCodexFileAccessMode(args: {
+  fileAccessMode?: ProviderRuntimeOptions["codexFileAccess"];
   planMode?: boolean;
-  fallback?: CodexSandboxMode;
-}): CodexSandboxMode {
+  fallback?: CodexFileAccessMode;
+}): CodexFileAccessMode {
   if (args.planMode) {
     return "read-only";
   }
 
   if (
-    args.sandboxMode === "read-only"
-    || args.sandboxMode === "workspace-write"
-    || args.sandboxMode === "danger-full-access"
+    args.fileAccessMode === "read-only"
+    || args.fileAccessMode === "workspace-write"
+    || args.fileAccessMode === "danger-full-access"
   ) {
-    return args.sandboxMode;
+    return args.fileAccessMode;
   }
 
   return args.fallback ?? "workspace-write";

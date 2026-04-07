@@ -51,7 +51,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
 
-  const [activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, sendUserMessage, createTask, updatePromptDraft] = useAppStore(
+  const [activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexPlanMode, sendUserMessage, createTask, updatePromptDraft] = useAppStore(
     useShallow((state) => [
       state.activeTaskId,
       state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
@@ -59,7 +59,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
       state.promptDraftByTask[state.activeTaskId] ?? EMPTY_PROMPT_DRAFT,
       state.settings.claudePermissionMode,
       state.settings.claudePermissionModeBeforePlan,
-      state.settings.codexExperimentalPlanMode,
+      state.settings.codexPlanMode,
       state.sendUserMessage,
       state.createTask,
       state.updatePromptDraft,
@@ -71,12 +71,12 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     fallback: {
       claudePermissionMode,
       claudePermissionModeBeforePlan,
-      codexExperimentalPlanMode,
+      codexPlanMode,
     },
   });
   const effectiveClaudePermissionMode = taskRuntimeState.claudePermissionMode;
   const effectiveClaudePermissionModeBeforePlan = taskRuntimeState.claudePermissionModeBeforePlan;
-  const effectiveCodexExperimentalPlanMode = taskRuntimeState.codexExperimentalPlanMode;
+  const effectiveCodexPlanMode = taskRuntimeState.codexPlanMode;
   const providerLabel = activeProvider === "codex" ? "Codex" : "Claude";
   const isManagedTask = isTaskManaged(activeTask);
   const managedNotice = isManagedTask
@@ -105,7 +105,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const { planText, isPlanPreparing, isPlanPending, canReplyToPlan } = resolvePlanViewerState({
     activeProvider,
     claudePermissionMode: effectiveClaudePermissionMode,
-    codexExperimentalPlanMode: effectiveCodexExperimentalPlanMode,
+    codexPlanMode: effectiveCodexPlanMode,
     latestPlanMessage,
     lastMessage,
     isTurnActive,
@@ -159,13 +159,13 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
           }),
         },
       });
-    } else if (activeProvider === "codex" && effectiveCodexExperimentalPlanMode) {
+    } else if (activeProvider === "codex" && effectiveCodexPlanMode) {
       updatePromptDraft({
         taskId: activeTaskId,
         patch: {
           runtimeOverrides: {
             ...promptDraft.runtimeOverrides,
-            codexExperimentalPlanMode: false,
+            codexPlanMode: false,
           },
         },
       });
@@ -179,7 +179,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     canReplyToPlan,
     effectiveClaudePermissionMode,
     effectiveClaudePermissionModeBeforePlan,
-    effectiveCodexExperimentalPlanMode,
+    effectiveCodexPlanMode,
     isManagedTask,
     promptDraft.runtimeOverrides,
     sendUserMessage,

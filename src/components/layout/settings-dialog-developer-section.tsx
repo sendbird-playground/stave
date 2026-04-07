@@ -154,19 +154,19 @@ export function ProviderTimeoutCard() {
 }
 
 export function CodexBinaryPathCard() {
-  const codexPathOverride = useAppStore((state) => state.settings.codexPathOverride);
+  const codexBinaryPath = useAppStore((state) => state.settings.codexBinaryPath);
   const updateSettings = useAppStore((state) => state.updateSettings);
 
   return (
     <SettingsCard
-      title="Codex Binary Path"
+      title="Codex Binary"
       description="Override the path to the local `codex` binary. Leave empty to use the system install discovered from your PATH/home bin locations."
     >
       <DraftInput
         className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
         placeholder="/usr/local/bin/codex"
-        value={codexPathOverride}
-        onCommit={(nextValue) => updateSettings({ patch: { codexPathOverride: nextValue } })}
+        value={codexBinaryPath}
+        onCommit={(nextValue) => updateSettings({ patch: { codexBinaryPath: nextValue } })}
       />
       <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground">
         <p className="flex items-center gap-2 font-medium text-foreground">
@@ -389,7 +389,7 @@ export function ClaudeRuntimeToolsCard() {
 }
 
 export function CodexMcpStatusCard() {
-  const codexPathOverride = useAppStore((state) => state.settings.codexPathOverride);
+  const codexBinaryPath = useAppStore((state) => state.settings.codexBinaryPath);
   const [state, setState] = useState<CodexMcpViewState>({
     status: "loading",
     servers: [],
@@ -418,8 +418,8 @@ export function CodexMcpStatusCard() {
 
     try {
       const result = await getCodexMcpStatus({
-        runtimeOptions: codexPathOverride.trim()
-          ? { codexPathOverride }
+        runtimeOptions: codexBinaryPath.trim()
+          ? { codexBinaryPath }
           : undefined,
       });
       setState({
@@ -440,7 +440,7 @@ export function CodexMcpStatusCard() {
 
   useEffect(() => {
     void refreshStatus();
-  }, [codexPathOverride]);
+  }, [codexBinaryPath]);
 
   const enabledCount = state.servers.filter((server) => server.enabled).length;
   const tokenAuthCount = state.servers.filter((server) => server.authStatus === "bearer_token").length;

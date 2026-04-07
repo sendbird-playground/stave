@@ -278,7 +278,7 @@ describe("stave muse send flow", () => {
     expect(startedTurn?.taskId).toBe("stave-muse");
     expect(startedTurn?.cwd).toBe("/tmp");
     expect(startedTurn?.runtimeOptions?.codexApprovalPolicy).toBe("never");
-    expect(startedTurn?.runtimeOptions?.codexSandboxMode).toBe("read-only");
+    expect(startedTurn?.runtimeOptions?.codexFileAccess).toBe("read-only");
 
     const conversation = startedTurn?.conversation;
     expect(conversation?.resume).toBeUndefined();

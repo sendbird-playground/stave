@@ -144,7 +144,7 @@ function describeClaudeAvailability() {
 
 function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {}) {
   const executablePath = resolveCodexExecutablePath({
-    explicitPath: args.runtimeOptions?.codexPathOverride,
+    explicitPath: args.runtimeOptions?.codexBinaryPath,
   });
   if (!executablePath) {
     setCachedAvailability("codex", false);

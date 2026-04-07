@@ -33,7 +33,7 @@ describe("createDefaultStaveAutoRoleRuntimeOverrides", () => {
       expect(role.claude.thinkingMode).toBe("adaptive");
       expect(role.claude.effort).toBe("medium");
       expect(role.claude.fastMode).toBe(false);
-      expect(role.codex.approvalPolicy).toBe("on-request");
+      expect(role.codex.approvalPolicy).toBe("untrusted");
       expect(role.codex.reasoningEffort).toBe("medium");
       expect(role.codex.fastMode).toBe(false);
     }
@@ -190,12 +190,12 @@ describe("applyStaveRoleRuntimeOverrides", () => {
       model: "gpt-5.3-codex",
       runtimeOptions: {
         codexApprovalPolicy: "on-request",
-        codexModelReasoningEffort: "medium",
+        codexReasoningEffort: "medium",
         codexFastMode: true,
       },
     })).toMatchObject({
       codexApprovalPolicy: "never",
-      codexModelReasoningEffort: "xhigh",
+      codexReasoningEffort: "xhigh",
       codexFastMode: false,
     });
   });
