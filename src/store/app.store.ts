@@ -606,6 +606,7 @@ interface AppState {
   }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
   continueWorkspaceFromSummary: (args: {
     name: string;
+    baseBranch?: string;
   }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
   closeWorkspace: (args: { workspaceId: string }) => Promise<void>;
   switchWorkspace: (args: { workspaceId: string }) => Promise<void>;
@@ -3610,7 +3611,7 @@ export const useAppStore = create<AppState>()(
           ? { ok: true, ...creationNotice }
           : { ok: true };
       },
-      continueWorkspaceFromSummary: async ({ name }) => {
+      continueWorkspaceFromSummary: async ({ name, baseBranch: requestedBaseBranch }) => {
         const current = get();
         const sourceWorkspaceId = current.activeWorkspaceId;
         if (!sourceWorkspaceId) {
@@ -3625,7 +3626,16 @@ export const useAppStore = create<AppState>()(
         const sourceWorkspacePath = current.workspacePathById[sourceWorkspaceId] ?? current.projectPath ?? "";
         const sourceBranch = current.workspaceBranchById[sourceWorkspaceId] ?? sourceWorkspaceName;
         const sourcePrInfo = current.workspacePrInfoById[sourceWorkspaceId] ?? null;
-        const baseBranch = sourcePrInfo?.pr?.baseRefName?.trim() || current.defaultBranch.trim() || "main";
+        const defaultBaseBranch = current.defaultBranch.trim() || "main";
+        const remoteBaseBranch = requestedBaseBranch?.trim() || `origin/${defaultBaseBranch}`;
+        const remoteSeparatorIndex = remoteBaseBranch.indexOf("/");
+        const remoteTarget = remoteSeparatorIndex > 0
+          ? {
+            remoteName: remoteBaseBranch.slice(0, remoteSeparatorIndex),
+            localBranch: remoteBaseBranch.slice(remoteSeparatorIndex + 1),
+          }
+          : null;
+        let baseBranch = remoteBaseBranch;
         const activeTask = current.tasks.find((task) => task.id === current.activeTaskId) ?? current.tasks[0] ?? null;
         const notes = current.workspaceInformation.notes.trim();
         const openTodos = current.workspaceInformation.todos
@@ -3634,11 +3644,23 @@ export const useAppStore = create<AppState>()(
 
         const runCommand = window.api?.terminal?.runCommand;
         const getHistory = window.api?.sourceControl?.getHistory;
+        const setupWarnings: string[] = [];
         let diffStat = "";
         let changedFiles: string[] = [];
         let recentCommitSubjects: string[] = [];
 
         if (runCommand && sourceWorkspacePath) {
+          if (remoteTarget) {
+            const fetchBaseResult = await runCommand({
+              cwd: sourceWorkspacePath,
+              command: `git fetch ${remoteTarget.remoteName} --prune`,
+            });
+            if (!fetchBaseResult.ok) {
+              baseBranch = remoteTarget.localBranch;
+              setupWarnings.push(`Could not refresh \`${remoteBaseBranch}\`; continued from local \`${remoteTarget.localBranch}\` instead.`);
+            }
+          }
+
           const diffStatResult = await runCommand({
             cwd: sourceWorkspacePath,
             command: `git diff --stat ${JSON.stringify(baseBranch)}...HEAD`,
@@ -3707,7 +3729,7 @@ export const useAppStore = create<AppState>()(
         const next = get();
         const targetWorkspaceId = next.activeWorkspaceId;
         const targetWorkspacePath = next.workspacePathById[targetWorkspaceId] ?? next.projectPath ?? "";
-        const warnings: string[] = [];
+        const warnings: string[] = [...setupWarnings];
         let attachedSummary = false;
 
         if (targetWorkspacePath) {

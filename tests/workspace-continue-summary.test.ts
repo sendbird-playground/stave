@@ -65,7 +65,7 @@ describe("workspace continue summary helpers", () => {
       generatedAt: "2026-04-01T00:00:00.000Z",
       sourceWorkspaceName: "feature/pr-status",
       sourceBranch: "feature/pr-status",
-      baseBranch: "main",
+      baseBranch: "origin/main",
       pr: {
         number: 12,
         title: "feat(topbar): add pr status",
@@ -82,6 +82,7 @@ describe("workspace continue summary helpers", () => {
 
     expect(markdown).toContain("# Workspace Continue Brief");
     expect(markdown).toContain("## Pull Request");
+    expect(markdown).toContain("- Base branch: `origin/main`");
     expect(markdown).toContain("feat(topbar): add pr status");
     expect(markdown).toContain("## Key Files");
     expect(markdown).toContain("`src/components/layout/TopBarOpenPR.tsx`");
@@ -101,6 +102,14 @@ describe("continueWorkspaceFromSummary", () => {
         terminal: {
           runCommand: async (args: { cwd?: string; command: string }) => {
             runCalls.push(args);
+            if (args.command === "git fetch origin --prune") {
+              return {
+                ok: true,
+                code: 0,
+                stdout: "",
+                stderr: "",
+              };
+            }
             if (args.command.startsWith("git diff --stat ")) {
               return {
                 ok: true,
@@ -257,10 +266,11 @@ describe("continueWorkspaceFromSummary", () => {
     expect(result.message).toContain(".stave/context/continued-from-feature-pr-status.md");
 
     expect(runCalls.map((call) => call.command)).toEqual([
-      "git diff --stat \"main\"...HEAD",
-      "git diff --name-only \"main\"...HEAD",
+      "git fetch origin --prune",
+      "git diff --stat \"origin/main\"...HEAD",
+      "git diff --name-only \"origin/main\"...HEAD",
       "mkdir -p .stave/workspaces",
-      "git worktree add -b \"feature/pr-status--continue--20260404-164512\" \"/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512\" \"main\"",
+      "git worktree add -b \"feature/pr-status--continue--20260404-164512\" \"/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512\" \"origin/main\"",
     ]);
 
     expect(createdDirectories).toEqual([".stave/context"]);
@@ -279,5 +289,317 @@ describe("continueWorkspaceFromSummary", () => {
       attachedFilePaths: [".stave/context/continued-from-feature-pr-status.md"],
       attachments: [],
     });
+  });
+
+  test("falls back to the local default branch with a warning when origin cannot be refreshed", async () => {
+    const runCalls: Array<{ cwd?: string; command: string }> = [];
+
+    setWindowContext({
+      api: {
+        terminal: {
+          runCommand: async (args: { cwd?: string; command: string }) => {
+            runCalls.push(args);
+            if (args.command === "git fetch origin --prune") {
+              return {
+                ok: false,
+                code: 1,
+                stdout: "",
+                stderr: "fatal: 'origin' does not appear to be a git repository",
+              };
+            }
+            if (args.command.startsWith("git diff --stat ")) {
+              return {
+                ok: true,
+                code: 0,
+                stdout: "",
+                stderr: "",
+              };
+            }
+            if (args.command.startsWith("git diff --name-only ")) {
+              return {
+                ok: true,
+                code: 0,
+                stdout: "",
+                stderr: "",
+              };
+            }
+            return {
+              ok: true,
+              code: 0,
+              stdout: "",
+              stderr: "",
+            };
+          },
+        },
+        sourceControl: {
+          getHistory: async () => ({
+            ok: true,
+            items: [],
+            stderr: "",
+          }),
+        },
+        fs: {
+          pickRoot: async () => ({
+            ok: true,
+            rootPath: "/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512",
+            rootName: "feature/pr-status--continue--20260404-164512",
+            files: [],
+          }),
+          listFiles: async () => ({
+            ok: true,
+            files: [],
+          }),
+          readFile: async () => ({
+            ok: true,
+            content: "",
+            revision: "rev-1",
+          }),
+          createDirectory: async () => ({
+            ok: true,
+            alreadyExists: false,
+          }),
+          createFile: async () => ({
+            ok: true,
+            alreadyExists: false,
+            revision: "rev-2",
+          }),
+          writeFile: async () => ({
+            ok: true,
+            revision: "rev-3",
+          }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+
+    useAppStore.setState({
+      ...initialState,
+      projectPath: "/tmp/stave-project",
+      projectName: "stave-project",
+      defaultBranch: "main",
+      recentProjects: [{
+        projectPath: "/tmp/stave-project",
+        projectName: "stave-project",
+        lastOpenedAt: "2026-04-01T00:00:00.000Z",
+        defaultBranch: "main",
+        workspaces: [{ id: "ws-source", name: "feature/pr-status", updatedAt: "2026-04-01T00:00:00.000Z" }],
+        activeWorkspaceId: "ws-source",
+        workspaceBranchById: { "ws-source": "feature/pr-status" },
+        workspacePathById: { "ws-source": "/tmp/stave-project/.stave/workspaces/feature__pr-status" },
+        workspaceDefaultById: { "ws-source": false },
+      }],
+      workspaces: [{ id: "ws-source", name: "feature/pr-status", updatedAt: "2026-04-01T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-source",
+      workspaceBranchById: { "ws-source": "feature/pr-status" },
+      workspacePathById: { "ws-source": "/tmp/stave-project/.stave/workspaces/feature__pr-status" },
+      workspaceDefaultById: { "ws-source": false },
+      workspacePrInfoById: {
+        "ws-source": {
+          pr: {
+            number: 12,
+            title: "feat(topbar): add pr status",
+            state: "MERGED",
+            isDraft: false,
+            url: "https://example.com/pull/12",
+            reviewDecision: "APPROVED",
+            mergeable: "MERGEABLE",
+            mergeStateStatus: "CLEAN",
+            checksRollup: "SUCCESS",
+            mergedAt: "2026-04-01T00:00:00.000Z",
+            baseRefName: "release",
+            headRefName: "feature/pr-status",
+          },
+          derived: "merged",
+          lastFetched: Date.now(),
+        },
+      },
+      tasks: [{
+        id: "task-source",
+        title: "Polish merged workspace flow",
+        provider: "codex",
+        updatedAt: "2026-04-01T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+        controlMode: "interactive",
+        controlOwner: "stave",
+      }],
+      activeTaskId: "task-source",
+      messagesByTask: { "task-source": [] },
+      promptDraftByTask: {},
+      workspaceInformation: {
+        jiraIssues: [],
+        figmaResources: [],
+        linkedPullRequests: [],
+        slackThreads: [],
+        notes: "",
+        todos: [],
+        customFields: [],
+      },
+      projectFiles: [],
+      taskWorkspaceIdById: { "task-source": "ws-source" },
+    });
+
+    const result = await useAppStore.getState().continueWorkspaceFromSummary({
+      name: "feature/pr-status--continue--20260404-164512",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      noticeLevel: "warning",
+    });
+    expect(result.message).toContain("Could not refresh `origin/main`; continued from local `main` instead.");
+    expect(runCalls.map((call) => call.command)).toEqual([
+      "git fetch origin --prune",
+      "git diff --stat \"main\"...HEAD",
+      "git diff --name-only \"main\"...HEAD",
+      "mkdir -p .stave/workspaces",
+      "git worktree add -b \"feature/pr-status--continue--20260404-164512\" \"/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512\" \"main\"",
+    ]);
+  });
+
+  test("uses an explicitly selected remote base branch when continuing", async () => {
+    const runCalls: Array<{ cwd?: string; command: string }> = [];
+
+    setWindowContext({
+      api: {
+        terminal: {
+          runCommand: async (args: { cwd?: string; command: string }) => {
+            runCalls.push(args);
+            return {
+              ok: true,
+              code: 0,
+              stdout: "",
+              stderr: "",
+            };
+          },
+        },
+        sourceControl: {
+          getHistory: async () => ({
+            ok: true,
+            items: [],
+            stderr: "",
+          }),
+        },
+        fs: {
+          pickRoot: async () => ({
+            ok: true,
+            rootPath: "/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512",
+            rootName: "feature/pr-status--continue--20260404-164512",
+            files: [],
+          }),
+          listFiles: async () => ({
+            ok: true,
+            files: [],
+          }),
+          readFile: async () => ({
+            ok: true,
+            content: "",
+            revision: "rev-1",
+          }),
+          createDirectory: async () => ({
+            ok: true,
+            alreadyExists: false,
+          }),
+          createFile: async () => ({
+            ok: true,
+            alreadyExists: false,
+            revision: "rev-2",
+          }),
+          writeFile: async () => ({
+            ok: true,
+            revision: "rev-3",
+          }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+
+    useAppStore.setState({
+      ...initialState,
+      projectPath: "/tmp/stave-project",
+      projectName: "stave-project",
+      defaultBranch: "main",
+      recentProjects: [{
+        projectPath: "/tmp/stave-project",
+        projectName: "stave-project",
+        lastOpenedAt: "2026-04-01T00:00:00.000Z",
+        defaultBranch: "main",
+        workspaces: [{ id: "ws-source", name: "feature/pr-status", updatedAt: "2026-04-01T00:00:00.000Z" }],
+        activeWorkspaceId: "ws-source",
+        workspaceBranchById: { "ws-source": "feature/pr-status" },
+        workspacePathById: { "ws-source": "/tmp/stave-project/.stave/workspaces/feature__pr-status" },
+        workspaceDefaultById: { "ws-source": false },
+      }],
+      workspaces: [{ id: "ws-source", name: "feature/pr-status", updatedAt: "2026-04-01T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-source",
+      workspaceBranchById: { "ws-source": "feature/pr-status" },
+      workspacePathById: { "ws-source": "/tmp/stave-project/.stave/workspaces/feature__pr-status" },
+      workspaceDefaultById: { "ws-source": false },
+      workspacePrInfoById: {
+        "ws-source": {
+          pr: {
+            number: 12,
+            title: "feat(topbar): add pr status",
+            state: "MERGED",
+            isDraft: false,
+            url: "https://example.com/pull/12",
+            reviewDecision: "APPROVED",
+            mergeable: "MERGEABLE",
+            mergeStateStatus: "CLEAN",
+            checksRollup: "SUCCESS",
+            mergedAt: "2026-04-01T00:00:00.000Z",
+            baseRefName: "main",
+            headRefName: "feature/pr-status",
+          },
+          derived: "merged",
+          lastFetched: Date.now(),
+        },
+      },
+      tasks: [{
+        id: "task-source",
+        title: "Polish merged workspace flow",
+        provider: "codex",
+        updatedAt: "2026-04-01T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+        controlMode: "interactive",
+        controlOwner: "stave",
+      }],
+      activeTaskId: "task-source",
+      messagesByTask: { "task-source": [] },
+      promptDraftByTask: {},
+      workspaceInformation: {
+        jiraIssues: [],
+        figmaResources: [],
+        linkedPullRequests: [],
+        slackThreads: [],
+        notes: "",
+        todos: [],
+        customFields: [],
+      },
+      projectFiles: [],
+      taskWorkspaceIdById: { "task-source": "ws-source" },
+    });
+
+    const result = await useAppStore.getState().continueWorkspaceFromSummary({
+      name: "feature/pr-status--continue--20260404-164512",
+      baseBranch: "origin/release",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      noticeLevel: "success",
+    });
+    expect(runCalls.map((call) => call.command)).toEqual([
+      "git fetch origin --prune",
+      "git diff --stat \"origin/release\"...HEAD",
+      "git diff --name-only \"origin/release\"...HEAD",
+      "mkdir -p .stave/workspaces",
+      "git worktree add -b \"feature/pr-status--continue--20260404-164512\" \"/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512\" \"origin/release\"",
+    ]);
   });
 });

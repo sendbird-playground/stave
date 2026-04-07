@@ -241,6 +241,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const hasWorkspaceContext = Boolean(activeWorkspaceId && workspaceCwd);
   const currentBranch = workspaceBranchById[activeWorkspaceId];
   const defaultBaseBranch = defaultBranch.trim() || "main";
+  const continueBaseBranch = `origin/${defaultBaseBranch}`;
 
   const prInfo = workspacePrInfoById[activeWorkspaceId];
   const prStatus: WorkspacePrStatus = prInfo?.derived ?? "no_pr";
@@ -668,10 +669,10 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     fetchStatus();
   }
 
-  async function handleContinueWorkspace(args: { name: string }) {
+  async function handleContinueWorkspace(args: { name: string; baseBranch?: string }) {
     setContinuingWorkspace(true);
     try {
-      const result = await continueWorkspaceFromSummary({ name: args.name });
+      const result = await continueWorkspaceFromSummary({ name: args.name, baseBranch: args.baseBranch });
       if (!result.ok) {
         toast.error("Unable to continue in a new workspace", {
           description: result.message ?? "The continuation brief could not be prepared.",
@@ -1090,7 +1091,9 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         open={continueDialogOpen}
         sourceBranch={currentBranch}
         sourceWorkspaceName={currentBranch}
-        baseBranch={prInfo?.pr?.baseRefName ?? defaultBaseBranch}
+        baseBranch={continueBaseBranch}
+        cwd={workspaceCwd}
+        defaultBranch={defaultBaseBranch}
         prTitle={prInfo?.pr?.title}
         onOpenChange={setContinueDialogOpen}
         onContinue={handleContinueWorkspace}

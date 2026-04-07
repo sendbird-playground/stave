@@ -194,7 +194,7 @@ When the active workspace PR is in a terminal state (`merged` or `closed_unmerge
 The flow:
 
 1. Prompt for the new workspace branch name, defaulting to `<source-branch>--continue--<utcstamp>`
-2. Create a fresh worktree from the PR base branch (or project default branch fallback)
+2. Refresh `origin` and create a fresh worktree from `origin/<defaultBranch>` (falling back to the local default branch with a warning if the remote cannot be refreshed)
 3. Generate a markdown continuation brief from:
    - source branch and PR metadata
    - current workspace notes and open todos
@@ -204,6 +204,8 @@ The flow:
 5. Create a new task in the fresh workspace and attach that markdown file to the prompt draft
 
 This is intentionally a **summary brief** flow, not a full task-history clone. It keeps the new workspace clean while carrying the previous implementation context forward in an explicit, reviewable artifact.
+
+The dialog keeps the base branch simple by default. It shows the current remote base as a badge and reveals a searchable remote branch picker only after the user clicks **Change**.
 
 ### PR Creation Dialog
 
