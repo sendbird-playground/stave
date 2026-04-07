@@ -1,5 +1,6 @@
 import { GitBranch, LoaderCircle } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { CreateWorkspaceBranchPicker } from "@/components/layout/CreateWorkspaceBranchPicker";
 import { Badge, Button, Input } from "@/components/ui";
 import {
   Dialog,
@@ -16,9 +17,11 @@ interface ContinueWorkspaceDialogProps {
   sourceBranch?: string;
   sourceWorkspaceName?: string;
   baseBranch: string;
+  cwd?: string;
+  defaultBranch: string;
   prTitle?: string;
   onOpenChange: (open: boolean) => void;
-  onContinue: (args: { name: string }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
+  onContinue: (args: { name: string; baseBranch?: string }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
 }
 
 function buildSuggestedWorkspaceName(sourceBranch?: string) {
@@ -27,18 +30,56 @@ function buildSuggestedWorkspaceName(sourceBranch?: string) {
 
 export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
   const [workspaceName, setWorkspaceName] = useState("");
+  const [selectedBaseBranch, setSelectedBaseBranch] = useState(props.baseBranch);
+  const [showBaseBranchPicker, setShowBaseBranchPicker] = useState(false);
+  const [availableRemoteBranches, setAvailableRemoteBranches] = useState<string[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const canChangeBaseBranch = Boolean(window.api?.sourceControl?.listBranches && props.cwd);
 
   useEffect(() => {
     if (!props.open) {
       setError(null);
       setSubmitting(false);
+      setShowBaseBranchPicker(false);
+      setAvailableRemoteBranches([]);
+      setLoadingBranches(false);
       return;
     }
+
     setWorkspaceName(buildSuggestedWorkspaceName(props.sourceBranch));
+    setSelectedBaseBranch(props.baseBranch);
+    setShowBaseBranchPicker(false);
+    setAvailableRemoteBranches([]);
     setError(null);
-  }, [props.open, props.sourceBranch]);
+
+    const listBranches = window.api?.sourceControl?.listBranches;
+    if (!listBranches || !props.cwd) {
+      setLoadingBranches(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingBranches(true);
+    void listBranches({ cwd: props.cwd }).then((result) => {
+      if (!result?.ok || cancelled) {
+        return;
+      }
+
+      const remoteBranches = result.remoteBranches ?? [];
+      setAvailableRemoteBranches(remoteBranches);
+      setSelectedBaseBranch((current) => remoteBranches.includes(current) ? current : props.baseBranch);
+    }).finally(() => {
+      if (!cancelled) {
+        setLoadingBranches(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [props.baseBranch, props.cwd, props.open, props.sourceBranch]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,7 +90,7 @@ export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await props.onContinue({ name: workspaceName });
+      const result = await props.onContinue({ name: workspaceName, baseBranch: selectedBaseBranch });
       if (!result.ok) {
         setError(result.message ?? "Failed to continue in a new workspace.");
         return;
@@ -76,7 +117,7 @@ export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
           <DialogHeader>
             <DialogTitle>Continue in New Workspace</DialogTitle>
             <DialogDescription>
-              Create a fresh workspace from the base branch and attach a continuation brief from the completed branch to the first task draft.
+              Create a fresh workspace from the latest remote default branch and attach a continuation brief from the completed branch to the first task draft.
             </DialogDescription>
           </DialogHeader>
 
@@ -96,13 +137,44 @@ export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
               </div>
 
               <div className="space-y-1.5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">New Workspace Base</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">New Workspace Base</p>
+                  {canChangeBaseBranch ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px] font-medium text-muted-foreground"
+                      onClick={() => setShowBaseBranchPicker((current) => !current)}
+                    >
+                      {showBaseBranchPicker ? "Done" : "Change"}
+                    </Button>
+                  ) : null}
+                </div>
                 <Badge variant="secondary" className="justify-start gap-1 rounded-md border border-border/60 bg-secondary/70 px-2 font-normal">
                   <GitBranch className="size-3.5 text-muted-foreground" />
-                  <span>{props.baseBranch}</span>
+                  <span>{selectedBaseBranch}</span>
                 </Badge>
               </div>
             </div>
+
+            {showBaseBranchPicker ? (
+              <div className="space-y-2 rounded-xl border border-border/70 bg-muted/15 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Remote Base Branch</p>
+                <CreateWorkspaceBranchPicker
+                  value={selectedBaseBranch}
+                  defaultBranch={props.defaultBranch}
+                  disabled={submitting}
+                  localBranches={[]}
+                  loading={loadingBranches}
+                  remoteBranches={availableRemoteBranches}
+                  onChange={setSelectedBaseBranch}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Override the default only when this follow-up should start from another remote branch.
+                </p>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <p className="text-sm font-medium">Workspace Branch Name</p>
