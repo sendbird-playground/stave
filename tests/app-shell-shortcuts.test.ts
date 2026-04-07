@@ -80,6 +80,7 @@ describe("app shell shortcut gating", () => {
         startedAt: 100,
       },
       preventDefault: true,
+      stopAppHandling: true,
     });
   });
 
@@ -95,6 +96,7 @@ describe("app shell shortcut gating", () => {
       action: "toggle-zen-mode",
       nextPendingChord: null,
       preventDefault: true,
+      stopAppHandling: true,
     });
   });
 
@@ -111,6 +113,7 @@ describe("app shell shortcut gating", () => {
       action: "toggle-zen-mode",
       nextPendingChord: null,
       preventDefault: true,
+      stopAppHandling: true,
     });
   });
 
@@ -126,6 +129,23 @@ describe("app shell shortcut gating", () => {
       action: null,
       nextPendingChord: null,
       preventDefault: false,
+      stopAppHandling: false,
+    });
+  });
+
+  test("cancels the zen-mode chord on Escape without swallowing dialog handling", () => {
+    expect(resolveShortcutChord({
+      key: "Escape",
+      pendingChord: {
+        type: "zen-mode",
+        startedAt: 100,
+      },
+      now: 150,
+    })).toEqual({
+      action: null,
+      nextPendingChord: null,
+      preventDefault: false,
+      stopAppHandling: true,
     });
   });
 });

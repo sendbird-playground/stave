@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { buildZenProjectList, type ZenProjectListItem } from "@/components/layout/zen-project-sidebar.utils";
 
-const IS_MAC = window.api?.platform === "darwin";
+const IS_MAC = typeof window !== "undefined" && window.api?.platform === "darwin";
 
 export const ZenProjectSidebar = memo(function ZenProjectSidebar() {
   const [currentProjectPath, currentProjectName, recentProjects, createProject, openProject] = useAppStore(useShallow((state) => [
@@ -45,7 +45,7 @@ export const ZenProjectSidebar = memo(function ZenProjectSidebar() {
           size="icon-sm"
           className="h-7 w-7 rounded-md"
           onClick={() => void createProject({})}
-          aria-label="open-project-folder"
+          aria-label="Add project"
         >
           <Plus className="size-3.5" />
         </Button>

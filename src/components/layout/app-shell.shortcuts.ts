@@ -12,6 +12,7 @@ export interface ShortcutChordResolution {
   action: "toggle-zen-mode" | null;
   nextPendingChord: PendingShortcutChord | null;
   preventDefault: boolean;
+  stopAppHandling: boolean;
 }
 
 type ClosestCapableTarget = EventTarget & {
@@ -74,6 +75,7 @@ export function resolveShortcutChord(args: {
       action: null,
       nextPendingChord: { type: "zen-mode", startedAt: now },
       preventDefault: true,
+      stopAppHandling: true,
     };
   }
 
@@ -82,6 +84,7 @@ export function resolveShortcutChord(args: {
       action: null,
       nextPendingChord: null,
       preventDefault: false,
+      stopAppHandling: false,
     };
   }
 
@@ -90,6 +93,7 @@ export function resolveShortcutChord(args: {
       action: null,
       nextPendingChord: pendingChord,
       preventDefault: false,
+      stopAppHandling: false,
     };
   }
 
@@ -98,6 +102,7 @@ export function resolveShortcutChord(args: {
       action: "toggle-zen-mode",
       nextPendingChord: null,
       preventDefault: true,
+      stopAppHandling: true,
     };
   }
 
@@ -105,7 +110,8 @@ export function resolveShortcutChord(args: {
     return {
       action: null,
       nextPendingChord: null,
-      preventDefault: true,
+      preventDefault: false,
+      stopAppHandling: true,
     };
   }
 
@@ -113,6 +119,7 @@ export function resolveShortcutChord(args: {
     action: null,
     nextPendingChord: null,
     preventDefault: false,
+    stopAppHandling: false,
   };
 }
 

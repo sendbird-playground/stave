@@ -125,7 +125,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
               ? "w-full gap-2"
               : message.role === "assistant"
                 ? "w-full max-w-4xl gap-1.5"
-                : "max-w-[88%] w-fit gap-1",
+                : "min-w-0 max-w-[88%] w-fit gap-1",
           )}
         >
           {zenMode ? (
@@ -349,8 +349,6 @@ function ChatPanelMessageList(args: { zenMode?: boolean }) {
   const totalMessageCount = useAppStore((state) => state.messageCountByTask[state.activeTaskId] ?? 0);
   const taskMessagesLoading = useAppStore((state) => state.taskMessagesLoadingByTask[state.activeTaskId] === true);
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
-  const zenScrollRef = useRef<HTMLDivElement | null>(null);
-  const zenStickToBottomRef = useRef(true);
   const [elapsedAnchorMs, setElapsedAnchorMs] = useState(() => Date.now());
   const [turnCompletionScrollTick, setTurnCompletionScrollTick] = useState(0);
   const previousActiveTurnIdRef = useRef<string | undefined>(activeTurnId);
@@ -399,83 +397,6 @@ function ChatPanelMessageList(args: { zenMode?: boolean }) {
     return () => window.clearInterval(handle);
   }, [activeTurnId]);
 
-  useEffect(() => {
-    if (!args.zenMode) {
-      return;
-    }
-    const node = zenScrollRef.current;
-    if (!node || !zenStickToBottomRef.current) {
-      return;
-    }
-    node.scrollTop = node.scrollHeight;
-  }, [args.zenMode, autoScrollKey, forceScrollKey]);
-
-  if (args.zenMode) {
-    return (
-      <div
-        ref={zenScrollRef}
-        className="zen-conversation-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
-        onScroll={(event) => {
-          const target = event.currentTarget;
-          const distance = target.scrollHeight - target.scrollTop - target.clientHeight;
-          zenStickToBottomRef.current = distance < 40;
-        }}
-      >
-        {hasOlderMessages ? (
-          <div className="mx-auto mb-3 flex w-full max-w-[82ch] px-2 pt-3 sm:px-0">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={taskMessagesLoading}
-              className="h-8 rounded-sm"
-              onClick={() => {
-                void loadTaskMessages({ taskId: activeTaskId, mode: "older" });
-              }}
-            >
-              {taskMessagesLoading
-                ? "Loading older messages..."
-                : `Load older messages (${totalMessageCount - messages.length} remaining)`}
-            </Button>
-          </div>
-        ) : null}
-        {showConversationLoadingState ? (
-          <SessionLoadingState
-            testId="conversation-loading-state"
-            title="Loading conversation"
-            description="Fetching the latest messages for this task."
-          />
-        ) : visibleMessages.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <MessageSquareIcon />
-              </EmptyMedia>
-              <EmptyTitle>Start a conversation</EmptyTitle>
-              <EmptyDescription>Send a prompt to begin this task.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : (
-          <div className="mx-auto flex w-full max-w-[82ch] flex-col gap-8 px-2 py-4 sm:px-0">
-            {visibleMessages.map((message, index) => (
-              <MessageRow
-                key={message.id}
-                activeTaskId={activeTaskId}
-                activeTurnId={activeTurnId}
-                chatStreamingEnabled={chatStreamingEnabled}
-                elapsedAnchorMs={message.id === liveStreamingMessageId ? elapsedAnchorMs : undefined}
-                isFirst={index === 0}
-                liveStreamingMessageId={liveStreamingMessageId}
-                zenMode
-                message={message}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <ConversationContent
       autoScrollKey={autoScrollKey}
@@ -483,10 +404,14 @@ function ChatPanelMessageList(args: { zenMode?: boolean }) {
       forceScrollKey={forceScrollKey}
       scrollScopeKey={scrollContextKey}
       forceScrollScopeKey={scrollContextKey}
-      withInnerLayout={visibleMessages.length === 0 && !showConversationLoadingState}
+      withInnerLayout={!args.zenMode && visibleMessages.length === 0 && !showConversationLoadingState}
+      className={args.zenMode ? "zen-conversation-scroll" : undefined}
     >
       {hasOlderMessages ? (
-        <div className="mx-auto mb-3 flex w-full max-w-6xl px-3 pt-3 sm:px-5 sm:pt-4">
+        <div className={cn(
+          "mx-auto mb-3 flex w-full pt-3",
+          args.zenMode ? "max-w-[82ch] px-2 sm:px-0" : "max-w-6xl px-3 sm:px-5 sm:pt-4",
+        )}>
           <Button
             type="button"
             size="sm"
@@ -510,15 +435,17 @@ function ChatPanelMessageList(args: { zenMode?: boolean }) {
           description="Fetching the latest messages for this task."
         />
       ) : visibleMessages.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <MessageSquareIcon />
-            </EmptyMedia>
-            <EmptyTitle>Start a conversation</EmptyTitle>
-            <EmptyDescription>Send a prompt to begin this task.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <div className={cn(args.zenMode && "mx-auto flex w-full max-w-[82ch] flex-1 px-2 py-4 sm:px-0")}>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <MessageSquareIcon />
+              </EmptyMedia>
+              <EmptyTitle>Start a conversation</EmptyTitle>
+              <EmptyDescription>Send a prompt to begin this task.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </div>
       ) : (
         <ConversationVirtualList
           listKey={scrollContextKey}
@@ -526,6 +453,7 @@ function ChatPanelMessageList(args: { zenMode?: boolean }) {
           data={visibleMessages}
           forceScrollKey={forceScrollKey}
           forceScrollScopeKey={scrollContextKey}
+          layout={args.zenMode ? "zen" : "default"}
           itemKey={(_, message) => message.id}
           itemContent={(index, message) => (
             <MessageRow

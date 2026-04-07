@@ -63,7 +63,7 @@ const WORKSPACE_SIDEBAR_MAX_WIDTH = 340;
 const MIN_CHAT_PANEL_WIDTH = 420;
 const MIN_EXPLORER_PANEL_WIDTH = 200;
 const PANEL_SEPARATOR_WIDTH = 1;
-const IS_MAC = window.api?.platform === "darwin";
+const IS_MAC = typeof window !== "undefined" && window.api?.platform === "darwin";
 const ZEN_DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
 const ZEN_NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
@@ -420,7 +420,7 @@ export function AppShell() {
         return;
       }
 
-      if (shortcutChord.preventDefault) {
+      if (shortcutChord.stopAppHandling) {
         return;
       }
 

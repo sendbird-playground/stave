@@ -937,7 +937,6 @@ export function WorkspaceInformationPanel() {
     infoPanelScale,
     workspacePlansRefreshNonce,
     openFileFromTree,
-    sendWorkspaceFileToChat,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -954,13 +953,8 @@ export function WorkspaceInformationPanel() {
           state.settings.infoPanelScale,
           state.workspacePlansRefreshNonce,
           state.openFileFromTree,
-          state.sendWorkspaceFileToChat,
         ] as const,
     ),
-  );
-  const activeTaskId = useAppStore((state) => state.activeTaskId);
-  const activeTaskIsResponding = useAppStore((state) =>
-    Boolean(state.activeTurnIdsByTask[state.activeTaskId])
   );
 
   const [openSections, setOpenSections] = useState<
@@ -1229,16 +1223,6 @@ export function WorkspaceInformationPanel() {
               workspacePath={workspacePath}
               refreshNonce={workspacePlansRefreshNonce}
               onOpenFile={({ filePath }) => openFileFromTree({ filePath })}
-              onSendToAgent={
-                activeTaskId
-                  ? ({ filePath }) =>
-                      sendWorkspaceFileToChat({
-                        taskId: activeTaskId,
-                        filePath,
-                      })
-                  : undefined
-              }
-              sendToAgentDisabled={!activeTaskId || activeTaskIsResponding}
             />
           </SectionHeader>
 
