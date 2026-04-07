@@ -31,6 +31,7 @@ import type {
 } from "@/lib/providers/provider.types";
 import type { ConnectedToolStatusEntry } from "@/lib/providers/connected-tool-status";
 import { getRepoMapContextCache } from "@/lib/fs/repo-map-context-cache";
+import { buildCurrentTaskAwarenessRetrievedContext } from "@/lib/task-context/current-task-awareness";
 import { buildReferencedTaskRetrievedContext } from "@/lib/task-context/referenced-task-context";
 import {
   buildWorkspaceContinueSummaryFilePath,
@@ -6380,6 +6381,16 @@ export const useAppStore = create<AppState>()(
         // ─────────────────────────────────────────────────────────────────────
 
         const providerSession = state.providerSessionByTask[resolvedTaskId];
+        const taskWorkspaceSummary = state.workspaces.find((workspace) => workspace.id === taskWorkspaceId) ?? null;
+        const taskWorkspaceSession = taskWorkspaceId === state.activeWorkspaceId
+          ? null
+          : state.workspaceRuntimeCacheById[taskWorkspaceId] ?? null;
+        const taskWorkspaceTasks = taskWorkspaceId === state.activeWorkspaceId
+          ? state.tasks
+          : taskWorkspaceSession?.tasks ?? (task ? [task] : []);
+        const taskWorkspaceInformation = taskWorkspaceId === state.activeWorkspaceId
+          ? state.workspaceInformation
+          : taskWorkspaceSession?.workspaceInformation ?? createEmptyWorkspaceInformation();
 
         // ── Repo-map context injection ─────────────────────────────────────────
         // On the first turn of a task, inject the pre-generated repo-map summary
@@ -6387,7 +6398,19 @@ export const useAppStore = create<AppState>()(
         // (hotspots, entrypoints, read-first docs) without having to explore first.
         // TopBar pre-warms this module-level Map cache asynchronously; the read
         // here is a plain Map.get — no IPC, no blocking, effectively free.
-        const retrievedContextParts: CanonicalRetrievedContextPart[] = [];
+        const retrievedContextParts: CanonicalRetrievedContextPart[] = [
+          buildCurrentTaskAwarenessRetrievedContext({
+            workspaceId: taskWorkspaceId,
+            workspaceName: taskWorkspaceSummary?.name ?? null,
+            workspacePath: workspaceCwd ?? null,
+            workspaceBranch: state.workspaceBranchById[taskWorkspaceId] ?? null,
+            projectName: state.projectName,
+            projectPath: state.projectPath,
+            taskId: resolvedTaskId,
+            tasks: taskWorkspaceTasks,
+            workspaceInformation: taskWorkspaceInformation,
+          }),
+        ];
         if (existingHistory.length === 0 && workspaceCwd) {
           const repoMapText = getRepoMapContextCache(workspaceCwd);
           if (repoMapText) {
@@ -6413,7 +6436,7 @@ export const useAppStore = create<AppState>()(
         const conversation = buildCanonicalConversationRequest({
           turnId,
           taskId: resolvedTaskId,
-          workspaceId: state.activeWorkspaceId,
+          workspaceId: taskWorkspaceId,
           providerId: provider,
           model: activeModel,
           history: existingHistory,

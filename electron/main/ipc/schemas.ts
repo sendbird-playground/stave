@@ -643,10 +643,23 @@ const UserInputOptionSchema = z
 
 const UserInputQuestionSchema = z
   .object({
+    key: z.string().max(200).optional(),
     question: z.string().max(5000),
     header: z.string().max(200),
     options: z.array(UserInputOptionSchema).max(20),
     multiSelect: z.boolean().optional(),
+    inputType: z.union([
+      z.literal("text"),
+      z.literal("number"),
+      z.literal("integer"),
+      z.literal("boolean"),
+      z.literal("url_notice"),
+    ]).optional(),
+    required: z.boolean().optional(),
+    placeholder: z.string().max(500).optional(),
+    allowCustom: z.boolean().optional(),
+    defaultValue: z.string().max(5000).optional(),
+    linkUrl: z.string().max(5000).optional(),
   })
   .strict();
 

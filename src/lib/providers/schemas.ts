@@ -85,6 +85,7 @@ const ApprovalEventSchema = z.object({
 });
 
 const UserInputQuestionSchema = z.object({
+  key: z.string().optional(),
   question: z.string(),
   header: z.string(),
   options: z.array(z.object({
@@ -92,6 +93,18 @@ const UserInputQuestionSchema = z.object({
     description: z.string(),
   })),
   multiSelect: z.boolean().optional(),
+  inputType: z.union([
+    z.literal("text"),
+    z.literal("number"),
+    z.literal("integer"),
+    z.literal("boolean"),
+    z.literal("url_notice"),
+  ]).optional(),
+  required: z.boolean().optional(),
+  placeholder: z.string().optional(),
+  allowCustom: z.boolean().optional(),
+  defaultValue: z.string().optional(),
+  linkUrl: z.string().optional(),
 });
 
 const UserInputEventSchema = z.object({

@@ -32,6 +32,8 @@ When the bundled Claude provider runs inside Stave, it also injects the same loc
 
 When Lens is open in a workspace, the same Local MCP server also exposes optional `stave_lens_*` inspection tools for that workspace browser session. Use those when an external agent needs screenshots, DOM, console logs, network logs, or element-level inspection from the live page.
 
+If a provider needs extra user input while using Local MCP, Stave surfaces that request through the same inline task-chat input card used for approvals and other structured question flows. Form-mode elicitation is answered directly in chat, and URL-mode elicitation shows the target link plus an explicit continue / decline action.
+
 ## Open The Settings
 
 In Stave:

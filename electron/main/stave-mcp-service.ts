@@ -9,6 +9,7 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "../../src/lib/providers/provider.types";
+import { buildCurrentTaskAwarenessRetrievedContext } from "../../src/lib/task-context/current-task-awareness";
 import type { AppNotificationCreateInput } from "../../src/lib/notifications/notification.types";
 import { workspaceHasActiveTurns } from "../../src/lib/notifications/notification.types";
 import {
@@ -1508,6 +1509,19 @@ export async function runTask(args: {
     userInput: args.prompt,
     mode: "chat",
     nativeSessionId: providerSession?.[provider] ?? null,
+    retrievedContextParts: [
+      buildCurrentTaskAwarenessRetrievedContext({
+        workspaceId: args.workspaceId,
+        workspaceName,
+        workspacePath,
+        workspaceBranch: registration.branch,
+        projectName: registration.project.projectName,
+        projectPath: registration.project.projectPath,
+        taskId: task.id,
+        tasks: session.tasks,
+        workspaceInformation: session.workspaceInformation,
+      }),
+    ],
   });
   const pendingState = buildPendingProviderTurnState({
     tasks: session.tasks,

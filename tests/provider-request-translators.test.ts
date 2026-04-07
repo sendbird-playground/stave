@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildProviderTurnPrompt,
+  filterPromptRetrievedContext,
   resolveProviderResumeSessionId,
 } from "@/lib/providers/provider-request-translators";
 import type { CanonicalConversationRequest } from "@/lib/providers/provider.types";
@@ -148,5 +149,37 @@ describe("provider request translators", () => {
       conversation,
       fallbackResumeId: "thread_override",
     })).toBe("thread_override");
+  });
+
+  test("can omit MCP-only retrieved context from the rendered prompt", () => {
+    const conversation = createConversation({
+      contextParts: [
+        {
+          type: "retrieved_context",
+          sourceId: "stave:current-task-awareness",
+          title: "Current Stave Task Context",
+          content: "MCP-scoped task context",
+        },
+        {
+          type: "retrieved_context",
+          sourceId: "stave:repo-map",
+          title: "Codebase Map",
+          content: "Repo map context",
+        },
+      ],
+    });
+
+    const filtered = filterPromptRetrievedContext({
+      conversation,
+      excludedSourceIds: ["stave:current-task-awareness"],
+    });
+    const prompt = buildProviderTurnPrompt({
+      providerId: "codex",
+      prompt: "fallback prompt",
+      conversation: filtered,
+    });
+
+    expect(prompt).not.toContain("MCP-scoped task context");
+    expect(prompt).toContain("Repo map context");
   });
 });

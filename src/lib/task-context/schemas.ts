@@ -63,6 +63,7 @@ const UserInputPartSchema = z.object({
   requestId: z.string(),
   toolName: z.string(),
   questions: z.array(z.object({
+    key: z.string().optional(),
     question: z.string(),
     header: z.string(),
     options: z.array(z.object({
@@ -70,6 +71,18 @@ const UserInputPartSchema = z.object({
       description: z.string(),
     })),
     multiSelect: z.boolean().optional(),
+    inputType: z.union([
+      z.literal("text"),
+      z.literal("number"),
+      z.literal("integer"),
+      z.literal("boolean"),
+      z.literal("url_notice"),
+    ]).optional(),
+    required: z.boolean().optional(),
+    placeholder: z.string().optional(),
+    allowCustom: z.boolean().optional(),
+    defaultValue: z.string().optional(),
+    linkUrl: z.string().optional(),
   })),
   answers: z.record(z.string(), z.string()).optional(),
   state: z.union([

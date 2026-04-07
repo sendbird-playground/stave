@@ -1,4 +1,5 @@
 import type { CanonicalConversationRequest, ProviderRuntimeOptions } from "../../src/lib/providers/provider.types";
+import type { UserInputQuestion } from "../../src/types/chat";
 import type {
   ConnectedToolStatusRequest,
   ConnectedToolStatusResponse,
@@ -52,12 +53,7 @@ export type BridgeEvent =
     type: "user_input";
     toolName: string;
     requestId: string;
-    questions: Array<{
-      question: string;
-      header: string;
-      options: Array<{ label: string; description: string }>;
-      multiSelect?: boolean;
-    }>;
+    questions: UserInputQuestion[];
   }
   | { type: "tool_progress"; toolUseId: string; toolName: string; elapsedSeconds: number }
   | { type: "plan_ready"; planText: string; sourceSegmentId?: string }
