@@ -1,3 +1,32 @@
+## [0.1.1](https://github.com/sendbird-playground/stave/compare/v0.1.0...v0.1.1) (2026-04-07)
+
+### Highlights
+
+* Added a chorded Zen mode (`Cmd/Ctrl+K`, then `Z`) plus a Command Palette entry for distraction-free chat and result review.
+* Stabilized chat and Zen-mode scrolling, follow-to-bottom behavior, and transcript/composer spacing after the new focused layout landed.
+* Added workspace hover previews in the sidebar so each workspace can show recent tasks, message counts, and running activity before you switch.
+* Fixed packaged Claude authentication by preserving the Claude config directory when the desktop app launches Claude.
+* Simplified saved plans in the Information panel so recent plan files open directly in the editor, while removing legacy plan-path prompt hints from injected task context.
+* Hardened task recovery and chat UX with stale-turn hydration fixes, clearer reasoning expansion defaults, stronger modal z-index layering, and aggressive wrapping for long user messages.
+
+### Features
+
+* workspace summary ([#328](https://github.com/sendbird-playground/stave/issues/328)) ([9671b15](https://github.com/sendbird-playground/stave/commit/9671b15e7a5bfda6065e77742777be53d7a72ee4))
+* **zen:** add terminal-style zen mode ([#326](https://github.com/sendbird-playground/stave/issues/326)) ([47b6a5e](https://github.com/sendbird-playground/stave/commit/47b6a5e69697d6077dfa9de9c599997e0d67bf08))
+
+### Bug Fixes
+
+* **claude:** preserve config dir for packaged auth ([01a0bb0](https://github.com/sendbird-playground/stave/commit/01a0bb0e4df3b5999b1ae1c32f964e87ce286df2))
+* cot default behavior ([#334](https://github.com/sendbird-playground/stave/issues/334)) ([494b157](https://github.com/sendbird-playground/stave/commit/494b157b7fe993120524371fc9ad721709932586))
+* ensure user messages wrap aggressively ([#325](https://github.com/sendbird-playground/stave/issues/325)) ([8802275](https://github.com/sendbird-playground/stave/commit/8802275d5feb227abfeebb5a696cdd60c41e04aa))
+* plans list and refresh bug ([#327](https://github.com/sendbird-playground/stave/issues/327)) ([f27bb2c](https://github.com/sendbird-playground/stave/commit/f27bb2cf6c855d1c06fc6f21316f97e474eaf5ee))
+* resize zindex ([#333](https://github.com/sendbird-playground/stave/issues/333)) ([829cc4c](https://github.com/sendbird-playground/stave/commit/829cc4cf2bd5f70af560ed51c19380bb04808b3c))
+* restore chat scroll from v0.1.0 baseline and fix zen mode regressions ([d717911](https://github.com/sendbird-playground/stave/commit/d717911a17395d8a8479cfac9234470e0989d93f))
+* **task-context:** remove legacy plans prompt hints ([eb96f41](https://github.com/sendbird-playground/stave/commit/eb96f4155579e30ce6f5ba724fbc2f1dcd74e37a))
+* turn not end bug ([#332](https://github.com/sendbird-playground/stave/issues/332)) ([8ba0a45](https://github.com/sendbird-playground/stave/commit/8ba0a45c59f74fa8d4a23e173851f826ecae5723))
+* zen mode message scroll ([#329](https://github.com/sendbird-playground/stave/issues/329)) ([1565857](https://github.com/sendbird-playground/stave/commit/1565857ead10699c5c9bc47cf99cf542ed86d273))
+* zen scroll 3rd ([#331](https://github.com/sendbird-playground/stave/issues/331)) ([0ce46bb](https://github.com/sendbird-playground/stave/commit/0ce46bb3755ca367e85a59ce2a2215a897ed7fd4))
+* zenmode message scroll continue ([#330](https://github.com/sendbird-playground/stave/issues/330)) ([2d6d3df](https://github.com/sendbird-playground/stave/commit/2d6d3df8609189bca8b22888dfe7a20be093b526))
 ## [0.1.0](https://github.com/sendbird-playground/stave/compare/v0.0.36...v0.1.0) (2026-04-07)
 
 ### New features
