@@ -13,6 +13,16 @@ import {
   CODEX_APPROVAL_POLICY_OPTIONS,
   CODEX_EFFORT_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
+import {
+  buildClaudeProviderModeSettingsPatch,
+  buildCodexProviderModeSettingsPatch,
+  CLAUDE_PROVIDER_MODE_PRESETS,
+  CODEX_PROVIDER_MODE_PRESETS,
+  detectClaudeProviderModePreset,
+  detectCodexProviderModePreset,
+  type ProviderModePresetDefinition,
+  type ProviderModePresetId,
+} from "@/lib/providers/provider-mode-presets";
 import type { ClaudeSettingSource, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import {
   buildStaveAutoModelSettingsPatch,
@@ -383,6 +393,30 @@ function StaveAutoOverrideField(args: {
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-foreground/90">{args.label}</p>
       {args.children}
+    </div>
+  );
+}
+
+function ProviderModePresetButtons(args: {
+  presets: readonly ProviderModePresetDefinition[];
+  activePresetId: ProviderModePresetId | null;
+  onSelect: (presetId: ProviderModePresetId) => void;
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-3">
+      {args.presets.map((preset) => (
+        <Button
+          key={preset.id}
+          className="h-auto min-h-16 items-start justify-start whitespace-normal rounded-md px-3 py-2.5 text-left"
+          variant={args.activePresetId === preset.id ? "default" : "outline"}
+          onClick={() => args.onSelect(preset.id)}
+        >
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{preset.label}</p>
+            <p className="text-xs opacity-80">{preset.description}</p>
+          </div>
+        </Button>
+      ))}
     </div>
   );
 }
@@ -897,6 +931,28 @@ export function ProvidersSection() {
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const currentClaudeModePresetId = detectClaudeProviderModePreset({
+    settings: {
+      claudePermissionMode,
+      claudeAllowDangerouslySkipPermissions,
+      claudeSandboxEnabled,
+      claudeAllowUnsandboxedCommands,
+    },
+  });
+  const currentCodexModePresetId = detectCodexProviderModePreset({
+    settings: {
+      codexFileAccess,
+      codexApprovalPolicy,
+      codexNetworkAccess,
+      codexWebSearch,
+    },
+  });
+  const currentClaudeModeLabel = currentClaudeModePresetId
+    ? (CLAUDE_PROVIDER_MODE_PRESETS.find((preset) => preset.id === currentClaudeModePresetId)?.label ?? "Custom")
+    : "Custom";
+  const currentCodexModeLabel = currentCodexModePresetId
+    ? (CODEX_PROVIDER_MODE_PRESETS.find((preset) => preset.id === currentCodexModePresetId)?.label ?? "Custom")
+    : "Custom";
   const toggleClaudeSettingSource = (source: "user" | "project" | "local") => {
     updateSettings({
       patch: {
@@ -927,7 +983,26 @@ export function ProvidersSection() {
 
         <TabsContent value="claude">
           <SectionStack>
-            <SettingsCard title="Claude Runtime Controls" description="Permission, sandbox, thinking, and subagent progress behavior passed into each Claude turn.">
+            <SettingsCard
+              title="Claude Runtime Controls"
+              description="Permission, sandbox, thinking, and subagent progress behavior passed into each Claude turn."
+              titleAccessory={<Badge variant={currentClaudeModePresetId ? "secondary" : "outline"}>{currentClaudeModeLabel}</Badge>}
+            >
+          <LabeledField
+            title="Mode Preset"
+            description="Apply a recommended Claude autonomy preset. Editing the fields below can move the card into Custom."
+          >
+            <ProviderModePresetButtons
+              presets={CLAUDE_PROVIDER_MODE_PRESETS}
+              activePresetId={currentClaudeModePresetId}
+              onSelect={(presetId) => updateSettings({ patch: buildClaudeProviderModeSettingsPatch({ presetId }) })}
+            />
+            <p className="text-xs text-muted-foreground">
+              {currentClaudeModePresetId
+                ? `${currentClaudeModeLabel} is active. Reapply a preset any time to restore its full permission and sandbox combination.`
+                : "Custom is active. The current Claude permission and sandbox combination does not match a built-in preset."}
+            </p>
+          </LabeledField>
           <LabeledField
             title="Permission Mode"
             description="Controls how aggressively Claude asks for permission during a turn."
@@ -1122,7 +1197,26 @@ export function ProvidersSection() {
 
         <TabsContent value="codex">
           <SectionStack>
-            <SettingsCard title="Codex Runtime Controls" description="Per-turn Codex file access, approvals, network, reasoning, and search settings.">
+            <SettingsCard
+              title="Codex Runtime Controls"
+              description="Per-turn Codex file access, approvals, network, reasoning, and search settings."
+              titleAccessory={<Badge variant={currentCodexModePresetId ? "secondary" : "outline"}>{currentCodexModeLabel}</Badge>}
+            >
+          <LabeledField
+            title="Mode Preset"
+            description="Apply a recommended Codex autonomy preset. Editing the fields below can move the card into Custom."
+          >
+            <ProviderModePresetButtons
+              presets={CODEX_PROVIDER_MODE_PRESETS}
+              activePresetId={currentCodexModePresetId}
+              onSelect={(presetId) => updateSettings({ patch: buildCodexProviderModeSettingsPatch({ presetId }) })}
+            />
+            <p className="text-xs text-muted-foreground">
+              {currentCodexModePresetId
+                ? `${currentCodexModeLabel} is active. Reapply a preset any time to restore its full file access, approval, and network combination.`
+                : "Custom is active. The current Codex file-access and approval combination does not match a built-in preset."}
+            </p>
+          </LabeledField>
           <LabeledField
             title="Network Access"
             description="Controls whether Codex may use networked capabilities during a turn."

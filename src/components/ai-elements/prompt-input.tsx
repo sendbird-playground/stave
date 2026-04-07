@@ -23,8 +23,8 @@ import {
   NO_PROMPT_HISTORY_SELECTION,
 } from "./prompt-input.utils";
 import { ModelSelector, type ModelSelectorOption } from "./model-selector";
-import { PromptInputRuntimeBar, type PromptInputRuntimeControl, type PromptInputRuntimeStatusItem } from "./prompt-input-runtime-bar";
-import { PermissionModeSelector, type PermissionModeValue } from "./permission-mode-selector";
+import { PromptInputProviderModePill, type PromptInputProviderModeStatus } from "./prompt-input-provider-mode";
+import { PromptInputRuntimeBar, type PromptInputRuntimeStatusItem } from "./prompt-input-runtime-bar";
 import { Suggestion, Suggestions } from "./suggestion";
 
 interface PromptInputProps {
@@ -39,8 +39,7 @@ interface PromptInputProps {
   attachments?: Attachment[];
   promptHistoryEntries?: readonly string[];
   promptSuggestions?: readonly string[];
-  permissionMode?: PermissionModeValue;
-  runtimeQuickControls?: readonly PromptInputRuntimeControl[];
+  providerModeStatus?: PromptInputProviderModeStatus | null;
   runtimeStatusItems?: readonly PromptInputRuntimeStatusItem[];
   commandPaletteItems?: readonly CommandPaletteItem[];
   commandPaletteProviderNote?: CommandPaletteProviderNote;
@@ -56,7 +55,6 @@ interface PromptInputProps {
   onOpenFileSelector?: () => void;
   onAttachmentsChange?: (args: { attachments: Attachment[] }) => void;
   onPasteFiles?: (args: { files: File[] }) => void | Promise<void>;
-  onPermissionModeChange?: (value: PermissionModeValue) => void;
   effortLabel?: string;
   effortValue?: string;
   onEffortCycle?: () => void;
@@ -103,8 +101,7 @@ export function PromptInput(args: PromptInputProps) {
     attachments,
     promptHistoryEntries,
     promptSuggestions,
-    permissionMode,
-    runtimeQuickControls,
+    providerModeStatus,
     runtimeStatusItems,
     commandPaletteItems,
     commandPaletteProviderNote,
@@ -120,7 +117,6 @@ export function PromptInput(args: PromptInputProps) {
     onOpenFileSelector,
     onAttachmentsChange,
     onPasteFiles,
-    onPermissionModeChange,
     effortLabel,
     effortValue,
     onEffortCycle,
@@ -239,10 +235,6 @@ export function PromptInput(args: PromptInputProps) {
     && dismissedSkillToken !== activeSkillToken.token
   );
   const activePalette = skillPaletteOpen ? "skill" : commandPaletteOpen ? "command" : null;
-  const hasRuntimePermissionControl = Boolean(runtimeQuickControls?.some((control) => control.id === "permission-mode"));
-  const showStandalonePermissionSelector = Boolean(
-    permissionMode !== undefined && onPermissionModeChange && !hasRuntimePermissionControl
-  );
   const paletteValue = useMemo(() => {
     if (activePalette === "skill" && selectedSkillIndex !== NO_COMMAND_SELECTION) {
       return filteredSkillItems[selectedSkillIndex]?.slug ?? "";
@@ -252,11 +244,7 @@ export function PromptInput(args: PromptInputProps) {
     }
     return "";
   }, [activePalette, selectedSkillIndex, selectedCommandIndex, filteredSkillItems, filteredCommandItems]);
-  const hasControlsDrawerContent = Boolean(
-    showStandalonePermissionSelector
-    || (runtimeQuickControls?.length ?? 0) > 0
-    || (runtimeStatusItems?.length ?? 0) > 0
-  );
+  const hasRuntimeDrawerContent = Boolean((runtimeStatusItems?.length ?? 0) > 0);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -1054,6 +1042,7 @@ export function PromptInput(args: PromptInputProps) {
               window.requestAnimationFrame(() => focusComposer());
             }}
           />
+          {providerModeStatus ? <PromptInputProviderModePill status={providerModeStatus} /> : null}
           {onPlanModeChange ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1157,7 +1146,7 @@ export function PromptInput(args: PromptInputProps) {
               </TooltipContent>
             </Tooltip>
           ) : null}
-          {hasControlsDrawerContent ? (
+          {hasRuntimeDrawerContent ? (
             <Drawer direction="bottom">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1170,42 +1159,26 @@ export function PromptInput(args: PromptInputProps) {
                       className={cn(
                         PROMPT_TOOLBAR_BUTTON,
                       )}
-                      aria-label="Controls & Runtime"
+                      aria-label="Current Runtime"
                     >
                       <SlidersHorizontal className="size-3.5" />
-                      <span>Controls</span>
+                      <span>Runtime</span>
                     </Button>
                   </DrawerTrigger>
                 </TooltipTrigger>
-                <TooltipContent side="top">Controls & Runtime</TooltipContent>
+                <TooltipContent side="top">Current runtime status</TooltipContent>
               </Tooltip>
               <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
                 <DrawerHeader className="gap-2 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
-                  <DrawerTitle className="text-lg font-semibold">Controls & Runtime</DrawerTitle>
+                  <DrawerTitle className="text-lg font-semibold">Current Runtime</DrawerTitle>
                   <DrawerDescription>
-                    Adjust provider controls and inspect the current runtime configuration for this composer.
+                    Inspect the effective runtime configuration for the next turn from this composer.
                   </DrawerDescription>
                 </DrawerHeader>
                 <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
-                  {showStandalonePermissionSelector ? (
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                        Permission
-                      </p>
-                      <PermissionModeSelector
-                        providerId={selectedModel.providerId === "stave" ? "claude-code" : selectedModel.providerId}
-                        value={permissionMode as PermissionModeValue}
-                        disabled={interactionsDisabled}
-                        onSelect={onPermissionModeChange!}
-                      />
-                    </div>
-                  ) : null}
                   <PromptInputRuntimeBar
-                    quickControls={runtimeQuickControls}
                     statusItems={runtimeStatusItems}
-                    disabled={interactionsDisabled}
                     withBorder={false}
-                    className={cn(showStandalonePermissionSelector && "mt-5")}
                   />
                 </div>
               </DrawerContent>

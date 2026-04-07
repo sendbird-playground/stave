@@ -136,12 +136,12 @@ If you want the user-facing setup workflow instead of the runtime internals, use
   - `low`: fastest.
   - `medium`: balanced default.
   - `high` / `max`: more deliberate, slower, better for hard tasks.
-- Example presets
-  - Daily coding: `acceptEdits` + `adaptive` + `medium`
-  - Architecture / design review: `plan` + `enabled` + `high`
-  - Trusted local automation: `bypassPermissions` + sandbox settings reviewed first
+- Example mode presets
+  - `Manual`: `acceptEdits` + sandbox on + unsandboxed off
+  - `Guided`: `auto` + sandbox off + unsandboxed on
+  - `Auto`: `bypassPermissions` + dangerous skip on + unsandboxed on
 
-In the chat composer, Stave mirrors the active provider runtime in a status line under the prompt box so the current turn settings stay visible. Permission/approval plus the most-used provider controls can also be adjusted inline there.
+In the chat composer, Stave now shows the active provider mode as a pill beside the model selector and keeps the detailed runtime values in the `Runtime` drawer. Inline runtime adjustments no longer happen there; the editable controls live in Settings.
 
 When Claude `agentProgressSummaries` is enabled, Stave forwards the SDK flag explicitly and renders incoming `task_progress.summary` updates as inline system events in the active assistant message.
 
@@ -288,11 +288,10 @@ If you want the user-facing setup workflow instead of the runtime internals, use
   - `disabled`: fully local.
   - `cached`: App Server-aligned default; lower-volatility search path when available.
   - `live`: allow current web lookup.
-- Example presets
-  - Safe review / audit: `read-only` + `untrusted` + `medium`
-  - Normal implementation: `workspace-write` + `untrusted` + `medium`
-  - Deep debugging: `workspace-write` + `on-request` + `high`
-  - Latest-docs research: `workspace-write` + `never` + `live`
+- Example mode presets
+  - `Manual`: `read-only` + `on-request` + network off + web search disabled
+  - `Guided`: `workspace-write` + `untrusted` + network off + web search cached
+  - `Auto`: `danger-full-access` + `never` + network on + web search live
 
 Current Codex defaults follow the App Server-aligned baseline in Stave: `workspace-write` file access, `untrusted` approvals, `network access = off`, `web search = cached`, `reasoning effort = medium`, raw reasoning off, and reasoning summary auto-detection enabled.
 

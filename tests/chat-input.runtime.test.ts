@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildChatInputRuntimeQuickControls,
   buildChatInputRuntimeStatusItems,
   buildCommandCatalogRuntimeOptions,
   cycleClaudeEffortValue,
@@ -11,7 +10,6 @@ const updateSettings = () => {};
 
 const baseArgs = {
   activeProvider: "codex" as const,
-  permissionMode: "on-request" as const,
   providerTimeoutMs: 3600000,
   claudePermissionMode: "acceptEdits" as const,
   claudePermissionModeBeforePlan: null,
@@ -42,16 +40,6 @@ const baseArgs = {
 };
 
 describe("chat-input runtime helpers", () => {
-  test("builds Codex quick controls from shared option metadata", () => {
-    const controls = buildChatInputRuntimeQuickControls(baseArgs);
-
-    expect(controls.map((control) => control.id)).toEqual([
-      "permission-mode",
-      "web-search",
-    ]);
-    expect(controls[1]?.value).toBe("live");
-  });
-
   test("cycles Claude effort in provider order", () => {
     expect(cycleClaudeEffortValue("low")).toBe("medium");
     expect(cycleClaudeEffortValue("medium")).toBe("high");
