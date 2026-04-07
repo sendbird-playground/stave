@@ -41,6 +41,7 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import {
   buildCollapsedWorkspaceEntries,
+  buildWorkspaceHoverPreview,
   buildVisibleWorkspaceShortcutTargets,
   getWorkspaceShortcutLabel,
   getWorkspaceHoverActionVisibilityClasses,
@@ -67,6 +68,7 @@ import {
   TooltipTrigger,
   WaveIndicator,
 } from "@/components/ui";
+import { loadWorkspaceShell, type WorkspaceShell } from "@/lib/db/workspaces.db";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
 import { resolveSidebarArtworkClass } from "@/lib/themes";
@@ -78,6 +80,7 @@ type ProjectSidebarView = ProjectSidebarCollapsedProjectView;
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_TASKS: Task[] = [];
 const EMPTY_MESSAGES_BY_TASK: Record<string, ChatMessage[]> = {};
+const EMPTY_MESSAGE_COUNT_BY_TASK: Record<string, number> = {};
 const EMPTY_ACTIVE_TURN_IDS_BY_TASK: Record<string, string | undefined> = {};
 
 function resolveRespondingToneClass(args: {
@@ -132,6 +135,10 @@ function formatWorkspaceName(name: string, branch?: string) {
   return name;
 }
 
+function formatCountLabel(count: number, singular: string) {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
 function useWorkspaceSidebarActivityState(workspaceId: string) {
   const [tasks, messagesByTask, activeTurnIdsByTask, prStatus] = useAppStore(
     useShallow((state) => {
@@ -163,6 +170,187 @@ function useWorkspaceSidebarActivityState(workspaceId: string) {
       prStatus,
     }),
     [activeTurnIdsByTask, messagesByTask, prStatus, tasks],
+  );
+}
+
+function useWorkspaceHoverPreviewState(workspaceId: string) {
+  const [tasks, messageCountByTask, activeTurnIdsByTask, hasRuntimeState] =
+    useAppStore(
+      useShallow((state) => {
+        if (state.activeWorkspaceId === workspaceId) {
+          return [
+            state.tasks,
+            state.messageCountByTask,
+            state.activeTurnIdsByTask,
+            true,
+          ] as const;
+        }
+        const runtimeState = state.workspaceRuntimeCacheById[workspaceId];
+        return [
+          runtimeState?.tasks ?? EMPTY_TASKS,
+          runtimeState?.messageCountByTask ?? EMPTY_MESSAGE_COUNT_BY_TASK,
+          runtimeState?.activeTurnIdsByTask ?? EMPTY_ACTIVE_TURN_IDS_BY_TASK,
+          Boolean(runtimeState),
+        ] as const;
+      }),
+    );
+
+  return useMemo(
+    () => ({
+      tasks,
+      messageCountByTask,
+      activeTurnIdsByTask,
+      hasRuntimeState,
+    }),
+    [activeTurnIdsByTask, hasRuntimeState, messageCountByTask, tasks],
+  );
+}
+
+function WorkspaceHoverPreviewTooltip(args: {
+  workspaceId: string;
+  workspaceName: string;
+  branch?: string;
+  projectName?: string;
+  shortcutLabel?: string | null;
+  side: "top" | "right";
+  children: ReactNode;
+}) {
+  const {
+    tasks,
+    messageCountByTask,
+    activeTurnIdsByTask,
+    hasRuntimeState,
+  } = useWorkspaceHoverPreviewState(args.workspaceId);
+  const [loadedShell, setLoadedShell] = useState<WorkspaceShell | null | undefined>(undefined);
+  const [isShellLoading, setIsShellLoading] = useState(false);
+  const [didShellLoadFail, setDidShellLoadFail] = useState(false);
+
+  const preview = useMemo(() => {
+    if (hasRuntimeState) {
+      return buildWorkspaceHoverPreview({
+        tasks,
+        messageCountByTask,
+        activeTurnIdsByTask,
+      });
+    }
+    if (loadedShell !== undefined) {
+      return buildWorkspaceHoverPreview({
+        tasks: loadedShell?.tasks ?? EMPTY_TASKS,
+        messageCountByTask: loadedShell?.messageCountByTask ?? EMPTY_MESSAGE_COUNT_BY_TASK,
+      });
+    }
+    return null;
+  }, [
+    activeTurnIdsByTask,
+    hasRuntimeState,
+    loadedShell,
+    messageCountByTask,
+    tasks,
+  ]);
+
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open || hasRuntimeState || loadedShell !== undefined || isShellLoading) {
+        return;
+      }
+
+      setIsShellLoading(true);
+      setDidShellLoadFail(false);
+      void loadWorkspaceShell({ workspaceId: args.workspaceId })
+        .then((shell) => {
+          setLoadedShell(shell);
+        })
+        .catch(() => {
+          setDidShellLoadFail(true);
+        })
+        .finally(() => {
+          setIsShellLoading(false);
+        });
+    },
+    [args.workspaceId, hasRuntimeState, isShellLoading, loadedShell],
+  );
+
+  const metaLabel = preview
+    ? [
+        formatCountLabel(preview.taskCount, "task"),
+        preview.messageCount > 0
+          ? formatCountLabel(preview.messageCount, "message")
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" • ")
+    : "";
+
+  return (
+    <Tooltip onOpenChange={handleOpenChange}>
+      <TooltipTrigger asChild>{args.children}</TooltipTrigger>
+      <TooltipContent
+        side={args.side}
+        align="start"
+        className="max-w-[260px] break-words px-3 py-2"
+      >
+        <div className="space-y-2">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium leading-snug text-background">
+              {formatWorkspaceName(args.workspaceName, args.branch)}
+            </p>
+            {args.projectName ? (
+              <p className="text-[11px] leading-snug text-background/70">
+                {args.projectName}
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-1.5">
+            {didShellLoadFail && !preview ? (
+              <p className="text-[11px] leading-snug text-background/70">
+                Preview unavailable
+              </p>
+            ) : !preview || isShellLoading ? (
+              <p className="text-[11px] leading-snug text-background/70">
+                Loading summary...
+              </p>
+            ) : preview.isEmpty ? (
+              <p className="text-[11px] leading-snug text-background/70">
+                No tasks yet
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] leading-snug text-background/70">
+                  <span>{metaLabel}</span>
+                  {preview.runningTaskCount > 0 ? (
+                    <span className="rounded-sm border border-background/20 bg-background/10 px-1 py-0.5 font-medium text-background">
+                      {`${preview.runningTaskCount} running`}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="space-y-1">
+                  {preview.taskTitles.map((title, index) => (
+                    <p
+                      key={`${args.workspaceId}:${index}`}
+                      className="text-xs leading-4 text-background"
+                    >
+                      {title}
+                    </p>
+                  ))}
+                  {preview.moreTaskCount > 0 ? (
+                    <p className="text-[11px] leading-snug text-background/70">
+                      +{preview.moreTaskCount} more
+                    </p>
+                  ) : null}
+                </div>
+              </>
+            )}
+            {args.shortcutLabel ? (
+              <WorkspaceShortcutChip
+                modifier={shortcutModifierSymbol}
+                label={args.shortcutLabel}
+                className="mt-0.5 h-4 px-1 text-[10px]"
+              />
+            ) : null}
+          </div>
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -755,53 +943,38 @@ export function ProjectWorkspaceSidebar(args: {
                           className="mb-2 h-px w-5 rounded-full bg-sidebar-border/70"
                         />
                       ) : null}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            className={cn(
-                              "flex h-10 w-10 items-center justify-center rounded-md border transition-colors",
-                              entry.isActive
-                                ? "border-primary/40 bg-primary/10 text-primary shadow-sm"
-                                : "border-transparent bg-background/60 text-muted-foreground hover:border-border/70 hover:bg-secondary/70 hover:text-foreground",
-                            )}
-                            onClick={() =>
-                              void handleProjectWorkspaceOpen({
-                                projectPath: entry.projectPath,
-                                workspaceId: entry.workspaceId,
-                              })
-                            }
-                            aria-label={`collapsed-workspace-${entry.workspaceId}`}
-                          >
-                            <WorkspaceLeadingStatusIcon
-                              workspaceId={entry.workspaceId}
-                              workspaceName={entry.workspaceName}
-                              isDefault={entry.isDefault}
-                              busy={workspaceBusy}
-                            />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-[220px]">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">
-                              {formatWorkspaceName(
-                                entry.workspaceName,
-                                entry.branch,
-                              )}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {entry.projectName}
-                            </p>
-                            {shortcutLabel ? (
-                              <WorkspaceShortcutChip
-                                modifier={shortcutModifierSymbol}
-                                label={shortcutLabel}
-                                className="mt-1 h-4 px-1 text-[10px]"
-                              />
-                            ) : null}
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
+                      <WorkspaceHoverPreviewTooltip
+                        workspaceId={entry.workspaceId}
+                        workspaceName={entry.workspaceName}
+                        branch={entry.branch}
+                        projectName={entry.projectName}
+                        shortcutLabel={shortcutLabel}
+                        side="right"
+                      >
+                        <button
+                          type="button"
+                          className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-md border transition-colors",
+                            entry.isActive
+                              ? "border-primary/40 bg-primary/10 text-primary shadow-sm"
+                              : "border-transparent bg-background/60 text-muted-foreground hover:border-border/70 hover:bg-secondary/70 hover:text-foreground",
+                          )}
+                          onClick={() =>
+                            void handleProjectWorkspaceOpen({
+                              projectPath: entry.projectPath,
+                              workspaceId: entry.workspaceId,
+                            })
+                          }
+                          aria-label={`collapsed-workspace-${entry.workspaceId}`}
+                        >
+                          <WorkspaceLeadingStatusIcon
+                            workspaceId={entry.workspaceId}
+                            workspaceName={entry.workspaceName}
+                            isDefault={entry.isDefault}
+                            busy={workspaceBusy}
+                          />
+                        </button>
+                      </WorkspaceHoverPreviewTooltip>
                     </div>
                   );
                 })}
@@ -1124,43 +1297,67 @@ export function ProjectWorkspaceSidebar(args: {
                                                         )}
                                                       >
                                                         {dragHandle}
-                                                        <button
-                                                          type="button"
-                                                          className={cn(
-                                                            "flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm",
-                                                          )}
-                                                          onClick={() =>
-                                                            void handleProjectWorkspaceOpen(
-                                                              {
-                                                                projectPath:
-                                                                  project.projectPath,
-                                                                workspaceId:
-                                                                  workspace.id,
-                                                              },
-                                                            )
+                                                        <WorkspaceHoverPreviewTooltip
+                                                          workspaceId={
+                                                            workspace.id
                                                           }
+                                                          workspaceName={
+                                                            workspace.name
+                                                          }
+                                                          branch={
+                                                            workspace.branch
+                                                          }
+                                                          shortcutLabel={
+                                                            workspaceShortcutLabel
+                                                          }
+                                                          side="right"
                                                         >
-                                                          <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                                                            <WorkspaceLeadingStatusIcon
-                                                              workspaceId={workspace.id}
-                                                              workspaceName={workspace.name}
-                                                              isDefault={workspace.isDefault}
-                                                              busy={workspaceBusy}
-                                                            />
-                                                          </span>
-                                                          <span
+                                                          <button
+                                                            type="button"
                                                             className={cn(
-                                                              "min-w-0 flex-1 truncate",
-                                                              isActive &&
-                                                                "font-medium text-foreground",
+                                                              "flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm",
                                                             )}
+                                                            onClick={() =>
+                                                              void handleProjectWorkspaceOpen(
+                                                                {
+                                                                  projectPath:
+                                                                    project.projectPath,
+                                                                  workspaceId:
+                                                                    workspace.id,
+                                                                },
+                                                              )
+                                                            }
                                                           >
-                                                            {formatWorkspaceName(
-                                                              workspace.name,
-                                                              workspace.branch,
-                                                            )}
-                                                          </span>
-                                                        </button>
+                                                            <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                                                              <WorkspaceLeadingStatusIcon
+                                                                workspaceId={
+                                                                  workspace.id
+                                                                }
+                                                                workspaceName={
+                                                                  workspace.name
+                                                                }
+                                                                isDefault={
+                                                                  workspace.isDefault
+                                                                }
+                                                                busy={
+                                                                  workspaceBusy
+                                                                }
+                                                              />
+                                                            </span>
+                                                            <span
+                                                              className={cn(
+                                                                "min-w-0 flex-1 truncate",
+                                                                isActive &&
+                                                                  "font-medium text-foreground",
+                                                              )}
+                                                            >
+                                                              {formatWorkspaceName(
+                                                                workspace.name,
+                                                                workspace.branch,
+                                                              )}
+                                                            </span>
+                                                          </button>
+                                                        </WorkspaceHoverPreviewTooltip>
                                                         <div className="relative shrink-0">
                                                           <WorkspaceRespondingCountBadge
                                                             workspaceId={workspace.id}

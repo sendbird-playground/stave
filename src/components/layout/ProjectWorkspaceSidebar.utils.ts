@@ -1,3 +1,6 @@
+import { isTaskArchived } from "@/lib/tasks";
+import type { Task } from "@/types/chat";
+
 export interface ProjectSidebarWorkspaceView {
   id: string;
   name: string;
@@ -14,6 +17,8 @@ export interface ProjectSidebarCollapsedProjectView {
 }
 
 export const WORKSPACE_SHORTCUT_COUNT = 9;
+const WORKSPACE_HOVER_PREVIEW_TASK_LIMIT = 2;
+const UNTITLED_TASK_FALLBACK = "Untitled task";
 
 const WORKSPACE_ROW_ACTION_REVEAL_CLASSES =
   "group-hover/workspace-row:pointer-events-auto group-hover/workspace-row:opacity-100 group-has-[:focus-visible]/workspace-row:pointer-events-auto group-has-[:focus-visible]/workspace-row:opacity-100";
@@ -40,6 +45,50 @@ export interface CollapsedWorkspaceEntry {
 export interface WorkspaceShortcutTarget {
   projectPath: string;
   workspaceId: string;
+}
+
+export interface WorkspaceHoverPreview {
+  isEmpty: boolean;
+  taskCount: number;
+  messageCount: number;
+  runningTaskCount: number;
+  taskTitles: string[];
+  moreTaskCount: number;
+}
+
+function parseTaskUpdatedAt(value: string) {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function getPreviewTaskTitle(title: string) {
+  const normalized = title.trim();
+  return normalized || UNTITLED_TASK_FALLBACK;
+}
+
+export function buildWorkspaceHoverPreview(args: {
+  tasks: Array<Pick<Task, "id" | "title" | "updatedAt" | "archivedAt">>;
+  messageCountByTask?: Record<string, number>;
+  activeTurnIdsByTask?: Record<string, string | undefined>;
+}): WorkspaceHoverPreview {
+  const visibleTasks = [...args.tasks]
+    .filter((task) => !isTaskArchived(task))
+    .sort((left, right) => parseTaskUpdatedAt(right.updatedAt) - parseTaskUpdatedAt(left.updatedAt));
+  const taskTitles = visibleTasks
+    .slice(0, WORKSPACE_HOVER_PREVIEW_TASK_LIMIT)
+    .map((task) => getPreviewTaskTitle(task.title));
+
+  return {
+    isEmpty: visibleTasks.length === 0,
+    taskCount: visibleTasks.length,
+    messageCount: visibleTasks.reduce(
+      (sum, task) => sum + Math.max(0, args.messageCountByTask?.[task.id] ?? 0),
+      0,
+    ),
+    runningTaskCount: visibleTasks.filter((task) => Boolean(args.activeTurnIdsByTask?.[task.id])).length,
+    taskTitles,
+    moreTaskCount: Math.max(visibleTasks.length - taskTitles.length, 0),
+  };
 }
 
 export function buildCollapsedWorkspaceEntries(args: {
