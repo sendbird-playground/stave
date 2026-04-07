@@ -887,7 +887,7 @@ class CodexAppServerClient {
     await this.sendRequest("initialize", {
       clientInfo: {
         name: "stave",
-        version: "0.0.36",
+        version: "0.1.0",
       },
       capabilities: {
         experimentalApi: true,
