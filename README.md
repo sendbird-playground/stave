@@ -28,6 +28,8 @@ If this is your first time using `gh`, or you need SSO/scope troubleshooting, se
 
 Packaged macOS builds also expose a top-bar update action that checks the latest authenticated GitHub release and can install it in place with restart.
 
+The installer prefers the current writable app location when possible and otherwise falls back to `~/Applications`.
+
 ## Highlights
 
 - desktop-first Claude and Codex workspace
