@@ -104,9 +104,12 @@ do_install() {
 # Stave daily auto-update — executed by launchd
 set -euo pipefail
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
 APP_NAME="Stave"
 REPO="${STAVE_REPO:-sendbird-playground/stave}"
-INSTALL_DIR="${STAVE_INSTALL_DIR:-$HOME/Applications}"
+DEFAULT_INSTALL_DIR="$HOME/Applications"
+INSTALL_DIR=""
 TARGET_APP="${INSTALL_DIR}/${APP_NAME}.app"
 LOG_DIR="$HOME/Library/Logs/Stave"
 LOG_FILE="${LOG_DIR}/auto-update.log"
@@ -117,7 +120,46 @@ log() {
   printf "[%s] %s\n" "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$LOG_FILE"
 }
 
+can_write_install_dir() {
+  local dir="$1"
+  if [ -d "$dir" ] && [ -w "$dir" ]; then
+    return 0
+  fi
+  local parent_dir
+  parent_dir="$(dirname "$dir")"
+  [ -d "$parent_dir" ] && [ -w "$parent_dir" ]
+}
+
+resolve_install_dir() {
+  if [ -n "${STAVE_INSTALL_DIR:-}" ]; then
+    printf "%s\n" "$STAVE_INSTALL_DIR"
+    return 0
+  fi
+
+  if [ -d "$HOME/Applications/${APP_NAME}.app" ]; then
+    printf "%s\n" "$HOME/Applications"
+    return 0
+  fi
+
+  if [ -d "/Applications/${APP_NAME}.app" ] && can_write_install_dir "/Applications"; then
+    printf "/Applications\n"
+    return 0
+  fi
+
+  printf "%s\n" "$DEFAULT_INSTALL_DIR"
+}
+
+run_installer() {
+  gh api -H 'Accept: application/vnd.github.v3.raw+json' \
+    "repos/${REPO}/contents/scripts/install-latest-release.sh" \
+    | env PATH="$PATH" GH_PROMPT_DISABLED=1 STAVE_INSTALL_DIR="$INSTALL_DIR" bash -s -- --silent
+}
+
+INSTALL_DIR="$(resolve_install_dir)"
+TARGET_APP="${INSTALL_DIR}/${APP_NAME}.app"
+
 log "--- auto-update check started ---"
+log "Install dir: ${INSTALL_DIR}"
 
 # 1. Verify gh authentication
 if ! gh auth status >/dev/null 2>&1; then
@@ -153,8 +195,7 @@ fi
 # 5. Run silent install
 log "Update available: ${LOCAL_VERSION:-none} -> ${REMOTE_TAG}. Installing..."
 
-if gh api -H 'Accept: application/vnd.github.v3.raw+json' \
-  "repos/${REPO}/contents/scripts/install-latest-release.sh" | bash -s -- --silent >> "$LOG_FILE" 2>&1; then
+if run_installer >> "$LOG_FILE" 2>&1; then
   log "Update to ${REMOTE_TAG} completed successfully."
 else
   log "ERROR: Update to ${REMOTE_TAG} failed (exit $?)."

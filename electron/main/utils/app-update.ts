@@ -1,5 +1,6 @@
 import { app } from "electron";
-import { promises as fs } from "node:fs";
+import { spawn } from "node:child_process";
+import { constants as fsConstants, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -11,9 +12,11 @@ import {
   isAppUpdateAvailable,
   normalizeAppVersionTag,
 } from "../../../src/lib/app-update";
+import { resolveExecutableLookupPath } from "../../providers/executable-path";
 import { runCommandArgs } from "./command";
 
 const DEFAULT_REPO = "sendbird-playground/stave";
+const FALLBACK_LOOKUP_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 
 function resolveReleaseRepo() {
   return process.env.STAVE_REPO?.trim() || DEFAULT_REPO;
@@ -29,6 +32,46 @@ function buildTimestampedLogLine(message: string) {
 
 function quoteShell(value: string) {
   return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function isTransientAppBundlePath(value: string) {
+  return value.startsWith("/Volumes/") || value.includes("/AppTranslocation/");
+}
+
+function resolveCurrentAppBundlePath() {
+  if (process.platform !== "darwin") {
+    return null;
+  }
+  const executablePath = app.getPath("exe");
+  const contentsDir = path.dirname(path.dirname(executablePath));
+  if (path.basename(contentsDir) !== "Contents") {
+    return null;
+  }
+  const bundlePath = path.dirname(contentsDir);
+  return bundlePath.endsWith(".app") ? bundlePath : null;
+}
+
+async function canWriteInstallDir(dirPath: string) {
+  try {
+    await fs.access(dirPath, fsConstants.W_OK);
+    return true;
+  } catch {
+    try {
+      await fs.access(path.dirname(dirPath), fsConstants.W_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function resolvePreferredInstallDir() {
+  const bundlePath = resolveCurrentAppBundlePath();
+  if (!bundlePath || isTransientAppBundlePath(bundlePath)) {
+    return null;
+  }
+  const installDir = path.dirname(bundlePath);
+  return (await canWriteInstallDir(installDir)) ? installDir : null;
 }
 
 async function runGhCommand(commandArgs: string[]) {
@@ -155,11 +198,20 @@ export async function getAppUpdateStatusSnapshot(): Promise<AppUpdateStatusSnaps
 async function writeUpdateHelperScript(args: { repo: string }) {
   const helperDir = await fs.mkdtemp(path.join(os.tmpdir(), "stave-update-"));
   const helperPath = path.join(helperDir, "install-and-relaunch.sh");
+  const lookupPath = resolveExecutableLookupPath({
+    basePath: process.env.PATH,
+  }) || FALLBACK_LOOKUP_PATH;
+  const preferredInstallDir = await resolvePreferredInstallDir();
+  const currentAppBundlePath = resolveCurrentAppBundlePath();
   const script = `#!/bin/bash
 set -euo pipefail
 
 SELF="$0"
+CURRENT_PID=${process.pid}
 REPO=${quoteShell(args.repo)}
+LOOKUP_PATH=${quoteShell(lookupPath)}
+PREFERRED_INSTALL_DIR=${quoteShell(preferredInstallDir ?? "")}
+CURRENT_APP_BUNDLE=${quoteShell(currentAppBundlePath ?? "")}
 LOG_DIR="$HOME/Library/Logs/Stave"
 LOG_FILE="$LOG_DIR/in-app-update.log"
 
@@ -168,15 +220,54 @@ cleanup() {
   rmdir "$(dirname "$SELF")" 2>/dev/null || true
 }
 
+wait_for_process_exit() {
+  local pid="$1"
+  local attempts=0
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep 0.2
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 150 ]; then
+      break
+    fi
+  done
+}
+
+reopen_current_app() {
+  if [ -n "$CURRENT_APP_BUNDLE" ] && [ -d "$CURRENT_APP_BUNDLE" ]; then
+    open "$CURRENT_APP_BUNDLE" >/dev/null 2>&1 || true
+  fi
+}
+
+run_installer() {
+  if [ -n "$PREFERRED_INSTALL_DIR" ]; then
+    gh api -H 'Accept: application/vnd.github.v3.raw+json' "repos/\${REPO}/contents/scripts/install-latest-release.sh" \
+      | env PATH="$PATH" GH_PROMPT_DISABLED=1 STAVE_INSTALL_DIR="$PREFERRED_INSTALL_DIR" bash
+    return
+  fi
+
+  gh api -H 'Accept: application/vnd.github.v3.raw+json' "repos/\${REPO}/contents/scripts/install-latest-release.sh" \
+    | env PATH="$PATH" GH_PROMPT_DISABLED=1 bash
+}
+
 trap cleanup EXIT
 
 mkdir -p "$LOG_DIR"
+export PATH="$LOOKUP_PATH"
 ${buildTimestampedLogLine("starting in-app update")}
 
-if gh api -H 'Accept: application/vnd.github.v3.raw+json' "repos/\${REPO}/contents/scripts/install-latest-release.sh" | bash >> "$LOG_FILE" 2>&1; then
+if ! command -v gh >/dev/null 2>&1; then
+  ${buildTimestampedLogLine("update failed: gh not found on helper PATH")}
+  reopen_current_app
+  exit 1
+fi
+
+wait_for_process_exit "$CURRENT_PID"
+
+if run_installer >> "$LOG_FILE" 2>&1; then
   ${buildTimestampedLogLine("update installed successfully")}
 else
   ${buildTimestampedLogLine("update failed")}
+  reopen_current_app
   exit 1
 fi
 `;
@@ -209,10 +300,18 @@ export async function scheduleAppUpdateInstallAndRestart(): Promise<AppUpdateIns
     repo: resolveReleaseRepo(),
   });
 
-  app.relaunch({
-    execPath: "/bin/bash",
-    args: [helperPath],
+  const lookupPath = resolveExecutableLookupPath({
+    basePath: process.env.PATH,
+  }) || FALLBACK_LOOKUP_PATH;
+  const helperProcess = spawn("/bin/bash", [helperPath], {
+    detached: true,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      PATH: lookupPath,
+    },
   });
+  helperProcess.unref();
 
   setTimeout(() => {
     app.quit();

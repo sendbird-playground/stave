@@ -41,7 +41,8 @@ That installer script:
 
 - downloads the latest `Stave-macOS.zip` release asset
 - extracts the bundle into a temporary directory
-- copies `Stave.app` into `~/Applications`
+- stages the new bundle before replacing the existing app so a failed update can recover cleanly
+- prefers the current writable install location and otherwise falls back to `~/Applications`
 - removes the macOS quarantine attribute from the installed app
 - opens Stave after installation
 
@@ -55,6 +56,8 @@ Packaged macOS builds also show an app update action in the top bar.
 
 This uses the same authenticated `gh`-based release flow as the terminal installer, so `gh auth login` is still required.
 
+On packaged macOS builds, the restart helper also carries a Homebrew-friendly PATH so GUI-launched Stave can still find `gh` during the install step.
+
 ## Automatic Daily Updates
 
 Keep Stave up-to-date automatically with a macOS LaunchAgent that checks for new releases every day at 10:00 AM:
@@ -66,7 +69,7 @@ gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground
 This registers a daily background task that:
 
 - compares the installed version against the latest GitHub release
-- downloads and installs the update silently if a new version is available
+- installs the update silently into the detected writable app location if a new version is available
 - skips the check when the version is already current
 - logs all activity to `~/Library/Logs/Stave/auto-update.log`
 
