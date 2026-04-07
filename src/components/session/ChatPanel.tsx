@@ -1,24 +1,61 @@
-import { memo, useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, MessageSquareIcon, Zap } from "lucide-react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import type { VirtuosoHandle } from "react-virtuoso";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  MessageSquareIcon,
+  Zap,
+} from "lucide-react";
+import {
+  Badge,
+  Button,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  WaveIndicator,
+} from "@/components/ui";
 import {
   Conversation,
+  ConversationContent,
   ConversationScrollButton,
+  ConversationVirtualList,
   Message,
   MessageAction,
   MessageActions,
   MessageContent,
   ModelIcon,
 } from "@/components/ai-elements";
-import { Badge, Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
-import { canTakeOverTask, formatTaskUpdatedAt, getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
+import {
+  getMessageScrollFingerprint,
+  shouldShowConversationLoadingState,
+} from "@/components/session/chat-panel.utils";
+import {
+  canTakeOverTask,
+  getTaskControlOwner,
+  isTaskManaged,
+  formatTaskUpdatedAt,
+} from "@/lib/tasks";
 import { toHumanModelName } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, MessagePart } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
-import { CopyButton, toProviderStartCase, toProviderWaveToneClass } from "./chat-panel-message-parts";
-import { ChatPanelMessageListScaffold, type ChatPanelRowRenderArgs } from "./chat-panel.shared";
+import {
+  CopyButton,
+  toProviderWaveToneClass,
+} from "./chat-panel-message-parts";
 import { AssistantMessageBody } from "./message/assistant-trace";
+import { SessionLoadingState } from "./SessionLoadingState";
+
+const EMPTY_MESSAGES: ChatMessage[] = [];
+
+const MemoizedAssistantMessageBody = memo(AssistantMessageBody);
 
 function formatElapsedLabel(durationMs: number) {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
@@ -34,7 +71,9 @@ function getMessageElapsedLabel(args: {
   message: Pick<ChatMessage, "startedAt" | "completedAt">;
   nowMs?: number;
 }) {
-  const startedAt = args.message.startedAt ? Date.parse(args.message.startedAt) : Number.NaN;
+  const startedAt = args.message.startedAt
+    ? Date.parse(args.message.startedAt)
+    : Number.NaN;
   if (!Number.isFinite(startedAt)) {
     return null;
   }
@@ -62,7 +101,13 @@ function formatCostUsd(usd: number): string {
 
 type MessageUsage = NonNullable<ChatMessage["usage"]>;
 
-interface StandardMessageRowProps extends ChatPanelRowRenderArgs {
+interface MessageRowProps {
+  activeTaskId: string;
+  activeTurnId?: string;
+  chatStreamingEnabled: boolean;
+  elapsedAnchorMs?: number;
+  isFirst?: boolean;
+  liveStreamingMessageId?: string;
   message: {
     id: string;
     role: "user" | "assistant";
@@ -77,16 +122,24 @@ interface StandardMessageRowProps extends ChatPanelRowRenderArgs {
   };
 }
 
-const MessageRow = memo(function MessageRow(args: StandardMessageRowProps) {
-  const { activeTaskId, activeTurnId, chatStreamingEnabled, elapsedAnchorMs, isFirst, liveStreamingMessageId, message } = args;
+const MessageRow = memo(function MessageRow(args: MessageRowProps) {
+  const {
+    activeTaskId,
+    activeTurnId,
+    chatStreamingEnabled,
+    elapsedAnchorMs,
+    isFirst,
+    liveStreamingMessageId,
+    message,
+  } = args;
   const showRespondingWave =
-    Boolean(activeTurnId)
-    && message.id === liveStreamingMessageId
-    && message.role === "assistant"
-    && message.isStreaming;
+    Boolean(activeTurnId) &&
+    message.id === liveStreamingMessageId &&
+    message.role === "assistant" &&
+    message.isStreaming;
   const elapsedLabel = useMemo(
     () => getMessageElapsedLabel({ message, nowMs: elapsedAnchorMs }),
-    [elapsedAnchorMs, message]
+    [elapsedAnchorMs, message],
   );
 
   return (
@@ -95,11 +148,15 @@ const MessageRow = memo(function MessageRow(args: StandardMessageRowProps) {
         <div
           className={cn(
             "group/message-shell flex flex-col items-stretch",
-            message.role === "assistant" ? "w-full max-w-4xl gap-1.5" : "min-w-0 max-w-[88%] w-fit gap-1",
+            message.role === "assistant"
+              ? "w-full max-w-4xl gap-1.5"
+              : "min-w-0 max-w-[88%] w-fit gap-1",
           )}
         >
-          <MessageContent className={message.role === "assistant" ? "pb-1" : undefined}>
-            <AssistantMessageBody
+          <MessageContent
+            className={message.role === "assistant" ? "pb-1" : undefined}
+          >
+            <MemoizedAssistantMessageBody
               message={message}
               taskId={activeTaskId}
               messageId={message.id}
@@ -108,7 +165,8 @@ const MessageRow = memo(function MessageRow(args: StandardMessageRowProps) {
           </MessageContent>
           <MessageActions
             className={cn(
-              message.role === "user" && "pointer-events-none self-end !ml-0 !mt-1 opacity-0 transition-opacity group-hover/message-shell:pointer-events-auto group-hover/message-shell:opacity-100",
+              message.role === "user" &&
+                "pointer-events-none self-end !ml-0 !mt-1 opacity-0 transition-opacity group-hover/message-shell:pointer-events-auto group-hover/message-shell:opacity-100",
               message.role === "assistant" && "self-stretch !ml-0 !mt-1",
             )}
           >
@@ -119,7 +177,10 @@ const MessageRow = memo(function MessageRow(args: StandardMessageRowProps) {
                   label={toHumanModelName({ model: message.model })}
                   className="pointer-events-none h-7 cursor-default rounded-sm border border-border/70 bg-background/80 px-2 text-sm font-normal text-foreground opacity-100 supports-backdrop-filter:backdrop-blur-xs"
                 >
-                  <ModelIcon providerId={message.providerId} className="size-3.5" />
+                  <ModelIcon
+                    providerId={message.providerId}
+                    className="size-3.5"
+                  />
                   {toHumanModelName({ model: message.model })}
                 </MessageAction>
               ) : null}
@@ -130,13 +191,24 @@ const MessageRow = memo(function MessageRow(args: StandardMessageRowProps) {
                   className="pointer-events-none h-7 cursor-default gap-1.5 rounded-sm px-2 text-sm font-normal text-muted-foreground opacity-100"
                 >
                   {showRespondingWave ? (
-                    <WaveIndicator className={cn("size-3.5", toProviderWaveToneClass({ providerId: message.providerId, model: message.model }))} animate />
+                    <WaveIndicator
+                      className={cn(
+                        "size-3.5",
+                        toProviderWaveToneClass({
+                          providerId: message.providerId,
+                          model: message.model,
+                        }),
+                      )}
+                      animate
+                    />
                   ) : null}
                   {elapsedLabel}
                 </MessageAction>
               ) : null}
               <CopyButton key="copy-action" text={message.content} />
-              {message.role === "assistant" && message.usage && !showRespondingWave ? (
+              {message.role === "assistant" &&
+              message.usage &&
+              !showRespondingWave ? (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -156,32 +228,50 @@ const MessageRow = memo(function MessageRow(args: StandardMessageRowProps) {
                           </span>
                         ) : null}
                         {message.usage.totalCostUsd != null ? (
-                          <span>{formatCostUsd(message.usage.totalCostUsd)}</span>
+                          <span>
+                            {formatCostUsd(message.usage.totalCostUsd)}
+                          </span>
                         ) : null}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-xs">
                       <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
                         <span className="text-muted-foreground">Input</span>
-                        <span className="text-right font-mono">{message.usage.inputTokens.toLocaleString()} tokens</span>
+                        <span className="text-right font-mono">
+                          {message.usage.inputTokens.toLocaleString()} tokens
+                        </span>
                         <span className="text-muted-foreground">Output</span>
-                        <span className="text-right font-mono">{message.usage.outputTokens.toLocaleString()} tokens</span>
+                        <span className="text-right font-mono">
+                          {message.usage.outputTokens.toLocaleString()} tokens
+                        </span>
                         {message.usage.cacheReadTokens ? (
                           <>
-                            <span className="text-muted-foreground">Cache read</span>
-                            <span className="text-right font-mono">{message.usage.cacheReadTokens.toLocaleString()} tokens</span>
+                            <span className="text-muted-foreground">
+                              Cache read
+                            </span>
+                            <span className="text-right font-mono">
+                              {message.usage.cacheReadTokens.toLocaleString()}{" "}
+                              tokens
+                            </span>
                           </>
                         ) : null}
                         {message.usage.cacheCreationTokens ? (
                           <>
-                            <span className="text-muted-foreground">Cache write</span>
-                            <span className="text-right font-mono">{message.usage.cacheCreationTokens.toLocaleString()} tokens</span>
+                            <span className="text-muted-foreground">
+                              Cache write
+                            </span>
+                            <span className="text-right font-mono">
+                              {message.usage.cacheCreationTokens.toLocaleString()}{" "}
+                              tokens
+                            </span>
                           </>
                         ) : null}
                         {message.usage.totalCostUsd != null ? (
                           <>
                             <span className="text-muted-foreground">Cost</span>
-                            <span className="text-right font-mono">{formatCostUsd(message.usage.totalCostUsd)}</span>
+                            <span className="text-right font-mono">
+                              {formatCostUsd(message.usage.totalCostUsd)}
+                            </span>
                           </>
                         ) : null}
                       </div>
@@ -205,24 +295,27 @@ function ChatPanelHeader() {
     activeTaskUpdatedAt,
     activeTurnId,
     takeOverTask,
-  ] = useAppStore(useShallow((state) => {
-    const activeTask = state.tasks.find((task) => task.id === state.activeTaskId);
-    return [
-      state.activeTaskId,
-      activeTask ?? null,
-      activeTask?.title ?? "Untitled Task",
-      activeTask?.updatedAt,
-      state.activeTurnIdsByTask[state.activeTaskId],
-      state.takeOverTask,
-    ] as const;
-  }));
+  ] = useAppStore(
+    useShallow((state) => {
+      const activeTask = state.tasks.find(
+        (task) => task.id === state.activeTaskId,
+      );
+      return [
+        state.activeTaskId,
+        activeTask ?? null,
+        activeTask?.title ?? "Untitled Task",
+        activeTask?.updatedAt,
+        state.activeTurnIdsByTask[state.activeTaskId],
+        state.takeOverTask,
+      ] as const;
+    }),
+  );
   const [timeAnchor, setTimeAnchor] = useState(() => Date.now());
   const isManagedTask = isTaskManaged(activeTask);
   const canTakeOver = canTakeOverTask({ task: activeTask, activeTurnId });
-  const managedLabel =
-    isManagedTask
-      ? `Managed by ${getTaskControlOwner(activeTask) === "external" ? "external controller" : "Stave"}`
-      : null;
+  const managedLabel = isManagedTask
+    ? `Managed by ${getTaskControlOwner(activeTask) === "external" ? "external controller" : "Stave"}`
+    : null;
 
   useEffect(() => {
     const handle = window.setInterval(() => {
@@ -235,20 +328,30 @@ function ChatPanelHeader() {
     <header className="flex h-10 items-center justify-between border-b border-border/80 bg-card px-3 text-sm">
       <div className="flex min-w-0 items-center gap-2">
         <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="truncate font-medium text-foreground">{activeTaskTitle}</span>
+        <span className="truncate font-medium text-foreground">
+          {activeTaskTitle}
+        </span>
         {managedLabel ? (
-          <Badge variant="secondary" className="shrink-0 rounded-sm text-[10px] uppercase tracking-[0.14em]">
+          <Badge
+            variant="secondary"
+            className="shrink-0 rounded-sm text-[10px] uppercase tracking-[0.14em]"
+          >
             Managed
           </Badge>
         ) : null}
         {activeTaskUpdatedAt ? (
           <span className="shrink-0 text-xs text-muted-foreground">
-            {formatTaskUpdatedAt({ value: activeTaskUpdatedAt, now: timeAnchor })}
+            {formatTaskUpdatedAt({
+              value: activeTaskUpdatedAt,
+              now: timeAnchor,
+            })}
           </span>
         ) : null}
         {managedLabel ? (
           <span className="truncate text-xs text-muted-foreground">
-            {activeTurnId ? managedLabel : `${managedLabel}. Take over to continue here.`}
+            {activeTurnId
+              ? managedLabel
+              : `${managedLabel}. Take over to continue here.`}
           </span>
         ) : null}
       </div>
@@ -272,13 +375,155 @@ function ChatPanelHeader() {
 
 const MemoizedChatPanelHeader = memo(ChatPanelHeader);
 
-const MemoizedChatPanelMessageList = memo(function ChatPanelMessageList() {
-  return (
-    <ChatPanelMessageListScaffold
-      renderMessageRow={(rowArgs) => <MessageRow {...rowArgs} />}
-    />
+function ChatPanelMessageList() {
+  const [
+    activeWorkspaceId,
+    activeTaskId,
+    activeTurnId,
+    chatStreamingEnabled,
+    loadTaskMessages,
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.activeWorkspaceId,
+          state.activeTaskId,
+          state.activeTurnIdsByTask[state.activeTaskId],
+          state.settings.chatStreamingEnabled,
+          state.loadTaskMessages,
+        ] as const,
+    ),
   );
-});
+  const messages = useAppStore(
+    (state) => state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES,
+  );
+  const totalMessageCount = useAppStore(
+    (state) => state.messageCountByTask[state.activeTaskId] ?? 0,
+  );
+  const taskMessagesLoading = useAppStore(
+    (state) => state.taskMessagesLoadingByTask[state.activeTaskId] === true,
+  );
+  const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+  const [elapsedAnchorMs, setElapsedAnchorMs] = useState(() => Date.now());
+  const [turnCompletionScrollTick, setTurnCompletionScrollTick] = useState(0);
+  const previousActiveTurnIdRef = useRef<string | undefined>(activeTurnId);
+
+  const visibleMessages = useMemo(
+    () => messages.filter((message) => !message.isPlanResponse),
+    [messages],
+  );
+  const hasOlderMessages = messages.length < totalMessageCount;
+  const showConversationLoadingState = shouldShowConversationLoadingState({
+    visibleMessageCount: visibleMessages.length,
+    totalMessageCount,
+    taskMessagesLoading,
+  });
+  const liveStreamingMessageId = activeTurnId
+    ? visibleMessages.at(-1)?.id
+    : undefined;
+  const latestVisibleMessageId = visibleMessages.at(-1)?.id;
+  const lastVisibleMessageScrollFingerprint = useMemo(
+    () => getMessageScrollFingerprint(visibleMessages.at(-1)),
+    [visibleMessages],
+  );
+  const autoScrollKey = `${visibleMessages.length}:${lastVisibleMessageScrollFingerprint}`;
+  const forceScrollKey = `${latestVisibleMessageId ?? "none"}:${turnCompletionScrollTick}`;
+  const scrollContextKey = `${activeWorkspaceId}:${activeTaskId}`;
+
+  useEffect(() => {
+    if (previousActiveTurnIdRef.current && !activeTurnId) {
+      setTurnCompletionScrollTick((current) => current + 1);
+    }
+    previousActiveTurnIdRef.current = activeTurnId;
+  }, [activeTurnId]);
+
+  useEffect(() => {
+    if (!activeTurnId) {
+      return;
+    }
+    const handle = window.setInterval(() => {
+      setElapsedAnchorMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(handle);
+  }, [activeTurnId]);
+
+  return (
+    <ConversationContent
+      autoScrollKey={autoScrollKey}
+      autoScrollBehavior="auto"
+      forceScrollKey={forceScrollKey}
+      scrollScopeKey={scrollContextKey}
+      forceScrollScopeKey={scrollContextKey}
+      withInnerLayout={
+        visibleMessages.length === 0 && !showConversationLoadingState
+      }
+    >
+      {hasOlderMessages ? (
+        <div className="mx-auto mb-3 flex w-full max-w-6xl px-3 pt-3 sm:px-5 sm:pt-4">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={taskMessagesLoading}
+            className="h-8 rounded-sm"
+            onClick={() => {
+              void loadTaskMessages({ taskId: activeTaskId, mode: "older" });
+            }}
+          >
+            {taskMessagesLoading
+              ? "Loading older messages..."
+              : `Load older messages (${totalMessageCount - messages.length} remaining)`}
+          </Button>
+        </div>
+      ) : null}
+      {showConversationLoadingState ? (
+        <SessionLoadingState
+          testId="conversation-loading-state"
+          title="Loading conversation"
+          description="Fetching the latest messages for this task."
+        />
+      ) : visibleMessages.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <MessageSquareIcon />
+            </EmptyMedia>
+            <EmptyTitle>Start a conversation</EmptyTitle>
+            <EmptyDescription>
+              Send a prompt to begin this task.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <ConversationVirtualList
+          listKey={scrollContextKey}
+          listRef={virtuosoRef}
+          data={visibleMessages}
+          forceScrollKey={forceScrollKey}
+          forceScrollScopeKey={scrollContextKey}
+          itemKey={(_, message) => message.id}
+          itemContent={(index, message) => (
+            <MessageRow
+              activeTaskId={activeTaskId}
+              activeTurnId={activeTurnId}
+              chatStreamingEnabled={chatStreamingEnabled}
+              elapsedAnchorMs={
+                message.id === liveStreamingMessageId
+                  ? elapsedAnchorMs
+                  : undefined
+              }
+              isFirst={index === 0}
+              liveStreamingMessageId={liveStreamingMessageId}
+              message={message}
+            />
+          )}
+        />
+      )}
+    </ConversationContent>
+  );
+}
+
+const MemoizedChatPanelMessageList = memo(ChatPanelMessageList);
 
 export function ChatPanel() {
   return (

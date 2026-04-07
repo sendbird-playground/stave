@@ -1,18 +1,38 @@
-import type { ComponentPropsWithoutRef, CSSProperties, ForwardedRef, HTMLAttributes, MutableRefObject, ReactNode } from "react";
-import { createContext, forwardRef, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  ComponentPropsWithoutRef,
+  CSSProperties,
+  ForwardedRef,
+  HTMLAttributes,
+  MutableRefObject,
+  ReactNode,
+} from "react";
+import {
+  createContext,
+  forwardRef,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ArrowDown, Download } from "lucide-react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { cn } from "@/lib/utils";
-import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import {
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui";
 
 interface ConversationContextValue {
   containerRef: React.RefObject<HTMLDivElement | null>;
   containerEl: HTMLDivElement | null;
   setContainerEl: (next: HTMLDivElement | null) => void;
   atBottom: boolean;
-  stickToBottomRef: MutableRefObject<boolean>;
-  preserveStickToBottom: (durationMs?: number) => void;
-  shouldPreserveStickToBottom: () => boolean;
+  stickToBottom: boolean;
   setAtBottom: (next: boolean) => void;
   setStickToBottom: (next: boolean) => void;
   scrollToBottom: (args?: { behavior?: ScrollBehavior }) => void;
@@ -22,18 +42,20 @@ interface ConversationContextValue {
 type ScrollToBottomArgs = { behavior?: ScrollBehavior };
 type ScrollToBottomHandler = (args?: ScrollToBottomArgs) => void;
 
-function toVirtualScrollBehavior(args?: ScrollToBottomArgs): "auto" | "smooth" | undefined {
+function toVirtualScrollBehavior(
+  args?: ScrollToBottomArgs,
+): "auto" | "smooth" | undefined {
   return args?.behavior === "smooth" ? "smooth" : "auto";
 }
 
-const ConversationContext = createContext<ConversationContextValue | null>(null);
+const ConversationContext = createContext<ConversationContextValue | null>(
+  null,
+);
 const VIRTUAL_LIST_BOTTOM_GAP = 24;
 const SCROLL_DEBUG_STORAGE_KEY = "stave:debug:conversation-scroll";
 // Threshold must exceed the bottom gap so the padding zone is always considered
 // "at bottom" — otherwise auto-scroll disengages while still in the gap area.
 const AT_BOTTOM_THRESHOLD = Math.max(32, VIRTUAL_LIST_BOTTOM_GAP + 8);
-const STICKY_INTENT_GUARD_MS = 280;
-const USER_SCROLL_INTENT_WINDOW_MS = 200;
 
 function isConversationScrollDebugEnabled() {
   if (typeof window === "undefined") {
@@ -46,7 +68,10 @@ function isConversationScrollDebugEnabled() {
   }
 }
 
-function debugConversationScroll(event: string, details: Record<string, unknown>) {
+function debugConversationScroll(
+  event: string,
+  details: Record<string, unknown>,
+) {
   if (!isConversationScrollDebugEnabled()) {
     return;
   }
@@ -57,11 +82,10 @@ function getDistanceFromBottom(container: HTMLDivElement) {
   return container.scrollHeight - container.scrollTop - container.clientHeight;
 }
 
-function getCurrentTimeMs() {
-  return typeof performance !== "undefined" ? performance.now() : Date.now();
-}
-
-function withExtraPaddingBottom(style: CSSProperties | undefined, extra: number): CSSProperties {
+function withExtraPaddingBottom(
+  style: CSSProperties | undefined,
+  extra: number,
+): CSSProperties {
   const paddingBottom = style?.paddingBottom;
   if (typeof paddingBottom === "number") {
     return { ...style, paddingBottom: paddingBottom + extra };
@@ -75,19 +99,23 @@ function withExtraPaddingBottom(style: CSSProperties | undefined, extra: number)
 function useConversationContext() {
   const context = useContext(ConversationContext);
   if (!context) {
-    throw new Error("Conversation components must be used inside <Conversation />.");
+    throw new Error(
+      "Conversation components must be used inside <Conversation />.",
+    );
   }
   return context;
 }
 
-export function Conversation(props: HTMLAttributes<HTMLDivElement>) {
+export function Conversation({
+  className: extraClassName,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   // Use refs for scroll-tracking state to avoid context re-renders on every scroll event.
   // State is only used by consumers that need to reactively show/hide (e.g., scroll button).
   const atBottomRef = useRef(true);
   const stickToBottomRef = useRef(true);
-  const preserveStickToBottomUntilRef = useRef(0);
   const [atBottom, setAtBottomState] = useState(true);
   const scrollToBottomOverrideRef = useRef<ScrollToBottomHandler | null>(null);
 
@@ -101,20 +129,8 @@ export function Conversation(props: HTMLAttributes<HTMLDivElement>) {
     stickToBottomRef.current = next;
   }, []);
 
-  const preserveStickToBottom = useCallback((durationMs = STICKY_INTENT_GUARD_MS) => {
-    preserveStickToBottomUntilRef.current = Math.max(
-      preserveStickToBottomUntilRef.current,
-      getCurrentTimeMs() + durationMs,
-    );
-  }, []);
-
-  const shouldPreserveStickToBottom = useCallback(() => {
-    return preserveStickToBottomUntilRef.current > getCurrentTimeMs();
-  }, []);
-
   const scrollToBottom = useCallback((args?: ScrollToBottomArgs) => {
     stickToBottomRef.current = true;
-    preserveStickToBottom();
     // Always scroll the container directly — this is the most reliable path
     // with customScrollParent. The override (Virtuoso scrollToIndex) is called
     // as a supplementary hint but container.scrollTo is the primary driver.
@@ -139,40 +155,45 @@ export function Conversation(props: HTMLAttributes<HTMLDivElement>) {
         });
       });
     }
-  }, [preserveStickToBottom]);
-
-  const setScrollToBottomOverride = useCallback((next: ScrollToBottomHandler | null) => {
-    scrollToBottomOverrideRef.current = next;
   }, []);
 
+  const setScrollToBottomOverride = useCallback(
+    (next: ScrollToBottomHandler | null) => {
+      scrollToBottomOverrideRef.current = next;
+    },
+    [],
+  );
+
   // Context value only depends on containerEl and atBottom (for scroll button).
-  // stickToBottom intent is read from the shared ref to avoid cascading re-renders.
-  const contextValue = useMemo(() => ({
-    containerRef,
-    containerEl,
-    setContainerEl,
-    atBottom,
-    stickToBottomRef,
-    preserveStickToBottom,
-    shouldPreserveStickToBottom,
-    setAtBottom,
-    setStickToBottom,
-    scrollToBottom,
-    setScrollToBottomOverride,
-  }), [
-    atBottom,
-    containerEl,
-    preserveStickToBottom,
-    setAtBottom,
-    setStickToBottom,
-    shouldPreserveStickToBottom,
-    scrollToBottom,
-    setScrollToBottomOverride,
-  ]);
+  // stickToBottom is read from ref to avoid cascading re-renders.
+  const contextValue = useMemo(
+    () => ({
+      containerRef,
+      containerEl,
+      setContainerEl,
+      atBottom,
+      stickToBottom: stickToBottomRef.current,
+      setAtBottom,
+      setStickToBottom,
+      scrollToBottom,
+      setScrollToBottomOverride,
+    }),
+    [
+      atBottom,
+      containerEl,
+      setAtBottom,
+      setStickToBottom,
+      scrollToBottom,
+      setScrollToBottomOverride,
+    ],
+  );
 
   return (
     <ConversationContext.Provider value={contextValue}>
-      <section className={cn("relative flex min-h-0 flex-1", props.className)} {...props} />
+      <section
+        className={cn("relative flex min-h-0 flex-1", extraClassName)}
+        {...props}
+      />
     </ConversationContext.Provider>
   );
 }
@@ -184,7 +205,10 @@ interface ConversationContentProps extends HTMLAttributes<HTMLDivElement> {
   forceScrollKey?: string | number;
   forceScrollScopeKey?: string | number;
   withInnerLayout?: boolean;
-  onScrollPositionChange?: (args: { scrollTop: number; container: HTMLDivElement }) => void;
+  onScrollPositionChange?: (args: {
+    scrollTop: number;
+    container: HTMLDivElement;
+  }) => void;
 }
 
 export function ConversationContent(props: ConversationContentProps) {
@@ -192,9 +216,6 @@ export function ConversationContent(props: ConversationContentProps) {
     containerRef,
     setContainerEl,
     setAtBottom,
-    stickToBottomRef,
-    preserveStickToBottom,
-    shouldPreserveStickToBottom,
     setStickToBottom,
     scrollToBottom,
   } = useConversationContext();
@@ -207,31 +228,41 @@ export function ConversationContent(props: ConversationContentProps) {
     forceScrollScopeKey,
     withInnerLayout = true,
     onScrollPositionChange,
+    className,
     ...rest
   } = props;
   const scrollFrameRef = useRef<number | null>(null);
   const lastReportedScrollTopRef = useRef<number>(0);
-  const lastAutoScrollScopeRef = useRef<{ initialized: boolean; scope?: string | number }>({
+  const lastAutoScrollScopeRef = useRef<{
+    initialized: boolean;
+    scope?: string | number;
+  }>({
     initialized: false,
     scope: scrollScopeKey,
   });
-  const lastForceScrollRequestRef = useRef<{ scope?: string | number; key?: string | number }>({
+  const lastForceScrollRequestRef = useRef<{
+    scope?: string | number;
+    key?: string | number;
+  }>({
     scope: forceScrollScopeKey,
     key: forceScrollKey,
   });
-  const lastScrollMetricsRef = useRef<{ clientHeight: number; scrollHeight: number }>({
-    clientHeight: 0,
-    scrollHeight: 0,
-  });
-  const lastUserScrollIntentAtRef = useRef(0);
+  // Read stickToBottom from the parent ref to avoid dependency on context value changes.
+  const stickToBottomRef = useRef(true);
 
-  const markUserScrollIntent = useCallback(() => {
-    lastUserScrollIntentAtRef.current = getCurrentTimeMs();
-  }, []);
+  // Sync ref from context setter calls.
+  const wrappedSetStickToBottom = useCallback(
+    (next: boolean) => {
+      stickToBottomRef.current = next;
+      setStickToBottom(next);
+    },
+    [setStickToBottom],
+  );
 
   useEffect(() => {
     const previous = lastAutoScrollScopeRef.current;
-    const scopeChanged = !previous.initialized || previous.scope !== scrollScopeKey;
+    const scopeChanged =
+      !previous.initialized || previous.scope !== scrollScopeKey;
     lastAutoScrollScopeRef.current = {
       initialized: true,
       scope: scrollScopeKey,
@@ -239,7 +270,8 @@ export function ConversationContent(props: ConversationContentProps) {
     if (scopeChanged) {
       // Reset auto-scroll intent for the new scope so subsequent content
       // updates (streaming) keep pinning to the bottom.
-      setStickToBottom(true);
+      stickToBottomRef.current = true;
+      wrappedSetStickToBottom(true);
       // Flush the container toward the bottom immediately so the user
       // doesn't see the stale scroll position from the previous scope
       // while Virtuoso finishes its initial item measurement.
@@ -249,26 +281,35 @@ export function ConversationContent(props: ConversationContentProps) {
     if (stickToBottomRef.current) {
       scrollToBottom({ behavior: autoScrollBehavior ?? "auto" });
     }
-  }, [autoScrollBehavior, autoScrollKey, scrollScopeKey, scrollToBottom, setStickToBottom, stickToBottomRef]);
+  }, [
+    autoScrollBehavior,
+    autoScrollKey,
+    scrollScopeKey,
+    scrollToBottom,
+    wrappedSetStickToBottom,
+  ]);
 
   useEffect(() => {
     const previous = lastForceScrollRequestRef.current;
     const scopeChanged = previous.scope !== forceScrollScopeKey;
-    const shouldForceScroll = !scopeChanged && forceScrollKey != null && forceScrollKey !== previous.key;
+    const shouldForceScroll =
+      !scopeChanged &&
+      forceScrollKey != null &&
+      forceScrollKey !== previous.key;
     lastForceScrollRequestRef.current = {
       scope: forceScrollScopeKey,
       key: forceScrollKey,
     };
     if (scopeChanged) {
       // Align with the auto-scroll effect — assume bottom intent for a new scope.
-      setStickToBottom(true);
+      stickToBottomRef.current = true;
     }
     if (!shouldForceScroll) {
       return;
     }
     // Re-enable auto-scroll so subsequent content updates (streaming) keep
     // following the bottom after this forced scroll.
-    setStickToBottom(true);
+    stickToBottomRef.current = true;
     const behavior = autoScrollBehavior ?? "auto";
     // Single RAF is sufficient — the double/triple RAF pattern caused jitter
     // by issuing multiple scroll commands across successive frames.
@@ -297,43 +338,17 @@ export function ConversationContent(props: ConversationContentProps) {
         containerRef.current = node;
         setContainerEl(node);
       }}
-      className={cn("min-h-0 flex-1 overflow-x-hidden overflow-y-auto", rest.className)}
-      onWheelCapture={markUserScrollIntent}
-      onTouchStartCapture={markUserScrollIntent}
+      className={cn(
+        "min-h-0 flex-1 overflow-x-hidden overflow-y-auto",
+        className,
+      )}
       onScroll={(event) => {
         const target = event.currentTarget;
-        const distance = target.scrollHeight - target.scrollTop - target.clientHeight;
+        const distance =
+          target.scrollHeight - target.scrollTop - target.clientHeight;
         const nextAtBottom = distance < AT_BOTTOM_THRESHOLD;
-        const previousMetrics = lastScrollMetricsRef.current;
-        const geometryChanged =
-          previousMetrics.clientHeight > 0
-          && (
-            previousMetrics.clientHeight !== target.clientHeight
-            || previousMetrics.scrollHeight !== target.scrollHeight
-          );
-        lastScrollMetricsRef.current = {
-          clientHeight: target.clientHeight,
-          scrollHeight: target.scrollHeight,
-        };
-        const hasRecentUserScrollIntent =
-          getCurrentTimeMs() - lastUserScrollIntentAtRef.current < USER_SCROLL_INTENT_WINDOW_MS;
         setAtBottom(nextAtBottom);
-        if (nextAtBottom) {
-          setStickToBottom(true);
-        } else if (!stickToBottomRef.current) {
-          setStickToBottom(false);
-        } else if (hasRecentUserScrollIntent) {
-          setStickToBottom(false);
-        } else if (geometryChanged || shouldPreserveStickToBottom()) {
-          preserveStickToBottom();
-          debugConversationScroll("preserve-sticky-intent", {
-            geometryChanged,
-            hasRecentUserScrollIntent,
-            distanceFromBottom: Math.round(distance),
-          });
-        } else {
-          setStickToBottom(false);
-        }
+        wrappedSetStickToBottom(nextAtBottom);
 
         if (onScrollPositionChange) {
           // Debounce scroll position tracking to avoid expensive DOM queries on every frame.
@@ -345,7 +360,10 @@ export function ConversationContent(props: ConversationContentProps) {
             const currentScrollTop = target.scrollTop;
             if (currentScrollTop !== lastReportedScrollTopRef.current) {
               lastReportedScrollTopRef.current = currentScrollTop;
-              onScrollPositionChange({ scrollTop: currentScrollTop, container: target });
+              onScrollPositionChange({
+                scrollTop: currentScrollTop,
+                container: target,
+              });
             }
           }, 100);
         }
@@ -353,8 +371,12 @@ export function ConversationContent(props: ConversationContentProps) {
       {...rest}
     >
       {withInnerLayout ? (
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-3 py-3 sm:px-5">{children}</div>
-      ) : children}
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-3 py-3 sm:px-5">
+          {children}
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }
@@ -374,129 +396,50 @@ interface ConversationVirtualListProps<T> {
   extraBottomPadding?: number;
 }
 
-export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T>) {
-  const {
-    containerEl,
-    setAtBottom,
-    setScrollToBottomOverride,
-    stickToBottomRef,
-    preserveStickToBottom,
-    shouldPreserveStickToBottom,
-  } = useConversationContext();
+export function ConversationVirtualList<T>(
+  props: ConversationVirtualListProps<T>,
+) {
+  const { containerEl, setAtBottom, setScrollToBottomOverride } =
+    useConversationContext();
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+  const stickToBottomRef = useRef(true);
   // Guard flag: while restoring to bottom, suppress Virtuoso's transient
   // "not-at-bottom" reports that would disable followOutput prematurely.
   const isRestoringRef = useRef(false);
-  const restoreRafIdsRef = useRef<number[]>([]);
-  const lastForceScrollRequestRef = useRef<{ scope?: string | number; key?: string | number }>({
+  const lastForceScrollRequestRef = useRef<{
+    scope?: string | number;
+    key?: string | number;
+  }>({
     scope: props.forceScrollScopeKey,
     key: props.forceScrollKey,
   });
-  const lastListScopeRef = useRef<{ initialized: boolean; scope?: string | number }>({
+  const lastListScopeRef = useRef<{
+    initialized: boolean;
+    scope?: string | number;
+  }>({
     initialized: false,
     scope: props.listKey,
   });
-  const lastContainerHeightRef = useRef<number | null>(null);
   const lastIndex = props.data.length - 1;
   const extraBottomPadding = props.extraBottomPadding ?? 0;
-  const lastExtraBottomPaddingRef = useRef(extraBottomPadding);
-  const queueRestoreFrame = useCallback((callback: FrameRequestCallback) => {
-    const frameId = requestAnimationFrame((timestamp) => {
-      restoreRafIdsRef.current = restoreRafIdsRef.current.filter((candidate) => candidate !== frameId);
-      callback(timestamp);
-    });
-    restoreRafIdsRef.current.push(frameId);
-    return frameId;
-  }, []);
-  const cancelPendingRestoreFrames = useCallback(() => {
-    for (const frameId of restoreRafIdsRef.current) {
-      cancelAnimationFrame(frameId);
-    }
-    restoreRafIdsRef.current = [];
-  }, []);
-  const scheduleContainerBottomSync = useCallback((reason: string) => {
-    if (!containerEl) {
-      isRestoringRef.current = false;
-      return;
-    }
+  // Ref allows the List component to read the latest padding without
+  // recreating the component reference (which causes Virtuoso to remount).
+  const extraBottomPaddingRef = useRef(extraBottomPadding);
+  extraBottomPaddingRef.current = extraBottomPadding;
 
-    const MAX_SYNC_ATTEMPTS = 4;
-    preserveStickToBottom();
-
-    const finishRestore = () => {
-      isRestoringRef.current = false;
-      const finalDistance = getDistanceFromBottom(containerEl);
-      if (finalDistance <= AT_BOTTOM_THRESHOLD) {
-        stickToBottomRef.current = true;
-        setAtBottom(true);
-      }
-      debugConversationScroll("container-bottom-sync-done", {
-        reason,
-        finalDistance: Math.round(finalDistance),
-        stickToBottom: stickToBottomRef.current,
-      });
-    };
-
-    const runSync = (attempt: number) => {
-      containerEl.scrollTo({ top: containerEl.scrollHeight, behavior: "auto" });
-      const distanceFromBottom = Math.round(getDistanceFromBottom(containerEl));
-      debugConversationScroll("container-bottom-sync", {
-        reason,
-        attempt,
-        distanceFromBottom,
-      });
-      if (attempt >= MAX_SYNC_ATTEMPTS) {
-        finishRestore();
-        return;
-      }
-      queueRestoreFrame(() => {
-        if (getDistanceFromBottom(containerEl) > AT_BOTTOM_THRESHOLD) {
-          runSync(attempt + 1);
-        } else {
-          finishRestore();
-        }
-      });
-    };
-
-    queueRestoreFrame(() => runSync(1));
-  }, [containerEl, queueRestoreFrame, setAtBottom]);
-  const restoreToBottom = useCallback((reason: string) => {
-    if (lastIndex < 0) {
-      return;
-    }
-    cancelPendingRestoreFrames();
-    // Enable stickToBottom so followOutput keeps pinning new content.
-    stickToBottomRef.current = true;
-    preserveStickToBottom();
-    isRestoringRef.current = true;
-    virtuosoRef.current?.scrollToIndex({
-      index: lastIndex,
-      align: "end",
-      behavior: "auto",
-    });
-    debugConversationScroll("restore-to-bottom", {
-      reason,
-      listKey: props.listKey ?? null,
-      forceScrollScopeKey: props.forceScrollScopeKey ?? null,
-      lastIndex,
-    });
-    scheduleContainerBottomSync(reason);
-  }, [
-    cancelPendingRestoreFrames,
-    lastIndex,
-    preserveStickToBottom,
-    props.forceScrollScopeKey,
-    props.listKey,
-    scheduleContainerBottomSync,
-  ]);
+  // Stable component references — only recreated when layout changes.
+  // extraBottomPadding is read from a ref so the components object identity
+  // never changes on padding updates, preventing Virtuoso remounts.
   const components = useMemo(() => {
     const listLayout = props.layout ?? "default";
+    const paddingRef = extraBottomPaddingRef;
     return {
       List: forwardRef(function ConversationListContainer(
         listProps: ComponentPropsWithoutRef<"div">,
-        ref: ForwardedRef<HTMLDivElement>
+        ref: ForwardedRef<HTMLDivElement>,
       ) {
         const { className, style, ...rest } = listProps;
+        const extra = paddingRef.current;
         return (
           <div
             ref={ref}
@@ -506,22 +449,27 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
                 : "mx-auto w-full max-w-6xl px-3 pt-4 sm:px-5 sm:pt-5",
               className,
             )}
-            style={extraBottomPadding > 0 ? withExtraPaddingBottom(style, extraBottomPadding) : style}
+            style={extra > 0 ? withExtraPaddingBottom(style, extra) : style}
             {...rest}
           />
         );
       }),
-      Item: function ConversationListItem(itemProps: ComponentPropsWithoutRef<"div">) {
+      Item: function ConversationListItem(
+        itemProps: ComponentPropsWithoutRef<"div">,
+      ) {
         const { className, ...rest } = itemProps;
         return (
           <div
-            className={cn(listLayout === "zen" ? "pb-8" : "pb-3 last:pb-6", className)}
+            className={cn(
+              listLayout === "zen" ? "pb-8" : "pb-3 last:pb-6",
+              className,
+            )}
             {...rest}
           />
         );
       },
     };
-  }, [extraBottomPadding, props.layout]);
+  }, [props.layout]);
 
   useEffect(() => {
     setScrollToBottomOverride(() => (args?: ScrollToBottomArgs) => {
@@ -548,8 +496,6 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     };
   }, [containerEl, lastIndex, setScrollToBottomOverride]);
 
-  useEffect(() => cancelPendingRestoreFrames, [cancelPendingRestoreFrames]);
-
   // Restore scroll position on task switch or data changes.
   // Uses a local stickToBottomRef to avoid re-running when the parent
   // stickToBottom state toggles during normal scrolling.
@@ -559,6 +505,82 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     }
 
     const rafIds: number[] = [];
+
+    const MAX_SYNC_ATTEMPTS = 4;
+
+    const scheduleContainerBottomSync = (reason: string) => {
+      if (!containerEl) {
+        isRestoringRef.current = false;
+        return;
+      }
+
+      const finishRestore = () => {
+        isRestoringRef.current = false;
+        // Re-assert stickToBottom after the sync completes — Virtuoso may
+        // have fired atBottomStateChange(false) during the scroll.
+        const finalDistance = getDistanceFromBottom(containerEl);
+        if (finalDistance <= AT_BOTTOM_THRESHOLD) {
+          stickToBottomRef.current = true;
+          setAtBottom(true);
+        }
+        debugConversationScroll("container-bottom-sync-done", {
+          reason,
+          finalDistance: Math.round(finalDistance),
+          stickToBottom: stickToBottomRef.current,
+        });
+      };
+
+      const runSync = (attempt: number) => {
+        containerEl.scrollTo({
+          top: containerEl.scrollHeight,
+          behavior: "auto",
+        });
+        const distanceFromBottom = Math.round(
+          getDistanceFromBottom(containerEl),
+        );
+        debugConversationScroll("container-bottom-sync", {
+          reason,
+          attempt,
+          distanceFromBottom,
+        });
+        if (attempt >= MAX_SYNC_ATTEMPTS) {
+          finishRestore();
+          return;
+        }
+        rafIds.push(
+          requestAnimationFrame(() => {
+            if (getDistanceFromBottom(containerEl) > AT_BOTTOM_THRESHOLD) {
+              runSync(attempt + 1);
+            } else {
+              finishRestore();
+            }
+          }),
+        );
+      };
+
+      rafIds.push(requestAnimationFrame(() => runSync(1)));
+    };
+
+    const restoreToBottom = (reason: string) => {
+      if (lastIndex < 0) {
+        return;
+      }
+      // Enable stickToBottom so followOutput keeps pinning new content.
+      stickToBottomRef.current = true;
+      isRestoringRef.current = true;
+      virtuosoRef.current?.scrollToIndex({
+        index: lastIndex,
+        align: "end",
+        behavior: "auto",
+      });
+      debugConversationScroll("restore-to-bottom", {
+        reason,
+        listKey: props.listKey ?? null,
+        forceScrollScopeKey: props.forceScrollScopeKey ?? null,
+        lastIndex,
+      });
+      scheduleContainerBottomSync(reason);
+    };
 
     const restoreToSavedAnchor = (index: number, offset: number) => {
       virtuosoRef.current?.scrollToIndex({
@@ -578,12 +600,15 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       if (!containerEl) {
         return false;
       }
-      const anchorNode = containerEl.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
+      const anchorNode = containerEl.querySelector<HTMLElement>(
+        `[data-message-id="${CSS.escape(messageId)}"]`,
+      );
       if (!anchorNode) {
         return false;
       }
       const containerTop = containerEl.getBoundingClientRect().top;
-      const currentOffset = anchorNode.getBoundingClientRect().top - containerTop;
+      const currentOffset =
+        anchorNode.getBoundingClientRect().top - containerTop;
       const delta = Math.round(currentOffset + offset);
       if (Math.abs(delta) <= 1) {
         return true;
@@ -596,18 +621,21 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     };
 
     const previousForceScroll = lastForceScrollRequestRef.current;
-    const forceScrollScopeChanged = previousForceScroll.scope !== props.forceScrollScopeKey;
+    const forceScrollScopeChanged =
+      previousForceScroll.scope !== props.forceScrollScopeKey;
     const shouldForceRestoreBottom =
-      !forceScrollScopeChanged
-      && props.forceScrollKey != null
-      && props.forceScrollKey !== previousForceScroll.key;
+      !forceScrollScopeChanged &&
+      props.forceScrollKey != null &&
+      props.forceScrollKey !== previousForceScroll.key;
     lastForceScrollRequestRef.current = {
       scope: props.forceScrollScopeKey,
       key: props.forceScrollKey,
     };
 
     const previousListScope = lastListScopeRef.current;
-    const listScopeChanged = !previousListScope.initialized || previousListScope.scope !== props.listKey;
+    const listScopeChanged =
+      !previousListScope.initialized ||
+      previousListScope.scope !== props.listKey;
     lastListScopeRef.current = {
       initialized: true,
       scope: props.listKey,
@@ -626,14 +654,17 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     }
 
     const savedIndex = props.restoreItemIndex;
-    if (savedIndex == null || savedIndex < 0 || savedIndex >= props.data.length) {
+    if (
+      savedIndex == null ||
+      savedIndex < 0 ||
+      savedIndex >= props.data.length
+    ) {
       if (listScopeChanged) {
         // On scope change Virtuoso remounts and uses initialTopMostItemIndex
         // to start near the bottom. The container's scrollTop is stale from
         // the previous scope — flush it immediately so Virtuoso's initial
         // layout doesn't inherit the wrong position.
         stickToBottomRef.current = true;
-        preserveStickToBottom();
         if (containerEl) {
           containerEl.scrollTop = containerEl.scrollHeight;
         }
@@ -673,6 +704,7 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       rafIds.forEach((id) => cancelAnimationFrame(id));
     };
   }, [
+    containerEl,
     lastIndex,
     props.data.length,
     props.forceScrollKey,
@@ -681,68 +713,27 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     props.restoreItemId,
     props.restoreItemIndex,
     props.restoreItemOffset,
-    restoreToBottom,
     // stickToBottom intentionally NOT in deps — read from ref to avoid
     // re-running this effect on every scroll near the bottom threshold.
   ]);
 
-  useEffect(() => {
-    if (!containerEl) {
-      lastContainerHeightRef.current = null;
-      return;
-    }
-
-    lastContainerHeightRef.current = containerEl.clientHeight;
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-
-    const observer = new ResizeObserver(() => {
-      const previousHeight = lastContainerHeightRef.current;
-      const nextHeight = containerEl.clientHeight;
-      lastContainerHeightRef.current = nextHeight;
-      if (
-        previousHeight == null
-        || previousHeight === nextHeight
-        || lastIndex < 0
-        || !stickToBottomRef.current
-      ) {
+  // Sync stickToBottom ref from Virtuoso's atBottomStateChange.
+  // During a restore-to-bottom operation, suppress transient "not at bottom"
+  // reports — Virtuoso fires these while it re-measures items but before our
+  // RAF-based container sync has finished scrolling.
+  const handleAtBottomChange = useCallback(
+    (isAtBottom: boolean) => {
+      if (!isAtBottom && isRestoringRef.current) {
+        debugConversationScroll("suppress-not-at-bottom", {
+          isRestoring: true,
+        });
         return;
       }
-      restoreToBottom("container-resize");
-    });
-    observer.observe(containerEl);
-
-    return () => observer.disconnect();
-  }, [containerEl, lastIndex, restoreToBottom]);
-
-  useEffect(() => {
-    const previousExtraBottomPadding = lastExtraBottomPaddingRef.current;
-    lastExtraBottomPaddingRef.current = extraBottomPadding;
-    if (
-      previousExtraBottomPadding === extraBottomPadding
-      || lastIndex < 0
-      || !stickToBottomRef.current
-    ) {
-      return;
-    }
-    restoreToBottom("bottom-padding-change");
-  }, [extraBottomPadding, lastIndex, restoreToBottom]);
-
-  // Virtuoso's atBottom signal reflects current geometry, not user intent.
-  // Preserve stickToBottom until actual user scroll or explicit scroll-to-bottom
-  // changes it, otherwise layout shifts (dock resize, viewport resize) break
-  // followOutput before the restore logic can run.
-  const handleAtBottomChange = useCallback((isAtBottom: boolean) => {
-    if (!isAtBottom && (isRestoringRef.current || (stickToBottomRef.current && shouldPreserveStickToBottom()))) {
-      debugConversationScroll("suppress-not-at-bottom", {
-        isRestoring: isRestoringRef.current,
-        preserveStickyIntent: shouldPreserveStickToBottom(),
-      });
-      return;
-    }
-    setAtBottom(isAtBottom);
-  }, [setAtBottom, shouldPreserveStickToBottom, stickToBottomRef]);
+      stickToBottomRef.current = isAtBottom;
+      setAtBottom(isAtBottom);
+    },
+    [setAtBottom],
+  );
 
   // Virtuoso's followOutput keeps the list pinned to the bottom when new content
   // is appended and the user was already at the bottom. This replaces the manual
@@ -789,8 +780,15 @@ export function ConversationEmptyState(args: {
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-h-[240px] flex-col items-center justify-center text-center", args.className)}>
-      {args.icon ? <div className="mb-3 text-muted-foreground">{args.icon}</div> : null}
+    <div
+      className={cn(
+        "flex min-h-[240px] flex-col items-center justify-center text-center",
+        args.className,
+      )}
+    >
+      {args.icon ? (
+        <div className="mb-3 text-muted-foreground">{args.icon}</div>
+      ) : null}
       <p className="text-lg font-semibold text-foreground/90">{args.title}</p>
       <p className="mt-1 text-sm text-muted-foreground">{args.description}</p>
     </div>
@@ -807,12 +805,15 @@ export function ConversationScrollButton(props: ConversationScrollButtonProps) {
     return null;
   }
 
-  const { tooltip, ...buttonProps } = props;
+  const { tooltip, className, ...buttonProps } = props;
   const button = (
     <Button
       size="sm"
       variant="outline"
-      className={cn("absolute bottom-3 left-3 h-8 rounded-full px-2", buttonProps.className)}
+      className={cn(
+        "absolute bottom-3 left-3 h-8 rounded-full px-2",
+        className,
+      )}
       onClick={() => {
         scrollToBottom({ behavior: "smooth" });
       }}
@@ -845,7 +846,10 @@ export interface ConversationMarkdownMessage {
 
 export function messagesToMarkdown(
   messages: ConversationMarkdownMessage[],
-  formatMessage?: (message: ConversationMarkdownMessage, index: number) => string
+  formatMessage?: (
+    message: ConversationMarkdownMessage,
+    index: number,
+  ) => string,
 ) {
   return messages
     .map((message, index) => {
@@ -857,27 +861,45 @@ export function messagesToMarkdown(
     .join("\n\n");
 }
 
-interface ConversationDownloadProps extends Omit<React.ComponentProps<typeof Button>, "onClick"> {
+interface ConversationDownloadProps extends Omit<
+  React.ComponentProps<typeof Button>,
+  "onClick"
+> {
   messages: ConversationMarkdownMessage[];
   filename?: string;
-  formatMessage?: (message: ConversationMarkdownMessage, index: number) => string;
+  formatMessage?: (
+    message: ConversationMarkdownMessage,
+    index: number,
+  ) => string;
   tooltip?: string;
 }
 
 export function ConversationDownload(args: ConversationDownloadProps) {
-  const { messages, filename = `conversation-${new Date().toISOString().slice(0, 10)}.md`, formatMessage, className, tooltip, ...props } = args;
+  const {
+    messages,
+    filename = `conversation-${new Date().toISOString().slice(0, 10)}.md`,
+    formatMessage,
+    className,
+    tooltip,
+    ...props
+  } = args;
   const disabled = messages.length === 0;
   const button = (
     <Button
       type="button"
       size="sm"
       variant="outline"
-      className={cn("absolute bottom-3 left-3 h-8 rounded-full px-2", className)}
+      className={cn(
+        "absolute bottom-3 left-3 h-8 rounded-full px-2",
+        className,
+      )}
       disabled={disabled}
       aria-label="download-conversation"
       onClick={() => {
         const markdown = messagesToMarkdown(messages, formatMessage);
-        const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+        const blob = new Blob([markdown], {
+          type: "text/markdown;charset=utf-8",
+        });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
         anchor.href = url;

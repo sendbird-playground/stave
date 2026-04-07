@@ -8,10 +8,18 @@ import {
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/chat";
 import { toProviderStartCase } from "./chat-panel-message-parts";
-import { ChatPanelMessageListScaffold, type ChatPanelRowRenderArgs } from "./chat-panel.shared";
-import { ZenAssistantMessageBody, hasVisibleZenAssistantMessageBody } from "./message/ZenAssistantMessageBody";
+import {
+  ChatPanelMessageListScaffold,
+  type ChatPanelRowRenderArgs,
+} from "./chat-panel.shared";
+import {
+  ZenAssistantMessageBody,
+  hasVisibleZenAssistantMessageBody,
+} from "./message/ZenAssistantMessageBody";
 
-const ZenMessageRow = memo(function ZenMessageRow(args: ChatPanelRowRenderArgs) {
+const ZenMessageRow = memo(function ZenMessageRow(
+  args: ChatPanelRowRenderArgs,
+) {
   const { activeTaskId, chatStreamingEnabled, isFirst, message } = args;
 
   return (
@@ -29,21 +37,27 @@ const ZenMessageRow = memo(function ZenMessageRow(args: ChatPanelRowRenderArgs) 
             <span
               className={cn(
                 "size-1.5 rounded-full",
-                message.role === "user" ? "bg-primary" : "bg-muted-foreground/70",
+                message.role === "user"
+                  ? "bg-primary"
+                  : "bg-muted-foreground/70",
               )}
               aria-hidden="true"
             />
             <span>{message.role === "user" ? "USER" : "AGENT"}</span>
             {message.role === "assistant" ? (
               <span className="text-muted-foreground/55">
-                {message.providerId === "user" ? "Assistant" : toProviderStartCase({ providerId: message.providerId })}
+                {message.providerId === "user"
+                  ? "Assistant"
+                  : toProviderStartCase({ providerId: message.providerId })}
               </span>
             ) : null}
           </div>
           <ZenMessageContent
             className={cn(
-              message.role === "assistant" && "w-full max-w-[72ch] self-start pb-0 text-left text-[0.98em] tracking-[-0.01em]",
-              message.role === "user" && "w-full max-w-[38ch] self-end pb-0 text-right text-[0.98em] tracking-[-0.01em]",
+              message.role === "assistant" &&
+                "w-full max-w-[72ch] self-start pb-0 text-left text-[0.98em] tracking-[-0.01em]",
+              message.role === "user" &&
+                "w-full max-w-[38ch] self-end pb-0 text-right text-[0.98em] tracking-[-0.01em]",
             )}
           >
             <ZenAssistantMessageBody
@@ -59,22 +73,25 @@ const ZenMessageRow = memo(function ZenMessageRow(args: ChatPanelRowRenderArgs) 
   );
 });
 
-const MemoizedZenChatPanelMessageList = memo(function ZenChatPanelMessageList(args: {
-  inputDockHeight?: number;
-}) {
-  const filterMessage = useCallback((message: ChatMessage) => (
-    message.role !== "assistant" || hasVisibleZenAssistantMessageBody({ message })
-  ), []);
+const MemoizedZenChatPanelMessageList = memo(
+  function ZenChatPanelMessageList(args: { inputDockHeight?: number }) {
+    const filterMessage = useCallback(
+      (message: ChatMessage) =>
+        message.role !== "assistant" ||
+        hasVisibleZenAssistantMessageBody({ message }),
+      [],
+    );
 
-  return (
-    <ChatPanelMessageListScaffold
-      layout="zen"
-      filterMessage={filterMessage}
-      bottomSpacerHeight={args.inputDockHeight}
-      renderMessageRow={(rowArgs) => <ZenMessageRow {...rowArgs} />}
-    />
-  );
-});
+    return (
+      <ChatPanelMessageListScaffold
+        layout="zen"
+        filterMessage={filterMessage}
+        bottomSpacerHeight={(args.inputDockHeight ?? 0) + 24}
+        renderMessageRow={(rowArgs) => <ZenMessageRow {...rowArgs} />}
+      />
+    );
+  },
+);
 
 export function ZenChatPanel(args: { inputDockHeight?: number }) {
   const conversationStyle = {
@@ -84,7 +101,9 @@ export function ZenChatPanel(args: { inputDockHeight?: number }) {
   return (
     <Conversation style={conversationStyle}>
       <div className="flex h-full w-full flex-col">
-        <MemoizedZenChatPanelMessageList inputDockHeight={args.inputDockHeight} />
+        <MemoizedZenChatPanelMessageList
+          inputDockHeight={args.inputDockHeight}
+        />
       </div>
       <ConversationScrollButton
         tooltip="Scroll to bottom"

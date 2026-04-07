@@ -142,8 +142,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist Variable', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: "Geist Variable", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -213,11 +213,13 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-  --font-heading: 'Inter Variable', sans-serif;
+  --font-heading: "Inter Variable", sans-serif;
 }
 
 @layer base {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     border-color: var(--border);
     box-sizing: border-box;
     @apply border-border outline-ring/50;
@@ -268,7 +270,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
@@ -338,7 +342,9 @@
 
   .zen-conversation-scroll {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in oklab, var(--foreground) 36%, transparent) transparent;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 36%, transparent)
+      transparent;
+    scrollbar-gutter: stable;
   }
 
   .zen-conversation-scroll::-webkit-scrollbar {
@@ -350,25 +356,24 @@
   }
 
   .zen-conversation-scroll::-webkit-scrollbar-thumb {
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--foreground) 42%, transparent) 0%,
-        color-mix(in oklab, var(--foreground) 24%, transparent) 100%
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--foreground) 42%, transparent) 0%,
+      color-mix(in oklab, var(--foreground) 24%, transparent) 100%
+    );
     border: 3px solid transparent;
     border-radius: 999px;
     background-clip: padding-box;
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 14%, transparent);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in oklab, var(--foreground) 14%, transparent);
   }
 
   .zen-conversation-scroll::-webkit-scrollbar-thumb:hover {
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--primary) 52%, transparent) 0%,
-        color-mix(in oklab, var(--foreground) 34%, transparent) 100%
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--primary) 52%, transparent) 0%,
+      color-mix(in oklab, var(--foreground) 34%, transparent) 100%
+    );
     background-clip: padding-box;
   }
 
@@ -523,14 +528,13 @@
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background:
-      linear-gradient(
-        120deg,
-        color-mix(in oklab, white 12%, transparent) 0%,
-        transparent 24%,
-        transparent 72%,
-        color-mix(in oklab, white 10%, transparent) 100%
-      );
+    background: linear-gradient(
+      120deg,
+      color-mix(in oklab, white 12%, transparent) 0%,
+      transparent 24%,
+      transparent 72%,
+      color-mix(in oklab, white 10%, transparent) 100%
+    );
     box-shadow:
       inset 1px 0 0 color-mix(in oklab, white 18%, transparent),
       inset 0 1px 0 color-mix(in oklab, white 18%, transparent),
@@ -548,12 +552,11 @@
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--sidebar) 26%, white 14%) 0%,
-        color-mix(in oklab, var(--sidebar) 16%, transparent) 100%
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--sidebar) 26%, white 14%) 0%,
+      color-mix(in oklab, var(--sidebar) 16%, transparent) 100%
+    );
     box-shadow:
       inset 0 1px 0 color-mix(in oklab, white 34%, transparent),
       0 12px 24px -22px color-mix(in oklab, var(--foreground) 28%, transparent);
@@ -730,14 +733,13 @@
   }
 
   :is(.dark) .sidebar-liquid-glass::after {
-    background:
-      linear-gradient(
-        120deg,
-        color-mix(in oklab, white 4%, transparent) 0%,
-        transparent 26%,
-        transparent 72%,
-        color-mix(in oklab, white 4%, transparent) 100%
-      );
+    background: linear-gradient(
+      120deg,
+      color-mix(in oklab, white 4%, transparent) 0%,
+      transparent 26%,
+      transparent 72%,
+      color-mix(in oklab, white 4%, transparent) 100%
+    );
     box-shadow:
       inset 1px 0 0 color-mix(in oklab, white 6%, transparent),
       inset 0 1px 0 color-mix(in oklab, white 6%, transparent),
@@ -747,12 +749,11 @@
   }
 
   :is(.dark) .sidebar-liquid-panel {
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--sidebar) 42%, white 3%) 0%,
-        color-mix(in oklab, var(--sidebar) 28%, transparent) 100%
-      );
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--sidebar) 42%, white 3%) 0%,
+      color-mix(in oklab, var(--sidebar) 28%, transparent) 100%
+    );
     box-shadow:
       inset 0 1px 0 color-mix(in oklab, white 8%, transparent),
       0 12px 24px -22px color-mix(in oklab, black 30%, transparent);
@@ -927,11 +928,13 @@
 }
 
 @keyframes terminal-caret {
-  0%, 48% {
+  0%,
+  48% {
     opacity: 1;
   }
 
-  49%, 100% {
+  49%,
+  100% {
     opacity: 0;
   }
 }
