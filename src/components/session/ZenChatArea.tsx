@@ -1,10 +1,9 @@
-import { ChatInput } from "@/components/session/ChatInput";
-import { ChatPanel } from "@/components/session/ChatPanel";
-import { PlanViewer } from "@/components/session/PlanViewer";
+import { ZenChatInput } from "@/components/session/ChatInput";
+import { ZenChatPanel } from "@/components/session/ZenChatPanel";
 import { RenderProfiler } from "@/lib/render-profiler";
 import { ChatAreaScaffold, useChatAreaShellState } from "./chat-area.shared";
 
-export function ChatArea() {
+export function ZenChatArea() {
   const state = useChatAreaShellState();
 
   return (
@@ -12,17 +11,12 @@ export function ChatArea() {
       state={state}
       input={(
         <RenderProfiler id="ChatInput" thresholdMs={8}>
-          <ChatInput />
+          <ZenChatInput />
         </RenderProfiler>
       )}
       panel={(
         <RenderProfiler id="ChatPanel" thresholdMs={8}>
-          <ChatPanel />
-        </RenderProfiler>
-      )}
-      planViewer={(
-        <RenderProfiler id="PlanViewer">
-          <PlanViewer inputDockHeight={state.chatInputDockHeight} />
+          <ZenChatPanel />
         </RenderProfiler>
       )}
     />

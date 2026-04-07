@@ -1,4 +1,4 @@
-import { PromptInput } from "@/components/ai-elements";
+import { PromptInput, ZenPromptInput } from "@/components/ai-elements";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildModelSelectorOptions,
@@ -70,7 +70,7 @@ import {
   shouldHandleApprovalEnterShortcut,
 } from "./chat-input.utils";
 
-interface ChatInputProps {
+interface BaseChatInputProps {
   compact?: boolean;
 }
 
@@ -417,6 +417,8 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     return () => window.removeEventListener("keydown", handleApprovalShortcut);
   }, [args.activeTaskId, pendingApproval, resolveApproval]);
 
+  const PromptInputComponent = args.compact ? ZenPromptInput : PromptInput;
+
   return (
     <div
       className={cn(
@@ -451,8 +453,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
             ) : null}
           </div>
         ) : null}
-        <PromptInput
-          minimal={args.compact}
+        <PromptInputComponent
           focusToken={`${args.providerSelectionTarget}:${focusNonce}`}
           value={draftText}
           onBlur={commitCurrentDraftText}
@@ -590,7 +591,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
   );
 }
 
-export function ChatInput(args: ChatInputProps = {}) {
+function BaseChatInput(args: BaseChatInputProps = {}) {
   const [providerCommandCatalog, setProviderCommandCatalog] = useState(() => getCachedProviderCommandCatalog({
     providerId: "claude-code",
   }));
@@ -1238,4 +1239,12 @@ export function ChatInput(args: ChatInputProps = {}) {
       }
     />
   );
+}
+
+export function ChatInput() {
+  return <BaseChatInput />;
+}
+
+export function ZenChatInput() {
+  return <BaseChatInput compact />;
 }

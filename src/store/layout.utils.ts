@@ -12,7 +12,6 @@ export interface LayoutState {
   sidebarOverlayTab: RightRailPanelId;
   terminalDocked: boolean;
   editorDiffMode: boolean;
-  zenMode: boolean;
 }
 
 export const WORKSPACE_SIDEBAR_MIN_WIDTH = 290;
@@ -38,13 +37,15 @@ export function mergeLayoutPatch(args: { layout: LayoutState; patch: Partial<Lay
 }
 
 export function normalizeLayoutState(layout: LayoutState): LayoutState {
+  const { zenMode: _legacyZenMode, ...rest } = layout as LayoutState & {
+    zenMode?: boolean;
+  };
   return {
-    ...layout,
+    ...rest,
     editorPanelWidth: Math.max(MIN_EDITOR_PANEL_WIDTH, layout.editorPanelWidth),
     sidebarOverlayTab: RIGHT_RAIL_PANEL_IDS.includes(layout.sidebarOverlayTab)
       ? layout.sidebarOverlayTab
       : "explorer",
-    zenMode: layout.zenMode === true,
   };
 }
 

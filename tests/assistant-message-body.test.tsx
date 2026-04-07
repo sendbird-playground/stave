@@ -14,7 +14,7 @@ function createAssistantMessage(
   };
 }
 
-async function loadAssistantMessageBody() {
+async function loadAssistantMessageBodies() {
   const localStorageStub = {
     getItem: (_key: string) => null,
     setItem: (_key: string, _value: string) => {},
@@ -42,13 +42,17 @@ async function loadAssistantMessageBody() {
     configurable: true,
   });
 
-  const module = await import("@/components/session/message/assistant-trace");
-  return module.AssistantMessageBody;
+  const standardModule = await import("@/components/session/message/assistant-trace");
+  const zenModule = await import("@/components/session/message/ZenAssistantMessageBody");
+  return {
+    AssistantMessageBody: standardModule.AssistantMessageBody,
+    ZenAssistantMessageBody: zenModule.ZenAssistantMessageBody,
+  };
 }
 
 describe("AssistantMessageBody", () => {
   test("shows only the CoT trigger before the first streaming trace entry arrives", async () => {
-    const AssistantMessageBody = await loadAssistantMessageBody();
+    const { AssistantMessageBody } = await loadAssistantMessageBodies();
     const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
       message: createAssistantMessage({
         isStreaming: true,
@@ -65,7 +69,7 @@ describe("AssistantMessageBody", () => {
   });
 
   test("renders the reasoning step once thinking content arrives", async () => {
-    const AssistantMessageBody = await loadAssistantMessageBody();
+    const { AssistantMessageBody } = await loadAssistantMessageBodies();
     const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
       message: createAssistantMessage({
         isStreaming: true,
@@ -81,8 +85,8 @@ describe("AssistantMessageBody", () => {
   });
 
   test("suppresses reasoning details in zen mode while keeping a minimal working state", async () => {
-    const AssistantMessageBody = await loadAssistantMessageBody();
-    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+    const { ZenAssistantMessageBody } = await loadAssistantMessageBodies();
+    const html = renderToStaticMarkup(createElement(ZenAssistantMessageBody, {
       message: createAssistantMessage({
         isStreaming: true,
         parts: [{ type: "thinking", text: "Inspecting files.", isStreaming: true }],
@@ -90,7 +94,6 @@ describe("AssistantMessageBody", () => {
       taskId: "task-1",
       messageId: "message-1",
       streamingEnabled: true,
-      zenMode: true,
     }));
 
     expect(html).not.toContain("Inspecting files.");
@@ -98,7 +101,7 @@ describe("AssistantMessageBody", () => {
   });
 
   test("keeps assistant trace collapsed in manual expansion mode", async () => {
-    const AssistantMessageBody = await loadAssistantMessageBody();
+    const { AssistantMessageBody } = await loadAssistantMessageBodies();
     const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
       message: createAssistantMessage({
         isStreaming: true,
@@ -115,7 +118,7 @@ describe("AssistantMessageBody", () => {
   });
 
   test("keeps markdown rendering for the pre-plan assistant message after plan splitting", async () => {
-    const AssistantMessageBody = await loadAssistantMessageBody();
+    const { AssistantMessageBody } = await loadAssistantMessageBodies();
     const replayed = replayProviderEventsToTaskState({
       taskId: "task-1",
       messages: [],
@@ -146,8 +149,8 @@ describe("AssistantMessageBody", () => {
   });
 
   test("keeps final response text visible in zen mode", async () => {
-    const AssistantMessageBody = await loadAssistantMessageBody();
-    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+    const { ZenAssistantMessageBody } = await loadAssistantMessageBodies();
+    const html = renderToStaticMarkup(createElement(ZenAssistantMessageBody, {
       message: createAssistantMessage({
         parts: [
           { type: "thinking", text: "Inspecting files.", isStreaming: false },
@@ -157,7 +160,6 @@ describe("AssistantMessageBody", () => {
       taskId: "task-1",
       messageId: "message-1",
       streamingEnabled: true,
-      zenMode: true,
     }));
 
     expect(html).not.toContain("Inspecting files.");

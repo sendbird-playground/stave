@@ -68,19 +68,13 @@ export function Message({ from, className, ...props }: MessageProps) {
   );
 }
 
-interface MessageContentProps extends HTMLAttributes<HTMLDivElement> {
-  minimal?: boolean;
-}
-
-export function MessageContent({ className, minimal = false, ...props }: MessageContentProps) {
+export function MessageContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   const messageFontSize = useAppStore((state) => state.settings.messageFontSize);
   return (
     <div
       className={cn(
-        "flex min-w-0 max-w-full flex-col gap-3 text-foreground",
-        minimal
-          ? "gap-2 font-mono group-[.is-user]:rounded-none group-[.is-user]:border-0 group-[.is-user]:bg-transparent group-[.is-user]:px-0 group-[.is-user]:py-0"
-          : "w-full group-[.is-user]:rounded-md group-[.is-user]:border group-[.is-user]:border-primary/35 group-[.is-user]:bg-primary/12 group-[.is-user]:px-4 group-[.is-user]:py-3",
+        "flex min-w-0 max-w-full w-full flex-col gap-3 text-foreground",
+        "group-[.is-user]:rounded-md group-[.is-user]:border group-[.is-user]:border-primary/35 group-[.is-user]:bg-primary/12 group-[.is-user]:px-4 group-[.is-user]:py-3",
         className
       )}
       style={{ fontSize: `${messageFontSize}px`, lineHeight: MESSAGE_BODY_LINE_HEIGHT }}

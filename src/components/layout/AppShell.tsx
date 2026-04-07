@@ -1,11 +1,10 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { GlobalCommandPalette } from "@/components/layout/GlobalCommandPalette";
 import { StaveMuseWidget } from "@/components/layout/StaveMuseWidget";
 import { resolveStaveMuseRightInset } from "@/components/layout/stave-muse-widget.utils";
 import { TopBar } from "@/components/layout/TopBar";
-import { TopBarWindowControls } from "@/components/layout/TopBarWindowControls";
-import { ZenProjectSidebar } from "@/components/layout/ZenProjectSidebar";
+import { ZenAppShellLayout } from "@/components/layout/ZenAppShellLayout";
 import { COLLAPSED_PROJECT_SIDEBAR_WIDTH, ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
 import { resolveLatestCompletedTurnTarget } from "@/components/layout/command-palette-navigation";
@@ -23,7 +22,6 @@ import {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
   useAppStore,
 } from "@/store/app.store";
-import { cn } from "@/lib/utils";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
 import {
@@ -63,9 +61,6 @@ const WORKSPACE_SIDEBAR_MAX_WIDTH = 340;
 const MIN_CHAT_PANEL_WIDTH = 420;
 const MIN_EXPLORER_PANEL_WIDTH = 200;
 const PANEL_SEPARATOR_WIDTH = 1;
-const IS_MAC = typeof window !== "undefined" && window.api?.platform === "darwin";
-const ZEN_DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
-const ZEN_NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
 function clampPanelWidth(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -94,9 +89,12 @@ export function AppShell() {
     explorerPanelWidth,
     terminalDocked,
     terminalDockHeight,
-    zenMode,
     activeEditorTabId,
-    settings,
+    appShellMode,
+    commandPaletteHiddenCommandIds,
+    commandPalettePinnedCommandIds,
+    commandPaletteRecentCommandIds,
+    commandPaletteShowRecent,
     createTask,
     selectTask,
     clearTaskSelection,
@@ -132,9 +130,12 @@ export function AppShell() {
     state.layout.explorerPanelWidth,
     state.layout.terminalDocked,
     state.layout.terminalDockHeight ?? 210,
-    state.layout.zenMode,
     state.activeEditorTabId,
-    state.settings,
+    state.settings.appShellMode,
+    state.settings.commandPaletteHiddenCommandIds,
+    state.settings.commandPalettePinnedCommandIds,
+    state.settings.commandPaletteRecentCommandIds,
+    state.settings.commandPaletteShowRecent,
     state.createTask,
     state.selectTask,
     state.clearTaskSelection,
@@ -149,6 +150,7 @@ export function AppShell() {
     state.setLayout,
     state.applyExternalWorkspaceInformationUpdate,
   ] as const));
+  const zenMode = appShellMode === "zen";
   const hasProject = Boolean(projectPath);
   const panelRowRef = useRef<HTMLDivElement>(null);
   const contentRowRef = useRef<HTMLDivElement>(null);
@@ -214,7 +216,11 @@ export function AppShell() {
   }, []);
   const handleToggleZenMode = useCallback(() => {
     const store = useAppStore.getState();
-    store.setLayout({ patch: { zenMode: !store.layout.zenMode } });
+    store.updateSettings({
+      patch: {
+        appShellMode: store.settings.appShellMode === "zen" ? "stave" : "zen",
+      },
+    });
   }, []);
   const handleOpenLatestCompletedTurnTask = useCallback(async () => {
     const stateBefore = useAppStore.getState();
@@ -704,7 +710,7 @@ export function AppShell() {
     overlayRightPanelMode = null;
   }
 
-  const showOverlayRightPanel = !zenMode && overlayRightPanelMode !== null;
+  const showOverlayRightPanel = overlayRightPanelMode !== null;
   const modifierLabel = useMemo<"Cmd" | "Ctrl">(
     () => (
       typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
@@ -716,7 +722,6 @@ export function AppShell() {
   const activeWorkspacePath = workspacePathById[activeWorkspaceId] ?? projectPath;
   const hasProjectContext = Boolean(projectPath?.trim());
   const museLeftInset = isLargeViewport
-    && !zenMode
     ? (
       workspaceSidebarCollapsed
         ? COLLAPSED_PROJECT_SIDEBAR_WIDTH
@@ -726,11 +731,11 @@ export function AppShell() {
   const museRightInset = resolveStaveMuseRightInset({
     hasProjectContext,
     isLargeViewport,
-    sidebarOverlayVisible: zenMode ? false : sidebarOverlayVisible,
-    sidebarOverlayTab: zenMode ? "explorer" : sidebarOverlayTab,
-    showDesktopSidebar: zenMode ? false : showDesktopSidebar,
-    desktopSidebarWidth: zenMode ? 0 : desktopSidebarWidth,
-    overlayRightPanelMode: zenMode ? null : overlayRightPanelMode,
+    sidebarOverlayVisible,
+    sidebarOverlayTab,
+    showDesktopSidebar,
+    desktopSidebarWidth,
+    overlayRightPanelMode,
     viewportWidth: typeof window === "undefined" ? 1440 : window.innerWidth,
   });
   const activeWorkspaceIsDefault = Boolean(workspaceDefaultById[activeWorkspaceId]);
@@ -757,10 +762,10 @@ export function AppShell() {
     },
     modifierLabel,
     preferences: {
-      hiddenIds: settings.commandPaletteHiddenCommandIds,
-      pinnedIds: settings.commandPalettePinnedCommandIds,
-      recentIds: settings.commandPaletteRecentCommandIds,
-      showRecent: settings.commandPaletteShowRecent,
+      hiddenIds: commandPaletteHiddenCommandIds,
+      pinnedIds: commandPalettePinnedCommandIds,
+      recentIds: commandPaletteRecentCommandIds,
+      showRecent: commandPaletteShowRecent,
     },
     projectPath,
     projects: (() => {
@@ -870,10 +875,10 @@ export function AppShell() {
     selectTask,
     setLayout,
     setTaskProvider,
-    settings.commandPaletteHiddenCommandIds,
-    settings.commandPalettePinnedCommandIds,
-    settings.commandPaletteRecentCommandIds,
-    settings.commandPaletteShowRecent,
+    commandPaletteHiddenCommandIds,
+    commandPalettePinnedCommandIds,
+    commandPaletteRecentCommandIds,
+    commandPaletteShowRecent,
     sidebarOverlayVisible,
     sidebarOverlayTab,
     tasks,
@@ -891,15 +896,6 @@ export function AppShell() {
 
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
-      {zenMode ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-10" style={ZEN_DRAG_STYLE}>
-          {!IS_MAC ? (
-            <div className="pointer-events-auto absolute right-3 top-1.5">
-              <TopBarWindowControls noDragStyle={ZEN_NO_DRAG_STYLE} />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
       {zoomHudPercent !== null ? (
         <div className="pointer-events-none absolute left-1/2 top-16 z-50 -translate-x-1/2">
           <div className="rounded-full border border-border/80 bg-card/95 px-3 py-1 text-sm font-medium text-foreground shadow-lg backdrop-blur-sm">
@@ -941,200 +937,200 @@ export function AppShell() {
         </Suspense>
       ) : null}
       {zenMode ? (
-        <ZenProjectSidebar />
+        <ZenAppShellLayout />
       ) : (
-        <RenderProfiler id="ProjectWorkspaceSidebar">
-          <ProjectWorkspaceSidebar
-            width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)}
-            collapsed={workspaceSidebarCollapsed}
-            animate={!sidebarResizing}
-            onOpenCommandPalette={handleOpenCommandPalette}
-            onOpenKeyboardShortcuts={handleOpenKeyboardShortcuts}
-            onOpenSettings={handleOpenSettings}
-            onPreloadSettings={handlePreloadSettings}
-          />
-        </RenderProfiler>
-      )}
-      {!zenMode && !workspaceSidebarCollapsed ? (
-        <div
-          className="group relative hidden w-[9px] -mx-[4px] z-50 shrink-0 cursor-col-resize lg:block"
-          onMouseDown={(event) => {
-            event.preventDefault();
-            setSidebarResizing(true);
-            const startX = event.clientX;
-            const startWidth = Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH);
-            const onMove = (moveEvent: MouseEvent) => {
-              const next = Math.max(
-                WORKSPACE_SIDEBAR_MIN_WIDTH,
-                Math.min(WORKSPACE_SIDEBAR_MAX_WIDTH, startWidth + (moveEvent.clientX - startX)),
-              );
-              scheduleLayoutResizePatch("workspaceSidebarWidth", next);
-            };
-            const onUp = () => {
-              setSidebarResizing(false);
-              flushPendingLayoutPatch();
-              window.removeEventListener("mousemove", onMove);
-              window.removeEventListener("mouseup", onUp);
-            };
-            window.addEventListener("mousemove", onMove);
-            window.addEventListener("mouseup", onUp);
-          }}
-        >
-          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
-        </div>
-      ) : null}
-      <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden", zenMode && "pt-8 sm:pt-10")}>
-        {!zenMode ? <TopBar /> : null}
-        <div ref={panelRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <div ref={contentRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              {hasProject && !zenMode ? <WorkspaceTaskTabs /> : null}
-              <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <>
+          <RenderProfiler id="ProjectWorkspaceSidebar">
+            <ProjectWorkspaceSidebar
+              width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)}
+              collapsed={workspaceSidebarCollapsed}
+              animate={!sidebarResizing}
+              onOpenCommandPalette={handleOpenCommandPalette}
+              onOpenKeyboardShortcuts={handleOpenKeyboardShortcuts}
+              onOpenSettings={handleOpenSettings}
+              onPreloadSettings={handlePreloadSettings}
+            />
+          </RenderProfiler>
+          {!workspaceSidebarCollapsed ? (
+            <div
+              className="group relative hidden w-[9px] -mx-[4px] z-50 shrink-0 cursor-col-resize lg:block"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                setSidebarResizing(true);
+                const startX = event.clientX;
+                const startWidth = Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH);
+                const onMove = (moveEvent: MouseEvent) => {
+                  const next = Math.max(
+                    WORKSPACE_SIDEBAR_MIN_WIDTH,
+                    Math.min(WORKSPACE_SIDEBAR_MAX_WIDTH, startWidth + (moveEvent.clientX - startX)),
+                  );
+                  scheduleLayoutResizePatch("workspaceSidebarWidth", next);
+                };
+                const onUp = () => {
+                  setSidebarResizing(false);
+                  flushPendingLayoutPatch();
+                  window.removeEventListener("mousemove", onMove);
+                  window.removeEventListener("mouseup", onUp);
+                };
+                window.addEventListener("mousemove", onMove);
+                window.addEventListener("mouseup", onUp);
+              }}
+            >
+              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+            </div>
+          ) : null}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <TopBar />
+            <div ref={panelRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+              <div ref={contentRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                  {hasProject ? <WorkspaceTaskTabs /> : null}
                   <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                    <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
-                      <ChatArea zenMode={zenMode} />
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                        <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
+                          <ChatArea />
+                        </div>
+                      </div>
+                      <div className={terminalDocked ? undefined : "hidden"}>
+                        <div
+                          className="group relative z-10 h-[9px] -my-[4px] shrink-0 cursor-row-resize"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            const startY = event.clientY;
+                            const startHeight = terminalDockHeight;
+                            const onMove = (moveEvent: MouseEvent) => {
+                              const delta = startY - moveEvent.clientY;
+                              const next = Math.max(120, Math.min(420, startHeight + delta));
+                              scheduleLayoutResizePatch("terminalDockHeight", next);
+                            };
+                            const onUp = () => {
+                              flushPendingLayoutPatch();
+                              window.removeEventListener("mousemove", onMove);
+                              window.removeEventListener("mouseup", onUp);
+                            };
+                            window.addEventListener("mousemove", onMove);
+                            window.addEventListener("mouseup", onUp);
+                          }}
+                        >
+                          <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+                        </div>
+                        <TerminalDock />
+                      </div>
                     </div>
                   </div>
-                  <div className={terminalDocked && !zenMode ? undefined : "hidden"}>
-                      <div
-                        className="group relative z-10 h-[9px] -my-[4px] shrink-0 cursor-row-resize"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          const startY = event.clientY;
-                          const startHeight = terminalDockHeight;
-                          const onMove = (moveEvent: MouseEvent) => {
-                            const delta = startY - moveEvent.clientY;
-                            const next = Math.max(120, Math.min(420, startHeight + delta));
-                            scheduleLayoutResizePatch("terminalDockHeight", next);
-                          };
-                          const onUp = () => {
-                            flushPendingLayoutPatch();
-                            window.removeEventListener("mousemove", onMove);
-                            window.removeEventListener("mouseup", onUp);
-                          };
-                          window.addEventListener("mousemove", onMove);
-                          window.addEventListener("mouseup", onUp);
-                        }}
-                      >
-                        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+                </div>
+                {showDesktopEditor ? (
+                  <>
+                    <div
+                      className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        const startX = event.clientX;
+                        const startWidth = desktopEditorWidth;
+                        const onMove = (moveEvent: MouseEvent) => {
+                          const containerWidth = contentRowRef.current?.offsetWidth ?? 9999;
+                          const explorerWidth = showDesktopSidebar ? desktopSidebarWidth : 0;
+                          const separators = showDesktopSidebar ? 2 : 1;
+                          const maxEditor = Math.max(
+                            MIN_EDITOR_PANEL_WIDTH,
+                            containerWidth - MIN_CHAT_PANEL_WIDTH - explorerWidth - separators,
+                          );
+                          const minEditor = Math.min(MIN_EDITOR_PANEL_WIDTH, maxEditor);
+                          const delta = startX - moveEvent.clientX;
+                          const next = Math.max(minEditor, Math.min(maxEditor, startWidth + delta));
+                          scheduleLayoutResizePatch("editorPanelWidth", next);
+                        };
+                        const onUp = () => {
+                          flushPendingLayoutPatch();
+                          window.removeEventListener("mousemove", onMove);
+                          window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                      }}
+                    >
+                      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+                    </div>
+                    <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopEditorWidth}px` }}>
+                      <RenderProfiler id="EditorMainPanel" thresholdMs={10}>
+                        <EditorMainPanel />
+                      </RenderProfiler>
+                    </div>
+                  </>
+                ) : null}
+                {showDesktopSidebar ? (
+                  <>
+                    <div
+                      className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        const startX = event.clientX;
+                        const startWidth = desktopSidebarWidth;
+                        const onMove = (moveEvent: MouseEvent) => {
+                          const containerWidth = contentRowRef.current?.offsetWidth ?? 9999;
+                          const editorWidth = showDesktopEditor ? desktopEditorWidth : 0;
+                          const separators = showDesktopEditor ? 2 : 1;
+                          const maxExplorer = Math.max(
+                            MIN_EXPLORER_PANEL_WIDTH,
+                            containerWidth - MIN_CHAT_PANEL_WIDTH - editorWidth - separators,
+                          );
+                          const delta = startX - moveEvent.clientX;
+                          const next = Math.max(MIN_EXPLORER_PANEL_WIDTH, Math.min(maxExplorer, startWidth + delta));
+                          scheduleLayoutResizePatch("explorerPanelWidth", next);
+                        };
+                        const onUp = () => {
+                          flushPendingLayoutPatch();
+                          window.removeEventListener("mousemove", onMove);
+                          window.removeEventListener("mouseup", onUp);
+                        };
+                        window.addEventListener("mousemove", onMove);
+                        window.addEventListener("mouseup", onUp);
+                      }}
+                    >
+                      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
+                    </div>
+                    <Suspense fallback={<aside className="bg-card p-3 text-sm text-muted-foreground" style={{ width: `${desktopSidebarWidth}px` }}>Loading panel...</aside>}>
+                      <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopSidebarWidth}px` }}>
+                        <RenderProfiler id="EditorPanel" thresholdMs={8}>
+                          <EditorPanel
+                            onOpenSettings={handleOpenSettings}
+                            lensOccluded={hasBlockingOverlayOpen}
+                          />
+                        </RenderProfiler>
                       </div>
-                      <TerminalDock />
+                    </Suspense>
+                  </>
+                ) : null}
+                {showOverlayRightPanel ? (
+                  <div className="min-h-0 min-w-0 w-[min(22rem,56vw)] max-w-[22rem] border-l border-border/40">
+                    {overlayRightPanelMode === "editor" ? (
+                      <RenderProfiler id="EditorMainPanelMobile" thresholdMs={10}>
+                        <EditorMainPanel />
+                      </RenderProfiler>
+                    ) : (
+                      <Suspense fallback={<aside className="h-full bg-card p-3 text-sm text-muted-foreground">Loading panel...</aside>}>
+                        <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
+                          <EditorPanel
+                            onOpenSettings={handleOpenSettings}
+                            lensOccluded={hasBlockingOverlayOpen}
+                          />
+                        </RenderProfiler>
+                      </Suspense>
+                    )}
                   </div>
-                </div>
+                ) : null}
               </div>
+              <RightRail />
             </div>
-            {showDesktopEditor ? (
-              <>
-                <div
-                  className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    const startX = event.clientX;
-                    const startWidth = desktopEditorWidth;
-                    const onMove = (moveEvent: MouseEvent) => {
-                      const containerWidth = contentRowRef.current?.offsetWidth ?? 9999;
-                      const explorerWidth = showDesktopSidebar ? desktopSidebarWidth : 0;
-                      const separators = showDesktopSidebar ? 2 : 1;
-                      const maxEditor = Math.max(
-                        MIN_EDITOR_PANEL_WIDTH,
-                        containerWidth - MIN_CHAT_PANEL_WIDTH - explorerWidth - separators,
-                      );
-                      const minEditor = Math.min(MIN_EDITOR_PANEL_WIDTH, maxEditor);
-                      const delta = startX - moveEvent.clientX;
-                      const next = Math.max(minEditor, Math.min(maxEditor, startWidth + delta));
-                      scheduleLayoutResizePatch("editorPanelWidth", next);
-                    };
-                    const onUp = () => {
-                      flushPendingLayoutPatch();
-                      window.removeEventListener("mousemove", onMove);
-                      window.removeEventListener("mouseup", onUp);
-                    };
-                    window.addEventListener("mousemove", onMove);
-                    window.addEventListener("mouseup", onUp);
-                  }}
-                >
-                  <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
-                </div>
-                <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopEditorWidth}px` }}>
-                  <RenderProfiler id="EditorMainPanel" thresholdMs={10}>
-                    <EditorMainPanel />
-                  </RenderProfiler>
-                </div>
-              </>
-            ) : null}
-            {showDesktopSidebar ? (
-              <>
-                <div
-                  className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    const startX = event.clientX;
-                    const startWidth = desktopSidebarWidth;
-                    const onMove = (moveEvent: MouseEvent) => {
-                      const containerWidth = contentRowRef.current?.offsetWidth ?? 9999;
-                      const editorWidth = showDesktopEditor ? desktopEditorWidth : 0;
-                      const separators = showDesktopEditor ? 2 : 1;
-                      const maxExplorer = Math.max(
-                        MIN_EXPLORER_PANEL_WIDTH,
-                        containerWidth - MIN_CHAT_PANEL_WIDTH - editorWidth - separators,
-                      );
-                      const delta = startX - moveEvent.clientX;
-                      const next = Math.max(MIN_EXPLORER_PANEL_WIDTH, Math.min(maxExplorer, startWidth + delta));
-                      scheduleLayoutResizePatch("explorerPanelWidth", next);
-                    };
-                    const onUp = () => {
-                      flushPendingLayoutPatch();
-                      window.removeEventListener("mousemove", onMove);
-                      window.removeEventListener("mouseup", onUp);
-                    };
-                    window.addEventListener("mousemove", onMove);
-                    window.addEventListener("mouseup", onUp);
-                  }}
-                >
-                  <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
-                </div>
-                <Suspense fallback={<aside className="bg-card p-3 text-sm text-muted-foreground" style={{ width: `${desktopSidebarWidth}px` }}>Loading panel...</aside>}>
-                  <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopSidebarWidth}px` }}>
-                    <RenderProfiler id="EditorPanel" thresholdMs={8}>
-                      <EditorPanel
-                        onOpenSettings={handleOpenSettings}
-                        lensOccluded={hasBlockingOverlayOpen}
-                      />
-                    </RenderProfiler>
-                  </div>
-                </Suspense>
-              </>
-            ) : null}
-            {showOverlayRightPanel ? (
-              <div className="min-h-0 min-w-0 w-[min(22rem,56vw)] max-w-[22rem] border-l border-border/40">
-                {overlayRightPanelMode === "editor" ? (
-                  <RenderProfiler id="EditorMainPanelMobile" thresholdMs={10}>
-                    <EditorMainPanel />
-                  </RenderProfiler>
-                ) : (
-                  <Suspense fallback={<aside className="h-full bg-card p-3 text-sm text-muted-foreground">Loading panel...</aside>}>
-                    <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
-                      <EditorPanel
-                        onOpenSettings={handleOpenSettings}
-                        lensOccluded={hasBlockingOverlayOpen}
-                      />
-                    </RenderProfiler>
-                  </Suspense>
-                )}
-              </div>
-            ) : null}
           </div>
-          {!zenMode ? <RightRail /> : null}
-        </div>
-      </div>
-      {!zenMode ? (
-        <StaveMuseWidget
-          leftInset={museLeftInset}
-          rightInset={museRightInset}
-          showFloatingTrigger={!isLargeViewport}
-        />
-      ) : null}
+          <StaveMuseWidget
+            leftInset={museLeftInset}
+            rightInset={museRightInset}
+            showFloatingTrigger={!isLargeViewport}
+          />
+        </>
+      )}
     </div>
   );
 }

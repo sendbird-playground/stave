@@ -28,6 +28,7 @@
 
 - Keyboard shortcut: `Cmd/Ctrl+K`, then `Z`
 - Command Palette: `Enter Zen Mode` or `Exit Zen Mode`
+- Settings: `Settings → General → Workspace Mode`
 
 ### Key Controls
 
@@ -53,7 +54,8 @@
 
 ## Files And Data
 
-- Zen mode is stored as part of the local layout state.
+- Zen mode is stored in local app settings as the current workspace mode.
+- Choosing `Zen` in Settings keeps the app in Zen mode across restarts until you switch back to `Stave`.
 - It does not change project files, workspace metadata, or task message history.
 
 ## Limitations And Advanced Options
