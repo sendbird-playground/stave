@@ -1037,7 +1037,9 @@ describe("workspace store hydration ordering", () => {
     await useAppStore.getState().hydrateWorkspaces();
     await Bun.sleep(0);
 
-    const messages = useAppStore.getState().messagesByTask["task-stale"] ?? [];
+    const nextState = useAppStore.getState();
+    const messages = nextState.messagesByTask["task-stale"] ?? [];
+    expect(nextState.activeTurnIdsByTask["task-stale"]).toBeUndefined();
     expect(messages).toHaveLength(2);
     expect(messages.at(-1)?.content).toBe("Generation interrupted because Stave was closed before this turn completed.");
     expect(messages.at(-1)?.parts).toEqual([{
@@ -1242,6 +1244,161 @@ describe("workspace store hydration ordering", () => {
 
     expect(useAppStore.getState().messagesByTask["task-main-hydrate"]?.at(-1)?.content).toBe("hydrated message");
     expect(useAppStore.getState().taskMessagesLoadingByTask["task-main-hydrate"]).toBe(false);
+  });
+
+  test("hydrateWorkspaces clears stale active turn state before interrupted task messages finish hydrating", async () => {
+    const localStorage = createMemoryStorage();
+    let resolveTaskMessages: ((value: {
+      ok: boolean;
+      page: {
+        messages: Array<{
+          id: string;
+          role: "assistant";
+          model: string;
+          providerId: "codex";
+          content: string;
+          isStreaming: boolean;
+          parts: Array<{ type: "text"; text: string }>;
+        }>;
+        totalCount: number;
+        limit: number;
+        offset: number;
+        hasMoreOlder: boolean;
+      };
+    }) => void) | null = null;
+    const taskMessagesPromise = new Promise<{
+      ok: boolean;
+      page: {
+        messages: Array<{
+          id: string;
+          role: "assistant";
+          model: string;
+          providerId: "codex";
+          content: string;
+          isStreaming: boolean;
+          parts: Array<{ type: "text"; text: string }>;
+        }>;
+        totalCount: number;
+        limit: number;
+        offset: number;
+        hasMoreOlder: boolean;
+      };
+    }>((resolve) => {
+      resolveTaskMessages = resolve;
+    });
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          pickRoot: async () => ({ ok: false }),
+          listFiles: async () => ({ ok: true, files: ["package.json"] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [{ id: "ws-main-interrupted", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+          }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          loadWorkspaceShell: async () => ({
+            ok: true,
+            shell: {
+              activeTaskId: "task-main-interrupted",
+              tasks: [{
+                id: "task-main-interrupted",
+                title: "Interrupted Hydration Task",
+                provider: "codex",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+                unread: false,
+              }],
+              promptDraftByTask: {},
+              providerSessionByTask: {},
+              messageCountByTask: { "task-main-interrupted": 1 },
+              workspaceInformation: {
+                jiraIssues: [],
+                confluencePages: [],
+                figmaResources: [],
+                linkedPullRequests: [],
+                slackThreads: [],
+                notes: "",
+                todos: [],
+                customFields: [],
+              },
+              editorTabs: [],
+              activeEditorTabId: null,
+            },
+          }),
+          loadTaskMessages: async () => taskMessagesPromise,
+          listLatestWorkspaceTurns: async () => ({
+            ok: true,
+            turns: [{
+              id: "turn-main-interrupted",
+              workspaceId: "ws-main-interrupted",
+              taskId: "task-main-interrupted",
+              providerId: "codex",
+              createdAt: "2026-03-10T00:00:00.000Z",
+              completedAt: null,
+              eventCount: 1,
+            }],
+          }),
+          loadProjectRegistry: async () => ({ ok: true, projects: [] }),
+          saveProjectRegistry: async () => ({ ok: true }),
+          upsertWorkspace: async () => ({ ok: true }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: false,
+      workspaces: [{ id: "ws-main-interrupted", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main-interrupted",
+      projectPath: "/tmp/stave-project-interrupted",
+      projectName: "stave-project-interrupted",
+      workspacePathById: { "ws-main-interrupted": "/tmp/stave-project-interrupted" },
+      workspaceBranchById: { "ws-main-interrupted": "main" },
+      workspaceDefaultById: { "ws-main-interrupted": true },
+      projectFiles: [],
+    });
+
+    let hydrated = false;
+    const hydratePromise = useAppStore.getState().hydrateWorkspaces().then(() => {
+      hydrated = true;
+    });
+
+    await Bun.sleep(0);
+
+    const hydratedState = useAppStore.getState();
+    expect(hydrated).toBe(true);
+    expect(hydratedState.activeTurnIdsByTask["task-main-interrupted"]).toBeUndefined();
+    expect(hydratedState.taskMessagesLoadingByTask["task-main-interrupted"]).toBe(true);
+
+    resolveTaskMessages?.({
+      ok: true,
+      page: {
+        messages: [{
+          id: "task-main-interrupted-m-1",
+          role: "assistant",
+          model: "gpt-5.4",
+          providerId: "codex",
+          content: "partial response",
+          isStreaming: false,
+          parts: [{ type: "text", text: "partial response" }],
+        }],
+        totalCount: 1,
+        limit: 120,
+        offset: 0,
+        hasMoreOlder: false,
+      },
+    });
+    await hydratePromise;
+    await Bun.sleep(0);
+
+    const finalMessages = useAppStore.getState().messagesByTask["task-main-interrupted"] ?? [];
+    expect(finalMessages.at(-1)?.content).toBe("Generation interrupted because Stave was closed before this turn completed.");
   });
 
   test("hydrateWorkspaces auto-imports existing git worktrees missing from the DB", async () => {

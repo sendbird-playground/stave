@@ -2081,14 +2081,20 @@ export const useAppStore = create<AppState>()(
         for (const taskId of interruptedTaskIds) {
           initialTaskIds.add(taskId);
         }
+        const workspaceState = buildWorkspaceSessionStateFromShell({
+          shell,
+          latestTurns,
+        });
         return {
           shell,
           latestTurns,
           initialTaskIds: [...initialTaskIds],
-          workspaceState: buildWorkspaceSessionStateFromShell({
-            shell,
-            latestTurns,
-          }),
+          workspaceState: interruptedTaskIds.size > 0
+            ? {
+                ...workspaceState,
+                activeTurnIdsByTask: {},
+              }
+            : workspaceState,
         };
       };
 
