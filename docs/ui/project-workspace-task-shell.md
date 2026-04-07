@@ -95,7 +95,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - exposes a dedicated Scripts panel for workspace actions, services, hook inspection, Orbit-enabled dev services, runtime path/status summary, and quick navigation back to project settings
   - exposes a workspace information panel with shared accordion sections, a distinct summary card, URL-first linked-resource sections for Jira, Confluence, Figma, Slack, and GitHub, plus notes, todos, saved plans, and custom structured fields that Muse and local MCP workflows can register against
   - surfaces workspace-level plan history from markdown files under `.stave/context/plans`, while still showing legacy `.stave/plans` files
-  - keeps the newest plan first, limits the list to the latest five saved plans, and lets users preview, edit, open, and send a saved plan to the active task from the Information panel
+  - keeps the newest plan first, limits the list to the latest five saved plans, and opens the selected saved plan directly in the editor from the Information panel
   - stays visible at every breakpoint, using a narrower compact treatment below `lg`
   - keeps terminal independent while making editor and explorer/changes mutually exclusive on small widths
   - opens its right-side panels as full-height siblings under the top bar instead of placing them beneath the task-tabs row
