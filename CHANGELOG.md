@@ -1,3 +1,65 @@
+## [0.1.0](https://github.com/sendbird-playground/stave/compare/v0.0.36...v0.1.0) (2026-04-07)
+
+### New features
+
+* Added provider mode presets and runtime guidance so Claude and Codex approval, sandbox, file-access, and network behavior can be switched more deliberately from the composer and settings UI.
+* Migrated Codex onto the app-server runtime path, which strengthens request plumbing and supports the newer planning, approval, and connected-tool flows shipped in this release.
+* Added ripgrep-powered explorer search with grouped results and jump-to-line navigation for faster codebase discovery inside the sidebar.
+* Added Stave control from chat through the local MCP layer, expanding what task turns can do with workspace-aware actions and context.
+* Surfaced workspace plans in the Information panel and tightened the plan workflow with preset-based mode controls, better approval restoration, and cleaner plan-session handoff.
+* Added project base prompts and stronger task-context/shared-skill routing so prompts resolve the intended workspace and task context more reliably.
+* Added in-app update controls in the top bar plus role-specific Stave Auto runtime overrides for more predictable automation behavior across providers.
+
+### Features
+
+* **app-update:** add in-app update button to top bar ([#296](https://github.com/sendbird-playground/stave/issues/296)) ([0cd8a54](https://github.com/sendbird-playground/stave/commit/0cd8a5452adffeb1327c1770809884260420584e))
+* **control:** stave from chat ([#306](https://github.com/sendbird-playground/stave/issues/306)) ([44ae3d1](https://github.com/sendbird-playground/stave/commit/44ae3d1746fb072b82ea477f1aa0d9a083d47ab0))
+* **explorer:** add file content search with ripgrep ([#290](https://github.com/sendbird-playground/stave/issues/290)) ([5d9d086](https://github.com/sendbird-playground/stave/commit/5d9d08606b6fffd8d30e9dc82a145e4da1c29579))
+* plans in information ([#308](https://github.com/sendbird-playground/stave/issues/308)) ([acf747d](https://github.com/sendbird-playground/stave/commit/acf747d2858940a77beff1ee22f9d12398ae6d54))
+* **project:** base prompt ([#304](https://github.com/sendbird-playground/stave/issues/304)) ([5b001b1](https://github.com/sendbird-playground/stave/commit/5b001b187910ac878b680a244b6d9dc15c45c3ee))
+* **prompt-input:** add mode presets and reset plan sessions ([ca01b0f](https://github.com/sendbird-playground/stave/commit/ca01b0f00d98e65ad3b1025daf52b21179f7bcfa))
+* provider modes ([#323](https://github.com/sendbird-playground/stave/issues/323)) ([3e88ce1](https://github.com/sendbird-playground/stave/commit/3e88ce10f811ef2b67c83dd9e6c2c8d3607b91e3))
+* **settings:** add provider runtime guidance ([#286](https://github.com/sendbird-playground/stave/issues/286)) ([e52c1ca](https://github.com/sendbird-playground/stave/commit/e52c1ca9f0d54d8bd87d5f91c19614631db7c2f5))
+* **stave-auto:** add role-specific runtime controls ([#279](https://github.com/sendbird-playground/stave/issues/279)) ([4787313](https://github.com/sendbird-playground/stave/commit/47873136306361240836bf3e885eca7ef4509c83))
+
+### Bug Fixes
+
+* approval process logics ([#320](https://github.com/sendbird-playground/stave/issues/320)) ([3171c01](https://github.com/sendbird-playground/stave/commit/3171c016ca8c427dff0ddade2a689a4bd2fc92ea))
+* **attachment-paste:** dedupe clipboard attachments by base64 payload ([#292](https://github.com/sendbird-playground/stave/issues/292)) ([401bea8](https://github.com/sendbird-playground/stave/commit/401bea88b999a79dcde80c2e1cb70d0d378d2666))
+* **chat:** avoid duplicate image pastes and stalled claude plan turns ([#277](https://github.com/sendbird-playground/stave/issues/277)) ([859a7f1](https://github.com/sendbird-playground/stave/commit/859a7f1fafb929bc06d18b76c95b9523c1992f86))
+* codex app server continue ([#316](https://github.com/sendbird-playground/stave/issues/316)) ([c06c065](https://github.com/sendbird-playground/stave/commit/c06c065b3473b05e4481eb238d1f015df7b53461))
+* **codex:** plugins ([#301](https://github.com/sendbird-playground/stave/issues/301)) ([0690132](https://github.com/sendbird-playground/stave/commit/0690132132efdee7ee29280aef2e6a7e8231c0f0))
+* **commands:** slop ([#314](https://github.com/sendbird-playground/stave/issues/314)) ([d7959e1](https://github.com/sendbird-playground/stave/commit/d7959e1aceaf7f6f489226d402d6f44f53961ea7))
+* **context:** expose workspace plan conventions ([373f342](https://github.com/sendbird-playground/stave/commit/373f342b8589a3b269f036d0a0efb2ed3c904d3f))
+* create pr base ([#315](https://github.com/sendbird-playground/stave/issues/315)) ([#318](https://github.com/sendbird-playground/stave/issues/318)) ([3a03814](https://github.com/sendbird-playground/stave/commit/3a03814fb2a11a41e03da92cf94e146d13881f98))
+* create pr draft bug ([#322](https://github.com/sendbird-playground/stave/issues/322)) ([398c8df](https://github.com/sendbird-playground/stave/commit/398c8df3d80f598009c9e8f6705af740abf32dc9))
+* create pr loading ([#315](https://github.com/sendbird-playground/stave/issues/315)) ([4c2696c](https://github.com/sendbird-playground/stave/commit/4c2696c4a79d70e1678d9ba520c375c602a3458c))
+* create pr loading ([#315](https://github.com/sendbird-playground/stave/issues/315)) ([#317](https://github.com/sendbird-playground/stave/issues/317)) ([7f602ad](https://github.com/sendbird-playground/stave/commit/7f602adc9a60bb9014b19b717df3522c7736dab9))
+* devtool command ([#303](https://github.com/sendbird-playground/stave/issues/303)) ([9924b08](https://github.com/sendbird-playground/stave/commit/9924b0864bb49c6b41305413c3b92fdef954db26))
+* **inspect:** include ambient type declaration files in workspace context ([#289](https://github.com/sendbird-playground/stave/issues/289)) ([930812e](https://github.com/sendbird-playground/stave/commit/930812eb87d1f0caff719817ce47947fa31bec61))
+* missing provider chip ([#309](https://github.com/sendbird-playground/stave/issues/309)) ([8db82d1](https://github.com/sendbird-playground/stave/commit/8db82d15f5e593fe2313bbeee790cfa555096437))
+* **model:** selector behavior ([#299](https://github.com/sendbird-playground/stave/issues/299)) ([5e719f8](https://github.com/sendbird-playground/stave/commit/5e719f82018d8c45b4aaa62a4cd4cd2ae994c82e))
+* **muse:** behavior ([#307](https://github.com/sendbird-playground/stave/issues/307)) ([3b3010c](https://github.com/sendbird-playground/stave/commit/3b3010cd68238cda676cb5221a3be1b8bd53b0bc))
+* **muse:** remove muse button from topbar ([#288](https://github.com/sendbird-playground/stave/issues/288)) ([abd28ae](https://github.com/sendbird-playground/stave/commit/abd28ae10ea8b389eafb8fe270c0cb44ab23b695))
+* **muse:** workflow ([#294](https://github.com/sendbird-playground/stave/issues/294)) ([5c8fbda](https://github.com/sendbird-playground/stave/commit/5c8fbda1326cbd3f67e27853818f512ebec0e572))
+* **new-task:** add empty task state and improve layout handling ([#297](https://github.com/sendbird-playground/stave/issues/297)) ([5610376](https://github.com/sendbird-playground/stave/commit/5610376365bd3d8ab2a22056319d55aa9b049c4c))
+* orbit not working ([#305](https://github.com/sendbird-playground/stave/issues/305)) ([ce1bca3](https://github.com/sendbird-playground/stave/commit/ce1bca35ce9b02827a8ef1e1dfa4b5ce5a57c699))
+* **plan:** normalize plan text and filter meaningless content ([#291](https://github.com/sendbird-playground/stave/issues/291)) ([13a8b83](https://github.com/sendbird-playground/stave/commit/13a8b8309d590db4ab48c55d6b2bdc1fd92426ac))
+* **plan:** normalize plan text and filter meaningless content ([#291](https://github.com/sendbird-playground/stave/issues/291)) ([#295](https://github.com/sendbird-playground/stave/issues/295)) ([c5695b1](https://github.com/sendbird-playground/stave/commit/c5695b162524d5d28cf092a4b802641772534d73))
+* **prompt-input:** colorize mode selector icons ([048dbe6](https://github.com/sendbird-playground/stave/commit/048dbe64733fab72cfd832df695ea86162ec5ea9))
+* **prompt:** normalize activated skill context ([#281](https://github.com/sendbird-playground/stave/issues/281)) ([3f5efa9](https://github.com/sendbird-playground/stave/commit/3f5efa9f827270362bb10c2937b319b8f1b9456d))
+* **pr:** prioritize pull request template context ([#298](https://github.com/sendbird-playground/stave/issues/298)) ([b59f942](https://github.com/sendbird-playground/stave/commit/b59f942af0c1e7c7f429cd4e3c8bd78d8b4b47cd))
+* **runtime:** harden task context and shared skill roots ([#311](https://github.com/sendbird-playground/stave/issues/311)) ([9c3a3af](https://github.com/sendbird-playground/stave/commit/9c3a3af37351f24e060697713d24e1fff18c427f))
+* setting providers selectbox ([#319](https://github.com/sendbird-playground/stave/issues/319)) ([58acdcf](https://github.com/sendbird-playground/stave/commit/58acdcfb906bbbb4ed76863451c2402875df84a5))
+* **setting:** select ([#313](https://github.com/sendbird-playground/stave/issues/313)) ([0a4c609](https://github.com/sendbird-playground/stave/commit/0a4c6095a7d09794ae7e76cc556b27d6ca4ef99e))
+* **settings:** resolve project selection logic in settings dialog ([#284](https://github.com/sendbird-playground/stave/issues/284)) ([95b84d6](https://github.com/sendbird-playground/stave/commit/95b84d6e16ba1b067ec2c95c9361e6219890e9bd))
+* **settings:** stabilize providers select ([494b905](https://github.com/sendbird-playground/stave/commit/494b905f3b6976e4ac66119fedb064cbdc4bc2ea))
+* **skills:** require safe worktree cleanup cwd ([#280](https://github.com/sendbird-playground/stave/issues/280)) ([f77914d](https://github.com/sendbird-playground/stave/commit/f77914dfc9df6701646ece573062bc4e84811d3b))
+* **skills:** route activated skills through prompt context ([#278](https://github.com/sendbird-playground/stave/issues/278)) ([05a49d1](https://github.com/sendbird-playground/stave/commit/05a49d15b8c6f31929aff7d3096136541db115c9))
+* stave mcp awareness ([#321](https://github.com/sendbird-playground/stave/issues/321)) ([90ec86e](https://github.com/sendbird-playground/stave/commit/90ec86ee1342fa0044e7eb864a77df7f1efc3699))
+* **stave:** model plan ([#302](https://github.com/sendbird-playground/stave/issues/302)) ([8025551](https://github.com/sendbird-playground/stave/commit/8025551ba2d95e750f4f15a25328969d53db7ea4))
+* **ui:** stabilize app menu overlay layout ([#282](https://github.com/sendbird-playground/stave/issues/282)) ([3723626](https://github.com/sendbird-playground/stave/commit/37236266a7084ff33ff011f6b32c61714d52869c))
+* **workspace:** reload persisted shells when cache is empty ([#312](https://github.com/sendbird-playground/stave/issues/312)) ([9cee0f0](https://github.com/sendbird-playground/stave/commit/9cee0f0ecc8284838f8ee63b92debff1e59df398))
 ## [0.0.36](https://github.com/sendbird-playground/stave/compare/v0.0.35...v0.0.36) (2026-04-05)
 
 ### Features
