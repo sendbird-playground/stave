@@ -32,6 +32,7 @@ import {
   ModelIcon,
 } from "@/components/ai-elements";
 import {
+  getReasoningTraceExpansionMode,
   getMessageScrollFingerprint,
   shouldShowConversationLoadingState,
 } from "@/components/session/chat-panel.utils";
@@ -108,6 +109,7 @@ interface MessageRowProps {
   elapsedAnchorMs?: number;
   isFirst?: boolean;
   liveStreamingMessageId?: string;
+  traceExpansionMode: "auto" | "manual";
   message: {
     id: string;
     role: "user" | "assistant";
@@ -130,6 +132,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
     elapsedAnchorMs,
     isFirst,
     liveStreamingMessageId,
+    traceExpansionMode,
     message,
   } = args;
   const showRespondingWave =
@@ -161,6 +164,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
               taskId={activeTaskId}
               messageId={message.id}
               streamingEnabled={chatStreamingEnabled}
+              traceExpansionMode={traceExpansionMode}
             />
           </MessageContent>
           <MessageActions
@@ -381,6 +385,7 @@ function ChatPanelMessageList() {
     activeTaskId,
     activeTurnId,
     chatStreamingEnabled,
+    reasoningExpansionMode,
     loadTaskMessages,
   ] = useAppStore(
     useShallow(
@@ -390,6 +395,7 @@ function ChatPanelMessageList() {
           state.activeTaskId,
           state.activeTurnIdsByTask[state.activeTaskId],
           state.settings.chatStreamingEnabled,
+          state.settings.reasoningExpansionMode,
           state.loadTaskMessages,
         ] as const,
     ),
@@ -429,6 +435,7 @@ function ChatPanelMessageList() {
   const autoScrollKey = `${visibleMessages.length}:${lastVisibleMessageScrollFingerprint}`;
   const forceScrollKey = `${latestVisibleMessageId ?? "none"}:${turnCompletionScrollTick}`;
   const scrollContextKey = `${activeWorkspaceId}:${activeTaskId}`;
+  const traceExpansionMode = getReasoningTraceExpansionMode({ reasoningExpansionMode });
 
   useEffect(() => {
     if (previousActiveTurnIdRef.current && !activeTurnId) {
@@ -514,6 +521,7 @@ function ChatPanelMessageList() {
               }
               isFirst={index === 0}
               liveStreamingMessageId={liveStreamingMessageId}
+              traceExpansionMode={traceExpansionMode}
               message={message}
             />
           )}
