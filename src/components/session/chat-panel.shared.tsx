@@ -35,6 +35,7 @@ export interface ChatPanelRowRenderArgs {
 interface ChatPanelMessageListScaffoldProps {
   layout?: "default" | "zen";
   filterMessage?: (message: ChatMessage) => boolean;
+  bottomSpacerHeight?: number;
   renderMessageRow: (args: ChatPanelRowRenderArgs) => ReactNode;
 }
 
@@ -152,6 +153,7 @@ export function ChatPanelMessageListScaffold(args: ChatPanelMessageListScaffoldP
           forceScrollKey={forceScrollKey}
           forceScrollScopeKey={scrollContextKey}
           layout={layout}
+          extraBottomPadding={layout === "zen" ? args.bottomSpacerHeight : undefined}
           itemKey={(_, message) => message.id}
           itemContent={(index, message) => args.renderMessageRow({
             activeTaskId,

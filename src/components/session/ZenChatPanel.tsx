@@ -1,4 +1,4 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, type CSSProperties } from "react";
 import {
   Conversation,
   ConversationScrollButton,
@@ -59,7 +59,9 @@ const ZenMessageRow = memo(function ZenMessageRow(args: ChatPanelRowRenderArgs) 
   );
 });
 
-const MemoizedZenChatPanelMessageList = memo(function ZenChatPanelMessageList() {
+const MemoizedZenChatPanelMessageList = memo(function ZenChatPanelMessageList(args: {
+  inputDockHeight?: number;
+}) {
   const filterMessage = useCallback((message: ChatMessage) => (
     message.role !== "assistant" || hasVisibleZenAssistantMessageBody({ message })
   ), []);
@@ -68,18 +70,26 @@ const MemoizedZenChatPanelMessageList = memo(function ZenChatPanelMessageList() 
     <ChatPanelMessageListScaffold
       layout="zen"
       filterMessage={filterMessage}
+      bottomSpacerHeight={args.inputDockHeight}
       renderMessageRow={(rowArgs) => <ZenMessageRow {...rowArgs} />}
     />
   );
 });
 
-export function ZenChatPanel() {
+export function ZenChatPanel(args: { inputDockHeight?: number }) {
+  const conversationStyle = {
+    "--zen-chat-input-dock-height": `${Math.max(0, Math.round(args.inputDockHeight ?? 0))}px`,
+  } as CSSProperties;
+
   return (
-    <Conversation>
+    <Conversation style={conversationStyle}>
       <div className="flex h-full w-full flex-col">
-        <MemoizedZenChatPanelMessageList />
+        <MemoizedZenChatPanelMessageList inputDockHeight={args.inputDockHeight} />
       </div>
-      <ConversationScrollButton tooltip="Scroll to bottom" />
+      <ConversationScrollButton
+        tooltip="Scroll to bottom"
+        className="bottom-[calc(var(--zen-chat-input-dock-height,0px)+0.75rem)]"
+      />
     </Conversation>
   );
 }

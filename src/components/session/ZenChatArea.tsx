@@ -16,9 +16,10 @@ export function ZenChatArea() {
       )}
       panel={(
         <RenderProfiler id="ChatPanel" thresholdMs={8}>
-          <ZenChatPanel />
+          <ZenChatPanel inputDockHeight={state.chatInputDockHeight} />
         </RenderProfiler>
       )}
+      inputDockMode="overlay"
     />
   );
 }

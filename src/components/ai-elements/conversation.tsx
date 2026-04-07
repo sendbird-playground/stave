@@ -300,6 +300,7 @@ interface ConversationVirtualListProps<T> {
   restoreItemOffset?: number;
   listRef?: MutableRefObject<VirtuosoHandle | null>;
   layout?: "default" | "zen";
+  extraBottomPadding?: number;
 }
 
 export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T>) {
@@ -318,6 +319,7 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     scope: props.listKey,
   });
   const lastIndex = props.data.length - 1;
+  const extraBottomPadding = props.extraBottomPadding ?? 0;
   const components = useMemo(() => {
     const listLayout = props.layout ?? "default";
     return {
@@ -335,7 +337,7 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
                 : "mx-auto w-full max-w-6xl px-3 pt-4 sm:px-5 sm:pt-5",
               className,
             )}
-            style={style}
+            style={extraBottomPadding > 0 ? withExtraPaddingBottom(style, extraBottomPadding) : style}
             {...rest}
           />
         );
@@ -350,7 +352,7 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
         );
       },
     };
-  }, [props.layout]);
+  }, [extraBottomPadding, props.layout]);
 
   useEffect(() => {
     setScrollToBottomOverride(() => (args?: ScrollToBottomArgs) => {

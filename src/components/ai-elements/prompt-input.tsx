@@ -672,7 +672,7 @@ export function PromptInput(args: PromptInputProps) {
             <div
               className={cn(
                 minimal
-                  ? "rounded-md border border-border/60 bg-background/25 px-3 py-2.5"
+                  ? "rounded-md border border-border/60 bg-background/55 px-3 py-2.5 supports-backdrop-filter:backdrop-blur-md"
                   : undefined,
               )}
             >
