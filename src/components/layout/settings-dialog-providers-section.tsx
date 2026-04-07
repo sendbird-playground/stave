@@ -30,6 +30,7 @@ import {
   resolveStaveProviderForModel,
   STAVE_AUTO_MODEL_PRESETS,
 } from "@/lib/providers/stave-auto-profile";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import type {
   StaveAutoClaudeRoleRuntimeOverrides,
   StaveAutoCodexRoleRuntimeOverrides,
@@ -370,7 +371,7 @@ function DescribedSelect<T extends string>(args: {
           position="popper"
           align="start"
           sideOffset={6}
-          className="z-[80] min-w-[var(--radix-select-trigger-width)] max-w-sm bg-popover"
+          className={`${UI_LAYER_CLASS.popover} min-w-[var(--radix-select-trigger-width)] max-w-sm bg-popover`}
         >
           {args.options.map((option) => (
             <SelectItem key={option.value} value={option.value} textValue={option.label}>

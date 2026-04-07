@@ -14,6 +14,7 @@ import { TerminalDock } from "@/components/layout/TerminalDock";
 import { Card, Toaster, toast } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { isTaskArchived } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
 import {
@@ -304,7 +305,7 @@ export function AppShell() {
 
   function OverlayLoadingFallback(args: { title: string }) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]">
+      <div className={`${UI_LAYER_CLASS.dialog} fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]`}>
         <Card className="w-full max-w-md border-border/80 bg-background/95 p-6 shadow-2xl">
           <div className="text-sm text-muted-foreground">
             Loading
@@ -897,7 +898,7 @@ export function AppShell() {
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
       {zoomHudPercent !== null ? (
-        <div className="pointer-events-none absolute left-1/2 top-16 z-50 -translate-x-1/2">
+        <div className={`pointer-events-none absolute left-1/2 top-16 ${UI_LAYER_CLASS.floatingChrome} -translate-x-1/2`}>
           <div className="rounded-full border border-border/80 bg-card/95 px-3 py-1 text-sm font-medium text-foreground shadow-lg backdrop-blur-sm">
             Zoom {zoomHudPercent}%
           </div>
@@ -953,7 +954,7 @@ export function AppShell() {
           </RenderProfiler>
           {!workspaceSidebarCollapsed ? (
             <div
-              className="group relative hidden w-[9px] -mx-[4px] z-50 shrink-0 cursor-col-resize lg:block"
+              className={`group relative hidden w-[9px] -mx-[4px] ${UI_LAYER_CLASS.resizer} shrink-0 cursor-col-resize lg:block`}
               onMouseDown={(event) => {
                 event.preventDefault();
                 setSidebarResizing(true);
@@ -994,7 +995,7 @@ export function AppShell() {
                       </div>
                       <div className={terminalDocked ? undefined : "hidden"}>
                         <div
-                          className="group relative z-10 h-[9px] -my-[4px] shrink-0 cursor-row-resize"
+                          className={`group relative ${UI_LAYER_CLASS.resizer} h-[9px] -my-[4px] shrink-0 cursor-row-resize`}
                           onMouseDown={(event) => {
                             event.preventDefault();
                             const startY = event.clientY;
@@ -1023,7 +1024,7 @@ export function AppShell() {
                 {showDesktopEditor ? (
                   <>
                     <div
-                      className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
+                      className={`group relative hidden w-[9px] -mx-[4px] ${UI_LAYER_CLASS.resizer} shrink-0 cursor-col-resize lg:block`}
                       onMouseDown={(event) => {
                         event.preventDefault();
                         const startX = event.clientX;
@@ -1062,7 +1063,7 @@ export function AppShell() {
                 {showDesktopSidebar ? (
                   <>
                     <div
-                      className="group relative hidden w-[9px] -mx-[4px] z-10 shrink-0 cursor-col-resize lg:block"
+                      className={`group relative hidden w-[9px] -mx-[4px] ${UI_LAYER_CLASS.resizer} shrink-0 cursor-col-resize lg:block`}
                       onMouseDown={(event) => {
                         event.preventDefault();
                         const startX = event.clientX;

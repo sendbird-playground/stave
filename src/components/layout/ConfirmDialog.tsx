@@ -1,6 +1,8 @@
 import { LoaderCircle } from "lucide-react";
 import { useEffect, useRef, type FormEvent, type KeyboardEvent } from "react";
 import { Card, Button } from "@/components/ui";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
+import { cn } from "@/lib/utils";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -53,7 +55,7 @@ export function ConfirmDialog(args: ConfirmDialogProps) {
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]" onMouseDown={loading ? undefined : onCancel}>
+    <div className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")} onMouseDown={loading ? undefined : onCancel}>
       <Card className="w-full max-w-md rounded-lg border-border/80 bg-card p-4 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
         <form onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
           <h3 className="text-base font-semibold text-foreground">{title}</h3>

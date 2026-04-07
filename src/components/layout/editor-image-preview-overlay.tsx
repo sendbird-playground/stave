@@ -1,3 +1,6 @@
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
+import { cn } from "@/lib/utils";
+
 export function EditorImagePreviewOverlay(args: {
   open: boolean;
   imageSrc: string;
@@ -10,7 +13,7 @@ export function EditorImagePreviewOverlay(args: {
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]"
+      className={cn(UI_LAYER_CLASS.lightbox, "fixed inset-0 flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]")}
       role="dialog"
       aria-modal="true"
       aria-label="Image full screen preview"

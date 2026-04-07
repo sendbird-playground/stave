@@ -2,6 +2,7 @@ import { Command, Home, Keyboard, Moon, RefreshCw, Settings, Sun } from "lucide-
 import { useCallback, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from "@/components/ui";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { STAVE_LOGO_URL } from "@/lib/providers/model-catalog";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -69,7 +70,7 @@ export function StaveAppMenuButton(args?: {
             />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" sideOffset={8} className="z-[130] w-64">
+        <DropdownMenuContent align="start" sideOffset={8} className={`${UI_LAYER_CLASS.appMenu} w-64`}>
           <DropdownMenuLabel>Stave</DropdownMenuLabel>
           <DropdownMenuItem className="gap-2" onSelect={clearTaskSelection}>
             <Home className="size-4 text-muted-foreground" />

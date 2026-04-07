@@ -6,6 +6,7 @@ import { UserInputCard } from "./user-input-card";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
 import type { ProviderModePresetDefinition, ProviderModePresetId } from "@/lib/providers/provider-mode-presets";
 import { filterCommandPaletteItems, getActiveSlashCommandTokenMatch, replaceSlashCommandToken } from "@/lib/commands";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { getActiveSkillTokenMatch, replaceSkillToken } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
@@ -1344,7 +1345,7 @@ export function PromptInput(args: PromptInputProps) {
     </form>
     {imagePreviewSrc ? (
       <div
-        className="fixed inset-0 z-[90] flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]"
+        className={cn(UI_LAYER_CLASS.lightbox, "fixed inset-0 flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]")}
         role="dialog"
         aria-modal="true"
         aria-label="Image full screen preview"

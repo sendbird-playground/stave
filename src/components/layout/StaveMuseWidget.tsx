@@ -26,6 +26,7 @@ import { ModelIcon } from "@/components/ai-elements";
 import { StaveMuseTriggerButton } from "@/components/layout/StaveMuseTriggerButton";
 import { WorkspaceIdentityMark } from "@/components/layout/workspace-accent";
 import { AssistantMessageBody } from "@/components/session/message/assistant-trace";
+import { UI_LAYER_CLASS, UI_LAYER_VALUE } from "@/lib/ui-layers";
 import { STAVE_MUSE_SESSION_ID } from "@/lib/stave-muse";
 import { cn } from "@/lib/utils";
 import { STAVE_MUSE_OPEN_SETTINGS_EVENT, useAppStore } from "@/store/app.store";
@@ -39,7 +40,6 @@ const TARGET_OPTIONS = [
 const FLOATING_TOGGLE_BOTTOM_PX = 68;
 const FLOATING_TOGGLE_SIZE_PX = 40;
 const FLOATING_PANEL_GAP_PX = 12;
-const MUSE_LAYER_Z_INDEX = 120;
 const SIDEBAR_PANEL_BOTTOM_PX = 12;
 const MOBILE_FLOATING_TOGGLE_LEFT_PX = 12;
 
@@ -136,12 +136,12 @@ export function StaveMuseWidget(args: {
     left: `${args.leftInset ?? (floatingToggleLeftPx + FLOATING_TOGGLE_SIZE_PX + FLOATING_PANEL_GAP_PX)}px`,
     right: args.rightInset && args.rightInset > 0 ? `${16 + args.rightInset}px` : "16px",
     bottom: `${panelBottomPx}px`,
-    zIndex: MUSE_LAYER_Z_INDEX,
+    zIndex: UI_LAYER_VALUE.muse,
   } as const;
   const floatingToggleStyle = {
     left: `${floatingToggleLeftPx}px`,
     bottom: `${FLOATING_TOGGLE_BOTTOM_PX}px`,
-    zIndex: MUSE_LAYER_Z_INDEX,
+    zIndex: UI_LAYER_VALUE.muse,
   } as const;
   const isTurnActive = Boolean(activeTurnId);
   const isBusy = submitting || isTurnActive;
@@ -312,7 +312,7 @@ export function StaveMuseWidget(args: {
                     <span className="truncate">{selectedTargetOption.label}</span>
                   </div>
                 </SelectTrigger>
-                <SelectContent className="z-[46]">
+                <SelectContent className={UI_LAYER_CLASS.popover}>
                   {TARGET_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value} className="text-xs">
                       <div className="flex items-center gap-2">

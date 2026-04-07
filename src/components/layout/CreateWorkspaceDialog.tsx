@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 import { CreateWorkspaceBranchPicker } from "@/components/layout/CreateWorkspaceBranchPicker";
 import { resolveDefaultCreateWorkspaceBaseBranch } from "@/components/layout/CreateWorkspaceBranchPicker.utils";
 import { Badge, Button, Card, Input, Textarea, toast } from "@/components/ui";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 
 interface CreateWorkspaceDialogProps {
@@ -185,7 +186,7 @@ export function CreateWorkspaceDialog({
 
   return (
     <div
-      className="absolute inset-0 z-40 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]"
+      className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")}
       onMouseDown={() => {
         if (creatingWorkspace) {
           return;

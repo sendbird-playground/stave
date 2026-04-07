@@ -72,6 +72,7 @@ import { loadWorkspaceShell, type WorkspaceShell } from "@/lib/db/workspaces.db"
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
 import { resolveSidebarArtworkClass } from "@/lib/themes";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { ChatMessage, Task } from "@/types/chat";
@@ -851,7 +852,7 @@ export function ProjectWorkspaceSidebar(args: {
         data-testid="project-workspace-sidebar"
         data-sidebar-artwork={sidebarArtworkMode}
         className={cn(
-          "sidebar-liquid-glass z-40 hidden h-full shrink-0 overflow-hidden text-sidebar-foreground lg:flex lg:flex-col",
+          `sidebar-liquid-glass ${UI_LAYER_CLASS.floatingChrome} hidden h-full shrink-0 overflow-hidden text-sidebar-foreground lg:flex lg:flex-col`,
           resolveSidebarArtworkClass({ mode: sidebarArtworkMode }),
           args.collapsed && "border-r border-sidebar-border/60",
         )}
