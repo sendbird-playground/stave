@@ -10,6 +10,26 @@ function shouldIncludeHistory(conversation: CanonicalConversationRequest) {
   return !getStoredResumeSessionId(conversation);
 }
 
+export function filterPromptRetrievedContext(args: {
+  conversation: CanonicalConversationRequest;
+  excludedSourceIds?: string[];
+}) {
+  const excludedSourceIds = new Set((args.excludedSourceIds ?? []).filter(Boolean));
+  if (excludedSourceIds.size === 0) {
+    return args.conversation;
+  }
+
+  const nextContextParts = args.conversation.contextParts.filter((part) => (
+    part.type !== "retrieved_context" || !excludedSourceIds.has(part.sourceId)
+  ));
+  return nextContextParts.length === args.conversation.contextParts.length
+    ? args.conversation
+    : {
+        ...args.conversation,
+        contextParts: nextContextParts,
+      };
+}
+
 export function buildClaudePromptFromConversation(args: {
   conversation: CanonicalConversationRequest;
   fallbackPrompt: string;

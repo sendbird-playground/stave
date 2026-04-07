@@ -10,6 +10,7 @@ import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
   buildProviderTurnPrompt,
+  filterPromptRetrievedContext,
   resolveProviderResumeSessionId,
 } from "../../src/lib/providers/provider-request-translators";
 import {
@@ -35,6 +36,7 @@ import {
 } from "../main/stave-local-mcp-manifest";
 import {
   CODEX_STAVE_MCP_TOKEN_ENV_VAR,
+  getCodexMcpRegistrationStatus,
 } from "../main/codex-mcp";
 
 const threadByTask = new Map<string, Thread>();
@@ -144,6 +146,21 @@ function buildCodexEnv(args: { executablePath?: string } = {}) {
   return Object.fromEntries(
     Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
   );
+}
+
+async function hasConnectedStaveLocalMcpForCodex() {
+  const manifest = readPrimaryStaveLocalMcpManifestSync();
+  if (!manifest) {
+    return false;
+  }
+  const status = await getCodexMcpRegistrationStatus({
+    autoRegister: false,
+    manifest,
+  });
+  return status.installed
+    && status.matchesCurrentManifest
+    && status.url === manifest.url
+    && status.bearerTokenEnvVar === CODEX_STAVE_MCP_TOKEN_ENV_VAR;
 }
 
 function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }) {
@@ -1003,10 +1020,16 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     const abortController = new AbortController();
     args.registerAbort?.(() => abortController.abort());
     const turnOptions: TurnOptions = { signal: abortController.signal };
+    const hasEmbeddedStaveLocalMcp = await hasConnectedStaveLocalMcpForCodex();
     let providerPrompt = buildProviderTurnPrompt({
       providerId: args.providerId,
       prompt: args.prompt,
-      conversation: args.conversation,
+      conversation: args.conversation
+        ? filterPromptRetrievedContext({
+            conversation: args.conversation,
+            excludedSourceIds: hasEmbeddedStaveLocalMcp ? [] : ["stave:current-task-awareness"],
+          })
+        : args.conversation,
     });
 
     // Codex has no separate system-prompt channel, so runtime prompt overrides

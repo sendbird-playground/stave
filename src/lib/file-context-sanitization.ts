@@ -225,6 +225,15 @@ export function sanitizeMessagePartPayload<T extends MessagePart>(part: T): T {
     case "user_input": {
       const questions = part.questions.map((question) => ({
         ...question,
+        ...(question.key !== undefined
+          ? {
+              key: sanitizeTextField({
+                value: question.key,
+                label: "user input key",
+                maxChars: MAX_PROVIDER_USER_INPUT_HEADER_CHARS,
+              }),
+            }
+          : {}),
         question: sanitizeTextField({
           value: question.question,
           label: "user input question",
@@ -248,10 +257,41 @@ export function sanitizeMessagePartPayload<T extends MessagePart>(part: T): T {
             maxChars: MAX_PROVIDER_USER_INPUT_OPTION_DESCRIPTION_CHARS,
           }),
         })),
+        ...(question.placeholder !== undefined
+          ? {
+              placeholder: sanitizeTextField({
+                value: question.placeholder,
+                label: "user input placeholder",
+                maxChars: MAX_PROVIDER_USER_INPUT_OPTION_LABEL_CHARS,
+              }),
+            }
+          : {}),
+        ...(question.defaultValue !== undefined
+          ? {
+              defaultValue: sanitizeTextField({
+                value: question.defaultValue,
+                label: "user input default value",
+                maxChars: MAX_PROVIDER_USER_INPUT_QUESTION_CHARS,
+              }),
+            }
+          : {}),
+        ...(question.linkUrl !== undefined
+          ? {
+              linkUrl: sanitizeTextField({
+                value: question.linkUrl,
+                label: "user input link url",
+                maxChars: MAX_PROVIDER_USER_INPUT_QUESTION_CHARS,
+              }),
+            }
+          : {}),
       }));
       const changed = questions.some((question, questionIndex) => (
-        question.question !== part.questions[questionIndex]?.question
+        question.key !== part.questions[questionIndex]?.key
+        || question.question !== part.questions[questionIndex]?.question
         || question.header !== part.questions[questionIndex]?.header
+        || question.placeholder !== part.questions[questionIndex]?.placeholder
+        || question.defaultValue !== part.questions[questionIndex]?.defaultValue
+        || question.linkUrl !== part.questions[questionIndex]?.linkUrl
         || question.options.some((option, optionIndex) => (
           option.label !== part.questions[questionIndex]?.options[optionIndex]?.label
           || option.description !== part.questions[questionIndex]?.options[optionIndex]?.description

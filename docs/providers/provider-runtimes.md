@@ -156,6 +156,8 @@ After a plugin reload, Stave invalidates the Claude command-catalog view so the 
 
 When the user explicitly references `stave task id` values in the prompt, Stave injects the latest loaded assistant replies for those task IDs as retrieved context and instructs the provider not to scan the filesystem or home directory to discover task history.
 
+When the active provider runtime actually has Stave Local MCP connected, task turns also carry a Stave-owned "current task awareness" retrieved-context block in the rendered provider prompt. That block anchors the owning workspace id/path, the current task id/title, visible sibling tasks, and a bounded snapshot of the current workspace Information panel. The prompt text explicitly tells providers that unqualified phrases such as "this workspace" or "Information panel" refer to the workspace that owns the current task unless the user clearly scopes the request elsewhere.
+
 Claude path and approval handling:
 
 - Stave runs Claude with the active workspace `cwd`
@@ -188,6 +190,8 @@ Codex event mapping:
 
 - native `agentMessage` items -> `text`
 - native `reasoning` items -> `thinking`
+- native `mcpServer/elicitation/request` form prompts -> shared `user_input` UI
+- URL-mode elicitation requests are surfaced through the same `user_input` card with an external-link action and an explicit continue / decline decision
 - native `plan` items and `item/plan/delta` -> `plan_ready`
 - command execution -> `tool`
 - MCP tool calls -> `tool`

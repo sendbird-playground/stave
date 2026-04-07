@@ -1,5 +1,9 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
-import { buildProviderTurnPrompt, resolveProviderResumeSessionId } from "../../src/lib/providers/provider-request-translators";
+import {
+  buildProviderTurnPrompt,
+  filterPromptRetrievedContext,
+  resolveProviderResumeSessionId,
+} from "../../src/lib/providers/provider-request-translators";
 import {
   MAX_PROVIDER_APPROVAL_DESCRIPTION_CHARS,
   sanitizeTextField,
@@ -1514,10 +1518,16 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
       fallback: "acceptEdits",
     });
+    const promptConversation = args.conversation
+      ? filterPromptRetrievedContext({
+          conversation: args.conversation,
+          excludedSourceIds: embeddedMcpServers ? [] : ["stave:current-task-awareness"],
+        })
+      : args.conversation;
     const providerPrompt = buildProviderTurnPrompt({
       providerId: args.providerId,
       prompt: args.prompt,
-      conversation: args.conversation,
+      conversation: promptConversation,
     });
     const activatedSkillSlugs = collectClaudeActivatedSkillSlugs({
       conversation: args.conversation,

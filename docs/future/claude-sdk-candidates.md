@@ -68,8 +68,8 @@ SDK surface:
 
 Why it is deferred:
 
-- Stave does not yet have a general-purpose MCP elicitation dialog. The current AskUserQuestion flow is separate.
-- URL-mode elicitation requires a secure browser-context handoff that needs design.
+- Stave now has a shared task-chat `user_input` surface that can render schema-driven MCP elicitation prompts, but the Claude SDK runtime is not yet wired to Claude's elicitation control messages.
+- URL-mode elicitation still requires a stronger Claude-specific browser handoff / completion flow design.
 
 Likely implementation shape:
 

@@ -94,10 +94,17 @@ export interface UserInputOption {
 }
 
 export interface UserInputQuestion {
+  key?: string;
   question: string;
   header: string;
   options: UserInputOption[];
   multiSelect?: boolean;
+  inputType?: "text" | "number" | "integer" | "boolean" | "url_notice";
+  required?: boolean;
+  placeholder?: string;
+  allowCustom?: boolean;
+  defaultValue?: string;
+  linkUrl?: string;
 }
 
 export interface UserInputPart extends MessagePartBase {
