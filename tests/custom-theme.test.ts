@@ -202,6 +202,21 @@ describe("listAllCustomThemes", () => {
 // ---------------------------------------------------------------------------
 
 describe("BUILTIN_CUSTOM_THEMES", () => {
+  it("tracks PromptInput role tokens in the built-in token registry", () => {
+    expect(BUILTIN_THEME_TOKEN_NAMES).toEqual(
+      expect.arrayContaining([
+        "prompt-role-plan",
+        "prompt-role-thinking",
+        "prompt-role-effort",
+        "prompt-role-fast",
+        "prompt-mode-manual",
+        "prompt-mode-guided",
+        "prompt-mode-auto",
+        "prompt-mode-custom",
+      ]),
+    );
+  });
+
   it("includes Dark High Contrast", () => {
     const theme = BUILTIN_CUSTOM_THEMES.find((t) => t.id === "dark-high-contrast");
     expect(theme).toBeDefined();

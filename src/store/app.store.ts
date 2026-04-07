@@ -631,6 +631,7 @@ interface AppState {
   loadTaskMessages: (args: { taskId: string; mode?: "latest" | "older" }) => Promise<void>;
   clearTaskSelection: () => void;
   updatePromptDraft: (args: { taskId: string; patch: Partial<PromptDraft> }) => void;
+  clearTaskProviderSession: (args: { taskId: string; providerId: ProviderId }) => void;
   updateWorkspaceInformation: (args: {
     updater: (current: WorkspaceInformationState) => WorkspaceInformationState;
   }) => void;
@@ -4502,6 +4503,37 @@ export const useAppStore = create<AppState>()(
             ...(onlyTextChanged
               ? { promptDraftPersistenceVersion: incrementPromptDraftPersistenceVersion(state) }
               : { workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state) }),
+          };
+        });
+      },
+      clearTaskProviderSession: ({ taskId, providerId }) => {
+        set((state) => {
+          const currentSession = state.providerSessionByTask[taskId];
+          const existingSessionId = currentSession?.[providerId]?.trim();
+          if (!existingSessionId) {
+            return state;
+          }
+
+          const nextTaskSession: TaskProviderSessionState = {
+            ...currentSession,
+          };
+          delete nextTaskSession[providerId];
+
+          const activeProvider = state.tasks.find((task) => task.id === taskId)?.provider;
+          const nextNativeSessionReady = activeProvider !== undefined
+            && activeProvider !== "stave"
+            && Boolean(nextTaskSession[activeProvider]?.trim());
+
+          return {
+            providerSessionByTask: {
+              ...state.providerSessionByTask,
+              [taskId]: nextTaskSession,
+            },
+            nativeSessionReadyByTask: {
+              ...state.nativeSessionReadyByTask,
+              [taskId]: nextNativeSessionReady,
+            },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
       },

@@ -4,6 +4,7 @@ import type {
   PromptDraft,
   PromptDraftRuntimeOverrides,
 } from "@/types/chat";
+import type { ProviderId } from "@/lib/providers/provider.types";
 
 export interface ResolvedPromptDraftRuntimeState {
   claudePermissionMode: ClaudePermissionMode;
@@ -55,6 +56,44 @@ export function transitionClaudePromptDraftPermissionMode(args: {
   return {
     claudePermissionMode: nextMode,
     claudePermissionModeBeforePlan: beforePlan,
+  };
+}
+
+export function resolvePromptDraftPlanModeChange(args: {
+  providerId: ProviderId;
+  enabled: boolean;
+  runtimeOverrides?: PromptDraftRuntimeOverrides;
+  claudePermissionMode: ClaudePermissionMode;
+  claudePermissionModeBeforePlan: ClaudePermissionModeBeforePlan;
+  codexPlanMode: boolean;
+}) {
+  if (args.providerId === "codex") {
+    return {
+      runtimeOverrides: {
+        ...args.runtimeOverrides,
+        codexPlanMode: args.enabled,
+      } satisfies PromptDraftRuntimeOverrides,
+      shouldClearCodexSession: args.codexPlanMode && !args.enabled,
+    };
+  }
+
+  if (args.providerId === "claude-code" || args.providerId === "stave") {
+    const nextMode: ClaudePermissionMode = args.enabled
+      ? "plan"
+      : (args.claudePermissionModeBeforePlan ?? "auto");
+    return {
+      runtimeOverrides: transitionClaudePromptDraftPermissionMode({
+        nextMode,
+        currentMode: args.claudePermissionMode,
+        beforePlan: args.claudePermissionModeBeforePlan,
+      }),
+      shouldClearCodexSession: false,
+    };
+  }
+
+  return {
+    runtimeOverrides: args.runtimeOverrides,
+    shouldClearCodexSession: false,
   };
 }
 

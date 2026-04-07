@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 import {
+  resolvePromptDraftPlanModeChange,
   resolvePromptDraftRuntimeState,
   transitionClaudePromptDraftPermissionMode,
 } from "@/store/prompt-draft-runtime";
@@ -38,6 +39,64 @@ describe("prompt-draft runtime state", () => {
     })).toEqual({
       claudePermissionMode: "acceptEdits",
       claudePermissionModeBeforePlan: null,
+    });
+  });
+
+  test("restores the prior Claude mode without clearing Codex sessions when plan mode is disabled", () => {
+    expect(resolvePromptDraftPlanModeChange({
+      providerId: "claude-code",
+      enabled: false,
+      runtimeOverrides: {
+        claudePermissionMode: "plan",
+        claudePermissionModeBeforePlan: "acceptEdits",
+      },
+      claudePermissionMode: "plan",
+      claudePermissionModeBeforePlan: "acceptEdits",
+      codexPlanMode: false,
+    })).toEqual({
+      runtimeOverrides: {
+        claudePermissionMode: "acceptEdits",
+        claudePermissionModeBeforePlan: null,
+      },
+      shouldClearCodexSession: false,
+    });
+  });
+
+  test("turns Codex plan mode off and clears the persisted Codex session for the next turn", () => {
+    expect(resolvePromptDraftPlanModeChange({
+      providerId: "codex",
+      enabled: false,
+      runtimeOverrides: {
+        claudePermissionMode: "auto",
+        codexPlanMode: true,
+      },
+      claudePermissionMode: "default",
+      claudePermissionModeBeforePlan: null,
+      codexPlanMode: true,
+    })).toEqual({
+      runtimeOverrides: {
+        claudePermissionMode: "auto",
+        codexPlanMode: false,
+      },
+      shouldClearCodexSession: true,
+    });
+  });
+
+  test("keeps the Codex session when plan mode stays enabled", () => {
+    expect(resolvePromptDraftPlanModeChange({
+      providerId: "codex",
+      enabled: true,
+      runtimeOverrides: {
+        codexPlanMode: false,
+      },
+      claudePermissionMode: "default",
+      claudePermissionModeBeforePlan: null,
+      codexPlanMode: false,
+    })).toEqual({
+      runtimeOverrides: {
+        codexPlanMode: true,
+      },
+      shouldClearCodexSession: false,
     });
   });
 

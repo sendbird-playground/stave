@@ -4,6 +4,7 @@ import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, 
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
+import type { ProviderModePresetDefinition, ProviderModePresetId } from "@/lib/providers/provider-mode-presets";
 import { filterCommandPaletteItems, getActiveSlashCommandTokenMatch, replaceSlashCommandToken } from "@/lib/commands";
 import { getActiveSkillTokenMatch, replaceSkillToken } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
@@ -40,6 +41,8 @@ interface PromptInputProps {
   promptHistoryEntries?: readonly string[];
   promptSuggestions?: readonly string[];
   providerModeStatus?: PromptInputProviderModeStatus | null;
+  providerModePresets?: readonly ProviderModePresetDefinition[];
+  activeProviderModePresetId?: ProviderModePresetId | null;
   runtimeStatusItems?: readonly PromptInputRuntimeStatusItem[];
   commandPaletteItems?: readonly CommandPaletteItem[];
   commandPaletteProviderNote?: CommandPaletteProviderNote;
@@ -55,6 +58,7 @@ interface PromptInputProps {
   onOpenFileSelector?: () => void;
   onAttachmentsChange?: (args: { attachments: Attachment[] }) => void;
   onPasteFiles?: (args: { files: File[] }) => void | Promise<void>;
+  onProviderModeSelect?: (presetId: ProviderModePresetId) => void;
   effortLabel?: string;
   effortValue?: string;
   onEffortCycle?: () => void;
@@ -84,6 +88,27 @@ const PROMPT_TOOLBAR_BUTTON =
 const PROMPT_TOOLBAR_ICON_BUTTON =
   `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} rounded-md border border-transparent bg-transparent p-0 text-muted-foreground hover:bg-muted/60 hover:text-foreground`;
 
+function getPromptToolbarAccentClass(tone: "plan" | "thinking" | "effort" | "fast") {
+  if (tone === "thinking") return "text-prompt-role-thinking hover:text-prompt-role-thinking";
+  if (tone === "effort") return "text-prompt-role-effort hover:text-prompt-role-effort";
+  if (tone === "fast") return "text-prompt-role-fast hover:text-prompt-role-fast";
+  return "text-prompt-role-plan hover:text-prompt-role-plan";
+}
+
+function isHighestEffortValue(value?: string) {
+  return value === "max" || value === "xhigh";
+}
+
+function getEffortIconToneClass(value?: string) {
+  if (isHighestEffortValue(value) || value === "high") {
+    return "text-prompt-role-effort";
+  }
+  if (value === "medium") {
+    return "text-prompt-role-effort/60";
+  }
+  return undefined;
+}
+
 function getPaletteItemSelector(index: number) {
   return `[${PALETTE_ITEM_INDEX_ATTRIBUTE}="${index}"]`;
 }
@@ -102,6 +127,8 @@ export function PromptInput(args: PromptInputProps) {
     promptHistoryEntries,
     promptSuggestions,
     providerModeStatus,
+    providerModePresets,
+    activeProviderModePresetId,
     runtimeStatusItems,
     commandPaletteItems,
     commandPaletteProviderNote,
@@ -117,6 +144,7 @@ export function PromptInput(args: PromptInputProps) {
     onOpenFileSelector,
     onAttachmentsChange,
     onPasteFiles,
+    onProviderModeSelect,
     effortLabel,
     effortValue,
     onEffortCycle,
@@ -1042,7 +1070,15 @@ export function PromptInput(args: PromptInputProps) {
               window.requestAnimationFrame(() => focusComposer());
             }}
           />
-          {providerModeStatus ? <PromptInputProviderModePill status={providerModeStatus} /> : null}
+          {providerModeStatus ? (
+            <PromptInputProviderModePill
+              status={providerModeStatus}
+              presets={providerModePresets ?? []}
+              activePresetId={activeProviderModePresetId ?? null}
+              onSelect={onProviderModeSelect}
+              disabled={interactionsDisabled}
+            />
+          ) : null}
           {onPlanModeChange ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1055,7 +1091,7 @@ export function PromptInput(args: PromptInputProps) {
                   className={cn(
                     PROMPT_TOOLBAR_BUTTON,
                     planMode
-                      ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                      ? getPromptToolbarAccentClass("plan")
                       : undefined,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
@@ -1082,14 +1118,14 @@ export function PromptInput(args: PromptInputProps) {
                   className={cn(
                     PROMPT_TOOLBAR_BUTTON,
                     thinkingMode === "enabled"
-                      ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                      ? getPromptToolbarAccentClass("thinking")
                       : thinkingMode === "disabled"
                         ? "text-muted-foreground/50"
                         : undefined,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
-                  <Brain className="size-3.5" />
+                  <Brain className={cn("size-3.5", thinkingMode === "adaptive" && "text-prompt-role-thinking")} />
                   <span>Thinking</span>
                 </Button>
               </TooltipTrigger>
@@ -1107,13 +1143,16 @@ export function PromptInput(args: PromptInputProps) {
                   onClick={() => onEffortCycle()}
                   className={cn(
                     PROMPT_TOOLBAR_BUTTON,
-                    (effortValue === "medium" || effortValue === "high" || effortValue === "xhigh" || effortValue === "max")
-                      ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                    isHighestEffortValue(effortValue)
+                      ? getPromptToolbarAccentClass("effort")
                       : undefined,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
-                  <Sparkles className="size-3.5" />
+                  <Sparkles className={cn(
+                    "size-3.5",
+                    getEffortIconToneClass(effortValue),
+                  )} />
                   <span>{effortLabel}</span>
                 </Button>
               </TooltipTrigger>
@@ -1132,12 +1171,12 @@ export function PromptInput(args: PromptInputProps) {
                   className={cn(
                     PROMPT_TOOLBAR_BUTTON,
                     fastMode
-                      ? "bg-amber-500/12 text-amber-500 hover:bg-amber-500/18 hover:text-amber-500"
+                      ? getPromptToolbarAccentClass("fast")
                       : undefined,
                     interactionsDisabled && "cursor-not-allowed opacity-60",
                   )}
                 >
-                  <Zap className={cn("size-3.5", fastMode && "fill-amber-400")} />
+                  <Zap className={cn("size-3.5", fastMode && "fill-current")} />
                   <span>Fast</span>
                 </Button>
               </TooltipTrigger>

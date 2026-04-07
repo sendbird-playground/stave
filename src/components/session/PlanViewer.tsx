@@ -7,8 +7,8 @@ import { APPROVE_PLAN_MESSAGE } from "@/lib/providers/plan-response";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { useAppStore } from "@/store/app.store";
 import {
+  resolvePromptDraftPlanModeChange,
   resolvePromptDraftRuntimeState,
-  transitionClaudePromptDraftPermissionMode,
 } from "@/store/prompt-draft-runtime";
 import {
   resolvePlanViewerAutoViewState,
@@ -51,7 +51,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
 
-  const [activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexPlanMode, sendUserMessage, createTask, updatePromptDraft] = useAppStore(
+  const [activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexPlanMode, sendUserMessage, createTask, updatePromptDraft, clearTaskProviderSession] = useAppStore(
     useShallow((state) => [
       state.activeTaskId,
       state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
@@ -63,6 +63,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
       state.sendUserMessage,
       state.createTask,
       state.updatePromptDraft,
+      state.clearTaskProviderSession,
     ] as const),
   );
   const activeProvider = activeTask?.provider ?? draftProvider;
@@ -147,28 +148,24 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     if (isManagedTask || !canReplyToPlan) {
       return;
     }
-    // Restore the permission mode that was active before plan mode
-    if ((activeProvider === "claude-code" || activeProvider === "stave") && effectiveClaudePermissionMode === "plan") {
+    const nextPlanModeState = resolvePromptDraftPlanModeChange({
+      providerId: activeProvider,
+      enabled: false,
+      runtimeOverrides: promptDraft.runtimeOverrides,
+      claudePermissionMode: effectiveClaudePermissionMode,
+      claudePermissionModeBeforePlan: effectiveClaudePermissionModeBeforePlan,
+      codexPlanMode: effectiveCodexPlanMode,
+    });
+    if (nextPlanModeState.runtimeOverrides !== promptDraft.runtimeOverrides) {
       updatePromptDraft({
         taskId: activeTaskId,
         patch: {
-          runtimeOverrides: transitionClaudePromptDraftPermissionMode({
-            nextMode: effectiveClaudePermissionModeBeforePlan ?? "auto",
-            currentMode: effectiveClaudePermissionMode,
-            beforePlan: effectiveClaudePermissionModeBeforePlan,
-          }),
+          runtimeOverrides: nextPlanModeState.runtimeOverrides,
         },
       });
-    } else if (activeProvider === "codex" && effectiveCodexPlanMode) {
-      updatePromptDraft({
-        taskId: activeTaskId,
-        patch: {
-          runtimeOverrides: {
-            ...promptDraft.runtimeOverrides,
-            codexPlanMode: false,
-          },
-        },
-      });
+    }
+    if (nextPlanModeState.shouldClearCodexSession) {
+      clearTaskProviderSession({ taskId: activeTaskId, providerId: "codex" });
     }
     sendUserMessage({ taskId: activeTaskId, content: APPROVE_PLAN_MESSAGE });
     setRevising(false);
@@ -177,6 +174,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     activeProvider,
     activeTaskId,
     canReplyToPlan,
+    clearTaskProviderSession,
     effectiveClaudePermissionMode,
     effectiveClaudePermissionModeBeforePlan,
     effectiveCodexPlanMode,

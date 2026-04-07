@@ -11,8 +11,16 @@ import type { PromptInputRuntimeStatusItem } from "@/components/ai-elements/prom
 import { toast } from "@/components/ui";
 import { buildCommandPaletteItems, type CommandPaletteItem, type CommandPaletteProviderNote } from "@/lib/commands";
 import {
+  buildClaudeProviderModeSettingsPatch,
+  buildCodexProviderModeSettingsPatch,
+  CLAUDE_PROVIDER_MODE_PRESETS,
+  CODEX_PROVIDER_MODE_PRESETS,
+  detectClaudeProviderModePreset,
+  detectCodexProviderModePreset,
   resolveClaudeProviderModePresentation,
   resolveCodexProviderModePresentation,
+  type ProviderModePresetDefinition,
+  type ProviderModePresetId,
 } from "@/lib/providers/provider-mode-presets";
 import type { ClaudeSettingSource } from "@/lib/providers/provider.types";
 import {
@@ -43,10 +51,10 @@ import {
   findLatestPendingUserInputPart,
 } from "@/store/provider-message.utils";
 import {
+  resolvePromptDraftPlanModeChange,
   resolvePromptDraftRuntimeState,
-  transitionClaudePromptDraftPermissionMode,
 } from "@/store/prompt-draft-runtime";
-import type { Attachment, ChatMessage, ClaudePermissionMode, PromptDraft } from "@/types/chat";
+import type { Attachment, ChatMessage, PromptDraft } from "@/types/chat";
 import { useShallow } from "zustand/react/shallow";
 import {
   buildChatInputRuntimeStatusItems,
@@ -107,6 +115,7 @@ const INACTIVE_STAVE_SETTINGS = [
   true,
   2,
 ] as const;
+const EMPTY_PROVIDER_MODE_PRESETS: readonly ProviderModePresetDefinition[] = [];
 
 interface ChatInputComposerProps {
   compact?: boolean;
@@ -125,6 +134,8 @@ interface ChatInputComposerProps {
   skillsAutoSuggest: boolean;
   skillPaletteItems: readonly SkillCatalogEntry[];
   providerModeStatus?: PromptInputProviderModeStatus | null;
+  providerModePresets: readonly ProviderModePresetDefinition[];
+  activeProviderModePresetId: ProviderModePresetId | null;
   runtimeStatusItems: readonly PromptInputRuntimeStatusItem[];
   effortLabel?: string;
   effortValue?: string;
@@ -135,6 +146,7 @@ interface ChatInputComposerProps {
   onPlanModeChange?: (enabled: boolean) => void;
   thinkingMode?: "adaptive" | "enabled" | "disabled";
   onThinkingModeChange?: (value: "adaptive" | "enabled" | "disabled") => void;
+  onProviderModeSelect?: (presetId: ProviderModePresetId) => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
 }
 
@@ -481,6 +493,14 @@ function ChatInputComposer(args: ChatInputComposerProps) {
             resolveUserInput({ taskId: args.activeTaskId, messageId, denied: true });
           } : undefined}
           providerModeStatus={args.providerModeStatus}
+          providerModePresets={args.providerModePresets}
+          activeProviderModePresetId={args.activeProviderModePresetId}
+          onProviderModeSelect={args.onProviderModeSelect
+            ? (presetId) => {
+                commitCurrentDraftText();
+                args.onProviderModeSelect?.(presetId);
+              }
+            : undefined}
           runtimeStatusItems={args.runtimeStatusItems}
           effortLabel={args.effortLabel}
           effortValue={args.effortValue}
@@ -550,6 +570,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     providerCommandCatalogRefreshNonce,
     setTaskProvider,
     updatePromptDraft,
+    clearTaskProviderSession,
     updateSettings,
     refreshSkillCatalog,
   ] = useAppStore(useShallow((state) => [
@@ -558,6 +579,7 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.providerCommandCatalogRefreshNonce,
     state.setTaskProvider,
     state.updatePromptDraft,
+    state.clearTaskProviderSession,
     state.updateSettings,
     state.refreshSkillCatalog,
   ] as const));
@@ -840,6 +862,63 @@ export function ChatInput(args: ChatInputProps = {}) {
     effectiveClaudePermissionMode,
     effectiveCodexPlanMode,
   ]);
+  const activeProviderModePresetId = useMemo<ProviderModePresetId | null>(() => {
+    if (activeProvider === "claude-code") {
+      return detectClaudeProviderModePreset({
+        settings: {
+          claudePermissionMode,
+          claudeAllowDangerouslySkipPermissions,
+          claudeSandboxEnabled,
+          claudeAllowUnsandboxedCommands,
+        },
+      });
+    }
+
+    if (activeProvider === "codex") {
+      return detectCodexProviderModePreset({
+        settings: {
+          codexFileAccess,
+          codexApprovalPolicy,
+          codexNetworkAccess,
+          codexWebSearch,
+        },
+      });
+    }
+
+    return null;
+  }, [
+    activeProvider,
+    claudeAllowDangerouslySkipPermissions,
+    claudeAllowUnsandboxedCommands,
+    claudePermissionMode,
+    claudeSandboxEnabled,
+    codexApprovalPolicy,
+    codexFileAccess,
+    codexNetworkAccess,
+    codexWebSearch,
+  ]);
+  const providerModePresets = useMemo(() => {
+    if (activeProvider === "claude-code") {
+      return CLAUDE_PROVIDER_MODE_PRESETS;
+    }
+    if (activeProvider === "codex") {
+      return CODEX_PROVIDER_MODE_PRESETS;
+    }
+    return EMPTY_PROVIDER_MODE_PRESETS;
+  }, [activeProvider]);
+  const onProviderModeSelect = useMemo(() => {
+    if (activeProvider === "claude-code") {
+      return (presetId: ProviderModePresetId) => updateSettings({
+        patch: buildClaudeProviderModeSettingsPatch({ presetId }),
+      });
+    }
+    if (activeProvider === "codex") {
+      return (presetId: ProviderModePresetId) => updateSettings({
+        patch: buildCodexProviderModeSettingsPatch({ presetId }),
+      });
+    }
+    return undefined;
+  }, [activeProvider, updateSettings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1001,6 +1080,9 @@ export function ChatInput(args: ChatInputProps = {}) {
       skillsAutoSuggest={skillsAutoSuggest}
       skillPaletteItems={deferredSkillPalette}
       providerModeStatus={providerModeStatus}
+      providerModePresets={providerModePresets}
+      activeProviderModePresetId={activeProviderModePresetId}
+      onProviderModeSelect={onProviderModeSelect}
       runtimeStatusItems={runtimeStatusItems}
       effortLabel={effortLabel}
       effortValue={effortValue}
@@ -1057,28 +1139,39 @@ export function ChatInput(args: ChatInputProps = {}) {
       }
       onPlanModeChange={
         activeProvider === "codex"
-          ? (enabled) => updatePromptDraft({
-              taskId: providerSelectionTarget,
-              patch: {
-                runtimeOverrides: {
-                  ...promptDraftRuntimeOverrides,
-                  codexPlanMode: enabled,
-                },
-              },
-            })
-          : activeProvider === "claude-code" || activeProvider === "stave"
           ? (enabled) => {
-              const nextMode: ClaudePermissionMode = enabled
-                ? "plan"
-                : (effectiveClaudePermissionModeBeforePlan ?? "auto");
+              const nextPlanModeState = resolvePromptDraftPlanModeChange({
+                providerId: activeProvider,
+                enabled,
+                runtimeOverrides: promptDraftRuntimeOverrides,
+                claudePermissionMode: effectiveClaudePermissionMode,
+                claudePermissionModeBeforePlan: effectiveClaudePermissionModeBeforePlan,
+                codexPlanMode: effectiveCodexPlanMode,
+              });
               updatePromptDraft({
                 taskId: providerSelectionTarget,
                 patch: {
-                  runtimeOverrides: transitionClaudePromptDraftPermissionMode({
-                    nextMode,
-                    currentMode: effectiveClaudePermissionMode,
-                    beforePlan: effectiveClaudePermissionModeBeforePlan,
-                  }),
+                  runtimeOverrides: nextPlanModeState.runtimeOverrides,
+                },
+              });
+              if (nextPlanModeState.shouldClearCodexSession) {
+                clearTaskProviderSession({ taskId: providerSelectionTarget, providerId: "codex" });
+              }
+            }
+          : activeProvider === "claude-code" || activeProvider === "stave"
+          ? (enabled) => {
+              const nextPlanModeState = resolvePromptDraftPlanModeChange({
+                providerId: activeProvider,
+                enabled,
+                runtimeOverrides: promptDraftRuntimeOverrides,
+                claudePermissionMode: effectiveClaudePermissionMode,
+                claudePermissionModeBeforePlan: effectiveClaudePermissionModeBeforePlan,
+                codexPlanMode: effectiveCodexPlanMode,
+              });
+              updatePromptDraft({
+                taskId: providerSelectionTarget,
+                patch: {
+                  runtimeOverrides: nextPlanModeState.runtimeOverrides,
                 },
               });
             }
