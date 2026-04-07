@@ -288,6 +288,7 @@ import {
 
 export { WORKSPACE_SIDEBAR_MIN_WIDTH, MIN_EDITOR_PANEL_WIDTH, DEFAULT_EDITOR_PANEL_WIDTH } from "@/store/layout.utils";
 export type { LayoutState } from "@/store/layout.utils";
+export type AppShellMode = "stave" | "zen";
 export {
   THEME_TOKEN_NAMES,
   PRESET_THEME_TOKENS,
@@ -395,6 +396,7 @@ function logWorkspaceSwitchMetric(args: {
 }
 
 export interface AppSettings {
+  appShellMode: AppShellMode;
   themeMode: "light" | "dark" | "system";
   /** ID of the active custom theme preset, or `null` for the default. */
   customThemeId: string | null;
@@ -975,7 +977,12 @@ const DEFAULT_STAVE_AUTO_MODEL_SETTINGS = buildStaveAutoModelSettingsPatch({
 });
 const DEFAULT_STAVE_AUTO_ROLE_RUNTIME_OVERRIDES = createDefaultStaveAutoRoleRuntimeOverrides();
 
+function normalizeAppShellMode(value: unknown): AppShellMode {
+  return value === "zen" ? "zen" : "stave";
+}
+
 const defaultSettings: AppSettings = {
+  appShellMode: "stave",
   themeMode: "dark",
   customThemeId: null,
   sidebarArtworkMode: DEFAULT_SIDEBAR_ARTWORK_MODE,
@@ -4298,6 +4305,11 @@ export const useAppStore = create<AppState>()(
       updateSettings: ({ patch }) => {
         const normalizedPatch: Partial<AppSettings> = {
           ...patch,
+          ...(patch.appShellMode === undefined
+            ? {}
+            : {
+                appShellMode: normalizeAppShellMode(patch.appShellMode),
+              }),
           ...(patch.sharedSkillsHome === undefined
             ? {}
             : {
@@ -7456,12 +7468,19 @@ export const useAppStore = create<AppState>()(
         if (!state) {
           return;
         }
+        const persistedSettings = state.settings;
         // Merge with defaultSettings so newly added fields are never undefined
         // for users whose persisted state pre-dates those fields.
-        state.settings = { ...defaultSettings, ...state.settings };
+        state.settings = { ...defaultSettings, ...persistedSettings };
         // Migrate legacy fastModeVisible → per-provider fields.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = state.settings as any;
+        const legacyLayoutZenMode = (state.layout as LayoutState & {
+          zenMode?: boolean;
+        }).zenMode === true;
+        state.settings.appShellMode = normalizeAppShellMode(
+          persistedSettings?.appShellMode ?? (legacyLayoutZenMode ? "zen" : defaultSettings.appShellMode),
+        );
         state.settings.sidebarArtworkMode = normalizeSidebarArtworkMode(
           raw.sidebarArtworkMode,
         );

@@ -4,7 +4,9 @@ import {
   PROMPT_INPUT_ROOT_SELECTOR,
   TASK_ABORT_SHORTCUT_SCOPE_SELECTOR,
   isEditableShortcutTarget,
+  resolveShortcutChord,
   shouldAbortTaskOnEscape,
+  ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS,
 } from "../src/components/layout/app-shell.shortcuts";
 
 type FakeTarget = EventTarget & {
@@ -64,5 +66,86 @@ describe("app shell shortcut gating", () => {
       target: dialogButton,
       activeElement: dialogButton,
     })).toBe(false);
+  });
+
+  test("starts the zen-mode chord on Cmd/Ctrl+K", () => {
+    expect(resolveShortcutChord({
+      key: "k",
+      metaKey: true,
+      now: 100,
+    })).toEqual({
+      action: null,
+      nextPendingChord: {
+        type: "zen-mode",
+        startedAt: 100,
+      },
+      preventDefault: true,
+      stopAppHandling: true,
+    });
+  });
+
+  test("toggles zen mode when Z follows the chord before timeout", () => {
+    expect(resolveShortcutChord({
+      key: "z",
+      pendingChord: {
+        type: "zen-mode",
+        startedAt: 100,
+      },
+      now: 100 + ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS - 1,
+    })).toEqual({
+      action: "toggle-zen-mode",
+      nextPendingChord: null,
+      preventDefault: true,
+      stopAppHandling: true,
+    });
+  });
+
+  test("keeps the chord valid when Cmd/Ctrl stays held for the second Z key", () => {
+    expect(resolveShortcutChord({
+      key: "z",
+      metaKey: true,
+      pendingChord: {
+        type: "zen-mode",
+        startedAt: 100,
+      },
+      now: 150,
+    })).toEqual({
+      action: "toggle-zen-mode",
+      nextPendingChord: null,
+      preventDefault: true,
+      stopAppHandling: true,
+    });
+  });
+
+  test("cancels expired zen-mode chords", () => {
+    expect(resolveShortcutChord({
+      key: "z",
+      pendingChord: {
+        type: "zen-mode",
+        startedAt: 100,
+      },
+      now: 100 + ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS + 1,
+    })).toEqual({
+      action: null,
+      nextPendingChord: null,
+      preventDefault: false,
+      stopAppHandling: false,
+    });
+  });
+
+  test("cancels the zen-mode chord on Escape without swallowing dialog handling", () => {
+    expect(resolveShortcutChord({
+      key: "Escape",
+      pendingChord: {
+        type: "zen-mode",
+        startedAt: 100,
+      },
+      now: 150,
+    })).toEqual({
+      action: null,
+      nextPendingChord: null,
+      preventDefault: false,
+      stopAppHandling: true,
+    });
   });
 });

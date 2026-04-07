@@ -256,7 +256,7 @@ export function ConversationContent(props: ConversationContentProps) {
         containerRef.current = node;
         setContainerEl(node);
       }}
-      className={cn("min-h-0 flex-1 overflow-y-auto", rest.className)}
+      className={cn("min-h-0 flex-1 overflow-x-hidden overflow-y-auto", rest.className)}
       onScroll={(event) => {
         const target = event.currentTarget;
         const distance = target.scrollHeight - target.scrollTop - target.clientHeight;
@@ -288,26 +288,6 @@ export function ConversationContent(props: ConversationContentProps) {
   );
 }
 
-const VirtualListContainer = forwardRef(function VirtualListContainer(
-  props: ComponentPropsWithoutRef<"div">,
-  ref: ForwardedRef<HTMLDivElement>
-) {
-  const { className, style, ...rest } = props;
-  return (
-    <div
-      ref={ref}
-      className={cn("mx-auto w-full max-w-6xl px-3 pt-4 sm:px-5 sm:pt-5", className)}
-      style={style}
-      {...rest}
-    />
-  );
-});
-
-function VirtualListItem(props: ComponentPropsWithoutRef<"div">) {
-  const { className, ...rest } = props;
-  return <div className={cn("pb-3 last:pb-6", className)} {...rest} />;
-}
-
 interface ConversationVirtualListProps<T> {
   data: T[];
   itemContent: (index: number, item: T) => ReactNode;
@@ -319,6 +299,7 @@ interface ConversationVirtualListProps<T> {
   restoreItemId?: string;
   restoreItemOffset?: number;
   listRef?: MutableRefObject<VirtuosoHandle | null>;
+  layout?: "default" | "zen";
 }
 
 export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T>) {
@@ -337,6 +318,39 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
     scope: props.listKey,
   });
   const lastIndex = props.data.length - 1;
+  const components = useMemo(() => {
+    const listLayout = props.layout ?? "default";
+    return {
+      List: forwardRef(function ConversationListContainer(
+        listProps: ComponentPropsWithoutRef<"div">,
+        ref: ForwardedRef<HTMLDivElement>
+      ) {
+        const { className, style, ...rest } = listProps;
+        return (
+          <div
+            ref={ref}
+            className={cn(
+              listLayout === "zen"
+                ? "mx-auto w-full max-w-[82ch] px-2 pt-4 sm:px-0"
+                : "mx-auto w-full max-w-6xl px-3 pt-4 sm:px-5 sm:pt-5",
+              className,
+            )}
+            style={style}
+            {...rest}
+          />
+        );
+      }),
+      Item: function ConversationListItem(itemProps: ComponentPropsWithoutRef<"div">) {
+        const { className, ...rest } = itemProps;
+        return (
+          <div
+            className={cn(listLayout === "zen" ? "pb-8" : "pb-3 last:pb-6", className)}
+            {...rest}
+          />
+        );
+      },
+    };
+  }, [props.layout]);
 
   useEffect(() => {
     setScrollToBottomOverride(() => (args?: ScrollToBottomArgs) => {
@@ -612,10 +626,7 @@ export function ConversationVirtualList<T>(props: ConversationVirtualListProps<T
       atBottomStateChange={handleAtBottomChange}
       followOutput={followOutput}
       computeItemKey={props.itemKey}
-      components={{
-        List: VirtualListContainer,
-        Item: VirtualListItem,
-      }}
+      components={components}
       itemContent={props.itemContent}
     />
   );

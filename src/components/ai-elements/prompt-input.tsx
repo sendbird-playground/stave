@@ -30,6 +30,7 @@ import { Suggestion, Suggestions } from "./suggestion";
 
 interface PromptInputProps {
   value: string;
+  minimal?: boolean;
   disabled?: boolean;
   isTurnActive?: boolean;
   focusToken?: string;
@@ -116,6 +117,7 @@ function getPaletteItemSelector(index: number) {
 export function PromptInput(args: PromptInputProps) {
   const {
     disabled,
+    minimal = false,
     isTurnActive,
     focusToken,
     value,
@@ -620,9 +622,14 @@ export function PromptInput(args: PromptInputProps) {
       onBlurCapture={() => {
         window.requestAnimationFrame(syncComposerFocus);
       }}
-      className="relative space-y-3 rounded-xl border border-border/70 bg-card/95 p-4 transition-[border-color,box-shadow,background-color] focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10"
+      className={cn(
+        "relative space-y-3 transition-[border-color,box-shadow,background-color]",
+        minimal
+          ? "space-y-2 border-0 border-t border-border/60 bg-transparent p-0 pt-3 focus-within:border-border/60"
+          : "rounded-xl border border-border/70 bg-card/95 p-4 focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10",
+      )}
     >
-      {promptSuggestions && promptSuggestions.length > 0 ? (
+      {!minimal && promptSuggestions && promptSuggestions.length > 0 ? (
         <Suggestions aria-label="Suggestions" className="-ml-1.5 mb-0.5">
           {promptSuggestions.map((suggestion) => (
             <Suggestion
@@ -636,7 +643,7 @@ export function PromptInput(args: PromptInputProps) {
           ))}
         </Suggestions>
       ) : null}
-      {!isPromptInputFocused && !interactionsDisabled ? (
+      {!minimal && !isPromptInputFocused && !interactionsDisabled ? (
         <Button
           type="button"
           variant="ghost"
@@ -661,204 +668,231 @@ export function PromptInput(args: PromptInputProps) {
       ) : null}
       <Popover open={activePalette !== null} modal={false}>
         <PopoverAnchor asChild>
-          <div className="space-y-2">
-            <Textarea
-              ref={textareaRef}
-              value={value}
-              disabled={interactionsDisabled}
-              onChange={(event) => {
-                syncCaretPosition(event.target);
-                onValueChange(event.target.value);
-              }}
-              onFocus={(event) => {
-                syncCaretPosition(event.currentTarget);
-                onFocus?.();
-              }}
-              onBlur={() => onBlur?.()}
-              onClick={(event) => syncCaretPosition(event.currentTarget)}
-              onKeyUp={(event) => syncCaretPosition(event.currentTarget)}
-              onSelect={(event) => syncCaretPosition(event.currentTarget)}
-              onPaste={(event) => {
-                const clipboardData = event.clipboardData;
-                if (!clipboardData) {
-                  return;
-                }
-                const { imageFiles, nonImageFiles: pastedFiles } = partitionClipboardFiles(
-                  collectClipboardFiles({
-                    items: clipboardData.items,
-                    files: clipboardData.files,
-                  }),
-                );
-                const shouldHandleImages = imageFiles.length > 0 && Boolean(onAttachmentsChange);
-                const shouldHandleFiles = pastedFiles.length > 0 && Boolean(onPasteFiles);
-                if (!shouldHandleImages && !shouldHandleFiles) {
-                  return;
-                }
-                event.preventDefault();
-                if (shouldHandleFiles) {
-                  void onPasteFiles?.({ files: pastedFiles });
-                }
-                if (shouldHandleImages) {
-                  Promise.all(
-                    imageFiles.map(
-                      (file) =>
-                        new Promise<Extract<Attachment, { kind: "image" }>>((resolve) => {
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            resolve({
-                              kind: "image",
-                              id: crypto.randomUUID(),
-                              dataUrl: reader.result as string,
-                              label: file.name || "Pasted image",
-                            });
-                          };
-                          reader.readAsDataURL(file);
-                        }),
-                    ),
-                  ).then((newImages) => {
-                    const existingImageAttachments = (attachments ?? []).filter(
-                      (attachment): attachment is Extract<Attachment, { kind: "image" }> =>
-                        attachment.kind === "image",
-                    );
-                    const retainedAttachments = (attachments ?? []).filter((attachment) => attachment.kind !== "image");
-                    onAttachmentsChange?.({
-                      attachments: [
-                        ...retainedAttachments,
-                        ...mergeClipboardImageAttachments({
-                          existing: existingImageAttachments,
-                          incoming: newImages,
-                        }),
-                      ],
-                    });
-                  });
-                }
-              }}
-              onKeyDown={(event) => {
-                if (activePalette === "skill" && filteredSkillItems.length > 0 && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setSelectedSkillIndex((current) => getNextCommandSelectionIndex({
-                      currentIndex: current,
-                      itemCount: filteredSkillItems.length,
-                      direction: "next",
-                    }));
-                    return;
-                  }
-                  if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setSelectedSkillIndex((current) => getNextCommandSelectionIndex({
-                      currentIndex: current,
-                      itemCount: filteredSkillItems.length,
-                      direction: "previous",
-                    }));
-                    return;
-                  }
-                  if (event.key === "Enter" || event.key === "Tab") {
-                    if (event.nativeEvent.isComposing) {
-                      return;
-                    }
-                    const selectedItem = getAcceptedPaletteItem({
-                      items: filteredSkillItems,
-                      selectedIndex: selectedSkillIndex,
-                      triggerKey: event.key,
-                    });
-                    if (selectedItem) {
-                      event.preventDefault();
-                      applySkillSelection(selectedItem);
-                      return;
-                    }
-                  }
-                }
-                if (activePalette === "command" && filteredCommandItems.length > 0 && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setSelectedCommandIndex((current) => getNextCommandSelectionIndex({
-                      currentIndex: current,
-                      itemCount: filteredCommandItems.length,
-                      direction: "next",
-                    }));
-                    return;
-                  }
-                  if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setSelectedCommandIndex((current) => getNextCommandSelectionIndex({
-                      currentIndex: current,
-                      itemCount: filteredCommandItems.length,
-                      direction: "previous",
-                    }));
-                    return;
-                  }
-                  if (event.key === "Enter" || event.key === "Tab") {
-                    if (event.nativeEvent.isComposing) {
-                      return;
-                    }
-                    const selectedItem = getAcceptedCommandPaletteItem({
-                      items: filteredCommandItems,
-                      selectedIndex: selectedCommandIndex,
-                      triggerKey: event.key,
-                    });
-                    if (selectedItem) {
-                      event.preventDefault();
-                      applyCommandSelection(selectedItem);
-                      return;
-                    }
-                  }
-                }
-                if (activePalette === "skill" && event.key === "Escape") {
-                  event.preventDefault();
-                  setDismissedSkillToken(activeSkillToken?.token ?? null);
-                  return;
-                }
-                if (activePalette === "command" && event.key === "Escape") {
-                  event.preventDefault();
-                  setDismissedCommandToken(activeCommandToken?.token ?? null);
-                  return;
-                }
-                if (
-                  activePalette === null
-                  && (event.key === "ArrowUp" || event.key === "ArrowDown")
-                  && !event.shiftKey
-                  && !event.altKey
-                  && !event.ctrlKey
-                  && !event.metaKey
-                  && !event.nativeEvent.isComposing
-                ) {
-                  const consumed = applyPromptHistoryNavigation(event.key === "ArrowUp" ? "previous" : "next");
-                  if (consumed) {
-                    event.preventDefault();
-                    return;
-                  }
-                }
-                if (handleShiftTabShortcut(event)) {
-                  return;
-                }
-                if (event.key !== "Enter") {
-                  return;
-                }
-                if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
-                  return;
-                }
-                if (event.nativeEvent.isComposing) {
-                  return;
-                }
-                const paletteHasAcceptedItems = activePalette === "skill"
-                  ? filteredSkillItems.length > 0
-                  : activePalette === "command"
-                    ? filteredCommandItems.length > 0
-                    : false;
-                if (paletteHasAcceptedItems) {
-                  event.preventDefault();
-                  return;
-                }
-                event.preventDefault();
-                void submitCurrentMessage();
-              }}
-              placeholder="Use / for commands, $ for skills (Enter to send)"
+          <div className={cn("space-y-2", minimal && "space-y-3")}>
+            <div
               className={cn(
-                "min-h-[104px] max-h-[240px] resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0 text-lg leading-8 shadow-none md:text-lg",
-                PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
+                minimal
+                  ? "rounded-md border border-border/60 bg-background/25 px-3 py-2.5"
+                  : undefined,
               )}
-            />
+            >
+              <div className={cn(minimal ? "flex items-start gap-3" : "space-y-2")}>
+                {minimal ? (
+                  <span className="select-none font-mono text-base leading-7 text-primary/90">
+                    &gt;
+                  </span>
+                ) : null}
+                <div className="relative min-w-0 flex-1">
+                  <Textarea
+                    ref={textareaRef}
+                    value={value}
+                    disabled={interactionsDisabled}
+                    onChange={(event) => {
+                      syncCaretPosition(event.target);
+                      onValueChange(event.target.value);
+                    }}
+                    onFocus={(event) => {
+                      syncCaretPosition(event.currentTarget);
+                      onFocus?.();
+                    }}
+                    onBlur={() => onBlur?.()}
+                    onClick={(event) => syncCaretPosition(event.currentTarget)}
+                    onKeyUp={(event) => syncCaretPosition(event.currentTarget)}
+                    onSelect={(event) => syncCaretPosition(event.currentTarget)}
+                    onPaste={(event) => {
+                      const clipboardData = event.clipboardData;
+                      if (!clipboardData) {
+                        return;
+                      }
+                      const { imageFiles, nonImageFiles: pastedFiles } = partitionClipboardFiles(
+                        collectClipboardFiles({
+                          items: clipboardData.items,
+                          files: clipboardData.files,
+                        }),
+                      );
+                      const shouldHandleImages = imageFiles.length > 0 && Boolean(onAttachmentsChange);
+                      const shouldHandleFiles = pastedFiles.length > 0 && Boolean(onPasteFiles);
+                      if (!shouldHandleImages && !shouldHandleFiles) {
+                        return;
+                      }
+                      event.preventDefault();
+                      if (shouldHandleFiles) {
+                        void onPasteFiles?.({ files: pastedFiles });
+                      }
+                      if (shouldHandleImages) {
+                        Promise.all(
+                          imageFiles.map(
+                            (file) =>
+                              new Promise<Extract<Attachment, { kind: "image" }>>((resolve) => {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  resolve({
+                                    kind: "image",
+                                    id: crypto.randomUUID(),
+                                    dataUrl: reader.result as string,
+                                    label: file.name || "Pasted image",
+                                  });
+                                };
+                                reader.readAsDataURL(file);
+                              }),
+                          ),
+                        ).then((newImages) => {
+                          const existingImageAttachments = (attachments ?? []).filter(
+                            (attachment): attachment is Extract<Attachment, { kind: "image" }> =>
+                              attachment.kind === "image",
+                          );
+                          const retainedAttachments = (attachments ?? []).filter((attachment) => attachment.kind !== "image");
+                          onAttachmentsChange?.({
+                            attachments: [
+                              ...retainedAttachments,
+                              ...mergeClipboardImageAttachments({
+                                existing: existingImageAttachments,
+                                incoming: newImages,
+                              }),
+                            ],
+                          });
+                        });
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (activePalette === "skill" && filteredSkillItems.length > 0 && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setSelectedSkillIndex((current) => getNextCommandSelectionIndex({
+                            currentIndex: current,
+                            itemCount: filteredSkillItems.length,
+                            direction: "next",
+                          }));
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setSelectedSkillIndex((current) => getNextCommandSelectionIndex({
+                            currentIndex: current,
+                            itemCount: filteredSkillItems.length,
+                            direction: "previous",
+                          }));
+                          return;
+                        }
+                        if (event.key === "Enter" || event.key === "Tab") {
+                          if (event.nativeEvent.isComposing) {
+                            return;
+                          }
+                          const selectedItem = getAcceptedPaletteItem({
+                            items: filteredSkillItems,
+                            selectedIndex: selectedSkillIndex,
+                            triggerKey: event.key,
+                          });
+                          if (selectedItem) {
+                            event.preventDefault();
+                            applySkillSelection(selectedItem);
+                            return;
+                          }
+                        }
+                      }
+                      if (activePalette === "command" && filteredCommandItems.length > 0 && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setSelectedCommandIndex((current) => getNextCommandSelectionIndex({
+                            currentIndex: current,
+                            itemCount: filteredCommandItems.length,
+                            direction: "next",
+                          }));
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setSelectedCommandIndex((current) => getNextCommandSelectionIndex({
+                            currentIndex: current,
+                            itemCount: filteredCommandItems.length,
+                            direction: "previous",
+                          }));
+                          return;
+                        }
+                        if (event.key === "Enter" || event.key === "Tab") {
+                          if (event.nativeEvent.isComposing) {
+                            return;
+                          }
+                          const selectedItem = getAcceptedCommandPaletteItem({
+                            items: filteredCommandItems,
+                            selectedIndex: selectedCommandIndex,
+                            triggerKey: event.key,
+                          });
+                          if (selectedItem) {
+                            event.preventDefault();
+                            applyCommandSelection(selectedItem);
+                            return;
+                          }
+                        }
+                      }
+                      if (activePalette === "skill" && event.key === "Escape") {
+                        event.preventDefault();
+                        setDismissedSkillToken(activeSkillToken?.token ?? null);
+                        return;
+                      }
+                      if (activePalette === "command" && event.key === "Escape") {
+                        event.preventDefault();
+                        setDismissedCommandToken(activeCommandToken?.token ?? null);
+                        return;
+                      }
+                      if (
+                        activePalette === null
+                        && (event.key === "ArrowUp" || event.key === "ArrowDown")
+                        && !event.shiftKey
+                        && !event.altKey
+                        && !event.ctrlKey
+                        && !event.metaKey
+                        && !event.nativeEvent.isComposing
+                      ) {
+                        const consumed = applyPromptHistoryNavigation(event.key === "ArrowUp" ? "previous" : "next");
+                        if (consumed) {
+                          event.preventDefault();
+                          return;
+                        }
+                      }
+                      if (handleShiftTabShortcut(event)) {
+                        return;
+                      }
+                      if (event.key !== "Enter") {
+                        return;
+                      }
+                      if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+                        return;
+                      }
+                      if (event.nativeEvent.isComposing) {
+                        return;
+                      }
+                      const paletteHasAcceptedItems = activePalette === "skill"
+                        ? filteredSkillItems.length > 0
+                        : activePalette === "command"
+                          ? filteredCommandItems.length > 0
+                          : false;
+                      if (paletteHasAcceptedItems) {
+                        event.preventDefault();
+                        return;
+                      }
+                      event.preventDefault();
+                      void submitCurrentMessage();
+                    }}
+                    placeholder={minimal && isPromptInputFocused ? "" : (minimal ? "Type a request..." : "Use / for commands, $ for skills (Enter to send)")}
+                    rows={minimal ? 1 : undefined}
+                    className={cn(
+                      "resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0 shadow-none",
+                      minimal
+                        ? "min-h-[32px] max-h-[168px] font-mono text-[15px] leading-7 tracking-[-0.01em] caret-primary md:text-[15px]"
+                        : "min-h-[104px] max-h-[240px] text-lg leading-8 md:text-lg",
+                      PROMPT_SURFACE_FOCUS_VISIBLE_RESET,
+                    )}
+                  />
+                  {minimal && isPromptInputFocused && value.length === 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-0 top-1.5 h-5 w-2 rounded-[1px] bg-foreground/85 motion-safe:animate-terminal-caret"
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
         </PopoverAnchor>
         <PopoverContent
@@ -1022,7 +1056,15 @@ export function PromptInput(args: PromptInputProps) {
       {attachedFilePaths.length > 0 || imageAttachments.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {attachedFilePaths.map((filePath) => (
-            <div key={filePath} className="flex items-center gap-1 rounded-sm border border-border/80 bg-secondary/50 px-2 py-1 text-sm">
+            <div
+              key={filePath}
+              className={cn(
+                "flex items-center gap-1 rounded-sm border px-2 py-1 text-sm",
+                minimal
+                  ? "border-border/60 bg-transparent font-mono text-xs text-muted-foreground"
+                  : "border-border/80 bg-secondary/50",
+              )}
+            >
               <span className="font-medium">{filePath}</span>
               <button
                 type="button"
@@ -1035,7 +1077,13 @@ export function PromptInput(args: PromptInputProps) {
             </div>
           ))}
           {imageAttachments.map((img) => (
-            <div key={img.id} className="relative flex items-center gap-1 rounded-sm border border-border/80 bg-secondary/50 p-1">
+            <div
+              key={img.id}
+              className={cn(
+                "relative flex items-center gap-1 rounded-sm border p-1",
+                minimal ? "border-border/60 bg-transparent" : "border-border/80 bg-secondary/50",
+              )}
+            >
               <img
                 src={img.dataUrl}
                 alt={img.label}
@@ -1057,173 +1105,173 @@ export function PromptInput(args: PromptInputProps) {
           ))}
         </div>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <ModelSelector
-            value={selectedModel}
-            options={modelOptions}
-            recommendedOptions={recommendedModelOptions}
-            disabled={interactionsDisabled}
-            openToken={modelSelectorOpenNonce > 0 ? modelSelectorOpenNonce : undefined}
-            onSelect={({ selection }) => {
-              onModelSelect({ selection });
-              window.requestAnimationFrame(() => focusComposer());
-            }}
-          />
-          {providerModeStatus ? (
-            <PromptInputProviderModePill
-              status={providerModeStatus}
-              presets={providerModePresets ?? []}
-              activePresetId={activeProviderModePresetId ?? null}
-              onSelect={onProviderModeSelect}
+      <div className={cn("flex flex-wrap items-center justify-between gap-2", minimal && "justify-end")}>
+        {!minimal ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ModelSelector
+              value={selectedModel}
+              options={modelOptions}
+              recommendedOptions={recommendedModelOptions}
               disabled={interactionsDisabled}
+              openToken={modelSelectorOpenNonce > 0 ? modelSelectorOpenNonce : undefined}
+              onSelect={({ selection }) => {
+                onModelSelect({ selection });
+                window.requestAnimationFrame(() => focusComposer());
+              }}
             />
-          ) : null}
-          {onPlanModeChange ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={interactionsDisabled}
-                  onClick={() => onPlanModeChange(!planMode)}
-                  className={cn(
-                    PROMPT_TOOLBAR_BUTTON,
-                    planMode
-                      ? getPromptToolbarAccentClass("plan")
-                      : undefined,
-                    interactionsDisabled && "cursor-not-allowed opacity-60",
-                  )}
-                >
-                  <ClipboardCheck className="size-3.5" />
-                  <span>Plan</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{planMode ? "Plan mode ON" : "Plan mode OFF"}</TooltipContent>
-            </Tooltip>
-          ) : null}
-          {onThinkingModeChange ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={interactionsDisabled}
-                  onClick={() => {
-                    const cycle = { adaptive: "enabled", enabled: "disabled", disabled: "adaptive" } as const;
-                    onThinkingModeChange(cycle[thinkingMode ?? "adaptive"]);
-                  }}
-                  className={cn(
-                    PROMPT_TOOLBAR_BUTTON,
-                    thinkingMode === "enabled"
-                      ? getPromptToolbarAccentClass("thinking")
-                      : thinkingMode === "disabled"
-                        ? "text-muted-foreground/50"
-                        : undefined,
-                    interactionsDisabled && "cursor-not-allowed opacity-60",
-                  )}
-                >
-                  <Brain className={cn("size-3.5", thinkingMode === "adaptive" && "text-prompt-role-thinking")} />
-                  <span>Thinking</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{`Thinking: ${thinkingMode ?? "adaptive"}`}</TooltipContent>
-            </Tooltip>
-          ) : null}
-          {onEffortCycle && effortLabel ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={interactionsDisabled}
-                  onClick={() => onEffortCycle()}
-                  className={cn(
-                    PROMPT_TOOLBAR_BUTTON,
-                    isHighestEffortValue(effortValue)
-                      ? getPromptToolbarAccentClass("effort")
-                      : undefined,
-                    interactionsDisabled && "cursor-not-allowed opacity-60",
-                  )}
-                >
-                  <Sparkles className={cn(
-                    "size-3.5",
-                    getEffortIconToneClass(effortValue),
-                  )} />
-                  <span>{effortLabel}</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{`Effort: ${effortLabel} — click to cycle`}</TooltipContent>
-            </Tooltip>
-          ) : null}
-          {onFastModeChange ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={interactionsDisabled}
-                  onClick={() => onFastModeChange(!fastMode)}
-                  className={cn(
-                    PROMPT_TOOLBAR_BUTTON,
-                    fastMode
-                      ? getPromptToolbarAccentClass("fast")
-                      : undefined,
-                    interactionsDisabled && "cursor-not-allowed opacity-60",
-                  )}
-                >
-                  <Zap className={cn("size-3.5", fastMode && "fill-current")} />
-                  <span>Fast</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-          {hasRuntimeDrawerContent ? (
-            <Drawer direction="bottom">
+            {providerModeStatus ? (
+              <PromptInputProviderModePill
+                status={providerModeStatus}
+                presets={providerModePresets ?? []}
+                activePresetId={activeProviderModePresetId ?? null}
+                onSelect={onProviderModeSelect}
+                disabled={interactionsDisabled}
+              />
+            ) : null}
+            {onPlanModeChange ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <DrawerTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={interactionsDisabled}
-                      className={cn(
-                        PROMPT_TOOLBAR_BUTTON,
-                      )}
-                      aria-label="Current Runtime"
-                    >
-                      <SlidersHorizontal className="size-3.5" />
-                      <span>Runtime</span>
-                    </Button>
-                  </DrawerTrigger>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={interactionsDisabled}
+                    onClick={() => onPlanModeChange(!planMode)}
+                    className={cn(
+                      PROMPT_TOOLBAR_BUTTON,
+                      planMode
+                        ? getPromptToolbarAccentClass("plan")
+                        : undefined,
+                      interactionsDisabled && "cursor-not-allowed opacity-60",
+                    )}
+                  >
+                    <ClipboardCheck className="size-3.5" />
+                    <span>Plan</span>
+                  </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">Current runtime status</TooltipContent>
+                <TooltipContent side="top">{planMode ? "Plan mode ON" : "Plan mode OFF"}</TooltipContent>
               </Tooltip>
-              <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
-                <DrawerHeader className="gap-2 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
-                  <DrawerTitle className="text-lg font-semibold">Current Runtime</DrawerTitle>
-                  <DrawerDescription>
-                    Inspect the effective runtime configuration for the next turn from this composer.
-                  </DrawerDescription>
-                </DrawerHeader>
-                <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
-                  <PromptInputRuntimeBar
-                    statusItems={runtimeStatusItems}
-                    withBorder={false}
-                  />
-                </div>
-              </DrawerContent>
-            </Drawer>
-          ) : null}
-        </div>
+            ) : null}
+            {onThinkingModeChange ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={interactionsDisabled}
+                    onClick={() => {
+                      const cycle = { adaptive: "enabled", enabled: "disabled", disabled: "adaptive" } as const;
+                      onThinkingModeChange(cycle[thinkingMode ?? "adaptive"]);
+                    }}
+                    className={cn(
+                      PROMPT_TOOLBAR_BUTTON,
+                      thinkingMode === "enabled"
+                        ? getPromptToolbarAccentClass("thinking")
+                        : thinkingMode === "disabled"
+                          ? "text-muted-foreground/50"
+                          : undefined,
+                      interactionsDisabled && "cursor-not-allowed opacity-60",
+                    )}
+                  >
+                    <Brain className={cn("size-3.5", thinkingMode === "adaptive" && "text-prompt-role-thinking")} />
+                    <span>Thinking</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{`Thinking: ${thinkingMode ?? "adaptive"}`}</TooltipContent>
+              </Tooltip>
+            ) : null}
+            {onEffortCycle && effortLabel ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={interactionsDisabled}
+                    onClick={() => onEffortCycle()}
+                    className={cn(
+                      PROMPT_TOOLBAR_BUTTON,
+                      isHighestEffortValue(effortValue)
+                        ? getPromptToolbarAccentClass("effort")
+                        : undefined,
+                      interactionsDisabled && "cursor-not-allowed opacity-60",
+                    )}
+                  >
+                    <Sparkles className={cn(
+                      "size-3.5",
+                      getEffortIconToneClass(effortValue),
+                    )} />
+                    <span>{effortLabel}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{`Effort: ${effortLabel} — click to cycle`}</TooltipContent>
+              </Tooltip>
+            ) : null}
+            {onFastModeChange ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={interactionsDisabled}
+                    onClick={() => onFastModeChange(!fastMode)}
+                    className={cn(
+                      PROMPT_TOOLBAR_BUTTON,
+                      fastMode
+                        ? getPromptToolbarAccentClass("fast")
+                        : undefined,
+                      interactionsDisabled && "cursor-not-allowed opacity-60",
+                    )}
+                  >
+                    <Zap className={cn("size-3.5", fastMode && "fill-current")} />
+                    <span>Fast</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            {hasRuntimeDrawerContent ? (
+              <Drawer direction="bottom">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DrawerTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={interactionsDisabled}
+                        className={cn(PROMPT_TOOLBAR_BUTTON)}
+                        aria-label="Current Runtime"
+                      >
+                        <SlidersHorizontal className="size-3.5" />
+                        <span>Runtime</span>
+                      </Button>
+                    </DrawerTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Current runtime status</TooltipContent>
+                </Tooltip>
+                <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
+                  <DrawerHeader className="gap-2 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
+                    <DrawerTitle className="text-lg font-semibold">Current Runtime</DrawerTitle>
+                    <DrawerDescription>
+                      Inspect the effective runtime configuration for the next turn from this composer.
+                    </DrawerDescription>
+                  </DrawerHeader>
+                  <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
+                    <PromptInputRuntimeBar
+                      statusItems={runtimeStatusItems}
+                      withBorder={false}
+                    />
+                  </div>
+                </DrawerContent>
+              </Drawer>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex items-center gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1235,9 +1283,7 @@ export function PromptInput(args: PromptInputProps) {
                 onClick={() => {
                   void onOpenFileSelector?.();
                 }}
-                className={cn(
-                  PROMPT_TOOLBAR_ICON_BUTTON,
-                )}
+                className={cn(PROMPT_TOOLBAR_ICON_BUTTON, minimal && "h-8 w-8 rounded-md border border-border/60 bg-background/50 text-foreground hover:bg-muted/40")}
                 aria-label="Attach files"
               >
                 <Paperclip className="size-3.5" />
@@ -1252,7 +1298,11 @@ export function PromptInput(args: PromptInputProps) {
                   type="button"
                   size="icon-sm"
                   variant="ghost"
-                  className={cn(PROMPT_TOOLBAR_ICON_BUTTON, "text-destructive hover:bg-destructive/10 hover:text-destructive")}
+                  className={cn(
+                    PROMPT_TOOLBAR_ICON_BUTTON,
+                    "text-destructive hover:bg-destructive/10 hover:text-destructive",
+                    minimal && "h-8 w-8 rounded-md border border-destructive/30 bg-background/50",
+                  )}
                   aria-label="Abort"
                   onClick={() => onAbort?.()}
                 >
@@ -1270,7 +1320,11 @@ export function PromptInput(args: PromptInputProps) {
                 <Button
                   type="submit"
                   size="icon-sm"
-                  className={cn("rounded-md", PROMPT_SURFACE_PRIMARY_FOCUS)}
+                  className={cn(
+                    "rounded-md",
+                    PROMPT_SURFACE_PRIMARY_FOCUS,
+                    minimal && "h-8 w-8 border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
+                  )}
                   disabled={disabled}
                   aria-label="Send"
                 >
@@ -1320,4 +1374,8 @@ export function PromptInput(args: PromptInputProps) {
     ) : null}
     </>
   );
+}
+
+export function ZenPromptInput(args: Omit<PromptInputProps, "minimal">) {
+  return <PromptInput {...args} minimal />;
 }

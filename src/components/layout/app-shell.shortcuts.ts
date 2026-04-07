@@ -1,6 +1,19 @@
 export const EDITABLE_SHORTCUT_SELECTOR = "input, textarea, select, [role='textbox'], [contenteditable='true']";
 export const PROMPT_INPUT_ROOT_SELECTOR = "[data-prompt-input-root]";
 export const TASK_ABORT_SHORTCUT_SCOPE_SELECTOR = "[data-task-abort-scope]";
+export const ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS = 2000;
+
+export interface PendingShortcutChord {
+  type: "zen-mode";
+  startedAt: number;
+}
+
+export interface ShortcutChordResolution {
+  action: "toggle-zen-mode" | null;
+  nextPendingChord: PendingShortcutChord | null;
+  preventDefault: boolean;
+  stopAppHandling: boolean;
+}
 
 type ClosestCapableTarget = EventTarget & {
   closest?: (selector: string) => Element | null;
@@ -10,6 +23,17 @@ type ClosestCapableTarget = EventTarget & {
 function matchesClosest(target: EventTarget | null | undefined, selector: string) {
   const candidate = target as ClosestCapableTarget | null | undefined;
   return typeof candidate?.closest === "function" && Boolean(candidate.closest(selector));
+}
+
+function isModifierKey(key: string) {
+  return key === "meta" || key === "control" || key === "shift" || key === "alt";
+}
+
+function isPendingChordExpired(args: {
+  pendingChord: PendingShortcutChord;
+  now: number;
+}) {
+  return args.now - args.pendingChord.startedAt > ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS;
 }
 
 export function isEditableShortcutTarget(target: EventTarget | null) {
@@ -25,6 +49,78 @@ export function isEditableShortcutTarget(target: EventTarget | null) {
       && !matchesClosest(target, PROMPT_INPUT_ROOT_SELECTOR)
     ),
   );
+}
+
+export function resolveShortcutChord(args: {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+  pendingChord?: PendingShortcutChord | null;
+  now?: number;
+}): ShortcutChordResolution {
+  const now = args.now ?? Date.now();
+  const normalizedKey = args.key.toLowerCase();
+  const hasMod = Boolean(args.ctrlKey || args.metaKey);
+  const pendingChord = (
+    args.pendingChord
+    && !isPendingChordExpired({ pendingChord: args.pendingChord, now })
+  )
+    ? args.pendingChord
+    : null;
+
+  if (hasMod && !args.altKey && !args.shiftKey && normalizedKey === "k") {
+    return {
+      action: null,
+      nextPendingChord: { type: "zen-mode", startedAt: now },
+      preventDefault: true,
+      stopAppHandling: true,
+    };
+  }
+
+  if (!pendingChord) {
+    return {
+      action: null,
+      nextPendingChord: null,
+      preventDefault: false,
+      stopAppHandling: false,
+    };
+  }
+
+  if (isModifierKey(normalizedKey)) {
+    return {
+      action: null,
+      nextPendingChord: pendingChord,
+      preventDefault: false,
+      stopAppHandling: false,
+    };
+  }
+
+  if (!args.altKey && !args.shiftKey && normalizedKey === "z") {
+    return {
+      action: "toggle-zen-mode",
+      nextPendingChord: null,
+      preventDefault: true,
+      stopAppHandling: true,
+    };
+  }
+
+  if (normalizedKey === "escape") {
+    return {
+      action: null,
+      nextPendingChord: null,
+      preventDefault: false,
+      stopAppHandling: true,
+    };
+  }
+
+  return {
+    action: null,
+    nextPendingChord: null,
+    preventDefault: false,
+    stopAppHandling: false,
+  };
 }
 
 export function shouldAbortTaskOnEscape(args: {

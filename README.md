@@ -31,6 +31,7 @@ Packaged macOS builds also expose a top-bar update action that checks the latest
 ## Highlights
 
 - desktop-first Claude and Codex workspace
+- chorded Zen mode (`Cmd/Ctrl+K`, then `Z`) for distraction-free chat and result review
 - task-oriented chat with approvals, user-input, tools, diffs, and plans
 - task-local prompt history navigation in the composer via `ArrowUp` / `ArrowDown`
 - global command palette on `Cmd/Ctrl+Shift+P` for IDE actions, separate from chat slash commands

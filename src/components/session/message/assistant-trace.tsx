@@ -625,6 +625,8 @@ export function AssistantMessageBody(args: {
     },
     [allDiffParts, fileChangeSummaryRows],
   );
+  const showDiffResults = allDiffParts.length > 0 && !isStreaming;
+  const showFileChangeSummary = unresolvedFileChangeRows.length > 0 && !isStreaming;
 
   if (
     !trace.showStreamingPlaceholder
@@ -638,7 +640,7 @@ export function AssistantMessageBody(args: {
 
   return (
     <>
-      {(trace.showStreamingPlaceholder || trace.entries.length > 0) ? (
+      {trace.showStreamingPlaceholder || trace.entries.length > 0 ? (
         <ChainOfThought
           isStreaming={isStreaming}
           defaultOpen={shouldAutoExpandTrace && isStreaming}
@@ -665,7 +667,12 @@ export function AssistantMessageBody(args: {
       ) : null}
 
       {trace.responseParts.length > 0 ? (
-        <div className={cn(trace.entries.length > 0 && "mt-4", "space-y-3")}>
+        <div
+          className={cn(
+            trace.entries.length > 0 && "mt-4",
+            "space-y-3",
+          )}
+        >
           {trace.responseParts.map((part, index) => (
             <MessageResponse
               key={`${messageId}-response-${index}`}
@@ -677,13 +684,13 @@ export function AssistantMessageBody(args: {
         </div>
       ) : null}
 
-      {allDiffParts.length > 0 && !isStreaming ? (
+      {showDiffResults ? (
         <div className="mt-4">
           <ChangedFilesBlock parts={allDiffParts} taskId={taskId} messageId={messageId} />
         </div>
       ) : null}
 
-      {unresolvedFileChangeRows.length > 0 && !isStreaming ? (
+      {showFileChangeSummary ? (
         <div className="mt-4">
           <FileChangeSummaryBlock rows={unresolvedFileChangeRows} />
         </div>

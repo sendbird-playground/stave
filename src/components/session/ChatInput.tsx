@@ -1,4 +1,4 @@
-import { PromptInput } from "@/components/ai-elements";
+import { PromptInput, ZenPromptInput } from "@/components/ai-elements";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildModelSelectorOptions,
@@ -70,7 +70,7 @@ import {
   shouldHandleApprovalEnterShortcut,
 } from "./chat-input.utils";
 
-interface ChatInputProps {
+interface BaseChatInputProps {
   compact?: boolean;
 }
 
@@ -123,6 +123,9 @@ interface ChatInputComposerProps {
   activeTaskId: string;
   activeProvider: ModelSelectorOption["providerId"];
   workspaceCwd?: string;
+  workspaceBranch?: string;
+  workspaceProjectLabel?: string;
+  workspacePathLabel?: string;
   providerSelectionTarget: string;
   isTurnActive: boolean;
   selectedModelOption: ModelSelectorOption;
@@ -414,6 +417,8 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     return () => window.removeEventListener("keydown", handleApprovalShortcut);
   }, [args.activeTaskId, pendingApproval, resolveApproval]);
 
+  const PromptInputComponent = args.compact ? ZenPromptInput : PromptInput;
+
   return (
     <div
       className={cn(
@@ -421,8 +426,34 @@ function ChatInputComposer(args: ChatInputComposerProps) {
         args.isEmpty && !args.compact && "pb-6",
       )}
     >
-      <div className={cn("mx-auto max-w-6xl")}>
-        <PromptInput
+      <div className={cn("mx-auto", args.compact ? "max-w-5xl" : "max-w-6xl")}>
+        {args.compact ? (
+          <div className="mb-3 flex flex-col gap-1 border-b border-border/50 pb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-primary/85">{args.workspaceProjectLabel ?? "user@stave"}</span>
+              {args.workspaceBranch ? (
+                <span>
+                  <span className="text-muted-foreground/55">branch:</span>
+                  {" "}
+                  <span className="text-foreground">{args.workspaceBranch}</span>
+                </span>
+              ) : null}
+              {args.workspacePathLabel ? (
+                <span>
+                  <span className="text-muted-foreground/55">worktree:</span>
+                  {" "}
+                  <span className="text-foreground">{args.workspacePathLabel}</span>
+                </span>
+              ) : null}
+            </div>
+            {args.workspaceCwd ? (
+              <div className="truncate text-[10px] normal-case tracking-normal text-muted-foreground/65">
+                {args.workspaceCwd}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <PromptInputComponent
           focusToken={`${args.providerSelectionTarget}:${focusNonce}`}
           value={draftText}
           onBlur={commitCurrentDraftText}
@@ -560,7 +591,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
   );
 }
 
-export function ChatInput(args: ChatInputProps = {}) {
+function BaseChatInput(args: BaseChatInputProps = {}) {
   const [providerCommandCatalog, setProviderCommandCatalog] = useState(() => getCachedProviderCommandCatalog({
     providerId: "claude-code",
   }));
@@ -590,6 +621,11 @@ export function ChatInput(args: ChatInputProps = {}) {
     state.promptDraftByTask[activeTaskId || "draft:session"]?.runtimeOverrides
   );
   const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
+  const [activeWorkspaceBranch, activeWorkspaceName, projectPath] = useAppStore(useShallow((state) => [
+    state.workspaceBranchById[state.activeWorkspaceId] ?? undefined,
+    state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
+    state.projectPath,
+  ] as const));
   const activeMessageCount = useAppStore((state) =>
     state.messageCountByTask[state.activeTaskId] ?? (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length
   );
@@ -727,6 +763,21 @@ export function ChatInput(args: ChatInputProps = {}) {
   const recommendedModelOptions = useMemo<ModelSelectorOption[]>(() => (
     buildRecommendedModelSelectorOptions({ options: modelOptions })
   ), [modelOptions]);
+  const workspacePathLabel = useMemo(() => {
+    const normalizedPath = workspaceCwd?.replace(/[\\/]+$/, "");
+    if (!normalizedPath) {
+      return undefined;
+    }
+    return normalizedPath.split(/[/\\]/).at(-1) || undefined;
+  }, [workspaceCwd]);
+  const workspaceProjectLabel = useMemo(() => {
+    const normalizedProjectPath = projectPath?.replace(/[\\/]+$/, "");
+    const projectLabel = normalizedProjectPath?.split(/[/\\]/).at(-1) || "stave";
+    if (activeWorkspaceName?.trim() && activeWorkspaceName.toLowerCase() !== "default workspace") {
+      return `user@${projectLabel}:${activeWorkspaceName.trim()}`;
+    }
+    return `user@${projectLabel}`;
+  }, [activeWorkspaceName, projectPath]);
   const effortLabel = useMemo(() => {
     if (activeProvider === "claude-code") {
       return findOptionLabel(CLAUDE_EFFORT_OPTIONS, claudeEffort);
@@ -1069,6 +1120,9 @@ export function ChatInput(args: ChatInputProps = {}) {
       activeTaskId={activeTaskId}
       activeProvider={activeProvider}
       workspaceCwd={workspaceCwd}
+      workspaceBranch={activeWorkspaceBranch}
+      workspaceProjectLabel={workspaceProjectLabel}
+      workspacePathLabel={workspacePathLabel}
       providerSelectionTarget={providerSelectionTarget}
       isTurnActive={isTurnActive}
       selectedModelOption={selectedModelOption}
@@ -1185,4 +1239,12 @@ export function ChatInput(args: ChatInputProps = {}) {
       }
     />
   );
+}
+
+export function ChatInput() {
+  return <BaseChatInput />;
+}
+
+export function ZenChatInput() {
+  return <BaseChatInput compact />;
 }

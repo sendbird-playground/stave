@@ -11,6 +11,7 @@ interface ShortcutItem {
   label: string;
   description: string;
   sequences: string[][];
+  sequenceJoiner?: "or" | "then";
 }
 
 interface ShortcutSection {
@@ -19,12 +20,12 @@ interface ShortcutSection {
   shortcuts: ShortcutItem[];
 }
 
-function ShortcutKeys({ sequences }: Pick<ShortcutItem, "sequences">) {
+function ShortcutKeys({ sequences, sequenceJoiner = "or" }: Pick<ShortcutItem, "sequences" | "sequenceJoiner">) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {sequences.map((sequence, sequenceIndex) => (
         <Fragment key={sequence.join("-")}>
-          {sequenceIndex > 0 ? <span className="text-xs text-muted-foreground">or</span> : null}
+          {sequenceIndex > 0 ? <span className="text-xs text-muted-foreground">{sequenceJoiner}</span> : null}
           <KbdGroup aria-label={`Keyboard shortcut ${sequence.join(" ")}`}>
             {sequence.map((part, partIndex) => (
               <Fragment key={`${part}-${partIndex}`}>
@@ -119,6 +120,12 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
             label: "Toggle terminal",
             description: "Dock or hide the terminal panel.",
             sequences: [[modifierLabel, "`"]],
+          },
+          {
+            label: "Toggle Zen mode",
+            description: "Hide surrounding workspace chrome and suppress thinking details to focus on chat and results.",
+            sequences: [[modifierLabel, "K"], ["Z"]],
+            sequenceJoiner: "then",
           },
         ],
       },
@@ -219,7 +226,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
                         <p className="text-sm font-medium text-foreground">{shortcut.label}</p>
                         <p className="text-xs text-muted-foreground">{shortcut.description}</p>
                       </div>
-                      <ShortcutKeys sequences={shortcut.sequences} />
+                      <ShortcutKeys sequences={shortcut.sequences} sequenceJoiner={shortcut.sequenceJoiner} />
                     </div>
                   ))}
                 </CardContent>
@@ -228,7 +235,7 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
           </div>
           <DrawerFooter className="border-t border-border/70 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-6">
             <p className="text-sm text-muted-foreground">
-              Workspace quick jump follows the sidebar's top-to-bottom order. Quick open and the shortcut guide are ignored while typing in inputs, and command palette/plan mode/model selector shortcuts stay globally available.
+              Workspace quick jump follows the sidebar's top-to-bottom order. Quick open and the shortcut guide are ignored while typing in inputs, and command palette, plan mode, model selector, and Zen mode shortcuts stay globally available.
             </p>
             <DrawerClose asChild>
               <Button variant="outline">Close</Button>
