@@ -11,7 +11,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
       claudePermissionMode: "plan",
-      codexExperimentalPlanMode: false,
+      codexPlanMode: false,
       isTurnActive: false,
       latestPlanMessage: {
         role: "assistant",
@@ -41,7 +41,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "codex",
       claudePermissionMode: "plan",
-      codexExperimentalPlanMode: true,
+      codexPlanMode: true,
       isTurnActive: false,
       latestPlanMessage: {
         role: "assistant",
@@ -71,7 +71,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
       claudePermissionMode: "plan",
-      codexExperimentalPlanMode: false,
+      codexPlanMode: false,
       isTurnActive: true,
       latestPlanMessage: null,
       lastMessage: null,
@@ -85,11 +85,11 @@ describe("resolvePlanViewerState", () => {
     });
   });
 
-  test("shows preparing state for Codex experimental plan mode while a turn is active and no plan yet", () => {
+  test("shows preparing state for Codex plan mode while a turn is active and no plan yet", () => {
     const state = resolvePlanViewerState({
       activeProvider: "codex",
       claudePermissionMode: "default",
-      codexExperimentalPlanMode: true,
+      codexPlanMode: true,
       isTurnActive: true,
       latestPlanMessage: null,
       lastMessage: null,
@@ -109,7 +109,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
       claudePermissionMode: "plan",
-      codexExperimentalPlanMode: false,
+      codexPlanMode: false,
       isTurnActive: true,
       latestPlanMessage: {
         role: "assistant",
@@ -139,7 +139,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "codex",
       claudePermissionMode: "default",
-      codexExperimentalPlanMode: true,
+      codexPlanMode: true,
       isTurnActive: true,
       latestPlanMessage: {
         role: "assistant",
@@ -169,7 +169,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
       claudePermissionMode: "plan",
-      codexExperimentalPlanMode: false,
+      codexPlanMode: false,
       isTurnActive: false,
       latestPlanMessage: {
         role: "assistant",
@@ -199,7 +199,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
       claudePermissionMode: "default",
-      codexExperimentalPlanMode: false,
+      codexPlanMode: false,
       isTurnActive: false,
       latestPlanMessage: {
         role: "assistant",
@@ -229,7 +229,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
       claudePermissionMode: "default",
-      codexExperimentalPlanMode: false,
+      codexPlanMode: false,
       isTurnActive: false,
       latestPlanMessage: {
         role: "assistant",
@@ -259,7 +259,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
       claudePermissionMode: "default",
-      codexExperimentalPlanMode: false,
+      codexPlanMode: false,
       isTurnActive: false,
       latestPlanMessage: null,
       lastMessage: {
@@ -283,7 +283,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "codex",
       claudePermissionMode: "default",
-      codexExperimentalPlanMode: true,
+      codexPlanMode: true,
       isTurnActive: false,
       latestPlanMessage: {
         role: "assistant",
@@ -313,7 +313,7 @@ describe("resolvePlanViewerState", () => {
     const state = resolvePlanViewerState({
       activeProvider: "codex",
       claudePermissionMode: "default",
-      codexExperimentalPlanMode: true,
+      codexPlanMode: true,
       isTurnActive: false,
       latestPlanMessage: {
         role: "assistant",

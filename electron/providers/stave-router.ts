@@ -207,7 +207,7 @@ export function buildStaveResolvedArgs(
       ...args.runtimeOptions,
       model: target.model,
       ...(options.forceCodexPlanMode && target.providerId === "codex"
-        ? { codexExperimentalPlanMode: true }
+        ? { codexPlanMode: true }
         : {}),
     },
     ...(resolvedConversation !== undefined ? { conversation: resolvedConversation } : {}),

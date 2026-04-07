@@ -22,9 +22,9 @@ const CLAUDE_OPTIONS: PermissionModeOption[] = [
 ];
 
 const CODEX_OPTIONS: PermissionModeOption[] = [
-  { value: "never", label: "Never" },
-  { value: "on-request", label: "On Request" },
   { value: "untrusted", label: "Untrusted" },
+  { value: "on-request", label: "On Request" },
+  { value: "never", label: "Never" },
 ];
 
 export function getPermissionModeOptions(providerId: "claude-code" | "codex"): readonly PermissionModeOption[] {

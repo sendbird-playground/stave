@@ -14,7 +14,7 @@ import {
 } from "../../src/lib/providers/provider-request-translators";
 import {
   resolveEffectiveCodexApprovalPolicy,
-  resolveEffectiveCodexSandboxMode,
+  resolveEffectiveCodexFileAccessMode,
 } from "../../src/lib/providers/codex-runtime-options";
 import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
@@ -64,14 +64,14 @@ interface CodexMcpServerListEntry {
   } | null;
 }
 
-function resolveSandboxMode(args: {
+function resolveFileAccessMode(args: {
   runtimeValue?: "read-only" | "workspace-write" | "danger-full-access";
   envValue?: string;
   planMode?: boolean;
   fallback: "read-only" | "workspace-write" | "danger-full-access";
 }) {
-  return resolveEffectiveCodexSandboxMode({
-    sandboxMode: args.runtimeValue ?? args.envValue,
+  return resolveEffectiveCodexFileAccessMode({
+    fileAccessMode: args.runtimeValue ?? args.envValue,
     planMode: args.planMode,
     fallback: args.fallback,
   });
@@ -84,7 +84,7 @@ export function resolveApprovalPolicy(args: {
   fallback?: "never" | "on-request" | "untrusted";
 }): "never" | "on-request" | "untrusted" | undefined {
   const candidate = args.runtimeValue ?? args.envValue;
-  if (candidate !== "never" && candidate !== "on-request" && candidate !== "on-failure" && candidate !== "untrusted") {
+  if (candidate !== "never" && candidate !== "on-request" && candidate !== "untrusted") {
     return args.fallback == null
       ? undefined
       : resolveEffectiveCodexApprovalPolicy({
@@ -175,16 +175,16 @@ export function buildCodexConfigOverrides(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
   const config: Record<string, string | boolean> = {};
-  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode === true;
+  const planModeEnabled = args.runtimeOptions?.codexPlanMode === true;
   const summaryMode = args.runtimeOptions?.codexReasoningSummary;
-  const supportsSummaries = args.runtimeOptions?.codexSupportsReasoningSummaries;
+  const supportsSummaries = args.runtimeOptions?.codexReasoningSummarySupport;
   const hasExplicitRawReasoningToggle = Object.prototype.hasOwnProperty.call(
     args.runtimeOptions ?? {},
-    "codexShowRawAgentReasoning",
+    "codexShowRawReasoning",
   );
 
   if (hasExplicitRawReasoningToggle) {
-    config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawAgentReasoning);
+    config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawReasoning);
   }
   if (summaryMode && summaryMode !== "auto") {
     config.model_reasoning_summary = summaryMode;
@@ -199,10 +199,10 @@ export function buildCodexConfigOverrides(args: {
   if (codexFastMode !== undefined) {
     config["features.fast_mode"] = codexFastMode;
   }
-  if (experimentalPlanMode) {
+  if (planModeEnabled) {
     config.collaboration_mode_kind = "plan";
-    if (args.runtimeOptions?.codexModelReasoningEffort) {
-      config.plan_mode_reasoning_effort = args.runtimeOptions.codexModelReasoningEffort;
+    if (args.runtimeOptions?.codexReasoningEffort) {
+      config.plan_mode_reasoning_effort = args.runtimeOptions.codexReasoningEffort;
     }
   }
 
@@ -215,7 +215,7 @@ function buildThreadKey(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
   const model = args.runtimeOptions?.model?.trim() || "default";
-  const mode = args.runtimeOptions?.codexExperimentalPlanMode ? "plan" : "chat";
+  const mode = args.runtimeOptions?.codexPlanMode ? "plan" : "chat";
   return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}`;
 }
 
@@ -463,7 +463,7 @@ export async function getCodexConnectedToolStatus(args: {
 }): Promise<ConnectedToolStatusResponse> {
   const toolIds = normalizeConnectedToolIds(args.toolIds);
   const executablePath = resolveCodexExecutablePath({
-    explicitPath: args.runtimeOptions?.codexPathOverride,
+    explicitPath: args.runtimeOptions?.codexBinaryPath,
   });
 
   if (!executablePath) {
@@ -876,23 +876,23 @@ function ensureThread(args: {
   conversation?: StreamTurnArgs["conversation"];
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }): Thread {
-  const experimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode === true;
-  const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccessEnabled
+  const planModeEnabled = args.runtimeOptions?.codexPlanMode === true;
+  const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccess
     ?? parseBooleanEnv({
       value: process.env.STAVE_CODEX_NETWORK_ACCESS,
-      fallback: true,
+      fallback: false,
     });
-  const sandboxMode = resolveSandboxMode({
-    runtimeValue: args.runtimeOptions?.codexSandboxMode,
+  const fileAccessMode = resolveFileAccessMode({
+    runtimeValue: args.runtimeOptions?.codexFileAccess,
     envValue: process.env.STAVE_CODEX_SANDBOX_MODE?.trim(),
-    planMode: experimentalPlanMode,
+    planMode: planModeEnabled,
     fallback: "workspace-write",
   });
   const approvalPolicy = resolveApprovalPolicy({
     runtimeValue: args.runtimeOptions?.codexApprovalPolicy,
     envValue: process.env.STAVE_CODEX_APPROVAL_POLICY?.trim(),
-    planMode: experimentalPlanMode,
-    fallback: "on-request",
+    planMode: planModeEnabled,
+    fallback: "untrusted",
   });
   const threadKey = buildThreadKey({
     taskId: args.taskId,
@@ -915,11 +915,10 @@ function ensureThread(args: {
     ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
     workingDirectory: args.cwd,
     ...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
-    sandboxMode,
-    ...(args.runtimeOptions?.codexSkipGitRepoCheck ? { skipGitRepoCheck: true } : {}),
+    sandboxMode: fileAccessMode,
     networkAccessEnabled,
-    ...(args.runtimeOptions?.codexModelReasoningEffort ? { modelReasoningEffort: args.runtimeOptions.codexModelReasoningEffort } : {}),
-    ...(args.runtimeOptions?.codexWebSearchMode ? { webSearchMode: args.runtimeOptions.codexWebSearchMode } : {}),
+    ...(args.runtimeOptions?.codexReasoningEffort ? { modelReasoningEffort: args.runtimeOptions.codexReasoningEffort } : {}),
+    ...(args.runtimeOptions?.codexWebSearch ? { webSearchMode: args.runtimeOptions.codexWebSearch } : {}),
     ...(approvalPolicy ? { approvalPolicy } : {}),
   };
   const thread = resumeThreadId
@@ -967,7 +966,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     }
 
     const codexExecutablePath = resolveCodexExecutablePath({
-      explicitPath: args.runtimeOptions?.codexPathOverride,
+      explicitPath: args.runtimeOptions?.codexBinaryPath,
     });
     diagnostics = buildCodexDiagnostics({ executablePath: codexExecutablePath ?? "", taskId: args.taskId });
     if (!codexExecutablePath) {
@@ -985,7 +984,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
 
     const codexConfig = buildCodexConfigOverrides({ runtimeOptions: args.runtimeOptions });
     const codex = new CodexCtor({
-      codexPathOverride: codexExecutablePath,
+      codexBinaryPath: codexExecutablePath,
       env: buildCodexEnv({ executablePath: codexExecutablePath }),
       ...(codexConfig ? { config: codexConfig } : {}),
     });
@@ -1025,7 +1024,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     const streamed = await thread.runStreamed(providerPrompt, turnOptions);
 
     const codexDebug = args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";
-    const codexExperimentalPlanMode = args.runtimeOptions?.codexExperimentalPlanMode === true;
+    const codexPlanMode = args.runtimeOptions?.codexPlanMode === true;
     const events: BridgeEvent[] = [];
     let sawExperimentalPlanTodo = false;
     let latestTodoPlanText: string | null = null;
@@ -1082,7 +1081,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
         console.debug("[codex-sdk-runtime] event", threadEvent.type, threadEvent);
       }
       if (
-        codexExperimentalPlanMode
+        codexPlanMode
         && pendingPlanMessageText
         && !(threadEvent.type === "item.completed" && threadEvent.item.type === "agent_message")
         && threadEvent.type !== "turn.completed"
@@ -1102,14 +1101,14 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
         case "item.started":
         case "item.updated":
         case "item.completed": {
-          if (codexExperimentalPlanMode && threadEvent.item.type === "todo_list") {
+          if (codexPlanMode && threadEvent.item.type === "todo_list") {
             sawExperimentalPlanTodo = true;
             latestTodoPlanText = buildCodexTodoPlanText({
               items: threadEvent.item.items ?? [],
             });
           }
           if (shouldBufferCompletedCodexPlanCandidate({
-            planMode: codexExperimentalPlanMode,
+            planMode: codexPlanMode,
             lifecycle: threadEvent.type,
             itemType: threadEvent.item.type,
             text: threadEvent.item.type === "agent_message" ? threadEvent.item.text : null,
@@ -1174,7 +1173,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
           });
           break;
         case "turn.completed":
-          if (!hasEmittedPlanReady && codexExperimentalPlanMode && (retainedFinalPlanText || pendingPlanMessageText || latestTodoPlanText)) {
+          if (!hasEmittedPlanReady && codexPlanMode && (retainedFinalPlanText || pendingPlanMessageText || latestTodoPlanText)) {
             flushPendingPlanMessage(true);
           }
           {

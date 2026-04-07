@@ -754,7 +754,7 @@ describe("buildStaveResolvedArgs", () => {
     expect(resolved.runtimeOptions?.model).toBe("gpt-5.4");
   });
 
-  test("can force Codex experimental plan mode for Stave plan routing", () => {
+  test("can force Codex plan mode for Stave plan routing", () => {
     const codexTarget = {
       providerId: "codex" as const,
       model: "gpt-5.4",
@@ -764,12 +764,12 @@ describe("buildStaveResolvedArgs", () => {
       providerId: "stave",
       runtimeOptions: {
         claudePermissionMode: "plan",
-        codexExperimentalPlanMode: false,
+        codexPlanMode: false,
       },
     });
     const resolved = buildStaveResolvedArgs(args, codexTarget, {
       forceCodexPlanMode: true,
     });
-    expect(resolved.runtimeOptions?.codexExperimentalPlanMode).toBe(true);
+    expect(resolved.runtimeOptions?.codexPlanMode).toBe(true);
   });
 });

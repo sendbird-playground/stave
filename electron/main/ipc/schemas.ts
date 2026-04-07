@@ -225,15 +225,14 @@ export const RuntimeOptionsObjectSchema = z
     claudeAllowedTools: z.array(z.string().max(200)).max(200).optional(),
     claudeDisallowedTools: z.array(z.string().max(200)).max(200).optional(),
     claudeResumeSessionId: z.string().max(200).optional(),
-    codexSandboxMode: z
+    codexFileAccess: z
       .union([
         z.literal("read-only"),
         z.literal("workspace-write"),
         z.literal("danger-full-access"),
       ])
       .optional(),
-    codexSkipGitRepoCheck: z.boolean().optional(),
-    codexNetworkAccessEnabled: z.boolean().optional(),
+    codexNetworkAccess: z.boolean().optional(),
     codexApprovalPolicy: z
       .union([
         z.literal("never"),
@@ -241,8 +240,8 @@ export const RuntimeOptionsObjectSchema = z
         z.literal("untrusted"),
       ])
       .optional(),
-    codexPathOverride: z.string().max(4096).optional(),
-    codexModelReasoningEffort: z
+    codexBinaryPath: z.string().max(4096).optional(),
+    codexReasoningEffort: z
       .union([
         z.literal("minimal"),
         z.literal("low"),
@@ -251,10 +250,10 @@ export const RuntimeOptionsObjectSchema = z
         z.literal("xhigh"),
       ])
       .optional(),
-    codexWebSearchMode: z
+    codexWebSearch: z
       .union([z.literal("disabled"), z.literal("cached"), z.literal("live")])
       .optional(),
-    codexShowRawAgentReasoning: z.boolean().optional(),
+    codexShowRawReasoning: z.boolean().optional(),
     codexReasoningSummary: z
       .union([
         z.literal("auto"),
@@ -263,11 +262,11 @@ export const RuntimeOptionsObjectSchema = z
         z.literal("none"),
       ])
       .optional(),
-    codexSupportsReasoningSummaries: z
+    codexReasoningSummarySupport: z
       .union([z.literal("auto"), z.literal("enabled"), z.literal("disabled")])
       .optional(),
     codexFastMode: z.boolean().optional(),
-    codexExperimentalPlanMode: z.boolean().optional(),
+    codexPlanMode: z.boolean().optional(),
     codexResumeThreadId: z.string().max(200).optional(),
     staveAuto: z
       .object({
@@ -1097,7 +1096,7 @@ export const OpenPathArgsSchema = z
 export const ToolingStatusArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),
-    codexPathOverride: z.string().max(4096).optional(),
+    codexBinaryPath: z.string().max(4096).optional(),
   })
   .strict();
 

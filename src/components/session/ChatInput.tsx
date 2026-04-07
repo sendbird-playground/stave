@@ -79,16 +79,15 @@ const INACTIVE_CLAUDE_SETTINGS = [
 const INACTIVE_CODEX_SETTINGS = [
   "workspace-write",
   false,
-  true,
-  "on-request",
+  "untrusted",
   "medium",
-  "disabled",
+  "cached",
   false,
   "auto",
   "auto",
   "",
   false,
-  true,
+  false,
   true,
 ] as const;
 const INACTIVE_STAVE_SETTINGS = [
@@ -576,33 +575,31 @@ export function ChatInput(args: ChatInputProps = {}) {
       : INACTIVE_CLAUDE_SETTINGS
   )));
   const [
-    codexSandboxMode,
-    codexSkipGitRepoCheck,
-    codexNetworkAccessEnabled,
+    codexFileAccess,
+    codexNetworkAccess,
     codexApprovalPolicy,
-    codexModelReasoningEffort,
-    codexWebSearchMode,
-    codexShowRawAgentReasoning,
+    codexReasoningEffort,
+    codexWebSearch,
+    codexShowRawReasoning,
     codexReasoningSummary,
-    codexSupportsReasoningSummaries,
-    codexPathOverride,
-    codexExperimentalPlanMode,
+    codexReasoningSummarySupport,
+    codexBinaryPath,
+    codexPlanMode,
     codexFastMode,
     codexFastModeVisible,
   ] = useAppStore(useShallow((state) => (
     activeProvider === "codex"
       ? [
-          state.settings.codexSandboxMode,
-          state.settings.codexSkipGitRepoCheck,
-          state.settings.codexNetworkAccessEnabled,
+          state.settings.codexFileAccess,
+          state.settings.codexNetworkAccess,
           state.settings.codexApprovalPolicy,
-          state.settings.codexModelReasoningEffort,
-          state.settings.codexWebSearchMode,
-          state.settings.codexShowRawAgentReasoning,
+          state.settings.codexReasoningEffort,
+          state.settings.codexWebSearch,
+          state.settings.codexShowRawReasoning,
           state.settings.codexReasoningSummary,
-          state.settings.codexSupportsReasoningSummaries,
-          state.settings.codexPathOverride,
-          state.settings.codexExperimentalPlanMode,
+          state.settings.codexReasoningSummarySupport,
+          state.settings.codexBinaryPath,
+          state.settings.codexPlanMode,
           state.settings.codexFastMode,
           state.settings.codexFastModeVisible,
         ] as const
@@ -637,18 +634,18 @@ export function ChatInput(args: ChatInputProps = {}) {
     fallback: {
       claudePermissionMode,
       claudePermissionModeBeforePlan,
-      codexExperimentalPlanMode,
+      codexPlanMode,
     },
-  }), [claudePermissionMode, claudePermissionModeBeforePlan, codexExperimentalPlanMode, promptDraftRuntimeOverrides]);
+  }), [claudePermissionMode, claudePermissionModeBeforePlan, codexPlanMode, promptDraftRuntimeOverrides]);
   const effectiveClaudePermissionMode = taskRuntimeState.claudePermissionMode;
   const effectiveClaudePermissionModeBeforePlan = taskRuntimeState.claudePermissionModeBeforePlan;
-  const effectiveCodexExperimentalPlanMode = taskRuntimeState.codexExperimentalPlanMode;
+  const effectiveCodexPlanMode = taskRuntimeState.codexPlanMode;
   const permissionMode: PermissionModeValue =
     activeProvider === "codex"
       ? resolveEffectiveCodexApprovalPolicy({
         approvalPolicy: codexApprovalPolicy,
-        planMode: effectiveCodexExperimentalPlanMode,
-        fallback: "on-request",
+        planMode: effectiveCodexPlanMode,
+        fallback: "untrusted",
       })
       : effectiveClaudePermissionMode;
   const isEmpty = activeMessageCount === 0;
@@ -677,14 +674,14 @@ export function ChatInput(args: ChatInputProps = {}) {
       return findOptionLabel(CLAUDE_EFFORT_OPTIONS, claudeEffort);
     }
     if (activeProvider === "codex") {
-      return findOptionLabel(CODEX_EFFORT_OPTIONS, codexModelReasoningEffort);
+      return findOptionLabel(CODEX_EFFORT_OPTIONS, codexReasoningEffort);
     }
     return undefined;
-  }, [activeProvider, claudeEffort, codexModelReasoningEffort]);
+  }, [activeProvider, claudeEffort, codexReasoningEffort]);
   const effortValue = activeProvider === "claude-code"
     ? claudeEffort
     : activeProvider === "codex"
-      ? codexModelReasoningEffort
+      ? codexReasoningEffort
       : undefined;
   const onEffortCycle = useMemo(() => {
     if (activeProvider === "claude-code") {
@@ -694,11 +691,11 @@ export function ChatInput(args: ChatInputProps = {}) {
     }
     if (activeProvider === "codex") {
       return () => updateSettings({
-        patch: { codexModelReasoningEffort: cycleCodexEffortValue(codexModelReasoningEffort) },
+        patch: { codexReasoningEffort: cycleCodexEffortValue(codexReasoningEffort) },
       });
     }
     return undefined;
-  }, [activeProvider, claudeEffort, codexModelReasoningEffort, updateSettings]);
+  }, [activeProvider, claudeEffort, codexReasoningEffort, updateSettings]);
   const runtimeQuickControls = useMemo(() => {
     return buildChatInputRuntimeQuickControls({
       activeProvider,
@@ -715,18 +712,17 @@ export function ChatInput(args: ChatInputProps = {}) {
       claudeThinkingMode,
       claudeAgentProgressSummaries,
       claudeFastMode,
-      codexSandboxMode,
-      codexSkipGitRepoCheck,
-      codexNetworkAccessEnabled,
+      codexFileAccess,
+      codexNetworkAccess,
       codexApprovalPolicy,
-      codexModelReasoningEffort,
-      codexWebSearchMode,
-      codexShowRawAgentReasoning,
+      codexReasoningEffort,
+      codexWebSearch,
+      codexShowRawReasoning,
       codexReasoningSummary,
-      codexSupportsReasoningSummaries,
+      codexReasoningSummarySupport,
       codexFastMode,
-      codexExperimentalPlanMode: effectiveCodexExperimentalPlanMode,
-      codexPathOverride,
+      codexPlanMode: effectiveCodexPlanMode,
+      codexBinaryPath,
       staveAutoFastMode,
       staveAutoOrchestrationMode,
       staveAutoMaxSubtasks,
@@ -759,18 +755,17 @@ export function ChatInput(args: ChatInputProps = {}) {
     claudeThinkingMode,
     codexApprovalPolicy,
     codexFastMode,
-    codexModelReasoningEffort,
-    codexNetworkAccessEnabled,
-    codexPathOverride,
+    codexReasoningEffort,
+    codexNetworkAccess,
+    codexBinaryPath,
     codexReasoningSummary,
-    codexSandboxMode,
-    codexSkipGitRepoCheck,
-    codexShowRawAgentReasoning,
-    codexSupportsReasoningSummaries,
-    codexWebSearchMode,
+    codexFileAccess,
+    codexShowRawReasoning,
+    codexReasoningSummarySupport,
+    codexWebSearch,
     effectiveClaudePermissionMode,
     effectiveClaudePermissionModeBeforePlan,
-    effectiveCodexExperimentalPlanMode,
+    effectiveCodexPlanMode,
     permissionMode,
     providerTimeoutMs,
     providerSelectionTarget,
@@ -797,18 +792,17 @@ export function ChatInput(args: ChatInputProps = {}) {
       claudeThinkingMode,
       claudeAgentProgressSummaries,
       claudeFastMode,
-      codexSandboxMode,
-      codexSkipGitRepoCheck,
-      codexNetworkAccessEnabled,
+      codexFileAccess,
+      codexNetworkAccess,
       codexApprovalPolicy,
-      codexModelReasoningEffort,
-      codexWebSearchMode,
-      codexShowRawAgentReasoning,
+      codexReasoningEffort,
+      codexWebSearch,
+      codexShowRawReasoning,
       codexReasoningSummary,
-      codexSupportsReasoningSummaries,
+      codexReasoningSummarySupport,
       codexFastMode,
-      codexExperimentalPlanMode: effectiveCodexExperimentalPlanMode,
-      codexPathOverride,
+      codexPlanMode: effectiveCodexPlanMode,
+      codexBinaryPath,
       staveAutoFastMode,
       staveAutoOrchestrationMode,
       staveAutoMaxSubtasks,
@@ -830,18 +824,17 @@ export function ChatInput(args: ChatInputProps = {}) {
     claudeThinkingMode,
     codexApprovalPolicy,
     codexFastMode,
-    codexModelReasoningEffort,
-    codexNetworkAccessEnabled,
-    codexPathOverride,
+    codexReasoningEffort,
+    codexNetworkAccess,
+    codexBinaryPath,
     codexReasoningSummary,
-    codexSandboxMode,
-    codexSkipGitRepoCheck,
-    codexShowRawAgentReasoning,
-    codexSupportsReasoningSummaries,
-    codexWebSearchMode,
+    codexFileAccess,
+    codexShowRawReasoning,
+    codexReasoningSummarySupport,
+    codexWebSearch,
     effectiveClaudePermissionMode,
     effectiveClaudePermissionModeBeforePlan,
-    effectiveCodexExperimentalPlanMode,
+    effectiveCodexPlanMode,
     permissionMode,
     providerTimeoutMs,
     staveAutoAllowCrossProviderWorkers,
@@ -1064,7 +1057,7 @@ export function ChatInput(args: ChatInputProps = {}) {
       }
       planMode={
         activeProvider === "codex"
-          ? effectiveCodexExperimentalPlanMode
+          ? effectiveCodexPlanMode
           : (activeProvider === "claude-code" || activeProvider === "stave") && effectiveClaudePermissionMode === "plan"
       }
       onPlanModeChange={
@@ -1074,7 +1067,7 @@ export function ChatInput(args: ChatInputProps = {}) {
               patch: {
                 runtimeOverrides: {
                   ...promptDraftRuntimeOverrides,
-                  codexExperimentalPlanMode: enabled,
+                  codexPlanMode: enabled,
                 },
               },
             })

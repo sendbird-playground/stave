@@ -1,13 +1,13 @@
 import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
 import {
   resolveEffectiveCodexApprovalPolicy,
-  resolveEffectiveCodexSandboxMode,
+  resolveEffectiveCodexFileAccessMode,
 } from "@/lib/providers/codex-runtime-options";
 import type { ClaudeSettingSource, ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import { buildStaveAutoProfileFromSettings } from "@/lib/providers/stave-auto-profile";
 import type { AppSettings } from "@/store/app.store";
 
-const DEFAULT_CODEX_APPROVAL_POLICY = "on-request";
+const DEFAULT_CODEX_APPROVAL_POLICY = "untrusted";
 const MAX_CLAUDE_TASK_BUDGET_TOKENS = 1_000_000;
 const CLAUDE_SETTING_SOURCE_ORDER = ["project", "local", "user"] as const satisfies readonly ClaudeSettingSource[];
 
@@ -27,18 +27,17 @@ type RuntimeSettings = Pick<
   | "claudeAgentProgressSummaries"
   | "claudeFastMode"
   | "claudeFastModeVisible"
-  | "codexSandboxMode"
-  | "codexSkipGitRepoCheck"
-  | "codexNetworkAccessEnabled"
+  | "codexFileAccess"
+  | "codexNetworkAccess"
   | "codexApprovalPolicy"
-  | "codexPathOverride"
-  | "codexModelReasoningEffort"
-  | "codexWebSearchMode"
-  | "codexShowRawAgentReasoning"
+  | "codexBinaryPath"
+  | "codexReasoningEffort"
+  | "codexWebSearch"
+  | "codexShowRawReasoning"
   | "codexReasoningSummary"
-  | "codexSupportsReasoningSummaries"
+  | "codexReasoningSummarySupport"
   | "codexFastMode"
-  | "codexExperimentalPlanMode"
+  | "codexPlanMode"
   | "codexFastModeVisible"
   | "staveAutoClassifierModel"
   | "staveAutoSupervisorModel"
@@ -158,28 +157,27 @@ export function buildProviderRuntimeOptions(args: {
       : args.provider === "claude-code" && providerSession?.["claude-code"]?.trim()
         ? { claudeResumeSessionId: providerSession["claude-code"] }
         : {}),
-    codexSandboxMode: resolveEffectiveCodexSandboxMode({
-      sandboxMode: settings.codexSandboxMode,
-      planMode: settings.codexExperimentalPlanMode,
+    codexFileAccess: resolveEffectiveCodexFileAccessMode({
+      fileAccessMode: settings.codexFileAccess,
+      planMode: settings.codexPlanMode,
       fallback: "workspace-write",
     }),
-    codexSkipGitRepoCheck: settings.codexSkipGitRepoCheck,
-    codexNetworkAccessEnabled: settings.codexNetworkAccessEnabled,
+    codexNetworkAccess: settings.codexNetworkAccess,
     codexApprovalPolicy: resolveEffectiveCodexApprovalPolicy({
       approvalPolicy: normalizeCodexApprovalPolicy({
         value: settings.codexApprovalPolicy,
       }),
-      planMode: settings.codexExperimentalPlanMode,
+      planMode: settings.codexPlanMode,
       fallback: DEFAULT_CODEX_APPROVAL_POLICY,
     }),
-    codexPathOverride: settings.codexPathOverride || undefined,
-    codexModelReasoningEffort: settings.codexModelReasoningEffort,
-    codexWebSearchMode: settings.codexWebSearchMode,
-    codexShowRawAgentReasoning: settings.codexShowRawAgentReasoning,
+    codexBinaryPath: settings.codexBinaryPath || undefined,
+    codexReasoningEffort: settings.codexReasoningEffort,
+    codexWebSearch: settings.codexWebSearch,
+    codexShowRawReasoning: settings.codexShowRawReasoning,
     codexReasoningSummary: settings.codexReasoningSummary,
-    codexSupportsReasoningSummaries: settings.codexSupportsReasoningSummaries,
+    codexReasoningSummarySupport: settings.codexReasoningSummarySupport,
     codexFastMode: settings.codexFastMode,
-    codexExperimentalPlanMode: settings.codexExperimentalPlanMode,
+    codexPlanMode: settings.codexPlanMode,
     ...(args.provider === "codex" && providerSession?.codex?.trim()
       ? { codexResumeThreadId: providerSession.codex }
       : {}),

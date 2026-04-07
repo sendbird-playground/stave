@@ -250,18 +250,17 @@ export interface ProviderRuntimeOptions {
   claudeAllowedTools?: string[];
   claudeDisallowedTools?: string[];
   claudeResumeSessionId?: string;
-  codexSandboxMode?: "read-only" | "workspace-write" | "danger-full-access";
-  codexSkipGitRepoCheck?: boolean;
-  codexNetworkAccessEnabled?: boolean;
+  codexFileAccess?: "read-only" | "workspace-write" | "danger-full-access";
+  codexNetworkAccess?: boolean;
   codexApprovalPolicy?: "never" | "on-request" | "untrusted";
-  codexPathOverride?: string;
-  codexModelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
-  codexWebSearchMode?: "disabled" | "cached" | "live";
-  codexShowRawAgentReasoning?: boolean;
+  codexBinaryPath?: string;
+  codexReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
+  codexWebSearch?: "disabled" | "cached" | "live";
+  codexShowRawReasoning?: boolean;
   codexReasoningSummary?: "auto" | "concise" | "detailed" | "none";
-  codexSupportsReasoningSummaries?: "auto" | "enabled" | "disabled";
+  codexReasoningSummarySupport?: "auto" | "enabled" | "disabled";
   codexFastMode?: boolean;
-  codexExperimentalPlanMode?: boolean;
+  codexPlanMode?: boolean;
   codexResumeThreadId?: string;
   /** Stave Auto profile used by the meta-provider for direct routing and orchestration. */
   staveAuto?: StaveAutoProfile;

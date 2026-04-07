@@ -67,7 +67,7 @@ export interface ToolingStatusSnapshot {
 
 export interface ToolingStatusRequest {
   cwd?: string;
-  codexPathOverride?: string;
+  codexBinaryPath?: string;
 }
 
 export interface SyncOriginMainRequest {

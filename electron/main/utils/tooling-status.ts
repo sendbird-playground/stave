@@ -544,9 +544,9 @@ async function inspectClaudeStatus() {
   });
 }
 
-async function inspectCodexStatus(args: { codexPathOverride?: string }) {
+async function inspectCodexStatus(args: { codexBinaryPath?: string }) {
   const executablePath = resolveCodexExecutablePath({
-    explicitPath: args.codexPathOverride,
+    explicitPath: args.codexBinaryPath,
   }) || null;
   if (!executablePath) {
     return makeToolEntry({
@@ -607,10 +607,10 @@ async function inspectCodexStatus(args: { codexPathOverride?: string }) {
 }
 
 export async function getCodexMcpStatus(args: {
-  codexPathOverride?: string;
+  codexBinaryPath?: string;
 }): Promise<CodexMcpStatusResponse> {
   const executablePath = resolveCodexExecutablePath({
-    explicitPath: args.codexPathOverride,
+    explicitPath: args.codexBinaryPath,
   }) || null;
 
   if (!executablePath) {
@@ -817,7 +817,7 @@ export async function getToolingStatusSnapshot(
     inspectGitStatus(),
     inspectGhStatus(),
     inspectClaudeStatus(),
-    inspectCodexStatus({ codexPathOverride: args.codexPathOverride }),
+    inspectCodexStatus({ codexBinaryPath: args.codexBinaryPath }),
   ]);
 
   return {

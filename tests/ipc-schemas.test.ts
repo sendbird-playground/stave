@@ -7,7 +7,7 @@ import {
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 
 describe("provider IPC schemas", () => {
-  test("rejects deprecated Codex on-failure approval policy in runtime options", () => {
+  test("rejects unknown Codex approval policies in runtime options", () => {
     const parsed = StreamTurnArgsSchema.safeParse({
       providerId: "codex",
       prompt: "continue",

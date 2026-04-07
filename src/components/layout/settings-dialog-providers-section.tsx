@@ -172,7 +172,7 @@ const CLAUDE_SETTING_SOURCE_HELP = [
   },
 ] as const satisfies ReadonlyArray<{ value: ClaudeSettingSource; label: string; description: string }>;
 
-const CODEX_SANDBOX_MODE_HELP = [
+const CODEX_FILE_ACCESS_HELP = [
   {
     value: "read-only",
     label: "read-only",
@@ -183,7 +183,7 @@ const CODEX_SANDBOX_MODE_HELP = [
     value: "workspace-write",
     label: "workspace-write",
     description: "Allow edits inside the current workspace and writable roots.",
-    example: "Best default for normal implementation work where edits should stay scoped to the repo.",
+    example: "Recommended App Server-style starting point for normal local work.",
   },
   {
     value: "danger-full-access",
@@ -191,9 +191,15 @@ const CODEX_SANDBOX_MODE_HELP = [
     description: "Remove most filesystem restrictions and allow broad mutation.",
     example: "Use this only for trusted automation that truly needs unrestricted file access.",
   },
-] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexSandboxMode"]>>[];
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexFileAccess"]>>[];
 
 const CODEX_APPROVAL_POLICY_HELP = [
+  {
+    value: "untrusted",
+    label: "untrusted",
+    description: "Only pause for actions the runtime treats as untrusted or higher risk.",
+    example: "Recommended App Server-style baseline when you want fewer routine approval pauses.",
+  },
   {
     value: "never",
     label: "never",
@@ -204,13 +210,7 @@ const CODEX_APPROVAL_POLICY_HELP = [
     value: "on-request",
     label: "on-request",
     description: "Pause when approval is needed and ask you to confirm.",
-    example: "Use this when you want Codex to work normally but still checkpoint risky actions.",
-  },
-  {
-    value: "untrusted",
-    label: "untrusted",
-    description: "Only pause for actions the runtime treats as untrusted or higher risk.",
-    example: "Useful when you want fewer prompts than `on-request` without going fully hands-off.",
+    example: "Use this when you want more explicit checkpoints than the default low-friction setup.",
   },
 ] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexApprovalPolicy"]>>[];
 
@@ -245,7 +245,7 @@ const CODEX_REASONING_EFFORT_HELP = [
     description: "Deepest reasoning budget and the highest latency cost.",
     example: "Reserve this for genuinely complex work where you want Codex to think much longer.",
   },
-] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexModelReasoningEffort"]>>[];
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexReasoningEffort"]>>[];
 
 const CODEX_REASONING_SUMMARY_HELP = [
   {
@@ -285,7 +285,7 @@ const CODEX_REASONING_SUPPORT_HELP = [
     value: "enabled",
     label: "Enabled",
     description: "Force-enable reasoning summary support even if automatic detection misses it.",
-    example: "Use this when a model supports summaries but the CLI does not infer it correctly.",
+    example: "Use this when a model supports summaries but the runtime does not infer it correctly.",
   },
   {
     value: "disabled",
@@ -293,9 +293,15 @@ const CODEX_REASONING_SUPPORT_HELP = [
     description: "Force-disable reasoning summary support.",
     example: "Use this if a model claims support but returns noisy or broken summary behavior.",
   },
-] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexSupportsReasoningSummaries"]>>[];
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexReasoningSummarySupport"]>>[];
 
 const CODEX_WEB_SEARCH_HELP = [
+  {
+    value: "cached",
+    label: "Cached",
+    description: "Allow search in a lower-volatility mode when cached results are available.",
+    example: "Recommended default when you want some search help without always relying on live web access.",
+  },
   {
     value: "disabled",
     label: "Disabled",
@@ -303,18 +309,12 @@ const CODEX_WEB_SEARCH_HELP = [
     example: "Best when you want fully local reasoning or reproducible offline behavior.",
   },
   {
-    value: "cached",
-    label: "Cached",
-    description: "Allow search in a lower-volatility mode when cached results are available.",
-    example: "Useful when you want some search help without always relying on live web access.",
-  },
-  {
     value: "live",
     label: "Live",
     description: "Allow live web search when the task needs current external information.",
     example: "Use this for latest docs, breaking API changes, or recent news-style facts.",
   },
-] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexWebSearchMode"]>>[];
+] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["codexWebSearch"]>>[];
 
 function buildGuideItems<T extends string>(options: readonly ExplainedSelectOption<T>[]) {
   return options.map((option) => ({
@@ -503,9 +503,9 @@ function StaveAutoRoleField(args: {
           )
         : (
             <div className="grid gap-3 md:grid-cols-3">
-              <StaveAutoOverrideField label="Approval Policy">
+              <StaveAutoOverrideField label="Approvals">
                 <Select
-                  value={args.overrides.codex.approvalPolicy ?? "on-request"}
+                  value={args.overrides.codex.approvalPolicy ?? "untrusted"}
                   onValueChange={(value) => args.onCodexOverrideChange(
                     "approvalPolicy",
                     value as StaveAutoCodexRoleRuntimeOverrides["approvalPolicy"],
@@ -864,15 +864,14 @@ export function ProvidersSection() {
     claudeThinkingMode,
     claudeAgentProgressSummaries,
     claudeFastMode,
-    codexSandboxMode,
-    codexSkipGitRepoCheck,
-    codexNetworkAccessEnabled,
+    codexFileAccess,
+    codexNetworkAccess,
     codexApprovalPolicy,
-    codexModelReasoningEffort,
-    codexWebSearchMode,
-    codexShowRawAgentReasoning,
+    codexReasoningEffort,
+    codexWebSearch,
+    codexShowRawReasoning,
     codexReasoningSummary,
-    codexSupportsReasoningSummaries,
+    codexReasoningSummarySupport,
     codexFastMode,
   ] = useAppStore(
     useShallow((state) => [
@@ -886,15 +885,14 @@ export function ProvidersSection() {
       state.settings.claudeThinkingMode,
       state.settings.claudeAgentProgressSummaries,
       state.settings.claudeFastMode,
-      state.settings.codexSandboxMode,
-      state.settings.codexSkipGitRepoCheck,
-      state.settings.codexNetworkAccessEnabled,
+      state.settings.codexFileAccess,
+      state.settings.codexNetworkAccess,
       state.settings.codexApprovalPolicy,
-      state.settings.codexModelReasoningEffort,
-      state.settings.codexWebSearchMode,
-      state.settings.codexShowRawAgentReasoning,
+      state.settings.codexReasoningEffort,
+      state.settings.codexWebSearch,
+      state.settings.codexShowRawReasoning,
       state.settings.codexReasoningSummary,
-      state.settings.codexSupportsReasoningSummaries,
+      state.settings.codexReasoningSummarySupport,
       state.settings.codexFastMode,
     ] as const),
   );
@@ -1124,63 +1122,50 @@ export function ProvidersSection() {
 
         <TabsContent value="codex">
           <SectionStack>
-            <SettingsCard title="Codex Runtime Controls" description="Per-turn Codex sandbox, approval, reasoning, and web-search settings.">
+            <SettingsCard title="Codex Runtime Controls" description="Per-turn Codex file access, approvals, network, reasoning, and search settings.">
           <LabeledField
             title="Network Access"
             description="Controls whether Codex may use networked capabilities during a turn."
           >
             <ChoiceButtons
-              value={codexNetworkAccessEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { codexNetworkAccessEnabled: value === "on" } })}
+              value={codexNetworkAccess ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { codexNetworkAccess: value === "on" } })}
               options={[
                 { value: "on", label: "On", description: "Allow browsing, web search, and other networked Codex features." },
-                { value: "off", label: "Off", description: "Keep Codex local to the workspace and configured tools." },
+                { value: "off", label: "Off", description: "Recommended default. Keep Codex local unless the task really needs the network." },
               ]}
             />
           </LabeledField>
           <LabeledField
-            title="Skip Git Repo Check"
-            description="Allows Codex turns to run in folders that are not Git repositories."
-          >
-            <ChoiceButtons
-              value={codexSkipGitRepoCheck ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { codexSkipGitRepoCheck: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Run Codex even when the current folder is not a Git repo." },
-                { value: "off", label: "Off", description: "Require a Git repository before starting Codex turns." },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField
-            title="Sandbox Mode"
+            title="File Access"
             guide={(
               <SettingsFieldGuide
-                title="Codex Sandbox Mode"
+                title="Codex File Access"
                 summary="This setting controls where Codex can read and write on disk."
-                items={buildGuideItems(CODEX_SANDBOX_MODE_HELP)}
-                examples={buildGuideExamples(CODEX_SANDBOX_MODE_HELP)}
+                items={buildGuideItems(CODEX_FILE_ACCESS_HELP)}
+                examples={buildGuideExamples(CODEX_FILE_ACCESS_HELP)}
                 note="When Stave runs Codex in plan mode, it forces `read-only` regardless of the normal setting."
-                tooltip="Compare Codex sandbox modes"
+                tooltip="Compare Codex file access levels"
               />
             )}
           >
             <DescribedSelect
-              value={codexSandboxMode}
-              options={CODEX_SANDBOX_MODE_HELP}
+              value={codexFileAccess}
+              options={CODEX_FILE_ACCESS_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexSandboxMode: value,
+                    codexFileAccess: value,
                   },
                 })
               }
             />
           </LabeledField>
           <LabeledField
-            title="Approval Policy"
+            title="Approvals"
             guide={(
               <SettingsFieldGuide
-                title="Codex Approval Policy"
+                title="Codex Approvals"
                 summary="Approval policy controls when Codex pauses to ask before acting."
                 items={buildGuideItems(CODEX_APPROVAL_POLICY_HELP)}
                 examples={buildGuideExamples(CODEX_APPROVAL_POLICY_HELP)}
@@ -1202,7 +1187,7 @@ export function ProvidersSection() {
             />
           </LabeledField>
           <LabeledField
-            title="Reasoning Effort"
+            title="Reasoning"
             guide={(
               <SettingsFieldGuide
                 title="Codex Reasoning Effort"
@@ -1214,12 +1199,12 @@ export function ProvidersSection() {
             )}
           >
             <DescribedSelect
-              value={codexModelReasoningEffort}
+              value={codexReasoningEffort}
               options={CODEX_REASONING_EFFORT_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexModelReasoningEffort: value,
+                    codexReasoningEffort: value,
                   },
                 })
               }
@@ -1251,8 +1236,8 @@ export function ProvidersSection() {
             />
           </LabeledField>
           <LabeledField
-            title="Supports Reasoning Summaries"
-            description="Override Codex capability detection when a model supports reasoning summaries but the CLI cannot infer it."
+            title="Summary Support"
+            description="Override Codex capability detection when a model supports reasoning summaries but the runtime cannot infer it."
             guide={(
               <SettingsFieldGuide
                 title="Reasoning Summary Capability Override"
@@ -1264,24 +1249,24 @@ export function ProvidersSection() {
             )}
           >
             <DescribedSelect
-              value={codexSupportsReasoningSummaries}
+              value={codexReasoningSummarySupport}
               options={CODEX_REASONING_SUPPORT_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexSupportsReasoningSummaries: value,
+                    codexReasoningSummarySupport: value,
                   },
                 })
               }
             />
           </LabeledField>
           <LabeledField
-            title="Raw Agent Reasoning"
+            title="Raw Reasoning"
             description="Shows low-level reasoning traces when Codex emits them."
           >
             <ChoiceButtons
-              value={codexShowRawAgentReasoning ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { codexShowRawAgentReasoning: value === "on" } })}
+              value={codexShowRawReasoning ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { codexShowRawReasoning: value === "on" } })}
               options={[
                 { value: "on", label: "On", description: "Surface raw reasoning events in the Stave UI." },
                 { value: "off", label: "Off", description: "Hide raw reasoning traces and keep the UI quieter." },
@@ -1289,11 +1274,11 @@ export function ProvidersSection() {
             />
           </LabeledField>
           <LabeledField
-            title="Web Search Mode"
-            description="Default is `disabled` to match the current Codex CLI opt-in `--search` behavior."
+            title="Web Search"
+            description="Default is `cached`, which allows lower-volatility search without turning on live external lookup."
             guide={(
               <SettingsFieldGuide
-                title="Codex Web Search Mode"
+                title="Codex Web Search"
                 summary="Use this when Codex needs outside knowledge rather than only repo-local context."
                 items={buildGuideItems(CODEX_WEB_SEARCH_HELP)}
                 examples={buildGuideExamples(CODEX_WEB_SEARCH_HELP)}
@@ -1302,12 +1287,12 @@ export function ProvidersSection() {
             )}
           >
             <DescribedSelect
-              value={codexWebSearchMode}
+              value={codexWebSearch}
               options={CODEX_WEB_SEARCH_HELP}
               onValueChange={(value) =>
                 updateSettings({
                   patch: {
-                    codexWebSearchMode: value,
+                    codexWebSearch: value,
                   },
                 })
               }

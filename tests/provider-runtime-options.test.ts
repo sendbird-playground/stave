@@ -19,18 +19,17 @@ const settings = {
   claudeAgentProgressSummaries: true,
   claudeFastMode: false,
   claudeFastModeVisible: true,
-  codexSandboxMode: "workspace-write",
-  codexSkipGitRepoCheck: false,
-  codexNetworkAccessEnabled: true,
-  codexApprovalPolicy: "on-request",
-  codexPathOverride: "",
-  codexModelReasoningEffort: "medium",
-  codexWebSearchMode: "disabled",
-  codexShowRawAgentReasoning: false,
+  codexFileAccess: "workspace-write",
+  codexNetworkAccess: false,
+  codexApprovalPolicy: "untrusted",
+  codexBinaryPath: "",
+  codexReasoningEffort: "medium",
+  codexWebSearch: "cached",
+  codexShowRawReasoning: false,
   codexReasoningSummary: "auto",
-  codexSupportsReasoningSummaries: "auto",
+  codexReasoningSummarySupport: "auto",
   codexFastMode: true,
-  codexExperimentalPlanMode: false,
+  codexPlanMode: false,
   codexFastModeVisible: true,
   staveAutoClassifierModel: "claude-haiku-4-5",
   staveAutoSupervisorModel: "claude-sonnet-4-6",
@@ -50,11 +49,7 @@ const settings = {
 
 describe("normalizeCodexApprovalPolicy", () => {
   test("falls back to the safe default when persisted data is invalid", () => {
-    expect(normalizeCodexApprovalPolicy({ value: "bogus" })).toBe("on-request");
-  });
-
-  test("normalizes deprecated on-failure persisted settings to on-request", () => {
-    expect(normalizeCodexApprovalPolicy({ value: "on-failure" })).toBe("on-request");
+    expect(normalizeCodexApprovalPolicy({ value: "bogus" })).toBe("untrusted");
   });
 });
 
@@ -74,7 +69,7 @@ describe("buildProviderRuntimeOptions", () => {
   test("leaves runtime options unchanged when the project base prompt is empty", () => {
     const runtimeOptions = {
       model: "gpt-5.4",
-      codexSandboxMode: "workspace-write" as const,
+      codexFileAccess: "workspace-write" as const,
     };
 
     expect(applyProjectBasePromptToRuntimeOptions({
@@ -89,15 +84,15 @@ describe("buildProviderRuntimeOptions", () => {
       model: "gpt-5.4",
       settings: {
         ...settings,
-        codexSandboxMode: "danger-full-access",
-        codexExperimentalPlanMode: true,
+        codexFileAccess: "danger-full-access",
+        codexPlanMode: true,
       },
       providerSession: null,
     })).toMatchObject({
       model: "gpt-5.4",
       codexApprovalPolicy: "never",
-      codexSandboxMode: "read-only",
-      codexExperimentalPlanMode: true,
+      codexFileAccess: "read-only",
+      codexPlanMode: true,
     });
   });
 
@@ -115,7 +110,7 @@ describe("buildProviderRuntimeOptions", () => {
       claudeResumeSessionId: "claude-session-1",
       codexResumeThreadId: "codex-thread-1",
       codexFastMode: true,
-      codexExperimentalPlanMode: false,
+      codexPlanMode: false,
     });
   });
 
@@ -144,8 +139,8 @@ describe("buildProviderRuntimeOptions", () => {
     })).toMatchObject({
       model: "gpt-5.4",
       codexResumeThreadId: "codex-thread-1",
-      codexSandboxMode: "workspace-write",
-      codexExperimentalPlanMode: false,
+      codexFileAccess: "workspace-write",
+      codexPlanMode: false,
     });
   });
 });

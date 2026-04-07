@@ -334,7 +334,7 @@ export function registerProviderHandlers() {
       };
     }
     return getCodexMcpStatus({
-      codexPathOverride: parsedArgs.data.runtimeOptions?.codexPathOverride,
+      codexBinaryPath: parsedArgs.data.runtimeOptions?.codexBinaryPath,
     });
   });
 

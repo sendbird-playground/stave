@@ -1,20 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import {
   resolveEffectiveCodexApprovalPolicy,
-  resolveEffectiveCodexSandboxMode,
+  resolveEffectiveCodexFileAccessMode,
 } from "@/lib/providers/codex-runtime-options";
 
-describe("resolveEffectiveCodexSandboxMode", () => {
-  test("forces read-only sandbox while Codex plan mode is enabled", () => {
-    expect(resolveEffectiveCodexSandboxMode({
-      sandboxMode: "danger-full-access",
+describe("resolveEffectiveCodexFileAccessMode", () => {
+  test("forces read-only file access while Codex plan mode is enabled", () => {
+    expect(resolveEffectiveCodexFileAccessMode({
+      fileAccessMode: "danger-full-access",
       planMode: true,
     })).toBe("read-only");
   });
 
-  test("preserves the configured sandbox when Codex plan mode is disabled", () => {
-    expect(resolveEffectiveCodexSandboxMode({
-      sandboxMode: "workspace-write",
+  test("preserves the configured file access when Codex plan mode is disabled", () => {
+    expect(resolveEffectiveCodexFileAccessMode({
+      fileAccessMode: "workspace-write",
       planMode: false,
     })).toBe("workspace-write");
   });
@@ -35,10 +35,10 @@ describe("resolveEffectiveCodexApprovalPolicy", () => {
     })).toBe("untrusted");
   });
 
-  test("normalizes deprecated on-failure inputs to on-request", () => {
+  test("falls back to the App Server-aligned default when approval is missing", () => {
     expect(resolveEffectiveCodexApprovalPolicy({
-      approvalPolicy: "on-failure",
+      approvalPolicy: undefined,
       planMode: false,
-    })).toBe("on-request");
+    })).toBe("untrusted");
   });
 });

@@ -45,16 +45,16 @@ export const CLAUDE_SETTING_SOURCE_OPTIONS = [
 ] as const satisfies readonly SelectOption<ClaudeSettingSource>[];
 
 export const CODEX_APPROVAL_POLICY_OPTIONS = [
-  { value: "never", label: "never" },
-  { value: "on-request", label: "on-request" },
   { value: "untrusted", label: "untrusted" },
+  { value: "on-request", label: "on-request" },
+  { value: "never", label: "never" },
 ] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexApprovalPolicy"]>>[];
 
 export const CODEX_SANDBOX_MODE_OPTIONS = [
   { value: "read-only", label: "read-only" },
   { value: "workspace-write", label: "workspace-write" },
   { value: "danger-full-access", label: "danger-full-access" },
-] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexSandboxMode"]>>[];
+] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexFileAccess"]>>[];
 
 export const CODEX_EFFORT_OPTIONS = [
   { value: "minimal", label: "Minimal" },
@@ -62,13 +62,13 @@ export const CODEX_EFFORT_OPTIONS = [
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
   { value: "xhigh", label: "X-High" },
-] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexModelReasoningEffort"]>>[];
+] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexReasoningEffort"]>>[];
 
 export const CODEX_WEB_SEARCH_OPTIONS = [
-  { value: "disabled", label: "Disabled" },
   { value: "cached", label: "Cached" },
+  { value: "disabled", label: "Disabled" },
   { value: "live", label: "Live" },
-] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexWebSearchMode"]>>[];
+] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexWebSearch"]>>[];
 
 export const CODEX_REASONING_SUMMARY_OPTIONS = [
   { value: "auto", label: "Auto" },
@@ -81,7 +81,7 @@ export const CODEX_REASONING_SUPPORT_OPTIONS = [
   { value: "auto", label: "Auto" },
   { value: "enabled", label: "Enabled" },
   { value: "disabled", label: "Disabled" },
-] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexSupportsReasoningSummaries"]>>[];
+] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["codexReasoningSummarySupport"]>>[];
 
 export const STAVE_AUTO_ORCHESTRATION_OPTIONS = [
   { value: "off", label: "Off" },
@@ -115,18 +115,17 @@ export const PROVIDER_RUNTIME_OPTION_KEYS = [
   "claudeAllowedTools",
   "claudeDisallowedTools",
   "claudeResumeSessionId",
-  "codexSandboxMode",
-  "codexSkipGitRepoCheck",
-  "codexNetworkAccessEnabled",
+  "codexFileAccess",
+  "codexNetworkAccess",
   "codexApprovalPolicy",
-  "codexPathOverride",
-  "codexModelReasoningEffort",
-  "codexWebSearchMode",
-  "codexShowRawAgentReasoning",
+  "codexBinaryPath",
+  "codexReasoningEffort",
+  "codexWebSearch",
+  "codexShowRawReasoning",
   "codexReasoningSummary",
-  "codexSupportsReasoningSummaries",
+  "codexReasoningSummarySupport",
   "codexFastMode",
-  "codexExperimentalPlanMode",
+  "codexPlanMode",
   "codexResumeThreadId",
   "staveAuto",
   "responseStylePrompt",

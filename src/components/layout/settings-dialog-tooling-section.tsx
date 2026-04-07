@@ -310,13 +310,13 @@ export function ToolingSection() {
     activeWorkspaceId,
     projectPath,
     workspacePathById,
-    codexPathOverride,
+    codexBinaryPath,
   ] = useAppStore(
     useShallow((state) => [
       state.activeWorkspaceId,
       state.projectPath,
       state.workspacePathById,
-      state.settings.codexPathOverride,
+      state.settings.codexBinaryPath,
     ] as const),
   );
   const workspaceCwd = workspacePathById[activeWorkspaceId] ?? projectPath ?? null;
@@ -355,7 +355,7 @@ export function ToolingSection() {
       try {
         const snapshot = await getStatus({
           cwd: workspaceCwd ?? undefined,
-          codexPathOverride: codexPathOverride || undefined,
+          codexBinaryPath: codexBinaryPath || undefined,
         });
         if (cancelled) {
           return;
@@ -382,7 +382,7 @@ export function ToolingSection() {
     return () => {
       cancelled = true;
     };
-  }, [codexPathOverride, refreshNonce, workspaceCwd]);
+  }, [codexBinaryPath, refreshNonce, workspaceCwd]);
 
   async function handleOpenTerminal() {
     const openInTerminal = window.api?.shell?.openInTerminal;

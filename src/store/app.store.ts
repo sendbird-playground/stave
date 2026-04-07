@@ -498,18 +498,17 @@ export interface AppSettings {
   claudeThinkingMode: "adaptive" | "enabled" | "disabled";
   claudeAgentProgressSummaries: boolean;
   claudeFastMode: boolean;
-  codexSandboxMode: "read-only" | "workspace-write" | "danger-full-access";
-  codexSkipGitRepoCheck: boolean;
-  codexNetworkAccessEnabled: boolean;
+  codexFileAccess: "read-only" | "workspace-write" | "danger-full-access";
+  codexNetworkAccess: boolean;
   codexApprovalPolicy: "never" | "on-request" | "untrusted";
-  codexPathOverride: string;
-  codexModelReasoningEffort: "minimal" | "low" | "medium" | "high" | "xhigh";
-  codexWebSearchMode: "disabled" | "cached" | "live";
-  codexShowRawAgentReasoning: boolean;
+  codexBinaryPath: string;
+  codexReasoningEffort: "minimal" | "low" | "medium" | "high" | "xhigh";
+  codexWebSearch: "disabled" | "cached" | "live";
+  codexShowRawReasoning: boolean;
   codexReasoningSummary: "auto" | "concise" | "detailed" | "none";
-  codexSupportsReasoningSummaries: "auto" | "enabled" | "disabled";
+  codexReasoningSummarySupport: "auto" | "enabled" | "disabled";
   codexFastMode: boolean;
-  codexExperimentalPlanMode: boolean;
+  codexPlanMode: boolean;
   /**
    * @deprecated No longer used. Kept temporarily so persisted settings
    * deserialise without errors; will be removed in a future cleanup pass.
@@ -1065,18 +1064,17 @@ const defaultSettings: AppSettings = {
   claudeThinkingMode: "adaptive",
   claudeAgentProgressSummaries: false,
   claudeFastMode: false,
-  codexSandboxMode: "workspace-write",
-  codexSkipGitRepoCheck: false,
-  codexNetworkAccessEnabled: true,
-  codexApprovalPolicy: "on-request",
-  codexPathOverride: "",
-  codexModelReasoningEffort: "medium",
-  codexWebSearchMode: "disabled",
-  codexShowRawAgentReasoning: false,
+  codexFileAccess: "workspace-write",
+  codexNetworkAccess: false,
+  codexApprovalPolicy: "untrusted",
+  codexBinaryPath: "",
+  codexReasoningEffort: "medium",
+  codexWebSearch: "cached",
+  codexShowRawReasoning: false,
   codexReasoningSummary: "auto",
-  codexSupportsReasoningSummaries: "auto",
+  codexReasoningSummarySupport: "auto",
   codexFastMode: false,
-  codexExperimentalPlanMode: false,
+  codexPlanMode: false,
   planAutoApprove: undefined,
   promptResponseStyle: DEFAULT_PROMPT_RESPONSE_STYLE,
   promptPrDescription: DEFAULT_PROMPT_PR_DESCRIPTION,
@@ -1629,7 +1627,7 @@ async function collectStaveMuseRoutingDecision(args: {
         claudeMaxTurns: 1,
         codexApprovalPolicy: "never",
         codexFastMode: true,
-        codexSandboxMode: "read-only",
+        codexFileAccess: "read-only",
         providerTimeoutMs: Math.min(
           runtimeOptions.providerTimeoutMs ?? STAVE_MUSE_ROUTER_TIMEOUT_MS,
           STAVE_MUSE_ROUTER_TIMEOUT_MS,
@@ -5165,13 +5163,13 @@ export const useAppStore = create<AppState>()(
         if (!checkAvailability) {
           return;
         }
-        const codexPathOverride = get().settings.codexPathOverride || undefined;
+        const codexBinaryPath = get().settings.codexBinaryPath || undefined;
         const availabilityEntries = await Promise.all(
           listProviderIds().map(async (providerId) => {
             const result = await checkAvailability({
               providerId,
-              runtimeOptions: codexPathOverride
-                ? { codexPathOverride }
+              runtimeOptions: codexBinaryPath
+                ? { codexBinaryPath }
                 : undefined,
             });
             return [providerId, result.ok && result.available] as const;
@@ -5872,7 +5870,7 @@ export const useAppStore = create<AppState>()(
               }
             : {
                 codexApprovalPolicy: "never" as const,
-                codexSandboxMode: "read-only" as const,
+                codexFileAccess: "read-only" as const,
               }),
         };
         const connectedToolIds = resolveRequestedStaveMuseConnectedTools({ input: trimmedContent });
@@ -6285,7 +6283,7 @@ export const useAppStore = create<AppState>()(
           fallback: {
             claudePermissionMode: state.settings.claudePermissionMode,
             claudePermissionModeBeforePlan: state.settings.claudePermissionModeBeforePlan,
-            codexExperimentalPlanMode: state.settings.codexExperimentalPlanMode,
+            codexPlanMode: state.settings.codexPlanMode,
           },
         });
         const activeModel = provider === "claude-code"
@@ -6515,7 +6513,7 @@ export const useAppStore = create<AppState>()(
               settings: {
                 ...get().settings,
                 claudePermissionMode: resolvedPromptDraftRuntimeState.claudePermissionMode,
-                codexExperimentalPlanMode: resolvedPromptDraftRuntimeState.codexExperimentalPlanMode,
+                codexPlanMode: resolvedPromptDraftRuntimeState.codexPlanMode,
               },
               providerSession,
             }),
@@ -7438,6 +7436,15 @@ export const useAppStore = create<AppState>()(
           state.settings.codexFastModeVisible ??= raw.fastModeVisible;
           delete raw.fastModeVisible;
         }
+        delete raw.codexSandboxMode;
+        delete raw.codexSkipGitRepoCheck;
+        delete raw.codexNetworkAccessEnabled;
+        delete raw.codexPathOverride;
+        delete raw.codexModelReasoningEffort;
+        delete raw.codexWebSearchMode;
+        delete raw.codexShowRawAgentReasoning;
+        delete raw.codexSupportsReasoningSummaries;
+        delete raw.codexExperimentalPlanMode;
         state.settings.thinkingPhraseAnimationStyle = normalizeThinkingPhraseAnimationStyle(
           state.settings.thinkingPhraseAnimationStyle,
         );
@@ -7461,7 +7468,24 @@ export const useAppStore = create<AppState>()(
         state.settings.providerTimeoutMs = normalizeProviderTimeoutMs({
           value: state.settings.providerTimeoutMs,
         });
-        state.settings.codexExperimentalPlanMode ??= false;
+        state.settings.codexPlanMode ??= false;
+        state.promptDraftByTask = Object.fromEntries(
+          Object.entries(state.promptDraftByTask).map(([taskId, draft]) => {
+            const runtimeOverrides = draft.runtimeOverrides;
+            if (!runtimeOverrides || !Object.hasOwn(runtimeOverrides, "codexExperimentalPlanMode")) {
+              return [taskId, draft];
+            }
+            const { codexExperimentalPlanMode: _unused, ...nextRuntimeOverrides } =
+              runtimeOverrides as typeof runtimeOverrides & { codexExperimentalPlanMode?: boolean };
+            return [
+              taskId,
+              {
+                ...draft,
+                runtimeOverrides: nextRuntimeOverrides,
+              },
+            ];
+          }),
+        );
         state.recentProjects = normalizeRecentProjectStates({
           projects: state.recentProjects,
         });

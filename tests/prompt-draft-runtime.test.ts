@@ -15,18 +15,18 @@ describe("prompt-draft runtime state", () => {
         runtimeOverrides: {
           claudePermissionMode: "plan",
           claudePermissionModeBeforePlan: "acceptEdits",
-          codexExperimentalPlanMode: true,
+          codexPlanMode: true,
         },
       },
       fallback: {
         claudePermissionMode: "default",
         claudePermissionModeBeforePlan: null,
-        codexExperimentalPlanMode: false,
+        codexPlanMode: false,
       },
     })).toEqual({
       claudePermissionMode: "plan",
       claudePermissionModeBeforePlan: "acceptEdits",
-      codexExperimentalPlanMode: true,
+      codexPlanMode: true,
     });
   });
 
@@ -63,7 +63,7 @@ describe("prompt-draft runtime state", () => {
             runtimeOverrides: {
               claudePermissionMode: "plan",
               claudePermissionModeBeforePlan: "acceptEdits",
-              codexExperimentalPlanMode: true,
+              codexPlanMode: true,
             },
           },
         },
@@ -76,7 +76,7 @@ describe("prompt-draft runtime state", () => {
     expect(parsed?.promptDraftByTask["task-1"]?.runtimeOverrides).toEqual({
       claudePermissionMode: "plan",
       claudePermissionModeBeforePlan: "acceptEdits",
-      codexExperimentalPlanMode: true,
+      codexPlanMode: true,
     });
   });
 });
