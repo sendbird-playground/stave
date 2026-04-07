@@ -1909,6 +1909,7 @@ export async function suggestClaudePRDescription(args: {
   prTemplateContent?: string;
   agentsContent?: string;
   promptTemplate?: string;
+  workspaceContext?: string;
 }): Promise<{ ok: boolean; title?: string; body?: string }> {
   try {
     const mod = await getPrewarmedSdkModule();
@@ -1934,6 +1935,11 @@ export async function suggestClaudePRDescription(args: {
       ...(args.agentsContent ? [
         "Repository guidelines from AGENTS.md (apply when consistent with the pull request template):",
         args.agentsContent.slice(0, 2000),
+        "",
+      ] : []),
+      ...(args.workspaceContext ? [
+        "Current workspace context (treat this as the primary source of intent for the PR draft):",
+        args.workspaceContext.slice(0, 3000),
         "",
       ] : []),
       "Fallback PR generation instructions (use only for gaps not specified above):",

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildPullRequestWorkspaceContext,
   generateFallbackPullRequestDraft,
   isReasonablePullRequestTitle,
   mergePullRequestDraft,
@@ -30,6 +31,29 @@ describe("generateFallbackPullRequestDraft", () => {
     });
 
     expect(draft.title).toBe("fix(topbar): create pr slow");
+  });
+});
+
+describe("buildPullRequestWorkspaceContext", () => {
+  test("keeps the draft focused on the active workspace task and attached brief", () => {
+    const context = buildPullRequestWorkspaceContext({
+      activeTaskTitle: "Fix create PR drafting",
+      taskPrompt: "Make the first PR draft use the active workspace context instead of older workspace summaries.",
+      attachedContextSnippets: [{
+        label: ".stave/context/continued-from-fix-create-pr.md",
+        content: "# Workspace Continue Brief\n\n## Task Focus\n- Active task: Fix create PR drafting",
+      }],
+      notes: "Current workspace is only for the create PR drafting regression.",
+      openTodos: ["Keep the draft tied to the active workspace", "Commit only current uncommitted files before PR creation"],
+    });
+
+    expect(context).toContain("Use this workspace context as the primary source of intent");
+    expect(context).toContain("Active task: Fix create PR drafting");
+    expect(context).toContain("Task request:");
+    expect(context).toContain(".stave/context/continued-from-fix-create-pr.md");
+    expect(context).toContain("Workspace notes:");
+    expect(context).toContain("Open todos:");
+    expect(context).toContain("Do not carry over previous workspace or earlier PR summaries");
   });
 });
 
