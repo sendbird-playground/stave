@@ -1,3 +1,5 @@
+import { resolveWorkspaceRelativeFilePath } from "@/lib/workspace-file-path";
+
 export interface ResolvedWorkspaceFileLink {
   filePath: string;
   fileName: string;
@@ -131,30 +133,15 @@ export function resolveWorkspaceFileLink(args: {
 
   const withoutQuery = decoded.split("?")[0] ?? decoded;
   const location = parseFileLinkLocation(withoutQuery);
-  const withoutFragment = withoutQuery.split("#")[0] ?? withoutQuery;
-  const normalized = stripLineSuffix(trimTrailingPunctuation(withoutFragment))
-    .replaceAll("\\", "/")
-    .replace(/^\.\/+/, "")
-    .replace(/\/+$/, "");
-
+  const normalized = resolveWorkspaceRelativeFilePath({
+    filePath: stripLineSuffix(trimTrailingPunctuation(withoutQuery)),
+    workspacePath: args.workspaceCwd,
+  });
   if (!normalized) {
     return null;
   }
 
-  let filePath = normalized;
-  if (normalized.startsWith("/")) {
-    if (!args.workspaceCwd) {
-      return null;
-    }
-
-    const normalizedWorkspaceCwd = args.workspaceCwd.replaceAll("\\", "/").replace(/\/+$/, "");
-    const prefix = `${normalizedWorkspaceCwd}/`;
-    if (!normalized.startsWith(prefix)) {
-      return null;
-    }
-    filePath = normalized.slice(prefix.length);
-  }
-
+  const filePath = normalized;
   if (!filePath || filePath === ".." || filePath.startsWith("../")) {
     return null;
   }
