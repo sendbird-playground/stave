@@ -2,6 +2,7 @@ import type { HTMLAttributes } from "react";
 import { useMemo, useState } from "react";
 import { Bot, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 import { cn } from "@/lib/utils";
 import { ToolInput, ToolOutput, getStatusBadge } from "./tool";
 
@@ -125,7 +126,7 @@ export function SubagentCard({ className, input, output, state, defaultOpen = fa
                   )}
                   aria-hidden="true"
                 />
-                <span className="min-w-0 break-words">{msg}</span>
+                <LinkifiedText text={msg} className="min-w-0 break-words" />
               </li>
             ))}
           </ul>
@@ -137,7 +138,7 @@ export function SubagentCard({ className, input, output, state, defaultOpen = fa
           <ToolInput input={promptText} />
           {state !== "input-streaming" ? (
             <ToolOutput
-              output={output ? <pre className="whitespace-pre-wrap text-[0.875em]">{output}</pre> : null}
+              outputText={output}
               errorText={state === "output-error" ? (output ?? "Subagent failed.") : undefined}
             />
           ) : null}

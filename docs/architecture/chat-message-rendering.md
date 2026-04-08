@@ -118,6 +118,8 @@ agents, and file changes. Each category shows an icon and count, separated by do
 - As a compatibility fallback, inline code spans that resolve to known workspace file paths are also promoted to file chips.
 - Code fences that include file metadata (for example `path=src/App.tsx`) pass that file reference to the block renderer so headers can surface a file chip.
 - File chips with `L<line>` (and optional `C<column>`) open the editor tab and reveal that exact location.
+- Plain `http`, `https`, and `mailto` URLs in settled assistant message text, reasoning/tool/subagent/system step text, and other non-markdown plain-text surfaces render as external links.
+- Terminal output recognizes URL-looking text through the xterm web-links flow and opens it only on `Cmd+Click` (macOS) or `Ctrl+Click` (other platforms).
 - Markdown bold uses `font-semibold` (600) instead of the browser default bold (700).
 
 ## Naming

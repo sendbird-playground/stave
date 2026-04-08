@@ -129,6 +129,8 @@ export {
   TooltipTrigger,
 } from "./tooltip";
 export { WaveIndicator } from "./wave-indicator";
+export { ExternalAnchor } from "./external-anchor";
+export { LinkifiedText } from "./linkified-text";
 export {
   Breadcrumb,
   BreadcrumbEllipsis,

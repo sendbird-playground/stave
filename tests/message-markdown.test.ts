@@ -216,6 +216,17 @@ describe("MarkdownMessage", () => {
     expect(html).not.toContain('data-message-file-link="true"');
   });
 
+  test("autolinks plain external URLs in markdown text", () => {
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "Visit https://openai.com/ for details.",
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+    }));
+
+    expect(html).toContain('href="https://openai.com/"');
+    expect(html).toContain("https://openai.com/");
+  });
+
   test("keeps slash-delimited non-file markdown links as anchors", () => {
     const knownFilePaths = new Set(["src/components/session/ChatPanel.tsx"]);
     const html = renderToStaticMarkup(createElement(MarkdownMessage, {
@@ -271,6 +282,18 @@ describe("MarkdownMessage", () => {
     expect(html).toContain("[overflow-wrap:anywhere]");
     expect(html).toContain("min-w-0");
     expect(html).toContain("max-w-full");
+  });
+
+  test("keeps streaming text fallback as plain text for hot-path performance", () => {
+    const html = renderToStaticMarkup(createElement(MarkdownMessage, {
+      content: "Local preview: https://stave.localhost:3000/test.",
+      isStreaming: true,
+      messageFontSize: 18,
+      messageCodeFontSize: 14,
+    }));
+
+    expect(html).toContain("https://stave.localhost:3000/test");
+    expect(html).not.toContain("<a");
   });
 });
 
