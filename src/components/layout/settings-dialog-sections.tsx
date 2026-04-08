@@ -66,6 +66,7 @@ import {
 } from "@/lib/thinking-phrases";
 import type { ResolvedWorkspaceScriptsConfig } from "@/lib/workspace-scripts/types";
 import { DeveloperSection } from "./settings-dialog-developer-section";
+import { McpSection } from "./settings-dialog-mcp-section";
 import { MuseSection } from "./settings-dialog-muse-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
 import { ToolingSection } from "./settings-dialog-tooling-section";
@@ -2426,6 +2427,8 @@ export function SettingsDialogSectionContent(args: {
       return <EditorSection />;
     case "providers":
       return <ProvidersSection />;
+    case "mcp":
+      return <McpSection />;
     case "prompts":
       return <PromptsSection />;
     case "developer":
