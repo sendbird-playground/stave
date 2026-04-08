@@ -20,6 +20,7 @@ import {
   resolveSkillFastPath,
   type StaveRouteTarget,
 } from "./stave-router";
+import { resolveAvailableStaveModel } from "./stave-model-fallback";
 import { runPreprocessor } from "./stave-preprocessor";
 import { getCachedAvailability, setCachedAvailability } from "./stave-availability";
 import { runOrchestrator } from "./stave-orchestrator";
@@ -228,32 +229,12 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     const historyLength = args.conversation?.history?.length ?? 0;
     const profile = args.runtimeOptions?.staveAuto ?? DEFAULT_STAVE_AUTO_PROFILE;
 
-    // ── Availability-aware fallback table (shared by skill fast-path and direct routing) ──
-    const MODEL_FALLBACK: Record<string, string> = {
-      "claude-opus-4-6": "gpt-5.4",
-      "claude-opus-4-6[1m]": "claude-opus-4-6",
-      "claude-sonnet-4-6": "gpt-5.4",
-      "claude-sonnet-4-6[1m]": "claude-sonnet-4-6",
-      "claude-haiku-4-5": "gpt-5.3-codex",
-      "gpt-5.4": "claude-opus-4-6",
-      "gpt-5.3-codex": "claude-haiku-4-5",
-      "opusplan": "claude-opus-4-6",
-    };
-
     const forcedPlanTarget = resolveForcedStavePlanTarget({
       profile,
       runtimeOptions: args.runtimeOptions,
     });
     if (forcedPlanTarget != null) {
-      let chosenModel = forcedPlanTarget.model;
-      const forcedPlanProvider = resolveStaveProviderForModel({ model: chosenModel });
-      const forcedPlanProviderAvail = getCachedAvailability(forcedPlanProvider);
-      if (forcedPlanProviderAvail === false) {
-        const fallback = MODEL_FALLBACK[chosenModel];
-        if (fallback) {
-          chosenModel = fallback;
-        }
-      }
+      const chosenModel = resolveAvailableStaveModel({ model: forcedPlanTarget.model });
 
       const resolvedTarget: StaveRouteTarget = {
         providerId: resolveStaveProviderForModel({ model: chosenModel }),
@@ -314,15 +295,7 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     // Skills carry an explicit provider preference — no classifier needed.
     const skillTarget = resolveSkillFastPath({ contextParts, profile });
     if (skillTarget != null) {
-      let chosenModel = skillTarget.model;
-      const skillProvider = resolveStaveProviderForModel({ model: chosenModel });
-      const skillProviderAvail = getCachedAvailability(skillProvider);
-      if (skillProviderAvail === false) {
-        const fallback = MODEL_FALLBACK[chosenModel];
-        if (fallback) {
-          chosenModel = fallback;
-        }
-      }
+      const chosenModel = resolveAvailableStaveModel({ model: skillTarget.model });
 
       const resolvedTarget: StaveRouteTarget = {
         providerId: resolveStaveProviderForModel({ model: chosenModel }),
@@ -389,18 +362,12 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       // an equivalent model from the other provider.
       // (MODEL_FALLBACK is hoisted to the top of the stave block.)
 
-      let chosenModel = resolveStaveIntentModel({
-        profile,
-        intent: plan.intent,
+      const chosenModel = resolveAvailableStaveModel({
+        model: resolveStaveIntentModel({
+          profile,
+          intent: plan.intent,
+        }),
       });
-      const planProvider = resolveStaveProviderForModel({ model: chosenModel });
-      const planProviderAvail = getCachedAvailability(planProvider);
-      if (planProviderAvail === false) {
-        const fallback = MODEL_FALLBACK[chosenModel];
-        if (fallback) {
-          chosenModel = fallback;
-        }
-      }
 
       // Resolve to the chosen provider and model.
       const resolvedTarget = {

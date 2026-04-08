@@ -13,6 +13,7 @@ import {
   resolveStaveProviderForModel,
   resolveStaveWorkerModel,
 } from "../../src/lib/providers/stave-auto-profile";
+import { resolveAvailableStaveModel } from "./stave-model-fallback";
 
 interface SubtaskSpec {
   id: string;
@@ -345,7 +346,7 @@ export async function runOrchestrator(args: {
   onEvent: (event: BridgeEvent) => void;
   runTurnBatch: (args: StreamTurnArgs) => Promise<BridgeEvent[]>;
 }): Promise<void> {
-  const supervisorModel = args.profile.supervisorModel;
+  const supervisorModel = resolveAvailableStaveModel({ model: args.profile.supervisorModel });
   const supervisorProvider = resolveStaveProviderForModel({ model: supervisorModel });
   const breakdownPrompt = buildSupervisorBreakdownPrompt({ profile: args.profile });
 
@@ -395,7 +396,9 @@ export async function runOrchestrator(args: {
   const workerModelMap = new Map<string, string>(
     subtasks.map((subtask) => [
       subtask.id,
-      resolveWorkerExecutionModel({ profile: args.profile, role: subtask.role, supervisorModel }),
+      resolveAvailableStaveModel({
+        model: resolveWorkerExecutionModel({ profile: args.profile, role: subtask.role, supervisorModel }),
+      }),
     ]),
   );
 

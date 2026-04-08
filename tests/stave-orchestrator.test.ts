@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { invalidateAvailability, setCachedAvailability } from "../electron/providers/stave-availability";
 import { runOrchestrator } from "../electron/providers/stave-orchestrator";
 import type { BridgeEvent, StreamTurnArgs } from "../electron/providers/types";
 import { DEFAULT_STAVE_AUTO_PROFILE } from "../src/lib/providers/stave-auto-profile";
@@ -16,6 +17,11 @@ function textResponse(text: string): BridgeEvent[] {
     { type: "done" },
   ];
 }
+
+afterEach(() => {
+  invalidateAvailability("claude-code");
+  invalidateAvailability("codex");
+});
 
 describe("runOrchestrator", () => {
   test("parses fenced supervisor output with wrapper text and role aliases", async () => {
@@ -304,6 +310,101 @@ This keeps the response concise.`);
         id: "st-fallback",
         title: "Process request",
         model: DEFAULT_STAVE_AUTO_PROFILE.generalModel,
+        dependsOn: [],
+      }],
+    });
+  });
+
+  test("falls back to the alternate provider for an unavailable supervisor model", async () => {
+    setCachedAvailability("claude-code", false);
+
+    const calls: StreamTurnArgs[] = [];
+    const emittedEvents: BridgeEvent[] = [];
+
+    await runOrchestrator({
+      userPrompt: "Implement with fallback supervisor",
+      profile: customProfile(),
+      baseArgs: {
+        cwd: "/tmp/workspace",
+        taskId: "task-supervisor-fallback",
+        workspaceId: "ws-supervisor-fallback",
+      },
+      onEvent: (event) => {
+        emittedEvents.push(event);
+      },
+      runTurnBatch: async (args) => {
+        calls.push(args);
+        switch (calls.length) {
+          case 1:
+            return textResponse(JSON.stringify([
+              { id: "st-1", title: "Implement", role: "implement", prompt: "Patch it", dependsOn: [] },
+            ]));
+          case 2:
+            return textResponse("Patched.");
+          case 3:
+            return textResponse("Synthesized.");
+          default:
+            throw new Error(`Unexpected call ${calls.length}`);
+        }
+      },
+    });
+
+    expect(calls[0]?.providerId).toBe("codex");
+    expect(calls[2]?.providerId).toBe("codex");
+    expect(emittedEvents).toContainEqual({
+      type: "stave:orchestration_processing",
+      supervisorModel: "gpt-5.4",
+      subtasks: [{
+        id: "st-1",
+        title: "Implement",
+        model: DEFAULT_STAVE_AUTO_PROFILE.implementModel,
+        dependsOn: [],
+      }],
+    });
+  });
+
+  test("falls back to the alternate provider for an unavailable worker model", async () => {
+    setCachedAvailability("codex", false);
+
+    const calls: StreamTurnArgs[] = [];
+    const emittedEvents: BridgeEvent[] = [];
+
+    await runOrchestrator({
+      userPrompt: "Review implementation",
+      profile: customProfile(),
+      baseArgs: {
+        cwd: "/tmp/workspace",
+        taskId: "task-worker-fallback",
+        workspaceId: "ws-worker-fallback",
+      },
+      onEvent: (event) => {
+        emittedEvents.push(event);
+      },
+      runTurnBatch: async (args) => {
+        calls.push(args);
+        switch (calls.length) {
+          case 1:
+            return textResponse(JSON.stringify([
+              { id: "st-1", title: "Verify fix", role: "verify", prompt: "Check it", dependsOn: [] },
+            ]));
+          case 2:
+            return textResponse("Checked.");
+          case 3:
+            return textResponse("Final.");
+          default:
+            throw new Error(`Unexpected call ${calls.length}`);
+        }
+      },
+    });
+
+    expect(calls[1]?.providerId).toBe("claude-code");
+    expect(emittedEvents).toContainEqual({
+      type: "stave:orchestration_processing",
+      supervisorModel: DEFAULT_STAVE_AUTO_PROFILE.supervisorModel,
+      subtasks: [{
+        id: "st-1",
+        title: "Verify fix",
+        model: "claude-opus-4-6",
         dependsOn: [],
       }],
     });
