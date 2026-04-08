@@ -1,3 +1,17 @@
+## [0.1.2](https://github.com/sendbird-playground/stave/compare/v0.1.1...v0.1.2) (2026-04-08)
+
+### Highlights
+
+* Improved macOS install and in-app update flows so Stave prefers the current writable app location, stages replacements more safely, and keeps `gh` discoverable for GUI-launched updates.
+* Updated the terminal installer and daily auto-update scripts to detect the writable install target more reliably and recover better from failed app replacement.
+* Kept pending approval requests visible in the chat input area even when the assistant trace is collapsed, with newest-first queueing and managed-task guardrails.
+* Upgraded Electron to `41.1.1` and stopped leaving stale terminal sessions alive across workspace switches or hidden terminal states.
+
+### Bug Fixes
+
+* cot collapsed approval view ([#337](https://github.com/sendbird-playground/stave/issues/337)) ([8482e10](https://github.com/sendbird-playground/stave/commit/8482e103998452eb4585805ba050d09c205cab9b))
+* **desktop:** upgrade electron to 41.1.1 and close stale terminal sessions ([#338](https://github.com/sendbird-playground/stave/issues/338)) ([fccf017](https://github.com/sendbird-playground/stave/commit/fccf017952dbc68b9aadce6ee2cf5dfb5d3b2e6b))
+* installation ([#336](https://github.com/sendbird-playground/stave/issues/336)) ([e22ded4](https://github.com/sendbird-playground/stave/commit/e22ded4ef91ffda19f3410ea231da7703cfaed48))
 ## [0.1.1](https://github.com/sendbird-playground/stave/compare/v0.1.0...v0.1.1) (2026-04-07)
 
 ### Highlights
