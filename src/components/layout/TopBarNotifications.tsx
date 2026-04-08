@@ -1,4 +1,4 @@
-import { Bell, Check, CheckCheck } from "lucide-react";
+import { Bell, Check, CheckCheck, CircleCheck, ShieldAlert, Archive } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -18,6 +18,7 @@ import {
   type NotificationView,
   shouldShowNotificationApprovalActions,
 } from "@/components/layout/top-bar-notifications.utils";
+import { buildNotificationDetail } from "@/lib/notifications/notification.utils";
 import { formatTaskUpdatedAt, isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import { isNotificationUnread } from "@/lib/notifications/notification.types";
 import { cn } from "@/lib/utils";
@@ -28,12 +29,11 @@ interface ArchivedNotificationPrompt {
   taskTitle: string;
 }
 
-function getNotificationKindLabel(kind: "task.turn_completed" | "task.approval_requested") {
-  return kind === "task.approval_requested" ? "Approval" : "Completed";
-}
-
-function getNotificationKindVariant(kind: "task.turn_completed" | "task.approval_requested") {
-  return kind === "task.approval_requested" ? "warning" : "success";
+function NotificationKindIcon({ kind }: { kind: "task.turn_completed" | "task.approval_requested" }) {
+  if (kind === "task.approval_requested") {
+    return <ShieldAlert className="size-3.5 shrink-0 text-warning" />;
+  }
+  return <CircleCheck className="size-3.5 shrink-0 text-success" />;
 }
 
 function buildLocationLabel(args: {
@@ -306,12 +306,12 @@ export function TopBarNotifications(props: {
               const taskIsArchived = isTaskArchived(notificationTask ?? { archivedAt: null });
               const approvalHandledExternally = approvalAction && isTaskManaged(notificationTask);
               const createdLabel = formatTaskUpdatedAt({ value: notification.createdAt });
-              const readLabel = notification.readAt ? formatTaskUpdatedAt({ value: notification.readAt }) : null;
               const notificationBusy = pendingActionId === "mark-all" || isNotificationActionPending(notification.id);
               const showArchivedPrompt = archivedPrompt?.notificationId === notification.id;
               const archivedTaskTitle = showArchivedPrompt
                 ? (archivedPrompt?.taskTitle ?? notification.taskTitle ?? "this task")
                 : null;
+              const notificationDetail = buildNotificationDetail(notification);
 
               return (
                 <div
@@ -325,8 +325,8 @@ export function TopBarNotifications(props: {
                     <div className="flex items-start gap-3">
                       <span
                         className={cn(
-                          "mt-1.5 size-2 shrink-0 rounded-full",
-                          unread ? "bg-primary shadow-[0_0_0_4px_rgba(255,255,255,0.03)]" : "bg-border/90",
+                          "mt-2 size-1.5 shrink-0 rounded-full",
+                          unread ? "bg-primary" : "bg-transparent",
                         )}
                       />
                       <div className="min-w-0 flex-1">
@@ -337,42 +337,30 @@ export function TopBarNotifications(props: {
                             disabled={notificationBusy}
                             onClick={() => void handleOpenNotification(notification.id)}
                           >
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge
-                                variant={getNotificationKindVariant(notification.kind)}
-                                className="rounded-sm text-[10px] font-medium uppercase tracking-[0.18em]"
-                              >
-                                {getNotificationKindLabel(notification.kind)}
-                              </Badge>
-                              <span className="text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1.5">
+                              <NotificationKindIcon kind={notification.kind} />
+                              <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                                {notification.taskTitle ?? notification.title}
+                              </p>
+                              <span className="shrink-0 text-[11px] text-muted-foreground">
                                 {createdLabel}
                               </span>
-                              {readLabel ? (
-                                <span className="text-[11px] text-muted-foreground">
-                                  Read {readLabel}
-                                </span>
-                              ) : null}
                             </div>
-                            <p className="mt-2 truncate text-sm font-medium text-foreground">
-                              {notification.title}
-                            </p>
-                            <p className="mt-1 break-words text-sm text-muted-foreground">
-                              {notification.body}
-                            </p>
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            {notificationDetail ? (
+                              <p className="mt-1 truncate pl-5 text-xs text-muted-foreground">
+                                {notificationDetail}
+                              </p>
+                            ) : null}
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-5 text-[11px] text-muted-foreground">
                               {locationLabel ? (
                                 <span className="rounded-sm border border-border/60 bg-background/70 px-1.5 py-0.5">
                                   {locationLabel}
                                 </span>
                               ) : null}
                               {taskIsArchived ? (
-                                <Badge variant="outline" className="rounded-sm border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.16em] text-warning dark:bg-warning/15">
+                                <span className="inline-flex items-center gap-1 rounded-sm border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-[11px] text-warning dark:bg-warning/15">
+                                  <Archive className="size-3" />
                                   Archived
-                                </Badge>
-                              ) : null}
-                              {notification.taskTitle ? (
-                                <span className="truncate">
-                                  {notification.taskTitle}
                                 </span>
                               ) : null}
                             </div>
