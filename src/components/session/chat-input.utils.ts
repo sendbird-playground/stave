@@ -85,7 +85,7 @@ const APPROVAL_SHORTCUT_BLOCKED_ROLES = new Set([
   "textbox",
 ]);
 
-export function shouldHandleApprovalEnterShortcut(args: {
+interface ApprovalShortcutArgs {
   key: string;
   altKey?: boolean;
   ctrlKey?: boolean;
@@ -95,8 +95,10 @@ export function shouldHandleApprovalEnterShortcut(args: {
   targetTagName?: string | null;
   targetRole?: string | null;
   targetIsContentEditable?: boolean;
-}) {
-  if (args.key !== "Enter") {
+}
+
+function shouldHandleApprovalShortcut(args: ApprovalShortcutArgs & { expectedKey: "Enter" | "Tab" }) {
+  if (args.key !== args.expectedKey) {
     return false;
   }
   if (args.altKey || args.ctrlKey || args.metaKey || args.shiftKey || args.isComposing) {
@@ -117,4 +119,43 @@ export function shouldHandleApprovalEnterShortcut(args: {
   }
 
   return true;
+}
+
+export function shouldHandleApprovalEnterShortcut(args: ApprovalShortcutArgs) {
+  return shouldHandleApprovalShortcut({
+    ...args,
+    expectedKey: "Enter",
+  });
+}
+
+export function shouldHandleApprovalTabShortcut(args: ApprovalShortcutArgs) {
+  return shouldHandleApprovalShortcut({
+    ...args,
+    expectedKey: "Tab",
+  });
+}
+
+export function buildApprovalGuidancePrompt(args: {
+  currentDraft: string;
+  toolName: string;
+  description: string;
+  guidance: string;
+}) {
+  const guidance = args.guidance.trim();
+  if (!guidance) {
+    return args.currentDraft;
+  }
+
+  const toolName = args.toolName.trim() || "the requested tool";
+  const description = args.description.trim();
+
+  return mergePromptSuggestionWithDraft({
+    currentDraft: args.currentDraft,
+    suggestion: [
+      `The previous approval request for ${toolName} was denied.`,
+      description ? `Requested action: ${description}` : null,
+      "Continue with this guidance instead:",
+      guidance,
+    ].filter(Boolean).join("\n"),
+  });
 }
