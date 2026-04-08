@@ -35,6 +35,7 @@ import {
   ToolOutput,
   parseSubagentToolInput,
 } from "@/components/ai-elements";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 import { MESSAGE_BODY_LINE_HEIGHT } from "@/components/ai-elements/message-styles";
 import type { TraceSummaryItem } from "@/components/ai-elements/chain-of-thought";
 import {
@@ -287,8 +288,9 @@ function ToolStepDetail(args: {
       {(args.state !== "input-streaming" || args.output?.trim()) ? (
         <ToolOutput
           label={args.state === "input-streaming" ? "Live output" : undefined}
-          output={args.output ? <pre className="whitespace-pre-wrap text-[0.875em]">{args.output}</pre> : null}
+          outputText={args.output}
           errorText={args.state === "output-error" ? (args.output ?? "Tool failed.") : undefined}
+          linkifyOutputText={args.state !== "input-streaming"}
         />
       ) : null}
     </div>
@@ -309,7 +311,7 @@ function SubagentStepDetail(args: {
           {args.progressMessages.map((message, index) => (
             <li key={`${message}-${index}`} className="flex items-start gap-2 text-[0.875em] text-muted-foreground">
               <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-border" aria-hidden="true" />
-              <span>{message}</span>
+              <LinkifiedText text={message} />
             </li>
           ))}
         </ul>
@@ -317,7 +319,7 @@ function SubagentStepDetail(args: {
       <ToolInput input={parsed.prompt ?? parsed.raw} />
       {args.state !== "input-streaming" ? (
         <ToolOutput
-          output={args.output ? <pre className="whitespace-pre-wrap text-[0.875em]">{args.output}</pre> : null}
+          outputText={args.output}
           errorText={args.state === "output-error" ? (args.output ?? "Subagent failed.") : undefined}
         />
       ) : null}
@@ -434,9 +436,18 @@ function ReasoningStepView(args: {
       defaultOpen={entry.isStreaming}
       openWhen={entry.isStreaming}
     >
-      <p className="whitespace-pre-wrap text-muted-foreground" style={{ lineHeight: MESSAGE_BODY_LINE_HEIGHT }}>
-        {reasoningText || "Thinking..."}
-      </p>
+      {entry.isStreaming ? (
+        <p className="whitespace-pre-wrap text-muted-foreground" style={{ lineHeight: MESSAGE_BODY_LINE_HEIGHT }}>
+          {reasoningText || "Thinking..."}
+        </p>
+      ) : (
+        <LinkifiedText
+          as="p"
+          text={reasoningText || "Thinking..."}
+          className="whitespace-pre-wrap text-muted-foreground"
+          style={{ lineHeight: MESSAGE_BODY_LINE_HEIGHT }}
+        />
+      )}
     </ChainOfThoughtStep>
   );
 }

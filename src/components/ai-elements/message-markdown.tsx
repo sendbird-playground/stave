@@ -3,6 +3,8 @@ import { useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { WorkspaceFileIcon } from "@/components/layout/explorer-entry-icon";
+import { ExternalAnchor } from "@/components/ui/external-anchor";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 import {
   formatFileLinkLocation,
   isLikelyWorkspaceFilePath,
@@ -308,15 +310,13 @@ export function MarkdownMessage({
       }
 
       return (
-        <a
+        <ExternalAnchor
           href={href}
           className="text-primary underline underline-offset-2"
-          target="_blank"
-          rel="noreferrer"
           onClick={(event: MouseEvent<HTMLAnchorElement>) => void onFileLinkClickRef.current?.({ event, href })}
         >
           {children}
-        </a>
+        </ExternalAnchor>
       );
     },
     table: ({ children }: { children?: ReactNode }) => (

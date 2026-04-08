@@ -19,6 +19,7 @@ import {
   UserInputCard,
   parseSubagentToolInput,
 } from "@/components/ai-elements";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 import {
   shouldAutoOpenToolPart,
   shouldRenderInlineSystemEvent,
@@ -133,13 +134,14 @@ export function MessagePartRenderer(args: {
           <ToolContent>
             <ToolInput input={part.input} />
             {(part.state !== "input-streaming" || part.output?.trim()) && (
-              <ToolOutput
-                label={part.state === "input-streaming" ? "Live output" : undefined}
-                output={part.output ? <pre className="whitespace-pre-wrap text-[0.875em]">{part.output}</pre> : null}
-                errorText={part.state === "output-error" ? (part.output ?? "Tool failed.") : undefined}
-              />
-            )}
-          </ToolContent>
+            <ToolOutput
+              label={part.state === "input-streaming" ? "Live output" : undefined}
+              outputText={part.output}
+              errorText={part.state === "output-error" ? (part.output ?? "Tool failed.") : undefined}
+              linkifyOutputText={part.state !== "input-streaming"}
+            />
+          )}
+        </ToolContent>
         </Tool>
       );
     case "code_diff":
@@ -220,7 +222,13 @@ export function MessagePartRenderer(args: {
           />
         );
       }
-      return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[0.875em] italic text-muted-foreground">{part.content}</p>;
+      return (
+        <LinkifiedText
+          as="p"
+          text={part.content}
+          className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[0.875em] italic text-muted-foreground"
+        />
+      );
     }
     case "orchestration_progress":
       return <OrchestrationCard part={part} />;

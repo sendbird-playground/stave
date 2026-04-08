@@ -1,6 +1,7 @@
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import { Eraser, Plus, SquareTerminal, Trash2, X } from "lucide-react";
 import {
@@ -10,6 +11,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui";
+import {
+  openExternalUrl,
+  shouldActivateExternalLinkWithModifier,
+} from "@/lib/external-links";
 import { cn } from "@/lib/utils";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
@@ -328,7 +333,25 @@ export function TerminalDock() {
       disableStdin: false,
     });
     const fitAddon = new FitAddon();
+    const activateExternalLink = (event: MouseEvent, uri: string) => {
+      if (!shouldActivateExternalLinkWithModifier({
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+      })) {
+        return;
+      }
+      void openExternalUrl({ url: uri });
+    };
+    const osc8LinkHandler = {
+      activate: (event: MouseEvent, uri: string) => activateExternalLink(event, uri),
+      allowNonHttpProtocols: false,
+    };
+    const webLinksAddon = new WebLinksAddon((event, uri) => {
+      activateExternalLink(event as MouseEvent, uri);
+    });
     terminal.loadAddon(fitAddon);
+    terminal.loadAddon(webLinksAddon);
+    terminal.options.linkHandler = osc8LinkHandler;
     terminal.open(containerRef.current);
 
     xtermRef.current = terminal;

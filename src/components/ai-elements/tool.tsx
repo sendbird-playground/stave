@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ChevronDown, CircleAlert, CircleCheck, LoaderCircle, Wrench } from "lucide-react";
+import { LinkifiedText } from "@/components/ui/linkified-text";
 import { cn } from "@/lib/utils";
 
 interface ToolProps extends HTMLAttributes<HTMLDivElement> {
@@ -171,19 +172,52 @@ export function ToolInput(args: { input: unknown; className?: string }) {
   return (
     <div className={cn("rounded-sm border border-border/70 bg-muted/20 p-2", args.className)}>
       <p className="mb-1 text-[0.75em] uppercase text-muted-foreground">Input</p>
-      <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-muted-foreground">{content}</pre>
+      <LinkifiedText
+        as="pre"
+        text={content}
+        className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-muted-foreground"
+      />
     </div>
   );
 }
 
-export function ToolOutput(args: { output?: ReactNode; errorText?: string; className?: string; label?: string }) {
+export function ToolOutput(args: {
+  output?: ReactNode;
+  outputText?: string;
+  errorText?: string;
+  className?: string;
+  label?: string;
+  linkifyOutputText?: boolean;
+}) {
   return (
     <div className={cn("rounded-sm border border-border/70 bg-background/40 p-2", args.className)}>
       <p className="mb-1 text-[0.75em] uppercase text-muted-foreground">{args.label ?? "Output"}</p>
       {args.errorText ? (
-        <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-destructive">{args.errorText}</p>
+        <LinkifiedText
+          as="p"
+          text={args.errorText}
+          className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-destructive"
+        />
       ) : (
-        <div>{args.output ?? <span className="text-muted-foreground">No output.</span>}</div>
+        <div>
+          {args.output ?? (
+            typeof args.outputText === "string" && args.outputText !== "" ? (
+              args.linkifyOutputText === false ? (
+                <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[0.875em]">
+                  {args.outputText}
+                </pre>
+              ) : (
+                <LinkifiedText
+                  as="pre"
+                  text={args.outputText}
+                  className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[0.875em]"
+                />
+              )
+            ) : (
+              <span className="text-muted-foreground">No output.</span>
+            )
+          )}
+        </div>
       )}
     </div>
   );

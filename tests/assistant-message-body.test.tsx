@@ -84,6 +84,22 @@ describe("AssistantMessageBody", () => {
     expect(html.match(/<button/g)?.length ?? 0).toBe(2);
   });
 
+  test("keeps streaming reasoning text plain for hot-path performance", async () => {
+    const { AssistantMessageBody } = await loadAssistantMessageBodies();
+    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+      message: createAssistantMessage({
+        isStreaming: true,
+        parts: [{ type: "thinking", text: "Open https://example.com/docs.", isStreaming: true }],
+      }),
+      taskId: "task-1",
+      messageId: "message-1",
+      streamingEnabled: true,
+    }));
+
+    expect(html).toContain("https://example.com/docs");
+    expect(html).not.toContain("<a");
+  });
+
   test("suppresses reasoning details in zen mode while keeping a minimal working state", async () => {
     const { ZenAssistantMessageBody } = await loadAssistantMessageBodies();
     const html = renderToStaticMarkup(createElement(ZenAssistantMessageBody, {
