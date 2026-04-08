@@ -40,9 +40,9 @@ import {
 import {
   buildPullRequestWorkspaceContext,
   generateFallbackPullRequestDraft,
-  isReasonablePullRequestTitle,
 } from "@/lib/source-control-pr";
 import {
+  canSubmitCreatePr,
   type CreatePrDialogStep,
   type CreatePrSubmitAction,
   buildCreatePrTargetBranchOptions,
@@ -829,9 +829,10 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
     buttonAction: "pr",
   });
   const effectiveTitle = prTitle.trim() || generateFallbackPRDraft(changedFiles).title;
-  const titleValidationMessage = prTitle.trim() && !isReasonablePullRequestTitle(prTitle)
-    ? "Use Conventional Commits format like `fix(topbar): add create pr loading splash`."
-    : null;
+  const canSubmitPr = canSubmitCreatePr({
+    step,
+    title: effectiveTitle,
+  });
   const statusLabel =
     step === "loading" ? "Loading..." :
     step === "committing" ? "Committing..." :
@@ -1090,12 +1091,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
                     onChange={(e) => {
                       setPrTitle(e.target.value);
                     }}
-                    aria-invalid={titleValidationMessage ? true : undefined}
                     disabled={isDialogBusy}
                   />
-                  {titleValidationMessage ? (
-                    <p className="text-xs text-warning">{titleValidationMessage}</p>
-                  ) : null}
                 </div>
 
                 {/* PR Description */}
@@ -1165,7 +1162,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={step !== "ready" || isDialogBusy || !isReasonablePullRequestTitle(effectiveTitle)}
+                  disabled={!canSubmitPr || isDialogBusy}
                   onClick={() => void handleSubmit({ draft: true })}
                 >
                   {isCreateDraftSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
@@ -1173,7 +1170,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={step !== "ready" || isDialogBusy || !isReasonablePullRequestTitle(effectiveTitle)}
+                  disabled={!canSubmitPr || isDialogBusy}
                 >
                   {isCreatePrSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
                   Create PR

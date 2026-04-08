@@ -108,17 +108,30 @@ function formatSubjectTokens(tokens: string[]) {
     .join(" ");
 }
 
-function buildFallbackTitleFromBranch(headBranch?: string) {
-  const branch = headBranch?.replace(/^refs\/heads\//, "").trim() || "HEAD";
-  const tokens = branch
-    .split(/[\\/_-]+/)
+function tokenizeBranchSegment(segment: string) {
+  return segment
+    .split(/[_-]+/)
     .map((token) => token.trim().toLowerCase())
     .filter(Boolean);
+}
 
-  const type = tokens[0];
+function buildFallbackTitleFromBranch(headBranch?: string) {
+  const branch = headBranch?.replace(/^refs\/heads\//, "").trim() || "HEAD";
+  const branchSegments = branch
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const type = branchSegments[0]?.toLowerCase();
+
   if (type && BRANCH_TITLE_TYPES.has(type)) {
-    const scope = tokens[1];
-    const subjectTokens = tokens.slice(scope ? 2 : 1);
+    const hasExplicitScopeSegment = branchSegments.length >= 3;
+    const scope = hasExplicitScopeSegment
+      ? formatSubjectTokens(tokenizeBranchSegment(branchSegments[1] ?? ""))
+      : undefined;
+    const subjectSegments = hasExplicitScopeSegment
+      ? branchSegments.slice(2)
+      : branchSegments.slice(1);
+    const subjectTokens = subjectSegments.flatMap((segment) => tokenizeBranchSegment(segment));
     const subject = formatSubjectTokens(subjectTokens);
     if (scope && subject) {
       return `${type}(${scope}): ${subject}`;
@@ -128,7 +141,9 @@ function buildFallbackTitleFromBranch(headBranch?: string) {
     }
   }
 
-  const cleanedBranch = formatSubjectTokens(tokens);
+  const cleanedBranch = formatSubjectTokens(
+    branchSegments.flatMap((segment) => tokenizeBranchSegment(segment)),
+  );
   return cleanedBranch ? `chore: update ${cleanedBranch}` : "chore: update branch";
 }
 

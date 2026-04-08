@@ -32,6 +32,16 @@ describe("generateFallbackPullRequestDraft", () => {
 
     expect(draft.title).toBe("fix(topbar): create pr slow");
   });
+
+  test("does not invent a scope from the first subject word when the branch has no scope segment", () => {
+    const draft = generateFallbackPullRequestDraft({
+      baseBranch: "main",
+      headBranch: "fix/create-pr-title-and-cache",
+      fileList: "M src/components/layout/TopBarOpenPR.tsx",
+    });
+
+    expect(draft.title).toBe("fix: create pr title and cache");
+  });
 });
 
 describe("buildPullRequestWorkspaceContext", () => {
