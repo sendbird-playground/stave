@@ -1102,7 +1102,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
                   </label>
                   <Textarea
                     id="pr-body-input"
-                    className="min-h-24 min-w-0 resize-y whitespace-pre-wrap break-words [field-sizing:fixed] [overflow-wrap:anywhere] text-sm"
+                    className="min-h-24 max-h-80 min-w-0 resize-y whitespace-pre-wrap break-words [field-sizing:fixed] [overflow-wrap:anywhere] text-sm"
                     rows={6}
                     wrap="soft"
                     placeholder="Describe your changes..."
