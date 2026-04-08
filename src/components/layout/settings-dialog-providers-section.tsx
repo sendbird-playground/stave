@@ -53,9 +53,6 @@ import {
 import {
   ClaudeRuntimeToolsCard,
   CodexBinaryPathCard,
-  CodexMcpStatusCard,
-  LocalMcpRequestLogCard,
-  LocalMcpServerCard,
 } from "./settings-dialog-developer-section";
 
 const STAVE_AUTO_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
@@ -982,8 +979,6 @@ export function ProvidersSection() {
         <TabsContent value="stave">
           <SectionStack>
             <StaveAutoCard />
-            <LocalMcpServerCard />
-            <LocalMcpRequestLogCard />
           </SectionStack>
         </TabsContent>
 
@@ -1413,7 +1408,6 @@ export function ProvidersSection() {
           </LabeledField>
             </SettingsCard>
             <CodexBinaryPathCard />
-            <CodexMcpStatusCard />
           </SectionStack>
         </TabsContent>
       </Tabs>
