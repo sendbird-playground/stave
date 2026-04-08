@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ChatInputApprovalQueue } from "@/components/session/chat-input-approval-queue";
 
 describe("ChatInputApprovalQueue", () => {
-  test("renders a visible approval queue with newest-first items", () => {
+  test("renders the latest approval with queued items collapsed", () => {
     const html = renderToStaticMarkup(createElement(ChatInputApprovalQueue, {
       approvals: [
         {
@@ -29,17 +29,25 @@ describe("ChatInputApprovalQueue", () => {
         },
       ],
       onResolveApproval: () => {},
+      onDraftGuidance: () => {},
     }));
 
-    expect(html).toContain("Approval Queue");
-    expect(html).toContain("2 requests waiting");
-    expect(html).toContain("Press");
+    // Latest tool is shown
     expect(html).toContain("Bash");
+    expect(html).toContain("Run npm test");
+    // Queued indicator
+    expect(html).toContain("+1 more queued");
+    // Guidance toggle present
+    expect(html).toContain("guide instead");
+    expect(html).toContain("Tab");
+    // Keyboard hint for approve
+    expect(html).toContain("approve");
+    // Queued item visible inside details
     expect(html).toContain("Read");
     expect(html.indexOf("Run npm test")).toBeLessThan(html.indexOf("Open .env"));
   });
 
-  test("omits the keyboard hint when queue actions are disabled", () => {
+  test("omits guidance and keyboard hint when disabled", () => {
     const html = renderToStaticMarkup(createElement(ChatInputApprovalQueue, {
       approvals: [
         {
@@ -58,8 +66,10 @@ describe("ChatInputApprovalQueue", () => {
       onResolveApproval: () => {},
     }));
 
-    expect(html).toContain("1 request waiting");
+    expect(html).toContain("Write");
     expect(html).toContain("Managed elsewhere.");
-    expect(html).not.toContain("approve the latest request");
+    // No keyboard shortcuts or guidance when disabled
+    expect(html).not.toContain("guide instead");
+    expect(html).not.toContain("Tab");
   });
 });

@@ -66,10 +66,12 @@ import {
 import { ChatInputApprovalQueue } from "./chat-input-approval-queue";
 import { toWorkspaceRelativeFilePath } from "./chat-input.attachments";
 import {
+  buildApprovalGuidancePrompt,
   getLatestPromptSuggestions,
   getPromptHistoryEntries,
   mergePromptSuggestionWithDraft,
   shouldHandleApprovalEnterShortcut,
+  shouldHandleApprovalTabShortcut,
 } from "./chat-input.utils";
 
 interface BaseChatInputProps {
@@ -159,6 +161,7 @@ interface ChatInputComposerProps {
 
 function ChatInputComposer(args: ChatInputComposerProps) {
   const [focusNonce, setFocusNonce] = useState(0);
+  const [guidanceFocusNonce, setGuidanceFocusNonce] = useState(0);
   const [
     promptDraft,
     promptFocusNonce,
@@ -267,6 +270,31 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     commitPromptDraftText({
       taskId: syncedDraftRef.current.taskId,
       text: draftTextRef.current,
+    });
+  }
+
+  function stageApprovalGuidance(guidanceArgs: {
+    toolName: string;
+    description: string;
+    guidance: string;
+  }) {
+    const nextText = buildApprovalGuidancePrompt({
+      currentDraft: draftTextRef.current,
+      toolName: guidanceArgs.toolName,
+      description: guidanceArgs.description,
+      guidance: guidanceArgs.guidance,
+    });
+    adoptPromptDraftText({
+      taskId: args.providerSelectionTarget,
+      text: nextText,
+    });
+    commitPromptDraftText({
+      taskId: args.providerSelectionTarget,
+      text: nextText,
+    });
+    setFocusNonce((current) => current + 1);
+    toast.message("Guidance drafted", {
+      description: "The current approval will be denied. Send the staged follow-up after the turn stops.",
     });
   }
 
@@ -396,6 +424,22 @@ function ChatInputComposer(args: ChatInputComposerProps) {
         return;
       }
       const target = event.target instanceof HTMLElement ? event.target : null;
+      if (shouldHandleApprovalTabShortcut({
+        key: event.key,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        isComposing: event.isComposing,
+        targetTagName: target?.tagName,
+        targetRole: target?.getAttribute("role"),
+        targetIsContentEditable: target?.isContentEditable,
+      })) {
+        event.preventDefault();
+        setGuidanceFocusNonce((current) => current + 1);
+        return;
+      }
+
       if (!shouldHandleApprovalEnterShortcut({
         key: event.key,
         altKey: event.altKey,
@@ -464,8 +508,21 @@ function ChatInputComposer(args: ChatInputComposerProps) {
             compact={args.compact}
             disabled={args.approvalActionsDisabled}
             disabledReason={args.approvalDisabledReason}
+            guidanceFocusNonce={guidanceFocusNonce}
             onResolveApproval={({ messageId, approved }) => {
               resolveApproval({ taskId: args.activeTaskId, messageId, approved });
+            }}
+            onDraftGuidance={({ messageId, toolName, description, guidance }) => {
+              stageApprovalGuidance({
+                toolName,
+                description,
+                guidance,
+              });
+              resolveApproval({
+                taskId: args.activeTaskId,
+                messageId,
+                approved: false,
+              });
             }}
           />
         ) : null}

@@ -34,7 +34,7 @@ The installer prefers the current writable app location when possible and otherw
 
 - desktop-first Claude and Codex workspace
 - chorded Zen mode (`Cmd/Ctrl+K`, then `Z`) for distraction-free chat and result review
-- task-oriented chat with approvals, user-input, tools, diffs, and plans
+- task-oriented chat with approvals, guidance drafting, user-input, tools, diffs, and plans
 - task-local prompt history navigation in the composer via `ArrowUp` / `ArrowDown`
 - global command palette on `Cmd/Ctrl+Shift+P` for IDE actions, separate from chat slash commands
 - Session Replay drawer for recent-turn inspection and request snapshots
