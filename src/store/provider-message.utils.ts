@@ -116,22 +116,33 @@ export function findLatestPendingToolInteractionPart(args: {
 export function findLatestPendingApproval(args: {
   messages: ChatMessage[];
 }): { messageId: string; part: ApprovalPart } | null {
+  const pendingApprovals = findPendingApprovals(args);
+  return pendingApprovals[0] ?? null;
+}
+
+export function findPendingApprovals(args: {
+  messages: ChatMessage[];
+}): Array<{ messageId: string; part: ApprovalPart }> {
+  const pendingApprovals: Array<{ messageId: string; part: ApprovalPart }> = [];
+
   for (let messageIndex = args.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = args.messages[messageIndex];
     if (!message) {
       continue;
     }
 
-    const part = findLatestPendingApprovalPart({ message });
-    if (part) {
-      return {
-        messageId: message.id,
-        part,
-      };
+    for (let partIndex = message.parts.length - 1; partIndex >= 0; partIndex -= 1) {
+      const part = message.parts[partIndex];
+      if (part?.type === "approval" && part.state === "approval-requested") {
+        pendingApprovals.push({
+          messageId: message.id,
+          part,
+        });
+      }
     }
   }
 
-  return null;
+  return pendingApprovals;
 }
 
 export function findLatestPendingToolInteraction(args: {

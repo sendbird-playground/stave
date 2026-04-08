@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  findPendingApprovals,
   findLatestPendingApproval,
   findLatestPendingApprovalPart,
   findPendingApprovalMessageByRequestId,
@@ -164,6 +165,92 @@ describe("findLatestPendingApproval", () => {
         state: "approval-requested",
       },
     });
+  });
+});
+
+describe("findPendingApprovals", () => {
+  test("returns every pending approval newest-first across messages", () => {
+    expect(findPendingApprovals({
+      messages: [
+        {
+          id: "message-1",
+          role: "assistant",
+          model: "codex",
+          providerId: "codex",
+          content: "",
+          parts: [
+            {
+              type: "approval",
+              toolName: "Read",
+              description: "older",
+              requestId: "req-old",
+              state: "approval-requested",
+            },
+            {
+              type: "approval",
+              toolName: "Read",
+              description: "ignored",
+              requestId: "req-ignored",
+              state: "approval-responded",
+            },
+          ],
+        },
+        {
+          id: "message-2",
+          role: "assistant",
+          model: "codex",
+          providerId: "codex",
+          content: "",
+          parts: [
+            {
+              type: "approval",
+              toolName: "Bash",
+              description: "earlier in same message",
+              requestId: "req-earlier",
+              state: "approval-requested",
+            },
+            {
+              type: "approval",
+              toolName: "Write",
+              description: "latest in same message",
+              requestId: "req-latest",
+              state: "approval-requested",
+            },
+          ],
+        },
+      ],
+    })).toEqual([
+      {
+        messageId: "message-2",
+        part: {
+          type: "approval",
+          toolName: "Write",
+          description: "latest in same message",
+          requestId: "req-latest",
+          state: "approval-requested",
+        },
+      },
+      {
+        messageId: "message-2",
+        part: {
+          type: "approval",
+          toolName: "Bash",
+          description: "earlier in same message",
+          requestId: "req-earlier",
+          state: "approval-requested",
+        },
+      },
+      {
+        messageId: "message-1",
+        part: {
+          type: "approval",
+          toolName: "Read",
+          description: "older",
+          requestId: "req-old",
+          state: "approval-requested",
+        },
+      },
+    ]);
   });
 });
 
