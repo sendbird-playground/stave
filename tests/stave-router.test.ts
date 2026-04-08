@@ -117,9 +117,9 @@ describe("resolveStaveTarget", () => {
     });
   });
 
-  // ── Rule 3: complex analysis / planning → claude-opus-4-6 ──────────────
+  // ── Rule 3: analysis / planning → claude-opus-4-6 ──────────────────────
 
-  describe("Rule 3 — complex analysis/planning → claude-opus-4-6", () => {
+  describe("Rule 3 — analysis/planning → claude-opus-4-6", () => {
     test("routes long analysis prompt (> 1200 chars) to claude-opus-4-6", () => {
       const longPrompt = padTo("Explain how the authentication system works. ", 1201);
       const result = resolveStaveTarget({ prompt: longPrompt });
@@ -159,10 +159,15 @@ describe("resolveStaveTarget", () => {
       expect(result.model).toBe("claude-opus-4-6");
     });
 
-    test("does NOT route short analysis prompt (< 1200 chars, < 4 files, < 8 messages) to opus", () => {
-      // Short 'why' prompt with no complexity signals → falls through to default
+    test("routes short analysis prompt to claude-opus-4-6", () => {
       const result = resolveStaveTarget({ prompt: "Why is this function slow?" });
-      expect(result.model).not.toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-6");
+    });
+
+    test("routes short Korean review prompt to claude-opus-4-6", () => {
+      const result = resolveStaveTarget({ prompt: "리뷰해" });
+      expect(result.providerId).toBe("claude-code");
+      expect(result.model).toBe("claude-opus-4-6");
     });
   });
 
@@ -274,16 +279,16 @@ describe("resolveStaveTarget", () => {
       expect(result.model).toBe("claude-sonnet-4-6");
     });
 
-    test("routes debugging request to claude-sonnet-4-6", () => {
+    test("routes debugging request to claude-opus-4-6", () => {
       const result = resolveStaveTarget({ prompt: "Debug the login flow for me" });
       expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-sonnet-4-6");
+      expect(result.model).toBe("claude-opus-4-6");
     });
 
-    test("routes code review request to claude-sonnet-4-6", () => {
+    test("routes code review request to claude-opus-4-6", () => {
       const result = resolveStaveTarget({ prompt: "Review this PR and give me feedback" });
       expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-sonnet-4-6");
+      expect(result.model).toBe("claude-opus-4-6");
     });
 
     test("routes empty prompt to claude-sonnet-4-6", () => {
@@ -296,11 +301,10 @@ describe("resolveStaveTarget", () => {
   // ── Complexity signal thresholds ─────────────────────────────────────────
 
   describe("complexity signal thresholds", () => {
-    test("prompt exactly 1200 chars is NOT complex (threshold is > 1200)", () => {
+    test("prompt exactly 1200 chars still routes analysis prompts to opus", () => {
       const prompt = padTo("Explain why this function is slow. ", 1200);
       const result = resolveStaveTarget({ prompt });
-      // analysisScore = 1 but isComplex = false → should not hit Rule 3
-      expect(result.model).not.toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-6");
     });
 
     test("prompt exactly 1201 chars IS complex", () => {
@@ -309,12 +313,12 @@ describe("resolveStaveTarget", () => {
       expect(result.model).toBe("claude-opus-4-6");
     });
 
-    test("3 attached files is NOT complex (threshold is >= 4)", () => {
+    test("3 attached files still route analysis prompts to opus", () => {
       const result = resolveStaveTarget({
         prompt: "Analyze these files",
         attachedFileCount: 3,
       });
-      expect(result.model).not.toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-6");
     });
 
     test("4 attached files IS complex", () => {
@@ -325,12 +329,12 @@ describe("resolveStaveTarget", () => {
       expect(result.model).toBe("claude-opus-4-6");
     });
 
-    test("7 history messages is NOT complex (threshold is >= 8)", () => {
+    test("7 history messages still route analysis prompts to opus", () => {
       const result = resolveStaveTarget({
         prompt: "Why does this crash?",
         historyLength: 7,
       });
-      expect(result.model).not.toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-6");
     });
 
     test("8 history messages IS complex", () => {

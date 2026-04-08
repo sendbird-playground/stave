@@ -63,7 +63,6 @@ export function resolveStaveIntent(args: {
   const quickEditScore = countMatches(QUICK_EDIT_PATTERNS, prompt);
   const implementScore = countMatches(IMPLEMENT_PATTERNS, prompt);
 
-  const isComplex = len > 1200 || attachedFileCount >= 4 || historyLength >= 8;
   const isShort = len < 350;
 
   if (planScore >= 1 && analyzeScore === 0 && len > 3) {
@@ -74,7 +73,7 @@ export function resolveStaveIntent(args: {
     return "quick_edit";
   }
 
-  if (analyzeScore >= 1 && (isComplex || planScore >= 1)) {
+  if (analyzeScore >= 1) {
     return "analyze";
   }
 
