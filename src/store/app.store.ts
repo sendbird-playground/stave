@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { toast } from "sonner";
 import { listLatestWorkspaceTurns, type PersistedTurnSummary } from "@/lib/db/turns.db";
 import {
   createNotification as createPersistedNotification,
@@ -44,6 +45,7 @@ import {
   sortNotificationsNewestFirst,
   workspaceHasActiveTurns,
 } from "@/lib/notifications/notification.types";
+import { buildNotificationDetail } from "@/lib/notifications/notification.utils";
 import {
   DEFAULT_NOTIFICATION_SOUND_PRESET,
   DEFAULT_NOTIFICATION_SOUND_MODE,
@@ -969,6 +971,23 @@ function buildApprovalNotificationInputs(args: {
       dedupeKey: `task.approval_requested:${args.turnId}:${event.requestId}`,
     } satisfies AppNotificationCreateInput];
   });
+}
+
+function showNotificationToast(notification: AppNotification) {
+  const label = notification.taskTitle?.trim() || notification.workspaceName?.trim() || "Task";
+  const description = buildNotificationDetail(notification) ?? undefined;
+
+  if (notification.kind === "task.turn_completed") {
+    toast.success(label, {
+      description,
+      duration: 5000,
+    });
+  } else if (notification.kind === "task.approval_requested") {
+    toast.warning(`Approval needed — ${label}`, {
+      description,
+      duration: 0,
+    });
+  }
 }
 
 const ARCHIVED_TASK_TURN_NOTICE = "Generation stopped because the task was archived before this turn completed.";
@@ -1971,6 +1990,7 @@ export const useAppStore = create<AppState>()(
               });
             }
           }
+          showNotificationToast(result.notification);
           return result.notification;
         } catch (error) {
           console.error("[notifications] failed to persist notification", error);
