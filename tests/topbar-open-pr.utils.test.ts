@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildCreatePrTargetBranchOptions,
+  canSubmitCreatePr,
   shouldShowCreatePrSubmitSpinner,
 } from "@/components/layout/TopBarOpenPR.utils";
 
@@ -103,6 +104,35 @@ describe("buildCreatePrTargetBranchOptions", () => {
       step: "committing",
       activeSubmitAction: null,
       buttonAction: "pr",
+    })).toBe(false);
+  });
+});
+
+describe("canSubmitCreatePr", () => {
+  test("allows non-conventional titles as long as the title is not empty", () => {
+    expect(canSubmitCreatePr({
+      step: "ready",
+      title: "Improve PR title fallback behavior",
+    })).toBe(true);
+  });
+
+  test("rejects empty titles", () => {
+    expect(canSubmitCreatePr({
+      step: "ready",
+      title: "   ",
+    })).toBe(false);
+  });
+
+  test("rejects missing titles", () => {
+    expect(canSubmitCreatePr({
+      step: "ready",
+    })).toBe(false);
+  });
+
+  test("rejects submission when the dialog is not ready", () => {
+    expect(canSubmitCreatePr({
+      step: "loading",
+      title: "Improve PR title fallback behavior",
     })).toBe(false);
   });
 });

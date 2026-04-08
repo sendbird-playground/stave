@@ -91,3 +91,10 @@ export function shouldShowCreatePrSubmitSpinner(args: {
 
   return isSubmitStep && args.activeSubmitAction === args.buttonAction;
 }
+
+export function canSubmitCreatePr(args: {
+  step: CreatePrDialogStep;
+  title?: string;
+}) {
+  return args.step === "ready" && (args.title?.trim().length ?? 0) > 0;
+}
