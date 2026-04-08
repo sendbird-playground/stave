@@ -346,8 +346,8 @@ export function TerminalDock() {
       activate: (event: MouseEvent, uri: string) => activateExternalLink(event, uri),
       allowNonHttpProtocols: false,
     };
-    const webLinksAddon = new WebLinksAddon((event, uri) => {
-      activateExternalLink(event as MouseEvent, uri);
+    const webLinksAddon = new WebLinksAddon((event: MouseEvent, uri: string) => {
+      activateExternalLink(event, uri);
     });
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
