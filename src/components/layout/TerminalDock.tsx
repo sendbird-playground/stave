@@ -19,12 +19,6 @@ interface TerminalTab {
   label: string;
 }
 
-interface WorkspaceTerminalState {
-  tabs: TerminalTab[];
-  activeTabId: string | null;
-  sessionBuffers: Record<string, string>;
-}
-
 const TERMINAL_TRANSCRIPT_STORAGE_KEY = "stave:terminal-task-transcript:v1";
 const TERMINAL_POLL_INTERVAL_MS = 120;
 const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
@@ -118,6 +112,7 @@ function appendTerminalInput(
 
 export function TerminalDock() {
   const [
+    terminalDocked,
     terminalDockHeight,
     terminalFontFamily,
     terminalFontSize,
@@ -131,6 +126,7 @@ export function TerminalDock() {
     useShallow(
       (state) =>
         [
+          state.layout.terminalDocked,
           state.layout.terminalDockHeight ?? 210,
           state.settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
           state.settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE,
@@ -159,10 +155,6 @@ export function TerminalDock() {
     rows: 0,
   });
   const transcriptLoadedRef = useRef(false);
-  const workspaceTerminalStateRef = useRef<
-    Record<string, WorkspaceTerminalState>
-  >({});
-  const prevWorkspaceCwdRef = useRef<string | undefined>(undefined);
 
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -283,25 +275,6 @@ export function TerminalDock() {
       }
       applyTerminalOutput({ sessionId, output: read.output });
     }
-  }
-
-  async function updateSessionDeliveryModes(args: {
-    sessionIds: string[];
-    deliveryMode: "poll" | "push";
-  }) {
-    const setSessionDeliveryMode = window.api?.terminal?.setSessionDeliveryMode;
-    if (!setSessionDeliveryMode || args.sessionIds.length === 0) {
-      return;
-    }
-
-    await Promise.allSettled(
-      args.sessionIds.map((sessionId) =>
-        setSessionDeliveryMode({
-          sessionId,
-          deliveryMode: args.deliveryMode,
-        }),
-      ),
-    );
   }
 
   useEffect(() => {
@@ -533,6 +506,25 @@ export function TerminalDock() {
     });
   }
 
+  async function disposeSessions(sessionIds: string[]) {
+    if (sessionIds.length === 0) {
+      return;
+    }
+
+    const closeSessionApi = window.api?.terminal?.closeSession;
+    if (closeSessionApi) {
+      await Promise.allSettled(
+        sessionIds.map((sessionId) => closeSessionApi({ sessionId })),
+      );
+    }
+
+    for (const sessionId of sessionIds) {
+      delete sessionBufferRef.current[sessionId];
+      delete pendingInputBySessionRef.current[sessionId];
+      delete writeInFlightBySessionRef.current[sessionId];
+    }
+  }
+
   useEffect(() => {
     if (!xtermRef.current) {
       return;
@@ -544,85 +536,39 @@ export function TerminalDock() {
     }
   }, [taskKey]);
 
-  // Persist terminal sessions across workspace switches instead of killing them.
   useEffect(() => {
-    if (!terminalReady) {
+    if (!terminalReady || !terminalDocked) {
       return;
     }
 
-    const prevCwd = prevWorkspaceCwdRef.current;
-    prevWorkspaceCwdRef.current = workspaceCwd;
+    let cancelled = false;
+    const sessionIds = tabs.map((tab) => tab.id);
 
-    // Save previous workspace's terminal state before switching.
-    if (prevCwd && prevCwd !== workspaceCwd) {
-      workspaceTerminalStateRef.current[prevCwd] = {
-        tabs: tabs,
-        activeTabId: activeTabId,
-        sessionBuffers: { ...sessionBufferRef.current },
-      };
-      if (supportsPushTerminalOutput) {
-        void updateSessionDeliveryModes({
-          sessionIds: tabs.map((tab) => tab.id),
-          deliveryMode: "poll",
-        });
+    void (async () => {
+      await disposeSessions(sessionIds);
+      if (cancelled) {
+        return;
       }
-    }
 
-    // Restore saved state or start fresh for the new workspace.
-    const saved = workspaceCwd
-      ? workspaceTerminalStateRef.current[workspaceCwd]
-      : undefined;
-    if (saved && saved.tabs.length > 0) {
-      setTabs(saved.tabs);
-      setActiveTabId(saved.activeTabId);
-      sessionBufferRef.current = saved.sessionBuffers;
-      xtermRef.current?.clear();
-      const buffer = saved.activeTabId
-        ? (saved.sessionBuffers[saved.activeTabId] ?? "")
-        : "";
-      if (buffer.trim()) {
-        xtermRef.current?.write(buffer);
-      }
-      if (supportsPushTerminalOutput) {
-        const sessionIds = saved.tabs.map((tab) => tab.id);
-        void updateSessionDeliveryModes({
-          sessionIds,
-          deliveryMode: "push",
-        }).then(() => syncTerminalOutput({ sessionIds }));
-      }
-    } else {
       setTabs([]);
       setActiveTabId(null);
       sessionBufferRef.current = {};
       xtermRef.current?.clear();
-      void createSessionTab();
-    }
+      await createSessionTab();
+    })();
 
-    // Only kill sessions on full unmount (component teardown), not workspace switch.
     return () => {
-      // Save current workspace state on unmount so it's available next mount.
-      if (workspaceCwd) {
-        workspaceTerminalStateRef.current[workspaceCwd] = {
-          tabs,
-          activeTabId,
-          sessionBuffers: { ...sessionBufferRef.current },
-        };
-      }
-      if (supportsPushTerminalOutput) {
-        void updateSessionDeliveryModes({
-          sessionIds: tabs.map((tab) => tab.id),
-          deliveryMode: "poll",
-        });
-      }
+      cancelled = true;
+      void disposeSessions(sessionIds);
     };
-  }, [supportsPushTerminalOutput, workspaceCwd, terminalReady]);
+  }, [workspaceCwd, terminalDocked, terminalReady]);
 
   // Fallback: ensure a session exists when a task is active but all sessions were cleared.
   useEffect(() => {
-    if (!terminalReady || !activeTaskId || tabs.length > 0) return;
+    if (!terminalDocked || !terminalReady || !activeTaskId || tabs.length > 0) return;
     void createSessionTab();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTaskId, tabs.length, terminalReady]);
+  }, [activeTaskId, tabs.length, terminalDocked, terminalReady]);
 
   useEffect(() => {
     if (supportsPushTerminalOutput) {
