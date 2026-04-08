@@ -14,8 +14,6 @@ import {
   AccordionTrigger,
   Badge,
   Button,
-  Card,
-  CardContent,
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -171,7 +169,7 @@ function ScriptEntryEditor(props: {
   return (
     <AccordionItem
       value={`${props.kind}:${props.index}`}
-      className="rounded-lg border border-border/70 bg-background/80 px-3"
+      className="rounded-lg border border-border/50 bg-muted/10 px-3"
     >
       <AccordionTrigger className="gap-3 py-3 no-underline hover:no-underline">
         <div className="min-w-0 flex-1 space-y-1 pr-2">
@@ -354,16 +352,14 @@ function HookTriggerEditor(props: {
 }) {
   const triggerMeta = SCRIPT_TRIGGER_METADATA[props.trigger];
   return (
-    <div className="rounded-lg border border-border/70 bg-background/80 p-3">
+    <div className="rounded-lg border border-border/50 bg-muted/10 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium text-foreground">{triggerMeta.label}</p>
-          </div>
+          <p className="text-sm font-medium text-foreground">{triggerMeta.label}</p>
           <p className="text-xs text-muted-foreground">{triggerMeta.description}</p>
         </div>
-        <Badge variant="outline" className="rounded-sm px-2 py-0">
-          {(props.links ?? []).length} linked
+        <Badge variant="outline" className="rounded-full px-1.5 py-0 text-[10px]">
+          {(props.links ?? []).length}
         </Badge>
       </div>
 
@@ -964,13 +960,9 @@ export function WorkspaceScriptsManager(props: {
   if (!selectedScope) {
     if (!initialScopeResolved) {
       return (
-        <Card size="sm" className="border border-border/70 bg-background/80">
-          <CardContent className="space-y-3 pt-4">
-            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-              Loading scripts manager...
-            </div>
-          </CardContent>
-        </Card>
+        <div className="px-1 py-4 text-xs text-muted-foreground">
+          Loading scripts manager…
+        </div>
       );
     }
 
@@ -988,244 +980,241 @@ export function WorkspaceScriptsManager(props: {
   }
 
   return (
-    <Card size="sm" className="border border-border/70 bg-background/80">
-      <CardContent className="space-y-4 pt-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-foreground">Scripts Manager</p>
-              <Badge
-                variant={isDirty ? "secondary" : "outline"}
-                className="rounded-sm px-2 py-0"
-              >
-                {isDirty ? "Unsaved changes" : fileState.exists ? "In sync" : "New file"}
-              </Badge>
-            </div>
-            <p className="text-xs leading-5 text-muted-foreground">
-              Edit only actions, services, and hooks here. Targets and advanced local overrides stay preserved but are not editable in this GUI.
-            </p>
-          </div>
+    <div className="space-y-4">
+      {/* ── Header ── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 rounded-md"
-              onClick={() => void reloadSelectedScope()}
-              disabled={fileState.status === "loading" || saving}
+            <p className="text-sm font-semibold text-foreground">Scripts Manager</p>
+            <Badge
+              variant={isDirty ? "secondary" : "outline"}
+              className="rounded-full px-2 py-0 text-[10px]"
             >
-              <RefreshCcw className={cn("mr-1 size-4", fileState.status === "loading" && "animate-spin")} />
-              Reload
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 rounded-md"
-              onClick={() => void discardChanges()}
-              disabled={!isDirty || saving}
-            >
-              Discard
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="h-8 rounded-md"
-              onClick={() => void saveChanges()}
-              disabled={fileState.status !== "ready" || saving}
-            >
-              {saving ? <RefreshCcw className="mr-1 size-4 animate-spin" /> : <Save className="mr-1 size-4" />}
-              Save
-            </Button>
+              {isDirty ? "Unsaved" : fileState.exists ? "In sync" : "New file"}
+            </Badge>
           </div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Edit actions, services, and hooks. Targets and local overrides are preserved but not editable here.
+          </p>
         </div>
-
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,280px)_1fr]">
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-foreground">Config Scope</span>
-            <Select value={selectedScope.id} onValueChange={handleScopeChange}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {scopes.map((scope) => (
-                  <SelectItem key={scope.id} value={scope.id}>
-                    {scope.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          <div className="rounded-lg border border-border/70 bg-muted/15 px-3 py-2.5">
-            <p className="text-xs font-medium text-foreground">{selectedScope.description}</p>
-            <p className="mt-1 break-all text-[11px] leading-5 text-muted-foreground">
-              {selectedScope.rootPath}/{selectedScope.filePath}
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 rounded-md px-2"
+            onClick={() => void reloadSelectedScope()}
+            disabled={fileState.status === "loading" || saving}
+          >
+            <RefreshCcw className={cn("mr-1 size-3.5", fileState.status === "loading" && "animate-spin")} />
+            Reload
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 rounded-md px-2"
+            onClick={() => void discardChanges()}
+            disabled={!isDirty || saving}
+          >
+            Discard
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 rounded-md px-2"
+            onClick={() => void saveChanges()}
+            disabled={fileState.status !== "ready" || saving}
+          >
+            {saving ? <RefreshCcw className="mr-1 size-3.5 animate-spin" /> : <Save className="mr-1 size-3.5" />}
+            Save
+          </Button>
         </div>
+      </div>
 
-        <div className="rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-[11px] leading-5 text-muted-foreground">
-          {selectedScope.id === "workspace"
-            ? "Workspace config overrides the project shared config for this workspace."
-            : "Project config is the shared fallback. If a workspace-level config exists, it wins for the active workspace."}
-          {" "}
-          For custom targets or `.stave/scripts.local.json`, edit JSON directly.
+      {/* ── Scope selector ── */}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,280px)_1fr]">
+        <label className="space-y-1.5">
+          <span className="text-xs font-medium text-foreground">Config Scope</span>
+          <Select value={selectedScope.id} onValueChange={handleScopeChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {scopes.map((scope) => (
+                <SelectItem key={scope.id} value={scope.id}>
+                  {scope.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        <div className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2.5">
+          <p className="text-xs font-medium text-foreground">{selectedScope.description}</p>
+          <p className="mt-1 break-all text-[11px] leading-5 text-muted-foreground">
+            {selectedScope.rootPath}/{selectedScope.filePath}
+          </p>
         </div>
+      </div>
 
-        {fileState.error ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2.5 text-xs text-destructive">
-            {fileState.error}
+      <p className="text-[11px] leading-5 text-muted-foreground">
+        {selectedScope.id === "workspace"
+          ? "Workspace config overrides the project shared config for this workspace."
+          : "Project config is the shared fallback. If a workspace-level config exists, it wins for the active workspace."}
+        {" "}
+        For custom targets or `.stave/scripts.local.json`, edit JSON directly.
+      </p>
+
+      {fileState.error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+          {fileState.error}
+        </div>
+      ) : null}
+
+      {fileState.status === "loading" ? (
+        <div className="px-1 py-4 text-xs text-muted-foreground">
+          Loading…
+        </div>
+      ) : null}
+
+      {fileState.status === "ready" ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="rounded-full px-1.5 py-0 text-[10px]">
+              {editorState.actions.length} actions
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-1.5 py-0 text-[10px]">
+              {editorState.services.length} services
+            </Badge>
+            <Badge variant="outline" className="rounded-full px-1.5 py-0 text-[10px]">
+              {SCRIPT_TRIGGER_IDS.reduce((sum, trigger) => sum + (editorState.hooks[trigger]?.length ?? 0), 0)} hook links
+            </Badge>
           </div>
-        ) : null}
 
-        {fileState.status === "loading" ? (
-          <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-            Loading scripts manager...
-          </div>
-        ) : null}
+          <div className="space-y-5">
+            {/* ── Actions section ── */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Actions</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Short-lived commands you run on demand or from hooks.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 rounded-md px-2"
+                  onClick={() => addEntry("action")}
+                >
+                  <Plus className="mr-1 size-3.5" />
+                  Add
+                </Button>
+              </div>
 
-        {fileState.status === "ready" ? (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded-sm px-2 py-0">
-                {editorState.actions.length} actions
-              </Badge>
-              <Badge variant="outline" className="rounded-sm px-2 py-0">
-                {editorState.services.length} services
-              </Badge>
-              <Badge variant="outline" className="rounded-sm px-2 py-0">
-                {SCRIPT_TRIGGER_IDS.reduce((sum, trigger) => sum + (editorState.hooks[trigger]?.length ?? 0), 0)} hook links
-              </Badge>
-            </div>
-
-            <div className="space-y-3">
-              <Card size="sm" className="border border-border/70 bg-muted/10">
-                <CardContent className="space-y-3 pt-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Actions</p>
-                      <p className="text-xs text-muted-foreground">
-                        Short-lived commands you run on demand or from hooks.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 rounded-md"
-                      onClick={() => addEntry("action")}
-                    >
-                      <Plus className="mr-1 size-4" />
-                      Add Action
-                    </Button>
-                  </div>
-
-                  {editorState.actions.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-border/70 bg-background/60 px-3 py-3 text-xs text-muted-foreground">
-                      No actions yet.
-                    </div>
-                  ) : (
-                    <Accordion type="multiple" value={expandedActions} onValueChange={setExpandedActions}>
-                      {editorState.actions.map((entry, index) => (
-                        <ScriptEntryEditor
-                          key={`action-${index}`}
-                          entry={entry}
-                          index={index}
-                          kind="action"
-                          targetOptions={targetOptions}
-                          onFieldChange={(entryIndex, field, value) => updateEntryField("action", entryIndex, field, value)}
-                          onRemove={(entryIndex) => removeEntry("action", entryIndex)}
-                        />
-                      ))}
-                    </Accordion>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card size="sm" className="border border-border/70 bg-muted/10">
-                <CardContent className="space-y-3 pt-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">Services</p>
-                      <p className="text-xs text-muted-foreground">
-                        Long-running processes that stay available until you stop them.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 rounded-md"
-                      onClick={() => addEntry("service")}
-                    >
-                      <Plus className="mr-1 size-4" />
-                      Add Service
-                    </Button>
-                  </div>
-
-                  {editorState.services.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-border/70 bg-background/60 px-3 py-3 text-xs text-muted-foreground">
-                      No services yet.
-                    </div>
-                  ) : (
-                    <Accordion type="multiple" value={expandedServices} onValueChange={setExpandedServices}>
-                      {editorState.services.map((entry, index) => (
-                        <ScriptEntryEditor
-                          key={`service-${index}`}
-                          entry={entry}
-                          index={index}
-                          kind="service"
-                          targetOptions={targetOptions}
-                          onFieldChange={(entryIndex, field, value) => updateEntryField("service", entryIndex, field, value)}
-                          onRemove={(entryIndex) => removeEntry("service", entryIndex)}
-                        />
-                      ))}
-                    </Accordion>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card size="sm" className="border border-border/70 bg-muted/10">
-                <CardContent className="space-y-3 pt-4">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Hooks</p>
-                    <p className="text-xs text-muted-foreground">
-                      Wire actions and services into task, turn, and PR lifecycle triggers.
-                    </p>
-                  </div>
-
-                  {SCRIPT_TRIGGER_IDS.map((trigger) => (
-                    <HookTriggerEditor
-                      key={trigger}
-                      trigger={trigger}
-                      candidates={hookCandidates}
-                      links={editorState.hooks[trigger]}
-                      onToggleLink={toggleHookLink}
-                      onToggleBlocking={toggleHookBlocking}
+              {editorState.actions.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border/50 px-3 py-3 text-xs text-muted-foreground">
+                  No actions yet.
+                </div>
+              ) : (
+                <Accordion type="multiple" value={expandedActions} onValueChange={setExpandedActions}>
+                  {editorState.actions.map((entry, index) => (
+                    <ScriptEntryEditor
+                      key={`action-${index}`}
+                      entry={entry}
+                      index={index}
+                      kind="action"
+                      targetOptions={targetOptions}
+                      onFieldChange={(entryIndex, field, value) => updateEntryField("action", entryIndex, field, value)}
+                      onRemove={(entryIndex) => removeEntry("action", entryIndex)}
                     />
                   ))}
-
-                  {unresolvedHookRefs.length > 0 ? (
-                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2.5 text-xs text-amber-950 dark:text-amber-100">
-                      <div className="flex items-center gap-2 font-medium">
-                        <AlertCircle className="size-4" />
-                        Preserved unresolved hook refs
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {unresolvedHookRefs.map(({ trigger, link }, index) => (
-                          <Badge key={`${trigger}:${link.scriptKind ?? "unknown"}:${link.scriptId}:${index}`} variant="secondary" className="rounded-sm px-2 py-0">
-                            {SCRIPT_TRIGGER_METADATA[trigger].label} → {link.scriptKind ?? "unknown"}:{link.scriptId}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
+                </Accordion>
+              )}
             </div>
-          </>
-        ) : null}
-      </CardContent>
-    </Card>
+
+            {/* ── Services section ── */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Services</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Long-running processes that stay available until you stop them.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 rounded-md px-2"
+                  onClick={() => addEntry("service")}
+                >
+                  <Plus className="mr-1 size-3.5" />
+                  Add
+                </Button>
+              </div>
+
+              {editorState.services.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border/50 px-3 py-3 text-xs text-muted-foreground">
+                  No services yet.
+                </div>
+              ) : (
+                <Accordion type="multiple" value={expandedServices} onValueChange={setExpandedServices}>
+                  {editorState.services.map((entry, index) => (
+                    <ScriptEntryEditor
+                      key={`service-${index}`}
+                      entry={entry}
+                      index={index}
+                      kind="service"
+                      targetOptions={targetOptions}
+                      onFieldChange={(entryIndex, field, value) => updateEntryField("service", entryIndex, field, value)}
+                      onRemove={(entryIndex) => removeEntry("service", entryIndex)}
+                    />
+                  ))}
+                </Accordion>
+              )}
+            </div>
+
+            {/* ── Hooks section ── */}
+            <div className="space-y-2">
+              <div>
+                <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Hooks</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Wire actions and services into task, turn, and PR lifecycle triggers.
+                </p>
+              </div>
+
+              {SCRIPT_TRIGGER_IDS.map((trigger) => (
+                <HookTriggerEditor
+                  key={trigger}
+                  trigger={trigger}
+                  candidates={hookCandidates}
+                  links={editorState.hooks[trigger]}
+                  onToggleLink={toggleHookLink}
+                  onToggleBlocking={toggleHookBlocking}
+                />
+              ))}
+
+              {unresolvedHookRefs.length > 0 ? (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2.5 text-xs text-amber-950 dark:text-amber-100">
+                  <div className="flex items-center gap-2 font-medium">
+                    <AlertCircle className="size-4" />
+                    Preserved unresolved hook refs
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {unresolvedHookRefs.map(({ trigger, link }, index) => (
+                      <Badge key={`${trigger}:${link.scriptKind ?? "unknown"}:${link.scriptId}:${index}`} variant="secondary" className="rounded-sm px-2 py-0">
+                        {SCRIPT_TRIGGER_METADATA[trigger].label} → {link.scriptKind ?? "unknown"}:{link.scriptId}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
