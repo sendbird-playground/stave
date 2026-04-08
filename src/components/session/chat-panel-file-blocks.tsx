@@ -14,6 +14,10 @@ import {
   parseFileChangeToolInput,
   summarizeDiffLineChanges,
 } from "@/components/session/chat-panel.utils";
+import {
+  formatWorkspaceFilePathForDisplay,
+  resolveWorkspaceRelativeFilePath,
+} from "@/lib/workspace-file-path";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -23,6 +27,25 @@ const ReactDiffViewer = lazy(() => import("react-diff-viewer-continued"));
 
 export function toBaseName(filePath: string) {
   return filePath.split("/").filter(Boolean).at(-1) ?? filePath;
+}
+
+function resolveChatBlockFilePath(args: { filePath: string; workspacePath?: string }) {
+  const openFilePath = resolveWorkspaceRelativeFilePath(args) ?? args.filePath;
+  return {
+    openFilePath,
+    displayFilePath: formatWorkspaceFilePathForDisplay(args),
+  };
+}
+
+function getFileChangeStatusPriority(status: FileChangeSummaryRow["status"]) {
+  switch (status) {
+    case "failed":
+      return 3;
+    case "skipped":
+      return 2;
+    case "applied":
+      return 1;
+  }
 }
 
 const CHAT_DIFF_VIEWER_STYLES = {
@@ -100,15 +123,20 @@ export function ChangedFilesBlock(args: { parts: CodeDiffPart[]; taskId: string;
   const resolveDiff = useAppStore((state) => state.resolveDiff);
   const openDiffInEditor = useAppStore((state) => state.openDiffInEditor);
   const isDarkMode = useAppStore((state) => state.isDarkMode);
+  const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
   const [openRows, setOpenRows] = useState<number[]>([]);
 
   const rows = useMemo(() => parts.map((part) => ({
     part,
+    ...resolveChatBlockFilePath({
+      filePath: part.filePath,
+      workspacePath: workspaceCwd,
+    }),
     summary: summarizeDiffLineChanges({
       oldContent: part.oldContent,
       newContent: part.newContent,
     }),
-  })), [parts]);
+  })), [parts, workspaceCwd]);
   const totalAdded = useMemo(() => rows.reduce((sum, row) => sum + row.summary.added, 0), [rows]);
   const totalRemoved = useMemo(() => rows.reduce((sum, row) => sum + row.summary.removed, 0), [rows]);
   const pendingCount = useMemo(() => parts.filter((part) => isPendingDiffStatus(part.status)).length, [parts]);
@@ -122,13 +150,17 @@ export function ChangedFilesBlock(args: { parts: CodeDiffPart[]; taskId: string;
   }
 
   function openDiff(args: { part: CodeDiffPart; index: number }) {
+    const normalizedFilePath = resolveWorkspaceRelativeFilePath({
+      filePath: args.part.filePath,
+      workspacePath: workspaceCwd,
+    }) ?? args.part.filePath;
     openDiffInEditor({
       editorTabId: toDiffEditorTabId({
         messageId,
-        filePath: args.part.filePath,
+        filePath: normalizedFilePath,
         index: startIndex + args.index,
       }),
-      filePath: args.part.filePath,
+      filePath: normalizedFilePath,
       oldContent: args.part.oldContent,
       newContent: args.part.newContent,
     });
@@ -164,13 +196,13 @@ export function ChangedFilesBlock(args: { parts: CodeDiffPart[]; taskId: string;
           const isOpen = openRows.includes(index);
           const isPendingDiff = isPendingDiffStatus(row.part.status);
           return (
-            <div key={`${row.part.filePath}-${index}`}>
+            <div key={`${row.openFilePath}-${index}`}>
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/35"
                 onClick={() => toggleRow(index)}
               >
-                <span className="min-w-0 flex-1 truncate font-medium">{row.part.filePath}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">{row.displayFilePath}</span>
                 <ChangeCount value={row.summary.added} tone="added" />
                 <ChangeCount value={row.summary.removed} tone="removed" />
                 {isPendingDiff ? <span className="size-2 shrink-0 rounded-full bg-warning" aria-hidden="true" /> : null}
@@ -227,18 +259,45 @@ function FileChangeStatusBadge(args: { status: FileChangeSummaryRow["status"] })
 export function FileChangeSummaryBlock(args: { rows: FileChangeSummaryRow[] }) {
   const { rows } = args;
   const openFileFromTree = useAppStore((state) => state.openFileFromTree);
+  const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
+
+  const normalizedRows = useMemo(() => {
+    const dedupedRows = new Map<string, {
+      row: FileChangeSummaryRow;
+      displayFilePath: string;
+      openFilePath: string;
+    }>();
+
+    for (const row of rows) {
+      const resolved = resolveChatBlockFilePath({
+        filePath: row.filePath,
+        workspacePath: workspaceCwd,
+      });
+      const key = resolved.openFilePath.trim();
+      const existing = dedupedRows.get(key);
+      if (!existing || getFileChangeStatusPriority(row.status) > getFileChangeStatusPriority(existing.row.status)) {
+        dedupedRows.set(key, {
+          row,
+          displayFilePath: resolved.displayFilePath,
+          openFilePath: resolved.openFilePath,
+        });
+      }
+    }
+
+    return Array.from(dedupedRows.values());
+  }, [rows, workspaceCwd]);
 
   const appliedCount = useMemo(
-    () => rows.filter((row) => row.status === "applied").length,
-    [rows],
+    () => normalizedRows.filter(({ row }) => row.status === "applied").length,
+    [normalizedRows],
   );
   const skippedCount = useMemo(
-    () => rows.filter((row) => row.status === "skipped").length,
-    [rows],
+    () => normalizedRows.filter(({ row }) => row.status === "skipped").length,
+    [normalizedRows],
   );
   const failedCount = useMemo(
-    () => rows.filter((row) => row.status === "failed").length,
-    [rows],
+    () => normalizedRows.filter(({ row }) => row.status === "failed").length,
+    [normalizedRows],
   );
 
   return (
@@ -246,7 +305,7 @@ export function FileChangeSummaryBlock(args: { rows: FileChangeSummaryRow[] }) {
       <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-sm font-medium">
-            {rows.length} {rows.length === 1 ? "file" : "files"} changed
+            {normalizedRows.length} {normalizedRows.length === 1 ? "file" : "files"} changed
           </span>
           {appliedCount > 0 ? <Badge variant="success">{appliedCount} applied</Badge> : null}
           {skippedCount > 0 ? <Badge variant="warning">{skippedCount} skipped</Badge> : null}
@@ -254,16 +313,16 @@ export function FileChangeSummaryBlock(args: { rows: FileChangeSummaryRow[] }) {
         </div>
       </div>
       <div className="divide-y">
-        {rows.map((row, index) => (
-          <div key={`${row.filePath}-${index}`} className="flex items-center gap-2 px-3 py-2">
-            <span className="min-w-0 flex-1 truncate font-medium">{row.filePath}</span>
+        {normalizedRows.map(({ row, displayFilePath, openFilePath }, index) => (
+          <div key={`${openFilePath}-${index}`} className="flex items-center gap-2 px-3 py-2">
+            <span className="min-w-0 flex-1 truncate font-medium">{displayFilePath}</span>
             <FileChangeStatusBadge status={row.status} />
             <Button
               type="button"
               size="xs"
               variant="ghost"
               className="shrink-0"
-              onClick={() => void openFileFromTree({ filePath: row.filePath })}
+              onClick={() => void openFileFromTree({ filePath: openFilePath })}
             >
               Open
             </Button>
@@ -285,7 +344,15 @@ export function FileChangeToolBlock(args: { input: string }) {
 export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {
   const { parts } = args;
   const openFileFromTree = useAppStore((state) => state.openFileFromTree);
+  const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
   const [openRows, setOpenRows] = useState<number[]>([]);
+  const resolvedParts = useMemo(() => parts.map((part) => ({
+    part,
+    ...resolveChatBlockFilePath({
+      filePath: part.filePath,
+      workspacePath: workspaceCwd,
+    }),
+  })), [parts, workspaceCwd]);
 
   function toggleRow(index: number) {
     setOpenRows((current) => (
@@ -309,7 +376,7 @@ export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {
           variant="ghost"
           className="shrink-0"
           onClick={() => {
-            const firstPath = parts[0]?.filePath;
+            const firstPath = resolvedParts[0]?.openFilePath;
             if (!firstPath) {
               return;
             }
@@ -321,18 +388,18 @@ export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {
         </Button>
       </div>
       <div className="divide-y">
-        {parts.map((part, index) => {
+        {resolvedParts.map(({ part, displayFilePath, openFilePath }, index) => {
           const isOpen = openRows.includes(index);
           return (
-            <div key={`${part.filePath}-${index}`}>
+            <div key={`${openFilePath}-${index}`}>
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/35"
                 onClick={() => toggleRow(index)}
               >
-                <span className="min-w-0 flex-1 truncate font-medium">{part.filePath}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">{displayFilePath}</span>
                 <Badge variant="outline" className="shrink-0">
-                  {part.language || toBaseName(part.filePath)}
+                  {part.language || toBaseName(openFilePath)}
                 </Badge>
                 {isOpen ? <ChevronDown className="size-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
               </button>
@@ -350,7 +417,7 @@ export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {
                     <div className="border-t px-3 py-2 text-[0.875em] text-muted-foreground">{part.instruction}</div>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-2 border-t px-3 py-2">
-                    <Button size="sm" variant="outline" onClick={() => void openFileFromTree({ filePath: part.filePath })}>
+                    <Button size="sm" variant="outline" onClick={() => void openFileFromTree({ filePath: openFilePath })}>
                       Open in Editor
                     </Button>
                   </div>

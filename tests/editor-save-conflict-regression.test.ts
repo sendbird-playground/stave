@@ -35,6 +35,19 @@ function buildRevision(args: { size: number; mtimeMs: number }) {
 }
 
 async function createFsApi(args: { rootPath: string; filePath: string }) {
+  function resolveRequestedFilePath(requestedFilePath: string) {
+    const normalizedPath = requestedFilePath
+      .trim()
+      .replace(/\\/g, "/")
+      .replace(/^\.\/+/, "")
+      .replace(/^\/+/, "")
+      .replace(/\/+$/, "");
+    if (!normalizedPath || normalizedPath !== args.filePath) {
+      return null;
+    }
+    return path.join(args.rootPath, normalizedPath);
+  }
+
   async function readWithRevision() {
     const fullPath = path.join(args.rootPath, args.filePath);
     const [content, fileStat] = await Promise.all([readFile(fullPath, "utf8"), stat(fullPath)]);
@@ -47,16 +60,23 @@ async function createFsApi(args: { rootPath: string; filePath: string }) {
   return {
     pickRoot: async () => ({ ok: true, rootPath: args.rootPath, rootName: "fixture", files: [args.filePath] }),
     listFiles: async () => ({ ok: true, files: [args.filePath] }),
-    readFile: async (_req: { rootPath: string; filePath: string }) => {
+    readFile: async (req: { rootPath: string; filePath: string }) => {
+      if (!resolveRequestedFilePath(req.filePath)) {
+        return { ok: false, content: "", revision: "" };
+      }
       const file = await readWithRevision();
       return { ok: true, content: file.content, revision: file.revision };
     },
     writeFile: async (req: { rootPath: string; filePath: string; content: string; expectedRevision?: string | null }) => {
+      const fullPath = resolveRequestedFilePath(req.filePath);
+      if (!fullPath) {
+        return { ok: false };
+      }
       const current = await readWithRevision();
       if (req.expectedRevision && req.expectedRevision !== current.revision) {
         return { ok: false, conflict: true, revision: current.revision };
       }
-      await writeFile(path.join(args.rootPath, args.filePath), req.content, "utf8");
+      await writeFile(fullPath, req.content, "utf8");
       const next = await readWithRevision();
       return { ok: true, revision: next.revision };
     },
@@ -232,6 +252,23 @@ describe("editor save/conflict behavior", () => {
     expect(tab?.hasConflict).toBe(true);
     expect(tab?.isDirty).toBe(true);
     expect(tab?.content).toBe("local change\n");
+  });
+
+  test("normalizes workspace absolute file paths before opening editor tabs", async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), "stave-editor-"));
+    const filePath = "note.txt";
+    await writeFile(path.join(rootPath, filePath), "alpha\n", "utf8");
+
+    const { useAppStore } = await setupStore({ rootPath, filePath });
+    await useAppStore.getState().openFileFromTree({ filePath: path.join(rootPath, filePath) });
+
+    const opened = useAppStore.getState().editorTabs[0];
+    expect(opened).toBeDefined();
+    expect(opened?.filePath).toBe(filePath);
+    expect(opened?.content).toBe("alpha\n");
+
+    await useAppStore.getState().openFileFromTree({ filePath });
+    expect(useAppStore.getState().editorTabs).toHaveLength(1);
   });
 
   test("closes the editor panel when the last open tab is closed", async () => {

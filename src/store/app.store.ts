@@ -99,6 +99,7 @@ import {
   DEFAULT_PROVIDER_TIMEOUT_MS,
   PROVIDER_TIMEOUT_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
+import { resolveWorkspaceRelativeFilePath } from "@/lib/workspace-file-path";
 import {
   createEmptyWorkspaceInformation,
   createWorkspaceConfluencePage,
@@ -7045,6 +7046,19 @@ export const useAppStore = create<AppState>()(
         });
       },
       openFileFromTree: async ({ filePath, line, column, fallbackContent }) => {
+        const state = get();
+        const workspaceRootPath = state.workspacePathById[state.activeWorkspaceId]
+          || state.projectPath
+          || workspaceFsAdapter.getRootPath?.()
+          || undefined;
+        const normalizedFilePath = resolveWorkspaceRelativeFilePath({
+          filePath,
+          workspacePath: workspaceRootPath,
+        });
+        if (!normalizedFilePath) {
+          return;
+        }
+
         const normalizedLine = typeof line === "number" && Number.isFinite(line)
           ? Math.max(1, Math.floor(line))
           : undefined;
@@ -7053,29 +7067,27 @@ export const useAppStore = create<AppState>()(
           : undefined;
         const pendingSelection = normalizedLine
           ? {
-              tabId: `file:${filePath}`,
+              tabId: `file:${normalizedFilePath}`,
               line: normalizedLine,
               ...(normalizedColumn ? { column: normalizedColumn } : {}),
             }
           : null;
-        const isImageFile = isImageFilePath({ filePath });
-        let fileData = isImageFile ? null : await workspaceFsAdapter.readFile({ filePath });
-        let imageData = isImageFile ? await workspaceFsAdapter.readFileDataUrl({ filePath }) : null;
+        const isImageFile = isImageFilePath({ filePath: normalizedFilePath });
+        let fileData = isImageFile ? null : await workspaceFsAdapter.readFile({ filePath: normalizedFilePath });
+        let imageData = isImageFile ? await workspaceFsAdapter.readFileDataUrl({ filePath: normalizedFilePath }) : null;
         if (!fileData && !imageData) {
-          const state = get();
-          const workspaceRootPath = state.workspacePathById[state.activeWorkspaceId] || state.projectPath;
           if (workspaceRootPath) {
             await workspaceFsAdapter.setRoot?.({
               rootPath: workspaceRootPath,
               rootName: state.projectName ?? "project",
             });
-            fileData = isImageFile ? null : await workspaceFsAdapter.readFile({ filePath });
-            imageData = isImageFile ? await workspaceFsAdapter.readFileDataUrl({ filePath }) : null;
+            fileData = isImageFile ? null : await workspaceFsAdapter.readFile({ filePath: normalizedFilePath });
+            imageData = isImageFile ? await workspaceFsAdapter.readFileDataUrl({ filePath: normalizedFilePath }) : null;
           }
         }
 
         set((state) => {
-          const tabId = `file:${filePath}`;
+          const tabId = `file:${normalizedFilePath}`;
           const existing = state.editorTabs.find((tab) => tab.id === tabId);
           if (existing) {
             return {
@@ -7094,9 +7106,9 @@ export const useAppStore = create<AppState>()(
           const baseRevision = isImageFile ? imageData?.revision ?? null : fileData?.revision ?? null;
           const nextTab: EditorTab = {
             id: tabId,
-            filePath,
+            filePath: normalizedFilePath,
             kind: isImageFile ? "image" : "text",
-            language: resolveLanguage({ filePath }),
+            language: resolveLanguage({ filePath: normalizedFilePath }),
             content: fileContent,
             originalContent: isImageFile ? undefined : fileContent,
             savedContent: isImageFile ? undefined : fileContent,
