@@ -10,6 +10,7 @@ Stave now includes an in-app notification center for background task activity.
 - can play an optional synthesized success sound when a task turn completes
 - tracks read / unread state
 - lets you jump from a notification back into the related project, workspace, and task
+- keeps approval handling accessible even if the original task trace is collapsed, because the active task also surfaces a composer-side approval queue
 - lets you approve or deny approval requests directly from the notification center
 
 ## UI
@@ -20,6 +21,7 @@ Stave now includes an in-app notification center for background task activity.
 - unread notifications stay in the main inbox list
 - read notifications move out of the inbox and remain visible in a separate history view
 - notifications stay readable after the underlying task or workspace is no longer active
+- active tasks also show the same pending approvals above the composer so you can resolve them without scrolling back to the originating assistant message
 - if the linked task is archived, opening the notification still routes to the correct project and workspace, then asks you to restore the task before reopening it
 - Settings > General includes task completion sound controls for enable/disable, preset, volume, and preview
 

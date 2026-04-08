@@ -8,10 +8,20 @@ interface ConfirmationCompactProps {
   onReject?: () => void;
   disabled?: boolean;
   disabledReason?: string;
+  showShortcutHint?: boolean;
 }
 
 export function ConfirmationCompact(args: ConfirmationCompactProps) {
-  const { toolName, description, state, onApprove, onReject, disabled, disabledReason } = args;
+  const {
+    toolName,
+    description,
+    state,
+    onApprove,
+    onReject,
+    disabled,
+    disabledReason,
+    showShortcutHint = true,
+  } = args;
 
   return (
     <div className="rounded-md border bg-card p-3 text-[0.875em]">
@@ -26,7 +36,7 @@ export function ConfirmationCompact(args: ConfirmationCompactProps) {
             <Button size="sm" disabled={disabled} onClick={onApprove}>Approve</Button>
             <Button size="sm" variant="outline" disabled={disabled} onClick={onReject}>Reject</Button>
           </div>
-          {!disabled && onApprove ? (
+          {!disabled && onApprove && showShortcutHint ? (
             <p className="mt-2 text-[0.75em] text-muted-foreground">
               Press <Kbd className="mx-1 h-5 px-1.5 text-[0.75rem]">Enter</Kbd> to approve.
             </p>

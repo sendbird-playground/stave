@@ -42,6 +42,7 @@ Recommended starting points:
 - **Settings → Developer → Provider Timeout**
 - The provider mode pill beside the model selector, which shows whether the current provider config is `Manual`, `Guided`, `Auto`, or `Custom`
 - The composer `Runtime` drawer, which shows the effective file access, approval, network, and plan state before send
+- The composer-side `Approval Queue`, which appears above the prompt box when a turn is waiting for one or more approval decisions
 - The composer plan toggle switches Claude turns into `Permission Mode = plan`
 - The composer plan toggle enables Codex planning for the current draft turn, backed by native App Server plan items
 
@@ -79,7 +80,8 @@ Provider differences that matter in practice:
 
 1. Confirm the provider mode pill and runtime drawer in the composer match the intended settings.
 2. Send a harmless prompt such as “summarize repo status” or “list likely files to inspect first.”
-3. Success looks like the runtime drawer reflecting the expected state before send. For Codex planning, look for `Planning: On` and an effective `Files: Read Only`. For Claude turns, look for `Sandbox: Enabled/Disabled` and `Unsandboxed: On/Off`.
+3. If the turn pauses for approval, use the composer `Approval Queue` to approve or deny without reopening the message trace, or use the notification center if you are working elsewhere in the app.
+4. Success looks like the runtime drawer reflecting the expected state before send. For Codex planning, look for `Planning: On` and an effective `Files: Read Only`. For Claude turns, look for `Sandbox: Enabled/Disabled` and `Unsandboxed: On/Off`.
 
 ## Files And Data
 

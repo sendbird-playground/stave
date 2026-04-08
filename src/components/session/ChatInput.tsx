@@ -43,11 +43,12 @@ import {
   findOptionLabel,
 } from "@/lib/providers/runtime-option-contract";
 import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
+import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import {
-  findLatestPendingApproval,
+  findPendingApprovals,
   findLatestPendingUserInputPart,
 } from "@/store/provider-message.utils";
 import {
@@ -62,6 +63,7 @@ import {
   cycleClaudeEffortValue,
   cycleCodexEffortValue,
 } from "./chat-input.runtime";
+import { ChatInputApprovalQueue } from "./chat-input-approval-queue";
 import { toWorkspaceRelativeFilePath } from "./chat-input.attachments";
 import {
   getLatestPromptSuggestions,
@@ -128,6 +130,8 @@ interface ChatInputComposerProps {
   workspacePathLabel?: string;
   providerSelectionTarget: string;
   isTurnActive: boolean;
+  approvalActionsDisabled?: boolean;
+  approvalDisabledReason?: string;
   selectedModelOption: ModelSelectorOption;
   modelOptions: ModelSelectorOption[];
   recommendedModelOptions: readonly ModelSelectorOption[];
@@ -197,10 +201,11 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     };
   }, [pendingUserInputMessageId, pendingUserInputPart]);
   const activeTaskMessages = useAppStore((state) => state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES);
-  const pendingApproval = useMemo(
-    () => findLatestPendingApproval({ messages: activeTaskMessages }),
+  const pendingApprovals = useMemo(
+    () => findPendingApprovals({ messages: activeTaskMessages }),
     [activeTaskMessages],
   );
+  const pendingApproval = pendingApprovals[0] ?? null;
   const isInputBlocked = args.isTurnActive || pendingApproval != null || pendingUserInput != null;
   const promptHistoryEntries = useMemo(
     () => getPromptHistoryEntries(activeTaskMessages),
@@ -382,7 +387,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
   }, []);
 
   useEffect(() => {
-    if (!pendingApproval) {
+    if (!pendingApproval || args.approvalActionsDisabled) {
       return;
     }
 
@@ -415,7 +420,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
 
     window.addEventListener("keydown", handleApprovalShortcut);
     return () => window.removeEventListener("keydown", handleApprovalShortcut);
-  }, [args.activeTaskId, pendingApproval, resolveApproval]);
+  }, [args.activeTaskId, args.approvalActionsDisabled, pendingApproval, resolveApproval]);
 
   const PromptInputComponent = args.compact ? ZenPromptInput : PromptInput;
 
@@ -452,6 +457,17 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               </div>
             ) : null}
           </div>
+        ) : null}
+        {pendingApprovals.length > 0 ? (
+          <ChatInputApprovalQueue
+            approvals={pendingApprovals}
+            compact={args.compact}
+            disabled={args.approvalActionsDisabled}
+            disabledReason={args.approvalDisabledReason}
+            onResolveApproval={({ messageId, approved }) => {
+              resolveApproval({ taskId: args.activeTaskId, messageId, approved });
+            }}
+          />
         ) : null}
         <PromptInputComponent
           focusToken={`${args.providerSelectionTarget}:${focusNonce}`}
@@ -778,6 +794,10 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     }
     return `user@${projectLabel}`;
   }, [activeWorkspaceName, projectPath]);
+  const approvalActionsDisabled = isTaskManaged(activeTask);
+  const approvalDisabledReason = approvalActionsDisabled
+    ? `This request is managed by ${getTaskControlOwner(activeTask) === "external" ? "an external controller" : "Stave"}. Respond from the originating client or take over after the run ends.`
+    : undefined;
   const effortLabel = useMemo(() => {
     if (activeProvider === "claude-code") {
       return findOptionLabel(CLAUDE_EFFORT_OPTIONS, claudeEffort);
@@ -1125,6 +1145,8 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       workspacePathLabel={workspacePathLabel}
       providerSelectionTarget={providerSelectionTarget}
       isTurnActive={isTurnActive}
+      approvalActionsDisabled={approvalActionsDisabled}
+      approvalDisabledReason={approvalDisabledReason}
       selectedModelOption={selectedModelOption}
       modelOptions={modelOptions}
       recommendedModelOptions={recommendedModelOptions}
