@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import type { PersistenceWorkspaceSnapshot } from "../../persistence/types";
 import {
   CreateNotificationArgsSchema,
+  ListActiveWorkspaceTurnsArgsSchema,
   LoadTaskMessagesArgsSchema,
   ListLatestWorkspaceTurnsArgsSchema,
   ListNotificationsArgsSchema,
@@ -195,6 +196,19 @@ export function registerPersistenceHandlers() {
     }
     const store = await ensurePersistenceReady();
     const turns = store.listLatestTurnsForWorkspace({
+      workspaceId: parsedArgs.data.workspaceId,
+      limit: parsedArgs.data.limit,
+    });
+    return { ok: true, turns };
+  });
+
+  ipcMain.handle("persistence:list-active-workspace-turns", async (_event, args: unknown) => {
+    const parsedArgs = ListActiveWorkspaceTurnsArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, turns: [] };
+    }
+    const store = await ensurePersistenceReady();
+    const turns = store.listActiveTurnsForWorkspace({
       workspaceId: parsedArgs.data.workspaceId,
       limit: parsedArgs.data.limit,
     });

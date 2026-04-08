@@ -197,6 +197,47 @@ describe("SqliteStore", () => {
     store.close();
   });
 
+  nativeSqliteTest("lists the latest active turn for each task even when a newer completed turn exists", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+
+    store.beginTurn({
+      id: "turn-task-1-active",
+      workspaceId: "ws-1",
+      taskId: "task-1",
+      providerId: "codex",
+      createdAt: "2026-03-06T01:00:00.000Z",
+    });
+    store.beginTurn({
+      id: "turn-task-1-completed",
+      workspaceId: "ws-1",
+      taskId: "task-1",
+      providerId: "codex",
+      createdAt: "2026-03-06T01:00:02.000Z",
+    });
+    store.completeTurn({
+      id: "turn-task-1-completed",
+      completedAt: "2026-03-06T01:00:03.000Z",
+    });
+    store.beginTurn({
+      id: "turn-task-2-active",
+      workspaceId: "ws-1",
+      taskId: "task-2",
+      providerId: "claude-code",
+      createdAt: "2026-03-06T01:00:01.000Z",
+    });
+
+    const turns = store.listActiveTurnsForWorkspace({ workspaceId: "ws-1" });
+
+    expect(turns.map((turn) => turn.id)).toEqual([
+      "turn-task-2-active",
+      "turn-task-1-active",
+    ]);
+    expect(turns.every((turn) => turn.completedAt === null)).toBe(true);
+
+    store.close();
+  });
+
   nativeSqliteTest("loads workspace shell and paged task messages without dropping preserved tasks", async () => {
     const SqliteStore = await loadSqliteStore();
     const store = new SqliteStore({ dbPath });

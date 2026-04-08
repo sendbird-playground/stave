@@ -85,7 +85,7 @@ export interface ApprovalPart extends MessagePartBase {
   toolName: string;
   description: string;
   requestId: string;
-  state: "approval-requested" | "approval-responded" | "output-denied";
+  state: "approval-requested" | "approval-responded" | "approval-interrupted" | "output-denied";
 }
 
 export interface UserInputOption {
@@ -113,7 +113,7 @@ export interface UserInputPart extends MessagePartBase {
   toolName: string;
   questions: UserInputQuestion[];
   answers?: Record<string, string>;
-  state: "input-requested" | "input-responded" | "input-denied";
+  state: "input-requested" | "input-responded" | "input-interrupted" | "input-denied";
 }
 
 export interface ImageContextPart extends MessagePartBase {

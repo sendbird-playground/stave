@@ -54,6 +54,7 @@ const ApprovalPartSchema = z.object({
   state: z.union([
     z.literal("approval-requested"),
     z.literal("approval-responded"),
+    z.literal("approval-interrupted"),
     z.literal("output-denied"),
   ]),
 });
@@ -88,6 +89,7 @@ const UserInputPartSchema = z.object({
   state: z.union([
     z.literal("input-requested"),
     z.literal("input-responded"),
+    z.literal("input-interrupted"),
     z.literal("input-denied"),
   ]),
 });

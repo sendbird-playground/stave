@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { toast } from "sonner";
-import { listLatestWorkspaceTurns, type PersistedTurnSummary } from "@/lib/db/turns.db";
+import { listActiveWorkspaceTurns, listLatestWorkspaceTurns, type PersistedTurnSummary } from "@/lib/db/turns.db";
 import {
   createNotification as createPersistedNotification,
   listNotifications as listPersistedNotifications,
@@ -156,6 +156,7 @@ import {
   findLatestPendingUserInput,
   findPendingApprovalMessageByRequestId,
   findLatestPendingUserInputPart,
+  interruptPendingToolInteractionsInMessages,
   updateApprovalPartsByRequestId,
   updateUserInputPartsByRequestId,
 } from "@/store/provider-message.utils";
@@ -2047,7 +2048,7 @@ export const useAppStore = create<AppState>()(
       }) => {
         const [shell, latestTurns] = await Promise.all([
           loadWorkspaceShell({ workspaceId: args.workspaceId }),
-          listLatestWorkspaceTurns({ workspaceId: args.workspaceId }),
+          listActiveWorkspaceTurns({ workspaceId: args.workspaceId }),
         ]);
         const initialTaskIds = new Set<string>();
         if (shell?.activeTaskId) {
@@ -2086,7 +2087,7 @@ export const useAppStore = create<AppState>()(
       }) => {
         const [shell, latestTurns] = await Promise.all([
           loadWorkspaceShell({ workspaceId: args.workspaceId }),
-          listLatestWorkspaceTurns({ workspaceId: args.workspaceId }),
+          listActiveWorkspaceTurns({ workspaceId: args.workspaceId }),
         ]);
         const interruptedTaskIds = new Set(
           latestTurns
@@ -6139,11 +6140,15 @@ export const useAppStore = create<AppState>()(
         void window.api?.provider?.cleanupTask?.({ taskId: STAVE_MUSE_SESSION_ID });
         set((state) => {
           const current = state.staveMuse.messages;
-          const target = current[current.length - 1];
+          const interruptedMessages = interruptPendingToolInteractionsInMessages({
+            messages: current,
+          });
+          const target = interruptedMessages[interruptedMessages.length - 1];
           if (!target || target.role !== "assistant" || !target.isStreaming) {
             return {
               staveMuse: {
                 ...state.staveMuse,
+                messages: interruptedMessages,
                 activeTurnId: undefined,
                 providerSession: undefined,
                 nativeSessionReady: false,
@@ -6162,7 +6167,7 @@ export const useAppStore = create<AppState>()(
           return {
             staveMuse: {
               ...state.staveMuse,
-              messages: [...current.slice(0, -1), aborted],
+              messages: [...interruptedMessages.slice(0, -1), aborted],
               activeTurnId: undefined,
               providerSession: undefined,
               nativeSessionReady: false,
@@ -6700,18 +6705,30 @@ export const useAppStore = create<AppState>()(
 
         set((state) => {
           const current = state.messagesByTask[taskId] ?? [];
-          const target = current[current.length - 1];
+          const interruptedMessages = interruptPendingToolInteractionsInMessages({
+            messages: current,
+          });
+          const target = interruptedMessages[interruptedMessages.length - 1];
           // Clear persisted provider session so stale thread IDs are not
           // carried across to subsequent turns or workspace reloads.
           const { [taskId]: _dropped, ...restProviderSession } =
             state.providerSessionByTask;
           if (!target || target.role !== "assistant" || !target.isStreaming) {
             return {
+              messagesByTask: interruptedMessages === current
+                ? state.messagesByTask
+                : {
+                    ...state.messagesByTask,
+                    [taskId]: interruptedMessages,
+                  },
               activeTurnIdsByTask: {
                 ...state.activeTurnIdsByTask,
                 [taskId]: undefined,
               },
               providerSessionByTask: restProviderSession,
+              ...(interruptedMessages === current ? {} : {
+                workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+              }),
             };
           }
 
@@ -6728,7 +6745,7 @@ export const useAppStore = create<AppState>()(
           return {
             messagesByTask: {
               ...state.messagesByTask,
-              [taskId]: [...current.slice(0, -1), aborted],
+              [taskId]: [...interruptedMessages.slice(0, -1), aborted],
             },
             activeTurnIdsByTask: {
               ...state.activeTurnIdsByTask,

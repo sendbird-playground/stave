@@ -6,6 +6,8 @@ import {
   findPendingApprovalMessageByRequestId,
   findLatestPendingUserInputPart,
   hasRenderableAssistantContent,
+  interruptPendingToolInteractionParts,
+  interruptPendingToolInteractionsInMessages,
   mergePromptSuggestions,
   mergeToolResultIntoPart,
   resolvePendingToolInteractionPartsByRequestId,
@@ -429,6 +431,87 @@ describe("updateUserInputPartsByRequestId", () => {
         state: "input-responded",
       },
     ]);
+  });
+});
+
+describe("interruptPendingToolInteractionParts", () => {
+  test("marks pending approvals and user-input requests as interrupted", () => {
+    expect(interruptPendingToolInteractionParts({
+      parts: [
+        {
+          type: "approval",
+          toolName: "Bash",
+          description: "Run command",
+          requestId: "approval-1",
+          state: "approval-requested",
+        },
+        {
+          type: "approval",
+          toolName: "Read",
+          description: "Already answered",
+          requestId: "approval-2",
+          state: "approval-responded",
+        },
+        {
+          type: "user_input",
+          toolName: "AskUserQuestion",
+          requestId: "input-1",
+          questions: [{
+            question: "Continue?",
+            header: "Confirm",
+            options: [{ label: "Yes", description: "continue" }],
+          }],
+          state: "input-requested",
+        },
+      ],
+    })).toEqual([
+      {
+        type: "approval",
+        toolName: "Bash",
+        description: "Run command",
+        requestId: "approval-1",
+        state: "approval-interrupted",
+      },
+      {
+        type: "approval",
+        toolName: "Read",
+        description: "Already answered",
+        requestId: "approval-2",
+        state: "approval-responded",
+      },
+      {
+        type: "user_input",
+        toolName: "AskUserQuestion",
+        requestId: "input-1",
+        questions: [{
+          question: "Continue?",
+          header: "Confirm",
+          options: [{ label: "Yes", description: "continue" }],
+        }],
+        state: "input-interrupted",
+      },
+    ]);
+  });
+});
+
+describe("interruptPendingToolInteractionsInMessages", () => {
+  test("returns the original array when there are no pending tool interactions", () => {
+    const messages = [{
+      id: "message-1",
+      role: "assistant" as const,
+      model: "codex",
+      providerId: "codex" as const,
+      content: "",
+      parts: [{
+        type: "approval" as const,
+        toolName: "Read",
+        description: "Already handled",
+        requestId: "approval-1",
+        state: "approval-responded" as const,
+      }],
+    }];
+
+    expect(interruptPendingToolInteractionsInMessages({ messages })).toBe(messages);
   });
 });
 

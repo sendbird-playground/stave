@@ -9,6 +9,7 @@ import {
 import { normalizeTaskControl } from "@/lib/tasks";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { createEmptyWorkspaceInformation, type WorkspaceInformationState } from "@/lib/workspace-information";
+import { interruptPendingToolInteractionsInMessages } from "@/store/provider-message.utils";
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 
 export const starterWorkspaceId = "base";
@@ -110,17 +111,23 @@ export function appendInterruptedTurnNotices(args: {
     }
 
     const currentMessages = nextMessagesByTask[turn.taskId] ?? [];
-    if (hasInterruptedTurnNotice(currentMessages)) {
+    const interruptedMessages = interruptPendingToolInteractionsInMessages({
+      messages: currentMessages,
+    });
+    const alreadyInterrupted = hasInterruptedTurnNotice(interruptedMessages);
+    if (alreadyInterrupted && interruptedMessages === currentMessages) {
       continue;
     }
 
-    nextMessagesByTask[turn.taskId] = [
-      ...currentMessages,
-      createInterruptedTurnNoticeMessage({
-        taskId: turn.taskId,
-        count: currentMessages.length,
-      }),
-    ];
+    nextMessagesByTask[turn.taskId] = alreadyInterrupted
+      ? interruptedMessages
+      : [
+          ...interruptedMessages,
+          createInterruptedTurnNoticeMessage({
+            taskId: turn.taskId,
+            count: interruptedMessages.length,
+          }),
+        ];
     changed = true;
   }
 
@@ -173,23 +180,35 @@ export function interruptActiveTaskTurns(args: {
     }
 
     const currentMessages = nextMessagesByTask[task.id] ?? [];
-    if (hasSystemNotice({ messages: currentMessages, notice: args.notice })) {
-      continue;
-    }
-
-    nextMessagesByTask[task.id] = [
-      ...currentMessages.map((message) => (
+    const interruptedMessages = interruptPendingToolInteractionsInMessages({
+      messages: currentMessages,
+    });
+    let taskMessagesChanged = interruptedMessages !== currentMessages;
+    const finalizedMessages = interruptedMessages.map((message) => (
         message.isStreaming
           ? { ...message, completedAt: message.completedAt ?? buildRecentTimestamp(), isStreaming: false }
           : message
-      )),
-      createSystemNoticeMessage({
-        taskId: task.id,
-        count: currentMessages.length,
-        notice: args.notice,
-      }),
-    ];
-    messagesChanged = true;
+      ));
+    if (finalizedMessages.some((message, index) => message !== interruptedMessages[index])) {
+      taskMessagesChanged = true;
+    }
+
+    const hasNotice = hasSystemNotice({ messages: finalizedMessages, notice: args.notice });
+    const nextMessages = hasNotice
+      ? finalizedMessages
+      : [
+          ...finalizedMessages,
+          createSystemNoticeMessage({
+            taskId: task.id,
+            count: finalizedMessages.length,
+            notice: args.notice,
+          }),
+        ];
+
+    if (!hasNotice || taskMessagesChanged) {
+      nextMessagesByTask[task.id] = nextMessages;
+      messagesChanged = true;
+    }
   }
 
   return {

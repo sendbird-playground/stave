@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  listActiveWorkspaceTurns,
   listLatestWorkspaceTurns,
   listTaskTurns,
   loadTurnRequestSnapshot,
@@ -105,6 +106,46 @@ describe("turn replay data access", () => {
     const turns = await listLatestWorkspaceTurns({ workspaceId: "ws-1" });
 
     expect(turns.map((turn) => turn.taskId)).toEqual(["task-2", "task-1"]);
+    expect(turns[0]?.completedAt).toBeNull();
+  });
+
+  test("lists active workspace turns from the dedicated bridge when available", async () => {
+    setWindowApi({
+      persistence: {
+        listActiveWorkspaceTurns: async () => ({
+          ok: true,
+          turns: [
+            {
+              id: "turn-task-1-active",
+              workspaceId: "ws-1",
+              taskId: "task-1",
+              providerId: "codex",
+              createdAt: "2026-03-10T00:00:00.000Z",
+              completedAt: null,
+              eventCount: 1,
+            },
+          ],
+        }),
+        listLatestWorkspaceTurns: async () => ({
+          ok: true,
+          turns: [
+            {
+              id: "turn-task-1-completed",
+              workspaceId: "ws-1",
+              taskId: "task-1",
+              providerId: "codex",
+              createdAt: "2026-03-10T00:00:01.000Z",
+              completedAt: "2026-03-10T00:00:02.000Z",
+              eventCount: 2,
+            },
+          ],
+        }),
+      },
+    });
+
+    const turns = await listActiveWorkspaceTurns({ workspaceId: "ws-1" });
+
+    expect(turns.map((turn) => turn.id)).toEqual(["turn-task-1-active"]);
     expect(turns[0]?.completedAt).toBeNull();
   });
 

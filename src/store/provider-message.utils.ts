@@ -279,6 +279,54 @@ export function resolvePendingToolInteractionPartsByRequestId(args: {
   return changed ? nextParts : args.parts;
 }
 
+export function interruptPendingToolInteractionParts(args: {
+  parts: MessagePart[];
+}): MessagePart[] {
+  let changed = false;
+  const nextParts = args.parts.map((part) => {
+    if (part.type === "approval" && part.state === "approval-requested") {
+      changed = true;
+      return {
+        ...part,
+        state: "approval-interrupted" as const,
+      };
+    }
+
+    if (part.type === "user_input" && part.state === "input-requested") {
+      changed = true;
+      return {
+        ...part,
+        state: "input-interrupted" as const,
+      };
+    }
+
+    return part;
+  });
+
+  return changed ? nextParts : args.parts;
+}
+
+export function interruptPendingToolInteractionsInMessages(args: {
+  messages: ChatMessage[];
+}): ChatMessage[] {
+  let changed = false;
+  const nextMessages = args.messages.map((message) => {
+    const nextParts = interruptPendingToolInteractionParts({
+      parts: message.parts,
+    });
+    if (nextParts === message.parts) {
+      return message;
+    }
+    changed = true;
+    return {
+      ...message,
+      parts: nextParts,
+    };
+  });
+
+  return changed ? nextMessages : args.messages;
+}
+
 export function updateUserInputPartsByRequestId(args: {
   parts: MessagePart[];
   requestId: string;

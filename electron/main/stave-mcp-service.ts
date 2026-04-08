@@ -372,7 +372,7 @@ async function loadWorkspaceSession(workspaceId: string) {
   if (!snapshot) {
     throw new Error(`Workspace not found: ${workspaceId}`);
   }
-  const latestTurns = store.listLatestTurnsForWorkspace({ workspaceId, limit: 200 });
+  const latestTurns = store.listActiveTurnsForWorkspace({ workspaceId, limit: 200 });
   const session = buildWorkspaceSessionState({
     snapshot: snapshot as never,
     latestTurns: latestTurns as never,

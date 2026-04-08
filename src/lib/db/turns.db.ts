@@ -115,6 +115,36 @@ export async function listLatestWorkspaceTurns(args: {
   return parsed.data;
 }
 
+export async function listActiveWorkspaceTurns(args: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<PersistedTurnSummary[]> {
+  const persistence = getPersistenceApi();
+  if (!persistence) {
+    return [];
+  }
+
+  if (!persistence.listActiveWorkspaceTurns) {
+    const latestTurns = await listLatestWorkspaceTurns(args);
+    return latestTurns.filter((turn) => !turn.completedAt);
+  }
+
+  const response = await persistence.listActiveWorkspaceTurns({
+    workspaceId: args.workspaceId,
+    limit: args.limit,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to list active workspace turns for ${args.workspaceId}`);
+  }
+
+  const parsed = z.array(PersistedTurnSummarySchema).safeParse(response.turns);
+  if (!parsed.success) {
+    throw new Error("Invalid active workspace turn payload returned from persistence bridge.");
+  }
+
+  return parsed.data;
+}
+
 export async function listPersistedTurnEvents(args: {
   turnId: string;
   afterSequence?: number;

@@ -3,12 +3,25 @@ import { Button, Kbd } from "@/components/ui";
 interface ConfirmationCompactProps {
   toolName: string;
   description: string;
-  state: "approval-requested" | "approval-responded" | "output-denied";
+  state: "approval-requested" | "approval-responded" | "approval-interrupted" | "output-denied";
   onApprove?: () => void;
   onReject?: () => void;
   disabled?: boolean;
   disabledReason?: string;
   showShortcutHint?: boolean;
+}
+
+function getApprovalDecisionText(state: ConfirmationCompactProps["state"]) {
+  switch (state) {
+    case "approval-responded":
+      return "Decision: approved.";
+    case "output-denied":
+      return "Decision: denied.";
+    case "approval-interrupted":
+      return "Request expired because the turn was interrupted.";
+    default:
+      return null;
+  }
 }
 
 export function ConfirmationCompact(args: ConfirmationCompactProps) {
@@ -22,6 +35,7 @@ export function ConfirmationCompact(args: ConfirmationCompactProps) {
     disabledReason,
     showShortcutHint = true,
   } = args;
+  const decisionText = getApprovalDecisionText(state);
 
   return (
     <div className="rounded-md border bg-card p-3 text-[0.875em]">
@@ -43,7 +57,7 @@ export function ConfirmationCompact(args: ConfirmationCompactProps) {
           ) : null}
         </>
       ) : (
-        <p className="mt-2 text-muted-foreground">Decision: {state}</p>
+        <p className="mt-2 text-muted-foreground">{decisionText ?? "Decision recorded."}</p>
       )}
     </div>
   );
