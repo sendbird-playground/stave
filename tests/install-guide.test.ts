@@ -18,12 +18,13 @@ describe("install guide", () => {
     expect(guide).toContain("gh auth refresh -h github.com -s repo,read:org");
   });
 
-  test("ships an installer script that downloads the latest macOS zip and removes quarantine", () => {
+  test("ships an installer script that stages the latest macOS zip before replacing the app and removes quarantine", () => {
     const installer = readFileSync(path.join(repoRoot, "scripts", "install-latest-release.sh"), "utf8");
 
     expect(installer).toContain("gh release download");
     expect(installer).toContain("Stave-macOS.zip");
-    expect(installer).toContain("ditto \"$SOURCE_APP\" \"$TARGET_APP\"");
+    expect(installer).toContain("ditto \"$SOURCE_APP\" \"$STAGED_APP\"");
+    expect(installer).toContain("mv \"$STAGED_APP\" \"$TARGET_APP\"");
     expect(installer).toContain("xattr -dr com.apple.quarantine");
     expect(installer).toContain("gh auth login");
   });
