@@ -5,7 +5,7 @@ import type { UserInputQuestion } from "@/types/chat";
 interface UserInputCardProps {
   toolName: string;
   questions: UserInputQuestion[];
-  state: "input-requested" | "input-responded" | "input-denied";
+  state: "input-requested" | "input-responded" | "input-interrupted" | "input-denied";
   answers?: Record<string, string>;
   onSubmit?: (answers: Record<string, string>) => void;
   onDeny?: () => void;
@@ -185,6 +185,8 @@ export function UserInputCard(args: UserInputCardProps) {
         </>
       ) : state === "input-denied" ? (
         <p className="mt-2 text-muted-foreground">Decision: user declined to answer.</p>
+      ) : state === "input-interrupted" ? (
+        <p className="mt-2 text-muted-foreground">Request expired because the turn was interrupted.</p>
       ) : (
         <div className="mt-3 space-y-2">
           {questions.map((question) => (

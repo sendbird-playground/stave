@@ -725,6 +725,7 @@ const CanonicalMessagePartSchema = z.discriminatedUnion("type", [
       state: z.union([
         z.literal("approval-requested"),
         z.literal("approval-responded"),
+        z.literal("approval-interrupted"),
         z.literal("output-denied"),
       ]),
     })
@@ -739,6 +740,7 @@ const CanonicalMessagePartSchema = z.discriminatedUnion("type", [
       state: z.union([
         z.literal("input-requested"),
         z.literal("input-responded"),
+        z.literal("input-interrupted"),
         z.literal("input-denied"),
       ]),
     })
@@ -1089,6 +1091,13 @@ export const ListTaskTurnsArgsSchema = z
   .strict();
 
 export const ListLatestWorkspaceTurnsArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+    limit: z.number().int().min(1).max(500).optional(),
+  })
+  .strict();
+
+export const ListActiveWorkspaceTurnsArgsSchema = z
   .object({
     workspaceId: z.string().min(1).max(200),
     limit: z.number().int().min(1).max(500).optional(),

@@ -969,6 +969,21 @@ interface WindowPersistenceApi {
       eventCount: number;
     }>;
   }>;
+  listActiveWorkspaceTurns?: (args: {
+    workspaceId: string;
+    limit?: number;
+  }) => Promise<{
+    ok: boolean;
+    turns: Array<{
+      id: string;
+      workspaceId: string;
+      taskId: string;
+      providerId: "claude-code" | "codex" | "stave";
+      createdAt: string;
+      completedAt: string | null;
+      eventCount: number;
+    }>;
+  }>;
   listLatestWorkspaceTurns?: (args: {
     workspaceId: string;
     limit?: number;

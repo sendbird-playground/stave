@@ -459,6 +459,8 @@ contextBridge.exposeInMainWorld("api", {
       taskId: string;
       limit?: number;
     }) => ipcRenderer.invoke("persistence:list-task-turns", args),
+    listActiveWorkspaceTurns: (args: { workspaceId: string; limit?: number }) =>
+      ipcRenderer.invoke("persistence:list-active-workspace-turns", args),
     listLatestWorkspaceTurns: (args: { workspaceId: string; limit?: number }) =>
       ipcRenderer.invoke("persistence:list-latest-workspace-turns", args),
     listTurnEvents: (args: {

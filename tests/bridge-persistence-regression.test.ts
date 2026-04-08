@@ -994,7 +994,16 @@ describe("workspace store hydration ordering", () => {
                     model: "gpt-5",
                     providerId: "codex",
                     content: "partial response",
-                    parts: [{ type: "text", text: "partial response" }],
+                    parts: [
+                      { type: "text", text: "partial response" },
+                      {
+                        type: "approval",
+                        toolName: "bash",
+                        description: "Run npm test",
+                        requestId: "approval-stale-1",
+                        state: "approval-requested",
+                      },
+                    ],
                   },
                 ],
               },
@@ -1041,6 +1050,11 @@ describe("workspace store hydration ordering", () => {
     const messages = nextState.messagesByTask["task-stale"] ?? [];
     expect(nextState.activeTurnIdsByTask["task-stale"]).toBeUndefined();
     expect(messages).toHaveLength(2);
+    expect(messages[0]?.parts[1]).toMatchObject({
+      type: "approval",
+      requestId: "approval-stale-1",
+      state: "approval-interrupted",
+    });
     expect(messages.at(-1)?.content).toBe("Generation interrupted because Stave was closed before this turn completed.");
     expect(messages.at(-1)?.parts).toEqual([{
       type: "system_event",
@@ -2740,21 +2754,32 @@ describe("workspace store hydration ordering", () => {
         unread: false,
         archivedAt: null,
       }],
-      messagesByTask: { "task-abort-1": [] },
-      activeTurnIdsByTask: {},
+      messagesByTask: {
+        "task-abort-1": [{
+          id: "task-abort-1-m-1",
+          role: "assistant",
+          model: "gpt-5.4",
+          providerId: "codex",
+          content: "",
+          isStreaming: false,
+          parts: [{
+            type: "approval",
+            toolName: "bash",
+            requestId: "approval-abort-1",
+            description: "Run npm test",
+            state: "approval-requested",
+          }],
+        }],
+      },
+      activeTurnIdsByTask: {
+        "task-abort-1": "turn-abort-1",
+      },
       promptDraftByTask: {},
       nativeSessionReadyByTask: {},
       providerSessionByTask: {
         "task-abort-1": { codex: "thread-id-stale-abc123" },
       },
     });
-
-    useAppStore.getState().sendUserMessage({
-      taskId: "task-abort-1",
-      content: "Do something, then I will abort.",
-    });
-
-    await Bun.sleep(0);
 
     const beforeAbort = useAppStore.getState();
     const activeTurnId = beforeAbort.activeTurnIdsByTask["task-abort-1"];
@@ -2770,6 +2795,11 @@ describe("workspace store hydration ordering", () => {
     expect(cleanupCalls).toContain("task-abort-1");
     // providerSessionByTask should no longer hold the stale thread id
     expect(afterAbort.providerSessionByTask["task-abort-1"]).toBeUndefined();
+    expect(afterAbort.messagesByTask["task-abort-1"]?.[0]?.parts[0]).toMatchObject({
+      type: "approval",
+      requestId: "approval-abort-1",
+      state: "approval-interrupted",
+    });
   });
 
   test("resolveApproval keeps pending state when no active turn exists", async () => {

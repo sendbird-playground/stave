@@ -1144,6 +1144,44 @@ export class SqliteStore {
     }));
   }
 
+  listActiveTurnsForWorkspace(args: { workspaceId: string; limit?: number }): PersistenceTurnSummary[] {
+    const limit = Math.max(1, Math.min(500, args.limit ?? 200));
+    const rows = this.db.prepare(`
+      SELECT id, workspace_id, task_id, provider_id, created_at, completed_at, event_count
+      FROM (
+        SELECT
+          turns.id,
+          turns.workspace_id,
+          turns.task_id,
+          turns.provider_id,
+          turns.created_at,
+          turns.completed_at,
+          COUNT(CASE WHEN turn_events.event_type != 'request_snapshot' THEN 1 END) AS event_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY turns.task_id
+            ORDER BY turns.created_at DESC, turns.id DESC
+          ) AS active_turn_rank
+        FROM turns
+        LEFT JOIN turn_events ON turn_events.turn_id = turns.id
+        WHERE turns.workspace_id = ? AND turns.completed_at IS NULL
+        GROUP BY turns.id, turns.workspace_id, turns.task_id, turns.provider_id, turns.created_at, turns.completed_at
+      ) active_turns
+      WHERE active_turn_rank = 1
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(args.workspaceId, limit) as TurnSummaryRow[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      workspaceId: row.workspace_id,
+      taskId: row.task_id,
+      providerId: row.provider_id,
+      createdAt: row.created_at,
+      completedAt: row.completed_at,
+      eventCount: row.event_count,
+    }));
+  }
+
   listLatestTurnsForWorkspace(args: { workspaceId: string; limit?: number }): PersistenceTurnSummary[] {
     const limit = Math.max(1, Math.min(500, args.limit ?? 200));
     const rows = this.db.prepare(`
