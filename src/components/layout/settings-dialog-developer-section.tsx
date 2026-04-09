@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui";
+import { Badge, Button, Switch, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type {
@@ -21,13 +21,13 @@ import { getRepoMapCacheSnapshot, clearRepoMapContextCache, type RepoMapCacheEnt
 import { useAppStore } from "@/store/app.store";
 import { buildProviderRuntimeOptions } from "@/store/provider-runtime-options";
 import {
-  ChoiceButtons,
   DraftInput,
   LabeledField,
   readInt,
   SectionHeading,
   SectionStack,
   SettingsCard,
+  SwitchField,
 } from "./settings-dialog.shared";
 
 interface GpuStatusSnapshot {
@@ -567,13 +567,9 @@ export function DeveloperSection() {
           title="Provider Debug Logging"
           description="Enables verbose stream event logging for all providers in the Electron main-process console."
         >
-          <ChoiceButtons
-            value={providerDebugStream ? "on" : "off"}
-            onChange={(value) => updateSettings({ patch: { providerDebugStream: value === "on" } })}
-            options={[
-              { value: "on", label: "On" },
-              { value: "off", label: "Off" },
-            ]}
+          <Switch
+            checked={providerDebugStream}
+            onCheckedChange={(checked) => updateSettings({ patch: { providerDebugStream: checked } })}
           />
         </SettingsCard>
 
@@ -819,19 +815,12 @@ export function LocalMcpServerCard() {
             `Claude Code` and `Codex` are opt-in. Stave only writes its managed MCP entry to your user-level CLI config files after you turn those settings on.
           </p>
 
-          <LabeledField
+          <SwitchField
             title="Server"
             description="Enable or disable the localhost MCP surface exposed by the desktop app."
-          >
-            <ChoiceButtons
-              value={config.enabled ? "on" : "off"}
-              onChange={(value) => void applyConfigPatch({ enabled: value === "on" })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={config.enabled}
+            onCheckedChange={(checked) => void applyConfigPatch({ enabled: checked })}
+          />
 
           <LabeledField
             title="Port"
@@ -848,33 +837,19 @@ export function LocalMcpServerCard() {
             />
           </LabeledField>
 
-          <LabeledField
+          <SwitchField
             title="Claude Code"
             description="Opt-in and off by default. When enabled, Stave manages only its own MCP entry in `~/.claude/settings.json` for the external Claude Code app. This does not affect Stave's internal Claude runtime."
-          >
-            <ChoiceButtons
-              value={config.claudeCodeAutoRegister ? "on" : "off"}
-              onChange={(value) => void applyConfigPatch({ claudeCodeAutoRegister: value === "on" })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={config.claudeCodeAutoRegister}
+            onCheckedChange={(checked) => void applyConfigPatch({ claudeCodeAutoRegister: checked })}
+          />
 
-          <LabeledField
+          <SwitchField
             title="Codex"
             description="Opt-in and off by default. When enabled, Stave manages only its own MCP entry in `~/.codex/config.toml` for Codex. Stave also injects the current token into the in-app Codex runtime env."
-          >
-            <ChoiceButtons
-              value={config.codexAutoRegister ? "on" : "off"}
-              onChange={(value) => void applyConfigPatch({ codexAutoRegister: value === "on" })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={config.codexAutoRegister}
+            onCheckedChange={(checked) => void applyConfigPatch({ codexAutoRegister: checked })}
+          />
 
           <LabeledField
             title="Token"

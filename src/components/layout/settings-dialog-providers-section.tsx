@@ -41,7 +41,6 @@ import { useAppStore } from "@/store/app.store";
 import type { ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
-  ChoiceButtons,
   DraftInput,
   LabeledField,
   readInt,
@@ -49,6 +48,7 @@ import {
   SectionStack,
   SettingsFieldGuide,
   SettingsCard,
+  SwitchField,
 } from "./settings-dialog.shared";
 import {
   ClaudeRuntimeToolsCard,
@@ -826,19 +826,12 @@ function StaveAutoCard() {
           </SelectContent>
         </Select>
       </LabeledField>
-      <LabeledField
+      <SwitchField
         title="Fast Mode"
         description="Requests fast execution for Stave Auto turns. It is only applied to providers whose fast mode is available in this workspace."
-      >
-        <ChoiceButtons
-          value={staveAutoFastMode ? "on" : "off"}
-          onChange={(value) => updateSettings({ patch: { staveAutoFastMode: value === "on" } })}
-          options={[
-            { value: "on", label: "On" },
-            { value: "off", label: "Off" },
-          ]}
-        />
-      </LabeledField>
+        checked={staveAutoFastMode}
+        onCheckedChange={(checked) => updateSettings({ patch: { staveAutoFastMode: checked } })}
+      />
       <LabeledField
         title="Role Runtime Overrides"
         description="Each role has its own default settings that you can customize per selected model provider."
@@ -875,16 +868,12 @@ function StaveAutoCard() {
             updateSettings({ patch: { staveAutoMaxParallelSubtasks: Math.min(8, Math.max(1, readInt(value, 2))) } })}
         />
       </LabeledField>
-      <LabeledField title="Cross-Provider Workers" description="Allow orchestration to mix Claude and Codex workers in the same request.">
-        <ChoiceButtons
-          value={staveAutoAllowCrossProviderWorkers ? "on" : "off"}
-          onChange={(value) => updateSettings({ patch: { staveAutoAllowCrossProviderWorkers: value === "on" } })}
-          options={[
-            { value: "on", label: "On" },
-            { value: "off", label: "Off" },
-          ]}
-        />
-      </LabeledField>
+      <SwitchField
+        title="Cross-Provider Workers"
+        description="Allow orchestration to mix Claude and Codex workers in the same request."
+        checked={staveAutoAllowCrossProviderWorkers}
+        onCheckedChange={(checked) => updateSettings({ patch: { staveAutoAllowCrossProviderWorkers: checked } })}
+      />
     </SettingsCard>
   );
 }
@@ -1030,45 +1019,24 @@ export function ProvidersSection() {
               }
             />
           </LabeledField>
-          <LabeledField
+          <SwitchField
             title="Dangerous Skip Permissions"
             description="Only applies when `bypassPermissions` is active."
-          >
-            <ChoiceButtons
-              value={claudeAllowDangerouslySkipPermissions ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { claudeAllowDangerouslySkipPermissions: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Let Claude skip permission prompts more aggressively." },
-                { value: "off", label: "Off", description: "Keep dangerous skip behavior disabled." },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField
+            checked={claudeAllowDangerouslySkipPermissions}
+            onCheckedChange={(checked) => updateSettings({ patch: { claudeAllowDangerouslySkipPermissions: checked } })}
+          />
+          <SwitchField
             title="Sandbox Enabled"
             description="Wrap Claude tool execution in its sandbox configuration."
-          >
-            <ChoiceButtons
-              value={claudeSandboxEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { claudeSandboxEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Request sandboxed Claude tool execution." },
-                { value: "off", label: "Off", description: "Do not ask Claude to use its sandbox." },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField
+            checked={claudeSandboxEnabled}
+            onCheckedChange={(checked) => updateSettings({ patch: { claudeSandboxEnabled: checked } })}
+          />
+          <SwitchField
             title="Allow Unsandboxed Commands"
             description="Controls whether Claude may fall back to commands outside the sandbox."
-          >
-            <ChoiceButtons
-              value={claudeAllowUnsandboxedCommands ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { claudeAllowUnsandboxedCommands: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Permit fallbacks that cannot stay sandboxed." },
-                { value: "off", label: "Off", description: "Reject commands that would escape the sandbox." },
-              ]}
-            />
-          </LabeledField>
+            checked={claudeAllowUnsandboxedCommands}
+            onCheckedChange={(checked) => updateSettings({ patch: { claudeAllowUnsandboxedCommands: checked } })}
+          />
           <LabeledField
             title="Setting Sources"
             description="Controls which Claude filesystem setting layers are loaded. `project` is required for CLAUDE.md and project slash commands."
@@ -1165,32 +1133,18 @@ export function ProvidersSection() {
               }
             />
           </LabeledField>
-          <LabeledField
+          <SwitchField
             title="Agent Progress Summaries"
             description="Enables Claude SDK `task_progress.summary` updates for running subagents."
-          >
-            <ChoiceButtons
-              value={claudeAgentProgressSummaries ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { claudeAgentProgressSummaries: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Show running subagent progress summaries in chat." },
-                { value: "off", label: "Off", description: "Keep subagent progress quieter and show only final output." },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField
+            checked={claudeAgentProgressSummaries}
+            onCheckedChange={(checked) => updateSettings({ patch: { claudeAgentProgressSummaries: checked } })}
+          />
+          <SwitchField
             title="Fast Mode"
             description="Enables Claude's /fast mode, which uses Haiku for faster responses on simpler tasks."
-          >
-            <ChoiceButtons
-              value={claudeFastMode ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { claudeFastMode: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Bias toward faster responses on simpler tasks." },
-                { value: "off", label: "Off", description: "Use the normal Claude runtime path." },
-              ]}
-            />
-          </LabeledField>
+            checked={claudeFastMode}
+            onCheckedChange={(checked) => updateSettings({ patch: { claudeFastMode: checked } })}
+          />
             </SettingsCard>
             <ClaudeRuntimeToolsCard />
           </SectionStack>
@@ -1218,19 +1172,12 @@ export function ProvidersSection() {
                 : "Custom is active. The current Codex file-access and approval combination does not match a built-in preset."}
             </p>
           </LabeledField>
-          <LabeledField
+          <SwitchField
             title="Network Access"
             description="Controls whether Codex may use networked capabilities during a turn."
-          >
-            <ChoiceButtons
-              value={codexNetworkAccess ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { codexNetworkAccess: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Allow browsing, web search, and other networked Codex features." },
-                { value: "off", label: "Off", description: "Recommended default. Keep Codex local unless the task really needs the network." },
-              ]}
-            />
-          </LabeledField>
+            checked={codexNetworkAccess}
+            onCheckedChange={(checked) => updateSettings({ patch: { codexNetworkAccess: checked } })}
+          />
           <LabeledField
             title="File Access"
             guide={(
@@ -1355,19 +1302,12 @@ export function ProvidersSection() {
               }
             />
           </LabeledField>
-          <LabeledField
+          <SwitchField
             title="Raw Reasoning"
             description="Shows low-level reasoning traces when Codex emits them."
-          >
-            <ChoiceButtons
-              value={codexShowRawReasoning ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { codexShowRawReasoning: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Surface raw reasoning events in the Stave UI." },
-                { value: "off", label: "Off", description: "Hide raw reasoning traces and keep the UI quieter." },
-              ]}
-            />
-          </LabeledField>
+            checked={codexShowRawReasoning}
+            onCheckedChange={(checked) => updateSettings({ patch: { codexShowRawReasoning: checked } })}
+          />
           <LabeledField
             title="Web Search"
             description="Default is `cached`, which allows lower-volatility search without turning on live external lookup."
@@ -1393,19 +1333,12 @@ export function ProvidersSection() {
               }
             />
           </LabeledField>
-          <LabeledField
+          <SwitchField
             title="Fast Mode"
             description="Enables Codex fast_mode feature flag for faster responses on simpler tasks."
-          >
-            <ChoiceButtons
-              value={codexFastMode ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { codexFastMode: value === "on" } })}
-              options={[
-                { value: "on", label: "On", description: "Bias toward faster Codex turns on simpler work." },
-                { value: "off", label: "Off", description: "Use the normal Codex runtime path." },
-              ]}
-            />
-          </LabeledField>
+            checked={codexFastMode}
+            onCheckedChange={(checked) => updateSettings({ patch: { codexFastMode: checked } })}
+          />
             </SettingsCard>
             <CodexBinaryPathCard />
           </SectionStack>

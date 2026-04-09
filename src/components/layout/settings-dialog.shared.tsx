@@ -10,6 +10,7 @@ import {
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
+  Switch,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -110,6 +111,33 @@ export function LabeledField(args: {
         {args.description ? <p className="text-sm text-muted-foreground">{args.description}</p> : null}
       </div>
       {args.children}
+    </div>
+  );
+}
+
+export function SwitchField(args: {
+  title: string;
+  description?: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  guide?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium">{args.title}</p>
+          {args.guide}
+        </div>
+        {args.description ? (
+          <p className="text-sm text-muted-foreground">{args.description}</p>
+        ) : null}
+      </div>
+      <Switch
+        checked={args.checked}
+        onCheckedChange={args.onCheckedChange}
+        className="mt-0.5 shrink-0"
+      />
     </div>
   );
 }

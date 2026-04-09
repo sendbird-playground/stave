@@ -17,11 +17,11 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { useShallow } from "zustand/react/shallow";
 import {
-  ChoiceButtons,
   LabeledField,
   SectionHeading,
   SectionStack,
   SettingsCard,
+  SwitchField,
 } from "./settings-dialog.shared";
 
 const MUSE_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
@@ -161,33 +161,19 @@ export function MuseSection() {
           </Select>
         </LabeledField>
 
-        <LabeledField
+        <SwitchField
           title="Auto Handoff To Task"
           description="When Muse detects Stave implementation or repository work that belongs in a workspace task, automatically create a task and continue there."
-        >
-          <ChoiceButtons
-            value={museAutoHandoffToTask ? "on" : "off"}
-            onChange={(value) => updateSettings({ patch: { museAutoHandoffToTask: value === "on" } })}
-            options={[
-              { value: "on", label: "On" },
-              { value: "off", label: "Off" },
-            ]}
-          />
-        </LabeledField>
+          checked={museAutoHandoffToTask}
+          onCheckedChange={(checked) => updateSettings({ patch: { museAutoHandoffToTask: checked } })}
+        />
 
-        <LabeledField
+        <SwitchField
           title="Direct Information Edits"
           description="Allow Muse to update notes, todos, links, and custom fields in the Information panel without creating a task."
-        >
-          <ChoiceButtons
-            value={museAllowDirectWorkspaceInfoEdits ? "on" : "off"}
-            onChange={(value) => updateSettings({ patch: { museAllowDirectWorkspaceInfoEdits: value === "on" } })}
-            options={[
-              { value: "on", label: "On" },
-              { value: "off", label: "Off" },
-            ]}
-          />
-        </LabeledField>
+          checked={museAllowDirectWorkspaceInfoEdits}
+          onCheckedChange={(checked) => updateSettings({ patch: { museAllowDirectWorkspaceInfoEdits: checked } })}
+        />
       </SettingsCard>
 
       <SettingsCard
