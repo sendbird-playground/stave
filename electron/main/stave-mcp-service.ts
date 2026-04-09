@@ -36,6 +36,7 @@ import {
 import { applyApprovalState, applyUserInputState } from "../../src/store/editor.utils";
 import {
   buildProjectDefaultWorkspaceId,
+  buildImportedWorktreeWorkspaceId,
   buildWorkspaceCreationNotice,
   buildWorkspaceRootNodeModulesSymlinkCommand,
   normalizeProjectDisplayName,
@@ -1299,8 +1300,11 @@ export async function createWorkspace(args: {
     } satisfies CreatedWorkspaceInfo;
   }
 
-  const workspaceId = randomUUID();
   const workspacePath = `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
+  const workspaceId = buildImportedWorktreeWorkspaceId({
+    projectPath,
+    worktreePath: workspacePath,
+  });
   const baseBranch = args.fromBranch?.trim() || project.defaultBranch || ensured.defaultBranch || "main";
   const initCommand = normalizeWorkspaceInitCommand({
     value: args.initCommand ?? resolveProjectWorkspaceInitCommand({
