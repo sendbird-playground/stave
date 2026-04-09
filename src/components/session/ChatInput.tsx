@@ -686,38 +686,54 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           onFocus={() => setStaveMuseOpen({ open: false })}
           onSubmit={async ({ text, filePaths }) => {
             cancelPendingDraftSave();
-            for (const fp of filePaths) {
-              await openFileFromTree({ filePath: fp });
-            }
-
-            const latestTabs = useAppStore.getState().editorTabs;
-            const fileContexts = filePaths
-              .map((fp) => latestTabs.find((item) => item.filePath === fp))
-              .filter((tab): tab is NonNullable<typeof tab> => tab != null)
-              .map((tab) => ({
-                filePath: tab.filePath,
-                content: tab.content,
-                language: tab.language,
-              }));
-            const currentAttachments = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachments ?? [];
-            const imageContexts = currentAttachments
-              .filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image")
-              .map((a) => ({
-                dataUrl: a.dataUrl,
-                label: a.label,
-                mimeType: "image/png",
-              }));
-            const result = await sendUserMessage({
-              taskId: args.activeTaskId,
-              content: text,
-              fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
-              imageContexts: imageContexts.length > 0 ? imageContexts : undefined,
+            const submittedDraft = {
+              taskId: args.providerSelectionTarget,
+              text: draftTextRef.current,
+            };
+            adoptPromptDraftText({
+              taskId: submittedDraft.taskId,
+              text: "",
             });
-            if (result.status === "started" || result.status === "queued") {
-              adoptPromptDraftText({
-                taskId: args.providerSelectionTarget,
-                text: "",
+            const restoreSubmittedDraft = () => {
+              if (syncedDraftRef.current.taskId !== submittedDraft.taskId || draftTextRef.current !== "") {
+                return;
+              }
+              adoptPromptDraftText(submittedDraft);
+              commitPromptDraftText(submittedDraft);
+            };
+            try {
+              for (const fp of filePaths) {
+                await openFileFromTree({ filePath: fp });
+              }
+              const latestTabs = useAppStore.getState().editorTabs;
+              const fileContexts = filePaths
+                .map((fp) => latestTabs.find((item) => item.filePath === fp))
+                .filter((tab): tab is NonNullable<typeof tab> => tab != null)
+                .map((tab) => ({
+                  filePath: tab.filePath,
+                  content: tab.content,
+                  language: tab.language,
+                }));
+              const currentAttachments = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachments ?? [];
+              const imageContexts = currentAttachments
+                .filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image")
+                .map((a) => ({
+                  dataUrl: a.dataUrl,
+                  label: a.label,
+                  mimeType: "image/png",
+                }));
+              const result = await sendUserMessage({
+                taskId: args.activeTaskId,
+                content: text,
+                fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
+                imageContexts: imageContexts.length > 0 ? imageContexts : undefined,
               });
+              if (result.status === "blocked") {
+                restoreSubmittedDraft();
+              }
+            } catch (error) {
+              restoreSubmittedDraft();
+              throw error;
             }
           }}
           onAbort={() => abortTaskTurn({ taskId: args.activeTaskId })}
