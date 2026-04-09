@@ -24,6 +24,7 @@ export interface TerminalSession {
   closing: boolean;
   closed: Promise<void>;
   close: () => void;
+  flushPushOutput: () => void;
   markClosed: () => void;
 }
 

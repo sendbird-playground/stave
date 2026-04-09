@@ -13,7 +13,13 @@ import {
   buildCodexEnv,
   resolveCodexExecutablePath,
 } from "../../providers/codex-sdk-runtime";
-import { deleteTerminalSession, getTerminalSession, setTerminalSession } from "../state";
+import {
+  deleteTerminalSession,
+  getTerminalSession,
+  getTerminalSessionIdForSlotKey,
+  setTerminalSession,
+} from "../state";
+import type { TerminalSession } from "../types";
 import { resolveCommandCwd, runCommand } from "../utils/command";
 import type { StreamTurnArgs } from "../../providers/types";
 
@@ -114,6 +120,53 @@ function createOscColorInterceptor(args: {
 const DEFAULT_TERMINAL_FOREGROUND = "#d4d4d4";
 const DEFAULT_TERMINAL_BACKGROUND = "#1e1e1e";
 
+function buildTerminalSessionSlotKey(args: {
+  workspaceId: string;
+  surface: "terminal" | "cli";
+  tabId: string;
+}) {
+  return `${args.surface}:${args.workspaceId}:${args.tabId}`;
+}
+
+function bufferPendingPushOutput(session: TerminalSession) {
+  if (session.pendingPush.length === 0) {
+    return;
+  }
+
+  session.outputChunks.push(session.pendingPush.join(""));
+  session.pendingPush.length = 0;
+  session.pushScheduled = false;
+}
+
+function reuseExistingTerminalSession(args: {
+  slotKey: string;
+  deliveryMode?: "poll" | "push";
+  ownerWebContentsId?: number | null;
+}) {
+  const sessionId = getTerminalSessionIdForSlotKey(args.slotKey);
+  if (!sessionId) {
+    return null;
+  }
+
+  const session = getTerminalSession(sessionId);
+  if (!session || session.closing) {
+    deleteTerminalSession(sessionId);
+    return null;
+  }
+
+  const nextDeliveryMode = args.deliveryMode ?? session.deliveryMode;
+  session.deliveryMode = nextDeliveryMode;
+  if (nextDeliveryMode === "push") {
+    session.ownerWebContentsId = args.ownerWebContentsId ?? null;
+    session.flushPushOutput();
+  } else {
+    session.ownerWebContentsId = null;
+    bufferPendingPushOutput(session);
+  }
+
+  return sessionId;
+}
+
 function createPtySession(args: {
   command: string;
   commandArgs?: string[];
@@ -124,6 +177,7 @@ function createPtySession(args: {
   deliveryMode?: "poll" | "push";
   ownerWebContentsId?: number | null;
   themeColors?: { foreground?: string; background?: string };
+  slotKey?: string;
 }) {
   const cols = args.cols ?? 80;
   const rows = args.rows ?? 24;
@@ -172,9 +226,12 @@ function createPtySession(args: {
       }
       ptyProcess.kill();
     },
+    flushPushOutput: () => {
+      flushPushOutput();
+    },
     markClosed: resolveClosed,
   };
-  setTerminalSession(sessionId, session);
+  setTerminalSession(sessionId, session, args.slotKey);
 
   function flushPushOutput() {
     session.pushScheduled = false;
@@ -249,8 +306,10 @@ function createPtySession(args: {
 }
 
 function createTerminalSession(args: {
+  workspaceId: string;
   workspacePath: string;
   taskId: string | null;
+  terminalTabId: string;
   shell?: string;
   cwd: string;
   cols?: number;
@@ -259,6 +318,21 @@ function createTerminalSession(args: {
   ownerWebContentsId?: number | null;
 }) {
   const shellExe = args.shell?.trim() || process.env.SHELL || "/bin/bash";
+  const slotKey = buildTerminalSessionSlotKey({
+    workspaceId: args.workspaceId,
+    surface: "terminal",
+    tabId: args.terminalTabId,
+  });
+  const existingSessionId = reuseExistingTerminalSession({
+    slotKey,
+    deliveryMode: args.deliveryMode,
+    ownerWebContentsId:
+      args.deliveryMode === "push" ? args.ownerWebContentsId ?? null : null,
+  });
+  if (existingSessionId) {
+    return existingSessionId;
+  }
+
   return createPtySession({
     command: shellExe,
     cwd: args.cwd || args.workspacePath,
@@ -266,6 +340,7 @@ function createTerminalSession(args: {
     rows: args.rows,
     deliveryMode: args.deliveryMode,
     ownerWebContentsId: args.ownerWebContentsId,
+    slotKey,
     env: {
       ...(process.env as Record<string, string>),
       STAVE_WORKSPACE_PATH: args.workspacePath,
@@ -275,7 +350,9 @@ function createTerminalSession(args: {
 }
 
 function createCliSession(args: {
+  workspaceId: string;
   workspacePath: string;
+  cliSessionTabId: string;
   taskId: string | null;
   taskTitle: string | null;
   providerId: "claude-code" | "codex";
@@ -286,6 +363,21 @@ function createCliSession(args: {
   ownerWebContentsId?: number | null;
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
+  const slotKey = buildTerminalSessionSlotKey({
+    workspaceId: args.workspaceId,
+    surface: "cli",
+    tabId: args.cliSessionTabId,
+  });
+  const existingSessionId = reuseExistingTerminalSession({
+    slotKey,
+    deliveryMode: args.deliveryMode,
+    ownerWebContentsId:
+      args.deliveryMode === "push" ? args.ownerWebContentsId ?? null : null,
+  });
+  if (existingSessionId) {
+    return { ok: true, sessionId: existingSessionId };
+  }
+
   if (args.providerId === "claude-code") {
     const executablePath = resolveClaudeExecutablePath({
       explicitPath: args.runtimeOptions?.claudeBinaryPath,
@@ -303,6 +395,7 @@ function createCliSession(args: {
         rows: args.rows,
         deliveryMode: args.deliveryMode,
         ownerWebContentsId: args.ownerWebContentsId,
+        slotKey,
         env: {
           ...env,
           STAVE_WORKSPACE_PATH: args.workspacePath,
@@ -329,6 +422,7 @@ function createCliSession(args: {
       rows: args.rows,
       deliveryMode: args.deliveryMode,
       ownerWebContentsId: args.ownerWebContentsId,
+      slotKey,
       env: {
         ...env,
         STAVE_WORKSPACE_PATH: args.workspacePath,
@@ -351,8 +445,10 @@ export function registerTerminalHandlers() {
     }
     const request = parsed.data;
     const sessionId = createTerminalSession({
+      workspaceId: request.workspaceId,
       workspacePath: request.workspacePath,
       taskId: request.taskId,
+      terminalTabId: request.terminalTabId,
       cwd: request.cwd,
       shell: request.shell,
       cols: request.cols,
@@ -371,7 +467,9 @@ export function registerTerminalHandlers() {
     }
     const request = parsed.data;
     return createCliSession({
+      workspaceId: request.workspaceId,
       workspacePath: request.workspacePath,
+      cliSessionTabId: request.cliSessionTabId,
       taskId: request.taskId,
       taskTitle: request.taskTitle,
       providerId: request.providerId,
@@ -399,6 +497,7 @@ export function registerTerminalHandlers() {
     if (!session) {
       return { ok: false, output: "", stderr: "Terminal session not found." };
     }
+    bufferPendingPushOutput(session);
     const output = session.outputChunks.join("");
     session.outputChunks.length = 0;
     return { ok: true, output, stderr: "" };
