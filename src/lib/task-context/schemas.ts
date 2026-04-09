@@ -184,6 +184,13 @@ const PromptDraftRuntimeOverridesSchema = z
   })
   .strict();
 
+const PromptDraftQueuedNextTurnSchema = z
+  .object({
+    queuedAt: z.string(),
+    sourceTurnId: z.string().optional(),
+  })
+  .strict();
+
 const ChatMessageSchema = z.object({
   id: z.string(),
   role: z.union([z.literal("user"), z.literal("assistant")]),
@@ -355,6 +362,7 @@ export const WorkspaceSnapshotSchema = z.object({
     attachedFilePaths: z.array(z.string()).optional().default([]),
     attachments: z.array(AttachmentSchema).optional().default([]),
     runtimeOverrides: PromptDraftRuntimeOverridesSchema.optional(),
+    queuedNextTurn: PromptDraftQueuedNextTurnSchema.optional(),
   })).optional().default({}),
   providerSessionByTask: z.record(z.string(), TaskProviderSessionStateSchema).optional().default({}),
   editorTabs: z.array(EditorTabSchema).optional().default([]),
