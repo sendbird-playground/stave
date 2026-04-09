@@ -935,7 +935,7 @@ export function PromptInput(args: PromptInputProps) {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium">{item.invocationToken}</span>
+                              <span className="font-medium">{item.name}</span>
                               <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
                                 {item.provider === "shared" ? "Shared" : item.provider === "claude-code" ? "Claude" : "Codex"}
                               </Badge>
@@ -963,7 +963,7 @@ export function PromptInput(args: PromptInputProps) {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium">{item.invocationToken}</span>
+                              <span className="font-medium">{item.name}</span>
                               <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
                                 {item.provider === "shared" ? "Shared" : item.provider === "claude-code" ? "Claude" : "Codex"}
                               </Badge>
@@ -991,7 +991,7 @@ export function PromptInput(args: PromptInputProps) {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium">{item.invocationToken}</span>
+                              <span className="font-medium">{item.name}</span>
                               <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
                                 {item.provider === "shared" ? "Shared" : item.provider === "claude-code" ? "Claude" : "Codex"}
                               </Badge>

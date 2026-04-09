@@ -82,7 +82,7 @@ export interface CommandPaletteProjectSummary {
 
 export interface CommandPaletteLayoutState {
   editorVisible: boolean;
-  sidebarOverlayTab: "explorer" | "changes" | "information" | "scripts" | "lens";
+  sidebarOverlayTab: "explorer" | "changes" | "information" | "skills" | "scripts" | "lens";
   sidebarOverlayVisible: boolean;
   terminalDocked: boolean;
   workspaceSidebarCollapsed: boolean;

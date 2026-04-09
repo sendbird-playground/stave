@@ -1797,13 +1797,11 @@ function ChatSection() {
 }
 
 function SkillsSection() {
-  const [skillsEnabled, skillsAutoSuggest, sharedSkillsHome, subagentsEnabled, subagentsProfile, skillCatalog, activeWorkspaceId, projectPath, workspacePathById] = useAppStore(
+  const [skillsEnabled, skillsAutoSuggest, sharedSkillsHome, skillCatalog, activeWorkspaceId, projectPath, workspacePathById] = useAppStore(
     useShallow((state) => [
       state.settings.skillsEnabled,
       state.settings.skillsAutoSuggest,
       state.settings.sharedSkillsHome,
-      state.settings.subagentsEnabled,
-      state.settings.subagentsProfile,
       state.skillCatalog,
       state.activeWorkspaceId,
       state.projectPath,
@@ -1873,7 +1871,7 @@ function SkillsSection() {
 
   return (
     <>
-      <SectionHeading title="Skills" description="Configure skill discovery, subagent delegation, and automatic prompting." />
+      <SectionHeading title="Skills" description="Configure skill discovery and automatic prompting." />
       <SectionStack>
         <SettingsCard title="Skills" description="Control skill suggestions and automatic prompting.">
           <LabeledField title="Enabled">
@@ -1905,25 +1903,6 @@ function SkillsSection() {
               placeholder="~/shared-skills"
               value={sharedSkillsHome}
               onCommit={(nextValue) => updateSettings({ patch: { sharedSkillsHome: nextValue } })}
-            />
-          </LabeledField>
-        </SettingsCard>
-        <SettingsCard title="Subagent" description="Control whether subagents are offered by default and which profile they use.">
-          <LabeledField title="Enabled">
-            <ChoiceButtons
-              value={subagentsEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { subagentsEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField title="Profile">
-            <DraftInput
-              className="h-10 rounded-md border-border/80 bg-background"
-              value={subagentsProfile}
-              onCommit={(nextValue) => updateSettings({ patch: { subagentsProfile: nextValue } })}
             />
           </LabeledField>
         </SettingsCard>
@@ -2025,7 +2004,7 @@ function SkillsSection() {
                         {group.skills.map((skill) => (
                           <div key={skill.id} className="rounded-lg border border-border/70 bg-background/60 px-3 py-2">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-medium">{skill.invocationToken}</span>
+                              <span className="text-sm font-medium">{skill.name}</span>
                               <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
                                 {skill.scope}
                               </Badge>
@@ -2044,6 +2023,44 @@ function SkillsSection() {
               })
             )}
           </div>
+        </SettingsCard>
+      </SectionStack>
+    </>
+  );
+}
+
+function SubagentsSection() {
+  const [subagentsEnabled, subagentsProfile] = useAppStore(
+    useShallow((state) => [
+      state.settings.subagentsEnabled,
+      state.settings.subagentsProfile,
+    ] as const),
+  );
+  const updateSettings = useAppStore((state) => state.updateSettings);
+
+  return (
+    <>
+      <SectionHeading title="Subagents" description="Control how the main agent delegates tasks to child agents." />
+      <SectionStack>
+        <SettingsCard title="Delegation" description="Subagents allow the primary model to spawn lightweight child agents for research, exploration, and parallel workstreams.">
+          <LabeledField title="Enabled" description="When enabled, the agent may delegate sub-tasks to smaller worker agents.">
+            <ChoiceButtons
+              value={subagentsEnabled ? "on" : "off"}
+              onChange={(value) => updateSettings({ patch: { subagentsEnabled: value === "on" } })}
+              options={[
+                { value: "on", label: "On" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+          </LabeledField>
+          <LabeledField title="Profile" description="Optional profile identifier that controls the subagent model and tool policy.">
+            <DraftInput
+              className="h-10 rounded-md border-border/80 bg-background"
+              placeholder="default"
+              value={subagentsProfile}
+              onCommit={(nextValue) => updateSettings({ patch: { subagentsProfile: nextValue } })}
+            />
+          </LabeledField>
         </SettingsCard>
       </SectionStack>
     </>
@@ -2420,6 +2437,8 @@ export function SettingsDialogSectionContent(args: {
       return <ToolingSection />;
     case "skills":
       return <SkillsSection />;
+    case "subagents":
+      return <SubagentsSection />;
     case "commandPalette":
       return <CommandPaletteSection />;
     case "editor":
