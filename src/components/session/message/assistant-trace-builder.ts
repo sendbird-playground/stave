@@ -65,7 +65,12 @@ export function buildAssistantTrace(args: {
     parts: args.message.parts,
   });
   const responseBoundaryIndex = renderableParts.reduce((lastIndex, part, index) => {
-    if (part.type === "text" || part.type === "file_context" || part.type === "image_context") {
+    if (
+      part.type === "text"
+      || part.type === "file_context"
+      || part.type === "image_context"
+      || part.type === "system_event"
+    ) {
       return lastIndex;
     }
     return index;
