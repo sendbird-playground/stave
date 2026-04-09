@@ -167,7 +167,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     if (nextPlanModeState.shouldClearCodexSession) {
       clearTaskProviderSession({ taskId: activeTaskId, providerId: "codex" });
     }
-    sendUserMessage({ taskId: activeTaskId, content: APPROVE_PLAN_MESSAGE });
+    void sendUserMessage({ taskId: activeTaskId, content: APPROVE_PLAN_MESSAGE });
     setRevising(false);
     setRevisionText("");
   }, [
@@ -206,7 +206,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
 
   function handleRevise() {
     if (isManagedTask || !canReplyToPlan || !revisionText.trim()) return;
-    sendUserMessage({ taskId: activeTaskId, content: revisionText.trim() });
+    void sendUserMessage({ taskId: activeTaskId, content: revisionText.trim() });
     setRevising(false);
     setRevisionText("");
   }

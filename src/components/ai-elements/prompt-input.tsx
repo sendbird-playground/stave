@@ -34,6 +34,8 @@ interface PromptInputProps {
   minimal?: boolean;
   disabled?: boolean;
   isTurnActive?: boolean;
+  submitMode?: "send" | "queue-next";
+  queuedNextTurn?: { queuedAt: string; sourceTurnId?: string } | null;
   focusToken?: string;
   selectedModel: ModelSelectorOption;
   modelOptions: readonly ModelSelectorOption[];
@@ -74,6 +76,7 @@ interface PromptInputProps {
   onUserInputSubmit?: (args: { messageId: string; answers: Record<string, string> }) => void;
   onUserInputDeny?: (args: { messageId: string }) => void;
   onSubmit: (args: { text: string; filePaths: string[] }) => void | Promise<void>;
+  onClearQueuedNextTurn?: () => void;
   onAbort?: () => void;
 }
 
@@ -120,6 +123,8 @@ export function PromptInput(args: PromptInputProps) {
     disabled,
     minimal = false,
     isTurnActive,
+    submitMode = "send",
+    queuedNextTurn,
     focusToken,
     value,
     selectedModel,
@@ -161,6 +166,7 @@ export function PromptInput(args: PromptInputProps) {
     onUserInputSubmit,
     onUserInputDeny,
     onSubmit,
+    onClearQueuedNextTurn,
     onAbort,
   } = args;
   const imageAttachments = useMemo(
@@ -181,7 +187,10 @@ export function PromptInput(args: PromptInputProps) {
   const textareaAutosizeFrameRef = useRef<number | null>(null);
   const commandListRef = useRef<HTMLDivElement | null>(null);
   const wasTurnActiveRef = useRef(Boolean(isTurnActive));
-  const interactionsDisabled = Boolean(disabled || isTurnActive);
+  const interactionsDisabled = Boolean(disabled);
+  const hasDraftPayload = value.trim().length > 0 || attachedFilePaths.length > 0 || imageAttachments.length > 0;
+  const primaryActionDisabled = Boolean(disabled || !hasDraftPayload);
+  const isQueueNextMode = submitMode === "queue-next";
   const modifierLabel = useMemo(
     () => (
       typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
@@ -479,7 +488,7 @@ export function PromptInput(args: PromptInputProps) {
 
   async function submitCurrentMessage() {
     const nextText = value.trim();
-    if (!nextText && attachedFilePaths.length === 0) {
+    if (!nextText && attachedFilePaths.length === 0 && imageAttachments.length === 0) {
       return;
     }
     await onSubmit({ text: nextText, filePaths: attachedFilePaths });
@@ -643,6 +652,29 @@ export function PromptInput(args: PromptInputProps) {
             />
           ))}
         </Suggestions>
+      ) : null}
+      {queuedNextTurn ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+            Queued next turn
+          </Badge>
+          <span>
+            {isTurnActive
+              ? "Sends automatically when the current response finishes."
+              : "Next-turn draft is staged."}
+          </span>
+          {onClearQueuedNextTurn ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onClearQueuedNextTurn()}
+              className="ml-auto h-7 px-2 text-xs"
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
       ) : null}
       {!minimal && !isPromptInputFocused && !interactionsDisabled ? (
         <Button
@@ -875,7 +907,15 @@ export function PromptInput(args: PromptInputProps) {
                       event.preventDefault();
                       void submitCurrentMessage();
                     }}
-                    placeholder={minimal && isPromptInputFocused ? "" : (minimal ? "Type a request..." : "Use / for commands, $ for skills (Enter to send)")}
+                    placeholder={minimal && isPromptInputFocused
+                      ? ""
+                      : (
+                        minimal
+                          ? (isQueueNextMode ? "Type the next turn..." : "Type a request...")
+                          : (isQueueNextMode
+                            ? "Use / for commands, $ for skills (Enter to queue next)"
+                            : "Use / for commands, $ for skills (Enter to send)")
+                      )}
                     rows={minimal ? 1 : undefined}
                     className={cn(
                       "resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0 shadow-none",
@@ -1315,31 +1355,33 @@ export function PromptInput(args: PromptInputProps) {
                 <Kbd>Esc</Kbd>
               </TooltipContent>
             </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="submit"
-                  size="icon-sm"
-                  className={cn(
-                    "rounded-md",
-                    PROMPT_SURFACE_PRIMARY_FOCUS,
-                    minimal && "h-8 w-8 border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
-                  )}
-                  disabled={disabled}
-                  aria-label="Send"
-                >
-                  <Send className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <span>Send message</span>
-                <KbdGroup>
-                  <Kbd>↵</Kbd>
-                </KbdGroup>
-              </TooltipContent>
-            </Tooltip>
-          )}
+          ) : null}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="submit"
+                size={isQueueNextMode ? "sm" : "icon-sm"}
+                className={cn(
+                  "rounded-md",
+                  PROMPT_SURFACE_PRIMARY_FOCUS,
+                  isQueueNextMode && "h-8 gap-2 px-3",
+                  minimal && !isQueueNextMode && "h-8 w-8 border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
+                  minimal && isQueueNextMode && "border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
+                )}
+                disabled={primaryActionDisabled}
+                aria-label={isQueueNextMode ? (queuedNextTurn ? "Update queued next turn" : "Queue next turn") : "Send"}
+              >
+                <Send className="size-3.5" />
+                {isQueueNextMode ? <span>{queuedNextTurn ? "Update queued" : "Queue next"}</span> : null}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <span>{isQueueNextMode ? "Queue the next turn" : "Send message"}</span>
+              <KbdGroup>
+                <Kbd>↵</Kbd>
+              </KbdGroup>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
     </form>

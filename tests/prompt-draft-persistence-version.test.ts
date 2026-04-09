@@ -71,4 +71,47 @@ describe("prompt draft persistence version", () => {
     expect(afterAttachmentUpdate.workspaceSnapshotVersion).toBe(5);
     expect(afterAttachmentUpdate.promptDraftPersistenceVersion).toBe(2);
   });
+
+  test("queued-next-turn metadata uses workspace snapshot persistence", async () => {
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+
+    useAppStore.setState({
+      ...initialState,
+      workspaceSnapshotVersion: 9,
+      promptDraftPersistenceVersion: 3,
+      promptDraftByTask: {
+        "task-1": {
+          text: "Follow up",
+          attachedFilePaths: [],
+          attachments: [],
+        },
+      },
+    });
+
+    useAppStore.getState().updatePromptDraft({
+      taskId: "task-1",
+      patch: {
+        queuedNextTurn: {
+          queuedAt: "2026-04-09T00:00:00.000Z",
+          sourceTurnId: "turn-1",
+        },
+      },
+    });
+
+    const afterQueueUpdate = useAppStore.getState();
+    expect(afterQueueUpdate.workspaceSnapshotVersion).toBe(10);
+    expect(afterQueueUpdate.promptDraftPersistenceVersion).toBe(3);
+
+    useAppStore.getState().updatePromptDraft({
+      taskId: "task-1",
+      patch: {
+        text: "Follow up with more detail",
+      },
+    });
+
+    const afterQueuedTextUpdate = useAppStore.getState();
+    expect(afterQueuedTextUpdate.workspaceSnapshotVersion).toBe(10);
+    expect(afterQueuedTextUpdate.promptDraftPersistenceVersion).toBe(4);
+  });
 });

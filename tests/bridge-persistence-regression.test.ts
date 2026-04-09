@@ -244,6 +244,8 @@ describe("workspace persistence fallback", () => {
         },
       },
     });
+    (globalThis.window as Window & typeof globalThis).setTimeout = globalThis.setTimeout.bind(globalThis);
+    (globalThis.window as Window & typeof globalThis).clearTimeout = globalThis.clearTimeout.bind(globalThis);
 
     const { useAppStore } = await import("../src/store/app.store");
     localStorage.clear();
@@ -1851,6 +1853,135 @@ describe("workspace store hydration ordering", () => {
     expect(restoredState.messagesByTask["task-main"]?.at(-1)?.content).toBe(
       "Task 1 kept updating after the workspace switch."
     );
+  });
+
+  test("queues the next prompt during an active turn and auto-dispatches it on completion", async () => {
+    const localStorage = createMemoryStorage();
+    const startedPrompts: string[] = [];
+    let streamListener: ((payload: { streamId: string; event: unknown; done: boolean }) => void) | null = null;
+
+    (globalThis as { window: unknown }).window = {
+      localStorage,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        provider: {
+          startPushTurn: async (args: { prompt?: string }) => {
+            const sequence = startedPrompts.length + 1;
+            startedPrompts.push(args.prompt ?? "");
+            return {
+              ok: true,
+              streamId: `stream-${sequence}`,
+              turnId: `turn-${sequence}`,
+            };
+          },
+          subscribeStreamEvents: (listener: typeof streamListener) => {
+            streamListener = listener;
+            return () => {
+              if (streamListener === listener) {
+                streamListener = null;
+              }
+            };
+          },
+          abortTurn: async () => ({ ok: true, message: "aborted" }),
+          cleanupTask: async () => ({ ok: true }),
+        },
+        fs: {
+          readFile: async () => ({ ok: false, content: "", revision: "", stderr: "not found" }),
+        },
+      },
+    } as unknown;
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-04-09T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-main": "/tmp/stave-project",
+      },
+      workspaceBranchById: {
+        "ws-main": "main",
+      },
+      workspaceDefaultById: {
+        "ws-main": true,
+      },
+      draftProvider: "codex",
+      tasks: [{
+        id: "task-main",
+        title: "Main Task",
+        provider: "codex",
+        updatedAt: "2026-04-09T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      messagesByTask: { "task-main": [] },
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
+    });
+
+    const started = await useAppStore.getState().sendUserMessage({
+      taskId: "task-main",
+      content: "First prompt",
+    });
+
+    expect(started).toMatchObject({
+      status: "started",
+      taskId: "task-main",
+      workspaceId: "ws-main",
+    });
+    expect(startedPrompts).toEqual(["First prompt"]);
+
+    const queued = await useAppStore.getState().sendUserMessage({
+      taskId: "task-main",
+      content: "Second prompt",
+    });
+
+    expect(queued).toEqual({
+      status: "queued",
+      taskId: "task-main",
+      workspaceId: "ws-main",
+    });
+
+    const queuedState = useAppStore.getState();
+    expect(queuedState.promptDraftByTask["task-main"]).toMatchObject({
+      text: "Second prompt",
+    });
+    expect(queuedState.promptDraftByTask["task-main"]?.queuedNextTurn).toMatchObject({
+      sourceTurnId: started.turnId,
+    });
+
+    streamListener?.({
+      streamId: "stream-1",
+      event: { type: "text", text: "First response" },
+      done: false,
+    });
+    streamListener?.({
+      streamId: "stream-1",
+      event: { type: "done" },
+      done: true,
+    });
+
+    await Bun.sleep(25);
+
+    const autoDispatchedState = useAppStore.getState();
+    expect(startedPrompts).toEqual(["First prompt", "Second prompt"]);
+    expect(typeof autoDispatchedState.activeTurnIdsByTask["task-main"]).toBe("string");
+    expect(autoDispatchedState.activeTurnIdsByTask["task-main"]).not.toBe(started.turnId);
+    expect(autoDispatchedState.promptDraftByTask["task-main"]?.text ?? "").toBe("");
+    expect(autoDispatchedState.promptDraftByTask["task-main"]?.queuedNextTurn).toBeUndefined();
+    expect(autoDispatchedState.messagesByTask["task-main"]?.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
   });
 
   test("switchWorkspace reloads persistence when the cached target workspace session is empty", async () => {

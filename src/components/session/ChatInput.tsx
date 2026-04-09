@@ -209,14 +209,15 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     [activeTaskMessages],
   );
   const pendingApproval = pendingApprovals[0] ?? null;
-  const isInputBlocked = args.isTurnActive || pendingApproval != null || pendingUserInput != null;
+  const queuedNextTurn = promptDraft.queuedNextTurn ?? null;
+  const isInputBlocked = pendingApproval != null || pendingUserInput != null;
   const promptHistoryEntries = useMemo(
     () => getPromptHistoryEntries(activeTaskMessages),
     [activeTaskMessages],
   );
   const promptSuggestions = useMemo(
-    () => (isInputBlocked ? [] : getLatestPromptSuggestions(activeTaskMessages)),
-    [activeTaskMessages, isInputBlocked],
+    () => (args.isTurnActive || isInputBlocked ? [] : getLatestPromptSuggestions(activeTaskMessages)),
+    [activeTaskMessages, args.isTurnActive, isInputBlocked],
   );
   const [draftText, setDraftText] = useState(promptDraft.text);
   const draftTextRef = useRef(promptDraft.text);
@@ -532,6 +533,18 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           onBlur={commitCurrentDraftText}
           disabled={isInputBlocked}
           isTurnActive={args.isTurnActive}
+          submitMode={args.isTurnActive ? "queue-next" : "send"}
+          queuedNextTurn={queuedNextTurn}
+          onClearQueuedNextTurn={queuedNextTurn
+            ? () => {
+                cancelPendingDraftSave();
+                clearPromptDraft({ taskId: args.providerSelectionTarget });
+                adoptPromptDraftText({
+                  taskId: args.providerSelectionTarget,
+                  text: "",
+                });
+              }
+            : undefined}
           selectedModel={args.selectedModelOption}
           modelOptions={args.modelOptions}
           recommendedModelOptions={args.recommendedModelOptions}
@@ -645,17 +658,18 @@ function ChatInputComposer(args: ChatInputComposerProps) {
                 label: a.label,
                 mimeType: "image/png",
               }));
-            sendUserMessage({
+            const result = await sendUserMessage({
               taskId: args.activeTaskId,
               content: text,
               fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
               imageContexts: imageContexts.length > 0 ? imageContexts : undefined,
             });
-            clearPromptDraft({ taskId: args.providerSelectionTarget });
-            adoptPromptDraftText({
-              taskId: args.providerSelectionTarget,
-              text: "",
-            });
+            if (result.status === "started") {
+              adoptPromptDraftText({
+                taskId: args.providerSelectionTarget,
+                text: "",
+              });
+            }
           }}
           onAbort={() => abortTaskTurn({ taskId: args.activeTaskId })}
         />

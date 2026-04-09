@@ -26,11 +26,17 @@ export interface PromptDraftRuntimeOverrides {
   codexPlanMode?: boolean;
 }
 
+export interface PromptDraftQueuedNextTurn {
+  queuedAt: string;
+  sourceTurnId?: string;
+}
+
 export interface PromptDraft {
   text: string;
   attachedFilePaths: string[];
   attachments: Attachment[];
   runtimeOverrides?: PromptDraftRuntimeOverrides;
+  queuedNextTurn?: PromptDraftQueuedNextTurn;
 }
 
 export interface MessagePartBase {

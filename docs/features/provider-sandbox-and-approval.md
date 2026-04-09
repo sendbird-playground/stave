@@ -4,6 +4,7 @@
 
 - Stave exposes separate runtime safety controls for Claude and Codex.
 - Use this guide to choose the right combination for review-only work, normal edits, planning, or higher-autonomy automation.
+- While a turn is running, the composer can stage one follow-up prompt per task and auto-send it when that task becomes idle again.
 
 ## When To Use It
 
@@ -17,6 +18,7 @@
 - Codex controls affect `codex` turns and Codex-backed Stave Auto turns.
 - The composer runtime chips under the prompt box show the effective settings for the next turn.
 - When a turn pauses for approval, the composer queue supports `Enter` to approve the newest request and `Tab` to draft a follow-up instruction that denies the current request and stages the next turn.
+- When a turn is actively running, the composer stays editable and the primary action switches to `Queue next`. Stave keeps a single queued follow-up per task, and submitting again replaces that queued payload.
 - If you need strict no-write behavior, Codex exposes an explicit `read-only` mode. Claude does not expose an equivalent read/write scope selector in Stave.
 
 ## Quick Start
@@ -45,6 +47,7 @@ Recommended starting points:
 - The composer `Runtime` drawer, which shows the effective file access, approval, network, and plan state before send
 - The composer-side `Approval Queue`, which appears above the prompt box when a turn is waiting for one or more approval decisions
 - The composer-side `Guide Instead` action, which rejects the latest approval request and stages your next instruction in the composer
+- The composer-side queued follow-up banner, which appears while a running turn already has a staged `Queue next` prompt
 - The composer plan toggle switches Claude turns into `Permission Mode = plan`
 - The composer plan toggle enables Codex planning for the current draft turn, backed by native App Server plan items
 
@@ -84,7 +87,8 @@ Provider differences that matter in practice:
 2. Send a harmless prompt such as “summarize repo status” or “list likely files to inspect first.”
 3. If the turn pauses for approval, use the composer `Approval Queue` to approve or deny without reopening the message trace, or use the notification center if you are working elsewhere in the app.
 4. If the request should be rejected but you already know the next instruction, press `Tab` or choose `Guide Instead` in the queue. Stave denies that approval and stages your follow-up prompt for the next turn.
-5. Success looks like the runtime drawer reflecting the expected state before send. For Codex planning, look for `Planning: On` and an effective `Files: Read Only`. For Claude turns, look for `Sandbox: Enabled/Disabled` and `Unsandboxed: On/Off`.
+5. If the turn is still running but you already know the follow-up, keep typing and choose `Queue next`. Stave stores that next prompt on the task, shows a queued banner, and auto-sends it when the running turn fully finishes.
+6. Success looks like the runtime drawer reflecting the expected state before send. For Codex planning, look for `Planning: On` and an effective `Files: Read Only`. For Claude turns, look for `Sandbox: Enabled/Disabled` and `Unsandboxed: On/Off`.
 
 ## Files And Data
 
@@ -113,6 +117,7 @@ Provider differences that matter in practice:
 - Claude SDK has deeper sandbox settings internally, but Stave currently supports the user-facing controls documented here.
 - `Custom` appears automatically when you mix fields in Settings so the combination no longer matches one of the built-in presets.
 - `Guide Instead` is a Stave-side workflow convenience. It does not inject extra text into the already-paused provider approval request; it rejects that request and prepares the next user turn.
+- `Queue next` is intentionally single-slot. Queuing another follow-up before the current turn finishes replaces the already-staged one for that task.
 
 ## Troubleshooting
 
@@ -127,6 +132,12 @@ Provider differences that matter in practice:
 - Symptom: Claude stops or refuses a command that needs broader access.
 - Cause: `Sandbox Enabled` is on and `Allow Unsandboxed Commands` is off, so Stave will not allow sandbox escape fallbacks.
 - Fix: keep the safer setting for review-style work, or enable `Allow Unsandboxed Commands` only if you trust the task and want looser fallbacks.
+
+### My Follow-Up Prompt Did Not Send Immediately
+
+- Symptom: you pressed `Queue next`, but nothing new started right away.
+- Cause: queued follow-ups only dispatch after the current task is fully idle. If the turn is still streaming, or paused on approval / user-input, Stave keeps the queued prompt staged.
+- Fix: let the running turn finish or resolve the blocking approval / user-input request first. You can still edit or clear the staged follow-up while it waits.
 
 ### I Need A Strict No-Write Claude Mode
 

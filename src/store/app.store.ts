@@ -177,6 +177,7 @@ import {
 import { createProviderTurnEventController, runProviderTurn } from "@/store/provider-turn-runtime";
 import {
   applyPendingProviderEventsToStoreState,
+  createWorkspaceSessionStateFromAppState,
   saveActiveWorkspaceRuntimeCache,
 } from "@/store/workspace-runtime-state";
 import type {
@@ -338,12 +339,225 @@ interface SkillCatalogState {
   detail: string;
 }
 
+type SendUserMessageResult =
+  | { status: "blocked" }
+  | { status: "queued"; taskId: string; workspaceId: string }
+  | { status: "started"; taskId: string; workspaceId: string; turnId: string };
+
 const APP_STORE_KEY = "stave-store";
 const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
 const TASK_MESSAGES_PAGE_SIZE = 120;
 const workspaceSwitchMetricsByWorkspaceId = new Map<string, WorkspaceSwitchMetric>();
 let workspaceSwitchMetricTokenCounter = 0;
 export { DEFAULT_PROVIDER_TIMEOUT_MS, PROVIDER_TIMEOUT_OPTIONS } from "@/lib/providers/runtime-option-contract";
+
+function hasPromptDraftPayload(draft: Pick<PromptDraft, "text" | "attachedFilePaths" | "attachments">) {
+  return draft.text.trim().length > 0 || draft.attachedFilePaths.length > 0 || draft.attachments.length > 0;
+}
+
+function buildClearedPromptDraft(draft?: PromptDraft | null): PromptDraft {
+  return {
+    text: "",
+    attachedFilePaths: [],
+    attachments: [],
+    ...(draft?.runtimeOverrides ? { runtimeOverrides: draft.runtimeOverrides } : {}),
+  };
+}
+
+function normalizePromptDraftForStorage(draft: PromptDraft): PromptDraft {
+  if (hasPromptDraftPayload(draft) || !draft.queuedNextTurn) {
+    return draft;
+  }
+  const { queuedNextTurn: _unused, ...nextDraft } = draft;
+  return nextDraft;
+}
+
+function arePromptDraftQueuedNextTurnEqual(
+  left?: PromptDraft["queuedNextTurn"],
+  right?: PromptDraft["queuedNextTurn"],
+) {
+  return left?.queuedAt === right?.queuedAt
+    && left?.sourceTurnId === right?.sourceTurnId;
+}
+
+function resolveTaskRuntimeTarget(args: {
+  state: Pick<
+    AppState,
+    | "activeTaskId"
+    | "activeWorkspaceId"
+    | "taskWorkspaceIdById"
+    | "tasks"
+    | "workspaceRuntimeCacheById"
+    | "messagesByTask"
+    | "messageCountByTask"
+    | "promptDraftByTask"
+    | "workspaceInformation"
+    | "editorTabs"
+    | "activeEditorTabId"
+    | "activeTurnIdsByTask"
+    | "providerSessionByTask"
+    | "nativeSessionReadyByTask"
+  >;
+  taskId: string;
+}) {
+  const activeTask = args.state.tasks.find((task) => task.id === args.taskId) ?? null;
+  if (activeTask) {
+    return {
+      workspaceId: args.state.activeWorkspaceId,
+      isActiveWorkspace: true,
+      session: createWorkspaceSessionStateFromAppState(args.state),
+      task: activeTask,
+    };
+  }
+
+  const mappedWorkspaceId = args.state.taskWorkspaceIdById[args.taskId];
+  if (mappedWorkspaceId && mappedWorkspaceId !== args.state.activeWorkspaceId) {
+    const mappedSession = args.state.workspaceRuntimeCacheById[mappedWorkspaceId];
+    const mappedTask = mappedSession?.tasks.find((task) => task.id === args.taskId) ?? null;
+    if (mappedSession && mappedTask) {
+      return {
+        workspaceId: mappedWorkspaceId,
+        isActiveWorkspace: false,
+        session: mappedSession,
+        task: mappedTask,
+      };
+    }
+  }
+
+  for (const [workspaceId, session] of Object.entries(args.state.workspaceRuntimeCacheById)) {
+    const task = session.tasks.find((candidate) => candidate.id === args.taskId) ?? null;
+    if (task) {
+      return {
+        workspaceId,
+        isActiveWorkspace: false,
+        session,
+        task,
+      };
+    }
+  }
+
+  return null;
+}
+
+function getWorkspaceSessionForState(args: {
+  state: Pick<
+    AppState,
+    | "activeTaskId"
+    | "activeWorkspaceId"
+    | "tasks"
+    | "messagesByTask"
+    | "messageCountByTask"
+    | "promptDraftByTask"
+    | "workspaceInformation"
+    | "editorTabs"
+    | "activeEditorTabId"
+    | "activeTurnIdsByTask"
+    | "providerSessionByTask"
+    | "nativeSessionReadyByTask"
+    | "workspaceRuntimeCacheById"
+  >;
+  workspaceId: string;
+}) {
+  if (args.workspaceId === args.state.activeWorkspaceId) {
+    return createWorkspaceSessionStateFromAppState(args.state);
+  }
+  return args.state.workspaceRuntimeCacheById[args.workspaceId] ?? null;
+}
+
+function getDraftImageContexts(args: {
+  promptDraft: PromptDraft;
+  imageContexts?: Array<{
+    dataUrl: string;
+    label: string;
+    mimeType: string;
+  }>;
+}): Array<{
+  dataUrl: string;
+  label: string;
+  mimeType: string;
+}> {
+  if ((args.imageContexts?.length ?? 0) > 0) {
+    return args.imageContexts ?? [];
+  }
+  return args.promptDraft.attachments
+    .filter((attachment): attachment is Extract<Attachment, { kind: "image" }> => attachment.kind === "image")
+    .map((attachment) => ({
+      dataUrl: attachment.dataUrl,
+      label: attachment.label,
+      mimeType: "image/png",
+    }));
+}
+
+async function getDraftFileContexts(args: {
+  promptDraft: PromptDraft;
+  session: Pick<WorkspaceSessionState, "editorTabs">;
+  workspaceRootPath?: string | null;
+  fileContexts?: Array<{
+    filePath: string;
+    content: string;
+    language: string;
+    instruction?: string;
+  }>;
+}): Promise<Array<{
+  filePath: string;
+  content: string;
+  language: string;
+  instruction?: string;
+}>> {
+  if ((args.fileContexts?.length ?? 0) > 0) {
+    return args.fileContexts ?? [];
+  }
+
+  if (args.promptDraft.attachedFilePaths.length === 0) {
+    return [];
+  }
+
+  const nextFileContexts: Array<{
+    filePath: string;
+    content: string;
+    language: string;
+    instruction?: string;
+  }> = [];
+  const seenFilePaths = new Set<string>();
+  const readFile = window.api?.fs?.readFile;
+
+  for (const filePath of args.promptDraft.attachedFilePaths) {
+    if (!filePath || seenFilePaths.has(filePath)) {
+      continue;
+    }
+    seenFilePaths.add(filePath);
+
+    const openTab = args.session.editorTabs.find((tab) => tab.filePath === filePath && tab.kind !== "image");
+    if (openTab) {
+      nextFileContexts.push({
+        filePath: openTab.filePath,
+        content: openTab.content,
+        language: openTab.language,
+      });
+      continue;
+    }
+
+    if (!args.workspaceRootPath || !readFile) {
+      continue;
+    }
+
+    const result = await readFile({
+      rootPath: args.workspaceRootPath,
+      filePath,
+    });
+    if (!result.ok) {
+      continue;
+    }
+
+    nextFileContexts.push({
+      filePath,
+      content: result.content,
+      language: resolveLanguage({ filePath }),
+    });
+  }
+
+  return nextFileContexts;
+}
 
 function isWorkspaceSwitchMetricLoggingEnabled() {
   return typeof import.meta !== "undefined"
@@ -700,7 +914,7 @@ interface AppState {
       label: string;
       mimeType: string;
     }>;
-  }) => void;
+  }) => Promise<SendUserMessageResult>;
   abortTaskTurn: (args: { taskId: string }) => void;
   resolveApproval: (args: { taskId: string; messageId: string; approved: boolean }) => void;
   resolveUserInput: (args: {
@@ -4518,14 +4732,20 @@ export const useAppStore = create<AppState>()(
       }),
       updatePromptDraft: ({ taskId, patch }) => {
         set((state) => {
-          const currentDraft = state.promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
-          const nextDraft = {
+          const workspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+          const cachedSession = workspaceId && workspaceId !== state.activeWorkspaceId
+            ? state.workspaceRuntimeCacheById[workspaceId] ?? null
+            : null;
+          const promptDraftByTask = cachedSession?.promptDraftByTask ?? state.promptDraftByTask;
+          const currentDraft = promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
+          const nextDraft = normalizePromptDraftForStorage({
             text: currentDraft.text,
             attachedFilePaths: currentDraft.attachedFilePaths,
             attachments: currentDraft.attachments,
             runtimeOverrides: currentDraft.runtimeOverrides,
+            queuedNextTurn: currentDraft.queuedNextTurn,
             ...patch,
-          };
+          });
           const textChanged = nextDraft.text !== currentDraft.text;
           const attachedFilePathsChanged =
             nextDraft.attachedFilePaths.length !== currentDraft.attachedFilePaths.length
@@ -4537,13 +4757,32 @@ export const useAppStore = create<AppState>()(
             nextDraft.runtimeOverrides,
             currentDraft.runtimeOverrides,
           );
-          if (!textChanged && !attachedFilePathsChanged && !attachmentsChanged && !runtimeOverridesChanged) {
+          const queuedNextTurnChanged = !arePromptDraftQueuedNextTurnEqual(
+            nextDraft.queuedNextTurn,
+            currentDraft.queuedNextTurn,
+          );
+          if (!textChanged && !attachedFilePathsChanged && !attachmentsChanged && !runtimeOverridesChanged && !queuedNextTurnChanged) {
             return state;
+          }
+          if (cachedSession) {
+            return {
+              workspaceRuntimeCacheById: {
+                ...state.workspaceRuntimeCacheById,
+                [workspaceId]: {
+                  ...cachedSession,
+                  promptDraftByTask: {
+                    ...cachedSession.promptDraftByTask,
+                    [taskId]: nextDraft,
+                  },
+                },
+              },
+            };
           }
           const onlyTextChanged = textChanged
             && !attachedFilePathsChanged
             && !attachmentsChanged
-            && !runtimeOverridesChanged;
+            && !runtimeOverridesChanged
+            && !queuedNextTurnChanged;
           return {
             promptDraftByTask: {
               ...state.promptDraftByTask,
@@ -4630,19 +4869,34 @@ export const useAppStore = create<AppState>()(
       },
       clearPromptDraft: ({ taskId }) => {
         set((state) => {
-          const currentDraft = state.promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
-          if (!currentDraft.text && currentDraft.attachedFilePaths.length === 0 && currentDraft.attachments.length === 0) {
+          const workspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+          const cachedSession = workspaceId && workspaceId !== state.activeWorkspaceId
+            ? state.workspaceRuntimeCacheById[workspaceId] ?? null
+            : null;
+          const promptDraftByTask = cachedSession?.promptDraftByTask ?? state.promptDraftByTask;
+          const currentDraft = promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
+          if (!hasPromptDraftPayload(currentDraft) && !currentDraft.queuedNextTurn) {
             return state;
+          }
+          const nextDraft = buildClearedPromptDraft(currentDraft);
+          if (cachedSession) {
+            return {
+              workspaceRuntimeCacheById: {
+                ...state.workspaceRuntimeCacheById,
+                [workspaceId]: {
+                  ...cachedSession,
+                  promptDraftByTask: {
+                    ...cachedSession.promptDraftByTask,
+                    [taskId]: nextDraft,
+                  },
+                },
+              },
+            };
           }
           return {
             promptDraftByTask: {
               ...state.promptDraftByTask,
-              [taskId]: {
-                text: "",
-                attachedFilePaths: [],
-                attachments: [],
-                ...(currentDraft.runtimeOverrides ? { runtimeOverrides: currentDraft.runtimeOverrides } : {}),
-              },
+              [taskId]: nextDraft,
             },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
@@ -5966,7 +6220,7 @@ export const useAppStore = create<AppState>()(
           const nextTitle = normalizeSuggestedTaskTitle({ title: trimmedContent }) ?? "Muse Task";
           get().createTask({ title: nextTitle });
           const nextTaskId = get().activeTaskId;
-          get().sendUserMessage({
+          void get().sendUserMessage({
             taskId: nextTaskId,
             content: trimmedContent,
           });
@@ -6313,13 +6567,20 @@ export const useAppStore = create<AppState>()(
           appendUserInputFailure("User input delivery failed: no active turn found for this Muse turn.");
         }
       },
-      sendUserMessage: ({ taskId, content, fileContexts, imageContexts }) => {
+      sendUserMessage: async ({ taskId, content, fileContexts, imageContexts }) => {
         const turnId = crypto.randomUUID();
         let state = get();
         let resolvedTaskId = taskId;
-        let task = state.tasks.find((item) => item.id === resolvedTaskId);
         const sourcePromptDraftTaskId = taskId || "draft:session";
-        const sourcePromptDraft = state.promptDraftByTask[sourcePromptDraftTaskId] ?? EMPTY_PROMPT_DRAFT;
+        let sourcePromptDraft = state.promptDraftByTask[sourcePromptDraftTaskId] ?? EMPTY_PROMPT_DRAFT;
+        let runtimeTarget = resolvedTaskId
+          ? resolveTaskRuntimeTarget({
+              state,
+              taskId: resolvedTaskId,
+            })
+          : null;
+        let task = runtimeTarget?.task ?? null;
+
         if (!task) {
           const seededTaskId = crypto.randomUUID();
           const seededTitleText = resolveSkillSelections({
@@ -6376,10 +6637,18 @@ export const useAppStore = create<AppState>()(
           }));
           state = get();
           resolvedTaskId = seededTaskId;
+          sourcePromptDraft = state.promptDraftByTask[sourcePromptDraftTaskId] ?? EMPTY_PROMPT_DRAFT;
+          runtimeTarget = resolveTaskRuntimeTarget({
+            state,
+            taskId: resolvedTaskId,
+          });
           task = seededTask;
         }
-        if (task && isManagedTaskReadOnly({ state, taskId: resolvedTaskId })) {
-          return;
+        if (!task || !runtimeTarget) {
+          return { status: "blocked" } satisfies SendUserMessageResult;
+        }
+        if (isManagedTaskReadOnly({ state, taskId: resolvedTaskId })) {
+          return { status: "blocked" } satisfies SendUserMessageResult;
         }
         const provider = task?.provider ?? state.draftProvider ?? "claude-code";
         const { workspaceId: taskWorkspaceId, cwd: workspaceCwd } = resolveTaskWorkspaceContext({
@@ -6390,6 +6659,13 @@ export const useAppStore = create<AppState>()(
           workspaceDefaultById: state.workspaceDefaultById,
           projectPath: state.projectPath,
         });
+        if (!taskWorkspaceId) {
+          return { status: "blocked" } satisfies SendUserMessageResult;
+        }
+        const taskWorkspaceSession = getWorkspaceSessionForState({
+          state,
+          workspaceId: taskWorkspaceId,
+        }) ?? runtimeTarget.session;
         const runCommand = window.api?.terminal?.runCommand;
 
         if (!state.taskCheckpointById[resolvedTaskId] && runCommand) {
@@ -6410,17 +6686,67 @@ export const useAppStore = create<AppState>()(
           });
         }
 
-        const existingHistory = state.messagesByTask[resolvedTaskId] ?? [];
-        if (state.activeTurnIdsByTask[resolvedTaskId]) {
-          return;
-        }
+        const existingHistory = taskWorkspaceSession.messagesByTask[resolvedTaskId] ?? [];
         if (findLatestPendingApproval({ messages: existingHistory })) {
-          return;
+          return { status: "blocked" } satisfies SendUserMessageResult;
         }
         if (findLatestPendingUserInput({ messages: existingHistory })) {
-          return;
+          return { status: "blocked" } satisfies SendUserMessageResult;
         }
-        const promptDraft = state.promptDraftByTask[resolvedTaskId] ?? sourcePromptDraft;
+        const promptDraft = normalizePromptDraftForStorage({
+          ...(taskWorkspaceSession.promptDraftByTask[resolvedTaskId] ?? sourcePromptDraft),
+          text: content,
+          queuedNextTurn: undefined,
+        });
+        const activeTurnId = taskWorkspaceSession.activeTurnIdsByTask[resolvedTaskId];
+        if (activeTurnId) {
+          const queuedPromptDraft = normalizePromptDraftForStorage({
+            ...(taskWorkspaceSession.promptDraftByTask[resolvedTaskId] ?? sourcePromptDraft),
+            text: content,
+            queuedNextTurn: {
+              queuedAt: buildRecentTimestamp(),
+              sourceTurnId: activeTurnId,
+            },
+          });
+          set((nextState) => {
+            if (taskWorkspaceId === nextState.activeWorkspaceId) {
+              return {
+                promptDraftByTask: {
+                  ...nextState.promptDraftByTask,
+                  [resolvedTaskId]: queuedPromptDraft,
+                },
+                workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
+              };
+            }
+
+            const cachedSession = nextState.workspaceRuntimeCacheById[taskWorkspaceId];
+            if (!cachedSession) {
+              return nextState;
+            }
+
+            return {
+              workspaceRuntimeCacheById: {
+                ...nextState.workspaceRuntimeCacheById,
+                [taskWorkspaceId]: {
+                  ...cachedSession,
+                  promptDraftByTask: {
+                    ...cachedSession.promptDraftByTask,
+                    [resolvedTaskId]: queuedPromptDraft,
+                  },
+                },
+              },
+            };
+          });
+          return {
+            status: "queued",
+            taskId: resolvedTaskId,
+            workspaceId: taskWorkspaceId,
+          } satisfies SendUserMessageResult;
+        }
+        if (!hasPromptDraftPayload(promptDraft)) {
+          return { status: "blocked" } satisfies SendUserMessageResult;
+        }
+
         const resolvedPromptDraftRuntimeState = resolvePromptDraftRuntimeState({
           promptDraft,
           fallback: {
@@ -6441,6 +6767,34 @@ export const useAppStore = create<AppState>()(
           providerId: provider,
         });
         const normalizedPrompt = skillSelection.normalizedText;
+        const resolvedFileContexts = await getDraftFileContexts({
+          promptDraft,
+          session: taskWorkspaceSession,
+          workspaceRootPath: workspaceCwd,
+          fileContexts,
+        });
+        const resolvedImageContexts = getDraftImageContexts({
+          promptDraft,
+          imageContexts,
+        });
+        state = get();
+        const latestWorkspaceSession = getWorkspaceSessionForState({
+          state,
+          workspaceId: taskWorkspaceId,
+        });
+        if (!latestWorkspaceSession) {
+          return { status: "blocked" } satisfies SendUserMessageResult;
+        }
+        const latestHistory = latestWorkspaceSession.messagesByTask[resolvedTaskId] ?? existingHistory;
+        if (latestWorkspaceSession.activeTurnIdsByTask[resolvedTaskId]) {
+          return { status: "blocked" } satisfies SendUserMessageResult;
+        }
+        if (
+          findLatestPendingApproval({ messages: latestHistory })
+          || findLatestPendingUserInput({ messages: latestHistory })
+        ) {
+          return { status: "blocked" } satisfies SendUserMessageResult;
+        }
 
         // ── Auto task naming ──────────────────────────────────────────────────
         // On every prompt, fire a lightweight single-turn Claude query to keep
@@ -6449,7 +6803,7 @@ export const useAppStore = create<AppState>()(
         {
           const capturedTaskId = resolvedTaskId;
           const promptForTitle = normalizedPrompt || content;
-          const historyForTitle = existingHistory.slice(-6).map((m) => ({
+          const historyForTitle = latestHistory.slice(-6).map((m) => ({
             role: m.role as string,
             content: m.content,
           }));
@@ -6471,17 +6825,10 @@ export const useAppStore = create<AppState>()(
         }
         // ─────────────────────────────────────────────────────────────────────
 
-        const providerSession = state.providerSessionByTask[resolvedTaskId];
+        const providerSession = latestWorkspaceSession.providerSessionByTask[resolvedTaskId];
         const taskWorkspaceSummary = state.workspaces.find((workspace) => workspace.id === taskWorkspaceId) ?? null;
-        const taskWorkspaceSession = taskWorkspaceId === state.activeWorkspaceId
-          ? null
-          : state.workspaceRuntimeCacheById[taskWorkspaceId] ?? null;
-        const taskWorkspaceTasks = taskWorkspaceId === state.activeWorkspaceId
-          ? state.tasks
-          : taskWorkspaceSession?.tasks ?? (task ? [task] : []);
-        const taskWorkspaceInformation = taskWorkspaceId === state.activeWorkspaceId
-          ? state.workspaceInformation
-          : taskWorkspaceSession?.workspaceInformation ?? createEmptyWorkspaceInformation();
+        const taskWorkspaceTasks = latestWorkspaceSession.tasks;
+        const taskWorkspaceInformation = latestWorkspaceSession.workspaceInformation;
 
         // ── Repo-map context injection ─────────────────────────────────────────
         // On the first turn of a task, inject the pre-generated repo-map summary
@@ -6516,8 +6863,8 @@ export const useAppStore = create<AppState>()(
         const referencedTaskContext = buildReferencedTaskRetrievedContext({
           prompt: normalizedPrompt || content,
           currentTaskId: resolvedTaskId,
-          tasks: state.tasks,
-          messagesByTask: state.messagesByTask,
+          tasks: taskWorkspaceTasks,
+          messagesByTask: latestWorkspaceSession.messagesByTask,
         });
         if (referencedTaskContext) {
           retrievedContextParts.push(referencedTaskContext);
@@ -6530,35 +6877,114 @@ export const useAppStore = create<AppState>()(
           workspaceId: taskWorkspaceId,
           providerId: provider,
           model: activeModel,
-          history: existingHistory,
+          history: latestHistory,
           userInput: normalizedPrompt,
           mode: "chat",
-          fileContexts,
-          imageContexts,
+          fileContexts: resolvedFileContexts.length > 0 ? resolvedFileContexts : undefined,
+          imageContexts: resolvedImageContexts.length > 0 ? resolvedImageContexts : undefined,
           skillContexts: skillSelection.selectedSkills,
           nativeSessionId: providerSession?.[provider] ?? null,
           retrievedContextParts,
         });
         const prompt = normalizedPrompt;
 
-        set((nextState) =>
-          buildPendingProviderTurnState({
-            tasks: nextState.tasks,
-            messagesByTask: nextState.messagesByTask,
-            messageCountByTask: nextState.messageCountByTask,
-            activeTurnIdsByTask: nextState.activeTurnIdsByTask,
-            taskWorkspaceIdById: nextState.taskWorkspaceIdById,
-            workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
-            taskId: resolvedTaskId,
-            taskWorkspaceId,
-            turnId,
-            provider,
-            activeModel,
-            content,
-            fileContexts,
-            imageContexts,
-          })
-        );
+        if (taskWorkspaceId === state.activeWorkspaceId) {
+          set((nextState) => {
+            const pendingTurnState = buildPendingProviderTurnState({
+              tasks: nextState.tasks,
+              messagesByTask: nextState.messagesByTask,
+              messageCountByTask: nextState.messageCountByTask,
+              activeTurnIdsByTask: nextState.activeTurnIdsByTask,
+              taskWorkspaceIdById: nextState.taskWorkspaceIdById,
+              workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
+              taskId: resolvedTaskId,
+              taskWorkspaceId,
+              turnId,
+              provider,
+              activeModel,
+              content,
+              fileContexts: resolvedFileContexts.length > 0 ? resolvedFileContexts : undefined,
+              imageContexts: resolvedImageContexts.length > 0 ? resolvedImageContexts : undefined,
+            });
+
+            return {
+              ...pendingTurnState,
+              promptDraftByTask: {
+                ...nextState.promptDraftByTask,
+                [resolvedTaskId]: buildClearedPromptDraft(nextState.promptDraftByTask[resolvedTaskId] ?? promptDraft),
+                ...(sourcePromptDraftTaskId !== resolvedTaskId
+                  ? {
+                      [sourcePromptDraftTaskId]: buildClearedPromptDraft(
+                        nextState.promptDraftByTask[sourcePromptDraftTaskId] ?? sourcePromptDraft,
+                      ),
+                    }
+                  : {}),
+              },
+            };
+          });
+        } else {
+          set((nextState) => {
+            const cachedSession = nextState.workspaceRuntimeCacheById[taskWorkspaceId];
+            if (!cachedSession) {
+              return nextState;
+            }
+
+            const pendingTurnState = buildPendingProviderTurnState({
+              tasks: cachedSession.tasks,
+              messagesByTask: cachedSession.messagesByTask,
+              messageCountByTask: cachedSession.messageCountByTask,
+              activeTurnIdsByTask: cachedSession.activeTurnIdsByTask,
+              taskWorkspaceIdById: nextState.taskWorkspaceIdById,
+              workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
+              taskId: resolvedTaskId,
+              taskWorkspaceId,
+              turnId,
+              provider,
+              activeModel,
+              content,
+              fileContexts: resolvedFileContexts.length > 0 ? resolvedFileContexts : undefined,
+              imageContexts: resolvedImageContexts.length > 0 ? resolvedImageContexts : undefined,
+            });
+
+            return {
+              workspaceRuntimeCacheById: {
+                ...nextState.workspaceRuntimeCacheById,
+                [taskWorkspaceId]: {
+                  ...cachedSession,
+                  tasks: pendingTurnState.tasks,
+                  messagesByTask: pendingTurnState.messagesByTask,
+                  messageCountByTask: pendingTurnState.messageCountByTask,
+                  activeTurnIdsByTask: pendingTurnState.activeTurnIdsByTask,
+                  promptDraftByTask: {
+                    ...cachedSession.promptDraftByTask,
+                    [resolvedTaskId]: buildClearedPromptDraft(
+                      cachedSession.promptDraftByTask[resolvedTaskId] ?? promptDraft,
+                    ),
+                  },
+                },
+              },
+            };
+          });
+
+          const inactiveWorkspaceSession = get().workspaceRuntimeCacheById[taskWorkspaceId];
+          if (inactiveWorkspaceSession) {
+            void persistWorkspaceSnapshot({
+              workspaceId: taskWorkspaceId,
+              workspaceName: resolveWorkspaceName({
+                state: get(),
+                workspaceId: taskWorkspaceId,
+              }),
+              activeTaskId: inactiveWorkspaceSession.activeTaskId,
+              tasks: inactiveWorkspaceSession.tasks,
+              messagesByTask: inactiveWorkspaceSession.messagesByTask,
+              promptDraftByTask: inactiveWorkspaceSession.promptDraftByTask,
+              workspaceInformation: inactiveWorkspaceSession.workspaceInformation,
+              editorTabs: inactiveWorkspaceSession.editorTabs,
+              activeEditorTabId: inactiveWorkspaceSession.activeEditorTabId,
+              providerSessionByTask: inactiveWorkspaceSession.providerSessionByTask,
+            });
+          }
+        }
 
         const providerTurnEventController = createProviderTurnEventController({
           flushEvents: (pendingEvents) => {
@@ -6643,7 +7069,24 @@ export const useAppStore = create<AppState>()(
               }
             }
             if (applied.turnCompleted) {
-              const completedTask = latestState.tasks.find((task) => task.id === resolvedTaskId) ?? null;
+              const latestWorkspaceSession = getWorkspaceSessionForState({
+                state: latestState,
+                workspaceId: taskWorkspaceId,
+              });
+              const queuedPromptDraft = latestWorkspaceSession?.promptDraftByTask[resolvedTaskId];
+              if (queuedPromptDraft?.queuedNextTurn) {
+                if (hasPromptDraftPayload(queuedPromptDraft)) {
+                  void get().sendUserMessage({
+                    taskId: resolvedTaskId,
+                    content: queuedPromptDraft.text,
+                  });
+                } else {
+                  get().clearPromptDraft({ taskId: resolvedTaskId });
+                }
+              }
+              const completedTask = latestWorkspaceSession?.tasks.find((task) => task.id === resolvedTaskId)
+                ?? latestState.tasks.find((task) => task.id === resolvedTaskId)
+                ?? null;
               runScriptHookInBackground({
                 workspaceId: taskWorkspaceId,
                 trigger: "turn.completed",
@@ -6689,6 +7132,12 @@ export const useAppStore = create<AppState>()(
           }),
           onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
         });
+        return {
+          status: "started",
+          taskId: resolvedTaskId,
+          workspaceId: taskWorkspaceId,
+          turnId,
+        } satisfies SendUserMessageResult;
       },
       abortTaskTurn: ({ taskId }) => {
         const stateBefore = get();
