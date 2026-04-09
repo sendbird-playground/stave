@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { buildImportedWorktreeWorkspaceId } from "@/store/project.utils";
 
 const originalWindow = globalThis.window;
 
@@ -102,6 +103,10 @@ describe("new workspace init command", () => {
       command: "bun install",
     });
     expect(useAppStore.getState().workspaces).toHaveLength(1);
+    expect(useAppStore.getState().workspaces[0]?.id).toBe(buildImportedWorktreeWorkspaceId({
+      projectPath: "/tmp/stave-project",
+      worktreePath: "/tmp/stave-project/.stave/workspaces/feature__bootstrap",
+    }));
     expect(useAppStore.getState().tasks).toHaveLength(1);
     expect(useAppStore.getState().tasks[0]?.title).toBe("New Task");
     expect(useAppStore.getState().activeTaskId).toBe(useAppStore.getState().tasks[0]?.id);

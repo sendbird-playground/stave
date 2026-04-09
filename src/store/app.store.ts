@@ -3918,7 +3918,6 @@ export const useAppStore = create<AppState>()(
         }
         const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({ state: current });
 
-        const workspaceId = crypto.randomUUID();
         const branchName = sanitizeBranchName({ value: trimmed });
         if (!branchName) {
           return { ok: false, message: "Workspace branch name is invalid." };
@@ -3939,6 +3938,10 @@ export const useAppStore = create<AppState>()(
           : normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({ value: requestedRootNodeModulesSymlink });
         const baseBranch = fromBranch?.trim() || current.defaultBranch || "main";
         const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
+        const workspaceId = buildImportedWorktreeWorkspaceId({
+          projectPath: current.projectPath,
+          worktreePath: workspacePath,
+        });
         const runner = window.api?.terminal?.runCommand;
         if (runner) {
           await runner({
