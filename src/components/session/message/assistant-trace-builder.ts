@@ -17,6 +17,37 @@ import type {
 
 const SUBAGENT_PROGRESS_PREFIX = "Subagent progress:";
 
+/**
+ * Heuristic: short filler phrases Claude emits mid-turn that add no user-visible
+ * information.  Case-insensitive prefix match keeps the list maintainable.
+ */
+const INTERIM_NOISE_PREFIXES = [
+  "now i have",
+  "now i'll",
+  "now let me",
+  "let me ",
+  "i'll now ",
+  "i now have",
+  "i have full context",
+  "i have the full context",
+  "i have all the context",
+  "i have enough context",
+  "perfect, ",
+  "perfect! ",
+  "great, ",
+  "great! ",
+  "got it",
+  "understood",
+  "i see",
+  "i understand",
+];
+
+function isInterimNoise(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized || normalized.length < 3) return true;
+  return INTERIM_NOISE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
 export type AssistantTraceEntry =
   | { kind: "reasoning"; id: string; parts: ThinkingPart[]; isStreaming: boolean }
   | { kind: "assistant_text"; id: string; parts: TextPart[] }
@@ -32,6 +63,8 @@ export type AssistantTraceEntry =
 
 export interface AssistantTraceData {
   entries: AssistantTraceEntry[];
+  /** Interim text parts that appeared *between* tool calls (before response boundary). */
+  interimTextParts: TextPart[];
   responseParts: TextPart[];
   fileContextParts: FileContextPart[];
   imageContextParts: ImageContextPart[];
@@ -77,6 +110,7 @@ export function buildAssistantTrace(args: {
   }, -1);
 
   const entries: AssistantTraceEntry[] = [];
+  const interimTextParts: TextPart[] = [];
   const responseParts: TextPart[] = [];
   const fileContextParts: FileContextPart[] = [];
   const imageContextParts: ImageContextPart[] = [];
@@ -90,6 +124,10 @@ export function buildAssistantTrace(args: {
         if (index > responseBoundaryIndex) {
           responseParts.push(part);
           return;
+        }
+        /* Collect non-noise interim text for surfacing outside the CoT. */
+        if (!isInterimNoise(part.text)) {
+          interimTextParts.push(part);
         }
         {
           const previous = entries.at(-1);
@@ -167,6 +205,7 @@ export function buildAssistantTrace(args: {
 
   return {
     entries,
+    interimTextParts,
     responseParts,
     fileContextParts,
     imageContextParts,
