@@ -1,5 +1,5 @@
 import { PromptInput, ZenPromptInput } from "@/components/ai-elements";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   buildModelSelectorOptions,
   buildRecommendedModelSelectorOptions,
@@ -68,7 +68,9 @@ import { toWorkspaceRelativeFilePath } from "./chat-input.attachments";
 import {
   buildApprovalGuidancePrompt,
   getLatestPromptSuggestions,
+  getLatestUserPromptMessage,
   getPromptHistoryEntries,
+  isStaleActiveTurnDraft,
   mergePromptSuggestionWithDraft,
   shouldHandleApprovalEnterShortcut,
   shouldHandleApprovalTabShortcut,
@@ -204,12 +206,17 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     };
   }, [pendingUserInputMessageId, pendingUserInputPart]);
   const activeTaskMessages = useAppStore((state) => state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES);
+  const activeTurnId = useAppStore((state) => state.activeTurnIdsByTask[args.activeTaskId] ?? null);
   const pendingApprovals = useMemo(
     () => findPendingApprovals({ messages: activeTaskMessages }),
     [activeTaskMessages],
   );
   const pendingApproval = pendingApprovals[0] ?? null;
   const queuedNextTurn = promptDraft.queuedNextTurn ?? null;
+  const latestUserPromptMessage = useMemo(
+    () => getLatestUserPromptMessage(activeTaskMessages),
+    [activeTaskMessages],
+  );
   const isInputBlocked = pendingApproval != null || pendingUserInput != null;
   const promptHistoryEntries = useMemo(
     () => getPromptHistoryEntries(activeTaskMessages),
@@ -227,6 +234,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
   });
   const draftSaveTimerRef = useRef<number | null>(null);
   const draftSaveIdleRef = useRef<number | null>(null);
+  const staleDraftResetTurnKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (promptFocusNonce === 0) return;
     setFocusNonce((current) => current + 1);
@@ -396,6 +404,46 @@ function ChatInputComposer(args: ChatInputComposerProps) {
       });
     }
   }, [args.providerSelectionTarget, promptDraft.text]);
+
+  useLayoutEffect(() => {
+    if (!activeTurnId) {
+      staleDraftResetTurnKeyRef.current = null;
+      return;
+    }
+
+    if (!latestUserPromptMessage) {
+      return;
+    }
+
+    const resetTurnKey = `${activeTurnId}:${latestUserPromptMessage.id}`;
+    if (staleDraftResetTurnKeyRef.current === resetTurnKey) {
+      return;
+    }
+    staleDraftResetTurnKeyRef.current = resetTurnKey;
+
+    if (!isStaleActiveTurnDraft({
+      isTurnActive: args.isTurnActive,
+      draftText: draftTextRef.current,
+      latestUserPrompt: latestUserPromptMessage.content,
+      queuedNextTurn,
+    })) {
+      return;
+    }
+
+    cancelPendingDraftSave();
+    clearPromptDraft({ taskId: args.providerSelectionTarget });
+    adoptPromptDraftText({
+      taskId: args.providerSelectionTarget,
+      text: "",
+    });
+  }, [
+    activeTurnId,
+    args.isTurnActive,
+    args.providerSelectionTarget,
+    clearPromptDraft,
+    latestUserPromptMessage,
+    queuedNextTurn,
+  ]);
 
   useEffect(() => () => {
     commitPromptDraftText({
