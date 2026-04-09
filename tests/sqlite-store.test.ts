@@ -56,7 +56,7 @@ function createSnapshot(): PersistenceWorkspaceSnapshot {
       id: "terminal-1",
       title: "project",
       linkedTaskId: null,
-      backend: "xterm",
+      backend: "ghostty",
       cwd: "/tmp/project",
       createdAt: 1,
     }],

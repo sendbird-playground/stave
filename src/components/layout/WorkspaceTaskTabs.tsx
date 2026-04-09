@@ -559,8 +559,11 @@ export function WorkspaceTaskTabs() {
                   const secondaryLabel = !providerAvailable
                     ? `${providerLabel} is unavailable in this environment`
                     : requiresTask
-                      ? (activeTask?.title ?? "Select an active task first")
+                      ? (activeTask
+                        ? `Continue from the active task context`
+                        : "Select an active task first")
                       : "Use the current workspace context";
+                  const taskHint = requiresTask && activeTask ? activeTask.title : null;
 
                   return (
                     <DropdownMenuItem
@@ -579,6 +582,7 @@ export function WorkspaceTaskTabs() {
                         <div className="min-w-0">
                           <div className="truncate text-sm font-medium">{providerLabel} · {contextLabel}</div>
                           <div className="mt-0.5 text-xs text-muted-foreground">{secondaryLabel}</div>
+                          {taskHint && <div className="mt-0.5 truncate text-xs text-muted-foreground/60">{taskHint}</div>}
                         </div>
                       </div>
                     </DropdownMenuItem>
@@ -592,10 +596,11 @@ export function WorkspaceTaskTabs() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground"
+                    className="h-8 gap-2 rounded-sm px-2.5 text-muted-foreground"
                     onClick={() => createTask({ title: "" })}
                   >
                     <Plus className="size-4" />
+                    New Task
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">

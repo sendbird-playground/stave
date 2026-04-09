@@ -1,4 +1,4 @@
-import { Ellipsis, Eraser, Plus, SquareTerminal, X } from "lucide-react";
+import { Ellipsis, Eraser, Loader2, Plus, SquareTerminal, X } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -23,7 +23,6 @@ const TERMINAL_TRANSCRIPT_STORAGE_KEY = "stave:terminal-tab-transcript:v2";
 const DEFAULT_TERMINAL_FONT_FAMILY =
   '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace';
 const DEFAULT_TERMINAL_FONT_SIZE = 13;
-const DEFAULT_TERMINAL_LINE_HEIGHT = 1.2;
 
 const DockTerminalTab = memo(function DockTerminalTab(args: {
   tab: ReturnType<typeof useAppStore.getState>["terminalTabs"][number];
@@ -109,7 +108,6 @@ export function TerminalDock() {
     terminalDockHeight,
     terminalFontFamily,
     terminalFontSize,
-    terminalLineHeight,
     isDarkMode,
     setLayout,
     activeWorkspaceId,
@@ -130,7 +128,6 @@ export function TerminalDock() {
           state.layout.terminalDockHeight ?? 210,
           state.settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
           state.settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE,
-          state.settings.terminalLineHeight || DEFAULT_TERMINAL_LINE_HEIGHT,
           state.isDarkMode,
           state.setLayout,
           state.activeWorkspaceId,
@@ -204,6 +201,8 @@ export function TerminalDock() {
     bridgeError,
     clearActiveTranscript,
     containerRef,
+    sessionExited,
+    terminalReady,
   } = usePtySessionSurface({
     activeTab,
     activeTabId: activeTerminalTabId,
@@ -213,7 +212,6 @@ export function TerminalDock() {
     isVisible: terminalDocked,
     fontFamily: terminalFontFamily,
     fontSize: terminalFontSize,
-    lineHeight: terminalLineHeight,
     isDarkMode,
     getTabKey,
     createSession,
@@ -378,18 +376,34 @@ export function TerminalDock() {
             <div className="flex h-8 items-center gap-2 border-b border-border/60 px-3 text-xs text-muted-foreground">
               <SquareTerminal className="size-3.5 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{activeTab?.cwd ?? workspacePath ?? "Terminal"}</span>
-              {activeSessionId ? (
-                <span className="truncate text-[11px] text-muted-foreground/80">live session</span>
+              {sessionExited ? (
+                <span className={cn(
+                  "truncate text-[11px] font-medium",
+                  sessionExited.exitCode === 0 ? "text-muted-foreground/80" : "text-destructive",
+                )}>
+                  exited ({sessionExited.exitCode})
+                </span>
+              ) : activeSessionId ? (
+                <span className="truncate text-[11px] text-emerald-600 dark:text-emerald-400">live</span>
               ) : null}
             </div>
-            <div className="min-h-0 flex-1 overflow-hidden bg-terminal">
+            <div className="relative min-h-0 flex-1 overflow-hidden bg-terminal">
               {bridgeError ? (
                 <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {bridgeError}
                 </div>
               ) : null}
+              {!terminalReady ? (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-terminal">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Initializing terminal…</span>
+                  </div>
+                </div>
+              ) : null}
               <div
                 ref={containerRef}
+                data-terminal-surface
                 className={cn(
                   "h-full w-full",
                   !activeTab && "opacity-60",

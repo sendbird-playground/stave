@@ -1,5 +1,6 @@
 export const EDITABLE_SHORTCUT_SELECTOR = "input, textarea, select, [role='textbox'], [contenteditable='true']";
 export const PROMPT_INPUT_ROOT_SELECTOR = "[data-prompt-input-root]";
+export const TERMINAL_SURFACE_SELECTOR = "[data-terminal-surface]";
 export const TASK_ABORT_SHORTCUT_SCOPE_SELECTOR = "[data-task-abort-scope]";
 export const ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS = 2000;
 
@@ -34,6 +35,10 @@ function isPendingChordExpired(args: {
   now: number;
 }) {
   return args.now - args.pendingChord.startedAt > ZEN_MODE_SHORTCUT_CHORD_TIMEOUT_MS;
+}
+
+export function isTerminalSurfaceTarget(target: EventTarget | null) {
+  return matchesClosest(target, TERMINAL_SURFACE_SELECTOR);
 }
 
 export function isEditableShortcutTarget(target: EventTarget | null) {

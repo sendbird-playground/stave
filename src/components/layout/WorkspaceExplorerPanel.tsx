@@ -359,7 +359,7 @@ function ExplorerTreeRow(args: {
           </ContextMenuItem>
           <ContextMenuItem onSelect={() => args.onOpenInStaveTerminal(terminalTargetPath)}>
             <SquareTerminal className="size-4" />
-            Open in Stave Terminal
+            Open in Ghostty
           </ContextMenuItem>
           <ContextMenuItem onSelect={() => args.onOpenInTerminal(terminalTargetPath)}>
             <SquareTerminal className="size-4" />
