@@ -677,10 +677,25 @@ export function AssistantMessageBody(args: {
         </ChainOfThought>
       ) : null}
 
-      {trace.responseParts.length > 0 ? (
+      {!isStreaming && trace.interimTextParts.length > 0 ? (
         <div
           className={cn(
             trace.entries.length > 0 && "mt-4",
+            "space-y-1.5 opacity-50",
+          )}
+        >
+          {trace.interimTextParts.map((part, index) => (
+            <MessageResponse key={`${messageId}-interim-${index}`}>
+              {part.text}
+            </MessageResponse>
+          ))}
+        </div>
+      ) : null}
+
+      {trace.responseParts.length > 0 ? (
+        <div
+          className={cn(
+            (trace.entries.length > 0 || trace.interimTextParts.length > 0) && "mt-4",
             "space-y-3",
           )}
         >

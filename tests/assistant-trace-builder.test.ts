@@ -85,6 +85,48 @@ describe("buildAssistantTrace", () => {
     ]);
   });
 
+  test("surfaces interim text parts (non-noise) outside the chain of thought", () => {
+    const trace = buildAssistantTrace({
+      message: createAssistantMessage({
+        parts: [
+          { type: "text", text: "I will inspect the repo first." },
+          { type: "tool_use", toolName: "bash", input: "ls", output: "ok", state: "output-available" },
+          { type: "text", text: "The file structure looks clean." },
+          { type: "tool_use", toolName: "read", input: "src/a.ts", output: "code", state: "output-available" },
+          { type: "text", text: "Done!" },
+        ],
+      }),
+    });
+
+    expect(trace.interimTextParts.map((p) => p.text)).toEqual([
+      "I will inspect the repo first.",
+      "The file structure looks clean.",
+    ]);
+    expect(trace.responseParts.map((p) => p.text)).toEqual(["Done!"]);
+  });
+
+  test("filters noise phrases from interim text parts", () => {
+    const trace = buildAssistantTrace({
+      message: createAssistantMessage({
+        parts: [
+          { type: "text", text: "Now I have full context about the codebase." },
+          { type: "tool_use", toolName: "bash", input: "rg foo", output: "bar", state: "output-available" },
+          { type: "text", text: "Let me check the runtime." },
+          { type: "tool_use", toolName: "read", input: "src/a.ts", output: "code", state: "output-available" },
+          { type: "text", text: "Perfect! I see the issue." },
+          { type: "tool_use", toolName: "write", input: "src/a.ts", output: "ok", state: "output-available" },
+          { type: "text", text: "Fixed the bug." },
+        ],
+      }),
+    });
+
+    // Noise phrases are excluded from interimTextParts
+    expect(trace.interimTextParts).toEqual([]);
+    // But they still appear inside trace entries (assistant_text)
+    expect(trace.entries.filter((e) => e.kind === "assistant_text")).toHaveLength(3);
+    expect(trace.responseParts.map((p) => p.text)).toEqual(["Fixed the bug."]);
+  });
+
   test("shows a streaming placeholder when nothing renderable has arrived yet", () => {
     const trace = buildAssistantTrace({
       message: createAssistantMessage({
