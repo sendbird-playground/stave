@@ -33,6 +33,10 @@ import {
 import type { UserInputQuestion } from "../../src/types/chat";
 import { getCodexMcpRegistrationStatus } from "../main/codex-mcp";
 import { readPrimaryStaveLocalMcpManifest } from "../main/stave-local-mcp-manifest";
+import {
+  buildCodexDeveloperInstructions,
+  buildCodexInstructionProfileKey,
+} from "./codex-runtime-config";
 
 const threadIdByTask = new Map<string, string>();
 const clientByExecutablePath = new Map<string, CodexAppServerClient>();
@@ -186,6 +190,9 @@ function buildCodexConfigOverrides(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
   const config: Record<string, string | boolean> = {};
+  const developerInstructions = buildCodexDeveloperInstructions({
+    runtimeOptions: args.runtimeOptions,
+  });
   const summaryMode = args.runtimeOptions?.codexReasoningSummary;
   const supportsSummaries = args.runtimeOptions?.codexReasoningSummarySupport;
   const hasExplicitRawReasoningToggle = Object.prototype.hasOwnProperty.call(
@@ -193,6 +200,9 @@ function buildCodexConfigOverrides(args: {
     "codexShowRawReasoning",
   );
 
+  if (developerInstructions) {
+    config.developer_instructions = developerInstructions;
+  }
   if (hasExplicitRawReasoningToggle) {
     config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawReasoning);
   }
@@ -225,7 +235,10 @@ function buildThreadKey(args: {
 }) {
   const model = args.runtimeOptions?.model?.trim() || "default";
   const mode = args.runtimeOptions?.codexPlanMode ? "plan" : "chat";
-  return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}`;
+  const instructionProfile = buildCodexInstructionProfileKey({
+    runtimeOptions: args.runtimeOptions,
+  });
+  return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}:${instructionProfile}`;
 }
 
 function resolveThreadId(args: { threadKey: string; fallbackThreadId?: string }) {
@@ -1155,7 +1168,7 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
   const diffTracker = await createTurnDiffTracker({ cwd: runtimeCwd });
   const hasEmbeddedStaveLocalMcp = await hasConnectedStaveLocalMcpForCodex();
 
-  let providerPrompt = buildProviderTurnPrompt({
+  const providerPrompt = buildProviderTurnPrompt({
     providerId: args.providerId,
     prompt: args.prompt,
     conversation: args.conversation
@@ -1165,10 +1178,6 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
         })
       : args.conversation,
   });
-  const responseStyle = args.runtimeOptions?.responseStylePrompt?.trim();
-  if (responseStyle) {
-    providerPrompt = `<system>\n${responseStyle}\n</system>\n\n${providerPrompt}`;
-  }
 
   const toolOutputBuffers = new Map<string, string>();
   const agentMessageBuffers = new Map<string, string>();
@@ -1797,7 +1806,9 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
             settings: {
               model: args.runtimeOptions?.model?.trim() || "gpt-5.4",
               reasoning_effort: args.runtimeOptions?.codexReasoningEffort ?? null,
-              developer_instructions: null,
+              developer_instructions: buildCodexDeveloperInstructions({
+                runtimeOptions: args.runtimeOptions,
+              }) ?? null,
             },
           },
         }

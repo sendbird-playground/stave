@@ -38,6 +38,10 @@ import {
   CODEX_STAVE_MCP_TOKEN_ENV_VAR,
   getCodexMcpRegistrationStatus,
 } from "../main/codex-mcp";
+import {
+  buildCodexDeveloperInstructions,
+  buildCodexInstructionProfileKey,
+} from "./codex-runtime-config";
 
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
@@ -193,6 +197,9 @@ export function buildCodexConfigOverrides(args: {
 }) {
   const config: Record<string, string | boolean> = {};
   const planModeEnabled = args.runtimeOptions?.codexPlanMode === true;
+  const developerInstructions = buildCodexDeveloperInstructions({
+    runtimeOptions: args.runtimeOptions,
+  });
   const summaryMode = args.runtimeOptions?.codexReasoningSummary;
   const supportsSummaries = args.runtimeOptions?.codexReasoningSummarySupport;
   const hasExplicitRawReasoningToggle = Object.prototype.hasOwnProperty.call(
@@ -200,6 +207,9 @@ export function buildCodexConfigOverrides(args: {
     "codexShowRawReasoning",
   );
 
+  if (developerInstructions) {
+    config.developer_instructions = developerInstructions;
+  }
   if (hasExplicitRawReasoningToggle) {
     config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawReasoning);
   }
@@ -233,7 +243,10 @@ function buildThreadKey(args: {
 }) {
   const model = args.runtimeOptions?.model?.trim() || "default";
   const mode = args.runtimeOptions?.codexPlanMode ? "plan" : "chat";
-  return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}`;
+  const instructionProfile = buildCodexInstructionProfileKey({
+    runtimeOptions: args.runtimeOptions,
+  });
+  return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}:${instructionProfile}`;
 }
 
 function resolveThreadId(args: { threadKey: string; fallbackThreadId?: string }) {
@@ -1021,7 +1034,7 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     args.registerAbort?.(() => abortController.abort());
     const turnOptions: TurnOptions = { signal: abortController.signal };
     const hasEmbeddedStaveLocalMcp = await hasConnectedStaveLocalMcpForCodex();
-    let providerPrompt = buildProviderTurnPrompt({
+    const providerPrompt = buildProviderTurnPrompt({
       providerId: args.providerId,
       prompt: args.prompt,
       conversation: args.conversation
@@ -1031,18 +1044,6 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
           })
         : args.conversation,
     });
-
-    // Codex has no separate system-prompt channel, so runtime prompt overrides
-    // are prepended as explicit <system> blocks before the turn prompt.
-    const baseSystemPrompt = args.runtimeOptions?.claudeSystemPrompt?.trim();
-    const responseStyle = args.runtimeOptions?.responseStylePrompt?.trim();
-    const systemBlocks = [
-      baseSystemPrompt ? `<system>\n${baseSystemPrompt}\n</system>` : null,
-      responseStyle ? `<system>\n${responseStyle}\n</system>` : null,
-    ].filter((value): value is string => Boolean(value));
-    if (systemBlocks.length > 0) {
-      providerPrompt = `${systemBlocks.join("\n\n")}\n\n${providerPrompt}`;
-    }
 
     const streamed = await thread.runStreamed(providerPrompt, turnOptions);
 

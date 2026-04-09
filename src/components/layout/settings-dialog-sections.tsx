@@ -2455,7 +2455,7 @@ function PromptsSection() {
         >
           <PromptField
             title="Response Formatting Rules"
-            description="Appended to the system prompt (Claude) or prepended to the user prompt (Codex). Empty disables the injection."
+            description="Appended to the system prompt (Claude) or injected as hidden developer instructions (Codex). Empty disables the injection."
             value={promptResponseStyle}
             defaultValue={DEFAULT_PROMPT_RESPONSE_STYLE}
             onCommit={(v) => updateSettings({ patch: { promptResponseStyle: v } })}
