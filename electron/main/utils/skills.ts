@@ -157,11 +157,13 @@ async function resolveCatalogRoots(args: {
   const sharedSkillsHome = settingsSharedSkillsHome ?? envSharedSkillsHome;
 
   if (sharedSkillsHome) {
+    // Scan the configured directory directly — the UI calls this
+    // "Shared Skills Root" so the path itself is the skills directory.
     specs.push({
       scope: "global",
       provider: "shared",
       source: "shared_root",
-      path: path.join(sharedSkillsHome, "skills"),
+      path: sharedSkillsHome,
       detail: settingsSharedSkillsHome
         ? "Shared skills root configured in Settings."
         : "Shared skills root resolved from STAVE_SHARED_SKILLS_HOME.",
