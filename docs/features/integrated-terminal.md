@@ -2,12 +2,15 @@
 
 ## Summary
 
-- Stave includes a workspace-scoped integrated terminal with terminal tabs in the same top strip as task tabs.
+- Stave includes two terminal surfaces:
+  - a docked workspace terminal for general shell work
+  - full-panel CLI sessions for running Claude or Codex directly inside the main workspace area
 - You can open a terminal for the workspace root or for a specific Explorer path without leaving Stave.
 
 ## When To Use It
 
-- Use it when you need a quick shell in the current workspace while keeping chat, editor, and Explorer visible.
+- Use the docked terminal when you need a quick shell in the current workspace while keeping chat, editor, and Explorer visible.
+- Use a CLI session when you want the main center panel to become a dedicated Claude or Codex terminal surface.
 - Use it when you want a terminal tab tied to the current workspace instead of opening a separate system terminal window.
 - Use the system terminal entry point when you explicitly want an external shell window managed by your OS.
 
@@ -20,7 +23,8 @@
 
 1. Click the `Terminal` button to show the docked terminal.
 2. If no terminal tab exists yet, Stave creates one for the active workspace.
-3. Use the terminal tab segment in the top strip to switch, create, rename, or close terminal tabs.
+3. Use the dock header tab strip to switch, create, rename, or close docked terminal tabs.
+4. Use `New CLI Session` in the top strip when you want to launch `Claude` or `Codex` in the center panel.
 
 ## Interface Walkthrough
 
@@ -29,40 +33,53 @@
 - `Terminal` button in the main workspace chrome toggles the dock visibility.
 - `Open in Stave Terminal` in the top bar workspace path menu opens a terminal tab for the current workspace path.
 - `Open in Stave Terminal` in the Explorer context menu opens a terminal tab rooted at the selected folder or file parent directory.
+- `New CLI Session` in the top strip opens one of four direct launch combinations:
+  - `Claude · Workspace`
+  - `Claude · Active Task`
+  - `Codex · Workspace`
+  - `Codex · Active Task`
 
 ### Key Controls
 
-- Task tabs and terminal tabs share the same top strip, but they stay independent.
+- The top strip shows task tabs and CLI session tabs.
+- Docked terminal tabs are fully managed inside the dock header and no longer appear in the top strip.
 - Selecting a task tab changes the chat context.
-- Selecting a terminal tab opens the dock and focuses that terminal session without changing the active task.
-- The dock header shows the active terminal title and, when present, the linked task label.
-- The dock header actions clear the visible transcript, hide the dock, or close the active terminal tab.
+- Selecting a CLI session tab replaces the main chat panel with that live CLI surface without changing the stored active task.
+- The dock header manages docked terminal tabs, clear, hide, and close actions.
+- The CLI session header exposes provider/context metadata plus `Copy Handoff`, `Paste Handoff`, `Restart Session`, and `Close Session`.
 
 ## Common Workflows
 
 ### Create Or Configure Something
 
-1. Click the terminal button in the top strip to create a new terminal tab.
+1. Click the dock `Terminal` toggle to create or reveal a docked terminal tab.
 2. Stave uses the active task title when a task is linked, or the current path name when the tab is path-based.
-3. Rename a terminal tab from its strip menu when you want a custom label.
+3. Rename a terminal tab from the dock tab menu when you want a custom label.
 
 ### Run Or Verify Something
 
-1. Select the terminal tab you want from the top strip.
+1. Select the docked terminal tab you want from the dock header.
 2. Run commands in the docked shell.
 3. Success looks like streamed shell output in the dock while the rest of the workspace stays interactive.
 
+### Run Claude Or Codex In-Panel
+
+1. Click `New CLI Session` in the top strip.
+2. Pick the provider and context combination you want.
+3. Stave opens a new center-panel CLI session tab and starts the provider CLI directly.
+4. If the session is task-linked, use `Paste Handoff` to inject the stored task summary into the live terminal.
+
 ## Files And Data
 
-- Terminal tab metadata is stored as part of the workspace shell state.
-- Terminal transcript cache is best-effort and local to the app.
+- Docked terminal tabs and CLI session tabs are both stored as part of the workspace shell state.
+- Terminal transcript cache is best-effort and local to the app for both surfaces.
 - Live shell processes are reset when you switch workspaces.
 
 ## Limitations And Advanced Options
 
-- The dock shows one active terminal viewport at a time even when multiple terminal tabs exist.
+- The dock shows one active terminal viewport at a time even when multiple docked terminal tabs exist.
+- CLI sessions persist as workspace tabs, but their live provider processes do not survive a workspace switch.
 - `Open in Terminal` still opens the external system terminal. It is separate from `Open in Stave Terminal`.
-- Terminal tabs persist as workspace state, but live shell processes do not survive a workspace switch.
 
 ## Troubleshooting
 
@@ -77,6 +94,12 @@
 - Symptom: a system terminal window opens outside Stave.
 - Cause: you used `Open in Terminal`, which keeps the external-terminal behavior.
 - Fix: use `Open in Stave Terminal` from the same menu.
+
+### CLI Session Fails To Start
+
+- Symptom: the center panel switches to a CLI session tab but shows an error banner.
+- Cause: the provider CLI executable is unavailable in the current runtime or the bridge could not launch it.
+- Fix: check Claude/Codex CLI installation, verify the Codex binary path setting if applicable, or run the desktop shell with `bun run dev:desktop` during local development.
 
 ## Related Docs
 

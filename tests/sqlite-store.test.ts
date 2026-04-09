@@ -16,6 +16,10 @@ function createSnapshot(): PersistenceWorkspaceSnapshot {
   return {
     version: 1,
     activeTaskId: "task-1",
+    activeSurface: {
+      kind: "cli-session",
+      cliSessionTabId: "cli-1",
+    },
     tasks: [
       {
         id: "task-1",
@@ -48,6 +52,27 @@ function createSnapshot(): PersistenceWorkspaceSnapshot {
       ],
       "task-2": [],
     },
+    terminalTabs: [{
+      id: "terminal-1",
+      title: "project",
+      linkedTaskId: null,
+      backend: "xterm",
+      cwd: "/tmp/project",
+      createdAt: 1,
+    }],
+    activeTerminalTabId: "terminal-1",
+    cliSessionTabs: [{
+      id: "cli-1",
+      title: "Claude Workspace",
+      provider: "claude-code",
+      contextMode: "workspace",
+      linkedTaskId: null,
+      linkedTaskTitle: null,
+      handoffSummary: "",
+      cwd: "/tmp/project",
+      createdAt: 2,
+    }],
+    activeCliSessionTabId: "cli-1",
   };
 }
 

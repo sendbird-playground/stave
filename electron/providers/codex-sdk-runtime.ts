@@ -125,7 +125,7 @@ function toCodexUserFacingErrorMessage(args: { message: string }) {
   return args.message;
 }
 
-function buildCodexEnv(args: { executablePath?: string } = {}) {
+export function buildCodexEnv(args: { executablePath?: string } = {}) {
   const env = buildRuntimeProcessEnv({
     executablePath: args.executablePath,
     extraPaths: CODEX_LOOKUP_PATHS,

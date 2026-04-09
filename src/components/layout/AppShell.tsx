@@ -7,6 +7,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { ZenAppShellLayout } from "@/components/layout/ZenAppShellLayout";
 import { COLLAPSED_PROJECT_SIDEBAR_WIDTH, ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
+import { CliSessionPanel } from "@/components/layout/CliSessionPanel";
 import { resolveLatestCompletedTurnTarget } from "@/components/layout/command-palette-navigation";
 import { dispatchTopBarPrAction } from "@/components/layout/top-bar-pr-events";
 import { ChatArea } from "@/components/session/ChatArea";
@@ -73,6 +74,8 @@ export function AppShell() {
     projectName,
     tasks,
     activeTaskId,
+    activeSurface,
+    cliSessionTabs,
     activeTurnIdsByTask,
     workspaces,
     activeWorkspaceId,
@@ -114,6 +117,8 @@ export function AppShell() {
     state.projectName,
     state.tasks,
     state.activeTaskId,
+    state.activeSurface,
+    state.cliSessionTabs,
     state.activeTurnIdsByTask,
     state.workspaces,
     state.activeWorkspaceId,
@@ -357,10 +362,15 @@ export function AppShell() {
   useEffect(() => {
     const unsubscribe = window.api?.window?.subscribeCloseShortcut?.(() => {
       const store = useAppStore.getState();
-      const { editorTabs, activeEditorTabId, activeTaskId, settings } = store;
+      const { editorTabs, activeEditorTabId, activeTaskId, activeSurface, activeCliSessionTabId, settings } = store;
 
       if (activeEditorTabId && editorTabs.length > 0) {
         store.requestCloseActiveEditorTab();
+        return;
+      }
+
+      if (activeSurface.kind === "cli-session" && activeCliSessionTabId) {
+        store.closeCliSessionTab({ tabId: activeCliSessionTabId });
         return;
       }
 
@@ -894,6 +904,8 @@ export function AppShell() {
     switchWorkspace,
     handleToggleZenMode,
   ]);
+  const showCliSurface = activeSurface.kind === "cli-session"
+    && cliSessionTabs.some((tab) => tab.id === activeSurface.cliSessionTabId);
 
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
@@ -990,7 +1002,10 @@ export function AppShell() {
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                         <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
-                          <ChatArea />
+                          <div className={showCliSurface ? "hidden h-full" : "h-full"}>
+                            <ChatArea />
+                          </div>
+                          {cliSessionTabs.length > 0 ? <CliSessionPanel /> : null}
                         </div>
                       </div>
                       <div className={terminalDocked ? undefined : "hidden"}>

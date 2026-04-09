@@ -1,6 +1,9 @@
 import type { CanonicalConversationRequest, ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 import type { ConnectedToolId } from "@/lib/providers/connected-tool-status";
-import type { TerminalCreateSessionArgs } from "@/lib/terminal/types";
+import type {
+  CliSessionCreateSessionArgs,
+  TerminalCreateSessionArgs,
+} from "@/lib/terminal/types";
 
 const DEV_API_BASE = "http://127.0.0.1:3001";
 
@@ -106,6 +109,10 @@ export function installDevApiBridge() {
       }),
       createSession: (args: TerminalCreateSessionArgs) => postJson({
         path: "/api/terminal/create",
+        body: args,
+      }),
+      createCliSession: (args: CliSessionCreateSessionArgs) => postJson({
+        path: "/api/terminal/create-cli",
         body: args,
       }),
       writeSession: (args: { sessionId: string; input: string }) => postJson({

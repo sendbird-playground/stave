@@ -253,6 +253,29 @@ const WorkspaceTerminalTabSchema = z.object({
   createdAt: z.number().int().nonnegative(),
 });
 
+const WorkspaceCliSessionTabSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  provider: z.union([z.literal("claude-code"), z.literal("codex")]),
+  contextMode: z.union([z.literal("workspace"), z.literal("active-task")]),
+  linkedTaskId: z.string().nullable(),
+  linkedTaskTitle: z.string().nullable(),
+  handoffSummary: z.string(),
+  cwd: z.string(),
+  createdAt: z.number().int().nonnegative(),
+});
+
+const WorkspaceActiveSurfaceSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("task"),
+    taskId: z.string(),
+  }),
+  z.object({
+    kind: z.literal("cli-session"),
+    cliSessionTabId: z.string(),
+  }),
+]);
+
 const WorkspaceJiraIssueSchema = z.object({
   id: z.string(),
   issueKey: z.string().optional().default(""),
@@ -378,6 +401,12 @@ export const WorkspaceSnapshotSchema = z.object({
   activeEditorTabId: z.string().nullable().optional().default(null),
   terminalTabs: z.array(WorkspaceTerminalTabSchema).optional().default([]),
   activeTerminalTabId: z.string().nullable().optional().default(null),
+  cliSessionTabs: z.array(WorkspaceCliSessionTabSchema).optional().default([]),
+  activeCliSessionTabId: z.string().nullable().optional().default(null),
+  activeSurface: WorkspaceActiveSurfaceSchema.optional().default({
+    kind: "task",
+    taskId: "",
+  }),
   workspaceInformation: WorkspaceInformationSchema.optional().default({
     jiraIssues: [],
     confluencePages: [],

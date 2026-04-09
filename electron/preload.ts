@@ -33,7 +33,10 @@ import type {
   ToolingStatusRequest,
   ToolingStatusSnapshot,
 } from "../src/lib/tooling-status";
-import type { TerminalCreateSessionArgs } from "../src/lib/terminal/types";
+import type {
+  CliSessionCreateSessionArgs,
+  TerminalCreateSessionArgs,
+} from "../src/lib/terminal/types";
 import type {
   ScriptKind,
   ScriptTrigger,
@@ -674,6 +677,8 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("terminal:run-command", args),
     createSession: (args: TerminalCreateSessionArgs) =>
       ipcRenderer.invoke("terminal:create-session", args),
+    createCliSession: (args: CliSessionCreateSessionArgs) =>
+      ipcRenderer.invoke("terminal:create-cli-session", args),
     writeSession: (args: { sessionId: string; input: string }) =>
       ipcRenderer.invoke("terminal:write-session", args),
     readSession: (args: { sessionId: string }) =>

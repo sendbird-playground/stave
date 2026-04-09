@@ -133,6 +133,23 @@ export const TerminalCreateSessionArgsSchema = z
   })
   .strict();
 
+export const CliSessionCreateSessionArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+    workspacePath: z.string().min(1).max(4096),
+    cliSessionTabId: z.string().min(1).max(200),
+    providerId: z.union([z.literal("claude-code"), z.literal("codex")]),
+    contextMode: z.union([z.literal("workspace"), z.literal("active-task")]),
+    taskId: z.string().min(1).max(200).nullable(),
+    taskTitle: z.string().max(500).nullable(),
+    cwd: z.string().min(1).max(4096),
+    cols: z.number().int().min(1).max(1000).optional(),
+    rows: z.number().int().min(1).max(1000).optional(),
+    deliveryMode: z.union([z.literal("poll"), z.literal("push")]).optional(),
+    runtimeOptions: z.lazy(() => RuntimeOptionsSchema),
+  })
+  .strict();
+
 export const GetPrStatusByUrlArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),

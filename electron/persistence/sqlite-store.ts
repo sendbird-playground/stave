@@ -353,6 +353,9 @@ export class SqliteStore {
       activeEditorTabId: args.snapshot.activeEditorTabId ?? null,
       terminalTabs: args.snapshot.terminalTabs ?? [],
       activeTerminalTabId: args.snapshot.activeTerminalTabId ?? null,
+      cliSessionTabs: args.snapshot.cliSessionTabs ?? [],
+      activeCliSessionTabId: args.snapshot.activeCliSessionTabId ?? null,
+      activeSurface: args.snapshot.activeSurface ?? { kind: "task", taskId: args.snapshot.activeTaskId },
       workspaceInformation: args.snapshot.workspaceInformation,
       messageCountByTask: args.messageCountByTask,
     };
@@ -381,6 +384,9 @@ export class SqliteStore {
       activeEditorTabId: null,
       terminalTabs: [],
       activeTerminalTabId: null,
+      cliSessionTabs: [],
+      activeCliSessionTabId: null,
+      activeSurface: { kind: "task", taskId: args.payload.activeTaskId },
       messageCountByTask: {},
       ...args.payload,
     };
