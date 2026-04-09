@@ -157,6 +157,10 @@ export function deriveTodoTraceStatus(args: {
     return "done" as const;
   }
 
+  if (args.state === "output-available" || args.state === "output-error") {
+    return "done" as const;
+  }
+
   if (
     args.state === "input-streaming"
     || args.state === "input-available"
@@ -164,10 +168,6 @@ export function deriveTodoTraceStatus(args: {
     || progress.hasPendingTodos
   ) {
     return "active" as const;
-  }
-
-  if (args.state === "output-available" || args.state === "output-error") {
-    return "done" as const;
   }
 
   return "pending" as const;
