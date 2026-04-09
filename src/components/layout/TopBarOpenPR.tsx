@@ -42,6 +42,7 @@ import {
   generateFallbackPullRequestDraft,
 } from "@/lib/source-control-pr";
 import {
+  canApplyCreatePrDialogOpenChange,
   canSubmitCreatePr,
   type CreatePrDialogStep,
   type CreatePrSubmitAction,
@@ -1053,15 +1054,30 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       <Dialog
         open={dialogOpen}
         onOpenChange={(open) => {
-          if (!isDialogBusy) {
-            setDialogOpen(open);
+          if (!canApplyCreatePrDialogOpenChange({ open, isDialogBusy })) {
+            return;
           }
-          if (!open) {
-            resetCreatePrDialogState();
+          if (open) {
+            setDialogOpen(true);
+            return;
           }
+          resetCreatePrDialogState({ closeDialog: true });
         }}
       >
-        <DialogContent className="min-w-0 sm:max-w-lg">
+        <DialogContent
+          className="min-w-0 sm:max-w-lg"
+          showCloseButton={!isDialogBusy}
+          onEscapeKeyDown={(event) => {
+            if (isDialogBusy) {
+              event.preventDefault();
+            }
+          }}
+          onInteractOutside={(event) => {
+            if (isDialogBusy) {
+              event.preventDefault();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Create Pull Request</DialogTitle>
             <DialogDescription className="sr-only">

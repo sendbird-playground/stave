@@ -98,3 +98,10 @@ export function canSubmitCreatePr(args: {
 }) {
   return args.step === "ready" && (args.title?.trim().length ?? 0) > 0;
 }
+
+export function canApplyCreatePrDialogOpenChange(args: {
+  open: boolean;
+  isDialogBusy: boolean;
+}) {
+  return args.open || !args.isDialogBusy;
+}
