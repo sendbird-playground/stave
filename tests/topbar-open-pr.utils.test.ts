@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildCreatePrTargetBranchOptions,
+  canApplyCreatePrDialogOpenChange,
   canSubmitCreatePr,
   shouldShowCreatePrSubmitSpinner,
 } from "@/components/layout/TopBarOpenPR.utils";
@@ -134,5 +135,28 @@ describe("canSubmitCreatePr", () => {
       step: "loading",
       title: "Improve PR title fallback behavior",
     })).toBe(false);
+  });
+});
+
+describe("canApplyCreatePrDialogOpenChange", () => {
+  test("blocks dismiss attempts while the dialog is busy", () => {
+    expect(canApplyCreatePrDialogOpenChange({
+      open: false,
+      isDialogBusy: true,
+    })).toBe(false);
+  });
+
+  test("allows opening while the dialog is busy", () => {
+    expect(canApplyCreatePrDialogOpenChange({
+      open: true,
+      isDialogBusy: true,
+    })).toBe(true);
+  });
+
+  test("allows normal close events when the dialog is idle", () => {
+    expect(canApplyCreatePrDialogOpenChange({
+      open: false,
+      isDialogBusy: false,
+    })).toBe(true);
   });
 });

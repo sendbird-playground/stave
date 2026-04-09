@@ -217,6 +217,7 @@ The dialog keeps the base branch simple by default. It shows the current remote 
 - If the user switches to another workspace while the dialog is open, Stave closes the dialog and discards the in-flight draft request so a previous workspace response cannot bleed into the newly active workspace.
 - Right before submission, Stave refreshes git status again and auto-commits only the files that are still currently uncommitted before pushing and opening the PR.
 - When uncommitted files are auto-committed during PR creation, progress, success, and failure messages are shown inline inside the dialog instead of as transient toast notifications.
+- While commit, push, or PR creation is running, the dialog no longer accepts dismiss attempts that would clear the prepared title and description mid-flight.
 
 ## Store Shape
 
