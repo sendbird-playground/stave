@@ -1985,6 +1985,117 @@ describe("workspace store hydration ordering", () => {
     ]);
   });
 
+  test("clears the submitted prompt draft before async context loading so workspace switches do not revive it", async () => {
+    const localStorage = createMemoryStorage();
+    let resolveReadFile: ((value: {
+      ok: boolean;
+      content: string;
+      revision: string;
+      stderr?: string;
+    }) => void) | null = null;
+
+    setWindowContext({
+      localStorage,
+      api: {
+        provider: {
+          subscribeStreamEvents: () => () => {},
+          startPushTurn: async () => ({ ok: true, streamId: "stream-submit-clear" }),
+        },
+        fs: {
+          listFiles: async () => ({ ok: true, files: [] }),
+          readFile: async () => await new Promise<{
+            ok: boolean;
+            content: string;
+            revision: string;
+            stderr?: string;
+          }>((resolve) => {
+            resolveReadFile = resolve;
+          }),
+        },
+      },
+    } as unknown);
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-04-09T00:00:00.000Z" },
+        { id: "ws-alt", name: "Alt", updatedAt: "2026-04-09T00:00:01.000Z" },
+      ],
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-main": "/tmp/stave-project",
+        "ws-alt": "/tmp/stave-project-alt",
+      },
+      workspaceBranchById: {
+        "ws-main": "main",
+        "ws-alt": "alt",
+      },
+      workspaceDefaultById: {
+        "ws-main": true,
+        "ws-alt": false,
+      },
+      draftProvider: "codex",
+      tasks: [{
+        id: "task-main",
+        title: "Main Task",
+        provider: "codex",
+        updatedAt: "2026-04-09T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      messagesByTask: { "task-main": [] },
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {
+        "task-main": {
+          text: "Submitted prompt",
+          attachedFilePaths: ["README.md"],
+          attachments: [],
+        },
+      },
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
+    });
+
+    const sendPromise = useAppStore.getState().sendUserMessage({
+      taskId: "task-main",
+      content: "Submitted prompt",
+    });
+
+    const afterSubmit = useAppStore.getState();
+    expect(afterSubmit.promptDraftByTask["task-main"]).toEqual({
+      text: "",
+      attachedFilePaths: [],
+      attachments: [],
+    });
+
+    await useAppStore.getState().switchWorkspace({ workspaceId: "ws-alt" });
+
+    const switchedState = useAppStore.getState();
+    expect(switchedState.workspaceRuntimeCacheById["ws-main"]?.promptDraftByTask["task-main"]).toEqual({
+      text: "",
+      attachedFilePaths: [],
+      attachments: [],
+    });
+
+    resolveReadFile?.({
+      ok: true,
+      content: "# README",
+      revision: "rev-1",
+    });
+
+    const started = await sendPromise;
+    expect(started).toMatchObject({
+      status: "started",
+      taskId: "task-main",
+      workspaceId: "ws-main",
+    });
+  });
+
   test("switchWorkspace reloads persistence when the cached target workspace session is empty", async () => {
     const localStorage = createMemoryStorage();
     setWindowContext({

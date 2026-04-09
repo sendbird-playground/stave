@@ -7275,6 +7275,72 @@ export const useAppStore = create<AppState>()(
           return { status: "blocked" } satisfies SendUserMessageResult;
         }
 
+        const updatePromptDraftsForWorkspace = (draftsByTaskId: Record<string, PromptDraft>) => {
+          set((nextState) => {
+            if (taskWorkspaceId === nextState.activeWorkspaceId) {
+              return {
+                promptDraftByTask: {
+                  ...nextState.promptDraftByTask,
+                  ...draftsByTaskId,
+                },
+                workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
+              };
+            }
+
+            const cachedSession = nextState.workspaceRuntimeCacheById[taskWorkspaceId];
+            if (!cachedSession) {
+              return nextState;
+            }
+
+            return {
+              workspaceRuntimeCacheById: {
+                ...nextState.workspaceRuntimeCacheById,
+                [taskWorkspaceId]: {
+                  ...cachedSession,
+                  promptDraftByTask: {
+                    ...cachedSession.promptDraftByTask,
+                    ...draftsByTaskId,
+                  },
+                },
+              },
+            };
+          });
+        };
+
+        let promptDraftClearedOptimistically = false;
+        const clearSubmittedPromptDraft = () => {
+          if (promptDraftClearedOptimistically) {
+            return;
+          }
+          promptDraftClearedOptimistically = true;
+          updatePromptDraftsForWorkspace({
+            [resolvedTaskId]: buildClearedPromptDraft(promptDraft),
+            ...(sourcePromptDraftTaskId !== resolvedTaskId
+              ? {
+                  [sourcePromptDraftTaskId]: buildClearedPromptDraft(sourcePromptDraft),
+                }
+              : {}),
+          });
+        };
+        const restoreSubmittedPromptDraft = () => {
+          if (!promptDraftClearedOptimistically) {
+            return;
+          }
+          promptDraftClearedOptimistically = false;
+          updatePromptDraftsForWorkspace({
+            [resolvedTaskId]: promptDraft,
+            ...(sourcePromptDraftTaskId !== resolvedTaskId
+              ? {
+                  [sourcePromptDraftTaskId]: sourcePromptDraft,
+                }
+              : {}),
+          });
+        };
+
+        clearSubmittedPromptDraft();
+
+        try {
+
         const resolvedPromptDraftRuntimeState = resolvePromptDraftRuntimeState({
           promptDraft,
           fallback: {
@@ -7311,16 +7377,19 @@ export const useAppStore = create<AppState>()(
           workspaceId: taskWorkspaceId,
         });
         if (!latestWorkspaceSession) {
+          restoreSubmittedPromptDraft();
           return { status: "blocked" } satisfies SendUserMessageResult;
         }
         const latestHistory = latestWorkspaceSession.messagesByTask[resolvedTaskId] ?? existingHistory;
         if (latestWorkspaceSession.activeTurnIdsByTask[resolvedTaskId]) {
+          restoreSubmittedPromptDraft();
           return { status: "blocked" } satisfies SendUserMessageResult;
         }
         if (
           findLatestPendingApproval({ messages: latestHistory })
           || findLatestPendingUserInput({ messages: latestHistory })
         ) {
+          restoreSubmittedPromptDraft();
           return { status: "blocked" } satisfies SendUserMessageResult;
         }
 
@@ -7415,6 +7484,7 @@ export const useAppStore = create<AppState>()(
           retrievedContextParts,
         });
         const prompt = normalizedPrompt;
+        promptDraftClearedOptimistically = false;
 
         if (taskWorkspaceId === state.activeWorkspaceId) {
           set((nextState) => {
@@ -7677,6 +7747,10 @@ export const useAppStore = create<AppState>()(
           workspaceId: taskWorkspaceId,
           turnId,
         } satisfies SendUserMessageResult;
+        } catch (error) {
+          restoreSubmittedPromptDraft();
+          throw error;
+        }
       },
       abortTaskTurn: ({ taskId }) => {
         const stateBefore = get();
