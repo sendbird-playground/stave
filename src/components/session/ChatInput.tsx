@@ -712,7 +712,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
               imageContexts: imageContexts.length > 0 ? imageContexts : undefined,
             });
-            if (result.status === "started") {
+            if (result.status === "started" || result.status === "queued") {
               adoptPromptDraftText({
                 taskId: args.providerSelectionTarget,
                 text: "",
