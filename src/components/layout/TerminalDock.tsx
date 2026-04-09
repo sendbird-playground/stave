@@ -8,7 +8,7 @@ import {
   useState,
   type DragEvent,
 } from "react";
-import { Badge, Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import { Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import {
   getWorkspaceTerminalTabKey,
@@ -147,12 +147,6 @@ export function TerminalDock() {
   const activeTab = useMemo(
     () => terminalTabs.find((tab) => tab.id === activeTerminalTabId) ?? null,
     [activeTerminalTabId, terminalTabs],
-  );
-  const activeLinkedTask = useMemo(
-    () => (activeTab?.linkedTaskId
-      ? tasks.find((task) => task.id === activeTab.linkedTaskId) ?? null
-      : null),
-    [activeTab?.linkedTaskId, tasks],
   );
   const getTabKey = useCallback((tab: ReturnType<typeof useAppStore.getState>["terminalTabs"][number]) => (
     getWorkspaceTerminalTabKey({
@@ -302,11 +296,6 @@ export function TerminalDock() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1 px-2">
-                {activeLinkedTask ? (
-                  <Badge variant="secondary" className="max-w-40 truncate rounded-sm text-[10px] uppercase tracking-[0.14em]">
-                    {activeLinkedTask.title}
-                  </Badge>
-                ) : null}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>

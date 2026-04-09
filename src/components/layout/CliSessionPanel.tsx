@@ -45,13 +45,6 @@ export function CliSessionPanel() {
     () => cliSessionTabs.find((tab) => tab.id === activeCliSessionTabId) ?? null,
     [activeCliSessionTabId, cliSessionTabs],
   );
-  const activeLinkedTask = useMemo(
-    () => (activeTab?.linkedTaskId
-      ? tasks.find((task) => task.id === activeTab.linkedTaskId) ?? null
-      : null),
-    [activeTab?.linkedTaskId, tasks],
-  );
-  const linkedTaskTitle = activeLinkedTask?.title ?? activeTab?.linkedTaskTitle ?? null;
   const handoffSummary = activeTab?.handoffSummary?.trim() ?? "";
   const getTabKey = useCallback((tab: NonNullable<typeof activeTab>) => (
     getWorkspaceCliSessionTabKey({
@@ -176,11 +169,6 @@ export function CliSessionPanel() {
                     <Badge variant="secondary" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
                       {getCliSessionContextLabel(activeTab.contextMode)}
                     </Badge>
-                    {linkedTaskTitle ? (
-                      <Badge variant="secondary" className="max-w-56 truncate rounded-sm text-[10px] uppercase tracking-[0.14em]">
-                        {linkedTaskTitle}
-                      </Badge>
-                    ) : null}
                   </>
                 ) : (
                   <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
