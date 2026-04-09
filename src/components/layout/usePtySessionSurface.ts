@@ -60,6 +60,33 @@ function resolveTerminalTheme() {
   };
 }
 
+type ResolvedTerminalTheme = ReturnType<typeof resolveTerminalTheme>;
+
+function getResolvedTerminalThemeKey(theme: ResolvedTerminalTheme) {
+  return `${theme.background}::${theme.foreground}::${theme.cursor}`;
+}
+
+function applyTerminalTheme(args: {
+  terminal: Terminal;
+  theme: ResolvedTerminalTheme;
+}) {
+  args.terminal.renderer?.setTheme(args.theme);
+
+  if (args.terminal.element) {
+    args.terminal.element.style.backgroundColor = args.theme.background;
+    args.terminal.element.style.color = args.theme.foreground;
+  }
+
+  if (args.terminal.renderer && args.terminal.wasmTerm) {
+    args.terminal.renderer.render(
+      args.terminal.wasmTerm,
+      true,
+      args.terminal.getViewportY(),
+      args.terminal,
+    );
+  }
+}
+
 function appendTerminalText(
   existing: string,
   nextChunk: string,
@@ -146,6 +173,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   const previousWorkspaceIdRef = useRef<string>("");
   // Tracks which sessions have exited (keyed by tabKey).
   const exitedByTabKeyRef = useRef<Record<string, { exitCode: number; signal?: number }>>({});
+  const terminalThemeKeyRef = useRef<string | null>(null);
+  const themeSyncFrameRef = useRef<number | null>(null);
 
   const [bridgeError, setBridgeError] = useState("");
   const [terminalReady, setTerminalReady] = useState(false);
@@ -359,6 +388,33 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     }
   }
 
+  function syncTerminalTheme(args: { force?: boolean } = {}) {
+    const terminal = xtermRef.current;
+    if (!terminal) {
+      return;
+    }
+
+    const theme = resolveTerminalTheme();
+    const themeKey = getResolvedTerminalThemeKey(theme);
+    if (!args.force && terminalThemeKeyRef.current === themeKey) {
+      return;
+    }
+
+    terminalThemeKeyRef.current = themeKey;
+    applyTerminalTheme({ terminal, theme });
+  }
+
+  function scheduleTerminalThemeSync(args: { force?: boolean } = {}) {
+    if (themeSyncFrameRef.current !== null) {
+      window.cancelAnimationFrame(themeSyncFrameRef.current);
+    }
+
+    themeSyncFrameRef.current = window.requestAnimationFrame(() => {
+      themeSyncFrameRef.current = null;
+      syncTerminalTheme(args);
+    });
+  }
+
   /**
    * RAF-debounced resize with inflight + pending flags.
    * During window drag, rapid ResizeObserver callbacks are coalesced:
@@ -457,6 +513,7 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       xtermRef.current = terminal;
       fitAddonRef.current = fitAddon;
       lastResizeRef.current = { cols: 0, rows: 0 };
+      terminalThemeKeyRef.current = null;
 
       const ro = new ResizeObserver(() => {
         // Skip resize during IME composition — the browser may
@@ -505,6 +562,7 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
 
       fitAddon.fit();
       resizeActiveSession();
+      scheduleTerminalThemeSync({ force: true });
 
       if (!cancelled) {
         setTerminalReady(true);
@@ -534,16 +592,70 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
         window.cancelAnimationFrame(resizeFrameRef.current);
         resizeFrameRef.current = null;
       }
+      if (themeSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(themeSyncFrameRef.current);
+        themeSyncFrameRef.current = null;
+      }
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
   }, [args.fontFamily, args.fontSize]);
 
   useEffect(() => {
-    if (!xtermRef.current) {
+    if (typeof MutationObserver === "undefined") {
       return;
     }
-    xtermRef.current.options.theme = resolveTerminalTheme();
+
+    const themeStyleIds = new Set(["stave-custom-theme", "stave-theme-overrides"]);
+    const isTrackedThemeNode = (node: Node | null) => {
+      if (!node) {
+        return false;
+      }
+
+      if (node instanceof Element) {
+        return themeStyleIds.has(node.id) || themeStyleIds.has(node.parentElement?.id ?? "");
+      }
+
+      return themeStyleIds.has(node.parentElement?.id ?? "");
+    };
+
+    const observer = new MutationObserver((records) => {
+      const shouldSync = records.some((record) => {
+        if (record.target === document.documentElement) {
+          return true;
+        }
+
+        if (isTrackedThemeNode(record.target)) {
+          return true;
+        }
+
+        return [...record.addedNodes, ...record.removedNodes].some(isTrackedThemeNode);
+      });
+
+      if (shouldSync) {
+        scheduleTerminalThemeSync({ force: true });
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
+    observer.observe(document.head, {
+      attributes: true,
+      attributeFilter: ["id"],
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    scheduleTerminalThemeSync({ force: true });
   }, [args.isDarkMode]);
 
   useEffect(() => {
