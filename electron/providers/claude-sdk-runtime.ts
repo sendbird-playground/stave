@@ -1669,6 +1669,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
 
     let hasStreamedText = false;
     let hasStreamedThinking = false;
+    const emittedToolUseIds = new Set<string>();
     let finalStopReason: string | undefined;
     const claudeDebugStream = args.runtimeOptions?.debug ?? process.env.STAVE_CLAUDE_DEBUG === "1";
     const subagentTracker = new SubagentProgressTracker();
@@ -1735,6 +1736,19 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       if (message.type === "assistant" && (hasStreamedText || hasStreamedThinking)) {
         normalizedEvents = normalizedEvents.filter((event) => event.type !== "text" && event.type !== "thinking");
       }
+      // Deduplicate tool events: with includePartialMessages the same tool_use
+      // block can appear in multiple partial assistant messages. Only keep the
+      // first emission per toolUseId so the UI does not create phantom parts.
+      normalizedEvents = normalizedEvents.filter((event) => {
+        if (event.type !== "tool" || !event.toolUseId) {
+          return true;
+        }
+        if (emittedToolUseIds.has(event.toolUseId)) {
+          return false;
+        }
+        emittedToolUseIds.add(event.toolUseId);
+        return true;
+      });
       // Let the subagent tracker observe tool starts / completions.
       for (const event of normalizedEvents) {
         subagentTracker.trackEvent(event);
