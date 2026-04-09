@@ -80,6 +80,7 @@ import {
   SectionHeading,
   SectionStack,
   SettingsCard,
+  SwitchField,
 } from "./settings-dialog.shared";
 
 function formatThemeTokenLabel(token: ThemeTokenName) {
@@ -845,37 +846,23 @@ function GeneralSection() {
           title="Window Behavior"
           description="Control how the app handles the close shortcut."
         >
-          <LabeledField
+          <SwitchField
             title="Confirm Before Close"
             description="Show a confirmation dialog before closing the app with ⌘W / Ctrl+W when no tabs or tasks are open."
-          >
-            <ChoiceButtons
-              value={confirmBeforeClose ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { confirmBeforeClose: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={confirmBeforeClose}
+            onCheckedChange={(checked) => updateSettings({ patch: { confirmBeforeClose: checked } })}
+          />
         </SettingsCard>
         <SettingsCard
           title="Notification Sound"
           description="Customize the success sound played when a task turn finishes."
         >
-          <LabeledField
+          <SwitchField
             title="Sound"
             description="Enable or mute the task completion sound."
-          >
-            <ChoiceButtons
-              value={notificationSoundEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { notificationSoundEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={notificationSoundEnabled}
+            onCheckedChange={(checked) => updateSettings({ patch: { notificationSoundEnabled: checked } })}
+          />
           {notificationSoundEnabled ? (
             <>
               <LabeledField
@@ -1700,36 +1687,21 @@ function ChatSection() {
           </LabeledField>
         </SettingsCard>
         <SettingsCard title="Behavior" description="Toggle chat features and display preferences.">
-          <LabeledField title="Smart Suggestions">
-            <ChoiceButtons
-              value={smartSuggestions ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { smartSuggestions: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField title="Send Preview">
-            <ChoiceButtons
-              value={chatSendPreview ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { chatSendPreview: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField title="Streaming UI">
-            <ChoiceButtons
-              value={chatStreamingEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { chatStreamingEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+          <SwitchField
+            title="Smart Suggestions"
+            checked={smartSuggestions}
+            onCheckedChange={(checked) => updateSettings({ patch: { smartSuggestions: checked } })}
+          />
+          <SwitchField
+            title="Send Preview"
+            checked={chatSendPreview}
+            onCheckedChange={(checked) => updateSettings({ patch: { chatSendPreview: checked } })}
+          />
+          <SwitchField
+            title="Streaming UI"
+            checked={chatStreamingEnabled}
+            onCheckedChange={(checked) => updateSettings({ patch: { chatStreamingEnabled: checked } })}
+          />
           <LabeledField
             title="Reasoning Expansion"
             description="Auto expands the reasoning trace while a turn is streaming, then collapses it again. Manual keeps it collapsed until you open it."
@@ -1765,32 +1737,18 @@ function ChatSection() {
               </SelectContent>
             </Select>
           </LabeledField>
-          <LabeledField
+          <SwitchField
             title="Show Fast Mode Toggle (Claude)"
             description="Show the Fast mode toggle button when Claude is the active provider."
-          >
-            <ChoiceButtons
-              value={claudeFastModeVisible ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { claudeFastModeVisible: value === "on" } })}
-              options={[
-                { value: "on", label: "Show" },
-                { value: "off", label: "Hide" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField
+            checked={claudeFastModeVisible}
+            onCheckedChange={(checked) => updateSettings({ patch: { claudeFastModeVisible: checked } })}
+          />
+          <SwitchField
             title="Show Fast Mode Toggle (Codex)"
             description="Show the Fast mode toggle button when Codex is the active provider."
-          >
-            <ChoiceButtons
-              value={codexFastModeVisible ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { codexFastModeVisible: value === "on" } })}
-              options={[
-                { value: "on", label: "Show" },
-                { value: "off", label: "Hide" },
-              ]}
-            />
-          </LabeledField>
+            checked={codexFastModeVisible}
+            onCheckedChange={(checked) => updateSettings({ patch: { codexFastModeVisible: checked } })}
+          />
         </SettingsCard>
       </SectionStack>
     </>
@@ -1875,26 +1833,16 @@ function SkillsSection() {
       <SectionHeading title="Skills" description="Configure skill discovery and automatic prompting." />
       <SectionStack>
         <SettingsCard title="Skills" description="Control skill suggestions and automatic prompting.">
-          <LabeledField title="Enabled">
-            <ChoiceButtons
-              value={skillsEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { skillsEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField title="Auto Suggest">
-            <ChoiceButtons
-              value={skillsAutoSuggest ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { skillsAutoSuggest: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+          <SwitchField
+            title="Enabled"
+            checked={skillsEnabled}
+            onCheckedChange={(checked) => updateSettings({ patch: { skillsEnabled: checked } })}
+          />
+          <SwitchField
+            title="Auto Suggest"
+            checked={skillsAutoSuggest}
+            onCheckedChange={(checked) => updateSettings({ patch: { skillsAutoSuggest: checked } })}
+          />
           <LabeledField
             title="Shared Skills Root"
             description="Optional shared global skill directory. Leave blank to follow STAVE_SHARED_SKILLS_HOME when present. Supports ~/..."
@@ -2044,16 +1992,12 @@ function SubagentsSection() {
       <SectionHeading title="Subagents" description="Control how the main agent delegates tasks to child agents." />
       <SectionStack>
         <SettingsCard title="Delegation" description="Subagents allow the primary model to spawn lightweight child agents for research, exploration, and parallel workstreams.">
-          <LabeledField title="Enabled" description="When enabled, the agent may delegate sub-tasks to smaller worker agents.">
-            <ChoiceButtons
-              value={subagentsEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { subagentsEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+          <SwitchField
+            title="Enabled"
+            description="When enabled, the agent may delegate sub-tasks to smaller worker agents."
+            checked={subagentsEnabled}
+            onCheckedChange={(checked) => updateSettings({ patch: { subagentsEnabled: checked } })}
+          />
           <LabeledField title="Profile" description="Optional profile identifier that controls the subagent model and tool policy.">
             <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
@@ -2117,16 +2061,11 @@ function CommandPaletteSection() {
       <SectionHeading title="Command Palette" description="Configure the global command launcher opened with Cmd/Ctrl+Shift+P. This is separate from slash commands in the chat input." />
       <SectionStack>
         <SettingsCard title="Behavior" description="Pinned commands appear first, hidden commands stay out of the palette, and recent history can be shown as its own section.">
-          <LabeledField title="Recent Commands">
-            <ChoiceButtons
-              value={commandPaletteShowRecent ? "show" : "hide"}
-              onChange={(value) => updateSettings({ patch: { commandPaletteShowRecent: value === "show" } })}
-              options={[
-                { value: "show", label: "Show" },
-                { value: "hide", label: "Hide" },
-              ]}
-            />
-          </LabeledField>
+          <SwitchField
+            title="Recent Commands"
+            checked={commandPaletteShowRecent}
+            onCheckedChange={(checked) => updateSettings({ patch: { commandPaletteShowRecent: checked } })}
+          />
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
@@ -2289,16 +2228,11 @@ function EditorSection() {
         </SettingsCard>
 
         <SettingsCard title="Display" description="Toggle editor line wrapping and chrome.">
-          <LabeledField title="Word Wrap">
-            <ChoiceButtons
-              value={editorWordWrap ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { editorWordWrap: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+          <SwitchField
+            title="Word Wrap"
+            checked={editorWordWrap}
+            onCheckedChange={(checked) => updateSettings({ patch: { editorWordWrap: checked } })}
+          />
           <LabeledField title="Line Numbers">
             <ChoiceButtons
               value={editorLineNumbers}
@@ -2311,54 +2245,35 @@ function EditorSection() {
               ]}
             />
           </LabeledField>
-          <LabeledField title="Minimap">
-            <ChoiceButtons
-              value={editorMinimap ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { editorMinimap: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+          <SwitchField
+            title="Minimap"
+            checked={editorMinimap}
+            onCheckedChange={(checked) => updateSettings({ patch: { editorMinimap: checked } })}
+          />
         </SettingsCard>
 
         <SettingsCard
           title="AI Inline Completions"
           description="Ghost-text code suggestions powered by Claude. Uses the Claude SDK with your local Claude auth when available, or falls back to the Anthropic API (requires ANTHROPIC_API_KEY)."
         >
-          <LabeledField
+          <SwitchField
             title="Enable AI Completions"
             description="Shows AI-generated inline suggestions as you type. Press Tab to accept. Uses Claude Haiku for fast, low-cost completions."
-          >
-            <ChoiceButtons
-              value={editorAiCompletions ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { editorAiCompletions: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={editorAiCompletions}
+            onCheckedChange={(checked) => updateSettings({ patch: { editorAiCompletions: checked } })}
+          />
         </SettingsCard>
 
         <SettingsCard
           title="Project Language Servers"
           description="LSP-backed intelligence for TypeScript/JavaScript and Python. Uses Electron-managed stdio language-server sessions per active workspace."
         >
-          <LabeledField
+          <SwitchField
             title="Enable LSP Runtime"
             description="Uses Electron-managed stdio language-server sessions per active workspace. Keep this off if you only want Monaco's built-in syntax support."
-          >
-            <ChoiceButtons
-              value={editorLspEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { editorLspEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={editorLspEnabled}
+            onCheckedChange={(checked) => updateSettings({ patch: { editorLspEnabled: checked } })}
+          />
           <LabeledField
             title="TypeScript LSP Command"
             description="Leave empty to auto-discover `typescript-language-server` from PATH. Install via `npm i -g typescript-language-server typescript`. Handles .ts, .tsx, .js, and .jsx files."
@@ -2383,32 +2298,18 @@ function EditorSection() {
           </LabeledField>
         </SettingsCard>
         <SettingsCard title="ESLint">
-          <LabeledField
+          <SwitchField
             title="Enable ESLint"
             description="Reads ESLint config from the opened project and shows diagnostics in the editor. Requires ESLint installed in the project's node_modules."
-          >
-            <ChoiceButtons
-              value={editorEslintEnabled ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { editorEslintEnabled: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField
+            checked={editorEslintEnabled}
+            onCheckedChange={(checked) => updateSettings({ patch: { editorEslintEnabled: checked } })}
+          />
+          <SwitchField
             title="Format on Save"
             description="Automatically apply ESLint auto-fix when saving a file."
-          >
-            <ChoiceButtons
-              value={editorFormatOnSave ? "on" : "off"}
-              onChange={(value) => updateSettings({ patch: { editorFormatOnSave: value === "on" } })}
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={editorFormatOnSave}
+            onCheckedChange={(checked) => updateSettings({ patch: { editorFormatOnSave: checked } })}
+          />
         </SettingsCard>
       </SectionStack>
     </>
@@ -2642,42 +2543,26 @@ function LensSection() {
           title="Source Code Mapping"
           description="Choose which strategies the element picker uses to help AI locate source files."
         >
-          <LabeledField
+          <SwitchField
             title="Heuristic Search"
             description="AI uses class names, text content, and IDs to search for source files via grep. Recommended for most projects."
-          >
-            <ChoiceButtons
-              value={heuristic ? "on" : "off"}
-              columns={2}
-              onChange={(v) =>
-                updateSettings({
-                  patch: { lensSourceMappingHeuristic: v === "on" },
-                })
-              }
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
-          <LabeledField
+            checked={heuristic}
+            onCheckedChange={(checked) =>
+              updateSettings({
+                patch: { lensSourceMappingHeuristic: checked },
+              })
+            }
+          />
+          <SwitchField
             title="React _debugSource"
             description="Extract exact file and line number from React fiber internals. Only works with dev builds that include @babel/plugin-transform-react-jsx-source (enabled by default in Vite React plugin, CRA, and Next.js dev)."
-          >
-            <ChoiceButtons
-              value={reactDebugSource ? "on" : "off"}
-              columns={2}
-              onChange={(v) =>
-                updateSettings({
-                  patch: { lensSourceMappingReactDebugSource: v === "on" },
-                })
-              }
-              options={[
-                { value: "on", label: "On" },
-                { value: "off", label: "Off" },
-              ]}
-            />
-          </LabeledField>
+            checked={reactDebugSource}
+            onCheckedChange={(checked) =>
+              updateSettings({
+                patch: { lensSourceMappingReactDebugSource: checked },
+              })
+            }
+          />
         </SettingsCard>
       </SectionStack>
     </>
