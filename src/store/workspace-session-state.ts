@@ -6,7 +6,8 @@ import {
   loadWorkspaceShell,
   upsertWorkspace,
 } from "@/lib/db/workspaces.db";
-import { normalizeTaskControl } from "@/lib/tasks";
+import type { WorkspaceTerminalTab } from "@/lib/terminal/types";
+import { isTaskArchived, normalizeTaskControl } from "@/lib/tasks";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { createEmptyWorkspaceInformation, type WorkspaceInformationState } from "@/lib/workspace-information";
 import { interruptPendingToolInteractionsInMessages } from "@/store/provider-message.utils";
@@ -26,6 +27,8 @@ export interface WorkspaceSessionState {
   workspaceInformation: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
+  terminalTabs: WorkspaceTerminalTab[];
+  activeTerminalTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   nativeSessionReadyByTask: Record<string, boolean>;
@@ -41,7 +44,42 @@ export function createEmptyWorkspaceState() {
     workspaceInformation: createEmptyWorkspaceInformation(),
     editorTabs: [] as EditorTab[],
     activeEditorTabId: null as string | null,
+    terminalTabs: [] as WorkspaceTerminalTab[],
+    activeTerminalTabId: null as string | null,
     providerSessionByTask: {} as Record<string, TaskProviderSessionState>,
+  };
+}
+
+function normalizeTerminalState(args: {
+  tasks: Task[];
+  terminalTabs: WorkspaceTerminalTab[];
+  activeTerminalTabId: string | null;
+}) {
+  const activeTaskIds = new Set(
+    args.tasks
+      .filter((task) => !isTaskArchived(task))
+      .map((task) => task.id),
+  );
+  const seenTabIds = new Set<string>();
+  const terminalTabs = args.terminalTabs.filter((tab) => {
+    if (seenTabIds.has(tab.id)) {
+      return false;
+    }
+    seenTabIds.add(tab.id);
+    return true;
+  }).map((tab) => ({
+    ...tab,
+    linkedTaskId: tab.linkedTaskId && activeTaskIds.has(tab.linkedTaskId)
+      ? tab.linkedTaskId
+      : null,
+  }));
+  const activeTerminalTabId = terminalTabs.some((tab) => tab.id === args.activeTerminalTabId)
+    ? args.activeTerminalTabId
+    : null;
+
+  return {
+    terminalTabs,
+    activeTerminalTabId,
   };
 }
 
@@ -240,6 +278,11 @@ export function buildWorkspaceSessionState(args: {
   const activeEditorTabId = editorTabs.some((tab) => tab.id === requestedActiveEditorTabId)
     ? requestedActiveEditorTabId
     : (editorTabs[0]?.id ?? null);
+  const normalizedTerminalState = normalizeTerminalState({
+    tasks,
+    terminalTabs: args.snapshot?.terminalTabs ?? empty.terminalTabs,
+    activeTerminalTabId: args.snapshot?.activeTerminalTabId ?? empty.activeTerminalTabId,
+  });
   const activeTurnIdsByTask = Object.fromEntries(
     (args.latestTurns ?? [])
       .filter((turn) => !turn.completedAt)
@@ -255,6 +298,8 @@ export function buildWorkspaceSessionState(args: {
     workspaceInformation: args.snapshot?.workspaceInformation ?? empty.workspaceInformation,
     editorTabs,
     activeEditorTabId,
+    terminalTabs: normalizedTerminalState.terminalTabs,
+    activeTerminalTabId: normalizedTerminalState.activeTerminalTabId,
     activeTurnIdsByTask,
     providerSessionByTask,
     nativeSessionReadyByTask: buildNativeSessionReadyByTask({
@@ -293,6 +338,11 @@ export function buildWorkspaceSessionStateFromShell(args: {
   const activeEditorTabId = editorTabs.some((tab) => tab.id === requestedActiveEditorTabId)
     ? requestedActiveEditorTabId
     : (editorTabs[0]?.id ?? null);
+  const normalizedTerminalState = normalizeTerminalState({
+    tasks,
+    terminalTabs: args.shell?.terminalTabs ?? empty.terminalTabs,
+    activeTerminalTabId: args.shell?.activeTerminalTabId ?? empty.activeTerminalTabId,
+  });
   const activeTurnIdsByTask = Object.fromEntries(
     (args.latestTurns ?? [])
       .filter((turn) => !turn.completedAt)
@@ -308,6 +358,8 @@ export function buildWorkspaceSessionStateFromShell(args: {
     workspaceInformation: args.shell?.workspaceInformation ?? empty.workspaceInformation,
     editorTabs,
     activeEditorTabId,
+    terminalTabs: normalizedTerminalState.terminalTabs,
+    activeTerminalTabId: normalizedTerminalState.activeTerminalTabId,
     activeTurnIdsByTask,
     providerSessionByTask,
     nativeSessionReadyByTask: buildNativeSessionReadyByTask({
@@ -325,6 +377,8 @@ export function createWorkspaceSnapshot(args: {
   workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
+  terminalTabs: WorkspaceTerminalTab[];
+  activeTerminalTabId: string | null;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
   return {
@@ -335,6 +389,8 @@ export function createWorkspaceSnapshot(args: {
     workspaceInformation: args.workspaceInformation ?? createEmptyWorkspaceInformation(),
     editorTabs: args.editorTabs,
     activeEditorTabId: args.activeEditorTabId,
+    terminalTabs: args.terminalTabs,
+    activeTerminalTabId: args.activeTerminalTabId,
     providerSessionByTask: args.providerSessionByTask,
   };
 }
@@ -349,6 +405,8 @@ export async function persistWorkspaceSnapshot(args: {
   workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
+  terminalTabs: WorkspaceTerminalTab[];
+  activeTerminalTabId: string | null;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
   const persistedShell = await loadWorkspaceShell({ workspaceId: args.workspaceId });
@@ -392,6 +450,8 @@ export async function persistWorkspaceSnapshot(args: {
       workspaceInformation: args.workspaceInformation,
       editorTabs: args.editorTabs,
       activeEditorTabId: args.activeEditorTabId,
+      terminalTabs: args.terminalTabs,
+      activeTerminalTabId: args.activeTerminalTabId,
       providerSessionByTask: mergedProviderSessionByTask,
     }),
   });

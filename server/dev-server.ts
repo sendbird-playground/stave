@@ -448,10 +448,18 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/api/terminal/create" && req.method === "POST") {
-      const body = await readJson<{ cwd?: string; shell?: string }>(req);
+      const body = await readJson<{
+        workspaceId: string;
+        workspacePath: string;
+        taskId: string | null;
+        taskTitle: string | null;
+        terminalTabId: string;
+        cwd: string;
+        shell?: string;
+      }>(req);
       const shell = body.shell?.trim() || process.env.SHELL || "/usr/bin/zsh";
       const proc = Bun.spawn([shell], {
-        cwd: body.cwd,
+        cwd: body.cwd || body.workspacePath,
         stderr: "pipe",
         stdout: "pipe",
         stdin: "pipe",

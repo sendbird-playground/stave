@@ -534,9 +534,10 @@ test("terminal dock opens with session surface", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
 
-  await page.getByRole("button", { name: "Terminal" }).click();
+  await page.getByRole("button", { name: "Terminal", exact: true }).click();
   await expect(page.getByTestId("terminal-dock")).toBeVisible();
-  await expect(page.getByText("Sessions")).toBeVisible();
+  await expect(page.getByTestId("terminal-dock").getByText("stave-project")).toBeVisible();
+  await expect(page.getByTestId("terminal-dock")).toContainText("session ready");
 });
 
 test("workspace switch restores per-workspace task snapshot", async ({ page }) => {
@@ -770,17 +771,17 @@ test("terminal sessions stream output over push channel when available", async (
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Terminal" }).click();
+  await page.getByRole("button", { name: "Terminal", exact: true }).click();
 
   await expect(page.getByTestId("terminal-dock")).toBeVisible();
-  await expect(page.getByText("Terminal 1")).toBeVisible();
+  await expect(page.getByTestId("terminal-dock").getByText("stave-project")).toBeVisible();
   await expect(page.getByTestId("terminal-dock")).toContainText("session 1 ready");
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __terminalTest: { readCalls: number } }).__terminalTest.readCalls))
     .toBe(0);
 
-  await page.getByRole("button", { name: "new-terminal-session" }).click();
-  await expect(page.getByText("Terminal 2")).toBeVisible();
+  await page.getByRole("button", { name: "new-terminal-tab" }).click();
+  await expect(page.getByRole("button", { name: "stave-project 2", exact: true })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __terminalTest: { createCalls: number } }).__terminalTest.createCalls))
     .toBeGreaterThanOrEqual(2);

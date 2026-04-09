@@ -180,6 +180,8 @@ function createEmptyWorkspaceSnapshot() {
     promptDraftByTask: empty.promptDraftByTask,
     editorTabs: empty.editorTabs,
     activeEditorTabId: empty.activeEditorTabId,
+    terminalTabs: empty.terminalTabs,
+    activeTerminalTabId: empty.activeTerminalTabId,
     providerSessionByTask: empty.providerSessionByTask,
   });
 }
@@ -212,6 +214,8 @@ async function persistWorkspaceSession(args: {
       workspaceInformation: args.session.workspaceInformation,
       editorTabs: args.session.editorTabs,
       activeEditorTabId: args.session.activeEditorTabId,
+      terminalTabs: args.session.terminalTabs,
+      activeTerminalTabId: args.session.activeTerminalTabId,
       providerSessionByTask: args.session.providerSessionByTask,
     }) as never,
   });

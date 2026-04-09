@@ -1,4 +1,5 @@
 import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
+import type { WorkspaceTerminalTab } from "@/lib/terminal/types";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
@@ -16,6 +17,8 @@ type ActiveWorkspaceProjectionState = {
   workspaceInformation: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
+  terminalTabs: WorkspaceTerminalTab[];
+  activeTerminalTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   nativeSessionReadyByTask: Record<string, boolean>;
@@ -37,6 +40,8 @@ export type ActiveWorkspaceStatePatch = Pick<
   | "workspaceInformation"
   | "editorTabs"
   | "activeEditorTabId"
+  | "terminalTabs"
+  | "activeTerminalTabId"
   | "activeTurnIdsByTask"
   | "providerSessionByTask"
   | "nativeSessionReadyByTask"
@@ -59,6 +64,8 @@ export function createWorkspaceSessionStateFromAppState(
     workspaceInformation: state.workspaceInformation,
     editorTabs: state.editorTabs,
     activeEditorTabId: state.activeEditorTabId,
+    terminalTabs: state.terminalTabs,
+    activeTerminalTabId: state.activeTerminalTabId,
     activeTurnIdsByTask: state.activeTurnIdsByTask,
     providerSessionByTask: state.providerSessionByTask,
     nativeSessionReadyByTask: state.nativeSessionReadyByTask,
@@ -75,6 +82,8 @@ export function createActiveWorkspaceStatePatch(session: WorkspaceSessionState):
     workspaceInformation: session.workspaceInformation,
     editorTabs: session.editorTabs,
     activeEditorTabId: session.activeEditorTabId,
+    terminalTabs: session.terminalTabs,
+    activeTerminalTabId: session.activeTerminalTabId,
     activeTurnIdsByTask: session.activeTurnIdsByTask,
     providerSessionByTask: session.providerSessionByTask,
     nativeSessionReadyByTask: session.nativeSessionReadyByTask,
@@ -116,6 +125,8 @@ export function saveActiveWorkspaceRuntimeCache(args: {
     | "workspaceInformation"
     | "editorTabs"
     | "activeEditorTabId"
+    | "terminalTabs"
+    | "activeTerminalTabId"
     | "activeTurnIdsByTask"
     | "providerSessionByTask"
     | "nativeSessionReadyByTask"

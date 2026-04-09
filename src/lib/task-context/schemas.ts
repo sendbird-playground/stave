@@ -237,6 +237,15 @@ const EditorTabSchema = z.object({
   isDirty: z.boolean(),
 });
 
+const WorkspaceTerminalTabSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  linkedTaskId: z.string().nullable(),
+  backend: z.literal("xterm"),
+  cwd: z.string(),
+  createdAt: z.number().int().nonnegative(),
+});
+
 const WorkspaceJiraIssueSchema = z.object({
   id: z.string(),
   issueKey: z.string().optional().default(""),
@@ -359,6 +368,8 @@ export const WorkspaceSnapshotSchema = z.object({
   providerSessionByTask: z.record(z.string(), TaskProviderSessionStateSchema).optional().default({}),
   editorTabs: z.array(EditorTabSchema).optional().default([]),
   activeEditorTabId: z.string().nullable().optional().default(null),
+  terminalTabs: z.array(WorkspaceTerminalTabSchema).optional().default([]),
+  activeTerminalTabId: z.string().nullable().optional().default(null),
   workspaceInformation: WorkspaceInformationSchema.optional().default({
     jiraIssues: [],
     confluencePages: [],
