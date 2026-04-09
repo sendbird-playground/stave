@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { toast } from "sonner";
-import { listActiveWorkspaceTurns, listLatestWorkspaceTurns, type PersistedTurnSummary } from "@/lib/db/turns.db";
+import {
+  listActiveWorkspaceTurns,
+  listLatestWorkspaceTurns,
+  type PersistedTurnSummary,
+} from "@/lib/db/turns.db";
 import {
   createNotification as createPersistedNotification,
   listNotifications as listPersistedNotifications,
@@ -39,7 +43,10 @@ import {
   buildWorkspaceContinueSummaryMarkdown,
 } from "@/lib/workspace-continue";
 import type { ScriptTrigger } from "@/lib/workspace-scripts";
-import type { AppNotification, AppNotificationCreateInput } from "@/lib/notifications/notification.types";
+import type {
+  AppNotification,
+  AppNotificationCreateInput,
+} from "@/lib/notifications/notification.types";
 import {
   isNotificationUnread,
   sortNotificationsNewestFirst,
@@ -58,9 +65,7 @@ import {
   type NotificationSoundMode,
   type NotificationSoundPreset,
 } from "@/lib/notifications/notification-sound";
-import {
-  buildCanonicalConversationRequest,
-} from "@/lib/providers/canonical-request";
+import { buildCanonicalConversationRequest } from "@/lib/providers/canonical-request";
 import {
   getDefaultModelForProvider,
   inferProviderIdFromModel,
@@ -182,7 +187,10 @@ import {
   createFileContextPart,
   createUserTextPart,
 } from "@/store/chat-state-helpers";
-import { createProviderTurnEventController, runProviderTurn } from "@/store/provider-turn-runtime";
+import {
+  createProviderTurnEventController,
+  runProviderTurn,
+} from "@/store/provider-turn-runtime";
 import {
   applyPendingProviderEventsToStoreState,
   createWorkspaceSessionStateFromAppState,
@@ -214,7 +222,10 @@ import {
   starterWorkspaceId,
   type WorkspaceSessionState,
 } from "@/store/workspace-session-state";
-import { normalizeComparablePath, parseGitWorktrees } from "@/lib/source-control-worktrees";
+import {
+  normalizeComparablePath,
+  parseGitWorktrees,
+} from "@/lib/source-control-worktrees";
 import {
   type LayoutState,
   WORKSPACE_SIDEBAR_MIN_WIDTH,
@@ -299,7 +310,11 @@ import {
   applyUserInputState,
 } from "@/store/editor.utils";
 
-export { WORKSPACE_SIDEBAR_MIN_WIDTH, MIN_EDITOR_PANEL_WIDTH, DEFAULT_EDITOR_PANEL_WIDTH } from "@/store/layout.utils";
+export {
+  WORKSPACE_SIDEBAR_MIN_WIDTH,
+  MIN_EDITOR_PANEL_WIDTH,
+  DEFAULT_EDITOR_PANEL_WIDTH,
+} from "@/store/layout.utils";
 export type { LayoutState } from "@/store/layout.utils";
 export type AppShellMode = "stave" | "zen";
 export {
@@ -353,14 +368,30 @@ type SendUserMessageResult =
   | { status: "started"; taskId: string; workspaceId: string; turnId: string };
 
 const APP_STORE_KEY = "stave-store";
-const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
+const EMPTY_PROMPT_DRAFT: PromptDraft = {
+  text: "",
+  attachedFilePaths: [],
+  attachments: [],
+};
 const TASK_MESSAGES_PAGE_SIZE = 120;
-const workspaceSwitchMetricsByWorkspaceId = new Map<string, WorkspaceSwitchMetric>();
+const workspaceSwitchMetricsByWorkspaceId = new Map<
+  string,
+  WorkspaceSwitchMetric
+>();
 let workspaceSwitchMetricTokenCounter = 0;
-export { DEFAULT_PROVIDER_TIMEOUT_MS, PROVIDER_TIMEOUT_OPTIONS } from "@/lib/providers/runtime-option-contract";
+export {
+  DEFAULT_PROVIDER_TIMEOUT_MS,
+  PROVIDER_TIMEOUT_OPTIONS,
+} from "@/lib/providers/runtime-option-contract";
 
-function hasPromptDraftPayload(draft: Pick<PromptDraft, "text" | "attachedFilePaths" | "attachments">) {
-  return draft.text.trim().length > 0 || draft.attachedFilePaths.length > 0 || draft.attachments.length > 0;
+function hasPromptDraftPayload(
+  draft: Pick<PromptDraft, "text" | "attachedFilePaths" | "attachments">,
+) {
+  return (
+    draft.text.trim().length > 0 ||
+    draft.attachedFilePaths.length > 0 ||
+    draft.attachments.length > 0
+  );
 }
 
 function buildClearedPromptDraft(draft?: PromptDraft | null): PromptDraft {
@@ -368,7 +399,9 @@ function buildClearedPromptDraft(draft?: PromptDraft | null): PromptDraft {
     text: "",
     attachedFilePaths: [],
     attachments: [],
-    ...(draft?.runtimeOverrides ? { runtimeOverrides: draft.runtimeOverrides } : {}),
+    ...(draft?.runtimeOverrides
+      ? { runtimeOverrides: draft.runtimeOverrides }
+      : {}),
   };
 }
 
@@ -387,9 +420,11 @@ function arePromptDraftQueuedNextTurnEqual(
   left?: PromptDraft["queuedNextTurn"],
   right?: PromptDraft["queuedNextTurn"],
 ) {
-  return left?.queuedAt === right?.queuedAt
-    && left?.sourceTurnId === right?.sourceTurnId
-    && left?.content === right?.content;
+  return (
+    left?.queuedAt === right?.queuedAt &&
+    left?.sourceTurnId === right?.sourceTurnId &&
+    left?.content === right?.content
+  );
 }
 
 function resolveTaskRuntimeTarget(args: {
@@ -417,7 +452,8 @@ function resolveTaskRuntimeTarget(args: {
   >;
   taskId: string;
 }) {
-  const activeTask = args.state.tasks.find((task) => task.id === args.taskId) ?? null;
+  const activeTask =
+    args.state.tasks.find((task) => task.id === args.taskId) ?? null;
   if (activeTask) {
     return {
       workspaceId: args.state.activeWorkspaceId,
@@ -429,8 +465,10 @@ function resolveTaskRuntimeTarget(args: {
 
   const mappedWorkspaceId = args.state.taskWorkspaceIdById[args.taskId];
   if (mappedWorkspaceId && mappedWorkspaceId !== args.state.activeWorkspaceId) {
-    const mappedSession = args.state.workspaceRuntimeCacheById[mappedWorkspaceId];
-    const mappedTask = mappedSession?.tasks.find((task) => task.id === args.taskId) ?? null;
+    const mappedSession =
+      args.state.workspaceRuntimeCacheById[mappedWorkspaceId];
+    const mappedTask =
+      mappedSession?.tasks.find((task) => task.id === args.taskId) ?? null;
     if (mappedSession && mappedTask) {
       return {
         workspaceId: mappedWorkspaceId,
@@ -441,8 +479,11 @@ function resolveTaskRuntimeTarget(args: {
     }
   }
 
-  for (const [workspaceId, session] of Object.entries(args.state.workspaceRuntimeCacheById)) {
-    const task = session.tasks.find((candidate) => candidate.id === args.taskId) ?? null;
+  for (const [workspaceId, session] of Object.entries(
+    args.state.workspaceRuntimeCacheById,
+  )) {
+    const task =
+      session.tasks.find((candidate) => candidate.id === args.taskId) ?? null;
     if (task) {
       return {
         workspaceId,
@@ -502,7 +543,10 @@ function getDraftImageContexts(args: {
     return args.imageContexts ?? [];
   }
   return args.promptDraft.attachments
-    .filter((attachment): attachment is Extract<Attachment, { kind: "image" }> => attachment.kind === "image")
+    .filter(
+      (attachment): attachment is Extract<Attachment, { kind: "image" }> =>
+        attachment.kind === "image",
+    )
     .map((attachment) => ({
       dataUrl: attachment.dataUrl,
       label: attachment.label,
@@ -520,12 +564,14 @@ async function getDraftFileContexts(args: {
     language: string;
     instruction?: string;
   }>;
-}): Promise<Array<{
-  filePath: string;
-  content: string;
-  language: string;
-  instruction?: string;
-}>> {
+}): Promise<
+  Array<{
+    filePath: string;
+    content: string;
+    language: string;
+    instruction?: string;
+  }>
+> {
   if ((args.fileContexts?.length ?? 0) > 0) {
     return args.fileContexts ?? [];
   }
@@ -549,7 +595,9 @@ async function getDraftFileContexts(args: {
     }
     seenFilePaths.add(filePath);
 
-    const openTab = args.session.editorTabs.find((tab) => tab.filePath === filePath && tab.kind !== "image");
+    const openTab = args.session.editorTabs.find(
+      (tab) => tab.filePath === filePath && tab.kind !== "image",
+    );
     if (openTab) {
       nextFileContexts.push({
         filePath: openTab.filePath,
@@ -582,12 +630,15 @@ async function getDraftFileContexts(args: {
 }
 
 function isWorkspaceSwitchMetricLoggingEnabled() {
-  return typeof import.meta !== "undefined"
-    && Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
+  return (
+    typeof import.meta !== "undefined" &&
+    Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV)
+  );
 }
 
 function getWorkspaceSwitchMetricNow() {
-  return typeof performance !== "undefined" && typeof performance.now === "function"
+  return typeof performance !== "undefined" &&
+    typeof performance.now === "function"
     ? performance.now()
     : Date.now();
 }
@@ -626,10 +677,18 @@ function logWorkspaceSwitchMetric(args: {
     cacheHit: metric.cacheHit,
     totalMs: roundWorkspaceSwitchDuration(now - metric.startedAt),
     ...(metric.shellResolvedAt !== undefined
-      ? { shellMs: roundWorkspaceSwitchDuration(metric.shellResolvedAt - metric.startedAt) }
+      ? {
+          shellMs: roundWorkspaceSwitchDuration(
+            metric.shellResolvedAt - metric.startedAt,
+          ),
+        }
       : {}),
     ...(metric.setRootResolvedAt !== undefined
-      ? { setRootMs: roundWorkspaceSwitchDuration(metric.setRootResolvedAt - metric.startedAt) }
+      ? {
+          setRootMs: roundWorkspaceSwitchDuration(
+            metric.setRootResolvedAt - metric.startedAt,
+          ),
+        }
       : {}),
     ...(args.extra ?? {}),
   });
@@ -821,7 +880,11 @@ interface AppState {
   activeCliSessionTabId: string | null;
   activeSurface: WorkspaceActiveSurface;
   pendingCloseEditorTabId: string | null;
-  pendingEditorSelection: { tabId: string; line: number; column?: number } | null;
+  pendingEditorSelection: {
+    tabId: string;
+    line: number;
+    column?: number;
+  } | null;
   projectName: string | null;
   projectFiles: string[];
   workspaceFileCacheByPath: Record<string, string[]>;
@@ -844,10 +907,15 @@ interface AppState {
   flushActiveWorkspaceSnapshot: (args?: { sync?: boolean }) => Promise<void>;
   refreshActiveManagedTask: () => Promise<void>;
   createProject: (args: { name?: string }) => Promise<void>;
-  openProjectFromPath: (args: { inputPath: string }) => Promise<{ ok: boolean; stderr?: string }>;
+  openProjectFromPath: (args: {
+    inputPath: string;
+  }) => Promise<{ ok: boolean; stderr?: string }>;
   openProject: (args: { projectPath: string }) => Promise<void>;
   removeProjectFromList: (args: { projectPath: string }) => Promise<void>;
-  moveProjectInList: (args: { projectPath: string; direction: "up" | "down" }) => void;
+  moveProjectInList: (args: {
+    projectPath: string;
+    direction: "up" | "down";
+  }) => void;
   createWorkspace: (args: {
     name: string;
     mode: "branch" | "clean";
@@ -855,11 +923,19 @@ interface AppState {
     initCommand?: string;
     useRootNodeModulesSymlink?: boolean;
     initialTaskTitle?: string;
-  }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
+  }) => Promise<{
+    ok: boolean;
+    message?: string;
+    noticeLevel?: "success" | "warning";
+  }>;
   continueWorkspaceFromSummary: (args: {
     name: string;
     baseBranch?: string;
-  }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
+  }) => Promise<{
+    ok: boolean;
+    message?: string;
+    noticeLevel?: "success" | "warning";
+  }>;
   closeWorkspace: (args: { workspaceId: string }) => Promise<void>;
   switchWorkspace: (args: { workspaceId: string }) => Promise<void>;
   moveWorkspaceInProjectList: (args: {
@@ -867,20 +943,41 @@ interface AppState {
     workspaceId: string;
     direction: "up" | "down";
   }) => void;
-  setProjectBasePrompt: (args: { projectPath?: string; prompt: string }) => void;
-  setProjectWorkspaceInitCommand: (args: { projectPath?: string; command: string }) => void;
-  setProjectWorkspaceUseRootNodeModulesSymlink: (args: { projectPath?: string; enabled: boolean }) => void;
+  setProjectBasePrompt: (args: {
+    projectPath?: string;
+    prompt: string;
+  }) => void;
+  setProjectWorkspaceInitCommand: (args: {
+    projectPath?: string;
+    command: string;
+  }) => void;
+  setProjectWorkspaceUseRootNodeModulesSymlink: (args: {
+    projectPath?: string;
+    enabled: boolean;
+  }) => void;
   setDarkMode: (args: { enabled: boolean }) => void;
-  installCustomTheme: (args: { theme: CustomThemeDefinition }) => { ok: boolean; error?: string };
+  installCustomTheme: (args: { theme: CustomThemeDefinition }) => {
+    ok: boolean;
+    error?: string;
+  };
   removeCustomTheme: (args: { themeId: string }) => void;
   updateSettings: (args: { patch: Partial<AppSettings> }) => void;
   refreshProviderCommandCatalog: () => void;
   notifyWorkspacePlansChanged: () => void;
   selectTask: (args: { taskId: string }) => void;
-  loadTaskMessages: (args: { taskId: string; mode?: "latest" | "older" }) => Promise<void>;
+  loadTaskMessages: (args: {
+    taskId: string;
+    mode?: "latest" | "older";
+  }) => Promise<void>;
   clearTaskSelection: () => void;
-  updatePromptDraft: (args: { taskId: string; patch: Partial<PromptDraft> }) => void;
-  clearTaskProviderSession: (args: { taskId: string; providerId: ProviderId }) => void;
+  updatePromptDraft: (args: {
+    taskId: string;
+    patch: Partial<PromptDraft>;
+  }) => void;
+  clearTaskProviderSession: (args: {
+    taskId: string;
+    providerId: ProviderId;
+  }) => void;
   updateWorkspaceInformation: (args: {
     updater: (current: WorkspaceInformationState) => WorkspaceInformationState;
   }) => void;
@@ -893,11 +990,19 @@ interface AppState {
   renameTask: (args: { taskId: string; title: string }) => void;
   restoreTask: (args: { taskId: string }) => void;
   duplicateTask: (args: { taskId: string }) => Promise<void>;
-  reorderTasks: (args: { activeTaskId: string; overTaskId: string; filter: TaskFilter }) => void;
+  reorderTasks: (args: {
+    activeTaskId: string;
+    overTaskId: string;
+    filter: TaskFilter;
+  }) => void;
   exportTask: (args: { taskId: string }) => Promise<void>;
   viewTaskChanges: (args: { taskId: string }) => Promise<void>;
   rollbackTask: (args: { taskId: string }) => Promise<void>;
-  rollbackToCompactBoundary: (args: { taskId: string; gitRef: string; trigger?: string }) => Promise<void>;
+  rollbackToCompactBoundary: (args: {
+    taskId: string;
+    gitRef: string;
+    trigger?: string;
+  }) => Promise<void>;
   archiveTask: (args: { taskId: string }) => void;
   setTaskProvider: (args: { taskId: string; provider: ProviderId }) => void;
   createTerminalTab: (args?: {
@@ -913,7 +1018,10 @@ interface AppState {
   renameCliSessionTab: (args: { tabId: string; title: string }) => void;
   reorderCliSessionTabs: (args: { fromTabId: string; toTabId: string }) => void;
   closeCliSessionTab: (args: { tabId: string }) => void;
-  setActiveTerminalTab: (args: { tabId: string | null; openDock?: boolean }) => void;
+  setActiveTerminalTab: (args: {
+    tabId: string | null;
+    openDock?: boolean;
+  }) => void;
   renameTerminalTab: (args: { tabId: string; title: string }) => void;
   reorderTerminalTabs: (args: { fromTabId: string; toTabId: string }) => void;
   closeTerminalTab: (args: { tabId: string }) => void;
@@ -927,20 +1035,32 @@ interface AppState {
   openWorkspacePicker: () => Promise<void>;
   refreshProjectFiles: () => Promise<void>;
   refreshProviderAvailability: () => Promise<void>;
-  refreshSkillCatalog: (args?: { workspacePath?: string | null }) => Promise<void>;
+  refreshSkillCatalog: (args?: {
+    workspacePath?: string | null;
+  }) => Promise<void>;
   takeOverTask: (args: { taskId: string }) => void;
   markNotificationRead: (args: { id: string }) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
-  openNotificationContext: (args: { notificationId: string }) => Promise<NotificationContextOpenResult>;
-  resolveNotificationApproval: (args: { notificationId: string; approved: boolean }) => Promise<void>;
+  openNotificationContext: (args: {
+    notificationId: string;
+  }) => Promise<NotificationContextOpenResult>;
+  resolveNotificationApproval: (args: {
+    notificationId: string;
+    approved: boolean;
+  }) => Promise<void>;
   setStaveMuseOpen: (args: { open: boolean }) => void;
   focusStaveMuse: () => void;
-  setStaveMuseTarget: (args: { kind: StaveMuseState["target"]["kind"] }) => void;
+  setStaveMuseTarget: (args: {
+    kind: StaveMuseState["target"]["kind"];
+  }) => void;
   clearStaveMuseConversation: () => void;
   updateStaveMusePromptDraft: (args: { patch: Partial<PromptDraft> }) => void;
   sendStaveMuseMessage: (args: { content: string }) => Promise<void>;
   abortStaveMuseTurn: () => void;
-  resolveStaveMuseApproval: (args: { messageId: string; approved: boolean }) => Promise<void>;
+  resolveStaveMuseApproval: (args: {
+    messageId: string;
+    approved: boolean;
+  }) => Promise<void>;
   resolveStaveMuseUserInput: (args: {
     messageId: string;
     answers?: Record<string, string>;
@@ -962,16 +1082,35 @@ interface AppState {
     }>;
   }) => Promise<SendUserMessageResult>;
   abortTaskTurn: (args: { taskId: string }) => void;
-  resolveApproval: (args: { taskId: string; messageId: string; approved: boolean }) => void;
+  resolveApproval: (args: {
+    taskId: string;
+    messageId: string;
+    approved: boolean;
+  }) => void;
   resolveUserInput: (args: {
     taskId: string;
     messageId: string;
     answers?: Record<string, string>;
     denied?: boolean;
   }) => void;
-  resolveDiff: (args: { taskId: string; messageId: string; accepted: boolean; partIndex?: number }) => void;
-  openDiffInEditor: (args: { editorTabId: string; filePath: string; oldContent: string; newContent: string }) => void;
-  openFileFromTree: (args: { filePath: string; line?: number; column?: number; fallbackContent?: string }) => Promise<void>;
+  resolveDiff: (args: {
+    taskId: string;
+    messageId: string;
+    accepted: boolean;
+    partIndex?: number;
+  }) => void;
+  openDiffInEditor: (args: {
+    editorTabId: string;
+    filePath: string;
+    oldContent: string;
+    newContent: string;
+  }) => void;
+  openFileFromTree: (args: {
+    filePath: string;
+    line?: number;
+    column?: number;
+    fallbackContent?: string;
+  }) => Promise<void>;
   setActiveEditorTab: (args: { tabId: string }) => void;
   reorderEditorTabs: (args: { fromTabId: string; toTabId: string }) => void;
   closeEditorTab: (args: { tabId: string }) => void;
@@ -982,7 +1121,10 @@ interface AppState {
   saveActiveEditorTab: () => Promise<{ ok: boolean; conflict?: boolean }>;
   checkOpenTabConflicts: () => Promise<void>;
   sendWorkspaceFileToChat: (args: { taskId: string; filePath: string }) => void;
-  sendEditorContextToChat: (args: { taskId: string; instruction?: string }) => void;
+  sendEditorContextToChat: (args: {
+    taskId: string;
+    instruction?: string;
+  }) => void;
 }
 
 function getCachedWorkspaceFiles(args: {
@@ -1017,11 +1159,15 @@ function removeCachedWorkspaceFiles(args: {
   workspaceFileCacheByPath: Record<string, string[]>;
   workspacePaths: Array<string | null | undefined>;
 }) {
-  const removablePaths = [...new Set(
-    args.workspacePaths
-      .map((workspacePath) => workspacePath?.trim())
-      .filter((workspacePath): workspacePath is string => Boolean(workspacePath)),
-  )];
+  const removablePaths = [
+    ...new Set(
+      args.workspacePaths
+        .map((workspacePath) => workspacePath?.trim())
+        .filter((workspacePath): workspacePath is string =>
+          Boolean(workspacePath),
+        ),
+    ),
+  ];
   if (removablePaths.length === 0) {
     return args.workspaceFileCacheByPath;
   }
@@ -1048,8 +1194,10 @@ function resolveWorkspacePathForId(args: {
   if (!workspaceId) {
     return null;
   }
-  return args.workspacePathById[workspaceId]
-    ?? (args.workspaceDefaultById[workspaceId] ? args.projectPath ?? null : null);
+  return (
+    args.workspacePathById[workspaceId] ??
+    (args.workspaceDefaultById[workspaceId] ? (args.projectPath ?? null) : null)
+  );
 }
 
 function mergeNotificationIntoList(args: {
@@ -1100,11 +1248,17 @@ function resolveTaskTitleFromSession(args: {
   session: WorkspaceSessionState;
   taskId: string;
 }) {
-  return args.session.tasks.find((task) => task.id === args.taskId)?.title.trim() || "Untitled Task";
+  return (
+    args.session.tasks.find((task) => task.id === args.taskId)?.title.trim() ||
+    "Untitled Task"
+  );
 }
 
 function buildTaskTurnCompletedNotificationInput(args: {
-  state: Pick<AppState, "projectPath" | "projectName" | "workspaces" | "recentProjects">;
+  state: Pick<
+    AppState,
+    "projectPath" | "projectName" | "workspaces" | "recentProjects"
+  >;
   session: WorkspaceSessionState;
   workspaceId: string;
   taskId: string;
@@ -1112,11 +1266,20 @@ function buildTaskTurnCompletedNotificationInput(args: {
   provider: ProviderId;
   events: NormalizedProviderEvent[];
 }): AppNotificationCreateInput | null {
-  const doneEvent = [...args.events].reverse().find((event): event is Extract<NormalizedProviderEvent, { type: "done" }> => event.type === "done");
+  const doneEvent = [...args.events]
+    .reverse()
+    .find(
+      (event): event is Extract<NormalizedProviderEvent, { type: "done" }> =>
+        event.type === "done",
+    );
   if (!doneEvent) {
     return null;
   }
-  if (workspaceHasActiveTurns({ activeTurnIdsByTask: args.session.activeTurnIdsByTask })) {
+  if (
+    workspaceHasActiveTurns({
+      activeTurnIdsByTask: args.session.activeTurnIdsByTask,
+    })
+  ) {
     return null;
   }
 
@@ -1163,7 +1326,10 @@ function buildTaskTurnCompletedNotificationInput(args: {
 }
 
 function buildApprovalNotificationInputs(args: {
-  state: Pick<AppState, "projectPath" | "projectName" | "workspaces" | "recentProjects">;
+  state: Pick<
+    AppState,
+    "projectPath" | "projectName" | "workspaces" | "recentProjects"
+  >;
   session: WorkspaceSessionState;
   workspaceId: string;
   taskId: string;
@@ -1171,7 +1337,10 @@ function buildApprovalNotificationInputs(args: {
   provider: ProviderId;
   events: NormalizedProviderEvent[];
 }): AppNotificationCreateInput[] {
-  const approvalEvents = args.events.filter((event): event is Extract<NormalizedProviderEvent, { type: "approval" }> => event.type === "approval");
+  const approvalEvents = args.events.filter(
+    (event): event is Extract<NormalizedProviderEvent, { type: "approval" }> =>
+      event.type === "approval",
+  );
   if (approvalEvents.length === 0) {
     return [];
   }
@@ -1207,35 +1376,40 @@ function buildApprovalNotificationInputs(args: {
       return [];
     }
 
-    return [{
-      id: crypto.randomUUID(),
-      kind: "task.approval_requested",
-      title: taskTitle,
-      body: `${event.toolName}: ${event.description}`,
-      projectPath: project?.projectPath ?? null,
-      projectName: project?.projectName ?? null,
-      workspaceId: args.workspaceId,
-      workspaceName,
-      taskId: args.taskId,
-      taskTitle,
-      turnId: args.turnId,
-      providerId: args.provider,
-      action: {
-        type: "approval",
-        requestId: event.requestId,
-        messageId: location.messageId,
-      },
-      payload: {
-        toolName: event.toolName,
-        description: event.description,
-      },
-      dedupeKey: `task.approval_requested:${args.turnId}:${event.requestId}`,
-    } satisfies AppNotificationCreateInput];
+    return [
+      {
+        id: crypto.randomUUID(),
+        kind: "task.approval_requested",
+        title: taskTitle,
+        body: `${event.toolName}: ${event.description}`,
+        projectPath: project?.projectPath ?? null,
+        projectName: project?.projectName ?? null,
+        workspaceId: args.workspaceId,
+        workspaceName,
+        taskId: args.taskId,
+        taskTitle,
+        turnId: args.turnId,
+        providerId: args.provider,
+        action: {
+          type: "approval",
+          requestId: event.requestId,
+          messageId: location.messageId,
+        },
+        payload: {
+          toolName: event.toolName,
+          description: event.description,
+        },
+        dedupeKey: `task.approval_requested:${args.turnId}:${event.requestId}`,
+      } satisfies AppNotificationCreateInput,
+    ];
   });
 }
 
 function showNotificationToast(notification: AppNotification) {
-  const label = notification.taskTitle?.trim() || notification.workspaceName?.trim() || "Task";
+  const label =
+    notification.taskTitle?.trim() ||
+    notification.workspaceName?.trim() ||
+    "Task";
   const description = buildNotificationDetail(notification) ?? undefined;
 
   if (notification.kind === "task.turn_completed") {
@@ -1251,12 +1425,14 @@ function showNotificationToast(notification: AppNotification) {
   }
 }
 
-const ARCHIVED_TASK_TURN_NOTICE = "Generation stopped because the task was archived before this turn completed.";
+const ARCHIVED_TASK_TURN_NOTICE =
+  "Generation stopped because the task was archived before this turn completed.";
 export const STAVE_MUSE_OPEN_SETTINGS_EVENT = "stave:muse-open-settings";
 const DEFAULT_STAVE_AUTO_MODEL_SETTINGS = buildStaveAutoModelSettingsPatch({
   presetId: DEFAULT_STAVE_AUTO_MODEL_PRESET_ID,
 });
-const DEFAULT_STAVE_AUTO_ROLE_RUNTIME_OVERRIDES = createDefaultStaveAutoRoleRuntimeOverrides();
+const DEFAULT_STAVE_AUTO_ROLE_RUNTIME_OVERRIDES =
+  createDefaultStaveAutoRoleRuntimeOverrides();
 
 function normalizeAppShellMode(value: unknown): AppShellMode {
   return value === "zen" ? "zen" : "stave";
@@ -1394,11 +1570,15 @@ function createDefaultProviderAvailability() {
   ) as Record<ProviderId, boolean>;
 }
 
-function incrementWorkspaceSnapshotVersion(state: Pick<AppState, "workspaceSnapshotVersion">) {
+function incrementWorkspaceSnapshotVersion(
+  state: Pick<AppState, "workspaceSnapshotVersion">,
+) {
   return state.workspaceSnapshotVersion + 1;
 }
 
-function incrementPromptDraftPersistenceVersion(state: Pick<AppState, "promptDraftPersistenceVersion">) {
+function incrementPromptDraftPersistenceVersion(
+  state: Pick<AppState, "promptDraftPersistenceVersion">,
+) {
   return state.promptDraftPersistenceVersion + 1;
 }
 
@@ -1448,8 +1628,12 @@ function mergeTaskMessagePage(args: {
   mode: "latest" | "older";
 }) {
   if (args.mode === "latest") {
-    const currentById = new Map(args.currentMessages.map((message) => [message.id, message] as const));
-    const merged = args.pageMessages.map((message) => currentById.get(message.id) ?? message);
+    const currentById = new Map(
+      args.currentMessages.map((message) => [message.id, message] as const),
+    );
+    const merged = args.pageMessages.map(
+      (message) => currentById.get(message.id) ?? message,
+    );
     const seen = new Set(merged.map((message) => message.id));
     for (const message of args.currentMessages) {
       if (!seen.has(message.id)) {
@@ -1460,7 +1644,9 @@ function mergeTaskMessagePage(args: {
   }
 
   const seen = new Set(args.currentMessages.map((message) => message.id));
-  const olderMessages = args.pageMessages.filter((message) => !seen.has(message.id));
+  const olderMessages = args.pageMessages.filter(
+    (message) => !seen.has(message.id),
+  );
   if (olderMessages.length === 0) {
     return args.currentMessages;
   }
@@ -1471,7 +1657,9 @@ function findTaskById(state: Pick<AppState, "tasks">, taskId: string) {
   return state.tasks.find((task) => task.id === taskId) ?? null;
 }
 
-function findActiveTerminalLinkableTask(args: Pick<AppState, "tasks" | "activeTaskId">) {
+function findActiveTerminalLinkableTask(
+  args: Pick<AppState, "tasks" | "activeTaskId">,
+) {
   if (!args.activeTaskId) {
     return null;
   }
@@ -1482,11 +1670,17 @@ function findActiveTerminalLinkableTask(args: Pick<AppState, "tasks" | "activeTa
   return task;
 }
 
-function findTerminalTabById(state: Pick<AppState, "terminalTabs">, tabId: string) {
+function findTerminalTabById(
+  state: Pick<AppState, "terminalTabs">,
+  tabId: string,
+) {
   return state.terminalTabs.find((tab) => tab.id === tabId) ?? null;
 }
 
-function findCliSessionTabById(state: Pick<AppState, "cliSessionTabs">, tabId: string) {
+function findCliSessionTabById(
+  state: Pick<AppState, "cliSessionTabs">,
+  tabId: string,
+) {
   return state.cliSessionTabs.find((tab) => tab.id === tabId) ?? null;
 }
 
@@ -1498,10 +1692,12 @@ function createTerminalTabRecord(args: {
   existingTitles?: string[];
 }) {
   const normalizedTitle = args.title?.trim();
-  const baseTitle = normalizedTitle || getTerminalTabDefaultTitle({
-    cwd: args.cwd,
-    linkedTaskTitle: args.linkedTaskTitle,
-  });
+  const baseTitle =
+    normalizedTitle ||
+    getTerminalTabDefaultTitle({
+      cwd: args.cwd,
+      linkedTaskTitle: args.linkedTaskTitle,
+    });
   const title = normalizedTitle
     ? normalizedTitle
     : (() => {
@@ -1530,8 +1726,12 @@ function buildCliSessionHandoffSummary(args: {
   messages: ChatMessage[];
   workspacePath: string;
 }) {
-  const latestUserMessage = [...args.messages].reverse().find((message) => message.role === "user" && message.content.trim());
-  const latestAssistantMessage = [...args.messages].reverse().find((message) => message.role === "assistant" && message.content.trim());
+  const latestUserMessage = [...args.messages]
+    .reverse()
+    .find((message) => message.role === "user" && message.content.trim());
+  const latestAssistantMessage = [...args.messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.content.trim());
   const lines = [
     `Continue the Stave task "${args.task.title}" in this fresh CLI session.`,
     `Workspace path: ${args.workspacePath || "current workspace"}`,
@@ -1541,7 +1741,11 @@ function buildCliSessionHandoffSummary(args: {
     lines.push("", "Latest user request:", latestUserMessage.content.trim());
   }
   if (latestAssistantMessage?.content.trim()) {
-    lines.push("", "Latest assistant context:", latestAssistantMessage.content.trim());
+    lines.push(
+      "",
+      "Latest assistant context:",
+      latestAssistantMessage.content.trim(),
+    );
   }
 
   return lines.join("\n").trim();
@@ -1615,9 +1819,15 @@ function mergeRecentProjectsByPath(args: {
   persistedProjects: RecentProjectState[];
   stateProjects: RecentProjectState[];
 }) {
-  let merged = normalizeRecentProjectStates({ projects: args.persistedProjects });
-  for (const project of normalizeRecentProjectStates({ projects: args.stateProjects })) {
-    const existing = merged.find((item) => item.projectPath === project.projectPath);
+  let merged = normalizeRecentProjectStates({
+    projects: args.persistedProjects,
+  });
+  for (const project of normalizeRecentProjectStates({
+    projects: args.stateProjects,
+  })) {
+    const existing = merged.find(
+      (item) => item.projectPath === project.projectPath,
+    );
     if (!existing || project.lastOpenedAt >= existing.lastOpenedAt) {
       merged = upsertRecentProjectState({
         projects: merged,
@@ -1628,24 +1838,36 @@ function mergeRecentProjectsByPath(args: {
   return merged;
 }
 
-function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspaceShell>>) {
+function summarizeWorkspaceShell(
+  snapshot: Awaited<ReturnType<typeof loadWorkspaceShell>>,
+) {
   if (!snapshot) {
     return 0;
   }
-  return snapshot.tasks.length
-    + (snapshot.terminalTabs?.length ?? 0)
-    + (snapshot.cliSessionTabs?.length ?? 0)
-    + Object.values(snapshot.messageCountByTask).reduce((sum, count) => sum + count, 0);
+  return (
+    snapshot.tasks.length +
+    (snapshot.terminalTabs?.length ?? 0) +
+    (snapshot.cliSessionTabs?.length ?? 0) +
+    Object.values(snapshot.messageCountByTask).reduce(
+      (sum, count) => sum + count,
+      0,
+    )
+  );
 }
 
 function summarizeWorkspaceSession(session?: WorkspaceSessionState | null) {
   if (!session) {
     return 0;
   }
-  return session.tasks.length
-    + (session.terminalTabs?.length ?? 0)
-    + (session.cliSessionTabs?.length ?? 0)
-    + Object.values(session.messageCountByTask).reduce((sum, count) => sum + count, 0);
+  return (
+    session.tasks.length +
+    (session.terminalTabs?.length ?? 0) +
+    (session.cliSessionTabs?.length ?? 0) +
+    Object.values(session.messageCountByTask).reduce(
+      (sum, count) => sum + count,
+      0,
+    )
+  );
 }
 
 function shouldReloadWorkspaceShellFromPersistence(args: {
@@ -1656,40 +1878,52 @@ function shouldReloadWorkspaceShellFromPersistence(args: {
 
 function shouldPreferLoadedWorkspaceState(args: {
   cachedWorkspaceState?: WorkspaceSessionState;
-  loadedWorkspaceShellState?: { shell: WorkspaceShell | null; workspaceState: WorkspaceSessionState } | null;
+  loadedWorkspaceShellState?: {
+    shell: WorkspaceShell | null;
+    workspaceState: WorkspaceSessionState;
+  } | null;
 }) {
   if (!args.loadedWorkspaceShellState) {
     return false;
   }
-  return summarizeWorkspaceShell(args.loadedWorkspaceShellState.shell) > summarizeWorkspaceSession(args.cachedWorkspaceState);
+  return (
+    summarizeWorkspaceShell(args.loadedWorkspaceShellState.shell) >
+    summarizeWorkspaceSession(args.cachedWorkspaceState)
+  );
 }
 
-function buildStaveMuseLocalActionContextFromState(state: Pick<
-  AppState,
-  | "activeWorkspaceId"
-  | "projectName"
-  | "projectPath"
-  | "recentProjects"
-  | "workspaces"
-  | "workspaceBranchById"
-  | "workspaceDefaultById"
-  | "workspaceInformation"
-  | "tasks"
-  | "activeTaskId"
-  | "activeTurnIdsByTask"
->) {
-  const projects: StaveMuseProjectSummary[] = state.recentProjects.map((project) => ({
-    projectName: project.projectName,
-    projectPath: project.projectPath,
-    isCurrent: project.projectPath === state.projectPath,
-  }));
-  const workspaces: StaveMuseWorkspaceSummary[] = state.workspaces.map((workspace) => ({
-    id: workspace.id,
-    name: workspace.name,
-    branch: state.workspaceBranchById[workspace.id],
-    isActive: workspace.id === state.activeWorkspaceId,
-    isDefault: Boolean(state.workspaceDefaultById[workspace.id]),
-  }));
+function buildStaveMuseLocalActionContextFromState(
+  state: Pick<
+    AppState,
+    | "activeWorkspaceId"
+    | "projectName"
+    | "projectPath"
+    | "recentProjects"
+    | "workspaces"
+    | "workspaceBranchById"
+    | "workspaceDefaultById"
+    | "workspaceInformation"
+    | "tasks"
+    | "activeTaskId"
+    | "activeTurnIdsByTask"
+  >,
+) {
+  const projects: StaveMuseProjectSummary[] = state.recentProjects.map(
+    (project) => ({
+      projectName: project.projectName,
+      projectPath: project.projectPath,
+      isCurrent: project.projectPath === state.projectPath,
+    }),
+  );
+  const workspaces: StaveMuseWorkspaceSummary[] = state.workspaces.map(
+    (workspace) => ({
+      id: workspace.id,
+      name: workspace.name,
+      branch: state.workspaceBranchById[workspace.id],
+      isActive: workspace.id === state.activeWorkspaceId,
+      isDefault: Boolean(state.workspaceDefaultById[workspace.id]),
+    }),
+  );
   const tasks: StaveMuseTaskSummary[] = state.tasks
     .filter((task) => !isTaskArchived(task))
     .map((task) => ({
@@ -1752,7 +1986,9 @@ function createStaveMuseAssistantMessage(args: {
   };
 }
 
-function buildClearedStaveMusePromptDraft(assistant: StaveMuseState): PromptDraft {
+function buildClearedStaveMusePromptDraft(
+  assistant: StaveMuseState,
+): PromptDraft {
   return {
     text: "",
     attachedFilePaths: [],
@@ -1802,9 +2038,15 @@ function appendStaveMuseSubmittedUserMessage(args: {
   } satisfies StaveMuseState;
 }
 
-function hasSelectedMuseWorkspace(state: Pick<AppState, "activeWorkspaceId" | "workspaces">) {
-  return Boolean(state.activeWorkspaceId)
-    && state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId);
+function hasSelectedMuseWorkspace(
+  state: Pick<AppState, "activeWorkspaceId" | "workspaces">,
+) {
+  return (
+    Boolean(state.activeWorkspaceId) &&
+    state.workspaces.some(
+      (workspace) => workspace.id === state.activeWorkspaceId,
+    )
+  );
 }
 
 function coerceMuseCustomFieldValue(args: {
@@ -1850,7 +2092,10 @@ function updateMuseCustomField(args: {
     case "number":
       return {
         ...args.field,
-        value: typeof nextValue === "number" || nextValue === null ? nextValue : args.field.value,
+        value:
+          typeof nextValue === "number" || nextValue === null
+            ? nextValue
+            : args.field.value,
       };
     case "boolean":
       return {
@@ -1877,12 +2122,13 @@ function updateMuseCustomField(args: {
 function getBlockingConnectedToolStatuses(args: {
   statuses: readonly ConnectedToolStatusEntry[];
 }) {
-  return args.statuses.filter((entry) => (
-    entry.state === "needs-auth"
-    || entry.state === "disabled"
-    || entry.state === "error"
-    || entry.state === "unsupported"
-  ));
+  return args.statuses.filter(
+    (entry) =>
+      entry.state === "needs-auth" ||
+      entry.state === "disabled" ||
+      entry.state === "error" ||
+      entry.state === "unsupported",
+  );
 }
 
 function appendStaveMuseLocalExchange(args: {
@@ -2076,8 +2322,9 @@ async function collectStaveMuseRoutingDecision(args: {
           return;
         }
         if (
-          event.type === "error"
-          || (event.type === "system" && event.content.startsWith("Provider stream failed:"))
+          event.type === "error" ||
+          (event.type === "system" &&
+            event.content.startsWith("Provider stream failed:"))
         ) {
           finalize(DEFAULT_STAVE_MUSE_ROUTING_DECISION);
           return;
@@ -2101,7 +2348,9 @@ export const useAppStore = create<AppState>()(
         if (!projectPath || !workspacePath || !branch) {
           return null;
         }
-        const workspaceName = state.workspaces.find((workspace) => workspace.id === workspaceId)?.name ?? branch;
+        const workspaceName =
+          state.workspaces.find((workspace) => workspace.id === workspaceId)
+            ?.name ?? branch;
         return {
           workspaceId,
           projectPath,
@@ -2130,19 +2379,21 @@ export const useAppStore = create<AppState>()(
           ...(args.taskId ? { taskId: args.taskId } : {}),
           ...(args.taskTitle ? { taskTitle: args.taskTitle } : {}),
           ...(args.turnId ? { turnId: args.turnId } : {}),
-        }).then((result) => {
-          if (!result.ok && result.summary?.failures.length) {
-            console.warn("[workspace-scripts] hook failures", {
+        })
+          .then((result) => {
+            if (!result.ok && result.summary?.failures.length) {
+              console.warn("[workspace-scripts] hook failures", {
+                trigger: args.trigger,
+                failures: result.summary.failures,
+              });
+            }
+          })
+          .catch((error) => {
+            console.warn("[workspace-scripts] hook failed", {
               trigger: args.trigger,
-              failures: result.summary.failures,
+              error: String(error),
             });
-          }
-        }).catch((error) => {
-          console.warn("[workspace-scripts] hook failed", {
-            trigger: args.trigger,
-            error: String(error),
           });
-        });
       };
 
       const activateProject = async (args: {
@@ -2167,7 +2418,10 @@ export const useAppStore = create<AppState>()(
           workspacePathById: stateBeforeSwitch.workspacePathById,
           workspaceDefaultById: stateBeforeSwitch.workspaceDefaultById,
         });
-        const existingProject = rememberedProjects.find((project) => project.projectPath === args.projectRootPath) ?? null;
+        const existingProject =
+          rememberedProjects.find(
+            (project) => project.projectPath === args.projectRootPath,
+          ) ?? null;
         const nextWorkspaceFileCacheByPath = rememberCachedWorkspaceFiles({
           workspaceFileCacheByPath: stateBeforeSwitch.workspaceFileCacheByPath,
           workspacePath: args.projectRootPath,
@@ -2197,10 +2451,11 @@ export const useAppStore = create<AppState>()(
                     projectPath: args.projectRootPath,
                     recentProjects: rememberedProjects,
                   }),
-                  newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
-                    projectPath: args.projectRootPath,
-                    recentProjects: rememberedProjects,
-                  }),
+                  newWorkspaceUseRootNodeModulesSymlink:
+                    resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+                      projectPath: args.projectRootPath,
+                      recentProjects: rememberedProjects,
+                    }),
                 }),
                 projectName: args.projectName,
                 defaultBranch: args.defaultBranch,
@@ -2209,7 +2464,8 @@ export const useAppStore = create<AppState>()(
             }),
             defaultBranch: args.defaultBranch,
             projectName: args.projectName,
-            projectFiles: args.files.length > 0 ? args.files : state.projectFiles,
+            projectFiles:
+              args.files.length > 0 ? args.files : state.projectFiles,
             workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
             workspaceRuntimeCacheById: savedWorkspaceRuntimeCacheById,
           }));
@@ -2229,11 +2485,20 @@ export const useAppStore = create<AppState>()(
             defaultBranch: args.defaultBranch,
             lastOpenedAt: new Date().toISOString(),
           };
-          const nextProjectWorkspaceIds = nextProject.workspaces.map((workspace) => workspace.id);
-          const emptyWorkspaceState = buildWorkspaceSessionState({ snapshot: null });
+          const nextProjectWorkspaceIds = nextProject.workspaces.map(
+            (workspace) => workspace.id,
+          );
+          const cachedActiveWorkspaceState = nextProject.activeWorkspaceId
+            ? savedWorkspaceRuntimeCacheById[nextProject.activeWorkspaceId]
+            : undefined;
+          const initialWorkspaceState =
+            cachedActiveWorkspaceState ??
+            buildWorkspaceSessionState({ snapshot: null });
           set(() => ({
             hasHydratedWorkspaces: false,
             workspaceSnapshotVersion: 0,
+            promptDraftPersistenceVersion: 0,
+            taskMessagesLoadingByTask: {},
             workspaces: nextProject.workspaces,
             activeWorkspaceId: nextProject.activeWorkspaceId,
             projectPath: args.projectRootPath,
@@ -2249,35 +2514,56 @@ export const useAppStore = create<AppState>()(
             projectFiles: args.files,
             workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
             workspaceRuntimeCacheById: savedWorkspaceRuntimeCacheById,
-            taskWorkspaceIdById: retainTaskWorkspaceOwnership({
-              taskWorkspaceIdById: stateBeforeSwitch.taskWorkspaceIdById,
-              workspaceIds: nextProjectWorkspaceIds,
+            taskWorkspaceIdById: registerTaskWorkspaceOwnership({
+              taskWorkspaceIdById: retainTaskWorkspaceOwnership({
+                taskWorkspaceIdById: stateBeforeSwitch.taskWorkspaceIdById,
+                workspaceIds: nextProjectWorkspaceIds,
+              }),
+              workspaceId: nextProject.activeWorkspaceId,
+              tasks: initialWorkspaceState.tasks,
             }),
-            ...emptyWorkspaceState,
+            ...initialWorkspaceState,
+            layout: {
+              ...stateBeforeSwitch.layout,
+              terminalDocked: initialWorkspaceState.activeTerminalTabId
+                ? true
+                : stateBeforeSwitch.layout.terminalDocked,
+              editorDiffMode: resolveEditorDiffMode({
+                editorTabs: initialWorkspaceState.editorTabs,
+                activeEditorTabId: initialWorkspaceState.activeEditorTabId,
+              }),
+            },
           }));
           await get().hydrateWorkspaces();
           return;
         }
 
-        const defaultWorkspaceId = buildProjectDefaultWorkspaceId({ projectPath: args.projectRootPath });
+        const defaultWorkspaceId = buildProjectDefaultWorkspaceId({
+          projectPath: args.projectRootPath,
+        });
         const now = new Date().toISOString();
 
         // Check if this workspace already has persisted data before overwriting.
         // When localStorage is cleared (e.g. dev-mode port change or origin switch),
         // the project won't appear in recentProjects even though the DB still holds
         // its tasks and messages.  Loading the existing snapshot prevents data loss.
-        const existingShell = await loadWorkspaceShell({ workspaceId: defaultWorkspaceId });
+        const existingShell = await loadWorkspaceShell({
+          workspaceId: defaultWorkspaceId,
+        });
 
-        let workspaceState: ReturnType<typeof buildWorkspaceSessionStateFromShell>;
+        let workspaceState: ReturnType<
+          typeof buildWorkspaceSessionStateFromShell
+        >;
         let deferredWorkspaceMessageHydration: {
           workspaceId: string;
           taskIds: string[];
           latestTurns: PersistedTurnSummary[];
         } | null = null;
         if (existingShell) {
-          const loadedWorkspaceShellState = await loadWorkspaceShellStateFromPersistence({
-            workspaceId: defaultWorkspaceId,
-          });
+          const loadedWorkspaceShellState =
+            await loadWorkspaceShellStateFromPersistence({
+              workspaceId: defaultWorkspaceId,
+            });
           workspaceState = loadedWorkspaceShellState.workspaceState;
           deferredWorkspaceMessageHydration = {
             workspaceId: defaultWorkspaceId,
@@ -2324,7 +2610,13 @@ export const useAppStore = create<AppState>()(
           projectName: args.projectName,
           lastOpenedAt: now,
           defaultBranch: args.defaultBranch,
-          workspaces: [{ id: defaultWorkspaceId, name: defaultWorkspaceName, updatedAt: now }],
+          workspaces: [
+            {
+              id: defaultWorkspaceId,
+              name: defaultWorkspaceName,
+              updatedAt: now,
+            },
+          ],
           activeWorkspaceId: defaultWorkspaceId,
           workspaceBranchById: { [defaultWorkspaceId]: args.defaultBranch },
           workspacePathById: { [defaultWorkspaceId]: args.projectRootPath },
@@ -2333,7 +2625,9 @@ export const useAppStore = create<AppState>()(
           newWorkspaceInitCommand: "",
           newWorkspaceUseRootNodeModulesSymlink: false,
         } satisfies RecentProjectState;
-        const nextProjectWorkspaceIds = nextProject.workspaces.map((workspace) => workspace.id);
+        const nextProjectWorkspaceIds = nextProject.workspaces.map(
+          (workspace) => workspace.id,
+        );
 
         set(() => ({
           hasHydratedWorkspaces: true,
@@ -2372,11 +2666,15 @@ export const useAppStore = create<AppState>()(
           }),
         }));
         if (deferredWorkspaceMessageHydration) {
-          hydrateWorkspaceMessagesInBackground(deferredWorkspaceMessageHydration);
+          hydrateWorkspaceMessagesInBackground(
+            deferredWorkspaceMessageHydration,
+          );
         }
       };
 
-      const persistNotification = async (notification: AppNotificationCreateInput) => {
+      const persistNotification = async (
+        notification: AppNotificationCreateInput,
+      ) => {
         try {
           const result = await createPersistedNotification({ notification });
           if (!result.notification) {
@@ -2395,8 +2693,14 @@ export const useAppStore = create<AppState>()(
             notificationSoundMode,
             notificationSoundCustomAudioData,
           } = get().settings;
-          if (notificationSoundEnabled && result.notification.kind === "task.turn_completed") {
-            if (notificationSoundMode === "custom" && notificationSoundCustomAudioData) {
+          if (
+            notificationSoundEnabled &&
+            result.notification.kind === "task.turn_completed"
+          ) {
+            if (
+              notificationSoundMode === "custom" &&
+              notificationSoundCustomAudioData
+            ) {
               playCustomNotificationSound({
                 dataUrl: notificationSoundCustomAudioData,
                 volume: notificationSoundVolume,
@@ -2411,18 +2715,25 @@ export const useAppStore = create<AppState>()(
           showNotificationToast(result.notification);
           return result.notification;
         } catch (error) {
-          console.error("[notifications] failed to persist notification", error);
+          console.error(
+            "[notifications] failed to persist notification",
+            error,
+          );
           return null;
         }
       };
 
-      const persistNotifications = async (notifications: AppNotificationCreateInput[]) => {
+      const persistNotifications = async (
+        notifications: AppNotificationCreateInput[],
+      ) => {
         for (const notification of notifications) {
           await persistNotification(notification);
         }
       };
 
-      const openNotificationContextInternal = async (notification: AppNotification): Promise<NotificationContextOpenResult> => {
+      const openNotificationContextInternal = async (
+        notification: AppNotification,
+      ): Promise<NotificationContextOpenResult> => {
         const projectPath = notification.projectPath?.trim();
         if (projectPath && projectPath !== get().projectPath) {
           await get().openProject({ projectPath });
@@ -2431,7 +2742,9 @@ export const useAppStore = create<AppState>()(
         const afterProjectOpen = get();
         const workspaceId = notification.workspaceId?.trim();
         if (workspaceId && afterProjectOpen.activeWorkspaceId !== workspaceId) {
-          const workspaceExists = afterProjectOpen.workspaces.some((workspace) => workspace.id === workspaceId);
+          const workspaceExists = afterProjectOpen.workspaces.some(
+            (workspace) => workspace.id === workspaceId,
+          );
           if (workspaceExists) {
             await afterProjectOpen.switchWorkspace({ workspaceId });
           }
@@ -2443,7 +2756,9 @@ export const useAppStore = create<AppState>()(
           return { status: "opened" };
         }
 
-        const targetTask = afterWorkspaceOpen.tasks.find((task) => task.id === taskId);
+        const targetTask = afterWorkspaceOpen.tasks.find(
+          (task) => task.id === taskId,
+        );
         if (!targetTask) {
           return { status: "opened" };
         }
@@ -2451,7 +2766,10 @@ export const useAppStore = create<AppState>()(
           return {
             status: "archived-task",
             taskId,
-            taskTitle: targetTask.title.trim() || notification.taskTitle?.trim() || "Untitled Task",
+            taskTitle:
+              targetTask.title.trim() ||
+              notification.taskTitle?.trim() ||
+              "Untitled Task",
           };
         }
 
@@ -2489,9 +2807,15 @@ export const useAppStore = create<AppState>()(
         );
         const workspaceState = buildWorkspaceSessionStateFromShell({
           shell,
-          messagesByTask: Object.fromEntries(pageEntries.map(({ taskId, page }) => [taskId, page.messages] as const)),
+          messagesByTask: Object.fromEntries(
+            pageEntries.map(
+              ({ taskId, page }) => [taskId, page.messages] as const,
+            ),
+          ),
           messageCountByTaskOverrides: Object.fromEntries(
-            pageEntries.map(({ taskId, page }) => [taskId, page.totalCount] as const),
+            pageEntries.map(
+              ({ taskId, page }) => [taskId, page.totalCount] as const,
+            ),
           ),
           latestTurns,
           appendInterruptedNotices: args.appendInterruptedNotices,
@@ -2513,11 +2837,9 @@ export const useAppStore = create<AppState>()(
         );
         const initialTaskIds = new Set<string>();
         if (
-          shell?.activeTaskId
-          && (
-            (shell.messageCountByTask[shell.activeTaskId] ?? 0) > 0
-            || interruptedTaskIds.has(shell.activeTaskId)
-          )
+          shell?.activeTaskId &&
+          ((shell.messageCountByTask[shell.activeTaskId] ?? 0) > 0 ||
+            interruptedTaskIds.has(shell.activeTaskId))
         ) {
           initialTaskIds.add(shell.activeTaskId);
         }
@@ -2532,12 +2854,13 @@ export const useAppStore = create<AppState>()(
           shell,
           latestTurns,
           initialTaskIds: [...initialTaskIds],
-          workspaceState: interruptedTaskIds.size > 0
-            ? {
-                ...workspaceState,
-                activeTurnIdsByTask: {},
-              }
-            : workspaceState,
+          workspaceState:
+            interruptedTaskIds.size > 0
+              ? {
+                  ...workspaceState,
+                  activeTurnIdsByTask: {},
+                }
+              : workspaceState,
         };
       };
 
@@ -2547,21 +2870,31 @@ export const useAppStore = create<AppState>()(
         mode: "latest" | "older";
       }) => {
         const stateBefore = get();
-        const ownerWorkspaceId = stateBefore.taskWorkspaceIdById[args.taskId] ?? stateBefore.activeWorkspaceId;
-        if (!args.taskId || !ownerWorkspaceId || ownerWorkspaceId !== args.workspaceId) {
+        const ownerWorkspaceId =
+          stateBefore.taskWorkspaceIdById[args.taskId] ??
+          stateBefore.activeWorkspaceId;
+        if (
+          !args.taskId ||
+          !ownerWorkspaceId ||
+          ownerWorkspaceId !== args.workspaceId
+        ) {
           return;
         }
         if (stateBefore.taskMessagesLoadingByTask[args.taskId]) {
           return;
         }
-        const currentSession = args.workspaceId === stateBefore.activeWorkspaceId
-          ? stateBefore
-          : stateBefore.workspaceRuntimeCacheById[args.workspaceId];
+        const currentSession =
+          args.workspaceId === stateBefore.activeWorkspaceId
+            ? stateBefore
+            : stateBefore.workspaceRuntimeCacheById[args.workspaceId];
         if (!currentSession) {
           return;
         }
-        const currentMessages = currentSession.messagesByTask[args.taskId] ?? [];
-        const totalCount = currentSession.messageCountByTask[args.taskId] ?? currentMessages.length;
+        const currentMessages =
+          currentSession.messagesByTask[args.taskId] ?? [];
+        const totalCount =
+          currentSession.messageCountByTask[args.taskId] ??
+          currentMessages.length;
         if (args.mode === "latest" && currentMessages.length > 0) {
           return;
         }
@@ -2584,9 +2917,10 @@ export const useAppStore = create<AppState>()(
             offset: args.mode === "older" ? currentMessages.length : 0,
           });
           set((state) => {
-            const targetSession = args.workspaceId === state.activeWorkspaceId
-              ? state
-              : state.workspaceRuntimeCacheById[args.workspaceId];
+            const targetSession =
+              args.workspaceId === state.activeWorkspaceId
+                ? state
+                : state.workspaceRuntimeCacheById[args.workspaceId];
             if (!targetSession) {
               return {
                 taskMessagesLoadingByTask: {
@@ -2595,7 +2929,8 @@ export const useAppStore = create<AppState>()(
                 },
               };
             }
-            const sessionMessages = targetSession.messagesByTask[args.taskId] ?? [];
+            const sessionMessages =
+              targetSession.messagesByTask[args.taskId] ?? [];
             const nextMessages = mergeTaskMessagePage({
               currentMessages: sessionMessages,
               pageMessages: page.messages,
@@ -2629,7 +2964,10 @@ export const useAppStore = create<AppState>()(
                   },
                   messageCountByTask: {
                     ...targetSession.messageCountByTask,
-                    [args.taskId]: Math.max(page.totalCount, nextMessages.length),
+                    [args.taskId]: Math.max(
+                      page.totalCount,
+                      nextMessages.length,
+                    ),
                   },
                 },
               },
@@ -2666,7 +3004,9 @@ export const useAppStore = create<AppState>()(
 
         set((state) => {
           let changed = false;
-          const nextTaskMessagesLoadingByTask = { ...state.taskMessagesLoadingByTask };
+          const nextTaskMessagesLoadingByTask = {
+            ...state.taskMessagesLoadingByTask,
+          };
           for (const taskId of taskIds) {
             if (nextTaskMessagesLoadingByTask[taskId] === true) {
               continue;
@@ -2674,7 +3014,9 @@ export const useAppStore = create<AppState>()(
             nextTaskMessagesLoadingByTask[taskId] = true;
             changed = true;
           }
-          return changed ? { taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask } : state;
+          return changed
+            ? { taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask }
+            : state;
         });
 
         void Promise.allSettled(
@@ -2687,103 +3029,117 @@ export const useAppStore = create<AppState>()(
               offset: 0,
             }),
           })),
-        ).then((results) => {
-          set((state) => {
-            const nextTaskMessagesLoadingByTask = { ...state.taskMessagesLoadingByTask };
-            for (const taskId of taskIds) {
-              nextTaskMessagesLoadingByTask[taskId] = false;
-            }
-
-            const targetSession = args.workspaceId === state.activeWorkspaceId
-              ? state
-              : state.workspaceRuntimeCacheById[args.workspaceId];
-            if (!targetSession) {
-              return {
-                taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
+        )
+          .then((results) => {
+            set((state) => {
+              const nextTaskMessagesLoadingByTask = {
+                ...state.taskMessagesLoadingByTask,
               };
-            }
-
-            const messagesPatch: Record<string, ChatMessage[]> = {};
-            const messageCountPatch: Record<string, number> = {};
-
-            for (const result of results) {
-              if (result.status !== "fulfilled") {
-                continue;
+              for (const taskId of taskIds) {
+                nextTaskMessagesLoadingByTask[taskId] = false;
               }
-              const sessionMessages = targetSession.messagesByTask[result.value.taskId] ?? [];
-              const mergedMessages = mergeTaskMessagePage({
-                currentMessages: sessionMessages,
-                pageMessages: result.value.page.messages,
-                mode: "latest",
-              });
-              const interruptedTurn = interruptedTurnByTaskId.get(result.value.taskId);
-              const nextMessages = interruptedTurn
-                ? (
-                    appendInterruptedTurnNotices({
+
+              const targetSession =
+                args.workspaceId === state.activeWorkspaceId
+                  ? state
+                  : state.workspaceRuntimeCacheById[args.workspaceId];
+              if (!targetSession) {
+                return {
+                  taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
+                };
+              }
+
+              const messagesPatch: Record<string, ChatMessage[]> = {};
+              const messageCountPatch: Record<string, number> = {};
+
+              for (const result of results) {
+                if (result.status !== "fulfilled") {
+                  continue;
+                }
+                const sessionMessages =
+                  targetSession.messagesByTask[result.value.taskId] ?? [];
+                const mergedMessages = mergeTaskMessagePage({
+                  currentMessages: sessionMessages,
+                  pageMessages: result.value.page.messages,
+                  mode: "latest",
+                });
+                const interruptedTurn = interruptedTurnByTaskId.get(
+                  result.value.taskId,
+                );
+                const nextMessages = interruptedTurn
+                  ? (appendInterruptedTurnNotices({
                       messagesByTask: { [result.value.taskId]: mergedMessages },
                       latestTurns: [interruptedTurn],
-                    })[result.value.taskId] ?? mergedMessages
-                  )
-                : mergedMessages;
-              messagesPatch[result.value.taskId] = nextMessages;
-              messageCountPatch[result.value.taskId] = Math.max(result.value.page.totalCount, nextMessages.length);
-            }
+                    })[result.value.taskId] ?? mergedMessages)
+                  : mergedMessages;
+                messagesPatch[result.value.taskId] = nextMessages;
+                messageCountPatch[result.value.taskId] = Math.max(
+                  result.value.page.totalCount,
+                  nextMessages.length,
+                );
+              }
 
-            if (Object.keys(messagesPatch).length === 0) {
-              return {
-                taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
-              };
-            }
+              if (Object.keys(messagesPatch).length === 0) {
+                return {
+                  taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
+                };
+              }
 
-            if (args.workspaceId === state.activeWorkspaceId) {
-              return {
-                messagesByTask: {
-                  ...state.messagesByTask,
-                  ...messagesPatch,
-                },
-                messageCountByTask: {
-                  ...state.messageCountByTask,
-                  ...messageCountPatch,
-                },
-                taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
-              };
-            }
-
-            return {
-              workspaceRuntimeCacheById: {
-                ...state.workspaceRuntimeCacheById,
-                [args.workspaceId]: {
-                  ...targetSession,
+              if (args.workspaceId === state.activeWorkspaceId) {
+                return {
                   messagesByTask: {
-                    ...targetSession.messagesByTask,
+                    ...state.messagesByTask,
                     ...messagesPatch,
                   },
                   messageCountByTask: {
-                    ...targetSession.messageCountByTask,
+                    ...state.messageCountByTask,
                     ...messageCountPatch,
                   },
+                  taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
+                };
+              }
+
+              return {
+                workspaceRuntimeCacheById: {
+                  ...state.workspaceRuntimeCacheById,
+                  [args.workspaceId]: {
+                    ...targetSession,
+                    messagesByTask: {
+                      ...targetSession.messagesByTask,
+                      ...messagesPatch,
+                    },
+                    messageCountByTask: {
+                      ...targetSession.messageCountByTask,
+                      ...messageCountPatch,
+                    },
+                  },
                 },
+                taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
+              };
+            });
+            logWorkspaceSwitchMetric({
+              workspaceId: args.workspaceId,
+              token: args.switchMetricToken,
+              phase: "messages",
+              extra: {
+                taskCount: taskIds.length,
               },
-              taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
-            };
+            });
+          })
+          .catch((error) => {
+            console.error(
+              "[workspace] failed to hydrate initial task messages",
+              error,
+            );
+            set((state) => ({
+              taskMessagesLoadingByTask: {
+                ...state.taskMessagesLoadingByTask,
+                ...Object.fromEntries(
+                  taskIds.map((taskId) => [taskId, false] as const),
+                ),
+              },
+            }));
           });
-          logWorkspaceSwitchMetric({
-            workspaceId: args.workspaceId,
-            token: args.switchMetricToken,
-            phase: "messages",
-            extra: {
-              taskCount: taskIds.length,
-            },
-          });
-        }).catch((error) => {
-          console.error("[workspace] failed to hydrate initial task messages", error);
-          set((state) => ({
-            taskMessagesLoadingByTask: {
-              ...state.taskMessagesLoadingByTask,
-              ...Object.fromEntries(taskIds.map((taskId) => [taskId, false] as const)),
-            },
-          }));
-        });
       };
 
       const refreshWorkspaceFilesInBackground = (args: {
@@ -2791,153 +3147,175 @@ export const useAppStore = create<AppState>()(
         workspacePath: string;
         switchMetricToken?: number;
       }) => {
-        void workspaceFsAdapter.listFiles().then((files) => {
-          set((state) => {
-            const nextWorkspaceFileCacheByPath = rememberCachedWorkspaceFiles({
-              workspaceFileCacheByPath: state.workspaceFileCacheByPath,
+        void workspaceFsAdapter
+          .listFiles()
+          .then((files) => {
+            set((state) => {
+              const nextWorkspaceFileCacheByPath = rememberCachedWorkspaceFiles(
+                {
+                  workspaceFileCacheByPath: state.workspaceFileCacheByPath,
+                  workspacePath: args.workspacePath,
+                  files,
+                },
+              );
+              const activeWorkspacePath = resolveWorkspacePathForId({
+                activeWorkspaceId: state.activeWorkspaceId,
+                workspacePathById: state.workspacePathById,
+                workspaceDefaultById: state.workspaceDefaultById,
+                projectPath: state.projectPath,
+              });
+              const shouldUpdateActiveFiles =
+                state.activeWorkspaceId === args.workspaceId &&
+                activeWorkspacePath === args.workspacePath &&
+                !areStringArraysEqual(state.projectFiles, files);
+              if (
+                !shouldUpdateActiveFiles &&
+                nextWorkspaceFileCacheByPath === state.workspaceFileCacheByPath
+              ) {
+                return state;
+              }
+              return {
+                workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
+                ...(shouldUpdateActiveFiles ? { projectFiles: files } : {}),
+              };
+            });
+            logWorkspaceSwitchMetric({
+              workspaceId: args.workspaceId,
+              token: args.switchMetricToken,
+              phase: "files",
+              extra: {
+                fileCount: files.length,
+              },
+            });
+          })
+          .catch((error) => {
+            console.warn("[workspace] failed to refresh workspace files", {
+              workspaceId: args.workspaceId,
               workspacePath: args.workspacePath,
-              files,
+              error: String(error),
             });
-            const activeWorkspacePath = resolveWorkspacePathForId({
-              activeWorkspaceId: state.activeWorkspaceId,
-              workspacePathById: state.workspacePathById,
-              workspaceDefaultById: state.workspaceDefaultById,
-              projectPath: state.projectPath,
-            });
-            const shouldUpdateActiveFiles = state.activeWorkspaceId === args.workspaceId
-              && activeWorkspacePath === args.workspacePath
-              && !areStringArraysEqual(state.projectFiles, files);
-            if (!shouldUpdateActiveFiles && nextWorkspaceFileCacheByPath === state.workspaceFileCacheByPath) {
-              return state;
-            }
-            return {
-              workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
-              ...(shouldUpdateActiveFiles ? { projectFiles: files } : {}),
-            };
           });
-          logWorkspaceSwitchMetric({
-            workspaceId: args.workspaceId,
-            token: args.switchMetricToken,
-            phase: "files",
-            extra: {
-              fileCount: files.length,
-            },
-          });
-        }).catch((error) => {
-          console.warn("[workspace] failed to refresh workspace files", {
-            workspaceId: args.workspaceId,
-            workspacePath: args.workspacePath,
-            error: String(error),
-          });
-        });
       };
 
-      return ({
-      hasHydratedWorkspaces: false,
-      workspaceSnapshotVersion: 0,
-      promptDraftPersistenceVersion: 0,
-      workspaces: [],
-      activeWorkspaceId: "",
-      projectPath: null,
-      recentProjects: [],
-      defaultBranch: "main",
-      workspaceBranchById: {},
-      workspacePathById: {},
-      workspaceDefaultById: {},
-      workspacePrInfoById: {},
-      isDarkMode: true,
-      activeTaskId: "",
-      draftProvider: "claude-code",
-      promptDraftByTask: {},
-      workspaceInformation: createEmptyWorkspaceInformation(),
-      promptFocusNonce: 0,
-      providerCommandCatalogRefreshNonce: 0,
-      workspacePlansRefreshNonce: 0,
-      tasks: [],
-      messagesByTask: {},
-      messageCountByTask: {},
-      taskMessagesLoadingByTask: {},
-      layout: {
-        workspaceSidebarWidth: WORKSPACE_SIDEBAR_MIN_WIDTH,
-        workspaceSidebarCollapsed: false,
-        editorPanelWidth: DEFAULT_EDITOR_PANEL_WIDTH,
-        explorerPanelWidth: 300,
-        terminalDockHeight: 210,
-        editorVisible: false,
-        sidebarOverlayVisible: false,
-        sidebarOverlayTab: "explorer",
-        terminalDocked: false,
-        editorDiffMode: false,
-      },
-      settings: defaultSettings,
-      editorTabs: [],
-      activeEditorTabId: null,
-      terminalTabs: [],
-      activeTerminalTabId: null,
-      cliSessionTabs: [],
-      activeCliSessionTabId: null,
-      activeSurface: { kind: "task", taskId: "" },
-      pendingCloseEditorTabId: null,
-      pendingEditorSelection: null,
-      projectName: null,
-      projectFiles: workspaceFsAdapter.getKnownFiles(),
-      workspaceFileCacheByPath: {},
-      taskCheckpointById: {},
-      providerAvailability: createDefaultProviderAvailability(),
-      skillCatalog: {
-        status: "idle",
-        workspacePath: null,
-        sharedSkillsHome: null,
-        fetchedAt: null,
-        skills: [],
-        roots: [],
-        detail: "Skill catalog has not been loaded yet.",
-      },
-      notifications: [],
-      activeTurnIdsByTask: {},
-      nativeSessionReadyByTask: {},
-      providerSessionByTask: {},
-      workspaceRuntimeCacheById: {},
-      taskWorkspaceIdById: {},
-      staveMuse: createEmptyStaveMuseState({
-        defaultTarget: defaultSettings.museDefaultTarget,
-      }),
-      hydrateProjectRegistry: async () => {
-        const rawPersistedProjects = (await loadProjectRegistrySnapshot()) as RecentProjectState[];
-        const persistedProjects = normalizeRecentProjectStates({
-          projects: rawPersistedProjects,
-        });
-        if (persistedProjects.length === 0) {
-          return;
-        }
-        const state = get();
-        const mergedProjects = mergeRecentProjectsByPath({
-          persistedProjects,
-          stateProjects: state.recentProjects,
-        });
-        const currentProject = state.projectPath
-          ? mergedProjects.find((project) => project.projectPath === state.projectPath) ?? null
-          : null;
-        if (currentProject || mergedProjects.length !== state.recentProjects.length) {
-          set(() => ({
-            recentProjects: mergedProjects,
-            ...(currentProject ? {
-              projectName: normalizeProjectDisplayName({
-                projectPath: currentProject.projectPath,
-                projectName: state.projectName?.trim() || currentProject.projectName,
-              }),
-              defaultBranch: state.defaultBranch || currentProject.defaultBranch,
-            } : {}),
-          }));
-        }
-        if (JSON.stringify(rawPersistedProjects) !== JSON.stringify(mergedProjects)) {
-          await saveProjectRegistrySnapshot({
-            projects: mergedProjects,
+      return {
+        hasHydratedWorkspaces: false,
+        workspaceSnapshotVersion: 0,
+        promptDraftPersistenceVersion: 0,
+        workspaces: [],
+        activeWorkspaceId: "",
+        projectPath: null,
+        recentProjects: [],
+        defaultBranch: "main",
+        workspaceBranchById: {},
+        workspacePathById: {},
+        workspaceDefaultById: {},
+        workspacePrInfoById: {},
+        isDarkMode: true,
+        activeTaskId: "",
+        draftProvider: "claude-code",
+        promptDraftByTask: {},
+        workspaceInformation: createEmptyWorkspaceInformation(),
+        promptFocusNonce: 0,
+        providerCommandCatalogRefreshNonce: 0,
+        workspacePlansRefreshNonce: 0,
+        tasks: [],
+        messagesByTask: {},
+        messageCountByTask: {},
+        taskMessagesLoadingByTask: {},
+        layout: {
+          workspaceSidebarWidth: WORKSPACE_SIDEBAR_MIN_WIDTH,
+          workspaceSidebarCollapsed: false,
+          editorPanelWidth: DEFAULT_EDITOR_PANEL_WIDTH,
+          explorerPanelWidth: 300,
+          terminalDockHeight: 210,
+          editorVisible: false,
+          sidebarOverlayVisible: false,
+          sidebarOverlayTab: "explorer",
+          terminalDocked: false,
+          editorDiffMode: false,
+        },
+        settings: defaultSettings,
+        editorTabs: [],
+        activeEditorTabId: null,
+        terminalTabs: [],
+        activeTerminalTabId: null,
+        cliSessionTabs: [],
+        activeCliSessionTabId: null,
+        activeSurface: { kind: "task", taskId: "" },
+        pendingCloseEditorTabId: null,
+        pendingEditorSelection: null,
+        projectName: null,
+        projectFiles: workspaceFsAdapter.getKnownFiles(),
+        workspaceFileCacheByPath: {},
+        taskCheckpointById: {},
+        providerAvailability: createDefaultProviderAvailability(),
+        skillCatalog: {
+          status: "idle",
+          workspacePath: null,
+          sharedSkillsHome: null,
+          fetchedAt: null,
+          skills: [],
+          roots: [],
+          detail: "Skill catalog has not been loaded yet.",
+        },
+        notifications: [],
+        activeTurnIdsByTask: {},
+        nativeSessionReadyByTask: {},
+        providerSessionByTask: {},
+        workspaceRuntimeCacheById: {},
+        taskWorkspaceIdById: {},
+        staveMuse: createEmptyStaveMuseState({
+          defaultTarget: defaultSettings.museDefaultTarget,
+        }),
+        hydrateProjectRegistry: async () => {
+          const rawPersistedProjects =
+            (await loadProjectRegistrySnapshot()) as RecentProjectState[];
+          const persistedProjects = normalizeRecentProjectStates({
+            projects: rawPersistedProjects,
           });
-        }
-      },
-      flushProjectRegistry: async () => {
-        const state = get();
+          if (persistedProjects.length === 0) {
+            return;
+          }
+          const state = get();
+          const mergedProjects = mergeRecentProjectsByPath({
+            persistedProjects,
+            stateProjects: state.recentProjects,
+          });
+          const currentProject = state.projectPath
+            ? (mergedProjects.find(
+                (project) => project.projectPath === state.projectPath,
+              ) ?? null)
+            : null;
+          if (
+            currentProject ||
+            mergedProjects.length !== state.recentProjects.length
+          ) {
+            set(() => ({
+              recentProjects: mergedProjects,
+              ...(currentProject
+                ? {
+                    projectName: normalizeProjectDisplayName({
+                      projectPath: currentProject.projectPath,
+                      projectName:
+                        state.projectName?.trim() || currentProject.projectName,
+                    }),
+                    defaultBranch:
+                      state.defaultBranch || currentProject.defaultBranch,
+                  }
+                : {}),
+            }));
+          }
+          if (
+            JSON.stringify(rawPersistedProjects) !==
+            JSON.stringify(mergedProjects)
+          ) {
+            await saveProjectRegistrySnapshot({
+              projects: mergedProjects,
+            });
+          }
+        },
+        flushProjectRegistry: async () => {
+          const state = get();
           const projects = captureCurrentProjectState({
             recentProjects: state.recentProjects,
             projectPath: state.projectPath,
@@ -2950,493 +3328,48 @@ export const useAppStore = create<AppState>()(
             defaultBranch: state.defaultBranch,
             workspaces: state.workspaces,
             activeWorkspaceId: state.activeWorkspaceId,
-          workspaceBranchById: state.workspaceBranchById,
-          workspacePathById: state.workspacePathById,
-          workspaceDefaultById: state.workspaceDefaultById,
-        });
-        await saveProjectRegistrySnapshot({
-          projects,
-        });
-      },
-      hydrateWorkspaces: async () => {
-        await get().hydrateProjectRegistry();
-        let initialRows = await listWorkspaceSummaries();
-        const stateBeforeHydrate = get();
-        const currentProject = stateBeforeHydrate.projectPath
-          ? stateBeforeHydrate.recentProjects.find((project) => project.projectPath === stateBeforeHydrate.projectPath) ?? null
-          : null;
-        const rememberedWorkspaceIds = new Set([
-          ...(currentProject?.workspaces.map((workspace) => workspace.id) ?? stateBeforeHydrate.workspaces.map((workspace) => workspace.id)),
-          ...Object.keys(currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById),
-        ]);
-        const currentProjectDefaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
-          projectPath: stateBeforeHydrate.projectPath,
-          workspaces: currentProject?.workspaces ?? stateBeforeHydrate.workspaces,
-          workspaceDefaultById: currentProject?.workspaceDefaultById ?? stateBeforeHydrate.workspaceDefaultById,
-          workspacePathById: currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById,
-        });
-        if (initialRows.length === 0 && stateBeforeHydrate.projectPath) {
-          await persistWorkspaceSnapshot({
-            workspaceId: currentProjectDefaultWorkspaceId,
-            workspaceName: defaultWorkspaceName,
-            activeTaskId: "",
-            tasks: [],
-            messagesByTask: {},
-            promptDraftByTask: {},
-            editorTabs: [],
-            activeEditorTabId: null,
-            terminalTabs: [],
-            activeTerminalTabId: null,
-            cliSessionTabs: [],
-            activeCliSessionTabId: null,
-            activeSurface: { kind: "task", taskId: "" },
-            providerSessionByTask: {},
+            workspaceBranchById: state.workspaceBranchById,
+            workspacePathById: state.workspacePathById,
+            workspaceDefaultById: state.workspaceDefaultById,
           });
-          initialRows = await listWorkspaceSummaries();
-        }
-        const persistedRowsById = new Map(initialRows.map((workspace) => [workspace.id, workspace] as const));
-        const rememberedRows = currentProject?.workspaces ?? stateBeforeHydrate.workspaces;
-        let rows = rememberedWorkspaceIds.size > 0
-          ? rememberedRows.map((workspace) => persistedRowsById.get(workspace.id) ?? workspace)
-          : initialRows;
-        if (rows.length === 0 && stateBeforeHydrate.projectPath) {
-          rows = [{
-            id: currentProjectDefaultWorkspaceId,
-            name: defaultWorkspaceName,
-            updatedAt: new Date().toISOString(),
-          }];
-        }
-        const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
-          projectPath: stateBeforeHydrate.projectPath,
-          workspaces: rows,
-          workspaceDefaultById: currentProject?.workspaceDefaultById ?? stateBeforeHydrate.workspaceDefaultById,
-          workspacePathById: currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById,
-        });
-        const branchById: Record<string, string> = {
-          ...(currentProject?.workspaceBranchById ?? stateBeforeHydrate.workspaceBranchById),
-        };
-        const pathById: Record<string, string> = {
-          ...(currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById),
-        };
-
-        // Worktree cleanup: remove DB workspaces whose git worktrees no longer exist
-        const runner = window.api?.terminal?.runCommand;
-        const projectPath = stateBeforeHydrate.projectPath;
-        if (runner && projectPath) {
-          await runner({ cwd: projectPath, command: "git worktree prune" });
-          const listResult = await runner({ cwd: projectPath, command: "git worktree list --porcelain" });
-          if (listResult.ok) {
-            const discoveredWorktrees = parseGitWorktrees({ stdout: listResult.stdout });
-            const rowPathEntries = await Promise.all(rows.map(async (row) => {
-              const comparablePath = normalizeComparablePath(
-                pathById[row.id]
-                ?? (row.id === defaultWorkspaceId
-                  ? projectPath
-                  : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`)
-              );
-              const snapshotScore = row.id === defaultWorkspaceId
-                ? Number.MAX_SAFE_INTEGER
-                : summarizeWorkspaceShell(await loadWorkspaceShell({ workspaceId: row.id }));
-              return {
-                row,
-                comparablePath,
-                snapshotScore,
-              };
-            }));
-            const bestRowByPath = new Map<string, { row: WorkspaceSummary; snapshotScore: number }>();
-            for (const entry of rowPathEntries) {
-              if (!entry.comparablePath) {
-                continue;
-              }
-              const existing = bestRowByPath.get(entry.comparablePath);
-              if (
-                !existing
-                || entry.snapshotScore > existing.snapshotScore
-                || (
-                  entry.snapshotScore === existing.snapshotScore
-                  && entry.row.updatedAt > existing.row.updatedAt
-                )
-              ) {
-                bestRowByPath.set(entry.comparablePath, {
-                  row: entry.row,
-                  snapshotScore: entry.snapshotScore,
-                });
-              }
-            }
-            rows = rows.filter((row) => {
-              const comparablePath = normalizeComparablePath(
-                pathById[row.id]
-                ?? (row.id === defaultWorkspaceId
-                  ? projectPath
-                  : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`)
-              );
-              if (!comparablePath) {
-                return true;
-              }
-              return bestRowByPath.get(comparablePath)?.row.id === row.id;
+          await saveProjectRegistrySnapshot({
+            projects,
+          });
+        },
+        hydrateWorkspaces: async () => {
+          await get().hydrateProjectRegistry();
+          let initialRows = await listWorkspaceSummaries();
+          const stateBeforeHydrate = get();
+          const currentProject = stateBeforeHydrate.projectPath
+            ? (stateBeforeHydrate.recentProjects.find(
+                (project) =>
+                  project.projectPath === stateBeforeHydrate.projectPath,
+              ) ?? null)
+            : null;
+          const rememberedWorkspaceIds = new Set([
+            ...(currentProject?.workspaces.map((workspace) => workspace.id) ??
+              stateBeforeHydrate.workspaces.map((workspace) => workspace.id)),
+            ...Object.keys(
+              currentProject?.workspacePathById ??
+                stateBeforeHydrate.workspacePathById,
+            ),
+          ]);
+          const currentProjectDefaultWorkspaceId =
+            resolveCurrentProjectDefaultWorkspaceId({
+              projectPath: stateBeforeHydrate.projectPath,
+              workspaces:
+                currentProject?.workspaces ?? stateBeforeHydrate.workspaces,
+              workspaceDefaultById:
+                currentProject?.workspaceDefaultById ??
+                stateBeforeHydrate.workspaceDefaultById,
+              workspacePathById:
+                currentProject?.workspacePathById ??
+                stateBeforeHydrate.workspacePathById,
             });
-            const registeredPaths = new Set(
-              discoveredWorktrees
-                .map((entry) => normalizeComparablePath(entry.path))
-                .filter(Boolean),
-            );
-            const staleIds: string[] = [];
-            for (const row of rows) {
-              if (row.id === defaultWorkspaceId) continue;
-              const wsPath = pathById[row.id]
-                ?? `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`;
-              if (!registeredPaths.has(normalizeComparablePath(wsPath))) {
-                staleIds.push(row.id);
-              }
-            }
-            for (const id of staleIds) {
-              await closeWorkspacePersistence({ workspaceId: id });
-            }
-            if (staleIds.length > 0) {
-              rows = rows.filter((row) => !staleIds.includes(row.id));
-              for (const id of staleIds) {
-                delete pathById[id];
-                delete branchById[id];
-              }
-            }
-
-            for (const row of rows) {
-              const isDefault = row.id === defaultWorkspaceId;
-              if (!branchById[row.id]) {
-                branchById[row.id] = isDefault ? stateBeforeHydrate.defaultBranch : row.name;
-              }
-              if (!pathById[row.id]) {
-                pathById[row.id] = isDefault
-                  ? projectPath
-                  : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`;
-              }
-            }
-
-            const knownPaths = new Set(
-              rows
-                .map((row) => normalizeComparablePath(
-                  pathById[row.id]
-                  ?? (row.id === defaultWorkspaceId
-                    ? projectPath
-                    : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`)
-                ))
-                .filter(Boolean),
-            );
-            const currentProjectPath = normalizeComparablePath(projectPath);
-
-            for (const worktree of discoveredWorktrees) {
-              const normalizedWorktreePath = normalizeComparablePath(worktree.path);
-              if (!worktree.branch || !normalizedWorktreePath || normalizedWorktreePath === currentProjectPath || knownPaths.has(normalizedWorktreePath)) {
-                continue;
-              }
-
-              const workspaceName = resolveImportedWorktreeName({
-                branch: worktree.branch,
-                worktreePath: worktree.path,
-              });
-              let matchedWorkspace = rows.find((row) => {
-                const comparablePath = normalizeComparablePath(
-                  pathById[row.id]
-                  ?? (row.id === defaultWorkspaceId
-                    ? projectPath
-                    : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`)
-                );
-                return comparablePath === normalizedWorktreePath;
-              }) ?? null;
-
-              if (!matchedWorkspace) {
-                const candidateRows = initialRows.filter((row) => {
-                  if (row.id === defaultWorkspaceId) {
-                    return false;
-                  }
-                  const comparablePath = normalizeComparablePath(
-                    pathById[row.id]
-                    ?? `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`
-                  );
-                  return comparablePath === normalizedWorktreePath || row.name === workspaceName;
-                });
-                if (candidateRows.length > 0) {
-                  const scoredCandidates = await Promise.all(candidateRows.map(async (row) => ({
-                    row,
-                    score: summarizeWorkspaceShell(await loadWorkspaceShell({ workspaceId: row.id })),
-                  })));
-                  scoredCandidates.sort((left, right) => (
-                    right.score - left.score
-                    || right.row.updatedAt.localeCompare(left.row.updatedAt)
-                  ));
-                  matchedWorkspace = scoredCandidates[0]?.row ?? null;
-                }
-              }
-
-              const workspaceId = matchedWorkspace?.id ?? buildImportedWorktreeWorkspaceId({
-                projectPath,
-                worktreePath: worktree.path,
-              });
-              const persistedWorkspace = matchedWorkspace
-                ?? rows.find((row) => row.id === workspaceId)
-                ?? persistedRowsById.get(workspaceId);
-
-              if (!persistedWorkspace) {
-                await persistWorkspaceSnapshot({
-                  workspaceId,
-                  workspaceName,
-                  activeTaskId: "",
-                  tasks: [],
-                  messagesByTask: {},
-                  promptDraftByTask: {},
-                  editorTabs: [],
-                  activeEditorTabId: null,
-                  terminalTabs: [],
-                  activeTerminalTabId: null,
-                  cliSessionTabs: [],
-                  activeCliSessionTabId: null,
-                  activeSurface: { kind: "task", taskId: "" },
-                  providerSessionByTask: {},
-                });
-              }
-
-              if (!rows.some((row) => row.id === workspaceId)) {
-                rows = [...rows, persistedWorkspace ?? {
-                  id: workspaceId,
-                  name: workspaceName,
-                  updatedAt: new Date().toISOString(),
-                }];
-              }
-
-              branchById[workspaceId] = worktree.branch;
-              pathById[workspaceId] = worktree.path;
-              knownPaths.add(normalizedWorktreePath);
-            }
-          }
-        }
-
-        for (const row of rows) {
-          const isDefault = row.id === defaultWorkspaceId;
-          if (!branchById[row.id]) {
-            branchById[row.id] = isDefault ? stateBeforeHydrate.defaultBranch : row.name;
-          }
-          if (!pathById[row.id] && projectPath) {
-            pathById[row.id] = isDefault
-              ? projectPath
-              : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`;
-          }
-        }
-
-        const preferredWorkspaceId = rows.some((workspace) => workspace.id === stateBeforeHydrate.activeWorkspaceId)
-          ? stateBeforeHydrate.activeWorkspaceId
-          : (rows.find((workspace) => workspace.id === defaultWorkspaceId)?.id ?? rows[0]?.id ?? "");
-        const cachedWorkspaceState = preferredWorkspaceId
-          ? stateBeforeHydrate.workspaceRuntimeCacheById[preferredWorkspaceId]
-          : undefined;
-        const loadedWorkspaceShellState = preferredWorkspaceId && (
-          !cachedWorkspaceState
-          || shouldReloadWorkspaceShellFromPersistence({ cachedWorkspaceState })
-        )
-          ? await loadWorkspaceShellStateFromPersistence({
-              workspaceId: preferredWorkspaceId,
-            })
-          : null;
-        const preferLoadedWorkspaceState = shouldPreferLoadedWorkspaceState({
-          cachedWorkspaceState,
-          loadedWorkspaceShellState,
-        });
-
-        const preferredWorkspacePath = pathById[preferredWorkspaceId] ?? null;
-        let projectFiles = stateBeforeHydrate.projectFiles;
-        if (preferredWorkspacePath) {
-          await workspaceFsAdapter.setRoot?.({
-            rootPath: preferredWorkspacePath,
-            rootName: stateBeforeHydrate.projectPath
-              ? normalizeProjectDisplayName({
-                  projectPath: stateBeforeHydrate.projectPath,
-                  projectName: stateBeforeHydrate.projectName,
-                })
-              : "project",
-          });
-          projectFiles = await workspaceFsAdapter.listFiles();
-        }
-
-        set((state) => {
-          const workspaceState = (
-            preferLoadedWorkspaceState
-            ? loadedWorkspaceShellState?.workspaceState
-            : (cachedWorkspaceState ?? loadedWorkspaceShellState?.workspaceState)
-          ) ?? buildWorkspaceSessionState({ snapshot: null });
-          const workspaceIds = rows.map((workspace) => workspace.id);
-          const nextRuntimeCacheById = preferLoadedWorkspaceState && preferredWorkspaceId
-            ? Object.fromEntries(
-                Object.entries(state.workspaceRuntimeCacheById).filter(([workspaceId]) => workspaceId !== preferredWorkspaceId),
-              )
-            : state.workspaceRuntimeCacheById;
-          const staleWorkspacePaths = rememberedRows
-            .filter((workspace) => !rows.some((row) => row.id === workspace.id))
-            .map((workspace) => (
-              (currentProject?.workspacePathById ?? stateBeforeHydrate.workspacePathById)[workspace.id]
-              ?? (workspace.id === defaultWorkspaceId
-                ? stateBeforeHydrate.projectPath
-                : null)
-            ));
-
-          return {
-            hasHydratedWorkspaces: true,
-            workspaceSnapshotVersion: 0,
-            promptDraftPersistenceVersion: 0,
-            taskMessagesLoadingByTask: {},
-            workspaces: rows,
-            activeWorkspaceId: preferredWorkspaceId,
-            recentProjects: state.projectPath
-              ? upsertRecentProjectState({
-                  projects: state.recentProjects,
-                  project: {
-                    projectPath: state.projectPath,
-                    projectName: normalizeProjectDisplayName({
-                      projectPath: state.projectPath,
-                      projectName: state.projectName,
-                    }),
-                    lastOpenedAt: new Date().toISOString(),
-                    defaultBranch: state.defaultBranch,
-                    workspaces: rows,
-                    activeWorkspaceId: preferredWorkspaceId,
-                    workspaceBranchById: branchById,
-                    workspacePathById: pathById,
-                    workspaceDefaultById: defaultWorkspaceId ? { [defaultWorkspaceId]: true } : {},
-                    projectBasePrompt: resolveProjectBasePrompt({
-                      projectPath: state.projectPath,
-                      recentProjects: state.recentProjects,
-                    }),
-                    newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
-                      projectPath: state.projectPath,
-                      recentProjects: state.recentProjects,
-                    }),
-                    newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
-                      projectPath: state.projectPath,
-                      recentProjects: state.recentProjects,
-                    }),
-                  },
-                })
-              : state.recentProjects,
-            workspaceDefaultById: defaultWorkspaceId ? { [defaultWorkspaceId]: true } : {},
-            workspaceBranchById: branchById,
-            workspacePathById: pathById,
-            projectFiles,
-            workspaceFileCacheByPath: rememberCachedWorkspaceFiles({
-              workspaceFileCacheByPath: removeCachedWorkspaceFiles({
-                workspaceFileCacheByPath: state.workspaceFileCacheByPath,
-                workspacePaths: staleWorkspacePaths,
-              }),
-              workspacePath: preferredWorkspacePath,
-              files: projectFiles,
-            }),
-            workspaceRuntimeCacheById: nextRuntimeCacheById,
-            taskWorkspaceIdById: registerTaskWorkspaceOwnership({
-              taskWorkspaceIdById: retainTaskWorkspaceOwnership({
-                taskWorkspaceIdById: state.taskWorkspaceIdById,
-                workspaceIds,
-              }),
-              workspaceId: preferredWorkspaceId,
-              tasks: workspaceState.tasks,
-            }),
-            ...workspaceState,
-            layout: {
-              ...state.layout,
-              terminalDocked: workspaceState.activeTerminalTabId
-                ? true
-                : state.layout.terminalDocked,
-              editorDiffMode: resolveEditorDiffMode({
-                editorTabs: workspaceState.editorTabs,
-                activeEditorTabId: workspaceState.activeEditorTabId,
-              }),
-            },
-          };
-        });
-        if (loadedWorkspaceShellState && (preferLoadedWorkspaceState || !cachedWorkspaceState)) {
-          hydrateWorkspaceMessagesInBackground({
-            workspaceId: preferredWorkspaceId,
-            taskIds: loadedWorkspaceShellState.initialTaskIds,
-            latestTurns: loadedWorkspaceShellState.latestTurns,
-          });
-        }
-      },
-      refreshWorkspaces: async () => {
-        const state = get();
-        if (!state.hasHydratedWorkspaces || !state.projectPath) {
-          return;
-        }
-        const runner = window.api?.terminal?.runCommand;
-        if (!runner) {
-          return;
-        }
-        const projectPath = state.projectPath;
-        const persistedRowsById = new Map(
-          (await listWorkspaceSummaries()).map((workspace) => [workspace.id, workspace] as const),
-        );
-
-        // Prune and list current git worktrees.
-        await runner({ cwd: projectPath, command: "git worktree prune" });
-        const listResult = await runner({ cwd: projectPath, command: "git worktree list --porcelain" });
-        if (!listResult.ok) {
-          return;
-        }
-        const discoveredWorktrees = parseGitWorktrees({ stdout: listResult.stdout });
-
-        const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
-          projectPath,
-          workspaces: state.workspaces,
-          workspaceDefaultById: state.workspaceDefaultById,
-          workspacePathById: state.workspacePathById,
-        });
-
-        // Build set of known workspace paths for quick lookup.
-        const knownPathToId = new Map<string, string>();
-        for (const workspace of state.workspaces) {
-          const wsPath = normalizeComparablePath(
-            state.workspacePathById[workspace.id]
-            ?? (workspace.id === defaultWorkspaceId
-              ? projectPath
-              : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: workspace.name })}`)
-          );
-          if (wsPath) {
-            knownPathToId.set(wsPath, workspace.id);
-          }
-        }
-
-        const registeredWorktreePaths = new Set(
-          discoveredWorktrees
-            .map((entry) => normalizeComparablePath(entry.path))
-            .filter(Boolean),
-        );
-        const currentProjectPath = normalizeComparablePath(projectPath);
-
-        // Detect new worktrees not yet tracked as workspaces.
-        const newRows: WorkspaceSummary[] = [];
-        const newBranchById: Record<string, string> = {};
-        const newPathById: Record<string, string> = {};
-        for (const worktree of discoveredWorktrees) {
-          const normalizedWorktreePath = normalizeComparablePath(worktree.path);
-          if (
-            !worktree.branch
-            || !normalizedWorktreePath
-            || normalizedWorktreePath === currentProjectPath
-            || knownPathToId.has(normalizedWorktreePath)
-          ) {
-            continue;
-          }
-
-          const workspaceName = resolveImportedWorktreeName({
-            branch: worktree.branch,
-            worktreePath: worktree.path,
-          });
-          const workspaceId = buildImportedWorktreeWorkspaceId({
-            projectPath,
-            worktreePath: worktree.path,
-          });
-          const persistedWorkspace = persistedRowsById.get(workspaceId);
-
-          // Only create a fresh empty snapshot for true first-time workspaces.
-          if (!persistedWorkspace) {
+          if (initialRows.length === 0 && stateBeforeHydrate.projectPath) {
             await persistWorkspaceSnapshot({
-              workspaceId,
-              workspaceName,
+              workspaceId: currentProjectDefaultWorkspaceId,
+              workspaceName: defaultWorkspaceName,
               activeTaskId: "",
               tasks: [],
               messagesByTask: {},
@@ -3450,917 +3383,1694 @@ export const useAppStore = create<AppState>()(
               activeSurface: { kind: "task", taskId: "" },
               providerSessionByTask: {},
             });
+            initialRows = await listWorkspaceSummaries();
           }
-
-          newRows.push(persistedWorkspace ?? {
-            id: workspaceId,
-            name: workspaceName,
-            updatedAt: new Date().toISOString(),
-          });
-          newBranchById[workspaceId] = worktree.branch;
-          newPathById[workspaceId] = worktree.path;
-        }
-
-        // Detect stale workspaces whose git worktrees no longer exist.
-        const staleIds: string[] = [];
-        for (const workspace of state.workspaces) {
-          if (workspace.id === defaultWorkspaceId) continue;
-          const wsPath = normalizeComparablePath(
-            state.workspacePathById[workspace.id]
-            ?? `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: workspace.name })}`
+          const persistedRowsById = new Map(
+            initialRows.map((workspace) => [workspace.id, workspace] as const),
           );
-          if (wsPath && !registeredWorktreePaths.has(wsPath)) {
-            staleIds.push(workspace.id);
+          const rememberedRows =
+            currentProject?.workspaces ?? stateBeforeHydrate.workspaces;
+          let rows =
+            rememberedWorkspaceIds.size > 0
+              ? rememberedRows.map(
+                  (workspace) =>
+                    persistedRowsById.get(workspace.id) ?? workspace,
+                )
+              : initialRows;
+          if (rows.length === 0 && stateBeforeHydrate.projectPath) {
+            rows = [
+              {
+                id: currentProjectDefaultWorkspaceId,
+                name: defaultWorkspaceName,
+                updatedAt: new Date().toISOString(),
+              },
+            ];
           }
-        }
-        for (const id of staleIds) {
-          await closeWorkspacePersistence({ workspaceId: id });
-        }
+          const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
+            projectPath: stateBeforeHydrate.projectPath,
+            workspaces: rows,
+            workspaceDefaultById:
+              currentProject?.workspaceDefaultById ??
+              stateBeforeHydrate.workspaceDefaultById,
+            workspacePathById:
+              currentProject?.workspacePathById ??
+              stateBeforeHydrate.workspacePathById,
+          });
+          const branchById: Record<string, string> = {
+            ...(currentProject?.workspaceBranchById ??
+              stateBeforeHydrate.workspaceBranchById),
+          };
+          const pathById: Record<string, string> = {
+            ...(currentProject?.workspacePathById ??
+              stateBeforeHydrate.workspacePathById),
+          };
 
-        // Nothing changed – skip store update.
-        if (newRows.length === 0 && staleIds.length === 0) {
-          return;
-        }
+          // Worktree cleanup: remove DB workspaces whose git worktrees no longer exist
+          const runner = window.api?.terminal?.runCommand;
+          const projectPath = stateBeforeHydrate.projectPath;
+          if (runner && projectPath) {
+            await runner({ cwd: projectPath, command: "git worktree prune" });
+            const listResult = await runner({
+              cwd: projectPath,
+              command: "git worktree list --porcelain",
+            });
+            if (listResult.ok) {
+              const discoveredWorktrees = parseGitWorktrees({
+                stdout: listResult.stdout,
+              });
+              const rowPathEntries = await Promise.all(
+                rows.map(async (row) => {
+                  const comparablePath = normalizeComparablePath(
+                    pathById[row.id] ??
+                      (row.id === defaultWorkspaceId
+                        ? projectPath
+                        : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`),
+                  );
+                  const snapshotScore =
+                    row.id === defaultWorkspaceId
+                      ? Number.MAX_SAFE_INTEGER
+                      : summarizeWorkspaceShell(
+                          await loadWorkspaceShell({ workspaceId: row.id }),
+                        );
+                  return {
+                    row,
+                    comparablePath,
+                    snapshotScore,
+                  };
+                }),
+              );
+              const bestRowByPath = new Map<
+                string,
+                { row: WorkspaceSummary; snapshotScore: number }
+              >();
+              for (const entry of rowPathEntries) {
+                if (!entry.comparablePath) {
+                  continue;
+                }
+                const existing = bestRowByPath.get(entry.comparablePath);
+                if (
+                  !existing ||
+                  entry.snapshotScore > existing.snapshotScore ||
+                  (entry.snapshotScore === existing.snapshotScore &&
+                    entry.row.updatedAt > existing.row.updatedAt)
+                ) {
+                  bestRowByPath.set(entry.comparablePath, {
+                    row: entry.row,
+                    snapshotScore: entry.snapshotScore,
+                  });
+                }
+              }
+              rows = rows.filter((row) => {
+                const comparablePath = normalizeComparablePath(
+                  pathById[row.id] ??
+                    (row.id === defaultWorkspaceId
+                      ? projectPath
+                      : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`),
+                );
+                if (!comparablePath) {
+                  return true;
+                }
+                return bestRowByPath.get(comparablePath)?.row.id === row.id;
+              });
+              const registeredPaths = new Set(
+                discoveredWorktrees
+                  .map((entry) => normalizeComparablePath(entry.path))
+                  .filter(Boolean),
+              );
+              const staleIds: string[] = [];
+              for (const row of rows) {
+                if (row.id === defaultWorkspaceId) continue;
+                const wsPath =
+                  pathById[row.id] ??
+                  `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`;
+                if (!registeredPaths.has(normalizeComparablePath(wsPath))) {
+                  staleIds.push(row.id);
+                }
+              }
+              for (const id of staleIds) {
+                await closeWorkspacePersistence({ workspaceId: id });
+              }
+              if (staleIds.length > 0) {
+                rows = rows.filter((row) => !staleIds.includes(row.id));
+                for (const id of staleIds) {
+                  delete pathById[id];
+                  delete branchById[id];
+                }
+              }
 
-        const staleIdSet = new Set(staleIds);
-        set((current) => {
-          let nextWorkspaces = current.workspaces;
-          if (staleIds.length > 0) {
-            nextWorkspaces = nextWorkspaces.filter((ws) => !staleIdSet.has(ws.id));
-          }
-          if (newRows.length > 0) {
-            nextWorkspaces = [...nextWorkspaces, ...newRows];
-          }
+              for (const row of rows) {
+                const isDefault = row.id === defaultWorkspaceId;
+                if (!branchById[row.id]) {
+                  branchById[row.id] = isDefault
+                    ? stateBeforeHydrate.defaultBranch
+                    : row.name;
+                }
+                if (!pathById[row.id]) {
+                  pathById[row.id] = isDefault
+                    ? projectPath
+                    : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`;
+                }
+              }
 
-          const nextBranch = { ...current.workspaceBranchById, ...newBranchById };
-          const nextPath = { ...current.workspacePathById, ...newPathById };
-          const nextDefault = { ...current.workspaceDefaultById };
-          const nextRuntimeCache = { ...current.workspaceRuntimeCacheById };
-          const nextTaskOwnership = { ...current.taskWorkspaceIdById };
-          const staleWorkspacePaths = staleIds.map((id) => current.workspacePathById[id]);
+              const knownPaths = new Set(
+                rows
+                  .map((row) =>
+                    normalizeComparablePath(
+                      pathById[row.id] ??
+                        (row.id === defaultWorkspaceId
+                          ? projectPath
+                          : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`),
+                    ),
+                  )
+                  .filter(Boolean),
+              );
+              const currentProjectPath = normalizeComparablePath(projectPath);
 
-          for (const id of staleIds) {
-            delete nextBranch[id];
-            delete nextPath[id];
-            delete nextDefault[id];
-            delete nextRuntimeCache[id];
-          }
-          // Clean up task-workspace ownership for stale workspaces.
-          if (staleIds.length > 0) {
-            for (const [taskId, ownerId] of Object.entries(nextTaskOwnership)) {
-              if (staleIdSet.has(ownerId)) {
-                delete nextTaskOwnership[taskId];
+              for (const worktree of discoveredWorktrees) {
+                const normalizedWorktreePath = normalizeComparablePath(
+                  worktree.path,
+                );
+                if (
+                  !worktree.branch ||
+                  !normalizedWorktreePath ||
+                  normalizedWorktreePath === currentProjectPath ||
+                  knownPaths.has(normalizedWorktreePath)
+                ) {
+                  continue;
+                }
+
+                const workspaceName = resolveImportedWorktreeName({
+                  branch: worktree.branch,
+                  worktreePath: worktree.path,
+                });
+                let matchedWorkspace =
+                  rows.find((row) => {
+                    const comparablePath = normalizeComparablePath(
+                      pathById[row.id] ??
+                        (row.id === defaultWorkspaceId
+                          ? projectPath
+                          : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`),
+                    );
+                    return comparablePath === normalizedWorktreePath;
+                  }) ?? null;
+
+                if (!matchedWorkspace) {
+                  const candidateRows = initialRows.filter((row) => {
+                    if (row.id === defaultWorkspaceId) {
+                      return false;
+                    }
+                    const comparablePath = normalizeComparablePath(
+                      pathById[row.id] ??
+                        `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`,
+                    );
+                    return (
+                      comparablePath === normalizedWorktreePath ||
+                      row.name === workspaceName
+                    );
+                  });
+                  if (candidateRows.length > 0) {
+                    const scoredCandidates = await Promise.all(
+                      candidateRows.map(async (row) => ({
+                        row,
+                        score: summarizeWorkspaceShell(
+                          await loadWorkspaceShell({ workspaceId: row.id }),
+                        ),
+                      })),
+                    );
+                    scoredCandidates.sort(
+                      (left, right) =>
+                        right.score - left.score ||
+                        right.row.updatedAt.localeCompare(left.row.updatedAt),
+                    );
+                    matchedWorkspace = scoredCandidates[0]?.row ?? null;
+                  }
+                }
+
+                const workspaceId =
+                  matchedWorkspace?.id ??
+                  buildImportedWorktreeWorkspaceId({
+                    projectPath,
+                    worktreePath: worktree.path,
+                  });
+                const persistedWorkspace =
+                  matchedWorkspace ??
+                  rows.find((row) => row.id === workspaceId) ??
+                  persistedRowsById.get(workspaceId);
+
+                if (!persistedWorkspace) {
+                  await persistWorkspaceSnapshot({
+                    workspaceId,
+                    workspaceName,
+                    activeTaskId: "",
+                    tasks: [],
+                    messagesByTask: {},
+                    promptDraftByTask: {},
+                    editorTabs: [],
+                    activeEditorTabId: null,
+                    terminalTabs: [],
+                    activeTerminalTabId: null,
+                    cliSessionTabs: [],
+                    activeCliSessionTabId: null,
+                    activeSurface: { kind: "task", taskId: "" },
+                    providerSessionByTask: {},
+                  });
+                }
+
+                if (!rows.some((row) => row.id === workspaceId)) {
+                  rows = [
+                    ...rows,
+                    persistedWorkspace ?? {
+                      id: workspaceId,
+                      name: workspaceName,
+                      updatedAt: new Date().toISOString(),
+                    },
+                  ];
+                }
+
+                branchById[workspaceId] = worktree.branch;
+                pathById[workspaceId] = worktree.path;
+                knownPaths.add(normalizedWorktreePath);
               }
             }
           }
 
-          // If the active workspace was removed, fall back to the default.
-          let nextActiveWorkspaceId = current.activeWorkspaceId;
-          if (staleIdSet.has(nextActiveWorkspaceId)) {
-            nextActiveWorkspaceId = defaultWorkspaceId
-              || nextWorkspaces[0]?.id
-              || "";
+          for (const row of rows) {
+            const isDefault = row.id === defaultWorkspaceId;
+            if (!branchById[row.id]) {
+              branchById[row.id] = isDefault
+                ? stateBeforeHydrate.defaultBranch
+                : row.name;
+            }
+            if (!pathById[row.id] && projectPath) {
+              pathById[row.id] = isDefault
+                ? projectPath
+                : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: row.name })}`;
+            }
           }
 
-          return {
-            workspaces: nextWorkspaces,
-            activeWorkspaceId: nextActiveWorkspaceId,
-            workspaceBranchById: nextBranch,
-            workspacePathById: nextPath,
-            workspaceDefaultById: nextDefault,
-            workspaceFileCacheByPath: removeCachedWorkspaceFiles({
-              workspaceFileCacheByPath: current.workspaceFileCacheByPath,
-              workspacePaths: staleWorkspacePaths,
-            }),
-            workspaceRuntimeCacheById: nextRuntimeCache,
-            taskWorkspaceIdById: nextTaskOwnership,
-            recentProjects: current.projectPath
-              ? upsertRecentProjectState({
-                  projects: current.recentProjects,
-                  project: {
-                    projectPath: current.projectPath,
-                    projectName: normalizeProjectDisplayName({
-                      projectPath: current.projectPath,
-                      projectName: current.projectName,
-                    }),
-                    lastOpenedAt: current.recentProjects.find((p) => p.projectPath === current.projectPath)?.lastOpenedAt
-                      ?? new Date().toISOString(),
-                    defaultBranch: current.defaultBranch,
-                    workspaces: nextWorkspaces,
-                    activeWorkspaceId: nextActiveWorkspaceId,
-                    workspaceBranchById: nextBranch,
-                    workspacePathById: nextPath,
-                    workspaceDefaultById: nextDefault,
-                    projectBasePrompt: resolveProjectBasePrompt({
-                      projectPath: current.projectPath,
-                      recentProjects: current.recentProjects,
-                    }),
-                    newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
-                      projectPath: current.projectPath,
-                      recentProjects: current.recentProjects,
-                    }),
-                    newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
-                      projectPath: current.projectPath,
-                      recentProjects: current.recentProjects,
-                    }),
-                  },
+          const preferredWorkspaceId = rows.some(
+            (workspace) =>
+              workspace.id === stateBeforeHydrate.activeWorkspaceId,
+          )
+            ? stateBeforeHydrate.activeWorkspaceId
+            : (rows.find((workspace) => workspace.id === defaultWorkspaceId)
+                ?.id ??
+              rows[0]?.id ??
+              "");
+          const cachedWorkspaceState = preferredWorkspaceId
+            ? stateBeforeHydrate.workspaceRuntimeCacheById[preferredWorkspaceId]
+            : undefined;
+          const loadedWorkspaceShellState =
+            preferredWorkspaceId &&
+            (!cachedWorkspaceState ||
+              shouldReloadWorkspaceShellFromPersistence({
+                cachedWorkspaceState,
+              }))
+              ? await loadWorkspaceShellStateFromPersistence({
+                  workspaceId: preferredWorkspaceId,
                 })
-              : current.recentProjects,
-          };
-        });
-      },
-      hydrateNotifications: async () => {
-        try {
-          const notifications = await listPersistedNotifications({ limit: 500 });
-          set(() => ({
-            notifications,
-          }));
-        } catch (error) {
-          console.error("[notifications] failed to hydrate notifications", error);
-          set(() => ({
-            notifications: [],
-          }));
-        }
-      },
-      flushActiveWorkspaceSnapshot: async ({ sync } = {}) => {
-        const state = get();
-        if (!state.hasHydratedWorkspaces) {
-          return;
-        }
-        const workspaceId = state.activeWorkspaceId;
-        const workspace = state.workspaces.find((item) => item.id === workspaceId);
-        if (!workspaceId || !workspace) {
-          return;
-        }
+              : null;
+          const preferLoadedWorkspaceState = shouldPreferLoadedWorkspaceState({
+            cachedWorkspaceState,
+            loadedWorkspaceShellState,
+          });
 
-        const snapshot = createWorkspaceSnapshot({
-          activeTaskId: state.activeTaskId,
-          tasks: state.tasks,
-          messagesByTask: state.messagesByTask,
-          promptDraftByTask: state.promptDraftByTask,
-          workspaceInformation: state.workspaceInformation,
-          editorTabs: state.editorTabs,
-          activeEditorTabId: state.activeEditorTabId,
-          terminalTabs: state.terminalTabs,
-          activeTerminalTabId: state.activeTerminalTabId,
-          cliSessionTabs: state.cliSessionTabs,
-          activeCliSessionTabId: state.activeCliSessionTabId,
-          activeSurface: state.activeSurface,
-          providerSessionByTask: state.providerSessionByTask,
-        });
-
-        if (sync) {
-          const upsertSync = window.api?.persistence?.upsertWorkspaceSync;
-          if (upsertSync) {
-            upsertSync({
-              id: workspaceId,
-              name: workspace.name,
-              snapshot,
+          const preferredWorkspacePath = pathById[preferredWorkspaceId] ?? null;
+          let projectFiles = stateBeforeHydrate.projectFiles;
+          if (preferredWorkspacePath) {
+            await workspaceFsAdapter.setRoot?.({
+              rootPath: preferredWorkspacePath,
+              rootName: stateBeforeHydrate.projectPath
+                ? normalizeProjectDisplayName({
+                    projectPath: stateBeforeHydrate.projectPath,
+                    projectName: stateBeforeHydrate.projectName,
+                  })
+                : "project",
             });
+            projectFiles = await workspaceFsAdapter.listFiles();
+          }
+
+          set((state) => {
+            const workspaceState =
+              (preferLoadedWorkspaceState
+                ? loadedWorkspaceShellState?.workspaceState
+                : (cachedWorkspaceState ??
+                  loadedWorkspaceShellState?.workspaceState)) ??
+              buildWorkspaceSessionState({ snapshot: null });
+            const workspaceIds = rows.map((workspace) => workspace.id);
+            const nextRuntimeCacheById =
+              preferLoadedWorkspaceState && preferredWorkspaceId
+                ? Object.fromEntries(
+                    Object.entries(state.workspaceRuntimeCacheById).filter(
+                      ([workspaceId]) => workspaceId !== preferredWorkspaceId,
+                    ),
+                  )
+                : state.workspaceRuntimeCacheById;
+            const staleWorkspacePaths = rememberedRows
+              .filter(
+                (workspace) => !rows.some((row) => row.id === workspace.id),
+              )
+              .map(
+                (workspace) =>
+                  (currentProject?.workspacePathById ??
+                    stateBeforeHydrate.workspacePathById)[workspace.id] ??
+                  (workspace.id === defaultWorkspaceId
+                    ? stateBeforeHydrate.projectPath
+                    : null),
+              );
+
+            return {
+              hasHydratedWorkspaces: true,
+              workspaceSnapshotVersion: 0,
+              promptDraftPersistenceVersion: 0,
+              taskMessagesLoadingByTask: {},
+              workspaces: rows,
+              activeWorkspaceId: preferredWorkspaceId,
+              recentProjects: state.projectPath
+                ? upsertRecentProjectState({
+                    projects: state.recentProjects,
+                    project: {
+                      projectPath: state.projectPath,
+                      projectName: normalizeProjectDisplayName({
+                        projectPath: state.projectPath,
+                        projectName: state.projectName,
+                      }),
+                      lastOpenedAt: new Date().toISOString(),
+                      defaultBranch: state.defaultBranch,
+                      workspaces: rows,
+                      activeWorkspaceId: preferredWorkspaceId,
+                      workspaceBranchById: branchById,
+                      workspacePathById: pathById,
+                      workspaceDefaultById: defaultWorkspaceId
+                        ? { [defaultWorkspaceId]: true }
+                        : {},
+                      projectBasePrompt: resolveProjectBasePrompt({
+                        projectPath: state.projectPath,
+                        recentProjects: state.recentProjects,
+                      }),
+                      newWorkspaceInitCommand:
+                        resolveProjectWorkspaceInitCommand({
+                          projectPath: state.projectPath,
+                          recentProjects: state.recentProjects,
+                        }),
+                      newWorkspaceUseRootNodeModulesSymlink:
+                        resolveProjectWorkspaceRootNodeModulesSymlinkPreference(
+                          {
+                            projectPath: state.projectPath,
+                            recentProjects: state.recentProjects,
+                          },
+                        ),
+                    },
+                  })
+                : state.recentProjects,
+              workspaceDefaultById: defaultWorkspaceId
+                ? { [defaultWorkspaceId]: true }
+                : {},
+              workspaceBranchById: branchById,
+              workspacePathById: pathById,
+              projectFiles,
+              workspaceFileCacheByPath: rememberCachedWorkspaceFiles({
+                workspaceFileCacheByPath: removeCachedWorkspaceFiles({
+                  workspaceFileCacheByPath: state.workspaceFileCacheByPath,
+                  workspacePaths: staleWorkspacePaths,
+                }),
+                workspacePath: preferredWorkspacePath,
+                files: projectFiles,
+              }),
+              workspaceRuntimeCacheById: nextRuntimeCacheById,
+              taskWorkspaceIdById: registerTaskWorkspaceOwnership({
+                taskWorkspaceIdById: retainTaskWorkspaceOwnership({
+                  taskWorkspaceIdById: state.taskWorkspaceIdById,
+                  workspaceIds,
+                }),
+                workspaceId: preferredWorkspaceId,
+                tasks: workspaceState.tasks,
+              }),
+              ...workspaceState,
+              layout: {
+                ...state.layout,
+                terminalDocked: workspaceState.activeTerminalTabId
+                  ? true
+                  : state.layout.terminalDocked,
+                editorDiffMode: resolveEditorDiffMode({
+                  editorTabs: workspaceState.editorTabs,
+                  activeEditorTabId: workspaceState.activeEditorTabId,
+                }),
+              },
+            };
+          });
+          if (
+            loadedWorkspaceShellState &&
+            (preferLoadedWorkspaceState || !cachedWorkspaceState)
+          ) {
+            hydrateWorkspaceMessagesInBackground({
+              workspaceId: preferredWorkspaceId,
+              taskIds: loadedWorkspaceShellState.initialTaskIds,
+              latestTurns: loadedWorkspaceShellState.latestTurns,
+            });
+          }
+        },
+        refreshWorkspaces: async () => {
+          const state = get();
+          if (!state.hasHydratedWorkspaces || !state.projectPath) {
             return;
           }
-        }
-
-        await persistWorkspaceSnapshot({
-          workspaceId,
-          workspaceName: workspace.name,
-          activeTaskId: state.activeTaskId,
-          tasks: state.tasks,
-          messagesByTask: state.messagesByTask,
-          promptDraftByTask: state.promptDraftByTask,
-          workspaceInformation: state.workspaceInformation,
-          editorTabs: state.editorTabs,
-          activeEditorTabId: state.activeEditorTabId,
-          terminalTabs: state.terminalTabs,
-          activeTerminalTabId: state.activeTerminalTabId,
-          cliSessionTabs: state.cliSessionTabs,
-          activeCliSessionTabId: state.activeCliSessionTabId,
-          activeSurface: state.activeSurface,
-          providerSessionByTask: state.providerSessionByTask,
-        });
-
-        set((current) => {
-          if (current.activeWorkspaceId !== workspaceId) {
-            return current;
+          const runner = window.api?.terminal?.runCommand;
+          if (!runner) {
+            return;
           }
-          const compactedMessagesByTask = compactLoadedMessagesByTask({
-            messagesByTask: current.messagesByTask,
-            activeTaskId: current.activeTaskId,
-            activeTurnIdsByTask: current.activeTurnIdsByTask,
-          });
-          if (compactedMessagesByTask === current.messagesByTask) {
-            return current;
-          }
-          return {
-            messagesByTask: compactedMessagesByTask,
-          };
-        });
-      },
-      refreshActiveManagedTask: async () => {
-        const stateBefore = get();
-        const workspaceId = stateBefore.activeWorkspaceId;
-        const activeTask = findTaskById(stateBefore, stateBefore.activeTaskId);
-        if (!workspaceId || !activeTask || !isTaskManaged(activeTask)) {
-          return;
-        }
-
-        const loadedWorkspaceSession = await loadWorkspaceSessionFromPersistence({
-          workspaceId,
-        });
-        if (!loadedWorkspaceSession.shell) {
-          return;
-        }
-
-        const nextSession = loadedWorkspaceSession.workspaceState;
-        const preferredActiveTaskId = nextSession.tasks.some((task) => task.id === stateBefore.activeTaskId)
-          ? stateBefore.activeTaskId
-          : nextSession.activeTaskId;
-        const refreshedSession: WorkspaceSessionState = {
-          ...nextSession,
-          activeTaskId: preferredActiveTaskId,
-        };
-
-        set((state) => {
-          if (state.activeWorkspaceId !== workspaceId) {
-            return state;
-          }
-          return {
-            tasks: refreshedSession.tasks,
-            messagesByTask: refreshedSession.messagesByTask,
-            messageCountByTask: refreshedSession.messageCountByTask,
-            activeTaskId: refreshedSession.activeTaskId,
-            workspaceInformation: refreshedSession.workspaceInformation,
-            activeTurnIdsByTask: refreshedSession.activeTurnIdsByTask,
-            providerSessionByTask: refreshedSession.providerSessionByTask,
-            nativeSessionReadyByTask: refreshedSession.nativeSessionReadyByTask,
-            workspaceRuntimeCacheById: {
-              ...state.workspaceRuntimeCacheById,
-              [workspaceId]: refreshedSession,
-            },
-            taskWorkspaceIdById: registerTaskWorkspaceOwnership({
-              taskWorkspaceIdById: state.taskWorkspaceIdById,
-              workspaceId,
-              tasks: refreshedSession.tasks,
-            }),
-          };
-        });
-      },
-      createProject: async ({ name }) => {
-        const root = await workspaceFsAdapter.pickRoot();
-        if (!root || !root.rootPath) {
-          return;
-        }
-        const projectRootPath = root.rootPath;
-
-        const terminalRun = window.api?.terminal?.runCommand;
-        let defaultBranch = "main";
-        if (terminalRun) {
-          const branchResult = await terminalRun({
-            cwd: projectRootPath,
-            command: "git symbolic-ref --short refs/remotes/origin/HEAD || git symbolic-ref --short HEAD || echo main",
-          });
-          const branchLine = (branchResult.stdout || "")
-            .split("\n")
-            .map((line) => line.trim())
-            .find((line) => line.length > 0);
-          if (branchLine) {
-            defaultBranch = branchLine.replace(/^origin\//, "");
-          }
-        }
-
-        const projectName = name?.trim() || root.rootName || resolveProjectNameFromPath({ projectPath: projectRootPath });
-        await activateProject({
-          projectRootPath,
-          projectName,
-          files: root.files,
-          defaultBranch,
-        });
-      },
-      openProjectFromPath: async ({ inputPath }) => {
-        const resolvePath = window.api?.fs?.resolvePath;
-        if (!resolvePath) {
-          return { ok: false, stderr: "Filesystem bridge unavailable." };
-        }
-        const result = await resolvePath({ inputPath });
-        if (!result.ok || !result.rootPath) {
-          return { ok: false, stderr: result.stderr || "Invalid path." };
-        }
-
-        const projectRootPath = result.rootPath;
-        const projectName = result.rootName || resolveProjectNameFromPath({ projectPath: projectRootPath });
-
-        const terminalRun = window.api?.terminal?.runCommand;
-        let defaultBranch = "main";
-        if (terminalRun) {
-          const branchResult = await terminalRun({
-            cwd: projectRootPath,
-            command: "git symbolic-ref --short refs/remotes/origin/HEAD || git symbolic-ref --short HEAD || echo main",
-          });
-          const branchLine = (branchResult.stdout || "")
-            .split("\n")
-            .map((line: string) => line.trim())
-            .find((line: string) => line.length > 0);
-          if (branchLine) {
-            defaultBranch = branchLine.replace(/^origin\//, "");
-          }
-        }
-
-        await activateProject({
-          projectRootPath,
-          projectName,
-          files: result.files ?? [],
-          defaultBranch,
-        });
-        return { ok: true };
-      },
-      openProject: async ({ projectPath }) => {
-        const normalizedProjectPath = projectPath.trim();
-        if (!normalizedProjectPath) {
-          return;
-        }
-
-        const state = get();
-        const rememberedProject = state.recentProjects.find((project) => project.projectPath === normalizedProjectPath);
-        const projectName = rememberedProject?.projectName || resolveProjectNameFromPath({ projectPath: normalizedProjectPath });
-        let files = rememberedProject?.projectPath === state.projectPath ? state.projectFiles : [];
-
-        await workspaceFsAdapter.setRoot?.({
-          rootPath: normalizedProjectPath,
-          rootName: projectName,
-          files,
-        });
-
-        try {
-          files = await workspaceFsAdapter.listFiles();
-        } catch {
-          files = workspaceFsAdapter.getKnownFiles();
-        }
-
-        await activateProject({
-          projectRootPath: normalizedProjectPath,
-          projectName,
-          files,
-          defaultBranch: rememberedProject?.defaultBranch || state.defaultBranch || "main",
-        });
-      },
-      removeProjectFromList: async ({ projectPath }) => {
-        const normalizedProjectPath = projectPath.trim();
-        if (!normalizedProjectPath) {
-          return;
-        }
-
-        const stateBefore = get();
-        const isCurrentProject = stateBefore.projectPath === normalizedProjectPath;
-        if (isCurrentProject) {
-          await get().flushActiveWorkspaceSnapshot({ sync: true });
-        }
-
-        set((state) => {
-          const matchingProject = state.recentProjects.find((project) => project.projectPath === normalizedProjectPath);
-          const workspaceIds = new Set<string>([
-            ...(matchingProject?.workspaces.map((workspace) => workspace.id) ?? []),
-            ...(isCurrentProject ? state.workspaces.map((workspace) => workspace.id) : []),
-          ]);
-          const nextRuntimeCacheById = removeWorkspaceRuntimeCacheEntries({
-            workspaceRuntimeCacheById: state.workspaceRuntimeCacheById,
-            workspaceIds: [...workspaceIds],
-          });
-          const nextWorkspaceFileCacheByPath = removeCachedWorkspaceFiles({
-            workspaceFileCacheByPath: state.workspaceFileCacheByPath,
-            workspacePaths: [
-              normalizedProjectPath,
-              ...Object.values(matchingProject?.workspacePathById ?? {}),
-              ...(isCurrentProject ? Object.values(state.workspacePathById) : []),
-            ],
-          });
-          const nextTaskWorkspaceIdById = Object.fromEntries(
-            Object.entries(state.taskWorkspaceIdById).filter(([, workspaceId]) => !workspaceIds.has(workspaceId))
+          const projectPath = state.projectPath;
+          const persistedRowsById = new Map(
+            (await listWorkspaceSummaries()).map(
+              (workspace) => [workspace.id, workspace] as const,
+            ),
           );
-          const nextRecentProjects = state.recentProjects.filter((project) => project.projectPath !== normalizedProjectPath);
 
-          if (!isCurrentProject) {
-            return {
-              recentProjects: nextRecentProjects,
-              workspaceRuntimeCacheById: nextRuntimeCacheById,
-              workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
-              taskWorkspaceIdById: nextTaskWorkspaceIdById,
-            };
+          // Prune and list current git worktrees.
+          await runner({ cwd: projectPath, command: "git worktree prune" });
+          const listResult = await runner({
+            cwd: projectPath,
+            command: "git worktree list --porcelain",
+          });
+          if (!listResult.ok) {
+            return;
           }
+          const discoveredWorktrees = parseGitWorktrees({
+            stdout: listResult.stdout,
+          });
 
-          const emptyWorkspaceState = buildWorkspaceSessionState({ snapshot: null });
-          return {
-            hasHydratedWorkspaces: false,
-            workspaceSnapshotVersion: 0,
-            workspaces: [],
-            activeWorkspaceId: "",
-            projectPath: null,
-            recentProjects: nextRecentProjects,
-            defaultBranch: "main",
-            workspaceBranchById: {},
-            workspacePathById: {},
-            workspaceDefaultById: {},
-            projectName: null,
-            projectFiles: [],
-            workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
-            taskCheckpointById: {},
-            workspaceRuntimeCacheById: nextRuntimeCacheById,
-            taskWorkspaceIdById: nextTaskWorkspaceIdById,
-            layout: {
-              ...state.layout,
-              editorVisible: false,
-              sidebarOverlayVisible: false,
-              terminalDocked: false,
-            },
-            ...emptyWorkspaceState,
-          };
-        });
-      },
-      moveProjectInList: ({ projectPath, direction }) => {
-        const normalizedProjectPath = projectPath.trim();
-        if (!normalizedProjectPath) {
-          return;
-        }
-
-        set((state) => {
-          const currentProjects = captureCurrentProjectState({
-            recentProjects: state.recentProjects,
-            projectPath: state.projectPath,
-            projectName: state.projectName,
-            defaultBranch: state.defaultBranch,
+          const defaultWorkspaceId = resolveCurrentProjectDefaultWorkspaceId({
+            projectPath,
             workspaces: state.workspaces,
-            activeWorkspaceId: state.activeWorkspaceId,
-            workspaceBranchById: state.workspaceBranchById,
-            workspacePathById: state.workspacePathById,
             workspaceDefaultById: state.workspaceDefaultById,
+            workspacePathById: state.workspacePathById,
           });
-          const fromIndex = currentProjects.findIndex((project) => project.projectPath === normalizedProjectPath);
-          const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1;
-          const nextProjects = moveArrayItem(currentProjects, fromIndex, toIndex);
-          return nextProjects === currentProjects ? state : { recentProjects: nextProjects };
-        });
-      },
-      createWorkspace: async ({
-        name,
-        mode,
-        fromBranch,
-        initCommand,
-        useRootNodeModulesSymlink: requestedRootNodeModulesSymlink,
-        initialTaskTitle,
-      }) => {
-        const trimmed = name.trim();
-        if (!trimmed) {
-          return { ok: false, message: "Workspace name is required." };
-        }
 
-        const current = get();
-        if (!current.projectPath) {
-          return { ok: false, message: "Open a project before creating a workspace." };
-        }
-        const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({ state: current });
-
-        const branchName = sanitizeBranchName({ value: trimmed });
-        if (!branchName) {
-          return { ok: false, message: "Workspace branch name is invalid." };
-        }
-        const projectWorkspaceInitCommand = resolveProjectWorkspaceInitCommand({
-          projectPath: current.projectPath,
-          recentProjects: current.recentProjects,
-        });
-        const projectUseRootNodeModulesSymlink = resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
-          projectPath: current.projectPath,
-          recentProjects: current.recentProjects,
-        });
-        const workspaceInitCommand = normalizeWorkspaceInitCommand({
-          value: initCommand ?? projectWorkspaceInitCommand,
-        });
-        const useRootNodeModulesSymlink = requestedRootNodeModulesSymlink === undefined
-          ? projectUseRootNodeModulesSymlink
-          : normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({ value: requestedRootNodeModulesSymlink });
-        const baseBranch = fromBranch?.trim() || current.defaultBranch || "main";
-        const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
-        const workspaceId = buildImportedWorktreeWorkspaceId({
-          projectPath: current.projectPath,
-          worktreePath: workspacePath,
-        });
-        const runner = window.api?.terminal?.runCommand;
-        if (runner) {
-          await runner({
-            cwd: current.projectPath,
-            command: "mkdir -p .stave/workspaces",
-          });
-          const addResult = await runner({
-            cwd: current.projectPath,
-            command: mode === "clean"
-              ? `git worktree add -b ${JSON.stringify(branchName)} ${JSON.stringify(workspacePath)}`
-              : `git worktree add -b ${JSON.stringify(branchName)} ${JSON.stringify(workspacePath)} ${JSON.stringify(baseBranch)}`,
-          });
-          if (!addResult.ok) {
-            const fallbackResult = await runner({
-              cwd: current.projectPath,
-              command: `git worktree add ${JSON.stringify(workspacePath)} ${JSON.stringify(branchName)}`,
-            });
-            if (!fallbackResult.ok) {
-              return { ok: false, message: (fallbackResult.stderr || addResult.stderr || "Failed to create git worktree.").trim() };
+          // Build set of known workspace paths for quick lookup.
+          const knownPathToId = new Map<string, string>();
+          for (const workspace of state.workspaces) {
+            const wsPath = normalizeComparablePath(
+              state.workspacePathById[workspace.id] ??
+                (workspace.id === defaultWorkspaceId
+                  ? projectPath
+                  : `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: workspace.name })}`),
+            );
+            if (wsPath) {
+              knownPathToId.set(wsPath, workspace.id);
             }
           }
-        }
 
-        const empty = createEmptyWorkspaceState();
-        const seededTask: Task = {
-          id: crypto.randomUUID(),
-          title: (initialTaskTitle ?? "").trim() || "New Task",
-          provider: current.draftProvider,
-          updatedAt: buildRecentTimestamp(),
-          unread: false,
-          archivedAt: null,
-          controlMode: "interactive",
-          controlOwner: "stave",
-        };
-        const snapshot = createWorkspaceSnapshot({
-          activeTaskId: seededTask.id,
-          tasks: [seededTask],
-          messagesByTask: {
-            [seededTask.id]: [],
-          },
-          promptDraftByTask: empty.promptDraftByTask,
-          editorTabs: empty.editorTabs,
-          activeEditorTabId: empty.activeEditorTabId,
-          terminalTabs: empty.terminalTabs,
-          activeTerminalTabId: empty.activeTerminalTabId,
-          cliSessionTabs: empty.cliSessionTabs,
-          activeCliSessionTabId: empty.activeCliSessionTabId,
-          activeSurface: { kind: "task", taskId: seededTask.id },
-          providerSessionByTask: {
-            [seededTask.id]: {},
-          },
-        });
-        await persistWorkspaceSnapshot({
-          workspaceId,
-          workspaceName: branchName,
-          activeTaskId: snapshot.activeTaskId,
-          tasks: snapshot.tasks,
-          messagesByTask: snapshot.messagesByTask,
-          promptDraftByTask: snapshot.promptDraftByTask ?? {},
-          editorTabs: snapshot.editorTabs ?? [],
-          activeEditorTabId: snapshot.activeEditorTabId ?? null,
-          terminalTabs: snapshot.terminalTabs ?? [],
-          activeTerminalTabId: snapshot.activeTerminalTabId ?? null,
-          cliSessionTabs: snapshot.cliSessionTabs ?? [],
-          activeCliSessionTabId: snapshot.activeCliSessionTabId ?? null,
-          activeSurface: snapshot.activeSurface ?? { kind: "task", taskId: snapshot.activeTaskId },
-          providerSessionByTask: snapshot.providerSessionByTask ?? {},
-        });
-        const workspaceState = buildWorkspaceSessionState({ snapshot });
+          const registeredWorktreePaths = new Set(
+            discoveredWorktrees
+              .map((entry) => normalizeComparablePath(entry.path))
+              .filter(Boolean),
+          );
+          const currentProjectPath = normalizeComparablePath(projectPath);
 
-        let files = current.projectFiles;
-        const creationNotices: Array<{ level: "success" | "warning"; message: string }> = [];
-        try {
-          await workspaceFsAdapter.setRoot?.({
-            rootPath: workspacePath,
-            rootName: branchName,
-          });
-        } catch {
-          // Worktree may be created successfully before filesystem bridge catches up.
-          // Keep workspace registration and use the existing file list as fallback.
-        }
+          // Detect new worktrees not yet tracked as workspaces.
+          const newRows: WorkspaceSummary[] = [];
+          const newBranchById: Record<string, string> = {};
+          const newPathById: Record<string, string> = {};
+          for (const worktree of discoveredWorktrees) {
+            const normalizedWorktreePath = normalizeComparablePath(
+              worktree.path,
+            );
+            if (
+              !worktree.branch ||
+              !normalizedWorktreePath ||
+              normalizedWorktreePath === currentProjectPath ||
+              knownPathToId.has(normalizedWorktreePath)
+            ) {
+              continue;
+            }
 
-        if (useRootNodeModulesSymlink) {
-          if (!runner) {
-            creationNotices.push({
-              level: "warning",
-              message: "The shared root `node_modules` symlink could not be created because the terminal bridge is unavailable.",
+            const workspaceName = resolveImportedWorktreeName({
+              branch: worktree.branch,
+              worktreePath: worktree.path,
             });
-          } else {
-            const linkResult = await runner({
-              cwd: workspacePath,
-              command: buildWorkspaceRootNodeModulesSymlinkCommand({
-                projectPath: current.projectPath,
-              }),
+            const workspaceId = buildImportedWorktreeWorkspaceId({
+              projectPath,
+              worktreePath: worktree.path,
             });
-            if (linkResult.ok) {
-              creationNotices.push({
-                level: "success",
-                message: "Linked `node_modules` from the repository root into the new workspace.",
-              });
-            } else {
-              creationNotices.push({
-                level: "warning",
-                message: `Linking the shared root \`node_modules\` failed. ${summarizeTerminalCommandDetail({
-                  stderr: linkResult.stderr,
-                  stdout: linkResult.stdout,
-                  fallback: "Command failed.",
-                })}`,
+            const persistedWorkspace = persistedRowsById.get(workspaceId);
+
+            // Only create a fresh empty snapshot for true first-time workspaces.
+            if (!persistedWorkspace) {
+              await persistWorkspaceSnapshot({
+                workspaceId,
+                workspaceName,
+                activeTaskId: "",
+                tasks: [],
+                messagesByTask: {},
+                promptDraftByTask: {},
+                editorTabs: [],
+                activeEditorTabId: null,
+                terminalTabs: [],
+                activeTerminalTabId: null,
+                cliSessionTabs: [],
+                activeCliSessionTabId: null,
+                activeSurface: { kind: "task", taskId: "" },
+                providerSessionByTask: {},
               });
             }
-          }
-        }
 
-        if (workspaceInitCommand) {
-          const summarizedCommand = summarizeWorkspaceInitCommand({ command: workspaceInitCommand });
-          if (!runner) {
-            creationNotices.push({
-              level: "warning",
-              message: `The post-create command could not run because the terminal bridge is unavailable: ${summarizedCommand}`,
-            });
-          } else {
-            const initResult = await runner({
-              cwd: workspacePath,
-              command: workspaceInitCommand,
-            });
-            if (initResult.ok) {
-              creationNotices.push({
-                level: "success",
-                message: `Ran the post-create command: ${summarizedCommand}`,
-              });
-            } else {
-              creationNotices.push({
-                level: "warning",
-                message: `The post-create command failed: ${summarizedCommand}. ${summarizeTerminalCommandDetail({
-                  stderr: initResult.stderr,
-                  stdout: initResult.stdout,
-                  fallback: "Command failed.",
-                })}`,
-              });
+            newRows.push(
+              persistedWorkspace ?? {
+                id: workspaceId,
+                name: workspaceName,
+                updatedAt: new Date().toISOString(),
+              },
+            );
+            newBranchById[workspaceId] = worktree.branch;
+            newPathById[workspaceId] = worktree.path;
+          }
+
+          // Detect stale workspaces whose git worktrees no longer exist.
+          const staleIds: string[] = [];
+          for (const workspace of state.workspaces) {
+            if (workspace.id === defaultWorkspaceId) continue;
+            const wsPath = normalizeComparablePath(
+              state.workspacePathById[workspace.id] ??
+                `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: workspace.name })}`,
+            );
+            if (wsPath && !registeredWorktreePaths.has(wsPath)) {
+              staleIds.push(workspace.id);
             }
           }
-        }
-
-        try {
-          files = await workspaceFsAdapter.listFiles();
-        } catch {
-          // Keep workspace registration and use the existing file list as fallback.
-        }
-
-        set((state) => ({
-          workspaceSnapshotVersion: 0,
-          workspaces: state.workspaces.some((workspace) => workspace.id === workspaceId)
-            ? state.workspaces
-            : [...state.workspaces, { id: workspaceId, name: branchName, updatedAt: new Date().toISOString() }],
-          activeWorkspaceId: workspaceId,
-          workspaceBranchById: {
-            ...state.workspaceBranchById,
-            [workspaceId]: branchName,
-          },
-          workspacePathById: {
-            ...state.workspacePathById,
-            [workspaceId]: workspacePath,
-          },
-          workspaceDefaultById: {
-            ...state.workspaceDefaultById,
-            [workspaceId]: false,
-          },
-          workspaceFileCacheByPath: rememberCachedWorkspaceFiles({
-            workspaceFileCacheByPath: state.workspaceFileCacheByPath,
-            workspacePath,
-            files,
-          }),
-          workspaceRuntimeCacheById: nextRuntimeCacheById,
-          taskWorkspaceIdById: registerTaskWorkspaceOwnership({
-            taskWorkspaceIdById: state.taskWorkspaceIdById,
-            workspaceId,
-            tasks: workspaceState.tasks,
-          }),
-          ...workspaceState,
-          projectFiles: files,
-        }));
-        runScriptHookInBackground({
-          workspaceId,
-          trigger: "task.created",
-          taskId: seededTask.id,
-          taskTitle: seededTask.title,
-        });
-        const creationNotice = buildWorkspaceCreationNotice({
-          notices: creationNotices,
-        });
-        return creationNotice
-          ? { ok: true, ...creationNotice }
-          : { ok: true };
-      },
-      continueWorkspaceFromSummary: async ({ name, baseBranch: requestedBaseBranch }) => {
-        const current = get();
-        const sourceWorkspaceId = current.activeWorkspaceId;
-        if (!sourceWorkspaceId) {
-          return { ok: false, message: "Select a workspace before continuing." };
-        }
-        if (current.workspaceDefaultById[sourceWorkspaceId]) {
-          return { ok: false, message: "The default workspace cannot be continued into a new workspace." };
-        }
-
-        const sourceWorkspace = current.workspaces.find((workspace) => workspace.id === sourceWorkspaceId) ?? null;
-        const sourceWorkspaceName = sourceWorkspace?.name ?? current.workspaceBranchById[sourceWorkspaceId] ?? "workspace";
-        const sourceWorkspacePath = current.workspacePathById[sourceWorkspaceId] ?? current.projectPath ?? "";
-        const sourceBranch = current.workspaceBranchById[sourceWorkspaceId] ?? sourceWorkspaceName;
-        const sourcePrInfo = current.workspacePrInfoById[sourceWorkspaceId] ?? null;
-        const defaultBaseBranch = current.defaultBranch.trim() || "main";
-        const remoteBaseBranch = requestedBaseBranch?.trim() || `origin/${defaultBaseBranch}`;
-        const remoteSeparatorIndex = remoteBaseBranch.indexOf("/");
-        const remoteTarget = remoteSeparatorIndex > 0
-          ? {
-            remoteName: remoteBaseBranch.slice(0, remoteSeparatorIndex),
-            localBranch: remoteBaseBranch.slice(remoteSeparatorIndex + 1),
+          for (const id of staleIds) {
+            await closeWorkspacePersistence({ workspaceId: id });
           }
-          : null;
-        let baseBranch = remoteBaseBranch;
-        const activeTask = current.tasks.find((task) => task.id === current.activeTaskId) ?? current.tasks[0] ?? null;
-        const notes = current.workspaceInformation.notes.trim();
-        const openTodos = current.workspaceInformation.todos
-          .filter((todo) => !todo.completed && todo.text.trim().length > 0)
-          .map((todo) => todo.text.trim());
 
-        const runCommand = window.api?.terminal?.runCommand;
-        const getHistory = window.api?.sourceControl?.getHistory;
-        const setupWarnings: string[] = [];
-        let diffStat = "";
-        let changedFiles: string[] = [];
-        let recentCommitSubjects: string[] = [];
+          // Nothing changed – skip store update.
+          if (newRows.length === 0 && staleIds.length === 0) {
+            return;
+          }
 
-        if (runCommand && sourceWorkspacePath) {
-          if (remoteTarget) {
-            const fetchBaseResult = await runCommand({
-              cwd: sourceWorkspacePath,
-              command: `git fetch ${remoteTarget.remoteName} --prune`,
-            });
-            if (!fetchBaseResult.ok) {
-              baseBranch = remoteTarget.localBranch;
-              setupWarnings.push(`Could not refresh \`${remoteBaseBranch}\`; continued from local \`${remoteTarget.localBranch}\` instead.`);
+          const staleIdSet = new Set(staleIds);
+          set((current) => {
+            let nextWorkspaces = current.workspaces;
+            if (staleIds.length > 0) {
+              nextWorkspaces = nextWorkspaces.filter(
+                (ws) => !staleIdSet.has(ws.id),
+              );
             }
-          }
-
-          const diffStatResult = await runCommand({
-            cwd: sourceWorkspacePath,
-            command: `git diff --stat ${JSON.stringify(baseBranch)}...HEAD`,
-          });
-          if (diffStatResult.ok) {
-            diffStat = (diffStatResult.stdout || "").trim();
-          }
-
-          const changedFilesResult = await runCommand({
-            cwd: sourceWorkspacePath,
-            command: `git diff --name-only ${JSON.stringify(baseBranch)}...HEAD`,
-          });
-          if (changedFilesResult.ok) {
-            changedFiles = (changedFilesResult.stdout || "")
-              .split("\n")
-              .map((line) => line.trim())
-              .filter(Boolean);
-          }
-        }
-
-        if (getHistory && sourceWorkspacePath) {
-          try {
-            const historyResult = await getHistory({ cwd: sourceWorkspacePath, limit: 8 });
-            if (historyResult.ok) {
-              recentCommitSubjects = historyResult.items
-                .map((item) => item.subject.trim())
-                .filter(Boolean);
+            if (newRows.length > 0) {
+              nextWorkspaces = [...nextWorkspaces, ...newRows];
             }
-          } catch {
-            // Keep the continuation brief deterministic even when git history is unavailable.
-          }
-        }
 
-        const summaryFilePath = buildWorkspaceContinueSummaryFilePath({ sourceBranch });
-        const summaryMarkdown = buildWorkspaceContinueSummaryMarkdown({
-          generatedAt: new Date().toISOString(),
-          sourceWorkspaceName,
-          sourceBranch,
-          baseBranch,
-          pr: sourcePrInfo?.pr
-            ? {
-              number: sourcePrInfo.pr.number,
-              title: sourcePrInfo.pr.title,
-              url: sourcePrInfo.pr.url,
-              status: sourcePrInfo.derived,
+            const nextBranch = {
+              ...current.workspaceBranchById,
+              ...newBranchById,
+            };
+            const nextPath = { ...current.workspacePathById, ...newPathById };
+            const nextDefault = { ...current.workspaceDefaultById };
+            const nextRuntimeCache = { ...current.workspaceRuntimeCacheById };
+            const nextTaskOwnership = { ...current.taskWorkspaceIdById };
+            const staleWorkspacePaths = staleIds.map(
+              (id) => current.workspacePathById[id],
+            );
+
+            for (const id of staleIds) {
+              delete nextBranch[id];
+              delete nextPath[id];
+              delete nextDefault[id];
+              delete nextRuntimeCache[id];
             }
-            : undefined,
-          activeTaskTitle: activeTask?.title,
-          notes,
-          openTodos,
-          changedFiles,
-          recentCommitSubjects,
-          diffStat,
-        });
-
-        const creationResult = await get().createWorkspace({
-          name,
-          mode: "branch",
-          fromBranch: baseBranch,
-          initialTaskTitle: `Continue from ${sourceWorkspaceName}`,
-        });
-        if (!creationResult.ok) {
-          return creationResult;
-        }
-
-        const next = get();
-        const targetWorkspaceId = next.activeWorkspaceId;
-        const targetWorkspacePath = next.workspacePathById[targetWorkspaceId] ?? next.projectPath ?? "";
-        const warnings: string[] = [...setupWarnings];
-        let attachedSummary = false;
-
-        if (targetWorkspacePath) {
-          try {
-            await workspaceFsAdapter.setRoot?.({
-              rootPath: targetWorkspacePath,
-              rootName: next.projectName ?? sourceWorkspaceName,
-              files: next.projectFiles,
-            });
-
-            const createDirectoryResult = await workspaceFsAdapter.createDirectory({ directoryPath: ".stave/context" });
-            if (!createDirectoryResult.ok && !createDirectoryResult.alreadyExists) {
-              warnings.push(createDirectoryResult.stderr || "Could not create the continuation brief directory.");
-            } else {
-              const createFileResult = await workspaceFsAdapter.createFile({ filePath: summaryFilePath });
-              if (!createFileResult.ok && !createFileResult.alreadyExists) {
-                warnings.push(createFileResult.stderr || "Could not create the continuation brief file.");
-              } else {
-                const writeSummaryResult = await workspaceFsAdapter.writeFile({
-                  filePath: summaryFilePath,
-                  content: summaryMarkdown,
-                });
-                if (!writeSummaryResult.ok) {
-                  warnings.push("Could not write the continuation brief file.");
-                } else {
-                  attachedSummary = true;
-                  set((state) => ({
-                    projectFiles: workspaceFsAdapter.getKnownFiles().length > 0
-                      ? workspaceFsAdapter.getKnownFiles()
-                      : state.projectFiles,
-                  }));
+            // Clean up task-workspace ownership for stale workspaces.
+            if (staleIds.length > 0) {
+              for (const [taskId, ownerId] of Object.entries(
+                nextTaskOwnership,
+              )) {
+                if (staleIdSet.has(ownerId)) {
+                  delete nextTaskOwnership[taskId];
                 }
               }
             }
-          } catch (error) {
-            warnings.push(error instanceof Error ? error.message : "Could not prepare the continuation brief file.");
-          }
-        } else {
-          warnings.push("The new workspace path is unavailable, so the continuation brief could not be created.");
-        }
 
-        const continuedTaskId = get().activeTaskId;
-        if (continuedTaskId && attachedSummary) {
-          get().updatePromptDraft({
-            taskId: continuedTaskId,
-            patch: {
-              attachedFilePaths: [summaryFilePath],
+            // If the active workspace was removed, fall back to the default.
+            let nextActiveWorkspaceId = current.activeWorkspaceId;
+            if (staleIdSet.has(nextActiveWorkspaceId)) {
+              nextActiveWorkspaceId =
+                defaultWorkspaceId || nextWorkspaces[0]?.id || "";
+            }
+
+            return {
+              workspaces: nextWorkspaces,
+              activeWorkspaceId: nextActiveWorkspaceId,
+              workspaceBranchById: nextBranch,
+              workspacePathById: nextPath,
+              workspaceDefaultById: nextDefault,
+              workspaceFileCacheByPath: removeCachedWorkspaceFiles({
+                workspaceFileCacheByPath: current.workspaceFileCacheByPath,
+                workspacePaths: staleWorkspacePaths,
+              }),
+              workspaceRuntimeCacheById: nextRuntimeCache,
+              taskWorkspaceIdById: nextTaskOwnership,
+              recentProjects: current.projectPath
+                ? upsertRecentProjectState({
+                    projects: current.recentProjects,
+                    project: {
+                      projectPath: current.projectPath,
+                      projectName: normalizeProjectDisplayName({
+                        projectPath: current.projectPath,
+                        projectName: current.projectName,
+                      }),
+                      lastOpenedAt:
+                        current.recentProjects.find(
+                          (p) => p.projectPath === current.projectPath,
+                        )?.lastOpenedAt ?? new Date().toISOString(),
+                      defaultBranch: current.defaultBranch,
+                      workspaces: nextWorkspaces,
+                      activeWorkspaceId: nextActiveWorkspaceId,
+                      workspaceBranchById: nextBranch,
+                      workspacePathById: nextPath,
+                      workspaceDefaultById: nextDefault,
+                      projectBasePrompt: resolveProjectBasePrompt({
+                        projectPath: current.projectPath,
+                        recentProjects: current.recentProjects,
+                      }),
+                      newWorkspaceInitCommand:
+                        resolveProjectWorkspaceInitCommand({
+                          projectPath: current.projectPath,
+                          recentProjects: current.recentProjects,
+                        }),
+                      newWorkspaceUseRootNodeModulesSymlink:
+                        resolveProjectWorkspaceRootNodeModulesSymlinkPreference(
+                          {
+                            projectPath: current.projectPath,
+                            recentProjects: current.recentProjects,
+                          },
+                        ),
+                    },
+                  })
+                : current.recentProjects,
+            };
+          });
+        },
+        hydrateNotifications: async () => {
+          try {
+            const notifications = await listPersistedNotifications({
+              limit: 500,
+            });
+            set(() => ({
+              notifications,
+            }));
+          } catch (error) {
+            console.error(
+              "[notifications] failed to hydrate notifications",
+              error,
+            );
+            set(() => ({
+              notifications: [],
+            }));
+          }
+        },
+        flushActiveWorkspaceSnapshot: async ({ sync } = {}) => {
+          const state = get();
+          if (!state.hasHydratedWorkspaces) {
+            return;
+          }
+          const workspaceId = state.activeWorkspaceId;
+          const workspace = state.workspaces.find(
+            (item) => item.id === workspaceId,
+          );
+          if (!workspaceId || !workspace) {
+            return;
+          }
+
+          const snapshot = createWorkspaceSnapshot({
+            activeTaskId: state.activeTaskId,
+            tasks: state.tasks,
+            messagesByTask: state.messagesByTask,
+            promptDraftByTask: state.promptDraftByTask,
+            workspaceInformation: state.workspaceInformation,
+            editorTabs: state.editorTabs,
+            activeEditorTabId: state.activeEditorTabId,
+            terminalTabs: state.terminalTabs,
+            activeTerminalTabId: state.activeTerminalTabId,
+            cliSessionTabs: state.cliSessionTabs,
+            activeCliSessionTabId: state.activeCliSessionTabId,
+            activeSurface: state.activeSurface,
+            providerSessionByTask: state.providerSessionByTask,
+          });
+
+          if (sync) {
+            const upsertSync = window.api?.persistence?.upsertWorkspaceSync;
+            if (upsertSync) {
+              upsertSync({
+                id: workspaceId,
+                name: workspace.name,
+                snapshot,
+              });
+              return;
+            }
+          }
+
+          await persistWorkspaceSnapshot({
+            workspaceId,
+            workspaceName: workspace.name,
+            activeTaskId: state.activeTaskId,
+            tasks: state.tasks,
+            messagesByTask: state.messagesByTask,
+            promptDraftByTask: state.promptDraftByTask,
+            workspaceInformation: state.workspaceInformation,
+            editorTabs: state.editorTabs,
+            activeEditorTabId: state.activeEditorTabId,
+            terminalTabs: state.terminalTabs,
+            activeTerminalTabId: state.activeTerminalTabId,
+            cliSessionTabs: state.cliSessionTabs,
+            activeCliSessionTabId: state.activeCliSessionTabId,
+            activeSurface: state.activeSurface,
+            providerSessionByTask: state.providerSessionByTask,
+          });
+
+          set((current) => {
+            if (current.activeWorkspaceId !== workspaceId) {
+              return current;
+            }
+            const compactedMessagesByTask = compactLoadedMessagesByTask({
+              messagesByTask: current.messagesByTask,
+              activeTaskId: current.activeTaskId,
+              activeTurnIdsByTask: current.activeTurnIdsByTask,
+            });
+            if (compactedMessagesByTask === current.messagesByTask) {
+              return current;
+            }
+            return {
+              messagesByTask: compactedMessagesByTask,
+            };
+          });
+        },
+        refreshActiveManagedTask: async () => {
+          const stateBefore = get();
+          const workspaceId = stateBefore.activeWorkspaceId;
+          const activeTask = findTaskById(
+            stateBefore,
+            stateBefore.activeTaskId,
+          );
+          if (!workspaceId || !activeTask || !isTaskManaged(activeTask)) {
+            return;
+          }
+
+          const loadedWorkspaceSession =
+            await loadWorkspaceSessionFromPersistence({
+              workspaceId,
+            });
+          if (!loadedWorkspaceSession.shell) {
+            return;
+          }
+
+          const nextSession = loadedWorkspaceSession.workspaceState;
+          const preferredActiveTaskId = nextSession.tasks.some(
+            (task) => task.id === stateBefore.activeTaskId,
+          )
+            ? stateBefore.activeTaskId
+            : nextSession.activeTaskId;
+          const refreshedSession: WorkspaceSessionState = {
+            ...nextSession,
+            activeTaskId: preferredActiveTaskId,
+          };
+
+          set((state) => {
+            if (state.activeWorkspaceId !== workspaceId) {
+              return state;
+            }
+            return {
+              tasks: refreshedSession.tasks,
+              messagesByTask: refreshedSession.messagesByTask,
+              messageCountByTask: refreshedSession.messageCountByTask,
+              activeTaskId: refreshedSession.activeTaskId,
+              workspaceInformation: refreshedSession.workspaceInformation,
+              activeTurnIdsByTask: refreshedSession.activeTurnIdsByTask,
+              providerSessionByTask: refreshedSession.providerSessionByTask,
+              nativeSessionReadyByTask:
+                refreshedSession.nativeSessionReadyByTask,
+              workspaceRuntimeCacheById: {
+                ...state.workspaceRuntimeCacheById,
+                [workspaceId]: refreshedSession,
+              },
+              taskWorkspaceIdById: registerTaskWorkspaceOwnership({
+                taskWorkspaceIdById: state.taskWorkspaceIdById,
+                workspaceId,
+                tasks: refreshedSession.tasks,
+              }),
+            };
+          });
+        },
+        createProject: async ({ name }) => {
+          const root = await workspaceFsAdapter.pickRoot();
+          if (!root || !root.rootPath) {
+            return;
+          }
+          const projectRootPath = root.rootPath;
+
+          const terminalRun = window.api?.terminal?.runCommand;
+          let defaultBranch = "main";
+          if (terminalRun) {
+            const branchResult = await terminalRun({
+              cwd: projectRootPath,
+              command:
+                "git symbolic-ref --short refs/remotes/origin/HEAD || git symbolic-ref --short HEAD || echo main",
+            });
+            const branchLine = (branchResult.stdout || "")
+              .split("\n")
+              .map((line) => line.trim())
+              .find((line) => line.length > 0);
+            if (branchLine) {
+              defaultBranch = branchLine.replace(/^origin\//, "");
+            }
+          }
+
+          const projectName =
+            name?.trim() ||
+            root.rootName ||
+            resolveProjectNameFromPath({ projectPath: projectRootPath });
+          await activateProject({
+            projectRootPath,
+            projectName,
+            files: root.files,
+            defaultBranch,
+          });
+        },
+        openProjectFromPath: async ({ inputPath }) => {
+          const resolvePath = window.api?.fs?.resolvePath;
+          if (!resolvePath) {
+            return { ok: false, stderr: "Filesystem bridge unavailable." };
+          }
+          const result = await resolvePath({ inputPath });
+          if (!result.ok || !result.rootPath) {
+            return { ok: false, stderr: result.stderr || "Invalid path." };
+          }
+
+          const projectRootPath = result.rootPath;
+          const projectName =
+            result.rootName ||
+            resolveProjectNameFromPath({ projectPath: projectRootPath });
+
+          const terminalRun = window.api?.terminal?.runCommand;
+          let defaultBranch = "main";
+          if (terminalRun) {
+            const branchResult = await terminalRun({
+              cwd: projectRootPath,
+              command:
+                "git symbolic-ref --short refs/remotes/origin/HEAD || git symbolic-ref --short HEAD || echo main",
+            });
+            const branchLine = (branchResult.stdout || "")
+              .split("\n")
+              .map((line: string) => line.trim())
+              .find((line: string) => line.length > 0);
+            if (branchLine) {
+              defaultBranch = branchLine.replace(/^origin\//, "");
+            }
+          }
+
+          await activateProject({
+            projectRootPath,
+            projectName,
+            files: result.files ?? [],
+            defaultBranch,
+          });
+          return { ok: true };
+        },
+        openProject: async ({ projectPath }) => {
+          const normalizedProjectPath = projectPath.trim();
+          if (!normalizedProjectPath) {
+            return;
+          }
+
+          const state = get();
+          const rememberedProject = state.recentProjects.find(
+            (project) => project.projectPath === normalizedProjectPath,
+          );
+          const projectName =
+            rememberedProject?.projectName ||
+            resolveProjectNameFromPath({ projectPath: normalizedProjectPath });
+          let files =
+            rememberedProject?.projectPath === state.projectPath
+              ? state.projectFiles
+              : [];
+
+          await workspaceFsAdapter.setRoot?.({
+            rootPath: normalizedProjectPath,
+            rootName: projectName,
+            files,
+          });
+
+          try {
+            files = await workspaceFsAdapter.listFiles();
+          } catch {
+            files = workspaceFsAdapter.getKnownFiles();
+          }
+
+          await activateProject({
+            projectRootPath: normalizedProjectPath,
+            projectName,
+            files,
+            defaultBranch:
+              rememberedProject?.defaultBranch || state.defaultBranch || "main",
+          });
+        },
+        removeProjectFromList: async ({ projectPath }) => {
+          const normalizedProjectPath = projectPath.trim();
+          if (!normalizedProjectPath) {
+            return;
+          }
+
+          const stateBefore = get();
+          const isCurrentProject =
+            stateBefore.projectPath === normalizedProjectPath;
+          if (isCurrentProject) {
+            await get().flushActiveWorkspaceSnapshot({ sync: true });
+          }
+
+          set((state) => {
+            const matchingProject = state.recentProjects.find(
+              (project) => project.projectPath === normalizedProjectPath,
+            );
+            const workspaceIds = new Set<string>([
+              ...(matchingProject?.workspaces.map(
+                (workspace) => workspace.id,
+              ) ?? []),
+              ...(isCurrentProject
+                ? state.workspaces.map((workspace) => workspace.id)
+                : []),
+            ]);
+            const nextRuntimeCacheById = removeWorkspaceRuntimeCacheEntries({
+              workspaceRuntimeCacheById: state.workspaceRuntimeCacheById,
+              workspaceIds: [...workspaceIds],
+            });
+            const nextWorkspaceFileCacheByPath = removeCachedWorkspaceFiles({
+              workspaceFileCacheByPath: state.workspaceFileCacheByPath,
+              workspacePaths: [
+                normalizedProjectPath,
+                ...Object.values(matchingProject?.workspacePathById ?? {}),
+                ...(isCurrentProject
+                  ? Object.values(state.workspacePathById)
+                  : []),
+              ],
+            });
+            const nextTaskWorkspaceIdById = Object.fromEntries(
+              Object.entries(state.taskWorkspaceIdById).filter(
+                ([, workspaceId]) => !workspaceIds.has(workspaceId),
+              ),
+            );
+            const nextRecentProjects = state.recentProjects.filter(
+              (project) => project.projectPath !== normalizedProjectPath,
+            );
+
+            if (!isCurrentProject) {
+              return {
+                recentProjects: nextRecentProjects,
+                workspaceRuntimeCacheById: nextRuntimeCacheById,
+                workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
+                taskWorkspaceIdById: nextTaskWorkspaceIdById,
+              };
+            }
+
+            const emptyWorkspaceState = buildWorkspaceSessionState({
+              snapshot: null,
+            });
+            return {
+              hasHydratedWorkspaces: false,
+              workspaceSnapshotVersion: 0,
+              workspaces: [],
+              activeWorkspaceId: "",
+              projectPath: null,
+              recentProjects: nextRecentProjects,
+              defaultBranch: "main",
+              workspaceBranchById: {},
+              workspacePathById: {},
+              workspaceDefaultById: {},
+              projectName: null,
+              projectFiles: [],
+              workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
+              taskCheckpointById: {},
+              workspaceRuntimeCacheById: nextRuntimeCacheById,
+              taskWorkspaceIdById: nextTaskWorkspaceIdById,
+              layout: {
+                ...state.layout,
+                editorVisible: false,
+                sidebarOverlayVisible: false,
+                terminalDocked: false,
+              },
+              ...emptyWorkspaceState,
+            };
+          });
+        },
+        moveProjectInList: ({ projectPath, direction }) => {
+          const normalizedProjectPath = projectPath.trim();
+          if (!normalizedProjectPath) {
+            return;
+          }
+
+          set((state) => {
+            const currentProjects = captureCurrentProjectState({
+              recentProjects: state.recentProjects,
+              projectPath: state.projectPath,
+              projectName: state.projectName,
+              defaultBranch: state.defaultBranch,
+              workspaces: state.workspaces,
+              activeWorkspaceId: state.activeWorkspaceId,
+              workspaceBranchById: state.workspaceBranchById,
+              workspacePathById: state.workspacePathById,
+              workspaceDefaultById: state.workspaceDefaultById,
+            });
+            const fromIndex = currentProjects.findIndex(
+              (project) => project.projectPath === normalizedProjectPath,
+            );
+            const toIndex = direction === "up" ? fromIndex - 1 : fromIndex + 1;
+            const nextProjects = moveArrayItem(
+              currentProjects,
+              fromIndex,
+              toIndex,
+            );
+            return nextProjects === currentProjects
+              ? state
+              : { recentProjects: nextProjects };
+          });
+        },
+        createWorkspace: async ({
+          name,
+          mode,
+          fromBranch,
+          initCommand,
+          useRootNodeModulesSymlink: requestedRootNodeModulesSymlink,
+          initialTaskTitle,
+        }) => {
+          const trimmed = name.trim();
+          if (!trimmed) {
+            return { ok: false, message: "Workspace name is required." };
+          }
+
+          const current = get();
+          if (!current.projectPath) {
+            return {
+              ok: false,
+              message: "Open a project before creating a workspace.",
+            };
+          }
+          const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({
+            state: current,
+          });
+
+          const branchName = sanitizeBranchName({ value: trimmed });
+          if (!branchName) {
+            return { ok: false, message: "Workspace branch name is invalid." };
+          }
+          const projectWorkspaceInitCommand =
+            resolveProjectWorkspaceInitCommand({
+              projectPath: current.projectPath,
+              recentProjects: current.recentProjects,
+            });
+          const projectUseRootNodeModulesSymlink =
+            resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+              projectPath: current.projectPath,
+              recentProjects: current.recentProjects,
+            });
+          const workspaceInitCommand = normalizeWorkspaceInitCommand({
+            value: initCommand ?? projectWorkspaceInitCommand,
+          });
+          const useRootNodeModulesSymlink =
+            requestedRootNodeModulesSymlink === undefined
+              ? projectUseRootNodeModulesSymlink
+              : normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+                  value: requestedRootNodeModulesSymlink,
+                });
+          const baseBranch =
+            fromBranch?.trim() || current.defaultBranch || "main";
+          const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
+          const workspaceId = buildImportedWorktreeWorkspaceId({
+            projectPath: current.projectPath,
+            worktreePath: workspacePath,
+          });
+          const runner = window.api?.terminal?.runCommand;
+          if (runner) {
+            await runner({
+              cwd: current.projectPath,
+              command: "mkdir -p .stave/workspaces",
+            });
+            const addResult = await runner({
+              cwd: current.projectPath,
+              command:
+                mode === "clean"
+                  ? `git worktree add -b ${JSON.stringify(branchName)} ${JSON.stringify(workspacePath)}`
+                  : `git worktree add -b ${JSON.stringify(branchName)} ${JSON.stringify(workspacePath)} ${JSON.stringify(baseBranch)}`,
+            });
+            if (!addResult.ok) {
+              const fallbackResult = await runner({
+                cwd: current.projectPath,
+                command: `git worktree add ${JSON.stringify(workspacePath)} ${JSON.stringify(branchName)}`,
+              });
+              if (!fallbackResult.ok) {
+                return {
+                  ok: false,
+                  message: (
+                    fallbackResult.stderr ||
+                    addResult.stderr ||
+                    "Failed to create git worktree."
+                  ).trim(),
+                };
+              }
+            }
+          }
+
+          const empty = createEmptyWorkspaceState();
+          const seededTask: Task = {
+            id: crypto.randomUUID(),
+            title: (initialTaskTitle ?? "").trim() || "New Task",
+            provider: current.draftProvider,
+            updatedAt: buildRecentTimestamp(),
+            unread: false,
+            archivedAt: null,
+            controlMode: "interactive",
+            controlOwner: "stave",
+          };
+          const snapshot = createWorkspaceSnapshot({
+            activeTaskId: seededTask.id,
+            tasks: [seededTask],
+            messagesByTask: {
+              [seededTask.id]: [],
+            },
+            promptDraftByTask: empty.promptDraftByTask,
+            editorTabs: empty.editorTabs,
+            activeEditorTabId: empty.activeEditorTabId,
+            terminalTabs: empty.terminalTabs,
+            activeTerminalTabId: empty.activeTerminalTabId,
+            cliSessionTabs: empty.cliSessionTabs,
+            activeCliSessionTabId: empty.activeCliSessionTabId,
+            activeSurface: { kind: "task", taskId: seededTask.id },
+            providerSessionByTask: {
+              [seededTask.id]: {},
             },
           });
-        }
-
-        const resultMessages = [
-          creationResult.message?.trim() ?? "",
-          attachedSummary
-            ? `Attached \`${summaryFilePath}\` to the new task draft.`
-            : "",
-          warnings.length > 0
-            ? warnings.join(" ")
-            : "",
-        ].filter(Boolean);
-
-        return {
-          ok: true,
-          noticeLevel: warnings.length > 0 || creationResult.noticeLevel === "warning"
-            ? "warning"
-            : "success",
-          message: resultMessages.join(" "),
-        };
-      },
-      closeWorkspace: async ({ workspaceId }) => {
-        const state = get();
-        const workspace = state.workspaces.find((item) => item.id === workspaceId);
-        const isProtectedDefault = state.workspaceDefaultById[workspaceId]
-          || workspaceId === starterWorkspaceId
-          || workspace?.name.toLowerCase() === defaultWorkspaceName.toLowerCase();
-        if (isProtectedDefault) {
-          return;
-        }
-        const workspacePath = state.workspacePathById[workspaceId];
-        const workspaceBranch = state.workspaceBranchById[workspaceId];
-        const projectPath = state.projectPath;
-        const runner = window.api?.terminal?.runCommand;
-        const stopWorkspaceScripts = window.api?.scripts?.stopAll;
-        if (stopWorkspaceScripts) {
-          await stopWorkspaceScripts({ workspaceId });
-        }
-        if (runner && projectPath && workspacePath) {
-          const removeResult = await runner({
-            cwd: projectPath,
-            command: `git worktree remove --force ${JSON.stringify(workspacePath)}`,
+          await persistWorkspaceSnapshot({
+            workspaceId,
+            workspaceName: branchName,
+            activeTaskId: snapshot.activeTaskId,
+            tasks: snapshot.tasks,
+            messagesByTask: snapshot.messagesByTask,
+            promptDraftByTask: snapshot.promptDraftByTask ?? {},
+            editorTabs: snapshot.editorTabs ?? [],
+            activeEditorTabId: snapshot.activeEditorTabId ?? null,
+            terminalTabs: snapshot.terminalTabs ?? [],
+            activeTerminalTabId: snapshot.activeTerminalTabId ?? null,
+            cliSessionTabs: snapshot.cliSessionTabs ?? [],
+            activeCliSessionTabId: snapshot.activeCliSessionTabId ?? null,
+            activeSurface: snapshot.activeSurface ?? {
+              kind: "task",
+              taskId: snapshot.activeTaskId,
+            },
+            providerSessionByTask: snapshot.providerSessionByTask ?? {},
           });
-          if (!removeResult.ok) {
-            await runner({ cwd: projectPath, command: `rm -rf ${JSON.stringify(workspacePath)}` });
-            await runner({ cwd: projectPath, command: "git worktree prune" });
+          const workspaceState = buildWorkspaceSessionState({ snapshot });
+
+          let files = current.projectFiles;
+          const creationNotices: Array<{
+            level: "success" | "warning";
+            message: string;
+          }> = [];
+          try {
+            await workspaceFsAdapter.setRoot?.({
+              rootPath: workspacePath,
+              rootName: branchName,
+            });
+          } catch {
+            // Worktree may be created successfully before filesystem bridge catches up.
+            // Keep workspace registration and use the existing file list as fallback.
           }
-          if (workspaceBranch) {
-            await runner({
-              cwd: projectPath,
-              command: `git branch -D ${JSON.stringify(workspaceBranch)}`,
+
+          if (useRootNodeModulesSymlink) {
+            if (!runner) {
+              creationNotices.push({
+                level: "warning",
+                message:
+                  "The shared root `node_modules` symlink could not be created because the terminal bridge is unavailable.",
+              });
+            } else {
+              const linkResult = await runner({
+                cwd: workspacePath,
+                command: buildWorkspaceRootNodeModulesSymlinkCommand({
+                  projectPath: current.projectPath,
+                }),
+              });
+              if (linkResult.ok) {
+                creationNotices.push({
+                  level: "success",
+                  message:
+                    "Linked `node_modules` from the repository root into the new workspace.",
+                });
+              } else {
+                creationNotices.push({
+                  level: "warning",
+                  message: `Linking the shared root \`node_modules\` failed. ${summarizeTerminalCommandDetail(
+                    {
+                      stderr: linkResult.stderr,
+                      stdout: linkResult.stdout,
+                      fallback: "Command failed.",
+                    },
+                  )}`,
+                });
+              }
+            }
+          }
+
+          if (workspaceInitCommand) {
+            const summarizedCommand = summarizeWorkspaceInitCommand({
+              command: workspaceInitCommand,
+            });
+            if (!runner) {
+              creationNotices.push({
+                level: "warning",
+                message: `The post-create command could not run because the terminal bridge is unavailable: ${summarizedCommand}`,
+              });
+            } else {
+              const initResult = await runner({
+                cwd: workspacePath,
+                command: workspaceInitCommand,
+              });
+              if (initResult.ok) {
+                creationNotices.push({
+                  level: "success",
+                  message: `Ran the post-create command: ${summarizedCommand}`,
+                });
+              } else {
+                creationNotices.push({
+                  level: "warning",
+                  message: `The post-create command failed: ${summarizedCommand}. ${summarizeTerminalCommandDetail(
+                    {
+                      stderr: initResult.stderr,
+                      stdout: initResult.stdout,
+                      fallback: "Command failed.",
+                    },
+                  )}`,
+                });
+              }
+            }
+          }
+
+          try {
+            files = await workspaceFsAdapter.listFiles();
+          } catch {
+            // Keep workspace registration and use the existing file list as fallback.
+          }
+
+          set((state) => ({
+            workspaceSnapshotVersion: 0,
+            workspaces: state.workspaces.some(
+              (workspace) => workspace.id === workspaceId,
+            )
+              ? state.workspaces
+              : [
+                  ...state.workspaces,
+                  {
+                    id: workspaceId,
+                    name: branchName,
+                    updatedAt: new Date().toISOString(),
+                  },
+                ],
+            activeWorkspaceId: workspaceId,
+            workspaceBranchById: {
+              ...state.workspaceBranchById,
+              [workspaceId]: branchName,
+            },
+            workspacePathById: {
+              ...state.workspacePathById,
+              [workspaceId]: workspacePath,
+            },
+            workspaceDefaultById: {
+              ...state.workspaceDefaultById,
+              [workspaceId]: false,
+            },
+            workspaceFileCacheByPath: rememberCachedWorkspaceFiles({
+              workspaceFileCacheByPath: state.workspaceFileCacheByPath,
+              workspacePath,
+              files,
+            }),
+            workspaceRuntimeCacheById: nextRuntimeCacheById,
+            taskWorkspaceIdById: registerTaskWorkspaceOwnership({
+              taskWorkspaceIdById: state.taskWorkspaceIdById,
+              workspaceId,
+              tasks: workspaceState.tasks,
+            }),
+            ...workspaceState,
+            projectFiles: files,
+          }));
+          runScriptHookInBackground({
+            workspaceId,
+            trigger: "task.created",
+            taskId: seededTask.id,
+            taskTitle: seededTask.title,
+          });
+          const creationNotice = buildWorkspaceCreationNotice({
+            notices: creationNotices,
+          });
+          return creationNotice
+            ? { ok: true, ...creationNotice }
+            : { ok: true };
+        },
+        continueWorkspaceFromSummary: async ({
+          name,
+          baseBranch: requestedBaseBranch,
+        }) => {
+          const current = get();
+          const sourceWorkspaceId = current.activeWorkspaceId;
+          if (!sourceWorkspaceId) {
+            return {
+              ok: false,
+              message: "Select a workspace before continuing.",
+            };
+          }
+          if (current.workspaceDefaultById[sourceWorkspaceId]) {
+            return {
+              ok: false,
+              message:
+                "The default workspace cannot be continued into a new workspace.",
+            };
+          }
+
+          const sourceWorkspace =
+            current.workspaces.find(
+              (workspace) => workspace.id === sourceWorkspaceId,
+            ) ?? null;
+          const sourceWorkspaceName =
+            sourceWorkspace?.name ??
+            current.workspaceBranchById[sourceWorkspaceId] ??
+            "workspace";
+          const sourceWorkspacePath =
+            current.workspacePathById[sourceWorkspaceId] ??
+            current.projectPath ??
+            "";
+          const sourceBranch =
+            current.workspaceBranchById[sourceWorkspaceId] ??
+            sourceWorkspaceName;
+          const sourcePrInfo =
+            current.workspacePrInfoById[sourceWorkspaceId] ?? null;
+          const defaultBaseBranch = current.defaultBranch.trim() || "main";
+          const remoteBaseBranch =
+            requestedBaseBranch?.trim() || `origin/${defaultBaseBranch}`;
+          const remoteSeparatorIndex = remoteBaseBranch.indexOf("/");
+          const remoteTarget =
+            remoteSeparatorIndex > 0
+              ? {
+                  remoteName: remoteBaseBranch.slice(0, remoteSeparatorIndex),
+                  localBranch: remoteBaseBranch.slice(remoteSeparatorIndex + 1),
+                }
+              : null;
+          let baseBranch = remoteBaseBranch;
+          const activeTask =
+            current.tasks.find((task) => task.id === current.activeTaskId) ??
+            current.tasks[0] ??
+            null;
+          const notes = current.workspaceInformation.notes.trim();
+          const openTodos = current.workspaceInformation.todos
+            .filter((todo) => !todo.completed && todo.text.trim().length > 0)
+            .map((todo) => todo.text.trim());
+
+          const runCommand = window.api?.terminal?.runCommand;
+          const getHistory = window.api?.sourceControl?.getHistory;
+          const setupWarnings: string[] = [];
+          let diffStat = "";
+          let changedFiles: string[] = [];
+          let recentCommitSubjects: string[] = [];
+
+          if (runCommand && sourceWorkspacePath) {
+            if (remoteTarget) {
+              const fetchBaseResult = await runCommand({
+                cwd: sourceWorkspacePath,
+                command: `git fetch ${remoteTarget.remoteName} --prune`,
+              });
+              if (!fetchBaseResult.ok) {
+                baseBranch = remoteTarget.localBranch;
+                setupWarnings.push(
+                  `Could not refresh \`${remoteBaseBranch}\`; continued from local \`${remoteTarget.localBranch}\` instead.`,
+                );
+              }
+            }
+
+            const diffStatResult = await runCommand({
+              cwd: sourceWorkspacePath,
+              command: `git diff --stat ${JSON.stringify(baseBranch)}...HEAD`,
+            });
+            if (diffStatResult.ok) {
+              diffStat = (diffStatResult.stdout || "").trim();
+            }
+
+            const changedFilesResult = await runCommand({
+              cwd: sourceWorkspacePath,
+              command: `git diff --name-only ${JSON.stringify(baseBranch)}...HEAD`,
+            });
+            if (changedFilesResult.ok) {
+              changedFiles = (changedFilesResult.stdout || "")
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean);
+            }
+          }
+
+          if (getHistory && sourceWorkspacePath) {
+            try {
+              const historyResult = await getHistory({
+                cwd: sourceWorkspacePath,
+                limit: 8,
+              });
+              if (historyResult.ok) {
+                recentCommitSubjects = historyResult.items
+                  .map((item) => item.subject.trim())
+                  .filter(Boolean);
+              }
+            } catch {
+              // Keep the continuation brief deterministic even when git history is unavailable.
+            }
+          }
+
+          const summaryFilePath = buildWorkspaceContinueSummaryFilePath({
+            sourceBranch,
+          });
+          const summaryMarkdown = buildWorkspaceContinueSummaryMarkdown({
+            generatedAt: new Date().toISOString(),
+            sourceWorkspaceName,
+            sourceBranch,
+            baseBranch,
+            pr: sourcePrInfo?.pr
+              ? {
+                  number: sourcePrInfo.pr.number,
+                  title: sourcePrInfo.pr.title,
+                  url: sourcePrInfo.pr.url,
+                  status: sourcePrInfo.derived,
+                }
+              : undefined,
+            activeTaskTitle: activeTask?.title,
+            notes,
+            openTodos,
+            changedFiles,
+            recentCommitSubjects,
+            diffStat,
+          });
+
+          const creationResult = await get().createWorkspace({
+            name,
+            mode: "branch",
+            fromBranch: baseBranch,
+            initialTaskTitle: `Continue from ${sourceWorkspaceName}`,
+          });
+          if (!creationResult.ok) {
+            return creationResult;
+          }
+
+          const next = get();
+          const targetWorkspaceId = next.activeWorkspaceId;
+          const targetWorkspacePath =
+            next.workspacePathById[targetWorkspaceId] ?? next.projectPath ?? "";
+          const warnings: string[] = [...setupWarnings];
+          let attachedSummary = false;
+
+          if (targetWorkspacePath) {
+            try {
+              await workspaceFsAdapter.setRoot?.({
+                rootPath: targetWorkspacePath,
+                rootName: next.projectName ?? sourceWorkspaceName,
+                files: next.projectFiles,
+              });
+
+              const createDirectoryResult =
+                await workspaceFsAdapter.createDirectory({
+                  directoryPath: ".stave/context",
+                });
+              if (
+                !createDirectoryResult.ok &&
+                !createDirectoryResult.alreadyExists
+              ) {
+                warnings.push(
+                  createDirectoryResult.stderr ||
+                    "Could not create the continuation brief directory.",
+                );
+              } else {
+                const createFileResult = await workspaceFsAdapter.createFile({
+                  filePath: summaryFilePath,
+                });
+                if (!createFileResult.ok && !createFileResult.alreadyExists) {
+                  warnings.push(
+                    createFileResult.stderr ||
+                      "Could not create the continuation brief file.",
+                  );
+                } else {
+                  const writeSummaryResult = await workspaceFsAdapter.writeFile(
+                    {
+                      filePath: summaryFilePath,
+                      content: summaryMarkdown,
+                    },
+                  );
+                  if (!writeSummaryResult.ok) {
+                    warnings.push(
+                      "Could not write the continuation brief file.",
+                    );
+                  } else {
+                    attachedSummary = true;
+                    set((state) => ({
+                      projectFiles:
+                        workspaceFsAdapter.getKnownFiles().length > 0
+                          ? workspaceFsAdapter.getKnownFiles()
+                          : state.projectFiles,
+                    }));
+                  }
+                }
+              }
+            } catch (error) {
+              warnings.push(
+                error instanceof Error
+                  ? error.message
+                  : "Could not prepare the continuation brief file.",
+              );
+            }
+          } else {
+            warnings.push(
+              "The new workspace path is unavailable, so the continuation brief could not be created.",
+            );
+          }
+
+          const continuedTaskId = get().activeTaskId;
+          if (continuedTaskId && attachedSummary) {
+            get().updatePromptDraft({
+              taskId: continuedTaskId,
+              patch: {
+                attachedFilePaths: [summaryFilePath],
+              },
             });
           }
-        }
-        await closeWorkspacePersistence({ workspaceId });
-        const nextWorkspace = state.workspaces.find((item) => state.workspaceDefaultById[item.id]) ?? state.workspaces[0];
-        if (!nextWorkspace) {
-          const workspaceState = buildWorkspaceSessionState({ snapshot: null });
+
+          const resultMessages = [
+            creationResult.message?.trim() ?? "",
+            attachedSummary
+              ? `Attached \`${summaryFilePath}\` to the new task draft.`
+              : "",
+            warnings.length > 0 ? warnings.join(" ") : "",
+          ].filter(Boolean);
+
+          return {
+            ok: true,
+            noticeLevel:
+              warnings.length > 0 || creationResult.noticeLevel === "warning"
+                ? "warning"
+                : "success",
+            message: resultMessages.join(" "),
+          };
+        },
+        closeWorkspace: async ({ workspaceId }) => {
+          const state = get();
+          const workspace = state.workspaces.find(
+            (item) => item.id === workspaceId,
+          );
+          const isProtectedDefault =
+            state.workspaceDefaultById[workspaceId] ||
+            workspaceId === starterWorkspaceId ||
+            workspace?.name.toLowerCase() ===
+              defaultWorkspaceName.toLowerCase();
+          if (isProtectedDefault) {
+            return;
+          }
+          const workspacePath = state.workspacePathById[workspaceId];
+          const workspaceBranch = state.workspaceBranchById[workspaceId];
+          const projectPath = state.projectPath;
+          const runner = window.api?.terminal?.runCommand;
+          const stopWorkspaceScripts = window.api?.scripts?.stopAll;
+          if (stopWorkspaceScripts) {
+            await stopWorkspaceScripts({ workspaceId });
+          }
+          if (runner && projectPath && workspacePath) {
+            const removeResult = await runner({
+              cwd: projectPath,
+              command: `git worktree remove --force ${JSON.stringify(workspacePath)}`,
+            });
+            if (!removeResult.ok) {
+              await runner({
+                cwd: projectPath,
+                command: `rm -rf ${JSON.stringify(workspacePath)}`,
+              });
+              await runner({ cwd: projectPath, command: "git worktree prune" });
+            }
+            if (workspaceBranch) {
+              await runner({
+                cwd: projectPath,
+                command: `git branch -D ${JSON.stringify(workspaceBranch)}`,
+              });
+            }
+          }
+          await closeWorkspacePersistence({ workspaceId });
+          const nextWorkspace =
+            state.workspaces.find(
+              (item) => state.workspaceDefaultById[item.id],
+            ) ?? state.workspaces[0];
+          if (!nextWorkspace) {
+            const workspaceState = buildWorkspaceSessionState({
+              snapshot: null,
+            });
+            set((nextState) => {
+              const nextBranchById = { ...nextState.workspaceBranchById };
+              const nextPathById = { ...nextState.workspacePathById };
+              const nextDefaultById = { ...nextState.workspaceDefaultById };
+              delete nextBranchById[workspaceId];
+              delete nextPathById[workspaceId];
+              delete nextDefaultById[workspaceId];
+              const nextRuntimeCacheById = removeWorkspaceRuntimeCacheEntries({
+                workspaceRuntimeCacheById: nextState.workspaceRuntimeCacheById,
+                workspaceIds: [workspaceId],
+              });
+              const nextTaskWorkspaceIdById = Object.fromEntries(
+                Object.entries(nextState.taskWorkspaceIdById).filter(
+                  ([, ownerWorkspaceId]) => ownerWorkspaceId !== workspaceId,
+                ),
+              );
+              return {
+                workspaces: nextState.workspaces.filter(
+                  (item) => item.id !== workspaceId,
+                ),
+                workspaceBranchById: nextBranchById,
+                workspacePathById: nextPathById,
+                workspaceDefaultById: nextDefaultById,
+                activeWorkspaceId: "",
+                workspaceSnapshotVersion: 0,
+                workspaceFileCacheByPath: removeCachedWorkspaceFiles({
+                  workspaceFileCacheByPath: nextState.workspaceFileCacheByPath,
+                  workspacePaths: [workspacePath],
+                }),
+                workspaceRuntimeCacheById: nextRuntimeCacheById,
+                taskWorkspaceIdById: nextTaskWorkspaceIdById,
+                ...workspaceState,
+                layout: {
+                  ...nextState.layout,
+                  terminalDocked: workspaceState.activeTerminalTabId
+                    ? true
+                    : nextState.layout.terminalDocked,
+                  editorDiffMode: resolveEditorDiffMode({
+                    editorTabs: workspaceState.editorTabs,
+                    activeEditorTabId: workspaceState.activeEditorTabId,
+                  }),
+                },
+              };
+            });
+            return;
+          }
+          await get().switchWorkspace({ workspaceId: nextWorkspace.id });
           set((nextState) => {
             const nextBranchById = { ...nextState.workspaceBranchById };
             const nextPathById = { ...nextState.workspacePathById };
@@ -4373,1170 +5083,1214 @@ export const useAppStore = create<AppState>()(
               workspaceIds: [workspaceId],
             });
             const nextTaskWorkspaceIdById = Object.fromEntries(
-              Object.entries(nextState.taskWorkspaceIdById).filter(([, ownerWorkspaceId]) => ownerWorkspaceId !== workspaceId)
+              Object.entries(nextState.taskWorkspaceIdById).filter(
+                ([, ownerWorkspaceId]) => ownerWorkspaceId !== workspaceId,
+              ),
             );
             return {
-              workspaces: nextState.workspaces.filter((item) => item.id !== workspaceId),
+              workspaces: nextState.workspaces.filter(
+                (item) => item.id !== workspaceId,
+              ),
               workspaceBranchById: nextBranchById,
               workspacePathById: nextPathById,
               workspaceDefaultById: nextDefaultById,
-              activeWorkspaceId: "",
-              workspaceSnapshotVersion: 0,
               workspaceFileCacheByPath: removeCachedWorkspaceFiles({
                 workspaceFileCacheByPath: nextState.workspaceFileCacheByPath,
                 workspacePaths: [workspacePath],
               }),
               workspaceRuntimeCacheById: nextRuntimeCacheById,
               taskWorkspaceIdById: nextTaskWorkspaceIdById,
+            };
+          });
+        },
+        switchWorkspace: async ({ workspaceId }) => {
+          const current = get();
+          if (workspaceId === current.activeWorkspaceId) {
+            return;
+          }
+          if (
+            !current.workspaces.some(
+              (workspace) => workspace.id === workspaceId,
+            )
+          ) {
+            return;
+          }
+
+          const workspacePath =
+            current.workspacePathById[workspaceId] ??
+            (current.workspaceDefaultById[workspaceId]
+              ? (current.projectPath ?? undefined)
+              : undefined);
+          if (!workspacePath) {
+            return;
+          }
+          const cachedFiles = getCachedWorkspaceFiles({
+            workspacePath,
+            workspaceFileCacheByPath: current.workspaceFileCacheByPath,
+          });
+          const switchMetricToken = ++workspaceSwitchMetricTokenCounter;
+          const switchStartedAt = getWorkspaceSwitchMetricNow();
+          const cachedWorkspaceState =
+            current.workspaceRuntimeCacheById[workspaceId];
+          const shouldLoadWorkspaceShellState =
+            !cachedWorkspaceState ||
+            shouldReloadWorkspaceShellFromPersistence({ cachedWorkspaceState });
+          let shellResolvedAt = !shouldLoadWorkspaceShellState
+            ? switchStartedAt
+            : undefined;
+          let setRootResolvedAt = switchStartedAt;
+          const loadedWorkspaceShellState = !shouldLoadWorkspaceShellState
+            ? null
+            : loadWorkspaceShellStateFromPersistence({
+                workspaceId,
+              }).then((result) => {
+                shellResolvedAt = getWorkspaceSwitchMetricNow();
+                return result;
+              });
+          await Promise.all([
+            loadedWorkspaceShellState,
+            Promise.resolve(
+              workspaceFsAdapter.setRoot?.({
+                rootPath: workspacePath,
+                rootName: current.projectName ?? "project",
+                files: cachedFiles,
+              }),
+            ).then(() => {
+              setRootResolvedAt = getWorkspaceSwitchMetricNow();
+            }),
+          ]);
+          const nextWorkspaces = current.workspaces;
+          const resolvedWorkspaceShellState = !shouldLoadWorkspaceShellState
+            ? null
+            : await loadedWorkspaceShellState;
+          const preferLoadedWorkspaceState = shouldPreferLoadedWorkspaceState({
+            cachedWorkspaceState,
+            loadedWorkspaceShellState: resolvedWorkspaceShellState,
+          });
+          const workspaceState =
+            (preferLoadedWorkspaceState
+              ? resolvedWorkspaceShellState?.workspaceState
+              : (cachedWorkspaceState ??
+                resolvedWorkspaceShellState?.workspaceState)) ??
+            buildWorkspaceSessionState({ snapshot: null });
+          const workspaceIds = nextWorkspaces.map((workspace) => workspace.id);
+          const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({
+            state: current,
+          });
+          if (preferLoadedWorkspaceState) {
+            delete nextRuntimeCacheById[workspaceId];
+          }
+
+          set((state) => {
+            return {
+              workspaces:
+                nextWorkspaces.length > 0 ? nextWorkspaces : state.workspaces,
+              activeWorkspaceId: workspaceId,
+              workspaceSnapshotVersion: 0,
+              promptDraftPersistenceVersion: 0,
+              taskMessagesLoadingByTask: {},
+              workspaceRuntimeCacheById: nextRuntimeCacheById,
+              taskWorkspaceIdById: registerTaskWorkspaceOwnership({
+                taskWorkspaceIdById: retainTaskWorkspaceOwnership({
+                  taskWorkspaceIdById: state.taskWorkspaceIdById,
+                  workspaceIds,
+                }),
+                workspaceId,
+                tasks: workspaceState.tasks,
+              }),
               ...workspaceState,
               layout: {
-                ...nextState.layout,
+                ...state.layout,
                 terminalDocked: workspaceState.activeTerminalTabId
                   ? true
-                  : nextState.layout.terminalDocked,
+                  : state.layout.terminalDocked,
                 editorDiffMode: resolveEditorDiffMode({
                   editorTabs: workspaceState.editorTabs,
                   activeEditorTabId: workspaceState.activeEditorTabId,
                 }),
               },
+              projectFiles: cachedFiles,
             };
           });
-          return;
-        }
-        await get().switchWorkspace({ workspaceId: nextWorkspace.id });
-        set((nextState) => {
-          const nextBranchById = { ...nextState.workspaceBranchById };
-          const nextPathById = { ...nextState.workspacePathById };
-          const nextDefaultById = { ...nextState.workspaceDefaultById };
-          delete nextBranchById[workspaceId];
-          delete nextPathById[workspaceId];
-          delete nextDefaultById[workspaceId];
-          const nextRuntimeCacheById = removeWorkspaceRuntimeCacheEntries({
-            workspaceRuntimeCacheById: nextState.workspaceRuntimeCacheById,
-            workspaceIds: [workspaceId],
-          });
-          const nextTaskWorkspaceIdById = Object.fromEntries(
-            Object.entries(nextState.taskWorkspaceIdById).filter(([, ownerWorkspaceId]) => ownerWorkspaceId !== workspaceId)
-          );
-          return {
-            workspaces: nextState.workspaces.filter((item) => item.id !== workspaceId),
-            workspaceBranchById: nextBranchById,
-            workspacePathById: nextPathById,
-            workspaceDefaultById: nextDefaultById,
-            workspaceFileCacheByPath: removeCachedWorkspaceFiles({
-              workspaceFileCacheByPath: nextState.workspaceFileCacheByPath,
-              workspacePaths: [workspacePath],
-            }),
-            workspaceRuntimeCacheById: nextRuntimeCacheById,
-            taskWorkspaceIdById: nextTaskWorkspaceIdById,
-          };
-        });
-      },
-      switchWorkspace: async ({ workspaceId }) => {
-        const current = get();
-        if (workspaceId === current.activeWorkspaceId) {
-          return;
-        }
-        if (!current.workspaces.some((workspace) => workspace.id === workspaceId)) {
-          return;
-        }
-
-        const workspacePath = current.workspacePathById[workspaceId]
-          ?? (current.workspaceDefaultById[workspaceId] ? current.projectPath ?? undefined : undefined);
-        if (!workspacePath) {
-          return;
-        }
-        const cachedFiles = getCachedWorkspaceFiles({
-          workspacePath,
-          workspaceFileCacheByPath: current.workspaceFileCacheByPath,
-        });
-        const switchMetricToken = ++workspaceSwitchMetricTokenCounter;
-        const switchStartedAt = getWorkspaceSwitchMetricNow();
-        const cachedWorkspaceState = current.workspaceRuntimeCacheById[workspaceId];
-        const shouldLoadWorkspaceShellState = !cachedWorkspaceState
-          || shouldReloadWorkspaceShellFromPersistence({ cachedWorkspaceState });
-        let shellResolvedAt = !shouldLoadWorkspaceShellState
-          ? switchStartedAt
-          : undefined;
-        let setRootResolvedAt = switchStartedAt;
-        const loadedWorkspaceShellState = !shouldLoadWorkspaceShellState
-          ? null
-          : loadWorkspaceShellStateFromPersistence({
-              workspaceId,
-            }).then((result) => {
-              shellResolvedAt = getWorkspaceSwitchMetricNow();
-              return result;
-            });
-        await Promise.all([
-          loadedWorkspaceShellState,
-          Promise.resolve(workspaceFsAdapter.setRoot?.({
-            rootPath: workspacePath,
-            rootName: current.projectName ?? "project",
-            files: cachedFiles,
-          })).then(() => {
-            setRootResolvedAt = getWorkspaceSwitchMetricNow();
-          }),
-        ]);
-        const nextWorkspaces = current.workspaces;
-        const resolvedWorkspaceShellState = !shouldLoadWorkspaceShellState
-          ? null
-          : await loadedWorkspaceShellState;
-        const preferLoadedWorkspaceState = shouldPreferLoadedWorkspaceState({
-          cachedWorkspaceState,
-          loadedWorkspaceShellState: resolvedWorkspaceShellState,
-        });
-        const workspaceState = (
-          preferLoadedWorkspaceState
-          ? resolvedWorkspaceShellState?.workspaceState
-          : (cachedWorkspaceState ?? resolvedWorkspaceShellState?.workspaceState)
-        ) ?? buildWorkspaceSessionState({ snapshot: null });
-        const workspaceIds = nextWorkspaces.map((workspace) => workspace.id);
-        const nextRuntimeCacheById = saveActiveWorkspaceRuntimeCache({ state: current });
-        if (preferLoadedWorkspaceState) {
-          delete nextRuntimeCacheById[workspaceId];
-        }
-
-        set((state) => {
-          return {
-            workspaces: nextWorkspaces.length > 0 ? nextWorkspaces : state.workspaces,
-            activeWorkspaceId: workspaceId,
-            workspaceSnapshotVersion: 0,
-            promptDraftPersistenceVersion: 0,
-            taskMessagesLoadingByTask: {},
-            workspaceRuntimeCacheById: nextRuntimeCacheById,
-            taskWorkspaceIdById: registerTaskWorkspaceOwnership({
-              taskWorkspaceIdById: retainTaskWorkspaceOwnership({
-                taskWorkspaceIdById: state.taskWorkspaceIdById,
-                workspaceIds,
-              }),
-              workspaceId,
-              tasks: workspaceState.tasks,
-            }),
-            ...workspaceState,
-            layout: {
-              ...state.layout,
-              terminalDocked: workspaceState.activeTerminalTabId
-                ? true
-                : state.layout.terminalDocked,
-              editorDiffMode: resolveEditorDiffMode({
-                editorTabs: workspaceState.editorTabs,
-                activeEditorTabId: workspaceState.activeEditorTabId,
-              }),
-            },
-            projectFiles: cachedFiles,
-          };
-        });
-        registerWorkspaceSwitchMetric({
-          workspaceId,
-          metric: {
-            token: switchMetricToken,
-            startedAt: switchStartedAt,
-            cacheHit: Boolean(cachedWorkspaceState) && !preferLoadedWorkspaceState,
-            ...(shellResolvedAt !== undefined ? { shellResolvedAt } : {}),
-            setRootResolvedAt,
-          },
-        });
-        logWorkspaceSwitchMetric({
-          workspaceId,
-          token: switchMetricToken,
-          phase: "active",
-          extra: {
-            taskCount: workspaceState.tasks.length,
-            fileCount: cachedFiles.length,
-          },
-        });
-        refreshWorkspaceFilesInBackground({
-          workspaceId,
-          workspacePath,
-          switchMetricToken,
-        });
-        if (resolvedWorkspaceShellState) {
-          hydrateWorkspaceMessagesInBackground({
+          registerWorkspaceSwitchMetric({
             workspaceId,
-            taskIds: resolvedWorkspaceShellState.initialTaskIds,
-            latestTurns: resolvedWorkspaceShellState.latestTurns,
+            metric: {
+              token: switchMetricToken,
+              startedAt: switchStartedAt,
+              cacheHit:
+                Boolean(cachedWorkspaceState) && !preferLoadedWorkspaceState,
+              ...(shellResolvedAt !== undefined ? { shellResolvedAt } : {}),
+              setRootResolvedAt,
+            },
+          });
+          logWorkspaceSwitchMetric({
+            workspaceId,
+            token: switchMetricToken,
+            phase: "active",
+            extra: {
+              taskCount: workspaceState.tasks.length,
+              fileCount: cachedFiles.length,
+            },
+          });
+          refreshWorkspaceFilesInBackground({
+            workspaceId,
+            workspacePath,
             switchMetricToken,
           });
-        }
-      },
-      moveWorkspaceInProjectList: ({ projectPath, workspaceId, direction }) => {
-        const normalizedProjectPath = projectPath.trim();
-        const normalizedWorkspaceId = workspaceId.trim();
-        if (!normalizedProjectPath || !normalizedWorkspaceId) {
-          return;
-        }
+          if (resolvedWorkspaceShellState) {
+            hydrateWorkspaceMessagesInBackground({
+              workspaceId,
+              taskIds: resolvedWorkspaceShellState.initialTaskIds,
+              latestTurns: resolvedWorkspaceShellState.latestTurns,
+              switchMetricToken,
+            });
+          }
+        },
+        moveWorkspaceInProjectList: ({
+          projectPath,
+          workspaceId,
+          direction,
+        }) => {
+          const normalizedProjectPath = projectPath.trim();
+          const normalizedWorkspaceId = workspaceId.trim();
+          if (!normalizedProjectPath || !normalizedWorkspaceId) {
+            return;
+          }
 
-        set((state) => {
-          const indexDelta = direction === "up" ? -1 : 1;
+          set((state) => {
+            const indexDelta = direction === "up" ? -1 : 1;
 
-          if (state.projectPath === normalizedProjectPath) {
-            const fromIndex = state.workspaces.findIndex((workspace) => workspace.id === normalizedWorkspaceId);
-            const nextWorkspaces = moveArrayItem(state.workspaces, fromIndex, fromIndex + indexDelta);
-            if (nextWorkspaces === state.workspaces) {
+            if (state.projectPath === normalizedProjectPath) {
+              const fromIndex = state.workspaces.findIndex(
+                (workspace) => workspace.id === normalizedWorkspaceId,
+              );
+              const nextWorkspaces = moveArrayItem(
+                state.workspaces,
+                fromIndex,
+                fromIndex + indexDelta,
+              );
+              if (nextWorkspaces === state.workspaces) {
+                return state;
+              }
+
+              return {
+                workspaces: nextWorkspaces,
+                recentProjects: upsertRecentProjectState({
+                  projects: state.recentProjects,
+                  project: {
+                    projectPath: normalizedProjectPath,
+                    projectName: state.projectName ?? "project",
+                    lastOpenedAt:
+                      state.recentProjects.find(
+                        (project) =>
+                          project.projectPath === normalizedProjectPath,
+                      )?.lastOpenedAt ?? new Date().toISOString(),
+                    defaultBranch: state.defaultBranch,
+                    workspaces: nextWorkspaces,
+                    activeWorkspaceId: state.activeWorkspaceId,
+                    workspaceBranchById: state.workspaceBranchById,
+                    workspacePathById: state.workspacePathById,
+                    workspaceDefaultById: state.workspaceDefaultById,
+                    projectBasePrompt: resolveProjectBasePrompt({
+                      projectPath: normalizedProjectPath,
+                      recentProjects: state.recentProjects,
+                    }),
+                    newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand(
+                      {
+                        projectPath: normalizedProjectPath,
+                        recentProjects: state.recentProjects,
+                      },
+                    ),
+                    newWorkspaceUseRootNodeModulesSymlink:
+                      resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+                        projectPath: normalizedProjectPath,
+                        recentProjects: state.recentProjects,
+                      }),
+                  },
+                }),
+              };
+            }
+
+            const projectIndex = state.recentProjects.findIndex(
+              (project) => project.projectPath === normalizedProjectPath,
+            );
+            const project =
+              projectIndex >= 0 ? state.recentProjects[projectIndex] : null;
+            if (!project) {
+              return state;
+            }
+
+            const fromIndex = project.workspaces.findIndex(
+              (workspace) => workspace.id === normalizedWorkspaceId,
+            );
+            const nextWorkspaces = moveArrayItem(
+              project.workspaces,
+              fromIndex,
+              fromIndex + indexDelta,
+            );
+            if (nextWorkspaces === project.workspaces) {
+              return state;
+            }
+
+            const nextProject = {
+              ...cloneRecentProjectState(project),
+              workspaces: nextWorkspaces,
+            } satisfies RecentProjectState;
+
+            return {
+              recentProjects: state.recentProjects.map((item, index) =>
+                index === projectIndex
+                  ? nextProject
+                  : cloneRecentProjectState(item),
+              ),
+            };
+          });
+        },
+        setProjectWorkspaceInitCommand: ({ projectPath, command }) => {
+          set((state) => {
+            const normalizedProjectPath =
+              projectPath?.trim() || state.projectPath?.trim() || "";
+            if (!normalizedProjectPath) {
+              return state;
+            }
+
+            const currentProjects = captureCurrentProjectState({
+              recentProjects: state.recentProjects,
+              projectPath: state.projectPath,
+              projectName: state.projectName,
+              defaultBranch: state.defaultBranch,
+              workspaces: state.workspaces,
+              activeWorkspaceId: state.activeWorkspaceId,
+              workspaceBranchById: state.workspaceBranchById,
+              workspacePathById: state.workspacePathById,
+              workspaceDefaultById: state.workspaceDefaultById,
+            });
+            const existingProject = currentProjects.find(
+              (project) => project.projectPath === normalizedProjectPath,
+            );
+            if (!existingProject) {
+              return state;
+            }
+
+            const nextCommand = normalizeProjectWorkspaceInitCommand({
+              value: command,
+            });
+            const currentCommand = normalizeProjectWorkspaceInitCommand({
+              value: existingProject.newWorkspaceInitCommand,
+            });
+            if (currentCommand === nextCommand) {
               return state;
             }
 
             return {
-              workspaces: nextWorkspaces,
               recentProjects: upsertRecentProjectState({
-                projects: state.recentProjects,
+                projects: currentProjects,
                 project: {
-                  projectPath: normalizedProjectPath,
-                  projectName: state.projectName ?? "project",
-                  lastOpenedAt: state.recentProjects.find((project) => project.projectPath === normalizedProjectPath)?.lastOpenedAt
-                    ?? new Date().toISOString(),
-                  defaultBranch: state.defaultBranch,
-                  workspaces: nextWorkspaces,
-                  activeWorkspaceId: state.activeWorkspaceId,
-                  workspaceBranchById: state.workspaceBranchById,
-                  workspacePathById: state.workspacePathById,
-                  workspaceDefaultById: state.workspaceDefaultById,
-                  projectBasePrompt: resolveProjectBasePrompt({
-                    projectPath: normalizedProjectPath,
-                    recentProjects: state.recentProjects,
-                  }),
-                  newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
-                    projectPath: normalizedProjectPath,
-                    recentProjects: state.recentProjects,
-                  }),
-                  newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
-                    projectPath: normalizedProjectPath,
-                    recentProjects: state.recentProjects,
-                  }),
+                  ...cloneRecentProjectState(existingProject),
+                  newWorkspaceInitCommand: nextCommand,
                 },
               }),
             };
-          }
-
-          const projectIndex = state.recentProjects.findIndex((project) => project.projectPath === normalizedProjectPath);
-          const project = projectIndex >= 0 ? state.recentProjects[projectIndex] : null;
-          if (!project) {
-            return state;
-          }
-
-          const fromIndex = project.workspaces.findIndex((workspace) => workspace.id === normalizedWorkspaceId);
-          const nextWorkspaces = moveArrayItem(project.workspaces, fromIndex, fromIndex + indexDelta);
-          if (nextWorkspaces === project.workspaces) {
-            return state;
-          }
-
-          const nextProject = {
-            ...cloneRecentProjectState(project),
-            workspaces: nextWorkspaces,
-          } satisfies RecentProjectState;
-
-          return {
-            recentProjects: state.recentProjects.map((item, index) => (
-              index === projectIndex ? nextProject : cloneRecentProjectState(item)
-            )),
-          };
-        });
-      },
-      setProjectWorkspaceInitCommand: ({ projectPath, command }) => {
-        set((state) => {
-          const normalizedProjectPath = (projectPath?.trim() || state.projectPath?.trim() || "");
-          if (!normalizedProjectPath) {
-            return state;
-          }
-
-          const currentProjects = captureCurrentProjectState({
-            recentProjects: state.recentProjects,
-            projectPath: state.projectPath,
-            projectName: state.projectName,
-            defaultBranch: state.defaultBranch,
-            workspaces: state.workspaces,
-            activeWorkspaceId: state.activeWorkspaceId,
-            workspaceBranchById: state.workspaceBranchById,
-            workspacePathById: state.workspacePathById,
-            workspaceDefaultById: state.workspaceDefaultById,
           });
-          const existingProject = currentProjects.find((project) => project.projectPath === normalizedProjectPath);
-          if (!existingProject) {
-            return state;
-          }
+        },
+        setProjectBasePrompt: ({ projectPath, prompt }) => {
+          set((state) => {
+            const normalizedProjectPath =
+              projectPath?.trim() || state.projectPath?.trim() || "";
+            if (!normalizedProjectPath) {
+              return state;
+            }
 
-          const nextCommand = normalizeProjectWorkspaceInitCommand({ value: command });
-          const currentCommand = normalizeProjectWorkspaceInitCommand({
-            value: existingProject.newWorkspaceInitCommand,
+            const currentProjects = captureCurrentProjectState({
+              recentProjects: state.recentProjects,
+              projectPath: state.projectPath,
+              projectName: state.projectName,
+              defaultBranch: state.defaultBranch,
+              workspaces: state.workspaces,
+              activeWorkspaceId: state.activeWorkspaceId,
+              workspaceBranchById: state.workspaceBranchById,
+              workspacePathById: state.workspacePathById,
+              workspaceDefaultById: state.workspaceDefaultById,
+            });
+            const existingProject = currentProjects.find(
+              (project) => project.projectPath === normalizedProjectPath,
+            );
+            if (!existingProject) {
+              return state;
+            }
+
+            const nextPrompt = normalizeProjectBasePrompt({ value: prompt });
+            const currentPrompt = normalizeProjectBasePrompt({
+              value: existingProject.projectBasePrompt,
+            });
+            if (currentPrompt === nextPrompt) {
+              return state;
+            }
+
+            return {
+              recentProjects: upsertRecentProjectState({
+                projects: currentProjects,
+                project: {
+                  ...cloneRecentProjectState(existingProject),
+                  projectBasePrompt: nextPrompt,
+                },
+              }),
+            };
           });
-          if (currentCommand === nextCommand) {
-            return state;
-          }
+        },
+        setProjectWorkspaceUseRootNodeModulesSymlink: ({
+          projectPath,
+          enabled,
+        }) => {
+          set((state) => {
+            const normalizedProjectPath =
+              projectPath?.trim() || state.projectPath?.trim() || "";
+            if (!normalizedProjectPath) {
+              return state;
+            }
 
-          return {
-            recentProjects: upsertRecentProjectState({
-              projects: currentProjects,
-              project: {
-                ...cloneRecentProjectState(existingProject),
-                newWorkspaceInitCommand: nextCommand,
+            const currentProjects = captureCurrentProjectState({
+              recentProjects: state.recentProjects,
+              projectPath: state.projectPath,
+              projectName: state.projectName,
+              defaultBranch: state.defaultBranch,
+              workspaces: state.workspaces,
+              activeWorkspaceId: state.activeWorkspaceId,
+              workspaceBranchById: state.workspaceBranchById,
+              workspacePathById: state.workspacePathById,
+              workspaceDefaultById: state.workspaceDefaultById,
+            });
+            const existingProject = currentProjects.find(
+              (project) => project.projectPath === normalizedProjectPath,
+            );
+            if (!existingProject) {
+              return state;
+            }
+
+            const nextEnabled =
+              normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+                value: enabled,
+              });
+            const currentEnabled =
+              normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+                value: existingProject.newWorkspaceUseRootNodeModulesSymlink,
+              });
+            if (currentEnabled === nextEnabled) {
+              return state;
+            }
+
+            return {
+              recentProjects: upsertRecentProjectState({
+                projects: currentProjects,
+                project: {
+                  ...cloneRecentProjectState(existingProject),
+                  newWorkspaceUseRootNodeModulesSymlink: nextEnabled,
+                },
+              }),
+            };
+          });
+        },
+        setDarkMode: ({ enabled }) => {
+          const nextThemeMode: AppSettings["themeMode"] = enabled
+            ? "dark"
+            : "light";
+          const hadCustomTheme = Boolean(get().settings.customThemeId);
+          set((state) => {
+            if (
+              state.isDarkMode === enabled &&
+              state.settings.themeMode === nextThemeMode &&
+              !state.settings.customThemeId
+            ) {
+              return state;
+            }
+            return {
+              isDarkMode: enabled,
+              settings: {
+                ...state.settings,
+                themeMode: nextThemeMode,
+                customThemeId: null,
               },
-            }),
-          };
-        });
-      },
-      setProjectBasePrompt: ({ projectPath, prompt }) => {
-        set((state) => {
-          const normalizedProjectPath = (projectPath?.trim() || state.projectPath?.trim() || "");
-          if (!normalizedProjectPath) {
-            return state;
-          }
-
-          const currentProjects = captureCurrentProjectState({
-            recentProjects: state.recentProjects,
-            projectPath: state.projectPath,
-            projectName: state.projectName,
-            defaultBranch: state.defaultBranch,
-            workspaces: state.workspaces,
-            activeWorkspaceId: state.activeWorkspaceId,
-            workspaceBranchById: state.workspaceBranchById,
-            workspacePathById: state.workspacePathById,
-            workspaceDefaultById: state.workspaceDefaultById,
+            };
           });
-          const existingProject = currentProjects.find((project) => project.projectPath === normalizedProjectPath);
-          if (!existingProject) {
-            return state;
+          if (hadCustomTheme) {
+            applyCustomTheme({ theme: null });
           }
+          applyThemeClass({ enabled });
+        },
 
-          const nextPrompt = normalizeProjectBasePrompt({ value: prompt });
-          const currentPrompt = normalizeProjectBasePrompt({
-            value: existingProject.projectBasePrompt,
-          });
-          if (currentPrompt === nextPrompt) {
-            return state;
+        installCustomTheme: ({ theme }) => {
+          const state = get();
+          const existing = state.settings.userCustomThemes;
+          if (existing.length >= MAX_USER_THEMES) {
+            return {
+              ok: false,
+              error: `Maximum of ${MAX_USER_THEMES} user themes reached.`,
+            };
           }
-
-          return {
-            recentProjects: upsertRecentProjectState({
-              projects: currentProjects,
-              project: {
-                ...cloneRecentProjectState(existingProject),
-                projectBasePrompt: nextPrompt,
-              },
-            }),
-          };
-        });
-      },
-      setProjectWorkspaceUseRootNodeModulesSymlink: ({ projectPath, enabled }) => {
-        set((state) => {
-          const normalizedProjectPath = (projectPath?.trim() || state.projectPath?.trim() || "");
-          if (!normalizedProjectPath) {
-            return state;
+          const allIds = new Set([
+            ...BUILTIN_CUSTOM_THEMES.map((t) => t.id),
+            ...existing.map((t) => t.id),
+          ]);
+          if (allIds.has(theme.id)) {
+            return {
+              ok: false,
+              error: `Theme id "${theme.id}" already exists.`,
+            };
           }
-
-          const currentProjects = captureCurrentProjectState({
-            recentProjects: state.recentProjects,
-            projectPath: state.projectPath,
-            projectName: state.projectName,
-            defaultBranch: state.defaultBranch,
-            workspaces: state.workspaces,
-            activeWorkspaceId: state.activeWorkspaceId,
-            workspaceBranchById: state.workspaceBranchById,
-            workspacePathById: state.workspacePathById,
-            workspaceDefaultById: state.workspaceDefaultById,
-          });
-          const existingProject = currentProjects.find((project) => project.projectPath === normalizedProjectPath);
-          if (!existingProject) {
-            return state;
-          }
-
-          const nextEnabled = normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({ value: enabled });
-          const currentEnabled = normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
-            value: existingProject.newWorkspaceUseRootNodeModulesSymlink,
-          });
-          if (currentEnabled === nextEnabled) {
-            return state;
-          }
-
-          return {
-            recentProjects: upsertRecentProjectState({
-              projects: currentProjects,
-              project: {
-                ...cloneRecentProjectState(existingProject),
-                newWorkspaceUseRootNodeModulesSymlink: nextEnabled,
-              },
-            }),
-          };
-        });
-      },
-      setDarkMode: ({ enabled }) => {
-        const nextThemeMode: AppSettings["themeMode"] = enabled ? "dark" : "light";
-        const hadCustomTheme = Boolean(get().settings.customThemeId);
-        set((state) => {
-          if (state.isDarkMode === enabled && state.settings.themeMode === nextThemeMode && !state.settings.customThemeId) {
-            return state;
-          }
-          return {
-            isDarkMode: enabled,
+          set((s) => ({
             settings: {
-              ...state.settings,
-              themeMode: nextThemeMode,
-              customThemeId: null,
+              ...s.settings,
+              userCustomThemes: [...s.settings.userCustomThemes, theme],
             },
-          };
-        });
-        if (hadCustomTheme) {
-          applyCustomTheme({ theme: null });
-        }
-        applyThemeClass({ enabled });
-      },
+          }));
+          return { ok: true };
+        },
 
-      installCustomTheme: ({ theme }) => {
-        const state = get();
-        const existing = state.settings.userCustomThemes;
-        if (existing.length >= MAX_USER_THEMES) {
-          return { ok: false, error: `Maximum of ${MAX_USER_THEMES} user themes reached.` };
-        }
-        const allIds = new Set([
-          ...BUILTIN_CUSTOM_THEMES.map((t) => t.id),
-          ...existing.map((t) => t.id),
-        ]);
-        if (allIds.has(theme.id)) {
-          return { ok: false, error: `Theme id "${theme.id}" already exists.` };
-        }
-        set((s) => ({
-          settings: {
-            ...s.settings,
-            userCustomThemes: [...s.settings.userCustomThemes, theme],
-          },
-        }));
-        return { ok: true };
-      },
-
-      removeCustomTheme: ({ themeId }) => {
-        const state = get();
-        const wasActive = state.settings.customThemeId === themeId;
-        set((s) => ({
-          settings: {
-            ...s.settings,
-            userCustomThemes: s.settings.userCustomThemes.filter((t) => t.id !== themeId),
-            customThemeId: wasActive ? null : s.settings.customThemeId,
-          },
-        }));
-        if (wasActive) {
-          applyCustomTheme({ theme: null });
-        }
-      },
-
-      updateSettings: ({ patch }) => {
-        const normalizedPatch: Partial<AppSettings> = {
-          ...patch,
-          ...(patch.appShellMode === undefined
-            ? {}
-            : {
-                appShellMode: normalizeAppShellMode(patch.appShellMode),
-              }),
-          ...(patch.sharedSkillsHome === undefined
-            ? {}
-            : {
-                sharedSkillsHome: normalizeSharedSkillsHomeSetting(patch.sharedSkillsHome),
-              }),
-          ...(patch.reasoningExpansionMode === undefined
-            ? {}
-            : {
-                reasoningExpansionMode: normalizeReasoningExpansionMode(patch.reasoningExpansionMode),
-              }),
-          ...(patch.providerTimeoutMs === undefined
-            ? {}
-            : {
-                providerTimeoutMs: normalizeProviderTimeoutMs({ value: patch.providerTimeoutMs }),
-              }),
-          ...(patch.claudeTaskBudgetTokens === undefined
-            ? {}
-            : {
-                claudeTaskBudgetTokens: normalizeClaudeTaskBudgetTokens({
-                  value: patch.claudeTaskBudgetTokens,
-                }),
-              }),
-          ...(patch.claudeSettingSources === undefined
-            ? {}
-            : {
-                claudeSettingSources: normalizeClaudeSettingSources({
-                  value: patch.claudeSettingSources,
-                }),
-              }),
-          ...(patch.staveAutoRoleRuntimeOverrides === undefined
-            ? {}
-            : {
-                staveAutoRoleRuntimeOverrides: normalizeStaveAutoRoleRuntimeOverrides({
-                  value: patch.staveAutoRoleRuntimeOverrides,
-                }),
-              }),
-          ...(patch.notificationSoundVolume === undefined
-            ? {}
-            : {
-                notificationSoundVolume: normalizeNotificationSoundVolume(
-                  patch.notificationSoundVolume,
-                ),
-              }),
-          ...(patch.notificationSoundPreset === undefined
-            ? {}
-            : {
-                notificationSoundPreset: normalizeNotificationSoundPreset(
-                  patch.notificationSoundPreset,
-                ),
-              }),
-          ...(patch.notificationSoundMode === undefined
-            ? {}
-            : {
-                notificationSoundMode: normalizeNotificationSoundMode(
-                  patch.notificationSoundMode,
-                ),
-              }),
-        };
-
-        // ── resolve custom-theme side-effects ───────────────────────
-        // When a custom theme is selected, automatically align themeMode
-        // to the theme's base mode so the correct CSS selector activates.
-        const customThemeIdChanged = normalizedPatch.customThemeId !== undefined;
-        if (customThemeIdChanged && normalizedPatch.customThemeId) {
-          const userThemes = get().settings.userCustomThemes;
-          const theme = findCustomThemeById({ themeId: normalizedPatch.customThemeId, userThemes });
-          if (theme && normalizedPatch.themeMode === undefined) {
-            normalizedPatch.themeMode = theme.baseMode;
+        removeCustomTheme: ({ themeId }) => {
+          const state = get();
+          const wasActive = state.settings.customThemeId === themeId;
+          set((s) => ({
+            settings: {
+              ...s.settings,
+              userCustomThemes: s.settings.userCustomThemes.filter(
+                (t) => t.id !== themeId,
+              ),
+              customThemeId: wasActive ? null : s.settings.customThemeId,
+            },
+          }));
+          if (wasActive) {
+            applyCustomTheme({ theme: null });
           }
-        }
+        },
 
-        const nextThemeMode = normalizedPatch.themeMode;
-        const nextIsDark = nextThemeMode
-          ? resolveDarkModeForTheme({ themeMode: nextThemeMode })
-          : null;
-
-        set((state) => {
-          const nextSettings = { ...state.settings, ...normalizedPatch };
-          const settingsChanged = Object.keys(normalizedPatch).some((key) => (
-            nextSettings[key as keyof AppSettings] !== state.settings[key as keyof AppSettings]
-          ));
-          if (!settingsChanged && (nextIsDark === null || nextIsDark === state.isDarkMode)) {
-            return state;
-          }
-          const nextState: Partial<AppState> = {
-            settings: nextSettings,
-          };
-          if (nextIsDark !== null) {
-            nextState.isDarkMode = nextIsDark;
-          }
-          return {
-            ...nextState,
-          };
-        });
-
-        // ── apply custom theme ────────────────────────────────────────
-        if (customThemeIdChanged) {
-          const s = get().settings;
-          const theme = s.customThemeId
-            ? findCustomThemeById({ themeId: s.customThemeId, userThemes: s.userCustomThemes })
-            : null;
-          applyCustomTheme({ theme });
-        }
-
-        if (normalizedPatch.themeOverrides) {
-          applyThemeOverrides({ themeOverrides: normalizedPatch.themeOverrides });
-        }
-        if (nextIsDark !== null) {
-          applyThemeClass({ enabled: nextIsDark });
-        }
-        if (
-          normalizedPatch.messageFontFamily !== undefined
-          || normalizedPatch.messageMonoFontFamily !== undefined
-          || normalizedPatch.messageKoreanFontFamily !== undefined
-        ) {
-          const s = get().settings;
-          applyFontOverrides({
-            messageFontFamily: s.messageFontFamily,
-            messageMonoFontFamily: s.messageMonoFontFamily,
-            messageKoreanFontFamily: s.messageKoreanFontFamily,
-          });
-        }
-      },
-      refreshProviderCommandCatalog: () => {
-        set((state) => ({
-          providerCommandCatalogRefreshNonce: state.providerCommandCatalogRefreshNonce + 1,
-        }));
-      },
-      notifyWorkspacePlansChanged: () => {
-        set((state) => ({
-          workspacePlansRefreshNonce: state.workspacePlansRefreshNonce + 1,
-        }));
-      },
-      selectTask: ({ taskId }) => {
-        const stateBefore = get();
-        const targetTask = stateBefore.tasks.find((task) => task.id === taskId) ?? null;
-        if (!targetTask || isTaskArchived(targetTask)) {
-          return;
-        }
-        if (stateBefore.activeTaskId === taskId && stateBefore.activeSurface.kind === "task" && stateBefore.activeSurface.taskId === taskId) {
-          return;
-        }
-        const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
-        const shouldLoadMessages = !(taskId in stateBefore.messagesByTask)
-          && (stateBefore.messageCountByTask[taskId] ?? 0) > 0;
-        set((state) => ({
-          activeTaskId: taskId,
-          activeSurface: { kind: "task", taskId },
-          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-        }));
-        if (workspaceId && shouldLoadMessages) {
-          void loadTaskMessagesIntoSession({
-            workspaceId,
-            taskId,
-            mode: "latest",
-          });
-        }
-      },
-      loadTaskMessages: async ({ taskId, mode = "latest" }) => {
-        const state = get();
-        const workspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
-        if (!workspaceId || !taskId) {
-          return;
-        }
-        await loadTaskMessagesIntoSession({
-          workspaceId,
-          taskId,
-          mode,
-        });
-      },
-      clearTaskSelection: () => set((state) => {
-        if (!state.activeTaskId) {
-          return state;
-        }
-        return {
-          activeTaskId: "",
-          activeSurface: state.activeSurface.kind === "task"
-            ? { kind: "task", taskId: "" }
-            : state.activeSurface,
-          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-        };
-      }),
-      updatePromptDraft: ({ taskId, patch }) => {
-        set((state) => {
-          const workspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
-          const cachedSession = workspaceId && workspaceId !== state.activeWorkspaceId
-            ? state.workspaceRuntimeCacheById[workspaceId] ?? null
-            : null;
-          const promptDraftByTask = cachedSession?.promptDraftByTask ?? state.promptDraftByTask;
-          const currentDraft = promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
-          const nextDraft = normalizePromptDraftForStorage({
-            text: currentDraft.text,
-            attachedFilePaths: currentDraft.attachedFilePaths,
-            attachments: currentDraft.attachments,
-            runtimeOverrides: currentDraft.runtimeOverrides,
-            queuedNextTurn: currentDraft.queuedNextTurn,
+        updateSettings: ({ patch }) => {
+          const normalizedPatch: Partial<AppSettings> = {
             ...patch,
-          });
-          const textChanged = nextDraft.text !== currentDraft.text;
-          const attachedFilePathsChanged =
-            nextDraft.attachedFilePaths.length !== currentDraft.attachedFilePaths.length
-            || nextDraft.attachedFilePaths.some((p, i) => p !== currentDraft.attachedFilePaths[i]);
-          const attachmentsChanged =
-            nextDraft.attachments.length !== currentDraft.attachments.length
-            || nextDraft.attachments.some((a, i) => a !== currentDraft.attachments[i]);
-          const runtimeOverridesChanged = !arePromptDraftRuntimeOverridesEqual(
-            nextDraft.runtimeOverrides,
-            currentDraft.runtimeOverrides,
-          );
-          const queuedNextTurnChanged = !arePromptDraftQueuedNextTurnEqual(
-            nextDraft.queuedNextTurn,
-            currentDraft.queuedNextTurn,
-          );
-          if (!textChanged && !attachedFilePathsChanged && !attachmentsChanged && !runtimeOverridesChanged && !queuedNextTurnChanged) {
-            return state;
-          }
-          if (cachedSession) {
-            return {
-              workspaceRuntimeCacheById: {
-                ...state.workspaceRuntimeCacheById,
-                [workspaceId]: {
-                  ...cachedSession,
-                  promptDraftByTask: {
-                    ...cachedSession.promptDraftByTask,
-                    [taskId]: nextDraft,
-                  },
-                },
-              },
-            };
-          }
-          const onlyTextChanged = textChanged
-            && !attachedFilePathsChanged
-            && !attachmentsChanged
-            && !runtimeOverridesChanged
-            && !queuedNextTurnChanged;
-          return {
-            promptDraftByTask: {
-              ...state.promptDraftByTask,
-              [taskId]: nextDraft,
-            },
-            ...(onlyTextChanged
-              ? { promptDraftPersistenceVersion: incrementPromptDraftPersistenceVersion(state) }
-              : { workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state) }),
+            ...(patch.appShellMode === undefined
+              ? {}
+              : {
+                  appShellMode: normalizeAppShellMode(patch.appShellMode),
+                }),
+            ...(patch.sharedSkillsHome === undefined
+              ? {}
+              : {
+                  sharedSkillsHome: normalizeSharedSkillsHomeSetting(
+                    patch.sharedSkillsHome,
+                  ),
+                }),
+            ...(patch.reasoningExpansionMode === undefined
+              ? {}
+              : {
+                  reasoningExpansionMode: normalizeReasoningExpansionMode(
+                    patch.reasoningExpansionMode,
+                  ),
+                }),
+            ...(patch.providerTimeoutMs === undefined
+              ? {}
+              : {
+                  providerTimeoutMs: normalizeProviderTimeoutMs({
+                    value: patch.providerTimeoutMs,
+                  }),
+                }),
+            ...(patch.claudeTaskBudgetTokens === undefined
+              ? {}
+              : {
+                  claudeTaskBudgetTokens: normalizeClaudeTaskBudgetTokens({
+                    value: patch.claudeTaskBudgetTokens,
+                  }),
+                }),
+            ...(patch.claudeSettingSources === undefined
+              ? {}
+              : {
+                  claudeSettingSources: normalizeClaudeSettingSources({
+                    value: patch.claudeSettingSources,
+                  }),
+                }),
+            ...(patch.staveAutoRoleRuntimeOverrides === undefined
+              ? {}
+              : {
+                  staveAutoRoleRuntimeOverrides:
+                    normalizeStaveAutoRoleRuntimeOverrides({
+                      value: patch.staveAutoRoleRuntimeOverrides,
+                    }),
+                }),
+            ...(patch.notificationSoundVolume === undefined
+              ? {}
+              : {
+                  notificationSoundVolume: normalizeNotificationSoundVolume(
+                    patch.notificationSoundVolume,
+                  ),
+                }),
+            ...(patch.notificationSoundPreset === undefined
+              ? {}
+              : {
+                  notificationSoundPreset: normalizeNotificationSoundPreset(
+                    patch.notificationSoundPreset,
+                  ),
+                }),
+            ...(patch.notificationSoundMode === undefined
+              ? {}
+              : {
+                  notificationSoundMode: normalizeNotificationSoundMode(
+                    patch.notificationSoundMode,
+                  ),
+                }),
           };
-        });
-      },
-      clearTaskProviderSession: ({ taskId, providerId }) => {
-        set((state) => {
-          const currentSession = state.providerSessionByTask[taskId];
-          const existingSessionId = currentSession?.[providerId]?.trim();
-          if (!existingSessionId) {
-            return state;
+
+          // ── resolve custom-theme side-effects ───────────────────────
+          // When a custom theme is selected, automatically align themeMode
+          // to the theme's base mode so the correct CSS selector activates.
+          const customThemeIdChanged =
+            normalizedPatch.customThemeId !== undefined;
+          if (customThemeIdChanged && normalizedPatch.customThemeId) {
+            const userThemes = get().settings.userCustomThemes;
+            const theme = findCustomThemeById({
+              themeId: normalizedPatch.customThemeId,
+              userThemes,
+            });
+            if (theme && normalizedPatch.themeMode === undefined) {
+              normalizedPatch.themeMode = theme.baseMode;
+            }
           }
 
-          const nextTaskSession: TaskProviderSessionState = {
-            ...currentSession,
-          };
-          delete nextTaskSession[providerId];
-
-          const activeProvider = state.tasks.find((task) => task.id === taskId)?.provider;
-          const nextNativeSessionReady = activeProvider !== undefined
-            && activeProvider !== "stave"
-            && Boolean(nextTaskSession[activeProvider]?.trim());
-
-          return {
-            providerSessionByTask: {
-              ...state.providerSessionByTask,
-              [taskId]: nextTaskSession,
-            },
-            nativeSessionReadyByTask: {
-              ...state.nativeSessionReadyByTask,
-              [taskId]: nextNativeSessionReady,
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      updateWorkspaceInformation: ({ updater }) => {
-        set((state) => {
-          const nextWorkspaceInformation = updater(state.workspaceInformation);
-          if (nextWorkspaceInformation === state.workspaceInformation) {
-            return state;
-          }
-          return {
-            workspaceInformation: nextWorkspaceInformation,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      applyExternalWorkspaceInformationUpdate: ({ workspaceId, workspaceInformation }) => {
-        set((state) => {
-          const cachedSession = state.workspaceRuntimeCacheById[workspaceId];
-          const nextRuntimeCacheById = cachedSession
-            ? {
-                ...state.workspaceRuntimeCacheById,
-                [workspaceId]: {
-                  ...cachedSession,
-                  workspaceInformation,
-                },
-              }
-            : state.workspaceRuntimeCacheById;
-
-          if (workspaceId === state.activeWorkspaceId) {
-            return {
-              workspaceInformation,
-              workspaceRuntimeCacheById: nextRuntimeCacheById,
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-            };
-          }
-
-          if (cachedSession) {
-            return {
-              workspaceRuntimeCacheById: nextRuntimeCacheById,
-            };
-          }
-
-          return state;
-        });
-      },
-      clearPromptDraft: ({ taskId }) => {
-        set((state) => {
-          const workspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
-          const cachedSession = workspaceId && workspaceId !== state.activeWorkspaceId
-            ? state.workspaceRuntimeCacheById[workspaceId] ?? null
+          const nextThemeMode = normalizedPatch.themeMode;
+          const nextIsDark = nextThemeMode
+            ? resolveDarkModeForTheme({ themeMode: nextThemeMode })
             : null;
-          const promptDraftByTask = cachedSession?.promptDraftByTask ?? state.promptDraftByTask;
-          const currentDraft = promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
-          if (!hasPromptDraftPayload(currentDraft) && !currentDraft.queuedNextTurn) {
-            return state;
-          }
-          const nextDraft = buildClearedPromptDraft(currentDraft);
-          if (cachedSession) {
-            return {
-              workspaceRuntimeCacheById: {
-                ...state.workspaceRuntimeCacheById,
-                [workspaceId]: {
-                  ...cachedSession,
-                  promptDraftByTask: {
-                    ...cachedSession.promptDraftByTask,
-                    [taskId]: nextDraft,
-                  },
-                },
-              },
+
+          set((state) => {
+            const nextSettings = { ...state.settings, ...normalizedPatch };
+            const settingsChanged = Object.keys(normalizedPatch).some(
+              (key) =>
+                nextSettings[key as keyof AppSettings] !==
+                state.settings[key as keyof AppSettings],
+            );
+            if (
+              !settingsChanged &&
+              (nextIsDark === null || nextIsDark === state.isDarkMode)
+            ) {
+              return state;
+            }
+            const nextState: Partial<AppState> = {
+              settings: nextSettings,
             };
+            if (nextIsDark !== null) {
+              nextState.isDarkMode = nextIsDark;
+            }
+            return {
+              ...nextState,
+            };
+          });
+
+          // ── apply custom theme ────────────────────────────────────────
+          if (customThemeIdChanged) {
+            const s = get().settings;
+            const theme = s.customThemeId
+              ? findCustomThemeById({
+                  themeId: s.customThemeId,
+                  userThemes: s.userCustomThemes,
+                })
+              : null;
+            applyCustomTheme({ theme });
           }
-          return {
-            promptDraftByTask: {
-              ...state.promptDraftByTask,
-              [taskId]: nextDraft,
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      createTask: ({ title }) => {
-        const trimmed = (title ?? "").trim();
-        const stateBefore = get();
-        const workspaceId = stateBefore.activeWorkspaceId;
-        if (!workspaceId || !stateBefore.workspaces.some((workspace) => workspace.id === workspaceId)) {
-          return;
-        }
-        const nextTask: Task = {
-          id: crypto.randomUUID(),
-          title: trimmed.length > 0 ? trimmed : "New Task",
-          provider: stateBefore.draftProvider,
-          updatedAt: buildRecentTimestamp(),
-          unread: false,
-          archivedAt: null,
-          controlMode: "interactive",
-          controlOwner: "stave",
-        };
-        set((state) => {
-          return {
-            tasks: [nextTask, ...state.tasks],
-            activeTaskId: nextTask.id,
-            activeSurface: { kind: "task", taskId: nextTask.id },
-            messagesByTask: {
-              ...state.messagesByTask,
-              [nextTask.id]: [],
-            },
-            messageCountByTask: {
-              ...state.messageCountByTask,
-              [nextTask.id]: 0,
-            },
-            nativeSessionReadyByTask: {
-              ...state.nativeSessionReadyByTask,
-              [nextTask.id]: false,
-            },
-            providerSessionByTask: {
-              ...state.providerSessionByTask,
-              [nextTask.id]: {},
-            },
-            taskWorkspaceIdById: {
-              ...state.taskWorkspaceIdById,
-              [nextTask.id]: workspaceId,
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-        runScriptHookInBackground({
-          workspaceId,
-          trigger: "task.created",
-          taskId: nextTask.id,
-          taskTitle: nextTask.title,
-        });
-      },
-      renameTask: ({ taskId, title }) => {
-        const nextTitle = title.trim();
-        if (!nextTitle) {
-          return;
-        }
-        set((state) => {
-          if (isManagedTaskReadOnly({ state, taskId })) {
-            return state;
+
+          if (normalizedPatch.themeOverrides) {
+            applyThemeOverrides({
+              themeOverrides: normalizedPatch.themeOverrides,
+            });
           }
-          return {
-            tasks: state.tasks.map((task) =>
-              task.id === taskId
-                ? {
-                    ...task,
-                    title: nextTitle,
-                    updatedAt: buildRecentTimestamp(),
-                  }
-                : task
-            ),
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      restoreTask: ({ taskId }) => {
-        const stateBefore = get();
-        const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
-        const shouldLoadMessages = !(taskId in stateBefore.messagesByTask)
-          && (stateBefore.messageCountByTask[taskId] ?? 0) > 0;
-        set((state) => {
-          const targetTask = state.tasks.find((task) => task.id === taskId);
-          if (!targetTask || !isTaskArchived(targetTask)) {
-            return {};
+          if (nextIsDark !== null) {
+            applyThemeClass({ enabled: nextIsDark });
           }
-          return {
-            tasks: state.tasks.map((task) =>
-              task.id === taskId
-                ? {
-                    ...task,
-                    archivedAt: null,
-                    updatedAt: buildRecentTimestamp(),
-                  }
-                : task
-            ),
+          if (
+            normalizedPatch.messageFontFamily !== undefined ||
+            normalizedPatch.messageMonoFontFamily !== undefined ||
+            normalizedPatch.messageKoreanFontFamily !== undefined
+          ) {
+            const s = get().settings;
+            applyFontOverrides({
+              messageFontFamily: s.messageFontFamily,
+              messageMonoFontFamily: s.messageMonoFontFamily,
+              messageKoreanFontFamily: s.messageKoreanFontFamily,
+            });
+          }
+        },
+        refreshProviderCommandCatalog: () => {
+          set((state) => ({
+            providerCommandCatalogRefreshNonce:
+              state.providerCommandCatalogRefreshNonce + 1,
+          }));
+        },
+        notifyWorkspacePlansChanged: () => {
+          set((state) => ({
+            workspacePlansRefreshNonce: state.workspacePlansRefreshNonce + 1,
+          }));
+        },
+        selectTask: ({ taskId }) => {
+          const stateBefore = get();
+          const targetTask =
+            stateBefore.tasks.find((task) => task.id === taskId) ?? null;
+          if (!targetTask || isTaskArchived(targetTask)) {
+            return;
+          }
+          if (
+            stateBefore.activeTaskId === taskId &&
+            stateBefore.activeSurface.kind === "task" &&
+            stateBefore.activeSurface.taskId === taskId
+          ) {
+            return;
+          }
+          const workspaceId =
+            stateBefore.taskWorkspaceIdById[taskId] ??
+            stateBefore.activeWorkspaceId;
+          const shouldLoadMessages =
+            !(taskId in stateBefore.messagesByTask) &&
+            (stateBefore.messageCountByTask[taskId] ?? 0) > 0;
+          set((state) => ({
             activeTaskId: taskId,
             activeSurface: { kind: "task", taskId },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-        if (workspaceId && shouldLoadMessages) {
-          void loadTaskMessagesIntoSession({
+          }));
+          if (workspaceId && shouldLoadMessages) {
+            void loadTaskMessagesIntoSession({
+              workspaceId,
+              taskId,
+              mode: "latest",
+            });
+          }
+        },
+        loadTaskMessages: async ({ taskId, mode = "latest" }) => {
+          const state = get();
+          const workspaceId =
+            state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+          if (!workspaceId || !taskId) {
+            return;
+          }
+          await loadTaskMessagesIntoSession({
             workspaceId,
             taskId,
-            mode: "latest",
+            mode,
           });
-        }
-      },
-      duplicateTask: async ({ taskId }) => {
-        const stateBefore = get();
-        const sourceTask = stateBefore.tasks.find((task) => task.id === taskId);
-        if (!sourceTask) {
-          return;
-        }
-        const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
-        const sourceMessages = (() => {
-          const loadedMessages = stateBefore.messagesByTask[taskId];
-          const totalCount = stateBefore.messageCountByTask[taskId] ?? loadedMessages?.length ?? 0;
-          if (loadedMessages && loadedMessages.length >= totalCount) {
-            return loadedMessages;
-          }
-          return null;
-        })();
-        const completeSourceMessages = sourceMessages
-          ?? (await loadWorkspaceSnapshot({ workspaceId }))?.messagesByTask[taskId]
-          ?? [];
+        },
+        clearTaskSelection: () =>
+          set((state) => {
+            if (!state.activeTaskId) {
+              return state;
+            }
+            return {
+              activeTaskId: "",
+              activeSurface:
+                state.activeSurface.kind === "task"
+                  ? { kind: "task", taskId: "" }
+                  : state.activeSurface,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          }),
+        updatePromptDraft: ({ taskId, patch }) => {
+          set((state) => {
+            const workspaceId =
+              state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+            const cachedSession =
+              workspaceId && workspaceId !== state.activeWorkspaceId
+                ? (state.workspaceRuntimeCacheById[workspaceId] ?? null)
+                : null;
+            const promptDraftByTask =
+              cachedSession?.promptDraftByTask ?? state.promptDraftByTask;
+            const currentDraft =
+              promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
+            const nextDraft = normalizePromptDraftForStorage({
+              text: currentDraft.text,
+              attachedFilePaths: currentDraft.attachedFilePaths,
+              attachments: currentDraft.attachments,
+              runtimeOverrides: currentDraft.runtimeOverrides,
+              queuedNextTurn: currentDraft.queuedNextTurn,
+              ...patch,
+            });
+            const textChanged = nextDraft.text !== currentDraft.text;
+            const attachedFilePathsChanged =
+              nextDraft.attachedFilePaths.length !==
+                currentDraft.attachedFilePaths.length ||
+              nextDraft.attachedFilePaths.some(
+                (p, i) => p !== currentDraft.attachedFilePaths[i],
+              );
+            const attachmentsChanged =
+              nextDraft.attachments.length !==
+                currentDraft.attachments.length ||
+              nextDraft.attachments.some(
+                (a, i) => a !== currentDraft.attachments[i],
+              );
+            const runtimeOverridesChanged =
+              !arePromptDraftRuntimeOverridesEqual(
+                nextDraft.runtimeOverrides,
+                currentDraft.runtimeOverrides,
+              );
+            const queuedNextTurnChanged = !arePromptDraftQueuedNextTurnEqual(
+              nextDraft.queuedNextTurn,
+              currentDraft.queuedNextTurn,
+            );
+            if (
+              !textChanged &&
+              !attachedFilePathsChanged &&
+              !attachmentsChanged &&
+              !runtimeOverridesChanged &&
+              !queuedNextTurnChanged
+            ) {
+              return state;
+            }
+            if (cachedSession) {
+              return {
+                workspaceRuntimeCacheById: {
+                  ...state.workspaceRuntimeCacheById,
+                  [workspaceId]: {
+                    ...cachedSession,
+                    promptDraftByTask: {
+                      ...cachedSession.promptDraftByTask,
+                      [taskId]: nextDraft,
+                    },
+                  },
+                },
+              };
+            }
+            const onlyTextChanged =
+              textChanged &&
+              !attachedFilePathsChanged &&
+              !attachmentsChanged &&
+              !runtimeOverridesChanged &&
+              !queuedNextTurnChanged;
+            return {
+              promptDraftByTask: {
+                ...state.promptDraftByTask,
+                [taskId]: nextDraft,
+              },
+              ...(onlyTextChanged
+                ? {
+                    promptDraftPersistenceVersion:
+                      incrementPromptDraftPersistenceVersion(state),
+                  }
+                : {
+                    workspaceSnapshotVersion:
+                      incrementWorkspaceSnapshotVersion(state),
+                  }),
+            };
+          });
+        },
+        clearTaskProviderSession: ({ taskId, providerId }) => {
+          set((state) => {
+            const currentSession = state.providerSessionByTask[taskId];
+            const existingSessionId = currentSession?.[providerId]?.trim();
+            if (!existingSessionId) {
+              return state;
+            }
 
-        set((state) => {
-          const nextTaskId = crypto.randomUUID();
-          const duplicatedMessages = completeSourceMessages.map((message) => ({
-            ...message,
+            const nextTaskSession: TaskProviderSessionState = {
+              ...currentSession,
+            };
+            delete nextTaskSession[providerId];
+
+            const activeProvider = state.tasks.find(
+              (task) => task.id === taskId,
+            )?.provider;
+            const nextNativeSessionReady =
+              activeProvider !== undefined &&
+              activeProvider !== "stave" &&
+              Boolean(nextTaskSession[activeProvider]?.trim());
+
+            return {
+              providerSessionByTask: {
+                ...state.providerSessionByTask,
+                [taskId]: nextTaskSession,
+              },
+              nativeSessionReadyByTask: {
+                ...state.nativeSessionReadyByTask,
+                [taskId]: nextNativeSessionReady,
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        updateWorkspaceInformation: ({ updater }) => {
+          set((state) => {
+            const nextWorkspaceInformation = updater(
+              state.workspaceInformation,
+            );
+            if (nextWorkspaceInformation === state.workspaceInformation) {
+              return state;
+            }
+            return {
+              workspaceInformation: nextWorkspaceInformation,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        applyExternalWorkspaceInformationUpdate: ({
+          workspaceId,
+          workspaceInformation,
+        }) => {
+          set((state) => {
+            const cachedSession = state.workspaceRuntimeCacheById[workspaceId];
+            const nextRuntimeCacheById = cachedSession
+              ? {
+                  ...state.workspaceRuntimeCacheById,
+                  [workspaceId]: {
+                    ...cachedSession,
+                    workspaceInformation,
+                  },
+                }
+              : state.workspaceRuntimeCacheById;
+
+            if (workspaceId === state.activeWorkspaceId) {
+              return {
+                workspaceInformation,
+                workspaceRuntimeCacheById: nextRuntimeCacheById,
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(state),
+              };
+            }
+
+            if (cachedSession) {
+              return {
+                workspaceRuntimeCacheById: nextRuntimeCacheById,
+              };
+            }
+
+            return state;
+          });
+        },
+        clearPromptDraft: ({ taskId }) => {
+          set((state) => {
+            const workspaceId =
+              state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+            const cachedSession =
+              workspaceId && workspaceId !== state.activeWorkspaceId
+                ? (state.workspaceRuntimeCacheById[workspaceId] ?? null)
+                : null;
+            const promptDraftByTask =
+              cachedSession?.promptDraftByTask ?? state.promptDraftByTask;
+            const currentDraft =
+              promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
+            if (
+              !hasPromptDraftPayload(currentDraft) &&
+              !currentDraft.queuedNextTurn
+            ) {
+              return state;
+            }
+            const nextDraft = buildClearedPromptDraft(currentDraft);
+            if (cachedSession) {
+              return {
+                workspaceRuntimeCacheById: {
+                  ...state.workspaceRuntimeCacheById,
+                  [workspaceId]: {
+                    ...cachedSession,
+                    promptDraftByTask: {
+                      ...cachedSession.promptDraftByTask,
+                      [taskId]: nextDraft,
+                    },
+                  },
+                },
+              };
+            }
+            return {
+              promptDraftByTask: {
+                ...state.promptDraftByTask,
+                [taskId]: nextDraft,
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        createTask: ({ title }) => {
+          const trimmed = (title ?? "").trim();
+          const stateBefore = get();
+          const workspaceId = stateBefore.activeWorkspaceId;
+          if (
+            !workspaceId ||
+            !stateBefore.workspaces.some(
+              (workspace) => workspace.id === workspaceId,
+            )
+          ) {
+            return;
+          }
+          const nextTask: Task = {
             id: crypto.randomUUID(),
-            isStreaming: false,
-          }));
-          const duplicatedTask: Task = {
-            ...sourceTask,
-            id: nextTaskId,
-            title: `${sourceTask.title} (copy)`,
+            title: trimmed.length > 0 ? trimmed : "New Task",
+            provider: stateBefore.draftProvider,
             updatedAt: buildRecentTimestamp(),
             unread: false,
             archivedAt: null,
             controlMode: "interactive",
             controlOwner: "stave",
           };
-          return {
-            tasks: [duplicatedTask, ...state.tasks],
-            activeTaskId: duplicatedTask.id,
-            taskCheckpointById: {
-              ...state.taskCheckpointById,
-              [duplicatedTask.id]: state.taskCheckpointById[taskId] ?? "",
-            },
-            messagesByTask: {
-              ...state.messagesByTask,
-              [duplicatedTask.id]: duplicatedMessages,
-            },
-            messageCountByTask: {
-              ...state.messageCountByTask,
-              [duplicatedTask.id]: duplicatedMessages.length,
-            },
-            nativeSessionReadyByTask: {
-              ...state.nativeSessionReadyByTask,
-              [duplicatedTask.id]: false,
-            },
-            providerSessionByTask: {
-              ...state.providerSessionByTask,
-              [duplicatedTask.id]: {},
-            },
-            taskWorkspaceIdById: {
-              ...state.taskWorkspaceIdById,
-              [duplicatedTask.id]: workspaceId,
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      reorderTasks: ({ activeTaskId, overTaskId, filter }) => {
-        set((state) => {
-          const nextTasks = reorderTasksWithinFilter({
-            tasks: state.tasks,
-            activeTaskId,
-            overTaskId,
-            filter,
+          set((state) => {
+            return {
+              tasks: [nextTask, ...state.tasks],
+              activeTaskId: nextTask.id,
+              activeSurface: { kind: "task", taskId: nextTask.id },
+              messagesByTask: {
+                ...state.messagesByTask,
+                [nextTask.id]: [],
+              },
+              messageCountByTask: {
+                ...state.messageCountByTask,
+                [nextTask.id]: 0,
+              },
+              nativeSessionReadyByTask: {
+                ...state.nativeSessionReadyByTask,
+                [nextTask.id]: false,
+              },
+              providerSessionByTask: {
+                ...state.providerSessionByTask,
+                [nextTask.id]: {},
+              },
+              taskWorkspaceIdById: {
+                ...state.taskWorkspaceIdById,
+                [nextTask.id]: workspaceId,
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
           });
-          if (nextTasks === state.tasks) {
-            return {};
+          runScriptHookInBackground({
+            workspaceId,
+            trigger: "task.created",
+            taskId: nextTask.id,
+            taskTitle: nextTask.title,
+          });
+        },
+        renameTask: ({ taskId, title }) => {
+          const nextTitle = title.trim();
+          if (!nextTitle) {
+            return;
           }
-          return {
-            tasks: nextTasks,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      exportTask: async ({ taskId }) => {
-        if (typeof document === "undefined") {
-          return;
-        }
-        const state = get();
-        const task = state.tasks.find((item) => item.id === taskId);
-        if (!task) {
-          return;
-        }
-        const workspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
-        const loadedMessages = state.messagesByTask[taskId];
-        const totalCount = state.messageCountByTask[taskId] ?? loadedMessages?.length ?? 0;
-        const messages = loadedMessages && loadedMessages.length >= totalCount
-          ? loadedMessages
-          : (await loadWorkspaceSnapshot({ workspaceId }))?.messagesByTask[taskId] ?? [];
-        const payload = {
-          exportedAt: new Date().toISOString(),
-          task,
-          messages,
-        };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        const safeTitle = task.title.replaceAll(/[^a-z0-9-_]+/gi, "-").toLowerCase();
-        anchor.href = url;
-        anchor.download = `${safeTitle || "task"}-${taskId}.json`;
-        document.body.append(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(url);
-      },
-      viewTaskChanges: async ({ taskId }) => {
-        const state = get();
-        const checkpoint = state.taskCheckpointById[taskId];
-        const workspaceCwd = resolveTaskWorkspaceContext({
-          taskId,
-          activeWorkspaceId: state.activeWorkspaceId,
-          taskWorkspaceIdById: state.taskWorkspaceIdById,
-          workspacePathById: state.workspacePathById,
-          workspaceDefaultById: state.workspaceDefaultById,
-          projectPath: state.projectPath,
-        }).cwd;
-        const runCommand = window.api?.terminal?.runCommand;
-        if (!runCommand || !workspaceCwd) {
-          return;
-        }
-
-        const command = checkpoint
-          ? `git diff --name-status ${JSON.stringify(checkpoint)} --`
-          : "git status --porcelain";
-        const result = await runCommand({ cwd: workspaceCwd, command });
-        const rawOutput = result.ok
-          ? (result.stdout.trim() || "No file changes for this task checkpoint.")
-          : (result.stderr.trim() || "Failed to load task changes.");
-        const output = result.ok && rawOutput !== "No file changes for this task checkpoint."
-          ? `### Task Changes\n\n\`\`\`diff\n${rawOutput}\n\`\`\``
-          : result.ok
-            ? rawOutput
-            : `> **Failed to load task changes.** ${rawOutput}`;
-
-        set((nextState) => {
-          const current = nextState.messagesByTask[taskId] ?? [];
-          const message: ChatMessage = {
-            id: buildMessageId({ taskId, count: current.length }),
-            role: "assistant",
-            model: "system",
-            providerId: "user",
-            content: rawOutput,
-            parts: [{
-              type: "text",
-              text: output,
-            }],
-          };
-          return {
-            messagesByTask: {
-              ...nextState.messagesByTask,
-              [taskId]: [...current, message],
-            },
-            messageCountByTask: {
-              ...nextState.messageCountByTask,
-              [taskId]: Math.max(
-                (nextState.messageCountByTask[taskId] ?? current.length) + 1,
-                current.length + 1,
+          set((state) => {
+            if (isManagedTaskReadOnly({ state, taskId })) {
+              return state;
+            }
+            return {
+              tasks: state.tasks.map((task) =>
+                task.id === taskId
+                  ? {
+                      ...task,
+                      title: nextTitle,
+                      updatedAt: buildRecentTimestamp(),
+                    }
+                  : task,
               ),
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-          };
-        });
-      },
-      rollbackTask: async ({ taskId }) => {
-        const state = get();
-        const checkpoint = state.taskCheckpointById[taskId];
-        const workspaceCwd = resolveTaskWorkspaceContext({
-          taskId,
-          activeWorkspaceId: state.activeWorkspaceId,
-          taskWorkspaceIdById: state.taskWorkspaceIdById,
-          workspacePathById: state.workspacePathById,
-          workspaceDefaultById: state.workspaceDefaultById,
-          projectPath: state.projectPath,
-        }).cwd;
-        const runCommand = window.api?.terminal?.runCommand;
-        if (!runCommand || !checkpoint || !workspaceCwd) {
-          return;
-        }
-
-        const rollbackResult = await runCommand({
-          cwd: workspaceCwd,
-          command: `git restore --source=${JSON.stringify(checkpoint)} --staged --worktree .`,
-        });
-
-        const rawOutput = rollbackResult.ok
-          ? `Rollback complete to checkpoint ${checkpoint}.`
-          : (rollbackResult.stderr.trim() || "Rollback failed.");
-        const output = rollbackResult.ok
-          ? `Rollback complete to checkpoint \`${checkpoint}\`.`
-          : `> **Rollback failed.** ${rollbackResult.stderr.trim() || "Unknown error."}`;
-
-        const files = await workspaceFsAdapter.listFiles();
-        set((nextState) => {
-          const current = nextState.messagesByTask[taskId] ?? [];
-          const message: ChatMessage = {
-            id: buildMessageId({ taskId, count: current.length }),
-            role: "assistant",
-            model: "system",
-            providerId: "user",
-            content: rawOutput,
-            parts: [{
-              type: "text",
-              text: output,
-            }],
-          };
-          return {
-            projectFiles: files,
-            messagesByTask: {
-              ...nextState.messagesByTask,
-              [taskId]: [...current, message],
-            },
-            messageCountByTask: {
-              ...nextState.messageCountByTask,
-              [taskId]: Math.max(
-                (nextState.messageCountByTask[taskId] ?? current.length) + 1,
-                current.length + 1,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        restoreTask: ({ taskId }) => {
+          const stateBefore = get();
+          const workspaceId =
+            stateBefore.taskWorkspaceIdById[taskId] ??
+            stateBefore.activeWorkspaceId;
+          const shouldLoadMessages =
+            !(taskId in stateBefore.messagesByTask) &&
+            (stateBefore.messageCountByTask[taskId] ?? 0) > 0;
+          set((state) => {
+            const targetTask = state.tasks.find((task) => task.id === taskId);
+            if (!targetTask || !isTaskArchived(targetTask)) {
+              return {};
+            }
+            return {
+              tasks: state.tasks.map((task) =>
+                task.id === taskId
+                  ? {
+                      ...task,
+                      archivedAt: null,
+                      updatedAt: buildRecentTimestamp(),
+                    }
+                  : task,
               ),
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
+              activeTaskId: taskId,
+              activeSurface: { kind: "task", taskId },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+          if (workspaceId && shouldLoadMessages) {
+            void loadTaskMessagesIntoSession({
+              workspaceId,
+              taskId,
+              mode: "latest",
+            });
+          }
+        },
+        duplicateTask: async ({ taskId }) => {
+          const stateBefore = get();
+          const sourceTask = stateBefore.tasks.find(
+            (task) => task.id === taskId,
+          );
+          if (!sourceTask) {
+            return;
+          }
+          const workspaceId =
+            stateBefore.taskWorkspaceIdById[taskId] ??
+            stateBefore.activeWorkspaceId;
+          const sourceMessages = (() => {
+            const loadedMessages = stateBefore.messagesByTask[taskId];
+            const totalCount =
+              stateBefore.messageCountByTask[taskId] ??
+              loadedMessages?.length ??
+              0;
+            if (loadedMessages && loadedMessages.length >= totalCount) {
+              return loadedMessages;
+            }
+            return null;
+          })();
+          const completeSourceMessages =
+            sourceMessages ??
+            (await loadWorkspaceSnapshot({ workspaceId }))?.messagesByTask[
+              taskId
+            ] ??
+            [];
+
+          set((state) => {
+            const nextTaskId = crypto.randomUUID();
+            const duplicatedMessages = completeSourceMessages.map(
+              (message) => ({
+                ...message,
+                id: crypto.randomUUID(),
+                isStreaming: false,
+              }),
+            );
+            const duplicatedTask: Task = {
+              ...sourceTask,
+              id: nextTaskId,
+              title: `${sourceTask.title} (copy)`,
+              updatedAt: buildRecentTimestamp(),
+              unread: false,
+              archivedAt: null,
+              controlMode: "interactive",
+              controlOwner: "stave",
+            };
+            return {
+              tasks: [duplicatedTask, ...state.tasks],
+              activeTaskId: duplicatedTask.id,
+              taskCheckpointById: {
+                ...state.taskCheckpointById,
+                [duplicatedTask.id]: state.taskCheckpointById[taskId] ?? "",
+              },
+              messagesByTask: {
+                ...state.messagesByTask,
+                [duplicatedTask.id]: duplicatedMessages,
+              },
+              messageCountByTask: {
+                ...state.messageCountByTask,
+                [duplicatedTask.id]: duplicatedMessages.length,
+              },
+              nativeSessionReadyByTask: {
+                ...state.nativeSessionReadyByTask,
+                [duplicatedTask.id]: false,
+              },
+              providerSessionByTask: {
+                ...state.providerSessionByTask,
+                [duplicatedTask.id]: {},
+              },
+              taskWorkspaceIdById: {
+                ...state.taskWorkspaceIdById,
+                [duplicatedTask.id]: workspaceId,
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        reorderTasks: ({ activeTaskId, overTaskId, filter }) => {
+          set((state) => {
+            const nextTasks = reorderTasksWithinFilter({
+              tasks: state.tasks,
+              activeTaskId,
+              overTaskId,
+              filter,
+            });
+            if (nextTasks === state.tasks) {
+              return {};
+            }
+            return {
+              tasks: nextTasks,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        exportTask: async ({ taskId }) => {
+          if (typeof document === "undefined") {
+            return;
+          }
+          const state = get();
+          const task = state.tasks.find((item) => item.id === taskId);
+          if (!task) {
+            return;
+          }
+          const workspaceId =
+            state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+          const loadedMessages = state.messagesByTask[taskId];
+          const totalCount =
+            state.messageCountByTask[taskId] ?? loadedMessages?.length ?? 0;
+          const messages =
+            loadedMessages && loadedMessages.length >= totalCount
+              ? loadedMessages
+              : ((await loadWorkspaceSnapshot({ workspaceId }))?.messagesByTask[
+                  taskId
+                ] ?? []);
+          const payload = {
+            exportedAt: new Date().toISOString(),
+            task,
+            messages,
           };
-        });
-      },
-      rollbackToCompactBoundary: async ({ taskId, gitRef, trigger }) => {
-        const state = get();
-        const resolvedGitRef = gitRef.trim();
-        if (!resolvedGitRef) {
-          return;
-        }
-        const taskWorkspaceId = state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
-        const workspaceCwd = state.workspacePathById[taskWorkspaceId] || state.projectPath || undefined;
-        const runCommand = window.api?.terminal?.runCommand;
-        if (!runCommand) {
-          return;
-        }
+          const blob = new Blob([JSON.stringify(payload, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          const safeTitle = task.title
+            .replaceAll(/[^a-z0-9-_]+/gi, "-")
+            .toLowerCase();
+          anchor.href = url;
+          anchor.download = `${safeTitle || "task"}-${taskId}.json`;
+          document.body.append(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+        },
+        viewTaskChanges: async ({ taskId }) => {
+          const state = get();
+          const checkpoint = state.taskCheckpointById[taskId];
+          const workspaceCwd = resolveTaskWorkspaceContext({
+            taskId,
+            activeWorkspaceId: state.activeWorkspaceId,
+            taskWorkspaceIdById: state.taskWorkspaceIdById,
+            workspacePathById: state.workspacePathById,
+            workspaceDefaultById: state.workspaceDefaultById,
+            projectPath: state.projectPath,
+          }).cwd;
+          const runCommand = window.api?.terminal?.runCommand;
+          if (!runCommand || !workspaceCwd) {
+            return;
+          }
 
-        const compactBoundaryLabel = trigger?.trim()
-          ? `context compacted (${trigger.trim()})`
-          : "context compacted";
+          const command = checkpoint
+            ? `git diff --name-status ${JSON.stringify(checkpoint)} --`
+            : "git status --porcelain";
+          const result = await runCommand({ cwd: workspaceCwd, command });
+          const rawOutput = result.ok
+            ? result.stdout.trim() ||
+              "No file changes for this task checkpoint."
+            : result.stderr.trim() || "Failed to load task changes.";
+          const output =
+            result.ok &&
+            rawOutput !== "No file changes for this task checkpoint."
+              ? `### Task Changes\n\n\`\`\`diff\n${rawOutput}\n\`\`\``
+              : result.ok
+                ? rawOutput
+                : `> **Failed to load task changes.** ${rawOutput}`;
 
-        const appendResultMessage = (args: { rawOutput: string; output: string; files?: string[] }) => {
           set((nextState) => {
             const current = nextState.messagesByTask[taskId] ?? [];
             const message: ChatMessage = {
@@ -5544,14 +6298,15 @@ export const useAppStore = create<AppState>()(
               role: "assistant",
               model: "system",
               providerId: "user",
-              content: args.rawOutput,
-              parts: [{
-                type: "text",
-                text: args.output,
-              }],
+              content: rawOutput,
+              parts: [
+                {
+                  type: "text",
+                  text: output,
+                },
+              ],
             };
             return {
-              ...(args.files ? { projectFiles: args.files } : {}),
               messagesByTask: {
                 ...nextState.messagesByTask,
                 [taskId]: [...current, message],
@@ -5563,3123 +6318,3864 @@ export const useAppStore = create<AppState>()(
                   current.length + 1,
                 ),
               },
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(nextState),
             };
           });
-        };
-
-        if (state.activeTurnIdsByTask[taskId]) {
-          appendResultMessage({
-            rawOutput: "Restore is blocked while a turn is still running.",
-            output: "> **Restore blocked.** Wait for the active turn to complete, then retry.",
-          });
-          return;
-        }
-
-        const restoreResult = await runCommand({
-          cwd: workspaceCwd,
-          command: `git restore --source=${JSON.stringify(resolvedGitRef)} --staged --worktree .`,
-        });
-        const rawOutput = restoreResult.ok
-          ? `Restore complete to ${compactBoundaryLabel} checkpoint ${resolvedGitRef}.`
-          : (restoreResult.stderr.trim() || "Restore failed.");
-        const output = restoreResult.ok
-          ? `Restore complete to ${compactBoundaryLabel} checkpoint \`${resolvedGitRef}\`.`
-          : `> **Restore failed.** ${restoreResult.stderr.trim() || "Unknown error."}`;
-        const files = await workspaceFsAdapter.listFiles();
-        appendResultMessage({
-          rawOutput,
-          output,
-          files,
-        });
-      },
-      archiveTask: ({ taskId }) => {
-        const stateBefore = get();
-        const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
-        const targetTask = stateBefore.tasks.find((task) => task.id === taskId) ?? null;
-        const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
-        if (!targetTask || isTaskArchived(targetTask) || isManagedTaskReadOnly({ state: stateBefore, taskId })) {
-          return;
-        }
-        set((state) => {
-          const interrupted = state.activeTurnIdsByTask[taskId]
-            ? interruptActiveTaskTurns({
-                tasks: [targetTask],
-                messagesByTask: state.messagesByTask,
-                activeTurnIdsByTask: state.activeTurnIdsByTask,
-                notice: ARCHIVED_TASK_TURN_NOTICE,
-              })
-            : {
-                messagesByTask: state.messagesByTask,
-                activeTurnIdsByTask: state.activeTurnIdsByTask,
-              };
-          const nextTasks = state.tasks.map((task) =>
-            task.id === taskId
-              ? {
-                  ...task,
-                  archivedAt: new Date().toISOString(),
-                  updatedAt: buildRecentTimestamp(),
-                  unread: false,
-                }
-              : task
-          );
-          const shouldSwitch = state.activeTaskId === taskId;
-          const fallbackTaskId = getArchiveFallbackTaskId({ tasks: state.tasks, archivedTaskId: taskId });
-          const nextTerminalTabs = state.terminalTabs.map((tab) =>
-            tab.linkedTaskId === taskId
-              ? { ...tab, linkedTaskId: null }
-              : tab,
-          );
-          const nextCliSessionTabs = state.cliSessionTabs.map((tab) =>
-            tab.linkedTaskId === taskId
-              ? { ...tab, linkedTaskId: null }
-              : tab,
-          );
-          const nextActiveTaskId = shouldSwitch ? fallbackTaskId : state.activeTaskId;
-          return {
-            tasks: nextTasks,
-            activeTaskId: nextActiveTaskId,
-            activeSurface: state.activeSurface.kind === "task" && state.activeSurface.taskId === taskId
-              ? { kind: "task", taskId: nextActiveTaskId }
-              : state.activeSurface,
-            terminalTabs: nextTerminalTabs,
-            cliSessionTabs: nextCliSessionTabs,
-            messagesByTask: interrupted.messagesByTask,
-            messageCountByTask: {
-              ...state.messageCountByTask,
-              [taskId]: Math.max(
-                state.messageCountByTask[taskId] ?? (state.messagesByTask[taskId] ?? []).length,
-                (interrupted.messagesByTask[taskId] ?? []).length,
-              ),
-            },
-            activeTurnIdsByTask: interrupted.activeTurnIdsByTask,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-        if (activeTurnId) {
-          const abortTurn = window.api?.provider?.abortTurn;
-          if (abortTurn) {
-            void abortTurn({ turnId: activeTurnId });
-          }
-        }
-        void window.api?.provider?.cleanupTask?.({ taskId });
-        if (workspaceId) {
-          runScriptHookInBackground({
-            workspaceId,
-            trigger: "task.archiving",
+        },
+        rollbackTask: async ({ taskId }) => {
+          const state = get();
+          const checkpoint = state.taskCheckpointById[taskId];
+          const workspaceCwd = resolveTaskWorkspaceContext({
             taskId,
-            taskTitle: targetTask.title,
+            activeWorkspaceId: state.activeWorkspaceId,
+            taskWorkspaceIdById: state.taskWorkspaceIdById,
+            workspacePathById: state.workspacePathById,
+            workspaceDefaultById: state.workspaceDefaultById,
+            projectPath: state.projectPath,
+          }).cwd;
+          const runCommand = window.api?.terminal?.runCommand;
+          if (!runCommand || !checkpoint || !workspaceCwd) {
+            return;
+          }
+
+          const rollbackResult = await runCommand({
+            cwd: workspaceCwd,
+            command: `git restore --source=${JSON.stringify(checkpoint)} --staged --worktree .`,
           });
-        }
-      },
-      setTaskProvider: ({ taskId, provider }) => {
-        set((state) => {
-          const hasTask = state.tasks.some((task) => task.id === taskId);
-          if (!hasTask) {
-            return { draftProvider: provider };
+
+          const rawOutput = rollbackResult.ok
+            ? `Rollback complete to checkpoint ${checkpoint}.`
+            : rollbackResult.stderr.trim() || "Rollback failed.";
+          const output = rollbackResult.ok
+            ? `Rollback complete to checkpoint \`${checkpoint}\`.`
+            : `> **Rollback failed.** ${rollbackResult.stderr.trim() || "Unknown error."}`;
+
+          const files = await workspaceFsAdapter.listFiles();
+          set((nextState) => {
+            const current = nextState.messagesByTask[taskId] ?? [];
+            const message: ChatMessage = {
+              id: buildMessageId({ taskId, count: current.length }),
+              role: "assistant",
+              model: "system",
+              providerId: "user",
+              content: rawOutput,
+              parts: [
+                {
+                  type: "text",
+                  text: output,
+                },
+              ],
+            };
+            return {
+              projectFiles: files,
+              messagesByTask: {
+                ...nextState.messagesByTask,
+                [taskId]: [...current, message],
+              },
+              messageCountByTask: {
+                ...nextState.messageCountByTask,
+                [taskId]: Math.max(
+                  (nextState.messageCountByTask[taskId] ?? current.length) + 1,
+                  current.length + 1,
+                ),
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(nextState),
+            };
+          });
+        },
+        rollbackToCompactBoundary: async ({ taskId, gitRef, trigger }) => {
+          const state = get();
+          const resolvedGitRef = gitRef.trim();
+          if (!resolvedGitRef) {
+            return;
           }
-          if (isManagedTaskReadOnly({ state, taskId })) {
-            return { draftProvider: provider };
+          const taskWorkspaceId =
+            state.taskWorkspaceIdById[taskId] ?? state.activeWorkspaceId;
+          const workspaceCwd =
+            state.workspacePathById[taskWorkspaceId] ||
+            state.projectPath ||
+            undefined;
+          const runCommand = window.api?.terminal?.runCommand;
+          if (!runCommand) {
+            return;
           }
-          return {
-            tasks: state.tasks.map((task) =>
+
+          const compactBoundaryLabel = trigger?.trim()
+            ? `context compacted (${trigger.trim()})`
+            : "context compacted";
+
+          const appendResultMessage = (args: {
+            rawOutput: string;
+            output: string;
+            files?: string[];
+          }) => {
+            set((nextState) => {
+              const current = nextState.messagesByTask[taskId] ?? [];
+              const message: ChatMessage = {
+                id: buildMessageId({ taskId, count: current.length }),
+                role: "assistant",
+                model: "system",
+                providerId: "user",
+                content: args.rawOutput,
+                parts: [
+                  {
+                    type: "text",
+                    text: args.output,
+                  },
+                ],
+              };
+              return {
+                ...(args.files ? { projectFiles: args.files } : {}),
+                messagesByTask: {
+                  ...nextState.messagesByTask,
+                  [taskId]: [...current, message],
+                },
+                messageCountByTask: {
+                  ...nextState.messageCountByTask,
+                  [taskId]: Math.max(
+                    (nextState.messageCountByTask[taskId] ?? current.length) +
+                      1,
+                    current.length + 1,
+                  ),
+                },
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(nextState),
+              };
+            });
+          };
+
+          if (state.activeTurnIdsByTask[taskId]) {
+            appendResultMessage({
+              rawOutput: "Restore is blocked while a turn is still running.",
+              output:
+                "> **Restore blocked.** Wait for the active turn to complete, then retry.",
+            });
+            return;
+          }
+
+          const restoreResult = await runCommand({
+            cwd: workspaceCwd,
+            command: `git restore --source=${JSON.stringify(resolvedGitRef)} --staged --worktree .`,
+          });
+          const rawOutput = restoreResult.ok
+            ? `Restore complete to ${compactBoundaryLabel} checkpoint ${resolvedGitRef}.`
+            : restoreResult.stderr.trim() || "Restore failed.";
+          const output = restoreResult.ok
+            ? `Restore complete to ${compactBoundaryLabel} checkpoint \`${resolvedGitRef}\`.`
+            : `> **Restore failed.** ${restoreResult.stderr.trim() || "Unknown error."}`;
+          const files = await workspaceFsAdapter.listFiles();
+          appendResultMessage({
+            rawOutput,
+            output,
+            files,
+          });
+        },
+        archiveTask: ({ taskId }) => {
+          const stateBefore = get();
+          const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
+          const targetTask =
+            stateBefore.tasks.find((task) => task.id === taskId) ?? null;
+          const workspaceId =
+            stateBefore.taskWorkspaceIdById[taskId] ??
+            stateBefore.activeWorkspaceId;
+          if (
+            !targetTask ||
+            isTaskArchived(targetTask) ||
+            isManagedTaskReadOnly({ state: stateBefore, taskId })
+          ) {
+            return;
+          }
+          set((state) => {
+            const interrupted = state.activeTurnIdsByTask[taskId]
+              ? interruptActiveTaskTurns({
+                  tasks: [targetTask],
+                  messagesByTask: state.messagesByTask,
+                  activeTurnIdsByTask: state.activeTurnIdsByTask,
+                  notice: ARCHIVED_TASK_TURN_NOTICE,
+                })
+              : {
+                  messagesByTask: state.messagesByTask,
+                  activeTurnIdsByTask: state.activeTurnIdsByTask,
+                };
+            const nextTasks = state.tasks.map((task) =>
               task.id === taskId
                 ? {
                     ...task,
-                    provider,
+                    archivedAt: new Date().toISOString(),
+                    updatedAt: buildRecentTimestamp(),
+                    unread: false,
                   }
-                : task
-            ),
-            draftProvider: provider,
-            nativeSessionReadyByTask: {
-              ...state.nativeSessionReadyByTask,
-              // stave has no native conversation ID of its own; treat as not ready
-              [taskId]: provider !== "stave" && Boolean(
-                (state.providerSessionByTask[taskId] as Record<string, string | undefined>)?.[provider]?.trim(),
+                : task,
+            );
+            const shouldSwitch = state.activeTaskId === taskId;
+            const fallbackTaskId = getArchiveFallbackTaskId({
+              tasks: state.tasks,
+              archivedTaskId: taskId,
+            });
+            const nextTerminalTabs = state.terminalTabs.map((tab) =>
+              tab.linkedTaskId === taskId
+                ? { ...tab, linkedTaskId: null }
+                : tab,
+            );
+            const nextCliSessionTabs = state.cliSessionTabs.map((tab) =>
+              tab.linkedTaskId === taskId
+                ? { ...tab, linkedTaskId: null }
+                : tab,
+            );
+            const nextActiveTaskId = shouldSwitch
+              ? fallbackTaskId
+              : state.activeTaskId;
+            return {
+              tasks: nextTasks,
+              activeTaskId: nextActiveTaskId,
+              activeSurface:
+                state.activeSurface.kind === "task" &&
+                state.activeSurface.taskId === taskId
+                  ? { kind: "task", taskId: nextActiveTaskId }
+                  : state.activeSurface,
+              terminalTabs: nextTerminalTabs,
+              cliSessionTabs: nextCliSessionTabs,
+              messagesByTask: interrupted.messagesByTask,
+              messageCountByTask: {
+                ...state.messageCountByTask,
+                [taskId]: Math.max(
+                  state.messageCountByTask[taskId] ??
+                    (state.messagesByTask[taskId] ?? []).length,
+                  (interrupted.messagesByTask[taskId] ?? []).length,
+                ),
+              },
+              activeTurnIdsByTask: interrupted.activeTurnIdsByTask,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+          if (activeTurnId) {
+            const abortTurn = window.api?.provider?.abortTurn;
+            if (abortTurn) {
+              void abortTurn({ turnId: activeTurnId });
+            }
+          }
+          void window.api?.provider?.cleanupTask?.({ taskId });
+          if (workspaceId) {
+            runScriptHookInBackground({
+              workspaceId,
+              trigger: "task.archiving",
+              taskId,
+              taskTitle: targetTask.title,
+            });
+          }
+        },
+        setTaskProvider: ({ taskId, provider }) => {
+          set((state) => {
+            const hasTask = state.tasks.some((task) => task.id === taskId);
+            if (!hasTask) {
+              return { draftProvider: provider };
+            }
+            if (isManagedTaskReadOnly({ state, taskId })) {
+              return { draftProvider: provider };
+            }
+            return {
+              tasks: state.tasks.map((task) =>
+                task.id === taskId
+                  ? {
+                      ...task,
+                      provider,
+                    }
+                  : task,
               ),
+              draftProvider: provider,
+              nativeSessionReadyByTask: {
+                ...state.nativeSessionReadyByTask,
+                // stave has no native conversation ID of its own; treat as not ready
+                [taskId]:
+                  provider !== "stave" &&
+                  Boolean(
+                    (
+                      state.providerSessionByTask[taskId] as Record<
+                        string,
+                        string | undefined
+                      >
+                    )?.[provider]?.trim(),
+                  ),
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+          void window.api?.provider?.cleanupTask?.({ taskId });
+        },
+        createTerminalTab: (args) => {
+          const state = get();
+          const workspaceId = state.activeWorkspaceId;
+          const workspacePath =
+            state.workspacePathById[workspaceId] ?? state.projectPath ?? "";
+          const cwd = args?.cwd?.trim() || workspacePath;
+          if (!workspaceId || !cwd) {
+            return null;
+          }
+
+          const linkedTask =
+            args?.linkedTaskId === undefined
+              ? findActiveTerminalLinkableTask(state)
+              : args.linkedTaskId
+                ? findTaskById(state, args.linkedTaskId)
+                : null;
+          const nextTab = createTerminalTabRecord({
+            cwd,
+            linkedTaskId:
+              linkedTask && !isTaskArchived(linkedTask) ? linkedTask.id : null,
+            linkedTaskTitle:
+              linkedTask && !isTaskArchived(linkedTask)
+                ? linkedTask.title
+                : null,
+            title: args?.title,
+            existingTitles: state.terminalTabs.map((tab) => tab.title),
+          });
+
+          set((current) => ({
+            terminalTabs: [...current.terminalTabs, nextTab],
+            activeTerminalTabId: nextTab.id,
+            layout: {
+              ...current.layout,
+              terminalDocked: true,
             },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-        void window.api?.provider?.cleanupTask?.({ taskId });
-      },
-      createTerminalTab: (args) => {
-        const state = get();
-        const workspaceId = state.activeWorkspaceId;
-        const workspacePath = state.workspacePathById[workspaceId] ?? state.projectPath ?? "";
-        const cwd = args?.cwd?.trim() || workspacePath;
-        if (!workspaceId || !cwd) {
-          return null;
-        }
+            workspaceSnapshotVersion:
+              incrementWorkspaceSnapshotVersion(current),
+          }));
 
-        const linkedTask = args?.linkedTaskId === undefined
-          ? findActiveTerminalLinkableTask(state)
-          : (args.linkedTaskId ? findTaskById(state, args.linkedTaskId) : null);
-        const nextTab = createTerminalTabRecord({
-          cwd,
-          linkedTaskId: linkedTask && !isTaskArchived(linkedTask) ? linkedTask.id : null,
-          linkedTaskTitle: linkedTask && !isTaskArchived(linkedTask) ? linkedTask.title : null,
-          title: args?.title,
-          existingTitles: state.terminalTabs.map((tab) => tab.title),
-        });
+          return nextTab.id;
+        },
+        createCliSessionTab: ({ provider, contextMode }) => {
+          const state = get();
+          const workspaceId = state.activeWorkspaceId;
+          const workspacePath =
+            state.workspacePathById[workspaceId] ?? state.projectPath ?? "";
+          if (!workspaceId || !workspacePath) {
+            return null;
+          }
 
-        set((current) => ({
-          terminalTabs: [...current.terminalTabs, nextTab],
-          activeTerminalTabId: nextTab.id,
-          layout: {
-            ...current.layout,
-            terminalDocked: true,
-          },
-          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(current),
-        }));
+          const linkedTask =
+            contextMode === "active-task"
+              ? findActiveTerminalLinkableTask(state)
+              : null;
+          if (contextMode === "active-task" && !linkedTask) {
+            return null;
+          }
 
-        return nextTab.id;
-      },
-      createCliSessionTab: ({ provider, contextMode }) => {
-        const state = get();
-        const workspaceId = state.activeWorkspaceId;
-        const workspacePath = state.workspacePathById[workspaceId] ?? state.projectPath ?? "";
-        if (!workspaceId || !workspacePath) {
-          return null;
-        }
+          const nextTab = createCliSessionTabRecord({
+            provider,
+            contextMode,
+            cwd: workspacePath,
+            linkedTaskId: linkedTask?.id ?? null,
+            linkedTaskTitle: linkedTask?.title ?? null,
+            handoffSummary: linkedTask
+              ? buildCliSessionHandoffSummary({
+                  task: linkedTask,
+                  messages: state.messagesByTask[linkedTask.id] ?? [],
+                  workspacePath,
+                })
+              : "",
+            existingTitles: state.cliSessionTabs.map((tab) => tab.title),
+          });
 
-        const linkedTask = contextMode === "active-task"
-          ? findActiveTerminalLinkableTask(state)
-          : null;
-        if (contextMode === "active-task" && !linkedTask) {
-          return null;
-        }
+          set((current) => ({
+            cliSessionTabs: [...current.cliSessionTabs, nextTab],
+            activeCliSessionTabId: nextTab.id,
+            activeSurface: { kind: "cli-session", cliSessionTabId: nextTab.id },
+            workspaceSnapshotVersion:
+              incrementWorkspaceSnapshotVersion(current),
+          }));
 
-        const nextTab = createCliSessionTabRecord({
-          provider,
-          contextMode,
-          cwd: workspacePath,
-          linkedTaskId: linkedTask?.id ?? null,
-          linkedTaskTitle: linkedTask?.title ?? null,
-          handoffSummary: linkedTask
-            ? buildCliSessionHandoffSummary({
-                task: linkedTask,
-                messages: state.messagesByTask[linkedTask.id] ?? [],
-                workspacePath,
-              })
-            : "",
-          existingTitles: state.cliSessionTabs.map((tab) => tab.title),
-        });
-
-        set((current) => ({
-          cliSessionTabs: [...current.cliSessionTabs, nextTab],
-          activeCliSessionTabId: nextTab.id,
-          activeSurface: { kind: "cli-session", cliSessionTabId: nextTab.id },
-          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(current),
-        }));
-
-        return nextTab.id;
-      },
-      setActiveCliSessionTab: ({ tabId }) => {
-        set((state) => {
-          if (tabId === null) {
-            if (state.activeCliSessionTabId === null && state.activeSurface.kind === "task") {
+          return nextTab.id;
+        },
+        setActiveCliSessionTab: ({ tabId }) => {
+          set((state) => {
+            if (tabId === null) {
+              if (
+                state.activeCliSessionTabId === null &&
+                state.activeSurface.kind === "task"
+              ) {
+                return state;
+              }
+              return {
+                activeCliSessionTabId: null,
+                activeSurface: { kind: "task", taskId: state.activeTaskId },
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(state),
+              };
+            }
+            if (!findCliSessionTabById(state, tabId)) {
+              return state;
+            }
+            if (
+              state.activeCliSessionTabId === tabId &&
+              state.activeSurface.kind === "cli-session" &&
+              state.activeSurface.cliSessionTabId === tabId
+            ) {
               return state;
             }
             return {
-              activeCliSessionTabId: null,
-              activeSurface: { kind: "task", taskId: state.activeTaskId },
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+              activeCliSessionTabId: tabId,
+              activeSurface: { kind: "cli-session", cliSessionTabId: tabId },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
             };
-          }
-          if (!findCliSessionTabById(state, tabId)) {
-            return state;
-          }
-          if (state.activeCliSessionTabId === tabId && state.activeSurface.kind === "cli-session" && state.activeSurface.cliSessionTabId === tabId) {
-            return state;
-          }
-          return {
-            activeCliSessionTabId: tabId,
-            activeSurface: { kind: "cli-session", cliSessionTabId: tabId },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      renameCliSessionTab: ({ tabId, title }) => {
-        const normalizedTitle = title.trim();
-        if (!normalizedTitle) {
-          return;
-        }
-        set((state) => {
-          const tab = findCliSessionTabById(state, tabId);
-          if (!tab || tab.title === normalizedTitle) {
-            return state;
-          }
-          return {
-            cliSessionTabs: state.cliSessionTabs.map((item) =>
-              item.id === tabId
-                ? { ...item, title: normalizedTitle }
-                : item,
-            ),
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      reorderCliSessionTabs: ({ fromTabId, toTabId }) => {
-        set((state) => {
-          const nextTabs = moveItemById({
-            items: state.cliSessionTabs,
-            fromId: fromTabId,
-            toId: toTabId,
           });
-          if (nextTabs === state.cliSessionTabs) {
-            return state;
+        },
+        renameCliSessionTab: ({ tabId, title }) => {
+          const normalizedTitle = title.trim();
+          if (!normalizedTitle) {
+            return;
           }
-          return {
-            cliSessionTabs: nextTabs,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      closeCliSessionTab: ({ tabId }) => {
-        set((state) => {
-          const closingIndex = state.cliSessionTabs.findIndex((tab) => tab.id === tabId);
-          if (closingIndex < 0) {
-            return state;
+          set((state) => {
+            const tab = findCliSessionTabById(state, tabId);
+            if (!tab || tab.title === normalizedTitle) {
+              return state;
+            }
+            return {
+              cliSessionTabs: state.cliSessionTabs.map((item) =>
+                item.id === tabId ? { ...item, title: normalizedTitle } : item,
+              ),
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        reorderCliSessionTabs: ({ fromTabId, toTabId }) => {
+          set((state) => {
+            const nextTabs = moveItemById({
+              items: state.cliSessionTabs,
+              fromId: fromTabId,
+              toId: toTabId,
+            });
+            if (nextTabs === state.cliSessionTabs) {
+              return state;
+            }
+            return {
+              cliSessionTabs: nextTabs,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        closeCliSessionTab: ({ tabId }) => {
+          set((state) => {
+            const closingIndex = state.cliSessionTabs.findIndex(
+              (tab) => tab.id === tabId,
+            );
+            if (closingIndex < 0) {
+              return state;
+            }
+            const nextTabs = state.cliSessionTabs.filter(
+              (tab) => tab.id !== tabId,
+            );
+            const fallbackTab =
+              nextTabs[
+                Math.min(closingIndex, Math.max(nextTabs.length - 1, 0))
+              ] ?? null;
+            const nextActiveCliSessionTabId =
+              state.activeCliSessionTabId === tabId
+                ? (fallbackTab?.id ?? null)
+                : state.activeCliSessionTabId;
+            return {
+              cliSessionTabs: nextTabs,
+              activeCliSessionTabId: nextActiveCliSessionTabId,
+              activeSurface:
+                state.activeSurface.kind === "cli-session" &&
+                state.activeSurface.cliSessionTabId === tabId
+                  ? fallbackTab
+                    ? { kind: "cli-session", cliSessionTabId: fallbackTab.id }
+                    : { kind: "task", taskId: state.activeTaskId }
+                  : state.activeSurface,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        setActiveTerminalTab: ({ tabId, openDock }) => {
+          set((state) => {
+            if (tabId !== null && !findTerminalTabById(state, tabId)) {
+              return state;
+            }
+            const shouldUpdateDock = openDock && !state.layout.terminalDocked;
+            if (state.activeTerminalTabId === tabId && !shouldUpdateDock) {
+              return state;
+            }
+            return {
+              activeTerminalTabId: tabId,
+              ...(shouldUpdateDock
+                ? {
+                    layout: {
+                      ...state.layout,
+                      terminalDocked: true,
+                    },
+                  }
+                : {}),
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        renameTerminalTab: ({ tabId, title }) => {
+          const normalizedTitle = title.trim();
+          if (!normalizedTitle) {
+            return;
           }
-          const nextTabs = state.cliSessionTabs.filter((tab) => tab.id !== tabId);
-          const fallbackTab = nextTabs[Math.min(closingIndex, Math.max(nextTabs.length - 1, 0))] ?? null;
-          const nextActiveCliSessionTabId = state.activeCliSessionTabId === tabId
-            ? fallbackTab?.id ?? null
-            : state.activeCliSessionTabId;
-          return {
-            cliSessionTabs: nextTabs,
-            activeCliSessionTabId: nextActiveCliSessionTabId,
-            activeSurface: state.activeSurface.kind === "cli-session" && state.activeSurface.cliSessionTabId === tabId
-              ? (
-                fallbackTab
-                  ? { kind: "cli-session", cliSessionTabId: fallbackTab.id }
-                  : { kind: "task", taskId: state.activeTaskId }
+          set((state) => {
+            const tab = findTerminalTabById(state, tabId);
+            if (!tab || tab.title === normalizedTitle) {
+              return state;
+            }
+            return {
+              terminalTabs: state.terminalTabs.map((item) =>
+                item.id === tabId ? { ...item, title: normalizedTitle } : item,
+              ),
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        reorderTerminalTabs: ({ fromTabId, toTabId }) => {
+          set((state) => {
+            const nextTabs = moveItemById({
+              items: state.terminalTabs,
+              fromId: fromTabId,
+              toId: toTabId,
+            });
+            if (nextTabs === state.terminalTabs) {
+              return state;
+            }
+            return {
+              terminalTabs: nextTabs,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        closeTerminalTab: ({ tabId }) => {
+          set((state) => {
+            const closingIndex = state.terminalTabs.findIndex(
+              (tab) => tab.id === tabId,
+            );
+            if (closingIndex < 0) {
+              return state;
+            }
+            const nextTabs = state.terminalTabs.filter(
+              (tab) => tab.id !== tabId,
+            );
+            const fallbackTab =
+              nextTabs[
+                Math.min(closingIndex, Math.max(nextTabs.length - 1, 0))
+              ] ?? null;
+            const nextActiveTerminalTabId =
+              state.activeTerminalTabId === tabId
+                ? (fallbackTab?.id ?? null)
+                : state.activeTerminalTabId;
+            return {
+              terminalTabs: nextTabs,
+              activeTerminalTabId: nextActiveTerminalTabId,
+              layout:
+                nextTabs.length === 0
+                  ? {
+                      ...state.layout,
+                      terminalDocked: false,
+                    }
+                  : state.layout,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        setWorkspaceBranch: ({ workspaceId, branch }) =>
+          set((state) => {
+            if (
+              !state.workspaces.some(
+                (workspace) => workspace.id === workspaceId,
               )
-              : state.activeSurface,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      setActiveTerminalTab: ({ tabId, openDock }) => {
-        set((state) => {
-          if (tabId !== null && !findTerminalTabById(state, tabId)) {
-            return state;
-          }
-          const shouldUpdateDock = openDock && !state.layout.terminalDocked;
-          if (state.activeTerminalTabId === tabId && !shouldUpdateDock) {
-            return state;
-          }
-          return {
-            activeTerminalTabId: tabId,
-            ...(shouldUpdateDock ? {
-              layout: {
-                ...state.layout,
-                terminalDocked: true,
+            ) {
+              return state;
+            }
+            return {
+              workspaceBranchById: {
+                ...state.workspaceBranchById,
+                [workspaceId]: branch,
               },
-            } : {}),
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      renameTerminalTab: ({ tabId, title }) => {
-        const normalizedTitle = title.trim();
-        if (!normalizedTitle) {
-          return;
-        }
-        set((state) => {
-          const tab = findTerminalTabById(state, tabId);
-          if (!tab || tab.title === normalizedTitle) {
-            return state;
-          }
-          return {
-            terminalTabs: state.terminalTabs.map((item) =>
-              item.id === tabId
-                ? { ...item, title: normalizedTitle }
-                : item,
-            ),
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      reorderTerminalTabs: ({ fromTabId, toTabId }) => {
-        set((state) => {
-          const nextTabs = moveItemById({
-            items: state.terminalTabs,
-            fromId: fromTabId,
-            toId: toTabId,
-          });
-          if (nextTabs === state.terminalTabs) {
-            return state;
-          }
-          return {
-            terminalTabs: nextTabs,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      closeTerminalTab: ({ tabId }) => {
-        set((state) => {
-          const closingIndex = state.terminalTabs.findIndex((tab) => tab.id === tabId);
-          if (closingIndex < 0) {
-            return state;
-          }
-          const nextTabs = state.terminalTabs.filter((tab) => tab.id !== tabId);
-          const fallbackTab = nextTabs[Math.min(closingIndex, Math.max(nextTabs.length - 1, 0))] ?? null;
-          const nextActiveTerminalTabId = state.activeTerminalTabId === tabId
-            ? fallbackTab?.id ?? null
-            : state.activeTerminalTabId;
-          return {
-            terminalTabs: nextTabs,
-            activeTerminalTabId: nextActiveTerminalTabId,
-            layout: nextTabs.length === 0
-              ? {
-                  ...state.layout,
-                  terminalDocked: false,
-                }
-              : state.layout,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      setWorkspaceBranch: ({ workspaceId, branch }) =>
-        set((state) => {
-          if (!state.workspaces.some((workspace) => workspace.id === workspaceId)) {
-            return state;
-          }
-          return {
-            workspaceBranchById: {
-              ...state.workspaceBranchById,
-              [workspaceId]: branch,
-            },
-          };
-        }),
-      fetchWorkspacePrStatus: async ({ workspaceId }) => {
-        const state = get();
-        if (!state.workspaces.some((workspace) => workspace.id === workspaceId)) return;
-        const cwd = state.workspacePathById[workspaceId];
-        if (!cwd) return;
-        if (state.workspaceDefaultById[workspaceId]) return;
+            };
+          }),
+        fetchWorkspacePrStatus: async ({ workspaceId }) => {
+          const state = get();
+          if (
+            !state.workspaces.some((workspace) => workspace.id === workspaceId)
+          )
+            return;
+          const cwd = state.workspacePathById[workspaceId];
+          if (!cwd) return;
+          if (state.workspaceDefaultById[workspaceId]) return;
 
-        const getPrStatus = window.api?.sourceControl?.getPrStatus;
-        if (!getPrStatus) return;
-
-        try {
-          const result = await getPrStatus({ cwd });
-          if (!result.ok) return;
-
-          const pr = result.pr as GitHubPrPayload | null;
-          const derived = pr ? derivePrStatus(pr) : "no_pr" as const;
-          const info: WorkspacePrInfo = { pr, derived, lastFetched: Date.now() };
-
-          set((s) => ({
-            workspacePrInfoById: {
-              ...s.workspacePrInfoById,
-              [workspaceId]: info,
-            },
-          }));
-        } catch {
-          // Silently ignore – PR status is best-effort.
-        }
-      },
-      fetchAllWorkspacePrStatuses: async () => {
-        const state = get();
-        const getPrStatus = window.api?.sourceControl?.getPrStatus;
-        if (!getPrStatus) return;
-
-        const nonDefaultIds = state.workspaces
-          .filter((ws) => !state.workspaceDefaultById[ws.id])
-          .map((ws) => ws.id);
-
-        // Fetch sequentially to avoid hammering GitHub API.
-        for (const wsId of nonDefaultIds) {
-          const cwd = state.workspacePathById[wsId];
-          if (!cwd) continue;
+          const getPrStatus = window.api?.sourceControl?.getPrStatus;
+          if (!getPrStatus) return;
 
           try {
             const result = await getPrStatus({ cwd });
-            if (!result.ok) continue;
+            if (!result.ok) return;
 
             const pr = result.pr as GitHubPrPayload | null;
-            const derived = pr ? derivePrStatus(pr) : "no_pr" as const;
-            const info: WorkspacePrInfo = { pr, derived, lastFetched: Date.now() };
+            const derived = pr ? derivePrStatus(pr) : ("no_pr" as const);
+            const info: WorkspacePrInfo = {
+              pr,
+              derived,
+              lastFetched: Date.now(),
+            };
 
             set((s) => ({
               workspacePrInfoById: {
                 ...s.workspacePrInfoById,
-                [wsId]: info,
+                [workspaceId]: info,
               },
             }));
           } catch {
-            // ignore
+            // Silently ignore – PR status is best-effort.
           }
-        }
-      },
-      setLayout: ({ patch }) => set((state) => {
-        const nextLayout = mergeLayoutPatch({
-          layout: state.layout,
-          patch,
-        });
-        return nextLayout ? { layout: nextLayout } : state;
-      }),
-      toggleEditorDiffMode: () =>
-        set((state) => ({
-          layout: {
-            ...state.layout,
-            editorDiffMode: !state.layout.editorDiffMode,
-          },
-        })),
-      openWorkspacePicker: async () => {
-        const root = await workspaceFsAdapter.pickRoot();
-        if (!root) {
-          return;
-        }
-        set((state) => ({
-          projectName: root.rootName,
-          projectFiles: root.files,
-          layout: {
-            ...state.layout,
-            editorVisible: true,
-          },
-        }));
-      },
-      refreshProjectFiles: async () => {
-        const files = await workspaceFsAdapter.listFiles();
-        const state = get();
-        const workspacePath = resolveWorkspacePathForId({
-          activeWorkspaceId: state.activeWorkspaceId,
-          workspacePathById: state.workspacePathById,
-          workspaceDefaultById: state.workspaceDefaultById,
-          projectPath: state.projectPath,
-        });
-        set((current) => {
-          const nextWorkspaceFileCacheByPath = rememberCachedWorkspaceFiles({
-            workspaceFileCacheByPath: current.workspaceFileCacheByPath,
-            workspacePath,
-            files,
-          });
-          if (
-            areStringArraysEqual(current.projectFiles, files)
-            && nextWorkspaceFileCacheByPath === current.workspaceFileCacheByPath
-          ) {
-            return current;
+        },
+        fetchAllWorkspacePrStatuses: async () => {
+          const state = get();
+          const getPrStatus = window.api?.sourceControl?.getPrStatus;
+          if (!getPrStatus) return;
+
+          const nonDefaultIds = state.workspaces
+            .filter((ws) => !state.workspaceDefaultById[ws.id])
+            .map((ws) => ws.id);
+
+          // Fetch sequentially to avoid hammering GitHub API.
+          for (const wsId of nonDefaultIds) {
+            const cwd = state.workspacePathById[wsId];
+            if (!cwd) continue;
+
+            try {
+              const result = await getPrStatus({ cwd });
+              if (!result.ok) continue;
+
+              const pr = result.pr as GitHubPrPayload | null;
+              const derived = pr ? derivePrStatus(pr) : ("no_pr" as const);
+              const info: WorkspacePrInfo = {
+                pr,
+                derived,
+                lastFetched: Date.now(),
+              };
+
+              set((s) => ({
+                workspacePrInfoById: {
+                  ...s.workspacePrInfoById,
+                  [wsId]: info,
+                },
+              }));
+            } catch {
+              // ignore
+            }
           }
-          return {
-            projectFiles: files,
-            workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
-          };
-        });
-      },
-      refreshProviderAvailability: async () => {
-        const checkAvailability = window.api?.provider?.checkAvailability;
-        if (!checkAvailability) {
-          return;
-        }
-        const claudeBinaryPath = get().settings.claudeBinaryPath || undefined;
-        const codexBinaryPath = get().settings.codexBinaryPath || undefined;
-        const availabilityEntries = await Promise.all(
-          listProviderIds().map(async (providerId) => {
-            const result = await checkAvailability({
-              providerId,
-              runtimeOptions: {
-                ...(claudeBinaryPath ? { claudeBinaryPath } : {}),
-                ...(codexBinaryPath ? { codexBinaryPath } : {}),
-              },
+        },
+        setLayout: ({ patch }) =>
+          set((state) => {
+            const nextLayout = mergeLayoutPatch({
+              layout: state.layout,
+              patch,
             });
-            return [providerId, result.ok && result.available] as const;
+            return nextLayout ? { layout: nextLayout } : state;
           }),
-        );
-
-        const providerAvailability = createDefaultProviderAvailability();
-        availabilityEntries.forEach(([providerId, available]) => {
-          providerAvailability[providerId] = available;
-        });
-
-        set(() => ({
-          providerAvailability,
-        }));
-      },
-      refreshSkillCatalog: async (args = {}) => {
-        const getCatalog = window.api?.skills?.getCatalog;
-        const fallbackWorkspacePath = get().workspacePathById[get().activeWorkspaceId] ?? get().projectPath ?? null;
-        const workspacePath = args.workspacePath === undefined
-          ? fallbackWorkspacePath
-          : args.workspacePath;
-        const sharedSkillsHome = normalizeSharedSkillsHomeSetting(get().settings.sharedSkillsHome) || null;
-
-        if (!getCatalog) {
-          set(() => ({
-            skillCatalog: {
-              status: "error",
-              workspacePath,
-              sharedSkillsHome,
-              fetchedAt: new Date().toISOString(),
-              skills: [],
-              roots: [],
-              detail: "Skill catalog API is unavailable in this build.",
+        toggleEditorDiffMode: () =>
+          set((state) => ({
+            layout: {
+              ...state.layout,
+              editorDiffMode: !state.layout.editorDiffMode,
             },
-          }));
-          return;
-        }
-
-        set((state) => ({
-          skillCatalog: {
-            ...state.skillCatalog,
-            status: "loading",
-            workspacePath,
-            sharedSkillsHome,
-            detail: "Loading skill catalog...",
-          },
-        }));
-
-        try {
-          const result = await getCatalog({
-            ...(workspacePath ? { workspacePath } : {}),
-            ...(sharedSkillsHome ? { sharedSkillsHome } : {}),
-          });
-          // Use the frontend-normalized `workspacePath` and `sharedSkillsHome`
-          // rather than the backend-expanded values so that the comparison keys
-          // in component useEffects stay consistent (the backend expands `~`
-          // and resolves symlinks, but the component compares against the raw
-          // settings string, which would otherwise never match and cause an
-          // infinite re-fetch loop).
-          set(() => ({
-            skillCatalog: {
-              status: result.ok ? "ready" : "error",
-              workspacePath,
-              sharedSkillsHome,
-              fetchedAt: result.catalog.fetchedAt,
-              skills: result.catalog.skills,
-              roots: result.catalog.roots,
-              detail: result.ok
-                ? result.catalog.detail
-                : result.message?.trim() || result.catalog.detail,
-            },
-          }));
-        } catch (error) {
-          set(() => ({
-            skillCatalog: {
-              status: "error",
-              workspacePath,
-              sharedSkillsHome,
-              fetchedAt: new Date().toISOString(),
-              skills: [],
-              roots: [],
-              detail: String(error),
-            },
-          }));
-        }
-      },
-      takeOverTask: ({ taskId }) => {
-        set((state) => {
-          const task = findTaskById(state, taskId);
-          if (!task || !canTakeOverTask({ task, activeTurnId: state.activeTurnIdsByTask[taskId] })) {
-            return state;
-          }
-          return {
-            tasks: state.tasks.map((item) =>
-              item.id === taskId
-                ? {
-                    ...item,
-                    controlMode: "interactive",
-                    controlOwner: "stave",
-                    updatedAt: buildRecentTimestamp(),
-                  }
-                : item
-            ),
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      markNotificationRead: async ({ id }) => {
-        const readAt = new Date().toISOString();
-        set((state) => ({
-          notifications: markNotificationReadInList({
-            notifications: state.notifications,
-            id,
-            readAt,
-          }),
-        }));
-        try {
-          const persisted = await markPersistedNotificationRead({ id, readAt });
-          if (!persisted) {
+          })),
+        openWorkspacePicker: async () => {
+          const root = await workspaceFsAdapter.pickRoot();
+          if (!root) {
             return;
           }
           set((state) => ({
-            notifications: mergeNotificationIntoList({
+            projectName: root.rootName,
+            projectFiles: root.files,
+            layout: {
+              ...state.layout,
+              editorVisible: true,
+            },
+          }));
+        },
+        refreshProjectFiles: async () => {
+          const files = await workspaceFsAdapter.listFiles();
+          const state = get();
+          const workspacePath = resolveWorkspacePathForId({
+            activeWorkspaceId: state.activeWorkspaceId,
+            workspacePathById: state.workspacePathById,
+            workspaceDefaultById: state.workspaceDefaultById,
+            projectPath: state.projectPath,
+          });
+          set((current) => {
+            const nextWorkspaceFileCacheByPath = rememberCachedWorkspaceFiles({
+              workspaceFileCacheByPath: current.workspaceFileCacheByPath,
+              workspacePath,
+              files,
+            });
+            if (
+              areStringArraysEqual(current.projectFiles, files) &&
+              nextWorkspaceFileCacheByPath === current.workspaceFileCacheByPath
+            ) {
+              return current;
+            }
+            return {
+              projectFiles: files,
+              workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
+            };
+          });
+        },
+        refreshProviderAvailability: async () => {
+          const checkAvailability = window.api?.provider?.checkAvailability;
+          if (!checkAvailability) {
+            return;
+          }
+          const claudeBinaryPath = get().settings.claudeBinaryPath || undefined;
+          const codexBinaryPath = get().settings.codexBinaryPath || undefined;
+          const availabilityEntries = await Promise.all(
+            listProviderIds().map(async (providerId) => {
+              const result = await checkAvailability({
+                providerId,
+                runtimeOptions: {
+                  ...(claudeBinaryPath ? { claudeBinaryPath } : {}),
+                  ...(codexBinaryPath ? { codexBinaryPath } : {}),
+                },
+              });
+              return [providerId, result.ok && result.available] as const;
+            }),
+          );
+
+          const providerAvailability = createDefaultProviderAvailability();
+          availabilityEntries.forEach(([providerId, available]) => {
+            providerAvailability[providerId] = available;
+          });
+
+          set(() => ({
+            providerAvailability,
+          }));
+        },
+        refreshSkillCatalog: async (args = {}) => {
+          const getCatalog = window.api?.skills?.getCatalog;
+          const fallbackWorkspacePath =
+            get().workspacePathById[get().activeWorkspaceId] ??
+            get().projectPath ??
+            null;
+          const workspacePath =
+            args.workspacePath === undefined
+              ? fallbackWorkspacePath
+              : args.workspacePath;
+          const sharedSkillsHome =
+            normalizeSharedSkillsHomeSetting(get().settings.sharedSkillsHome) ||
+            null;
+
+          if (!getCatalog) {
+            set(() => ({
+              skillCatalog: {
+                status: "error",
+                workspacePath,
+                sharedSkillsHome,
+                fetchedAt: new Date().toISOString(),
+                skills: [],
+                roots: [],
+                detail: "Skill catalog API is unavailable in this build.",
+              },
+            }));
+            return;
+          }
+
+          set((state) => ({
+            skillCatalog: {
+              ...state.skillCatalog,
+              status: "loading",
+              workspacePath,
+              sharedSkillsHome,
+              detail: "Loading skill catalog...",
+            },
+          }));
+
+          try {
+            const result = await getCatalog({
+              ...(workspacePath ? { workspacePath } : {}),
+              ...(sharedSkillsHome ? { sharedSkillsHome } : {}),
+            });
+            // Use the frontend-normalized `workspacePath` and `sharedSkillsHome`
+            // rather than the backend-expanded values so that the comparison keys
+            // in component useEffects stay consistent (the backend expands `~`
+            // and resolves symlinks, but the component compares against the raw
+            // settings string, which would otherwise never match and cause an
+            // infinite re-fetch loop).
+            set(() => ({
+              skillCatalog: {
+                status: result.ok ? "ready" : "error",
+                workspacePath,
+                sharedSkillsHome,
+                fetchedAt: result.catalog.fetchedAt,
+                skills: result.catalog.skills,
+                roots: result.catalog.roots,
+                detail: result.ok
+                  ? result.catalog.detail
+                  : result.message?.trim() || result.catalog.detail,
+              },
+            }));
+          } catch (error) {
+            set(() => ({
+              skillCatalog: {
+                status: "error",
+                workspacePath,
+                sharedSkillsHome,
+                fetchedAt: new Date().toISOString(),
+                skills: [],
+                roots: [],
+                detail: String(error),
+              },
+            }));
+          }
+        },
+        takeOverTask: ({ taskId }) => {
+          set((state) => {
+            const task = findTaskById(state, taskId);
+            if (
+              !task ||
+              !canTakeOverTask({
+                task,
+                activeTurnId: state.activeTurnIdsByTask[taskId],
+              })
+            ) {
+              return state;
+            }
+            return {
+              tasks: state.tasks.map((item) =>
+                item.id === taskId
+                  ? {
+                      ...item,
+                      controlMode: "interactive",
+                      controlOwner: "stave",
+                      updatedAt: buildRecentTimestamp(),
+                    }
+                  : item,
+              ),
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        markNotificationRead: async ({ id }) => {
+          const readAt = new Date().toISOString();
+          set((state) => ({
+            notifications: markNotificationReadInList({
               notifications: state.notifications,
-              notification: persisted,
+              id,
+              readAt,
             }),
           }));
-        } catch (error) {
-          console.error("[notifications] failed to mark notification as read", error);
-        }
-      },
-      markAllNotificationsRead: async () => {
-        const readAt = new Date().toISOString();
-        set((state) => ({
-          notifications: markAllNotificationsReadInList({
-            notifications: state.notifications,
-            readAt,
-          }),
-        }));
-        try {
-          await markAllPersistedNotificationsRead({ readAt });
-        } catch (error) {
-          console.error("[notifications] failed to mark all notifications as read", error);
-        }
-      },
-      openNotificationContext: async ({ notificationId }) => {
-        const notification = get().notifications.find((item) => item.id === notificationId);
-        if (!notification) {
-          return { status: "opened" };
-        }
-        const result = await openNotificationContextInternal(notification);
-        if (isNotificationUnread(notification)) {
-          await get().markNotificationRead({ id: notification.id });
-        }
-        return result;
-      },
-      resolveNotificationApproval: async ({ notificationId, approved }) => {
-        const notification = get().notifications.find((item) => item.id === notificationId);
-        if (!notification || notification.action?.type !== "approval") {
-          return;
-        }
-
-        await openNotificationContextInternal(notification);
-        const latestState = get();
-        const taskId = notification.taskId?.trim();
-        if (!taskId) {
+          try {
+            const persisted = await markPersistedNotificationRead({
+              id,
+              readAt,
+            });
+            if (!persisted) {
+              return;
+            }
+            set((state) => ({
+              notifications: mergeNotificationIntoList({
+                notifications: state.notifications,
+                notification: persisted,
+              }),
+            }));
+          } catch (error) {
+            console.error(
+              "[notifications] failed to mark notification as read",
+              error,
+            );
+          }
+        },
+        markAllNotificationsRead: async () => {
+          const readAt = new Date().toISOString();
+          set((state) => ({
+            notifications: markAllNotificationsReadInList({
+              notifications: state.notifications,
+              readAt,
+            }),
+          }));
+          try {
+            await markAllPersistedNotificationsRead({ readAt });
+          } catch (error) {
+            console.error(
+              "[notifications] failed to mark all notifications as read",
+              error,
+            );
+          }
+        },
+        openNotificationContext: async ({ notificationId }) => {
+          const notification = get().notifications.find(
+            (item) => item.id === notificationId,
+          );
+          if (!notification) {
+            return { status: "opened" };
+          }
+          const result = await openNotificationContextInternal(notification);
           if (isNotificationUnread(notification)) {
-            await latestState.markNotificationRead({ id: notification.id });
+            await get().markNotificationRead({ id: notification.id });
           }
-          return;
-        }
-
-        const locatedApproval = findPendingApprovalMessageByRequestId({
-          messages: latestState.messagesByTask[taskId] ?? [],
-          requestId: notification.action.requestId,
-        });
-
-        if (isManagedTaskReadOnly({ state: latestState, taskId })) {
-          return;
-        }
-
-        if (!locatedApproval) {
-          if (isNotificationUnread(notification)) {
-            await latestState.markNotificationRead({ id: notification.id });
+          return result;
+        },
+        resolveNotificationApproval: async ({ notificationId, approved }) => {
+          const notification = get().notifications.find(
+            (item) => item.id === notificationId,
+          );
+          if (!notification || notification.action?.type !== "approval") {
+            return;
           }
-          return;
-        }
 
-        latestState.resolveApproval({
-          taskId,
-          messageId: notification.action.messageId ?? locatedApproval.messageId,
-          approved,
-        });
-        await latestState.markNotificationRead({ id: notification.id });
-      },
-      setStaveMuseOpen: ({ open }) => {
-        set((state) => {
-          if (state.staveMuse.open === open) {
-            return state;
+          await openNotificationContextInternal(notification);
+          const latestState = get();
+          const taskId = notification.taskId?.trim();
+          if (!taskId) {
+            if (isNotificationUnread(notification)) {
+              await latestState.markNotificationRead({ id: notification.id });
+            }
+            return;
           }
-          return {
-            staveMuse: {
-              ...state.staveMuse,
-              open,
-            },
-          };
-        });
-      },
-      focusStaveMuse: () => {
-        set((state) => ({
-          staveMuse: {
-            ...state.staveMuse,
-            open: true,
-            focusNonce: state.staveMuse.focusNonce + 1,
-          },
-        }));
-      },
-      setStaveMuseTarget: ({ kind }) => {
-        set((state) => {
-          if (state.staveMuse.target.kind === kind) {
-            return state;
+
+          const locatedApproval = findPendingApprovalMessageByRequestId({
+            messages: latestState.messagesByTask[taskId] ?? [],
+            requestId: notification.action.requestId,
+          });
+
+          if (isManagedTaskReadOnly({ state: latestState, taskId })) {
+            return;
           }
-          return {
+
+          if (!locatedApproval) {
+            if (isNotificationUnread(notification)) {
+              await latestState.markNotificationRead({ id: notification.id });
+            }
+            return;
+          }
+
+          latestState.resolveApproval({
+            taskId,
+            messageId:
+              notification.action.messageId ?? locatedApproval.messageId,
+            approved,
+          });
+          await latestState.markNotificationRead({ id: notification.id });
+        },
+        setStaveMuseOpen: ({ open }) => {
+          set((state) => {
+            if (state.staveMuse.open === open) {
+              return state;
+            }
+            return {
+              staveMuse: {
+                ...state.staveMuse,
+                open,
+              },
+            };
+          });
+        },
+        focusStaveMuse: () => {
+          set((state) => ({
             staveMuse: {
               ...state.staveMuse,
               open: true,
-              target: { kind },
+              focusNonce: state.staveMuse.focusNonce + 1,
             },
-          };
-        });
-      },
-      clearStaveMuseConversation: () => {
-        const activeTurnId = get().staveMuse.activeTurnId;
-        if (activeTurnId) {
-          void window.api?.provider?.abortTurn?.({ turnId: activeTurnId });
-        }
-        void window.api?.provider?.cleanupTask?.({ taskId: STAVE_MUSE_SESSION_ID });
-        set((state) => ({
-          staveMuse: {
-            ...createEmptyStaveMuseState(),
-            open: state.staveMuse.open,
-            target: state.staveMuse.target,
-            focusNonce: state.staveMuse.focusNonce + 1,
-          },
-        }));
-      },
-      updateStaveMusePromptDraft: ({ patch }) => {
-        set((state) => {
-          const currentDraft = state.staveMuse.promptDraft;
-          const nextDraft = {
-            text: currentDraft.text,
-            attachedFilePaths: currentDraft.attachedFilePaths,
-            attachments: currentDraft.attachments,
-            runtimeOverrides: currentDraft.runtimeOverrides,
-            ...patch,
-          };
-          const textChanged = nextDraft.text !== currentDraft.text;
-          const attachedFilePathsChanged =
-            nextDraft.attachedFilePaths.length !== currentDraft.attachedFilePaths.length
-            || nextDraft.attachedFilePaths.some((path, index) => path !== currentDraft.attachedFilePaths[index]);
-          const attachmentsChanged =
-            nextDraft.attachments.length !== currentDraft.attachments.length
-            || nextDraft.attachments.some((attachment, index) => attachment !== currentDraft.attachments[index]);
-          const runtimeOverridesChanged = !arePromptDraftRuntimeOverridesEqual(
-            nextDraft.runtimeOverrides,
-            currentDraft.runtimeOverrides,
-          );
-          if (!textChanged && !attachedFilePathsChanged && !attachmentsChanged && !runtimeOverridesChanged) {
-            return state;
+          }));
+        },
+        setStaveMuseTarget: ({ kind }) => {
+          set((state) => {
+            if (state.staveMuse.target.kind === kind) {
+              return state;
+            }
+            return {
+              staveMuse: {
+                ...state.staveMuse,
+                open: true,
+                target: { kind },
+              },
+            };
+          });
+        },
+        clearStaveMuseConversation: () => {
+          const activeTurnId = get().staveMuse.activeTurnId;
+          if (activeTurnId) {
+            void window.api?.provider?.abortTurn?.({ turnId: activeTurnId });
           }
-          return {
-            staveMuse: {
-              ...state.staveMuse,
-              promptDraft: nextDraft,
-            },
-          };
-        });
-      },
-      sendStaveMuseMessage: async ({ content }) => {
-        const trimmedContent = content.trim();
-        if (!trimmedContent) {
-          return;
-        }
-
-        const stateBeforeSubmit = get();
-        if (stateBeforeSubmit.staveMuse.activeTurnId) {
-          return;
-        }
-
-        const historyBeforeSubmit = stateBeforeSubmit.staveMuse.messages;
-
-        set((state) => ({
-          staveMuse: appendStaveMuseSubmittedUserMessage({
-            assistant: state.staveMuse,
-            content: trimmedContent,
-          }),
-        }));
-
-        const appendMuseResponse = (responseText: string, args?: {
-          providerId?: ProviderId;
-          model?: string;
-        }) => {
+          void window.api?.provider?.cleanupTask?.({
+            taskId: STAVE_MUSE_SESSION_ID,
+          });
           set((state) => ({
-            staveMuse: appendStaveMuseStandaloneMessage({
+            staveMuse: {
+              ...createEmptyStaveMuseState(),
+              open: state.staveMuse.open,
+              target: state.staveMuse.target,
+              focusNonce: state.staveMuse.focusNonce + 1,
+            },
+          }));
+        },
+        updateStaveMusePromptDraft: ({ patch }) => {
+          set((state) => {
+            const currentDraft = state.staveMuse.promptDraft;
+            const nextDraft = {
+              text: currentDraft.text,
+              attachedFilePaths: currentDraft.attachedFilePaths,
+              attachments: currentDraft.attachments,
+              runtimeOverrides: currentDraft.runtimeOverrides,
+              ...patch,
+            };
+            const textChanged = nextDraft.text !== currentDraft.text;
+            const attachedFilePathsChanged =
+              nextDraft.attachedFilePaths.length !==
+                currentDraft.attachedFilePaths.length ||
+              nextDraft.attachedFilePaths.some(
+                (path, index) => path !== currentDraft.attachedFilePaths[index],
+              );
+            const attachmentsChanged =
+              nextDraft.attachments.length !==
+                currentDraft.attachments.length ||
+              nextDraft.attachments.some(
+                (attachment, index) =>
+                  attachment !== currentDraft.attachments[index],
+              );
+            const runtimeOverridesChanged =
+              !arePromptDraftRuntimeOverridesEqual(
+                nextDraft.runtimeOverrides,
+                currentDraft.runtimeOverrides,
+              );
+            if (
+              !textChanged &&
+              !attachedFilePathsChanged &&
+              !attachmentsChanged &&
+              !runtimeOverridesChanged
+            ) {
+              return state;
+            }
+            return {
+              staveMuse: {
+                ...state.staveMuse,
+                promptDraft: nextDraft,
+              },
+            };
+          });
+        },
+        sendStaveMuseMessage: async ({ content }) => {
+          const trimmedContent = content.trim();
+          if (!trimmedContent) {
+            return;
+          }
+
+          const stateBeforeSubmit = get();
+          if (stateBeforeSubmit.staveMuse.activeTurnId) {
+            return;
+          }
+
+          const historyBeforeSubmit = stateBeforeSubmit.staveMuse.messages;
+
+          set((state) => ({
+            staveMuse: appendStaveMuseSubmittedUserMessage({
               assistant: state.staveMuse,
-              content: responseText,
-              providerId: args?.providerId,
-              model: args?.model,
+              content: trimmedContent,
             }),
           }));
-        };
 
-        const buildMuseContext = () => buildStaveMuseLocalActionContextFromState(get());
-        const ensureWorkspaceInfoContext = () => {
-          const state = get();
-          if (hasSelectedMuseWorkspace(state)) {
-            return true;
-          }
-          appendMuseResponse("Select a workspace first.");
-          return false;
-        };
-        const applyWorkspaceInformationUpdate = (
-          updater: (current: WorkspaceInformationState) => WorkspaceInformationState,
-        ) => {
-          if (!ensureWorkspaceInfoContext()) {
+          const appendMuseResponse = (
+            responseText: string,
+            args?: {
+              providerId?: ProviderId;
+              model?: string;
+            },
+          ) => {
+            set((state) => ({
+              staveMuse: appendStaveMuseStandaloneMessage({
+                assistant: state.staveMuse,
+                content: responseText,
+                providerId: args?.providerId,
+                model: args?.model,
+              }),
+            }));
+          };
+
+          const buildMuseContext = () =>
+            buildStaveMuseLocalActionContextFromState(get());
+          const ensureWorkspaceInfoContext = () => {
+            const state = get();
+            if (hasSelectedMuseWorkspace(state)) {
+              return true;
+            }
+            appendMuseResponse("Select a workspace first.");
             return false;
-          }
-          get().updateWorkspaceInformation({ updater });
-          return true;
-        };
+          };
+          const applyWorkspaceInformationUpdate = (
+            updater: (
+              current: WorkspaceInformationState,
+            ) => WorkspaceInformationState,
+          ) => {
+            if (!ensureWorkspaceInfoContext()) {
+              return false;
+            }
+            get().updateWorkspaceInformation({ updater });
+            return true;
+          };
 
-        const stateBeforeRouting = get();
-        const localAction = resolveStaveMuseLocalAction({
-          input: trimmedContent,
-          context: buildMuseContext(),
-          allowDirectWorkspaceInfoEdits: stateBeforeRouting.settings.museAllowDirectWorkspaceInfoEdits,
-        });
+          const stateBeforeRouting = get();
+          const localAction = resolveStaveMuseLocalAction({
+            input: trimmedContent,
+            context: buildMuseContext(),
+            allowDirectWorkspaceInfoEdits:
+              stateBeforeRouting.settings.museAllowDirectWorkspaceInfoEdits,
+          });
 
-        if (localAction) {
-          switch (localAction.kind) {
-            case "show_summary":
-              appendMuseResponse(buildStaveMuseSummaryResponse({
-                target: get().staveMuse.target,
-                context: buildMuseContext(),
-              }));
-              return;
-            case "show_information_summary":
-              appendMuseResponse(buildStaveMuseLocalActionResponse({
+          if (localAction) {
+            switch (localAction.kind) {
+              case "show_summary":
+                appendMuseResponse(
+                  buildStaveMuseSummaryResponse({
+                    target: get().staveMuse.target,
+                    context: buildMuseContext(),
+                  }),
+                );
+                return;
+              case "show_information_summary":
+                appendMuseResponse(
+                  buildStaveMuseLocalActionResponse({
+                    action: localAction,
+                    context: buildMuseContext(),
+                  }),
+                );
+                return;
+              case "open_settings":
+                window.dispatchEvent(
+                  new CustomEvent(STAVE_MUSE_OPEN_SETTINGS_EVENT, {
+                    detail: { section: "muse" },
+                  }),
+                );
+                break;
+              case "toggle_information_panel":
+                get().setLayout({
+                  patch: {
+                    sidebarOverlayVisible: localAction.open ?? true,
+                    sidebarOverlayTab: "information",
+                  },
+                });
+                break;
+              case "toggle_changes_panel":
+                get().setLayout({
+                  patch: {
+                    sidebarOverlayVisible: localAction.open ?? true,
+                    sidebarOverlayTab: "changes",
+                  },
+                });
+                break;
+              case "toggle_explorer_panel":
+                get().setLayout({
+                  patch: {
+                    sidebarOverlayVisible: localAction.open ?? true,
+                    sidebarOverlayTab: "explorer",
+                  },
+                });
+                break;
+              case "toggle_scripts_panel":
+                get().setLayout({
+                  patch: {
+                    sidebarOverlayVisible: localAction.open ?? true,
+                    sidebarOverlayTab: "scripts",
+                  },
+                });
+                break;
+              case "toggle_editor":
+                get().setLayout({
+                  patch: {
+                    editorVisible:
+                      localAction.open ?? !get().layout.editorVisible,
+                  },
+                });
+                break;
+              case "toggle_terminal":
+                get().setLayout({
+                  patch: {
+                    terminalDocked:
+                      localAction.open ?? !get().layout.terminalDocked,
+                  },
+                });
+                break;
+              case "toggle_workspace_sidebar":
+                get().setLayout({
+                  patch: {
+                    workspaceSidebarCollapsed:
+                      localAction.open === undefined
+                        ? !get().layout.workspaceSidebarCollapsed
+                        : !localAction.open,
+                  },
+                });
+                break;
+              case "switch_workspace":
+                await get().switchWorkspace({
+                  workspaceId: localAction.workspaceId,
+                });
+                break;
+              case "open_project":
+                await get().openProject({
+                  projectPath: localAction.projectPath,
+                });
+                break;
+              case "create_task":
+                if (!hasSelectedMuseWorkspace(get())) {
+                  appendMuseResponse("Open a project workspace first.");
+                  return;
+                }
+                get().createTask({ title: localAction.title });
+                break;
+              case "select_task":
+                get().selectTask({ taskId: localAction.taskId });
+                break;
+              case "replace_notes":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    notes: localAction.text,
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "append_notes":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    notes: current.notes.trim()
+                      ? `${current.notes.trim()}\n${localAction.text}`
+                      : localAction.text,
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "clear_notes":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    notes: "",
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "add_todo":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => {
+                    const nextTodo = createWorkspaceTodoItem();
+                    nextTodo.text = localAction.text;
+                    return {
+                      ...current,
+                      todos: [...current.todos, nextTodo],
+                    };
+                  })
+                ) {
+                  return;
+                }
+                break;
+              case "complete_todo":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    todos: current.todos.map((todo) =>
+                      todo.id === localAction.todoId
+                        ? { ...todo, completed: true }
+                        : todo,
+                    ),
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "delete_todo":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    todos: current.todos.filter(
+                      (todo) => todo.id !== localAction.todoId,
+                    ),
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "add_jira_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => {
+                    const nextLink = createWorkspaceJiraIssue();
+                    nextLink.issueKey = localAction.issueKey;
+                    nextLink.title = localAction.issueKey;
+                    nextLink.url = localAction.url;
+                    return {
+                      ...current,
+                      jiraIssues: [...current.jiraIssues, nextLink],
+                    };
+                  })
+                ) {
+                  return;
+                }
+                break;
+              case "remove_jira_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    jiraIssues: current.jiraIssues.filter(
+                      (issue) => issue.id !== localAction.linkId,
+                    ),
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "add_pull_request_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => {
+                    const nextLink = createWorkspaceLinkedPullRequest();
+                    nextLink.title = localAction.title;
+                    nextLink.url = localAction.url;
+                    return {
+                      ...current,
+                      linkedPullRequests: [
+                        ...current.linkedPullRequests,
+                        nextLink,
+                      ],
+                    };
+                  })
+                ) {
+                  return;
+                }
+                break;
+              case "remove_pull_request_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    linkedPullRequests: current.linkedPullRequests.filter(
+                      (pullRequest) => pullRequest.id !== localAction.linkId,
+                    ),
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "add_confluence_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => {
+                    const nextLink = createWorkspaceConfluencePage();
+                    nextLink.title = localAction.title;
+                    nextLink.url = localAction.url;
+                    return {
+                      ...current,
+                      confluencePages: [...current.confluencePages, nextLink],
+                    };
+                  })
+                ) {
+                  return;
+                }
+                break;
+              case "remove_confluence_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    confluencePages: current.confluencePages.filter(
+                      (page) => page.id !== localAction.linkId,
+                    ),
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "add_figma_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => {
+                    const nextLink = createWorkspaceFigmaResource();
+                    nextLink.title = localAction.title;
+                    nextLink.url = localAction.url;
+                    nextLink.nodeId = localAction.nodeId;
+                    return {
+                      ...current,
+                      figmaResources: [...current.figmaResources, nextLink],
+                    };
+                  })
+                ) {
+                  return;
+                }
+                break;
+              case "remove_figma_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    figmaResources: current.figmaResources.filter(
+                      (resource) => resource.id !== localAction.linkId,
+                    ),
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "add_slack_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => {
+                    const nextLink = createWorkspaceSlackThread();
+                    nextLink.url = localAction.url;
+                    nextLink.channelName = localAction.channelName;
+                    return {
+                      ...current,
+                      slackThreads: [...current.slackThreads, nextLink],
+                    };
+                  })
+                ) {
+                  return;
+                }
+                break;
+              case "remove_slack_link":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    slackThreads: current.slackThreads.filter(
+                      (thread) => thread.id !== localAction.linkId,
+                    ),
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "add_custom_field":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    customFields: [
+                      ...current.customFields,
+                      createWorkspaceInfoCustomField({
+                        type: localAction.fieldType,
+                        label: localAction.label,
+                      }),
+                    ],
+                  }))
+                ) {
+                  return;
+                }
+                break;
+              case "set_custom_field":
+                if (
+                  !applyWorkspaceInformationUpdate((current) => ({
+                    ...current,
+                    customFields: current.customFields.map((field) =>
+                      field.id === localAction.fieldId
+                        ? updateMuseCustomField({
+                            field,
+                            value: localAction.value,
+                          })
+                        : field,
+                    ),
+                  }))
+                ) {
+                  return;
+                }
+                break;
+            }
+
+            appendMuseResponse(
+              buildStaveMuseLocalActionResponse({
                 action: localAction,
                 context: buildMuseContext(),
-              }));
-              return;
-            case "open_settings":
-              window.dispatchEvent(new CustomEvent(STAVE_MUSE_OPEN_SETTINGS_EVENT, {
-                detail: { section: "muse" },
-              }));
-              break;
-            case "toggle_information_panel":
-              get().setLayout({
-                patch: {
-                  sidebarOverlayVisible: localAction.open ?? true,
-                  sidebarOverlayTab: "information",
-                },
-              });
-              break;
-            case "toggle_changes_panel":
-              get().setLayout({
-                patch: {
-                  sidebarOverlayVisible: localAction.open ?? true,
-                  sidebarOverlayTab: "changes",
-                },
-              });
-              break;
-            case "toggle_explorer_panel":
-              get().setLayout({
-                patch: {
-                  sidebarOverlayVisible: localAction.open ?? true,
-                  sidebarOverlayTab: "explorer",
-                },
-              });
-              break;
-            case "toggle_scripts_panel":
-              get().setLayout({
-                patch: {
-                  sidebarOverlayVisible: localAction.open ?? true,
-                  sidebarOverlayTab: "scripts",
-                },
-              });
-              break;
-            case "toggle_editor":
-              get().setLayout({
-                patch: {
-                  editorVisible: localAction.open ?? !get().layout.editorVisible,
-                },
-              });
-              break;
-            case "toggle_terminal":
-              get().setLayout({
-                patch: {
-                  terminalDocked: localAction.open ?? !get().layout.terminalDocked,
-                },
-              });
-              break;
-            case "toggle_workspace_sidebar":
-              get().setLayout({
-                patch: {
-                  workspaceSidebarCollapsed: localAction.open === undefined
-                    ? !get().layout.workspaceSidebarCollapsed
-                    : !localAction.open,
-                },
-              });
-              break;
-            case "switch_workspace":
-              await get().switchWorkspace({ workspaceId: localAction.workspaceId });
-              break;
-            case "open_project":
-              await get().openProject({ projectPath: localAction.projectPath });
-              break;
-            case "create_task":
-              if (!hasSelectedMuseWorkspace(get())) {
-                appendMuseResponse("Open a project workspace first.");
-                return;
-              }
-              get().createTask({ title: localAction.title });
-              break;
-            case "select_task":
-              get().selectTask({ taskId: localAction.taskId });
-              break;
-            case "replace_notes":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                notes: localAction.text,
-              }))) {
-                return;
-              }
-              break;
-            case "append_notes":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                notes: current.notes.trim()
-                  ? `${current.notes.trim()}\n${localAction.text}`
-                  : localAction.text,
-              }))) {
-                return;
-              }
-              break;
-            case "clear_notes":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                notes: "",
-              }))) {
-                return;
-              }
-              break;
-            case "add_todo":
-              if (!applyWorkspaceInformationUpdate((current) => {
-                const nextTodo = createWorkspaceTodoItem();
-                nextTodo.text = localAction.text;
-                return {
-                  ...current,
-                  todos: [...current.todos, nextTodo],
-                };
-              })) {
-                return;
-              }
-              break;
-            case "complete_todo":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                todos: current.todos.map((todo) => (
-                  todo.id === localAction.todoId
-                    ? { ...todo, completed: true }
-                    : todo
-                )),
-              }))) {
-                return;
-              }
-              break;
-            case "delete_todo":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                todos: current.todos.filter((todo) => todo.id !== localAction.todoId),
-              }))) {
-                return;
-              }
-              break;
-            case "add_jira_link":
-              if (!applyWorkspaceInformationUpdate((current) => {
-                const nextLink = createWorkspaceJiraIssue();
-                nextLink.issueKey = localAction.issueKey;
-                nextLink.title = localAction.issueKey;
-                nextLink.url = localAction.url;
-                return {
-                  ...current,
-                  jiraIssues: [...current.jiraIssues, nextLink],
-                };
-              })) {
-                return;
-              }
-              break;
-            case "remove_jira_link":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                jiraIssues: current.jiraIssues.filter((issue) => issue.id !== localAction.linkId),
-              }))) {
-                return;
-              }
-              break;
-            case "add_pull_request_link":
-              if (!applyWorkspaceInformationUpdate((current) => {
-                const nextLink = createWorkspaceLinkedPullRequest();
-                nextLink.title = localAction.title;
-                nextLink.url = localAction.url;
-                return {
-                  ...current,
-                  linkedPullRequests: [...current.linkedPullRequests, nextLink],
-                };
-              })) {
-                return;
-              }
-              break;
-            case "remove_pull_request_link":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                linkedPullRequests: current.linkedPullRequests.filter((pullRequest) => pullRequest.id !== localAction.linkId),
-              }))) {
-                return;
-              }
-              break;
-            case "add_confluence_link":
-              if (!applyWorkspaceInformationUpdate((current) => {
-                const nextLink = createWorkspaceConfluencePage();
-                nextLink.title = localAction.title;
-                nextLink.url = localAction.url;
-                return {
-                  ...current,
-                  confluencePages: [...current.confluencePages, nextLink],
-                };
-              })) {
-                return;
-              }
-              break;
-            case "remove_confluence_link":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                confluencePages: current.confluencePages.filter((page) => page.id !== localAction.linkId),
-              }))) {
-                return;
-              }
-              break;
-            case "add_figma_link":
-              if (!applyWorkspaceInformationUpdate((current) => {
-                const nextLink = createWorkspaceFigmaResource();
-                nextLink.title = localAction.title;
-                nextLink.url = localAction.url;
-                nextLink.nodeId = localAction.nodeId;
-                return {
-                  ...current,
-                  figmaResources: [...current.figmaResources, nextLink],
-                };
-              })) {
-                return;
-              }
-              break;
-            case "remove_figma_link":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                figmaResources: current.figmaResources.filter((resource) => resource.id !== localAction.linkId),
-              }))) {
-                return;
-              }
-              break;
-            case "add_slack_link":
-              if (!applyWorkspaceInformationUpdate((current) => {
-                const nextLink = createWorkspaceSlackThread();
-                nextLink.url = localAction.url;
-                nextLink.channelName = localAction.channelName;
-                return {
-                  ...current,
-                  slackThreads: [...current.slackThreads, nextLink],
-                };
-              })) {
-                return;
-              }
-              break;
-            case "remove_slack_link":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                slackThreads: current.slackThreads.filter((thread) => thread.id !== localAction.linkId),
-              }))) {
-                return;
-              }
-              break;
-            case "add_custom_field":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                customFields: [
-                  ...current.customFields,
-                  createWorkspaceInfoCustomField({
-                    type: localAction.fieldType,
-                    label: localAction.label,
-                  }),
-                ],
-              }))) {
-                return;
-              }
-              break;
-            case "set_custom_field":
-              if (!applyWorkspaceInformationUpdate((current) => ({
-                ...current,
-                customFields: current.customFields.map((field) => (
-                  field.id === localAction.fieldId
-                    ? updateMuseCustomField({
-                        field,
-                        value: localAction.value,
-                      })
-                    : field
-                )),
-              }))) {
-                return;
-              }
-              break;
-          }
-
-          appendMuseResponse(buildStaveMuseLocalActionResponse({
-            action: localAction,
-            context: buildMuseContext(),
-          }));
-          return;
-        }
-
-        const contextSnapshot = buildStaveMuseContextSnapshot({
-          target: stateBeforeRouting.staveMuse.target,
-          context: buildMuseContext(),
-        });
-        const routingDecision = await collectStaveMuseRoutingDecision({
-          content: trimmedContent,
-          model: stateBeforeRouting.settings.museRouterModel,
-          settings: stateBeforeRouting.settings,
-          contextSnapshot,
-          projectBasePrompt: resolveProjectBasePrompt({
-            projectPath: stateBeforeRouting.projectPath,
-            recentProjects: stateBeforeRouting.recentProjects,
-          }),
-        });
-
-        const explicitTaskRequest = isStaveMuseExplicitTaskRequest(trimmedContent);
-        if (routingDecision.mode === "handoff") {
-          const currentState = get();
-          if (!currentState.settings.museAutoHandoffToTask && !explicitTaskRequest) {
-            appendMuseResponse(
-              "This request needs task chat. Turn on Auto Handoff To Task or ask Muse to open a task for it.",
-              { model: "stave-muse-router" },
+              }),
             );
             return;
           }
-          if (!hasSelectedMuseWorkspace(currentState)) {
-            appendMuseResponse("Open a project workspace first so I can hand this off to a task.");
-            return;
-          }
 
-          const requestedWorkspace = findStaveMuseWorkspaceMention({
-            input: trimmedContent,
-            workspaces: buildMuseContext().workspaces,
+          const contextSnapshot = buildStaveMuseContextSnapshot({
+            target: stateBeforeRouting.staveMuse.target,
+            context: buildMuseContext(),
           });
-          if (requestedWorkspace && requestedWorkspace.id !== get().activeWorkspaceId) {
-            await get().switchWorkspace({ workspaceId: requestedWorkspace.id });
-          }
-
-          const nextTitle = normalizeSuggestedTaskTitle({ title: trimmedContent }) ?? "Muse Task";
-          get().createTask({ title: nextTitle });
-          const nextTaskId = get().activeTaskId;
-          void get().sendUserMessage({
-            taskId: nextTaskId,
+          const routingDecision = await collectStaveMuseRoutingDecision({
             content: trimmedContent,
-          });
-          appendMuseResponse(
-            `Created task "${nextTitle}" and handed the request off to task chat.${routingDecision.reason ? ` ${routingDecision.reason}` : ""}`,
-            { model: "stave-muse-router" },
-          );
-          return;
-        }
-
-        const activeModel = routingDecision.mode === "planner"
-          ? stateBeforeRouting.settings.musePlannerModel
-          : stateBeforeRouting.settings.museChatModel;
-        const provider = inferProviderIdFromModel({ model: activeModel });
-        const providerRuntimeOptions = {
-          ...applyProjectBasePromptToRuntimeOptions({
-            runtimeOptions: buildProviderRuntimeOptions({
-              provider,
-              model: activeModel,
-              settings: get().settings,
-            }),
+            model: stateBeforeRouting.settings.museRouterModel,
+            settings: stateBeforeRouting.settings,
+            contextSnapshot,
             projectBasePrompt: resolveProjectBasePrompt({
               projectPath: stateBeforeRouting.projectPath,
               recentProjects: stateBeforeRouting.recentProjects,
             }),
-          }),
-          ...(provider === "claude-code"
-            ? {
-                claudeDisallowedTools: ["Bash", "Glob", "Grep", "LS", "NotebookRead", "Read"],
-                claudePermissionMode: "plan" as const,
-              }
-            : {
-                codexApprovalPolicy: "never" as const,
-                codexFileAccess: "read-only" as const,
-              }),
-        };
-        const connectedToolIds = resolveRequestedStaveMuseConnectedTools({ input: trimmedContent });
-        const turnId = crypto.randomUUID();
-        const workspaceId = get().activeWorkspaceId || undefined;
-        const museRuntimeCwd = getStaveMuseRuntimeCwd();
-        const promptContextPart = buildStaveMuseInstructionContextPart({
-          mode: routingDecision.mode === "planner" ? "planner" : "chat",
-          prompt: routingDecision.mode === "planner"
-            ? stateBeforeRouting.settings.musePlannerPrompt
-            : stateBeforeRouting.settings.museChatPrompt,
-        });
-        const retrievedContextParts: CanonicalRetrievedContextPart[] = [
-          promptContextPart,
-          {
-            type: "retrieved_context",
-            sourceId: "stave:muse-context",
-            title: "Stave Muse Context",
-            content: contextSnapshot,
-          },
-        ];
+          });
 
-        if (window.api?.provider?.checkAvailability) {
-          try {
-            const availability = await window.api.provider.checkAvailability({
-              providerId: provider,
-              runtimeOptions: providerRuntimeOptions,
-            });
-            if (!availability.ok || !availability.available) {
-              appendMuseResponse(buildStaveMuseProviderUnavailableMessage({
-                providerId: provider,
-                detail: availability.detail,
-              }), {
-                providerId: "stave",
-                model: "system",
-              });
+          const explicitTaskRequest =
+            isStaveMuseExplicitTaskRequest(trimmedContent);
+          if (routingDecision.mode === "handoff") {
+            const currentState = get();
+            if (
+              !currentState.settings.museAutoHandoffToTask &&
+              !explicitTaskRequest
+            ) {
+              appendMuseResponse(
+                "This request needs task chat. Turn on Auto Handoff To Task or ask Muse to open a task for it.",
+                { model: "stave-muse-router" },
+              );
               return;
             }
-          } catch (error) {
-            appendMuseResponse(buildStaveMuseProviderUnavailableMessage({
-              providerId: provider,
-              detail: String(error),
-            }), {
-              providerId: "stave",
-              model: "system",
-            });
-            return;
-          }
-        }
-
-        if (connectedToolIds.length > 0 && window.api?.provider?.getConnectedToolStatus) {
-          try {
-            const connectedToolStatus = await window.api.provider.getConnectedToolStatus({
-              providerId: provider,
-              cwd: museRuntimeCwd,
-              runtimeOptions: providerRuntimeOptions,
-              toolIds: connectedToolIds,
-            });
-            const blockingStatuses = getBlockingConnectedToolStatuses({
-              statuses: connectedToolStatus.tools,
-            });
-            if (blockingStatuses.length > 0) {
-              appendMuseResponse(buildStaveMuseConnectedToolPreflightMessage({
-                providerId: provider,
-                blockingTools: blockingStatuses,
-              }), {
-                providerId: "stave",
-                model: "system",
-              });
+            if (!hasSelectedMuseWorkspace(currentState)) {
+              appendMuseResponse(
+                "Open a project workspace first so I can hand this off to a task.",
+              );
               return;
             }
-          } catch (error) {
-            appendMuseResponse(buildStaveMuseConnectedToolPreflightMessage({
-              providerId: provider,
-              blockingTools: connectedToolIds.map((toolId) => ({
-                id: toolId,
-                label: toolId,
-                state: "error" as const,
-                available: false,
-                detail: String(error),
-              })),
-            }), {
-              providerId: "stave",
-              model: "system",
+
+            const requestedWorkspace = findStaveMuseWorkspaceMention({
+              input: trimmedContent,
+              workspaces: buildMuseContext().workspaces,
             });
+            if (
+              requestedWorkspace &&
+              requestedWorkspace.id !== get().activeWorkspaceId
+            ) {
+              await get().switchWorkspace({
+                workspaceId: requestedWorkspace.id,
+              });
+            }
+
+            const nextTitle =
+              normalizeSuggestedTaskTitle({ title: trimmedContent }) ??
+              "Muse Task";
+            get().createTask({ title: nextTitle });
+            const nextTaskId = get().activeTaskId;
+            void get().sendUserMessage({
+              taskId: nextTaskId,
+              content: trimmedContent,
+            });
+            appendMuseResponse(
+              `Created task "${nextTitle}" and handed the request off to task chat.${routingDecision.reason ? ` ${routingDecision.reason}` : ""}`,
+              { model: "stave-muse-router" },
+            );
             return;
           }
-        }
 
-        const conversation = buildCanonicalConversationRequest({
-          turnId,
-          taskId: STAVE_MUSE_SESSION_ID,
-          workspaceId,
-          providerId: provider,
-          model: activeModel,
-          history: historyBeforeSubmit,
-          userInput: trimmedContent,
-          mode: "chat",
-          retrievedContextParts,
-        });
-
-        set((state) => ({
-          staveMuse: appendStaveMusePendingReply({
-            assistant: state.staveMuse,
-            providerId: provider,
-            model: activeModel,
-            turnId,
-          }),
-        }));
-
-        const providerTurnEventController = createProviderTurnEventController({
-          flushEvents: (pendingEvents) => {
-            set((state) => ({
-              staveMuse: applyProviderEventsToStaveMuse({
-                assistant: state.staveMuse,
-                events: pendingEvents,
+          const activeModel =
+            routingDecision.mode === "planner"
+              ? stateBeforeRouting.settings.musePlannerModel
+              : stateBeforeRouting.settings.museChatModel;
+          const provider = inferProviderIdFromModel({ model: activeModel });
+          const providerRuntimeOptions = {
+            ...applyProjectBasePromptToRuntimeOptions({
+              runtimeOptions: buildProviderRuntimeOptions({
                 provider,
                 model: activeModel,
-                turnId,
+                settings: get().settings,
               }),
-            }));
-          },
-        });
-
-        runProviderTurn({
-          turnId,
-          provider,
-          prompt: trimmedContent,
-          conversation,
-          taskId: STAVE_MUSE_SESSION_ID,
-          workspaceId,
-          cwd: museRuntimeCwd,
-          runtimeOptions: providerRuntimeOptions,
-          onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
-        });
-      },
-      abortStaveMuseTurn: () => {
-        const stateBefore = get();
-        const activeTurnId = stateBefore.staveMuse.activeTurnId;
-        if (activeTurnId) {
-          void window.api?.provider?.abortTurn?.({ turnId: activeTurnId });
-        }
-        void window.api?.provider?.cleanupTask?.({ taskId: STAVE_MUSE_SESSION_ID });
-        set((state) => {
-          const current = state.staveMuse.messages;
-          const interruptedMessages = interruptPendingToolInteractionsInMessages({
-            messages: current,
+              projectBasePrompt: resolveProjectBasePrompt({
+                projectPath: stateBeforeRouting.projectPath,
+                recentProjects: stateBeforeRouting.recentProjects,
+              }),
+            }),
+            ...(provider === "claude-code"
+              ? {
+                  claudeDisallowedTools: [
+                    "Bash",
+                    "Glob",
+                    "Grep",
+                    "LS",
+                    "NotebookRead",
+                    "Read",
+                  ],
+                  claudePermissionMode: "plan" as const,
+                }
+              : {
+                  codexApprovalPolicy: "never" as const,
+                  codexFileAccess: "read-only" as const,
+                }),
+          };
+          const connectedToolIds = resolveRequestedStaveMuseConnectedTools({
+            input: trimmedContent,
           });
-          const target = interruptedMessages[interruptedMessages.length - 1];
-          if (!target || target.role !== "assistant" || !target.isStreaming) {
+          const turnId = crypto.randomUUID();
+          const workspaceId = get().activeWorkspaceId || undefined;
+          const museRuntimeCwd = getStaveMuseRuntimeCwd();
+          const promptContextPart = buildStaveMuseInstructionContextPart({
+            mode: routingDecision.mode === "planner" ? "planner" : "chat",
+            prompt:
+              routingDecision.mode === "planner"
+                ? stateBeforeRouting.settings.musePlannerPrompt
+                : stateBeforeRouting.settings.museChatPrompt,
+          });
+          const retrievedContextParts: CanonicalRetrievedContextPart[] = [
+            promptContextPart,
+            {
+              type: "retrieved_context",
+              sourceId: "stave:muse-context",
+              title: "Stave Muse Context",
+              content: contextSnapshot,
+            },
+          ];
+
+          if (window.api?.provider?.checkAvailability) {
+            try {
+              const availability = await window.api.provider.checkAvailability({
+                providerId: provider,
+                runtimeOptions: providerRuntimeOptions,
+              });
+              if (!availability.ok || !availability.available) {
+                appendMuseResponse(
+                  buildStaveMuseProviderUnavailableMessage({
+                    providerId: provider,
+                    detail: availability.detail,
+                  }),
+                  {
+                    providerId: "stave",
+                    model: "system",
+                  },
+                );
+                return;
+              }
+            } catch (error) {
+              appendMuseResponse(
+                buildStaveMuseProviderUnavailableMessage({
+                  providerId: provider,
+                  detail: String(error),
+                }),
+                {
+                  providerId: "stave",
+                  model: "system",
+                },
+              );
+              return;
+            }
+          }
+
+          if (
+            connectedToolIds.length > 0 &&
+            window.api?.provider?.getConnectedToolStatus
+          ) {
+            try {
+              const connectedToolStatus =
+                await window.api.provider.getConnectedToolStatus({
+                  providerId: provider,
+                  cwd: museRuntimeCwd,
+                  runtimeOptions: providerRuntimeOptions,
+                  toolIds: connectedToolIds,
+                });
+              const blockingStatuses = getBlockingConnectedToolStatuses({
+                statuses: connectedToolStatus.tools,
+              });
+              if (blockingStatuses.length > 0) {
+                appendMuseResponse(
+                  buildStaveMuseConnectedToolPreflightMessage({
+                    providerId: provider,
+                    blockingTools: blockingStatuses,
+                  }),
+                  {
+                    providerId: "stave",
+                    model: "system",
+                  },
+                );
+                return;
+              }
+            } catch (error) {
+              appendMuseResponse(
+                buildStaveMuseConnectedToolPreflightMessage({
+                  providerId: provider,
+                  blockingTools: connectedToolIds.map((toolId) => ({
+                    id: toolId,
+                    label: toolId,
+                    state: "error" as const,
+                    available: false,
+                    detail: String(error),
+                  })),
+                }),
+                {
+                  providerId: "stave",
+                  model: "system",
+                },
+              );
+              return;
+            }
+          }
+
+          const conversation = buildCanonicalConversationRequest({
+            turnId,
+            taskId: STAVE_MUSE_SESSION_ID,
+            workspaceId,
+            providerId: provider,
+            model: activeModel,
+            history: historyBeforeSubmit,
+            userInput: trimmedContent,
+            mode: "chat",
+            retrievedContextParts,
+          });
+
+          set((state) => ({
+            staveMuse: appendStaveMusePendingReply({
+              assistant: state.staveMuse,
+              providerId: provider,
+              model: activeModel,
+              turnId,
+            }),
+          }));
+
+          const providerTurnEventController = createProviderTurnEventController(
+            {
+              flushEvents: (pendingEvents) => {
+                set((state) => ({
+                  staveMuse: applyProviderEventsToStaveMuse({
+                    assistant: state.staveMuse,
+                    events: pendingEvents,
+                    provider,
+                    model: activeModel,
+                    turnId,
+                  }),
+                }));
+              },
+            },
+          );
+
+          runProviderTurn({
+            turnId,
+            provider,
+            prompt: trimmedContent,
+            conversation,
+            taskId: STAVE_MUSE_SESSION_ID,
+            workspaceId,
+            cwd: museRuntimeCwd,
+            runtimeOptions: providerRuntimeOptions,
+            onEvent: ({ event }) =>
+              providerTurnEventController.handleEvent(event),
+          });
+        },
+        abortStaveMuseTurn: () => {
+          const stateBefore = get();
+          const activeTurnId = stateBefore.staveMuse.activeTurnId;
+          if (activeTurnId) {
+            void window.api?.provider?.abortTurn?.({ turnId: activeTurnId });
+          }
+          void window.api?.provider?.cleanupTask?.({
+            taskId: STAVE_MUSE_SESSION_ID,
+          });
+          set((state) => {
+            const current = state.staveMuse.messages;
+            const interruptedMessages =
+              interruptPendingToolInteractionsInMessages({
+                messages: current,
+              });
+            const target = interruptedMessages[interruptedMessages.length - 1];
+            if (!target || target.role !== "assistant" || !target.isStreaming) {
+              return {
+                staveMuse: {
+                  ...state.staveMuse,
+                  messages: interruptedMessages,
+                  activeTurnId: undefined,
+                  providerSession: undefined,
+                  nativeSessionReady: false,
+                },
+              };
+            }
+            const aborted: ChatMessage = {
+              ...target,
+              completedAt: buildRecentTimestamp(),
+              isStreaming: false,
+              parts: [
+                ...target.parts,
+                {
+                  type: "system_event",
+                  content: "Generation aborted by user.",
+                },
+              ],
+            };
             return {
               staveMuse: {
                 ...state.staveMuse,
-                messages: interruptedMessages,
+                messages: [...interruptedMessages.slice(0, -1), aborted],
                 activeTurnId: undefined,
                 providerSession: undefined,
                 nativeSessionReady: false,
               },
             };
-          }
-          const aborted: ChatMessage = {
-            ...target,
-            completedAt: buildRecentTimestamp(),
-            isStreaming: false,
-            parts: [
-              ...target.parts,
-              { type: "system_event", content: "Generation aborted by user." },
-            ],
-          };
-          return {
-            staveMuse: {
-              ...state.staveMuse,
-              messages: [...interruptedMessages.slice(0, -1), aborted],
-              activeTurnId: undefined,
-              providerSession: undefined,
-              nativeSessionReady: false,
-            },
-          };
-        });
-      },
-      resolveStaveMuseApproval: async ({ messageId, approved }) => {
-        const stateBefore = get();
-        const activeTurnId = stateBefore.staveMuse.activeTurnId;
-        const message = stateBefore.staveMuse.messages.find((item) => item.id === messageId);
-        const approvalPart = findLatestPendingApprovalPart({ message });
-
-        const appendApprovalFailure = (failureText: string) => {
-          set((state) => ({
-            staveMuse: appendStaveMuseStandaloneMessage({
-              assistant: state.staveMuse,
-              content: failureText,
-              providerId: "stave",
-              model: "system",
-            }),
-          }));
-        };
-
-        const applyApprovalResponse = (requestId: string) => {
-          set((state) => ({
-            staveMuse: {
-              ...state.staveMuse,
-              messages: updateMessageById({
-                messages: state.staveMuse.messages,
-                messageId,
-                update: (currentMessage) => ({
-                  ...currentMessage,
-                  parts: updateApprovalPartsByRequestId({
-                    parts: currentMessage.parts,
-                    requestId,
-                    approved,
-                  }),
-                }),
-              }),
-            },
-          }));
-        };
-
-        if (activeTurnId && approvalPart) {
-          const respondApproval = window.api?.provider?.respondApproval;
-          if (respondApproval) {
-            void respondApproval({
-              turnId: activeTurnId,
-              requestId: approvalPart.requestId,
-              approved,
-            }).then((result) => {
-              if (!result.ok) {
-                appendApprovalFailure(`Approval delivery failed: ${result.message ?? "unknown"}`);
-                return;
-              }
-              applyApprovalResponse(approvalPart.requestId);
-            }).catch((error) => {
-              appendApprovalFailure(`Approval delivery failed: ${String(error)}`);
-            });
-            return;
-          }
-        }
-
-        if (!activeTurnId && approvalPart && window.api?.provider?.respondApproval) {
-          appendApprovalFailure("Approval delivery failed: no active turn found for this Muse turn.");
-          return;
-        }
-        if (approvalPart) {
-          appendApprovalFailure("Approval delivery failed: no active turn found for this Muse turn.");
-        }
-      },
-      resolveStaveMuseUserInput: async ({ messageId, answers, denied }) => {
-        const stateBefore = get();
-        const activeTurnId = stateBefore.staveMuse.activeTurnId;
-        const message = stateBefore.staveMuse.messages.find((item) => item.id === messageId);
-        const userInputPart = findLatestPendingUserInputPart({ message });
-
-        const appendUserInputFailure = (failureText: string) => {
-          set((state) => ({
-            staveMuse: appendStaveMuseStandaloneMessage({
-              assistant: state.staveMuse,
-              content: failureText,
-              providerId: "stave",
-              model: "system",
-            }),
-          }));
-        };
-
-        const applyUserInputResponse = (requestId: string) => {
-          set((state) => ({
-            staveMuse: {
-              ...state.staveMuse,
-              messages: updateMessageById({
-                messages: state.staveMuse.messages,
-                messageId,
-                update: (currentMessage) => ({
-                  ...currentMessage,
-                  parts: updateUserInputPartsByRequestId({
-                    parts: currentMessage.parts,
-                    requestId,
-                    answers,
-                    denied,
-                  }),
-                }),
-              }),
-            },
-          }));
-        };
-
-        if (activeTurnId && userInputPart) {
-          const respondUserInput = window.api?.provider?.respondUserInput;
-          if (respondUserInput) {
-            void respondUserInput({
-              turnId: activeTurnId,
-              requestId: userInputPart.requestId,
-              answers,
-              denied,
-            }).then((result) => {
-              if (!result.ok) {
-                appendUserInputFailure(`User input delivery failed: ${result.message ?? "unknown"}`);
-                return;
-              }
-              applyUserInputResponse(userInputPart.requestId);
-            }).catch((error) => {
-              appendUserInputFailure(`User input delivery failed: ${String(error)}`);
-            });
-            return;
-          }
-        }
-
-        if (!activeTurnId && userInputPart && window.api?.provider?.respondUserInput) {
-          appendUserInputFailure("User input delivery failed: no active turn found for this Muse turn.");
-          return;
-        }
-        if (userInputPart) {
-          appendUserInputFailure("User input delivery failed: no active turn found for this Muse turn.");
-        }
-      },
-      sendUserMessage: async ({ taskId, content, fileContexts, imageContexts }) => {
-        const turnId = crypto.randomUUID();
-        let state = get();
-        let resolvedTaskId = taskId;
-        const sourcePromptDraftTaskId = taskId || "draft:session";
-        let sourcePromptDraft = state.promptDraftByTask[sourcePromptDraftTaskId] ?? EMPTY_PROMPT_DRAFT;
-        let runtimeTarget = resolvedTaskId
-          ? resolveTaskRuntimeTarget({
-              state,
-              taskId: resolvedTaskId,
-            })
-          : null;
-        let task = runtimeTarget?.task ?? null;
-
-        if (!task) {
-          const seededTaskId = crypto.randomUUID();
-          const seededTitleText = resolveSkillSelections({
-            text: content,
-            skills: state.skillCatalog.skills,
-            providerId: state.draftProvider,
-          }).normalizedText;
-          const seededTitle = seededTitleText.split("\n")[0]?.trim().slice(0, 48) || "New Task";
-          const seededTask: Task = {
-            id: seededTaskId,
-            title: seededTitle,
-            provider: state.draftProvider,
-            updatedAt: buildRecentTimestamp(),
-            unread: false,
-            archivedAt: null,
-            controlMode: "interactive",
-            controlOwner: "stave",
-          };
-          set((nextState) => ({
-            tasks: [seededTask, ...nextState.tasks],
-            activeTaskId: seededTaskId,
-            messagesByTask: {
-              ...nextState.messagesByTask,
-              [seededTaskId]: nextState.messagesByTask[seededTaskId] ?? [],
-            },
-            messageCountByTask: {
-              ...nextState.messageCountByTask,
-              [seededTaskId]: nextState.messageCountByTask[seededTaskId] ?? 0,
-            },
-            nativeSessionReadyByTask: {
-              ...nextState.nativeSessionReadyByTask,
-              [seededTaskId]: false,
-            },
-            providerSessionByTask: {
-              ...nextState.providerSessionByTask,
-              [seededTaskId]: {},
-            },
-            taskWorkspaceIdById: {
-              ...nextState.taskWorkspaceIdById,
-              [seededTaskId]: nextState.activeWorkspaceId,
-            },
-            promptDraftByTask: {
-              ...nextState.promptDraftByTask,
-              [seededTaskId]: {
-                text: "",
-                attachedFilePaths: [],
-                attachments: [],
-                ...(sourcePromptDraft.runtimeOverrides
-                  ? { runtimeOverrides: sourcePromptDraft.runtimeOverrides }
-                  : {}),
-              },
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-          }));
-          state = get();
-          resolvedTaskId = seededTaskId;
-          sourcePromptDraft = state.promptDraftByTask[sourcePromptDraftTaskId] ?? EMPTY_PROMPT_DRAFT;
-          runtimeTarget = resolveTaskRuntimeTarget({
-            state,
-            taskId: resolvedTaskId,
           });
-          task = seededTask;
-        }
-        if (!task || !runtimeTarget) {
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
-        if (isManagedTaskReadOnly({ state, taskId: resolvedTaskId })) {
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
-        const provider = task?.provider ?? state.draftProvider ?? "claude-code";
-        const { workspaceId: taskWorkspaceId, cwd: workspaceCwd } = resolveTaskWorkspaceContext({
-          taskId: resolvedTaskId,
-          activeWorkspaceId: state.activeWorkspaceId,
-          taskWorkspaceIdById: state.taskWorkspaceIdById,
-          workspacePathById: state.workspacePathById,
-          workspaceDefaultById: state.workspaceDefaultById,
-          projectPath: state.projectPath,
-        });
-        if (!taskWorkspaceId) {
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
-        const taskWorkspaceSession = getWorkspaceSessionForState({
-          state,
-          workspaceId: taskWorkspaceId,
-        }) ?? runtimeTarget.session;
-        const runCommand = window.api?.terminal?.runCommand;
+        },
+        resolveStaveMuseApproval: async ({ messageId, approved }) => {
+          const stateBefore = get();
+          const activeTurnId = stateBefore.staveMuse.activeTurnId;
+          const message = stateBefore.staveMuse.messages.find(
+            (item) => item.id === messageId,
+          );
+          const approvalPart = findLatestPendingApprovalPart({ message });
 
-        if (!state.taskCheckpointById[resolvedTaskId] && runCommand) {
-          void runCommand({ cwd: workspaceCwd, command: "git rev-parse HEAD" }).then((result) => {
-            if (!result.ok) {
-              return;
-            }
-            const checkpoint = result.stdout.trim().split("\n")[0]?.trim();
-            if (!checkpoint) {
-              return;
-            }
-            set((nextState) => ({
-              taskCheckpointById: {
-                ...nextState.taskCheckpointById,
-                [resolvedTaskId]: checkpoint,
+          const appendApprovalFailure = (failureText: string) => {
+            set((state) => ({
+              staveMuse: appendStaveMuseStandaloneMessage({
+                assistant: state.staveMuse,
+                content: failureText,
+                providerId: "stave",
+                model: "system",
+              }),
+            }));
+          };
+
+          const applyApprovalResponse = (requestId: string) => {
+            set((state) => ({
+              staveMuse: {
+                ...state.staveMuse,
+                messages: updateMessageById({
+                  messages: state.staveMuse.messages,
+                  messageId,
+                  update: (currentMessage) => ({
+                    ...currentMessage,
+                    parts: updateApprovalPartsByRequestId({
+                      parts: currentMessage.parts,
+                      requestId,
+                      approved,
+                    }),
+                  }),
+                }),
               },
             }));
-          });
-        }
+          };
 
-        const existingHistory = taskWorkspaceSession.messagesByTask[resolvedTaskId] ?? [];
-        if (findLatestPendingApproval({ messages: existingHistory })) {
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
-        if (findLatestPendingUserInput({ messages: existingHistory })) {
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
-        const promptDraft = normalizePromptDraftForStorage({
-          ...(taskWorkspaceSession.promptDraftByTask[resolvedTaskId] ?? sourcePromptDraft),
-          text: content,
-          queuedNextTurn: undefined,
-        });
-        const activeTurnId = taskWorkspaceSession.activeTurnIdsByTask[resolvedTaskId];
-        if (activeTurnId) {
-          const queuedPromptDraft = normalizePromptDraftForStorage({
-            ...(taskWorkspaceSession.promptDraftByTask[resolvedTaskId] ?? sourcePromptDraft),
-            text: "",
-            queuedNextTurn: {
-              queuedAt: buildRecentTimestamp(),
-              sourceTurnId: activeTurnId,
-              content,
-            },
-          });
-          set((nextState) => {
-            if (taskWorkspaceId === nextState.activeWorkspaceId) {
-              return {
-                promptDraftByTask: {
-                  ...nextState.promptDraftByTask,
-                  [resolvedTaskId]: queuedPromptDraft,
-                },
-                workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-              };
+          if (activeTurnId && approvalPart) {
+            const respondApproval = window.api?.provider?.respondApproval;
+            if (respondApproval) {
+              void respondApproval({
+                turnId: activeTurnId,
+                requestId: approvalPart.requestId,
+                approved,
+              })
+                .then((result) => {
+                  if (!result.ok) {
+                    appendApprovalFailure(
+                      `Approval delivery failed: ${result.message ?? "unknown"}`,
+                    );
+                    return;
+                  }
+                  applyApprovalResponse(approvalPart.requestId);
+                })
+                .catch((error) => {
+                  appendApprovalFailure(
+                    `Approval delivery failed: ${String(error)}`,
+                  );
+                });
+              return;
             }
+          }
 
-            const cachedSession = nextState.workspaceRuntimeCacheById[taskWorkspaceId];
-            if (!cachedSession) {
-              return nextState;
-            }
-
-            return {
-              workspaceRuntimeCacheById: {
-                ...nextState.workspaceRuntimeCacheById,
-                [taskWorkspaceId]: {
-                  ...cachedSession,
-                  promptDraftByTask: {
-                    ...cachedSession.promptDraftByTask,
-                    [resolvedTaskId]: queuedPromptDraft,
-                  },
-                },
-              },
-            };
-          });
-          return {
-            status: "queued",
-            taskId: resolvedTaskId,
-            workspaceId: taskWorkspaceId,
-          } satisfies SendUserMessageResult;
-        }
-        if (!hasPromptDraftPayload(promptDraft)) {
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
-
-        const updatePromptDraftsForWorkspace = (draftsByTaskId: Record<string, PromptDraft>) => {
-          set((nextState) => {
-            if (taskWorkspaceId === nextState.activeWorkspaceId) {
-              return {
-                promptDraftByTask: {
-                  ...nextState.promptDraftByTask,
-                  ...draftsByTaskId,
-                },
-                workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-              };
-            }
-
-            const cachedSession = nextState.workspaceRuntimeCacheById[taskWorkspaceId];
-            if (!cachedSession) {
-              return nextState;
-            }
-
-            return {
-              workspaceRuntimeCacheById: {
-                ...nextState.workspaceRuntimeCacheById,
-                [taskWorkspaceId]: {
-                  ...cachedSession,
-                  promptDraftByTask: {
-                    ...cachedSession.promptDraftByTask,
-                    ...draftsByTaskId,
-                  },
-                },
-              },
-            };
-          });
-        };
-
-        let promptDraftClearedOptimistically = false;
-        const clearSubmittedPromptDraft = () => {
-          if (promptDraftClearedOptimistically) {
+          if (
+            !activeTurnId &&
+            approvalPart &&
+            window.api?.provider?.respondApproval
+          ) {
+            appendApprovalFailure(
+              "Approval delivery failed: no active turn found for this Muse turn.",
+            );
             return;
           }
-          promptDraftClearedOptimistically = true;
-          updatePromptDraftsForWorkspace({
-            [resolvedTaskId]: buildClearedPromptDraft(promptDraft),
-            ...(sourcePromptDraftTaskId !== resolvedTaskId
-              ? {
-                  [sourcePromptDraftTaskId]: buildClearedPromptDraft(sourcePromptDraft),
-                }
-              : {}),
-          });
-        };
-        const restoreSubmittedPromptDraft = () => {
-          if (!promptDraftClearedOptimistically) {
+          if (approvalPart) {
+            appendApprovalFailure(
+              "Approval delivery failed: no active turn found for this Muse turn.",
+            );
+          }
+        },
+        resolveStaveMuseUserInput: async ({ messageId, answers, denied }) => {
+          const stateBefore = get();
+          const activeTurnId = stateBefore.staveMuse.activeTurnId;
+          const message = stateBefore.staveMuse.messages.find(
+            (item) => item.id === messageId,
+          );
+          const userInputPart = findLatestPendingUserInputPart({ message });
+
+          const appendUserInputFailure = (failureText: string) => {
+            set((state) => ({
+              staveMuse: appendStaveMuseStandaloneMessage({
+                assistant: state.staveMuse,
+                content: failureText,
+                providerId: "stave",
+                model: "system",
+              }),
+            }));
+          };
+
+          const applyUserInputResponse = (requestId: string) => {
+            set((state) => ({
+              staveMuse: {
+                ...state.staveMuse,
+                messages: updateMessageById({
+                  messages: state.staveMuse.messages,
+                  messageId,
+                  update: (currentMessage) => ({
+                    ...currentMessage,
+                    parts: updateUserInputPartsByRequestId({
+                      parts: currentMessage.parts,
+                      requestId,
+                      answers,
+                      denied,
+                    }),
+                  }),
+                }),
+              },
+            }));
+          };
+
+          if (activeTurnId && userInputPart) {
+            const respondUserInput = window.api?.provider?.respondUserInput;
+            if (respondUserInput) {
+              void respondUserInput({
+                turnId: activeTurnId,
+                requestId: userInputPart.requestId,
+                answers,
+                denied,
+              })
+                .then((result) => {
+                  if (!result.ok) {
+                    appendUserInputFailure(
+                      `User input delivery failed: ${result.message ?? "unknown"}`,
+                    );
+                    return;
+                  }
+                  applyUserInputResponse(userInputPart.requestId);
+                })
+                .catch((error) => {
+                  appendUserInputFailure(
+                    `User input delivery failed: ${String(error)}`,
+                  );
+                });
+              return;
+            }
+          }
+
+          if (
+            !activeTurnId &&
+            userInputPart &&
+            window.api?.provider?.respondUserInput
+          ) {
+            appendUserInputFailure(
+              "User input delivery failed: no active turn found for this Muse turn.",
+            );
             return;
           }
-          promptDraftClearedOptimistically = false;
-          updatePromptDraftsForWorkspace({
-            [resolvedTaskId]: promptDraft,
-            ...(sourcePromptDraftTaskId !== resolvedTaskId
-              ? {
-                  [sourcePromptDraftTaskId]: sourcePromptDraft,
-                }
-              : {}),
-          });
-        };
-
-        clearSubmittedPromptDraft();
-
-        try {
-
-        const resolvedPromptDraftRuntimeState = resolvePromptDraftRuntimeState({
-          promptDraft,
-          fallback: {
-            claudePermissionMode: state.settings.claudePermissionMode,
-            claudePermissionModeBeforePlan: state.settings.claudePermissionModeBeforePlan,
-            codexPlanMode: state.settings.codexPlanMode,
-          },
-        });
-        const activeModel = provider === "claude-code"
-          ? state.settings.modelClaude
-          : provider === "stave"
-            ? state.settings.modelStave
-            : state.settings.modelCodex;
-
-        const skillSelection = resolveSkillSelections({
-          text: content,
-          skills: state.skillCatalog.skills,
-          providerId: provider,
-        });
-        const normalizedPrompt = skillSelection.normalizedText;
-        const resolvedFileContexts = await getDraftFileContexts({
-          promptDraft,
-          session: taskWorkspaceSession,
-          workspaceRootPath: workspaceCwd,
+          if (userInputPart) {
+            appendUserInputFailure(
+              "User input delivery failed: no active turn found for this Muse turn.",
+            );
+          }
+        },
+        sendUserMessage: async ({
+          taskId,
+          content,
           fileContexts,
-        });
-        const resolvedImageContexts = getDraftImageContexts({
-          promptDraft,
           imageContexts,
-        });
-        state = get();
-        const latestWorkspaceSession = getWorkspaceSessionForState({
-          state,
-          workspaceId: taskWorkspaceId,
-        });
-        if (!latestWorkspaceSession) {
-          restoreSubmittedPromptDraft();
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
-        const latestHistory = latestWorkspaceSession.messagesByTask[resolvedTaskId] ?? existingHistory;
-        if (latestWorkspaceSession.activeTurnIdsByTask[resolvedTaskId]) {
-          restoreSubmittedPromptDraft();
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
-        if (
-          findLatestPendingApproval({ messages: latestHistory })
-          || findLatestPendingUserInput({ messages: latestHistory })
-        ) {
-          restoreSubmittedPromptDraft();
-          return { status: "blocked" } satisfies SendUserMessageResult;
-        }
+        }) => {
+          const turnId = crypto.randomUUID();
+          let state = get();
+          let resolvedTaskId = taskId;
+          const sourcePromptDraftTaskId = taskId || "draft:session";
+          let sourcePromptDraft =
+            state.promptDraftByTask[sourcePromptDraftTaskId] ??
+            EMPTY_PROMPT_DRAFT;
+          let runtimeTarget = resolvedTaskId
+            ? resolveTaskRuntimeTarget({
+                state,
+                taskId: resolvedTaskId,
+              })
+            : null;
+          let task = runtimeTarget?.task ?? null;
 
-        // ── Auto task naming ──────────────────────────────────────────────────
-        // On every prompt, fire a lightweight single-turn Claude query to keep
-        // the task title up-to-date with the evolving conversation context.
-        // Runs fully async — never blocks the main turn.
-        {
-          const capturedTaskId = resolvedTaskId;
-          const promptForTitle = normalizedPrompt || content;
-          const historyForTitle = latestHistory.slice(-6).map((m) => ({
-            role: m.role as string,
-            content: m.content,
-          }));
-          void window.api?.provider?.suggestTaskName?.({
-            prompt: promptForTitle,
-            history: historyForTitle,
-          })
-            .then((result) => {
-              if (result?.ok && result.title) {
-                const safeTitle = normalizeSuggestedTaskTitle({ title: result.title });
-                if (safeTitle) {
-                  get().renameTask({ taskId: capturedTaskId, title: safeTitle });
-                }
-              }
-            })
-            .catch(() => {
-              // Title generation failed — keep the current title.
-            });
-        }
-        // ─────────────────────────────────────────────────────────────────────
-
-        const providerSession = latestWorkspaceSession.providerSessionByTask[resolvedTaskId];
-        const taskWorkspaceSummary = state.workspaces.find((workspace) => workspace.id === taskWorkspaceId) ?? null;
-        const taskWorkspaceTasks = latestWorkspaceSession.tasks;
-        const taskWorkspaceInformation = latestWorkspaceSession.workspaceInformation;
-
-        // ── Repo-map context injection ─────────────────────────────────────────
-        // On the first turn of a task, inject the pre-generated repo-map summary
-        // as retrieved context so the AI immediately knows the codebase structure
-        // (hotspots, entrypoints, read-first docs) without having to explore first.
-        // TopBar pre-warms this module-level Map cache asynchronously; the read
-        // here is a plain Map.get — no IPC, no blocking, effectively free.
-        const retrievedContextParts: CanonicalRetrievedContextPart[] = [
-          buildCurrentTaskAwarenessRetrievedContext({
-            workspaceId: taskWorkspaceId,
-            workspaceName: taskWorkspaceSummary?.name ?? null,
-            workspacePath: workspaceCwd ?? null,
-            workspaceBranch: state.workspaceBranchById[taskWorkspaceId] ?? null,
-            projectName: state.projectName,
-            projectPath: state.projectPath,
-            taskId: resolvedTaskId,
-            tasks: taskWorkspaceTasks,
-            workspaceInformation: taskWorkspaceInformation,
-          }),
-        ];
-        if (existingHistory.length === 0 && workspaceCwd) {
-          const repoMapText = getRepoMapContextCache(workspaceCwd);
-          if (repoMapText) {
-            retrievedContextParts.push({
-              type: "retrieved_context",
-              sourceId: "stave:repo-map",
-              title: "Codebase Map",
-              content: repoMapText,
-            });
-          }
-        }
-        const referencedTaskContext = buildReferencedTaskRetrievedContext({
-          prompt: normalizedPrompt || content,
-          currentTaskId: resolvedTaskId,
-          tasks: taskWorkspaceTasks,
-          messagesByTask: latestWorkspaceSession.messagesByTask,
-        });
-        if (referencedTaskContext) {
-          retrievedContextParts.push(referencedTaskContext);
-        }
-        // ──────────────────────────────────────────────────────────────────────
-
-        const conversation = buildCanonicalConversationRequest({
-          turnId,
-          taskId: resolvedTaskId,
-          workspaceId: taskWorkspaceId,
-          providerId: provider,
-          model: activeModel,
-          history: latestHistory,
-          userInput: normalizedPrompt,
-          mode: "chat",
-          fileContexts: resolvedFileContexts.length > 0 ? resolvedFileContexts : undefined,
-          imageContexts: resolvedImageContexts.length > 0 ? resolvedImageContexts : undefined,
-          skillContexts: skillSelection.selectedSkills,
-          nativeSessionId: providerSession?.[provider] ?? null,
-          retrievedContextParts,
-        });
-        const prompt = normalizedPrompt;
-        promptDraftClearedOptimistically = false;
-
-        if (taskWorkspaceId === state.activeWorkspaceId) {
-          set((nextState) => {
-            const pendingTurnState = buildPendingProviderTurnState({
-              tasks: nextState.tasks,
-              messagesByTask: nextState.messagesByTask,
-              messageCountByTask: nextState.messageCountByTask,
-              activeTurnIdsByTask: nextState.activeTurnIdsByTask,
-              taskWorkspaceIdById: nextState.taskWorkspaceIdById,
-              workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
-              taskId: resolvedTaskId,
-              taskWorkspaceId,
-              turnId,
-              provider,
-              activeModel,
-              content,
-              fileContexts: resolvedFileContexts.length > 0 ? resolvedFileContexts : undefined,
-              imageContexts: resolvedImageContexts.length > 0 ? resolvedImageContexts : undefined,
-            });
-
-            return {
-              ...pendingTurnState,
+          if (!task) {
+            const seededTaskId = crypto.randomUUID();
+            const seededTitleText = resolveSkillSelections({
+              text: content,
+              skills: state.skillCatalog.skills,
+              providerId: state.draftProvider,
+            }).normalizedText;
+            const seededTitle =
+              seededTitleText.split("\n")[0]?.trim().slice(0, 48) || "New Task";
+            const seededTask: Task = {
+              id: seededTaskId,
+              title: seededTitle,
+              provider: state.draftProvider,
+              updatedAt: buildRecentTimestamp(),
+              unread: false,
+              archivedAt: null,
+              controlMode: "interactive",
+              controlOwner: "stave",
+            };
+            set((nextState) => ({
+              tasks: [seededTask, ...nextState.tasks],
+              activeTaskId: seededTaskId,
+              messagesByTask: {
+                ...nextState.messagesByTask,
+                [seededTaskId]: nextState.messagesByTask[seededTaskId] ?? [],
+              },
+              messageCountByTask: {
+                ...nextState.messageCountByTask,
+                [seededTaskId]: nextState.messageCountByTask[seededTaskId] ?? 0,
+              },
+              nativeSessionReadyByTask: {
+                ...nextState.nativeSessionReadyByTask,
+                [seededTaskId]: false,
+              },
+              providerSessionByTask: {
+                ...nextState.providerSessionByTask,
+                [seededTaskId]: {},
+              },
+              taskWorkspaceIdById: {
+                ...nextState.taskWorkspaceIdById,
+                [seededTaskId]: nextState.activeWorkspaceId,
+              },
               promptDraftByTask: {
                 ...nextState.promptDraftByTask,
-                [resolvedTaskId]: buildClearedPromptDraft(nextState.promptDraftByTask[resolvedTaskId] ?? promptDraft),
-                ...(sourcePromptDraftTaskId !== resolvedTaskId
-                  ? {
-                      [sourcePromptDraftTaskId]: buildClearedPromptDraft(
-                        nextState.promptDraftByTask[sourcePromptDraftTaskId] ?? sourcePromptDraft,
-                      ),
-                    }
-                  : {}),
-              },
-            };
-          });
-        } else {
-          set((nextState) => {
-            const cachedSession = nextState.workspaceRuntimeCacheById[taskWorkspaceId];
-            if (!cachedSession) {
-              return nextState;
-            }
-
-            const pendingTurnState = buildPendingProviderTurnState({
-              tasks: cachedSession.tasks,
-              messagesByTask: cachedSession.messagesByTask,
-              messageCountByTask: cachedSession.messageCountByTask,
-              activeTurnIdsByTask: cachedSession.activeTurnIdsByTask,
-              taskWorkspaceIdById: nextState.taskWorkspaceIdById,
-              workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
-              taskId: resolvedTaskId,
-              taskWorkspaceId,
-              turnId,
-              provider,
-              activeModel,
-              content,
-              fileContexts: resolvedFileContexts.length > 0 ? resolvedFileContexts : undefined,
-              imageContexts: resolvedImageContexts.length > 0 ? resolvedImageContexts : undefined,
-            });
-
-            return {
-              workspaceRuntimeCacheById: {
-                ...nextState.workspaceRuntimeCacheById,
-                [taskWorkspaceId]: {
-                  ...cachedSession,
-                  tasks: pendingTurnState.tasks,
-                  messagesByTask: pendingTurnState.messagesByTask,
-                  messageCountByTask: pendingTurnState.messageCountByTask,
-                  activeTurnIdsByTask: pendingTurnState.activeTurnIdsByTask,
-                  promptDraftByTask: {
-                    ...cachedSession.promptDraftByTask,
-                    [resolvedTaskId]: buildClearedPromptDraft(
-                      cachedSession.promptDraftByTask[resolvedTaskId] ?? promptDraft,
-                    ),
-                  },
+                [seededTaskId]: {
+                  text: "",
+                  attachedFilePaths: [],
+                  attachments: [],
+                  ...(sourcePromptDraft.runtimeOverrides
+                    ? { runtimeOverrides: sourcePromptDraft.runtimeOverrides }
+                    : {}),
                 },
               },
-            };
-          });
-
-          const inactiveWorkspaceSession = get().workspaceRuntimeCacheById[taskWorkspaceId];
-          if (inactiveWorkspaceSession) {
-            void persistWorkspaceSnapshot({
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(nextState),
+            }));
+            state = get();
+            resolvedTaskId = seededTaskId;
+            sourcePromptDraft =
+              state.promptDraftByTask[sourcePromptDraftTaskId] ??
+              EMPTY_PROMPT_DRAFT;
+            runtimeTarget = resolveTaskRuntimeTarget({
+              state,
+              taskId: resolvedTaskId,
+            });
+            task = seededTask;
+          }
+          if (!task || !runtimeTarget) {
+            return { status: "blocked" } satisfies SendUserMessageResult;
+          }
+          if (isManagedTaskReadOnly({ state, taskId: resolvedTaskId })) {
+            return { status: "blocked" } satisfies SendUserMessageResult;
+          }
+          const provider =
+            task?.provider ?? state.draftProvider ?? "claude-code";
+          const { workspaceId: taskWorkspaceId, cwd: workspaceCwd } =
+            resolveTaskWorkspaceContext({
+              taskId: resolvedTaskId,
+              activeWorkspaceId: state.activeWorkspaceId,
+              taskWorkspaceIdById: state.taskWorkspaceIdById,
+              workspacePathById: state.workspacePathById,
+              workspaceDefaultById: state.workspaceDefaultById,
+              projectPath: state.projectPath,
+            });
+          if (!taskWorkspaceId) {
+            return { status: "blocked" } satisfies SendUserMessageResult;
+          }
+          const taskWorkspaceSession =
+            getWorkspaceSessionForState({
+              state,
               workspaceId: taskWorkspaceId,
-              workspaceName: resolveWorkspaceName({
-                state: get(),
-                workspaceId: taskWorkspaceId,
-              }),
-              activeTaskId: inactiveWorkspaceSession.activeTaskId,
-              tasks: inactiveWorkspaceSession.tasks,
-              messagesByTask: inactiveWorkspaceSession.messagesByTask,
-              promptDraftByTask: inactiveWorkspaceSession.promptDraftByTask,
-              workspaceInformation: inactiveWorkspaceSession.workspaceInformation,
-              editorTabs: inactiveWorkspaceSession.editorTabs,
-              activeEditorTabId: inactiveWorkspaceSession.activeEditorTabId,
-              terminalTabs: inactiveWorkspaceSession.terminalTabs,
-              activeTerminalTabId: inactiveWorkspaceSession.activeTerminalTabId,
-              cliSessionTabs: inactiveWorkspaceSession.cliSessionTabs,
-              activeCliSessionTabId: inactiveWorkspaceSession.activeCliSessionTabId,
-              activeSurface: inactiveWorkspaceSession.activeSurface,
-              providerSessionByTask: inactiveWorkspaceSession.providerSessionByTask,
+            }) ?? runtimeTarget.session;
+          const runCommand = window.api?.terminal?.runCommand;
+
+          if (!state.taskCheckpointById[resolvedTaskId] && runCommand) {
+            void runCommand({
+              cwd: workspaceCwd,
+              command: "git rev-parse HEAD",
+            }).then((result) => {
+              if (!result.ok) {
+                return;
+              }
+              const checkpoint = result.stdout.trim().split("\n")[0]?.trim();
+              if (!checkpoint) {
+                return;
+              }
+              set((nextState) => ({
+                taskCheckpointById: {
+                  ...nextState.taskCheckpointById,
+                  [resolvedTaskId]: checkpoint,
+                },
+              }));
             });
           }
-        }
 
-        const providerTurnEventController = createProviderTurnEventController({
-          flushEvents: (pendingEvents) => {
-            let persistInactiveWorkspaceSession: { workspaceId: string; session: WorkspaceSessionState } | null = null;
-            let updatedSession: WorkspaceSessionState | null = null;
-            const currentState = get();
-            const applied = applyPendingProviderEventsToStoreState({
-              state: currentState,
-              taskWorkspaceId,
+          const existingHistory =
+            taskWorkspaceSession.messagesByTask[resolvedTaskId] ?? [];
+          if (findLatestPendingApproval({ messages: existingHistory })) {
+            return { status: "blocked" } satisfies SendUserMessageResult;
+          }
+          if (findLatestPendingUserInput({ messages: existingHistory })) {
+            return { status: "blocked" } satisfies SendUserMessageResult;
+          }
+          const promptDraft = normalizePromptDraftForStorage({
+            ...(taskWorkspaceSession.promptDraftByTask[resolvedTaskId] ??
+              sourcePromptDraft),
+            text: content,
+            queuedNextTurn: undefined,
+          });
+          const activeTurnId =
+            taskWorkspaceSession.activeTurnIdsByTask[resolvedTaskId];
+          if (activeTurnId) {
+            const queuedPromptDraft = normalizePromptDraftForStorage({
+              ...(taskWorkspaceSession.promptDraftByTask[resolvedTaskId] ??
+                sourcePromptDraft),
+              text: "",
+              queuedNextTurn: {
+                queuedAt: buildRecentTimestamp(),
+                sourceTurnId: activeTurnId,
+                content,
+              },
+            });
+            set((nextState) => {
+              if (taskWorkspaceId === nextState.activeWorkspaceId) {
+                return {
+                  promptDraftByTask: {
+                    ...nextState.promptDraftByTask,
+                    [resolvedTaskId]: queuedPromptDraft,
+                  },
+                  workspaceSnapshotVersion:
+                    incrementWorkspaceSnapshotVersion(nextState),
+                };
+              }
+
+              const cachedSession =
+                nextState.workspaceRuntimeCacheById[taskWorkspaceId];
+              if (!cachedSession) {
+                return nextState;
+              }
+
+              return {
+                workspaceRuntimeCacheById: {
+                  ...nextState.workspaceRuntimeCacheById,
+                  [taskWorkspaceId]: {
+                    ...cachedSession,
+                    promptDraftByTask: {
+                      ...cachedSession.promptDraftByTask,
+                      [resolvedTaskId]: queuedPromptDraft,
+                    },
+                  },
+                },
+              };
+            });
+            return {
+              status: "queued",
               taskId: resolvedTaskId,
-              events: pendingEvents,
-              provider,
+              workspaceId: taskWorkspaceId,
+            } satisfies SendUserMessageResult;
+          }
+          if (!hasPromptDraftPayload(promptDraft)) {
+            return { status: "blocked" } satisfies SendUserMessageResult;
+          }
+
+          const updatePromptDraftsForWorkspace = (
+            draftsByTaskId: Record<string, PromptDraft>,
+          ) => {
+            set((nextState) => {
+              if (taskWorkspaceId === nextState.activeWorkspaceId) {
+                return {
+                  promptDraftByTask: {
+                    ...nextState.promptDraftByTask,
+                    ...draftsByTaskId,
+                  },
+                  workspaceSnapshotVersion:
+                    incrementWorkspaceSnapshotVersion(nextState),
+                };
+              }
+
+              const cachedSession =
+                nextState.workspaceRuntimeCacheById[taskWorkspaceId];
+              if (!cachedSession) {
+                return nextState;
+              }
+
+              return {
+                workspaceRuntimeCacheById: {
+                  ...nextState.workspaceRuntimeCacheById,
+                  [taskWorkspaceId]: {
+                    ...cachedSession,
+                    promptDraftByTask: {
+                      ...cachedSession.promptDraftByTask,
+                      ...draftsByTaskId,
+                    },
+                  },
+                },
+              };
+            });
+          };
+
+          let promptDraftClearedOptimistically = false;
+          const clearSubmittedPromptDraft = () => {
+            if (promptDraftClearedOptimistically) {
+              return;
+            }
+            promptDraftClearedOptimistically = true;
+            updatePromptDraftsForWorkspace({
+              [resolvedTaskId]: buildClearedPromptDraft(promptDraft),
+              ...(sourcePromptDraftTaskId !== resolvedTaskId
+                ? {
+                    [sourcePromptDraftTaskId]:
+                      buildClearedPromptDraft(sourcePromptDraft),
+                  }
+                : {}),
+            });
+          };
+          const restoreSubmittedPromptDraft = () => {
+            if (!promptDraftClearedOptimistically) {
+              return;
+            }
+            promptDraftClearedOptimistically = false;
+            updatePromptDraftsForWorkspace({
+              [resolvedTaskId]: promptDraft,
+              ...(sourcePromptDraftTaskId !== resolvedTaskId
+                ? {
+                    [sourcePromptDraftTaskId]: sourcePromptDraft,
+                  }
+                : {}),
+            });
+          };
+
+          clearSubmittedPromptDraft();
+
+          try {
+            const resolvedPromptDraftRuntimeState =
+              resolvePromptDraftRuntimeState({
+                promptDraft,
+                fallback: {
+                  claudePermissionMode: state.settings.claudePermissionMode,
+                  claudePermissionModeBeforePlan:
+                    state.settings.claudePermissionModeBeforePlan,
+                  codexPlanMode: state.settings.codexPlanMode,
+                },
+              });
+            const activeModel =
+              provider === "claude-code"
+                ? state.settings.modelClaude
+                : provider === "stave"
+                  ? state.settings.modelStave
+                  : state.settings.modelCodex;
+
+            const skillSelection = resolveSkillSelections({
+              text: content,
+              skills: state.skillCatalog.skills,
+              providerId: provider,
+            });
+            const normalizedPrompt = skillSelection.normalizedText;
+            const resolvedFileContexts = await getDraftFileContexts({
+              promptDraft,
+              session: taskWorkspaceSession,
+              workspaceRootPath: workspaceCwd,
+              fileContexts,
+            });
+            const resolvedImageContexts = getDraftImageContexts({
+              promptDraft,
+              imageContexts,
+            });
+            state = get();
+            const latestWorkspaceSession = getWorkspaceSessionForState({
+              state,
+              workspaceId: taskWorkspaceId,
+            });
+            if (!latestWorkspaceSession) {
+              restoreSubmittedPromptDraft();
+              return { status: "blocked" } satisfies SendUserMessageResult;
+            }
+            const latestHistory =
+              latestWorkspaceSession.messagesByTask[resolvedTaskId] ??
+              existingHistory;
+            if (latestWorkspaceSession.activeTurnIdsByTask[resolvedTaskId]) {
+              restoreSubmittedPromptDraft();
+              return { status: "blocked" } satisfies SendUserMessageResult;
+            }
+            if (
+              findLatestPendingApproval({ messages: latestHistory }) ||
+              findLatestPendingUserInput({ messages: latestHistory })
+            ) {
+              restoreSubmittedPromptDraft();
+              return { status: "blocked" } satisfies SendUserMessageResult;
+            }
+
+            // ── Auto task naming ──────────────────────────────────────────────────
+            // On every prompt, fire a lightweight single-turn Claude query to keep
+            // the task title up-to-date with the evolving conversation context.
+            // Runs fully async — never blocks the main turn.
+            {
+              const capturedTaskId = resolvedTaskId;
+              const promptForTitle = normalizedPrompt || content;
+              const historyForTitle = latestHistory.slice(-6).map((m) => ({
+                role: m.role as string,
+                content: m.content,
+              }));
+              void window.api?.provider
+                ?.suggestTaskName?.({
+                  prompt: promptForTitle,
+                  history: historyForTitle,
+                })
+                .then((result) => {
+                  if (result?.ok && result.title) {
+                    const safeTitle = normalizeSuggestedTaskTitle({
+                      title: result.title,
+                    });
+                    if (safeTitle) {
+                      get().renameTask({
+                        taskId: capturedTaskId,
+                        title: safeTitle,
+                      });
+                    }
+                  }
+                })
+                .catch(() => {
+                  // Title generation failed — keep the current title.
+                });
+            }
+            // ─────────────────────────────────────────────────────────────────────
+
+            const providerSession =
+              latestWorkspaceSession.providerSessionByTask[resolvedTaskId];
+            const taskWorkspaceSummary =
+              state.workspaces.find(
+                (workspace) => workspace.id === taskWorkspaceId,
+              ) ?? null;
+            const taskWorkspaceTasks = latestWorkspaceSession.tasks;
+            const taskWorkspaceInformation =
+              latestWorkspaceSession.workspaceInformation;
+
+            // ── Repo-map context injection ─────────────────────────────────────────
+            // On the first turn of a task, inject the pre-generated repo-map summary
+            // as retrieved context so the AI immediately knows the codebase structure
+            // (hotspots, entrypoints, read-first docs) without having to explore first.
+            // TopBar pre-warms this module-level Map cache asynchronously; the read
+            // here is a plain Map.get — no IPC, no blocking, effectively free.
+            const retrievedContextParts: CanonicalRetrievedContextPart[] = [
+              buildCurrentTaskAwarenessRetrievedContext({
+                workspaceId: taskWorkspaceId,
+                workspaceName: taskWorkspaceSummary?.name ?? null,
+                workspacePath: workspaceCwd ?? null,
+                workspaceBranch:
+                  state.workspaceBranchById[taskWorkspaceId] ?? null,
+                projectName: state.projectName,
+                projectPath: state.projectPath,
+                taskId: resolvedTaskId,
+                tasks: taskWorkspaceTasks,
+                workspaceInformation: taskWorkspaceInformation,
+              }),
+            ];
+            if (existingHistory.length === 0 && workspaceCwd) {
+              const repoMapText = getRepoMapContextCache(workspaceCwd);
+              if (repoMapText) {
+                retrievedContextParts.push({
+                  type: "retrieved_context",
+                  sourceId: "stave:repo-map",
+                  title: "Codebase Map",
+                  content: repoMapText,
+                });
+              }
+            }
+            const referencedTaskContext = buildReferencedTaskRetrievedContext({
+              prompt: normalizedPrompt || content,
+              currentTaskId: resolvedTaskId,
+              tasks: taskWorkspaceTasks,
+              messagesByTask: latestWorkspaceSession.messagesByTask,
+            });
+            if (referencedTaskContext) {
+              retrievedContextParts.push(referencedTaskContext);
+            }
+            // ──────────────────────────────────────────────────────────────────────
+
+            const conversation = buildCanonicalConversationRequest({
+              turnId,
+              taskId: resolvedTaskId,
+              workspaceId: taskWorkspaceId,
+              providerId: provider,
               model: activeModel,
+              history: latestHistory,
+              userInput: normalizedPrompt,
+              mode: "chat",
+              fileContexts:
+                resolvedFileContexts.length > 0
+                  ? resolvedFileContexts
+                  : undefined,
+              imageContexts:
+                resolvedImageContexts.length > 0
+                  ? resolvedImageContexts
+                  : undefined,
+              skillContexts: skillSelection.selectedSkills,
+              nativeSessionId: providerSession?.[provider] ?? null,
+              retrievedContextParts,
+            });
+            const prompt = normalizedPrompt;
+            promptDraftClearedOptimistically = false;
+
+            if (taskWorkspaceId === state.activeWorkspaceId) {
+              set((nextState) => {
+                const pendingTurnState = buildPendingProviderTurnState({
+                  tasks: nextState.tasks,
+                  messagesByTask: nextState.messagesByTask,
+                  messageCountByTask: nextState.messageCountByTask,
+                  activeTurnIdsByTask: nextState.activeTurnIdsByTask,
+                  taskWorkspaceIdById: nextState.taskWorkspaceIdById,
+                  workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
+                  taskId: resolvedTaskId,
+                  taskWorkspaceId,
+                  turnId,
+                  provider,
+                  activeModel,
+                  content,
+                  fileContexts:
+                    resolvedFileContexts.length > 0
+                      ? resolvedFileContexts
+                      : undefined,
+                  imageContexts:
+                    resolvedImageContexts.length > 0
+                      ? resolvedImageContexts
+                      : undefined,
+                });
+
+                return {
+                  ...pendingTurnState,
+                  promptDraftByTask: {
+                    ...nextState.promptDraftByTask,
+                    [resolvedTaskId]: buildClearedPromptDraft(
+                      nextState.promptDraftByTask[resolvedTaskId] ??
+                        promptDraft,
+                    ),
+                    ...(sourcePromptDraftTaskId !== resolvedTaskId
+                      ? {
+                          [sourcePromptDraftTaskId]: buildClearedPromptDraft(
+                            nextState.promptDraftByTask[
+                              sourcePromptDraftTaskId
+                            ] ?? sourcePromptDraft,
+                          ),
+                        }
+                      : {}),
+                  },
+                };
+              });
+            } else {
+              set((nextState) => {
+                const cachedSession =
+                  nextState.workspaceRuntimeCacheById[taskWorkspaceId];
+                if (!cachedSession) {
+                  return nextState;
+                }
+
+                const pendingTurnState = buildPendingProviderTurnState({
+                  tasks: cachedSession.tasks,
+                  messagesByTask: cachedSession.messagesByTask,
+                  messageCountByTask: cachedSession.messageCountByTask,
+                  activeTurnIdsByTask: cachedSession.activeTurnIdsByTask,
+                  taskWorkspaceIdById: nextState.taskWorkspaceIdById,
+                  workspaceSnapshotVersion: nextState.workspaceSnapshotVersion,
+                  taskId: resolvedTaskId,
+                  taskWorkspaceId,
+                  turnId,
+                  provider,
+                  activeModel,
+                  content,
+                  fileContexts:
+                    resolvedFileContexts.length > 0
+                      ? resolvedFileContexts
+                      : undefined,
+                  imageContexts:
+                    resolvedImageContexts.length > 0
+                      ? resolvedImageContexts
+                      : undefined,
+                });
+
+                return {
+                  workspaceRuntimeCacheById: {
+                    ...nextState.workspaceRuntimeCacheById,
+                    [taskWorkspaceId]: {
+                      ...cachedSession,
+                      tasks: pendingTurnState.tasks,
+                      messagesByTask: pendingTurnState.messagesByTask,
+                      messageCountByTask: pendingTurnState.messageCountByTask,
+                      activeTurnIdsByTask: pendingTurnState.activeTurnIdsByTask,
+                      promptDraftByTask: {
+                        ...cachedSession.promptDraftByTask,
+                        [resolvedTaskId]: buildClearedPromptDraft(
+                          cachedSession.promptDraftByTask[resolvedTaskId] ??
+                            promptDraft,
+                        ),
+                      },
+                    },
+                  },
+                };
+              });
+
+              const inactiveWorkspaceSession =
+                get().workspaceRuntimeCacheById[taskWorkspaceId];
+              if (inactiveWorkspaceSession) {
+                void persistWorkspaceSnapshot({
+                  workspaceId: taskWorkspaceId,
+                  workspaceName: resolveWorkspaceName({
+                    state: get(),
+                    workspaceId: taskWorkspaceId,
+                  }),
+                  activeTaskId: inactiveWorkspaceSession.activeTaskId,
+                  tasks: inactiveWorkspaceSession.tasks,
+                  messagesByTask: inactiveWorkspaceSession.messagesByTask,
+                  promptDraftByTask: inactiveWorkspaceSession.promptDraftByTask,
+                  workspaceInformation:
+                    inactiveWorkspaceSession.workspaceInformation,
+                  editorTabs: inactiveWorkspaceSession.editorTabs,
+                  activeEditorTabId: inactiveWorkspaceSession.activeEditorTabId,
+                  terminalTabs: inactiveWorkspaceSession.terminalTabs,
+                  activeTerminalTabId:
+                    inactiveWorkspaceSession.activeTerminalTabId,
+                  cliSessionTabs: inactiveWorkspaceSession.cliSessionTabs,
+                  activeCliSessionTabId:
+                    inactiveWorkspaceSession.activeCliSessionTabId,
+                  activeSurface: inactiveWorkspaceSession.activeSurface,
+                  providerSessionByTask:
+                    inactiveWorkspaceSession.providerSessionByTask,
+                });
+              }
+            }
+
+            const providerTurnEventController =
+              createProviderTurnEventController({
+                flushEvents: (pendingEvents) => {
+                  let persistInactiveWorkspaceSession: {
+                    workspaceId: string;
+                    session: WorkspaceSessionState;
+                  } | null = null;
+                  let updatedSession: WorkspaceSessionState | null = null;
+                  const currentState = get();
+                  const applied = applyPendingProviderEventsToStoreState({
+                    state: currentState,
+                    taskWorkspaceId,
+                    taskId: resolvedTaskId,
+                    events: pendingEvents,
+                    provider,
+                    model: activeModel,
+                    turnId,
+                  });
+                  persistInactiveWorkspaceSession =
+                    applied.persistInactiveWorkspaceSession;
+                  updatedSession = applied.updatedSession;
+                  if (applied.stateChanged) {
+                    set(applied.statePatch);
+                  }
+                  const persistedInactiveWorkspaceSession =
+                    persistInactiveWorkspaceSession as {
+                      workspaceId: string;
+                      session: WorkspaceSessionState;
+                    } | null;
+                  const latestState = get();
+                  if (persistedInactiveWorkspaceSession !== null) {
+                    void persistWorkspaceSnapshot({
+                      workspaceId:
+                        persistedInactiveWorkspaceSession.workspaceId,
+                      workspaceName: resolveWorkspaceName({
+                        state: latestState,
+                        workspaceId:
+                          persistedInactiveWorkspaceSession.workspaceId,
+                      }),
+                      activeTaskId:
+                        persistedInactiveWorkspaceSession.session.activeTaskId,
+                      tasks: persistedInactiveWorkspaceSession.session.tasks,
+                      messagesByTask:
+                        persistedInactiveWorkspaceSession.session
+                          .messagesByTask,
+                      promptDraftByTask:
+                        persistedInactiveWorkspaceSession.session
+                          .promptDraftByTask,
+                      workspaceInformation:
+                        persistedInactiveWorkspaceSession.session
+                          .workspaceInformation,
+                      editorTabs:
+                        persistedInactiveWorkspaceSession.session.editorTabs,
+                      activeEditorTabId:
+                        persistedInactiveWorkspaceSession.session
+                          .activeEditorTabId,
+                      terminalTabs:
+                        persistedInactiveWorkspaceSession.session.terminalTabs,
+                      activeTerminalTabId:
+                        persistedInactiveWorkspaceSession.session
+                          .activeTerminalTabId,
+                      cliSessionTabs:
+                        persistedInactiveWorkspaceSession.session
+                          .cliSessionTabs,
+                      activeCliSessionTabId:
+                        persistedInactiveWorkspaceSession.session
+                          .activeCliSessionTabId,
+                      activeSurface:
+                        persistedInactiveWorkspaceSession.session.activeSurface,
+                      providerSessionByTask:
+                        persistedInactiveWorkspaceSession.session
+                          .providerSessionByTask,
+                    });
+                  }
+                  const nextPlanReady = pendingEvents
+                    .filter(
+                      (
+                        event,
+                      ): event is Extract<
+                        NormalizedProviderEvent,
+                        { type: "plan_ready" }
+                      > => event.type === "plan_ready",
+                    )
+                    .at(-1);
+                  if (nextPlanReady?.planText?.trim() && workspaceCwd) {
+                    void persistWorkspacePlanFile({
+                      rootPath: workspaceCwd,
+                      taskId: resolvedTaskId,
+                      planText: nextPlanReady.planText,
+                    }).then((filePath) => {
+                      if (filePath) {
+                        latestState.notifyWorkspacePlansChanged();
+                      }
+                    });
+                  }
+                  const notificationSession =
+                    updatedSession as WorkspaceSessionState | null;
+                  if (notificationSession) {
+                    const notificationsToPersist =
+                      buildApprovalNotificationInputs({
+                        state: latestState,
+                        session: notificationSession,
+                        workspaceId: taskWorkspaceId,
+                        taskId: resolvedTaskId,
+                        turnId,
+                        provider,
+                        events: pendingEvents,
+                      });
+                    const completionNotification =
+                      buildTaskTurnCompletedNotificationInput({
+                        state: latestState,
+                        session: notificationSession,
+                        workspaceId: taskWorkspaceId,
+                        taskId: resolvedTaskId,
+                        turnId,
+                        provider,
+                        events: pendingEvents,
+                      });
+                    if (completionNotification) {
+                      notificationsToPersist.push(completionNotification);
+                    }
+                    if (notificationsToPersist.length > 0) {
+                      void persistNotifications(notificationsToPersist);
+                    }
+                  }
+                  if (applied.turnCompleted) {
+                    const latestWorkspaceSession = getWorkspaceSessionForState({
+                      state: latestState,
+                      workspaceId: taskWorkspaceId,
+                    });
+                    const queuedPromptDraft =
+                      latestWorkspaceSession?.promptDraftByTask[resolvedTaskId];
+                    if (queuedPromptDraft?.queuedNextTurn) {
+                      const queuedContent =
+                        queuedPromptDraft.queuedNextTurn.content ??
+                        queuedPromptDraft.text;
+                      if (queuedContent.trim()) {
+                        void get().sendUserMessage({
+                          taskId: resolvedTaskId,
+                          content: queuedContent,
+                        });
+                      } else {
+                        get().clearPromptDraft({ taskId: resolvedTaskId });
+                      }
+                    }
+                    const completedTask =
+                      latestWorkspaceSession?.tasks.find(
+                        (task) => task.id === resolvedTaskId,
+                      ) ??
+                      latestState.tasks.find(
+                        (task) => task.id === resolvedTaskId,
+                      ) ??
+                      null;
+                    runScriptHookInBackground({
+                      workspaceId: taskWorkspaceId,
+                      trigger: "turn.completed",
+                      taskId: resolvedTaskId,
+                      taskTitle: completedTask?.title,
+                      turnId,
+                    });
+                  }
+                },
+              });
+
+            runScriptHookInBackground({
+              workspaceId: taskWorkspaceId,
+              trigger: "turn.started",
+              taskId: resolvedTaskId,
+              taskTitle: task?.title,
               turnId,
             });
-            persistInactiveWorkspaceSession = applied.persistInactiveWorkspaceSession;
-            updatedSession = applied.updatedSession;
-            if (applied.stateChanged) {
-              set(applied.statePatch);
-            }
-            const persistedInactiveWorkspaceSession = persistInactiveWorkspaceSession as {
-              workspaceId: string;
-              session: WorkspaceSessionState;
-            } | null;
-            const latestState = get();
-            if (persistedInactiveWorkspaceSession !== null) {
-              void persistWorkspaceSnapshot({
-                workspaceId: persistedInactiveWorkspaceSession.workspaceId,
-                workspaceName: resolveWorkspaceName({
-                  state: latestState,
-                  workspaceId: persistedInactiveWorkspaceSession.workspaceId,
-                }),
-                activeTaskId: persistedInactiveWorkspaceSession.session.activeTaskId,
-                tasks: persistedInactiveWorkspaceSession.session.tasks,
-                messagesByTask: persistedInactiveWorkspaceSession.session.messagesByTask,
-                promptDraftByTask: persistedInactiveWorkspaceSession.session.promptDraftByTask,
-                workspaceInformation: persistedInactiveWorkspaceSession.session.workspaceInformation,
-                editorTabs: persistedInactiveWorkspaceSession.session.editorTabs,
-                activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
-                terminalTabs: persistedInactiveWorkspaceSession.session.terminalTabs,
-                activeTerminalTabId: persistedInactiveWorkspaceSession.session.activeTerminalTabId,
-                cliSessionTabs: persistedInactiveWorkspaceSession.session.cliSessionTabs,
-                activeCliSessionTabId: persistedInactiveWorkspaceSession.session.activeCliSessionTabId,
-                activeSurface: persistedInactiveWorkspaceSession.session.activeSurface,
-                providerSessionByTask: persistedInactiveWorkspaceSession.session.providerSessionByTask,
-              });
-            }
-            const nextPlanReady = pendingEvents
-              .filter((event): event is Extract<NormalizedProviderEvent, { type: "plan_ready" }> => event.type === "plan_ready")
-              .at(-1);
-            if (nextPlanReady?.planText?.trim() && workspaceCwd) {
-              void persistWorkspacePlanFile({
-                rootPath: workspaceCwd,
-                taskId: resolvedTaskId,
-                planText: nextPlanReady.planText,
-              }).then((filePath) => {
-                if (filePath) {
-                  latestState.notifyWorkspacePlansChanged();
-                }
-              });
-            }
-            const notificationSession = updatedSession as WorkspaceSessionState | null;
-            if (notificationSession) {
-              const notificationsToPersist = buildApprovalNotificationInputs({
-                state: latestState,
-                session: notificationSession,
-                workspaceId: taskWorkspaceId,
-                taskId: resolvedTaskId,
-                turnId,
-                provider,
-                events: pendingEvents,
-              });
-              const completionNotification = buildTaskTurnCompletedNotificationInput({
-                state: latestState,
-                session: notificationSession,
-                workspaceId: taskWorkspaceId,
-                taskId: resolvedTaskId,
-                turnId,
-                provider,
-                events: pendingEvents,
-              });
-              if (completionNotification) {
-                notificationsToPersist.push(completionNotification);
-              }
-              if (notificationsToPersist.length > 0) {
-                void persistNotifications(notificationsToPersist);
-              }
-            }
-            if (applied.turnCompleted) {
-              const latestWorkspaceSession = getWorkspaceSessionForState({
-                state: latestState,
-                workspaceId: taskWorkspaceId,
-              });
-              const queuedPromptDraft = latestWorkspaceSession?.promptDraftByTask[resolvedTaskId];
-              if (queuedPromptDraft?.queuedNextTurn) {
-                const queuedContent = queuedPromptDraft.queuedNextTurn.content ?? queuedPromptDraft.text;
-                if (queuedContent.trim()) {
-                  void get().sendUserMessage({
-                    taskId: resolvedTaskId,
-                    content: queuedContent,
-                  });
-                } else {
-                  get().clearPromptDraft({ taskId: resolvedTaskId });
-                }
-              }
-              const completedTask = latestWorkspaceSession?.tasks.find((task) => task.id === resolvedTaskId)
-                ?? latestState.tasks.find((task) => task.id === resolvedTaskId)
-                ?? null;
-              runScriptHookInBackground({
-                workspaceId: taskWorkspaceId,
-                trigger: "turn.completed",
-                taskId: resolvedTaskId,
-                taskTitle: completedTask?.title,
-                turnId,
-              });
-            }
-          },
-        });
 
-        runScriptHookInBackground({
-          workspaceId: taskWorkspaceId,
-          trigger: "turn.started",
-          taskId: resolvedTaskId,
-          taskTitle: task?.title,
-          turnId,
-        });
-
-        runProviderTurn({
-          turnId,
-          provider,
-          prompt,
-          conversation,
-          taskId: resolvedTaskId,
-          workspaceId: taskWorkspaceId,
-          cwd: workspaceCwd,
-          runtimeOptions: applyProjectBasePromptToRuntimeOptions({
-            runtimeOptions: buildProviderRuntimeOptions({
+            runProviderTurn({
+              turnId,
               provider,
-              model: activeModel,
-              settings: {
-                ...get().settings,
-                claudePermissionMode: resolvedPromptDraftRuntimeState.claudePermissionMode,
-                codexPlanMode: resolvedPromptDraftRuntimeState.codexPlanMode,
-              },
-              providerSession,
-            }),
-            projectBasePrompt: resolveProjectBasePrompt({
-              projectPath: get().projectPath,
-              recentProjects: get().recentProjects,
-            }),
-          }),
-          onEvent: ({ event }) => providerTurnEventController.handleEvent(event),
-        });
-        return {
-          status: "started",
-          taskId: resolvedTaskId,
-          workspaceId: taskWorkspaceId,
-          turnId,
-        } satisfies SendUserMessageResult;
-        } catch (error) {
-          restoreSubmittedPromptDraft();
-          throw error;
-        }
-      },
-      abortTaskTurn: ({ taskId }) => {
-        const stateBefore = get();
-        if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
-          return;
-        }
-        const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
-        if (activeTurnId) {
-          const abortTurn = window.api?.provider?.abortTurn;
-          if (abortTurn) {
-            void abortTurn({ turnId: activeTurnId });
-          }
-        }
-        // Clean up provider runtime state (thread caches, session maps) so a
-        // subsequent turn does not try to resume a stale / aborted thread.
-        const cleanupTask = window.api?.provider?.cleanupTask;
-        if (cleanupTask) {
-          void cleanupTask({ taskId });
-        }
-
-        set((state) => {
-          const current = state.messagesByTask[taskId] ?? [];
-          const interruptedMessages = interruptPendingToolInteractionsInMessages({
-            messages: current,
-          });
-          const target = interruptedMessages[interruptedMessages.length - 1];
-          // Clear persisted provider session so stale thread IDs are not
-          // carried across to subsequent turns or workspace reloads.
-          const { [taskId]: _dropped, ...restProviderSession } =
-            state.providerSessionByTask;
-          if (!target || target.role !== "assistant" || !target.isStreaming) {
-            return {
-              messagesByTask: interruptedMessages === current
-                ? state.messagesByTask
-                : {
-                    ...state.messagesByTask,
-                    [taskId]: interruptedMessages,
+              prompt,
+              conversation,
+              taskId: resolvedTaskId,
+              workspaceId: taskWorkspaceId,
+              cwd: workspaceCwd,
+              runtimeOptions: applyProjectBasePromptToRuntimeOptions({
+                runtimeOptions: buildProviderRuntimeOptions({
+                  provider,
+                  model: activeModel,
+                  settings: {
+                    ...get().settings,
+                    claudePermissionMode:
+                      resolvedPromptDraftRuntimeState.claudePermissionMode,
+                    codexPlanMode:
+                      resolvedPromptDraftRuntimeState.codexPlanMode,
                   },
+                  providerSession,
+                }),
+                projectBasePrompt: resolveProjectBasePrompt({
+                  projectPath: get().projectPath,
+                  recentProjects: get().recentProjects,
+                }),
+              }),
+              onEvent: ({ event }) =>
+                providerTurnEventController.handleEvent(event),
+            });
+            return {
+              status: "started",
+              taskId: resolvedTaskId,
+              workspaceId: taskWorkspaceId,
+              turnId,
+            } satisfies SendUserMessageResult;
+          } catch (error) {
+            restoreSubmittedPromptDraft();
+            throw error;
+          }
+        },
+        abortTaskTurn: ({ taskId }) => {
+          const stateBefore = get();
+          if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
+            return;
+          }
+          const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
+          if (activeTurnId) {
+            const abortTurn = window.api?.provider?.abortTurn;
+            if (abortTurn) {
+              void abortTurn({ turnId: activeTurnId });
+            }
+          }
+          // Clean up provider runtime state (thread caches, session maps) so a
+          // subsequent turn does not try to resume a stale / aborted thread.
+          const cleanupTask = window.api?.provider?.cleanupTask;
+          if (cleanupTask) {
+            void cleanupTask({ taskId });
+          }
+
+          set((state) => {
+            const current = state.messagesByTask[taskId] ?? [];
+            const interruptedMessages =
+              interruptPendingToolInteractionsInMessages({
+                messages: current,
+              });
+            const target = interruptedMessages[interruptedMessages.length - 1];
+            // Clear persisted provider session so stale thread IDs are not
+            // carried across to subsequent turns or workspace reloads.
+            const { [taskId]: _dropped, ...restProviderSession } =
+              state.providerSessionByTask;
+            if (!target || target.role !== "assistant" || !target.isStreaming) {
+              return {
+                messagesByTask:
+                  interruptedMessages === current
+                    ? state.messagesByTask
+                    : {
+                        ...state.messagesByTask,
+                        [taskId]: interruptedMessages,
+                      },
+                activeTurnIdsByTask: {
+                  ...state.activeTurnIdsByTask,
+                  [taskId]: undefined,
+                },
+                providerSessionByTask: restProviderSession,
+                ...(interruptedMessages === current
+                  ? {}
+                  : {
+                      workspaceSnapshotVersion:
+                        incrementWorkspaceSnapshotVersion(state),
+                    }),
+              };
+            }
+
+            const aborted: ChatMessage = {
+              ...target,
+              completedAt: buildRecentTimestamp(),
+              isStreaming: false,
+              parts: [
+                ...target.parts,
+                {
+                  type: "system_event",
+                  content: "Generation aborted by user.",
+                },
+              ],
+            };
+
+            return {
+              messagesByTask: {
+                ...state.messagesByTask,
+                [taskId]: [...interruptedMessages.slice(0, -1), aborted],
+              },
               activeTurnIdsByTask: {
                 ...state.activeTurnIdsByTask,
                 [taskId]: undefined,
               },
               providerSessionByTask: restProviderSession,
-              ...(interruptedMessages === current ? {} : {
-                workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-              }),
-            };
-          }
-
-          const aborted: ChatMessage = {
-            ...target,
-            completedAt: buildRecentTimestamp(),
-            isStreaming: false,
-            parts: [
-              ...target.parts,
-              { type: "system_event", content: "Generation aborted by user." },
-            ],
-          };
-
-          return {
-            messagesByTask: {
-              ...state.messagesByTask,
-              [taskId]: [...interruptedMessages.slice(0, -1), aborted],
-            },
-            activeTurnIdsByTask: {
-              ...state.activeTurnIdsByTask,
-              [taskId]: undefined,
-            },
-            providerSessionByTask: restProviderSession,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      resolveApproval: ({ taskId, messageId, approved }) => {
-        if (taskId === STAVE_MUSE_SESSION_ID) {
-          void get().resolveStaveMuseApproval({ messageId, approved });
-          return;
-        }
-        const stateBefore = get();
-        if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
-          return;
-        }
-        const runtimeTarget = resolveTaskRuntimeTarget({ state: stateBefore, taskId });
-        const workspaceId = runtimeTarget?.workspaceId
-          ?? stateBefore.taskWorkspaceIdById[taskId]
-          ?? stateBefore.activeWorkspaceId;
-        const targetSession = runtimeTarget?.session
-          ?? (workspaceId ? getWorkspaceSessionForState({ state: stateBefore, workspaceId }) : null);
-        const activeTurnId = targetSession?.activeTurnIdsByTask[taskId];
-        const message = (targetSession?.messagesByTask[taskId] ?? []).find((item) => item.id === messageId);
-        const approvalPart = findLatestPendingApprovalPart({ message });
-
-        const appendApprovalFailure = (failureText: string) => {
-          set((state) => {
-            const cachedSession = workspaceId && workspaceId !== state.activeWorkspaceId
-              ? state.workspaceRuntimeCacheById[workspaceId] ?? null
-              : null;
-            const current = (cachedSession?.messagesByTask ?? state.messagesByTask)[taskId] ?? [];
-            const systemMessage: ChatMessage = {
-              id: buildMessageId({ taskId, count: current.length }),
-              role: "assistant",
-              model: "system",
-              providerId: "user",
-              content: failureText,
-              parts: [{
-                type: "system_event",
-                content: failureText,
-              }],
-            };
-            if (cachedSession && workspaceId) {
-              return {
-                workspaceRuntimeCacheById: {
-                  ...state.workspaceRuntimeCacheById,
-                  [workspaceId]: {
-                    ...cachedSession,
-                    messagesByTask: {
-                      ...cachedSession.messagesByTask,
-                      [taskId]: [...current, systemMessage],
-                    },
-                    messageCountByTask: {
-                      ...cachedSession.messageCountByTask,
-                      [taskId]: Math.max(
-                        (cachedSession.messageCountByTask[taskId] ?? current.length) + 1,
-                        current.length + 1,
-                      ),
-                    },
-                  },
-                },
-              };
-            }
-            return {
-              messagesByTask: {
-                ...state.messagesByTask,
-                [taskId]: [...current, systemMessage],
-              },
-              messageCountByTask: {
-                ...state.messageCountByTask,
-                [taskId]: Math.max(
-                  (state.messageCountByTask[taskId] ?? current.length) + 1,
-                  current.length + 1,
-                ),
-              },
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
             };
           });
-        };
+        },
+        resolveApproval: ({ taskId, messageId, approved }) => {
+          if (taskId === STAVE_MUSE_SESSION_ID) {
+            void get().resolveStaveMuseApproval({ messageId, approved });
+            return;
+          }
+          const stateBefore = get();
+          if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
+            return;
+          }
+          const runtimeTarget = resolveTaskRuntimeTarget({
+            state: stateBefore,
+            taskId,
+          });
+          const workspaceId =
+            runtimeTarget?.workspaceId ??
+            stateBefore.taskWorkspaceIdById[taskId] ??
+            stateBefore.activeWorkspaceId;
+          const targetSession =
+            runtimeTarget?.session ??
+            (workspaceId
+              ? getWorkspaceSessionForState({ state: stateBefore, workspaceId })
+              : null);
+          const activeTurnId = targetSession?.activeTurnIdsByTask[taskId];
+          const message = (targetSession?.messagesByTask[taskId] ?? []).find(
+            (item) => item.id === messageId,
+          );
+          const approvalPart = findLatestPendingApprovalPart({ message });
 
-        const applyApprovalResponse = (requestId: string) => {
-          set((state) => {
-            if (workspaceId && workspaceId !== state.activeWorkspaceId) {
-              const cachedSession = state.workspaceRuntimeCacheById[workspaceId];
-              if (!cachedSession) {
-                return state;
+          const appendApprovalFailure = (failureText: string) => {
+            set((state) => {
+              const cachedSession =
+                workspaceId && workspaceId !== state.activeWorkspaceId
+                  ? (state.workspaceRuntimeCacheById[workspaceId] ?? null)
+                  : null;
+              const current =
+                (cachedSession?.messagesByTask ?? state.messagesByTask)[
+                  taskId
+                ] ?? [];
+              const systemMessage: ChatMessage = {
+                id: buildMessageId({ taskId, count: current.length }),
+                role: "assistant",
+                model: "system",
+                providerId: "user",
+                content: failureText,
+                parts: [
+                  {
+                    type: "system_event",
+                    content: failureText,
+                  },
+                ],
+              };
+              if (cachedSession && workspaceId) {
+                return {
+                  workspaceRuntimeCacheById: {
+                    ...state.workspaceRuntimeCacheById,
+                    [workspaceId]: {
+                      ...cachedSession,
+                      messagesByTask: {
+                        ...cachedSession.messagesByTask,
+                        [taskId]: [...current, systemMessage],
+                      },
+                      messageCountByTask: {
+                        ...cachedSession.messageCountByTask,
+                        [taskId]: Math.max(
+                          (cachedSession.messageCountByTask[taskId] ??
+                            current.length) + 1,
+                          current.length + 1,
+                        ),
+                      },
+                    },
+                  },
+                };
               }
-              const nextMessagesState = applyApprovalState({
-                messagesByTask: cachedSession.messagesByTask,
-                workspaceSnapshotVersion: 0,
+              return {
+                messagesByTask: {
+                  ...state.messagesByTask,
+                  [taskId]: [...current, systemMessage],
+                },
+                messageCountByTask: {
+                  ...state.messageCountByTask,
+                  [taskId]: Math.max(
+                    (state.messageCountByTask[taskId] ?? current.length) + 1,
+                    current.length + 1,
+                  ),
+                },
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(state),
+              };
+            });
+          };
+
+          const applyApprovalResponse = (requestId: string) => {
+            set((state) => {
+              if (workspaceId && workspaceId !== state.activeWorkspaceId) {
+                const cachedSession =
+                  state.workspaceRuntimeCacheById[workspaceId];
+                if (!cachedSession) {
+                  return state;
+                }
+                const nextMessagesState = applyApprovalState({
+                  messagesByTask: cachedSession.messagesByTask,
+                  workspaceSnapshotVersion: 0,
+                  taskId,
+                  messageId,
+                  requestId,
+                  approved,
+                });
+                return {
+                  workspaceRuntimeCacheById: {
+                    ...state.workspaceRuntimeCacheById,
+                    [workspaceId]: {
+                      ...cachedSession,
+                      messagesByTask: nextMessagesState.messagesByTask,
+                    },
+                  },
+                };
+              }
+
+              return applyApprovalState({
+                messagesByTask: state.messagesByTask,
+                workspaceSnapshotVersion: state.workspaceSnapshotVersion,
                 taskId,
                 messageId,
                 requestId,
                 approved,
               });
-              return {
-                workspaceRuntimeCacheById: {
-                  ...state.workspaceRuntimeCacheById,
-                  [workspaceId]: {
-                    ...cachedSession,
-                    messagesByTask: nextMessagesState.messagesByTask,
-                  },
-                },
-              };
-            }
-
-            return applyApprovalState({
-              messagesByTask: state.messagesByTask,
-              workspaceSnapshotVersion: state.workspaceSnapshotVersion,
-              taskId,
-              messageId,
-              requestId,
-              approved,
             });
-          });
-        };
+          };
 
-        if (activeTurnId && approvalPart) {
-          const respondApproval = window.api?.provider?.respondApproval;
-          if (respondApproval) {
-            void respondApproval({
-              turnId: activeTurnId,
-              requestId: approvalPart.requestId,
-              approved,
-            }).then((result) => {
-              if (!result.ok) {
-                appendApprovalFailure(`Approval delivery failed: ${result.message ?? "unknown"}`);
-                return;
-              }
-              applyApprovalResponse(approvalPart.requestId);
-            }).catch((error) => {
-              appendApprovalFailure(`Approval delivery failed: ${String(error)}`);
+          if (activeTurnId && approvalPart) {
+            const respondApproval = window.api?.provider?.respondApproval;
+            if (respondApproval) {
+              void respondApproval({
+                turnId: activeTurnId,
+                requestId: approvalPart.requestId,
+                approved,
+              })
+                .then((result) => {
+                  if (!result.ok) {
+                    appendApprovalFailure(
+                      `Approval delivery failed: ${result.message ?? "unknown"}`,
+                    );
+                    return;
+                  }
+                  applyApprovalResponse(approvalPart.requestId);
+                })
+                .catch((error) => {
+                  appendApprovalFailure(
+                    `Approval delivery failed: ${String(error)}`,
+                  );
+                });
+              return;
+            }
+          }
+
+          if (
+            !activeTurnId &&
+            approvalPart &&
+            workspaceId &&
+            window.api?.localMcp?.respondApproval
+          ) {
+            void window.api.localMcp
+              .respondApproval({
+                workspaceId,
+                taskId,
+                requestId: approvalPart.requestId,
+                approved,
+              })
+              .then((result) => {
+                if (!result.ok) {
+                  appendApprovalFailure(
+                    `Approval delivery failed: ${result.message ?? "unknown"}`,
+                  );
+                  return;
+                }
+                applyApprovalResponse(approvalPart.requestId);
+              })
+              .catch((error) => {
+                appendApprovalFailure(
+                  `Approval delivery failed: ${String(error)}`,
+                );
+              });
+            return;
+          }
+
+          if (
+            !activeTurnId &&
+            approvalPart &&
+            window.api?.provider?.respondApproval
+          ) {
+            appendApprovalFailure(
+              "Approval delivery failed: no active turn found for this task.",
+            );
+            return;
+          }
+          if (approvalPart) {
+            appendApprovalFailure(
+              "Approval delivery failed: no active turn found for this task.",
+            );
+            return;
+          }
+        },
+        resolveUserInput: ({ taskId, messageId, answers, denied }) => {
+          if (taskId === STAVE_MUSE_SESSION_ID) {
+            void get().resolveStaveMuseUserInput({
+              messageId,
+              answers,
+              denied,
             });
             return;
           }
-        }
-
-        if (!activeTurnId && approvalPart && workspaceId && window.api?.localMcp?.respondApproval) {
-          void window.api.localMcp.respondApproval({
-            workspaceId,
+          const stateBefore = get();
+          if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
+            return;
+          }
+          const runtimeTarget = resolveTaskRuntimeTarget({
+            state: stateBefore,
             taskId,
-            requestId: approvalPart.requestId,
-            approved,
-          }).then((result) => {
-            if (!result.ok) {
-              appendApprovalFailure(`Approval delivery failed: ${result.message ?? "unknown"}`);
-              return;
-            }
-            applyApprovalResponse(approvalPart.requestId);
-          }).catch((error) => {
-            appendApprovalFailure(`Approval delivery failed: ${String(error)}`);
           });
-          return;
-        }
+          const workspaceId =
+            runtimeTarget?.workspaceId ??
+            stateBefore.taskWorkspaceIdById[taskId] ??
+            stateBefore.activeWorkspaceId;
+          const targetSession =
+            runtimeTarget?.session ??
+            (workspaceId
+              ? getWorkspaceSessionForState({ state: stateBefore, workspaceId })
+              : null);
+          const activeTurnId = targetSession?.activeTurnIdsByTask[taskId];
+          const message = (targetSession?.messagesByTask[taskId] ?? []).find(
+            (item) => item.id === messageId,
+          );
+          const userInputPart = findLatestPendingUserInputPart({ message });
 
-        if (!activeTurnId && approvalPart && window.api?.provider?.respondApproval) {
-          appendApprovalFailure("Approval delivery failed: no active turn found for this task.");
-          return;
-        }
-        if (approvalPart) {
-          appendApprovalFailure("Approval delivery failed: no active turn found for this task.");
-          return;
-        }
-      },
-      resolveUserInput: ({ taskId, messageId, answers, denied }) => {
-        if (taskId === STAVE_MUSE_SESSION_ID) {
-          void get().resolveStaveMuseUserInput({ messageId, answers, denied });
-          return;
-        }
-        const stateBefore = get();
-        if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
-          return;
-        }
-        const runtimeTarget = resolveTaskRuntimeTarget({ state: stateBefore, taskId });
-        const workspaceId = runtimeTarget?.workspaceId
-          ?? stateBefore.taskWorkspaceIdById[taskId]
-          ?? stateBefore.activeWorkspaceId;
-        const targetSession = runtimeTarget?.session
-          ?? (workspaceId ? getWorkspaceSessionForState({ state: stateBefore, workspaceId }) : null);
-        const activeTurnId = targetSession?.activeTurnIdsByTask[taskId];
-        const message = (targetSession?.messagesByTask[taskId] ?? []).find((item) => item.id === messageId);
-        const userInputPart = findLatestPendingUserInputPart({ message });
-
-        const appendUserInputFailure = (failureText: string) => {
-          set((state) => {
-            const cachedSession = workspaceId && workspaceId !== state.activeWorkspaceId
-              ? state.workspaceRuntimeCacheById[workspaceId] ?? null
-              : null;
-            const current = (cachedSession?.messagesByTask ?? state.messagesByTask)[taskId] ?? [];
-            const systemMessage: ChatMessage = {
-              id: buildMessageId({ taskId, count: current.length }),
-              role: "assistant",
-              model: "system",
-              providerId: "user",
-              content: failureText,
-              parts: [{
-                type: "system_event",
+          const appendUserInputFailure = (failureText: string) => {
+            set((state) => {
+              const cachedSession =
+                workspaceId && workspaceId !== state.activeWorkspaceId
+                  ? (state.workspaceRuntimeCacheById[workspaceId] ?? null)
+                  : null;
+              const current =
+                (cachedSession?.messagesByTask ?? state.messagesByTask)[
+                  taskId
+                ] ?? [];
+              const systemMessage: ChatMessage = {
+                id: buildMessageId({ taskId, count: current.length }),
+                role: "assistant",
+                model: "system",
+                providerId: "user",
                 content: failureText,
-              }],
-            };
-            if (cachedSession && workspaceId) {
-              return {
-                workspaceRuntimeCacheById: {
-                  ...state.workspaceRuntimeCacheById,
-                  [workspaceId]: {
-                    ...cachedSession,
-                    messagesByTask: {
-                      ...cachedSession.messagesByTask,
-                      [taskId]: [...current, systemMessage],
-                    },
-                    messageCountByTask: {
-                      ...cachedSession.messageCountByTask,
-                      [taskId]: Math.max(
-                        (cachedSession.messageCountByTask[taskId] ?? current.length) + 1,
-                        current.length + 1,
-                      ),
+                parts: [
+                  {
+                    type: "system_event",
+                    content: failureText,
+                  },
+                ],
+              };
+              if (cachedSession && workspaceId) {
+                return {
+                  workspaceRuntimeCacheById: {
+                    ...state.workspaceRuntimeCacheById,
+                    [workspaceId]: {
+                      ...cachedSession,
+                      messagesByTask: {
+                        ...cachedSession.messagesByTask,
+                        [taskId]: [...current, systemMessage],
+                      },
+                      messageCountByTask: {
+                        ...cachedSession.messageCountByTask,
+                        [taskId]: Math.max(
+                          (cachedSession.messageCountByTask[taskId] ??
+                            current.length) + 1,
+                          current.length + 1,
+                        ),
+                      },
                     },
                   },
-                },
-              };
-            }
-            return {
-              messagesByTask: {
-                ...state.messagesByTask,
-                [taskId]: [...current, systemMessage],
-              },
-              messageCountByTask: {
-                ...state.messageCountByTask,
-                [taskId]: Math.max(
-                  (state.messageCountByTask[taskId] ?? current.length) + 1,
-                  current.length + 1,
-                ),
-              },
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-            };
-          });
-        };
-
-        const applyUserInputResponse = (requestId: string) => {
-          set((state) => {
-            if (workspaceId && workspaceId !== state.activeWorkspaceId) {
-              const cachedSession = state.workspaceRuntimeCacheById[workspaceId];
-              if (!cachedSession) {
-                return state;
+                };
               }
-              const nextMessagesState = applyUserInputState({
-                messagesByTask: cachedSession.messagesByTask,
-                workspaceSnapshotVersion: 0,
+              return {
+                messagesByTask: {
+                  ...state.messagesByTask,
+                  [taskId]: [...current, systemMessage],
+                },
+                messageCountByTask: {
+                  ...state.messageCountByTask,
+                  [taskId]: Math.max(
+                    (state.messageCountByTask[taskId] ?? current.length) + 1,
+                    current.length + 1,
+                  ),
+                },
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(state),
+              };
+            });
+          };
+
+          const applyUserInputResponse = (requestId: string) => {
+            set((state) => {
+              if (workspaceId && workspaceId !== state.activeWorkspaceId) {
+                const cachedSession =
+                  state.workspaceRuntimeCacheById[workspaceId];
+                if (!cachedSession) {
+                  return state;
+                }
+                const nextMessagesState = applyUserInputState({
+                  messagesByTask: cachedSession.messagesByTask,
+                  workspaceSnapshotVersion: 0,
+                  taskId,
+                  messageId,
+                  requestId,
+                  answers,
+                  denied,
+                });
+                return {
+                  workspaceRuntimeCacheById: {
+                    ...state.workspaceRuntimeCacheById,
+                    [workspaceId]: {
+                      ...cachedSession,
+                      messagesByTask: nextMessagesState.messagesByTask,
+                    },
+                  },
+                };
+              }
+
+              return applyUserInputState({
+                messagesByTask: state.messagesByTask,
+                workspaceSnapshotVersion: state.workspaceSnapshotVersion,
                 taskId,
                 messageId,
                 requestId,
                 answers,
                 denied,
               });
-              return {
-                workspaceRuntimeCacheById: {
-                  ...state.workspaceRuntimeCacheById,
-                  [workspaceId]: {
-                    ...cachedSession,
-                    messagesByTask: nextMessagesState.messagesByTask,
-                  },
-                },
-              };
-            }
-
-            return applyUserInputState({
-              messagesByTask: state.messagesByTask,
-              workspaceSnapshotVersion: state.workspaceSnapshotVersion,
-              taskId,
-              messageId,
-              requestId,
-              answers,
-              denied,
             });
-          });
-        };
+          };
 
-        if (activeTurnId && userInputPart) {
-          const respondUserInput = window.api?.provider?.respondUserInput;
-          if (respondUserInput) {
-            void respondUserInput({
-              turnId: activeTurnId,
-              requestId: userInputPart.requestId,
-              answers,
-              denied,
-            }).then((result) => {
-              if (!result.ok) {
-                appendUserInputFailure(`User input delivery failed: ${result.message ?? "unknown"}`);
-                return;
-              }
-              applyUserInputResponse(userInputPart.requestId);
-            }).catch((error) => {
-              appendUserInputFailure(`User input delivery failed: ${String(error)}`);
-            });
-            return;
-          }
-        }
-
-        if (!activeTurnId && userInputPart && workspaceId && window.api?.localMcp?.respondUserInput) {
-          void window.api.localMcp.respondUserInput({
-            workspaceId,
-            taskId,
-            requestId: userInputPart.requestId,
-            answers,
-            denied,
-          }).then((result) => {
-            if (!result.ok) {
-              appendUserInputFailure(`User input delivery failed: ${result.message ?? "unknown"}`);
+          if (activeTurnId && userInputPart) {
+            const respondUserInput = window.api?.provider?.respondUserInput;
+            if (respondUserInput) {
+              void respondUserInput({
+                turnId: activeTurnId,
+                requestId: userInputPart.requestId,
+                answers,
+                denied,
+              })
+                .then((result) => {
+                  if (!result.ok) {
+                    appendUserInputFailure(
+                      `User input delivery failed: ${result.message ?? "unknown"}`,
+                    );
+                    return;
+                  }
+                  applyUserInputResponse(userInputPart.requestId);
+                })
+                .catch((error) => {
+                  appendUserInputFailure(
+                    `User input delivery failed: ${String(error)}`,
+                  );
+                });
               return;
             }
-            applyUserInputResponse(userInputPart.requestId);
-          }).catch((error) => {
-            appendUserInputFailure(`User input delivery failed: ${String(error)}`);
-          });
-          return;
-        }
-
-        if (!activeTurnId && userInputPart && window.api?.provider?.respondUserInput) {
-          appendUserInputFailure("User input delivery failed: no active turn found for this task.");
-          return;
-        }
-        if (userInputPart) {
-          appendUserInputFailure("User input delivery failed: no active turn found for this task.");
-        }
-      },
-      resolveDiff: ({ taskId, messageId, accepted, partIndex }) => {
-        if (taskId === STAVE_MUSE_SESSION_ID) {
-          set((state) => ({
-            staveMuse: {
-              ...state.staveMuse,
-              messages: updateMessageById({
-                messages: state.staveMuse.messages,
-                messageId,
-                update: (message) => ({
-                  ...message,
-                  parts: message.parts.map((part, index) => {
-                    if (part.type !== "code_diff") {
-                      return part;
-                    }
-                    if (partIndex != null && index !== partIndex) {
-                      return part;
-                    }
-                    return {
-                      ...part,
-                      status: accepted ? "accepted" : "rejected",
-                    };
-                  }),
-                }),
-              }),
-            },
-          }));
-          return;
-        }
-        set((state) => {
-          const current = state.messagesByTask[taskId] ?? [];
-          return {
-            messagesByTask: {
-              ...state.messagesByTask,
-              [taskId]: updateMessageById({
-                messages: current,
-                messageId,
-                update: (message) => ({
-                  ...message,
-                  parts: message.parts.map((part, index) => {
-                    if (part.type !== "code_diff") {
-                      return part;
-                    }
-                    if (partIndex != null && index !== partIndex) {
-                      return part;
-                    }
-                    return {
-                      ...part,
-                      status: accepted ? "accepted" : "rejected",
-                    };
-                  }),
-                }),
-              }),
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      openDiffInEditor: ({ editorTabId, filePath, oldContent, newContent }) => {
-        set((state) => {
-          const existing = state.editorTabs.find((tab) => tab.id === editorTabId);
-          const nextLanguage = resolveLanguage({ filePath });
-          if (existing) {
-            const canRefreshExisting = !existing.isDirty;
-            const shouldRefreshExisting = canRefreshExisting
-              && (
-                existing.filePath !== filePath
-                || existing.language !== nextLanguage
-                || existing.originalContent !== oldContent
-                || existing.content !== newContent
-                || existing.savedContent !== newContent
-              );
-
-            return {
-              editorTabs: shouldRefreshExisting
-                ? state.editorTabs.map((tab) =>
-                    tab.id === existing.id
-                      ? {
-                          ...tab,
-                          filePath,
-                          language: nextLanguage,
-                          content: newContent,
-                          originalContent: oldContent,
-                          savedContent: newContent,
-                          hasConflict: false,
-                          isDirty: false,
-                        }
-                      : tab
-                  )
-                : state.editorTabs,
-              activeEditorTabId: existing.id,
-              layout: { ...state.layout, editorVisible: true, editorDiffMode: true },
-              workspaceSnapshotVersion: shouldRefreshExisting || state.activeEditorTabId !== existing.id
-                ? incrementWorkspaceSnapshotVersion(state)
-                : state.workspaceSnapshotVersion,
-            };
           }
 
-          const nextTab: EditorTab = {
-            id: editorTabId,
-            filePath,
-            kind: "text",
-            language: nextLanguage,
-            content: newContent,
-            originalContent: oldContent,
-            savedContent: newContent,
-            baseRevision: null,
-            hasConflict: false,
-            isDirty: false,
-          };
-
-          return {
-            editorTabs: [...state.editorTabs, nextTab],
-            activeEditorTabId: nextTab.id,
-            layout: { ...state.layout, editorVisible: true, editorDiffMode: true },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      openFileFromTree: async ({ filePath, line, column, fallbackContent }) => {
-        const state = get();
-        const workspaceRootPath = state.workspacePathById[state.activeWorkspaceId]
-          || state.projectPath
-          || workspaceFsAdapter.getRootPath?.()
-          || undefined;
-        const normalizedFilePath = resolveWorkspaceRelativeFilePath({
-          filePath,
-          workspacePath: workspaceRootPath,
-        });
-        if (!normalizedFilePath) {
-          return;
-        }
-
-        const normalizedLine = typeof line === "number" && Number.isFinite(line)
-          ? Math.max(1, Math.floor(line))
-          : undefined;
-        const normalizedColumn = typeof column === "number" && Number.isFinite(column)
-          ? Math.max(1, Math.floor(column))
-          : undefined;
-        const pendingSelection = normalizedLine
-          ? {
-              tabId: `file:${normalizedFilePath}`,
-              line: normalizedLine,
-              ...(normalizedColumn ? { column: normalizedColumn } : {}),
-            }
-          : null;
-        const isImageFile = isImageFilePath({ filePath: normalizedFilePath });
-        let fileData = isImageFile ? null : await workspaceFsAdapter.readFile({ filePath: normalizedFilePath });
-        let imageData = isImageFile ? await workspaceFsAdapter.readFileDataUrl({ filePath: normalizedFilePath }) : null;
-        if (!fileData && !imageData) {
-          if (workspaceRootPath) {
-            await workspaceFsAdapter.setRoot?.({
-              rootPath: workspaceRootPath,
-              rootName: state.projectName ?? "project",
-            });
-            fileData = isImageFile ? null : await workspaceFsAdapter.readFile({ filePath: normalizedFilePath });
-            imageData = isImageFile ? await workspaceFsAdapter.readFileDataUrl({ filePath: normalizedFilePath }) : null;
-          }
-        }
-
-        set((state) => {
-          const tabId = `file:${normalizedFilePath}`;
-          const existing = state.editorTabs.find((tab) => tab.id === tabId);
-          if (existing) {
-            return {
-              activeEditorTabId: existing.id,
-              layout: { ...state.layout, editorVisible: true, editorDiffMode: false },
-              pendingEditorSelection: pendingSelection,
-              workspaceSnapshotVersion: state.activeEditorTabId !== existing.id
-                ? incrementWorkspaceSnapshotVersion(state)
-                : state.workspaceSnapshotVersion,
-            };
-          }
-
-          const fileContent = isImageFile
-            ? imageData?.dataUrl ?? ""
-            : fileData?.content ?? fallbackContent ?? "";
-          const baseRevision = isImageFile ? imageData?.revision ?? null : fileData?.revision ?? null;
-          const nextTab: EditorTab = {
-            id: tabId,
-            filePath: normalizedFilePath,
-            kind: isImageFile ? "image" : "text",
-            language: resolveLanguage({ filePath: normalizedFilePath }),
-            content: fileContent,
-            originalContent: isImageFile ? undefined : fileContent,
-            savedContent: isImageFile ? undefined : fileContent,
-            baseRevision,
-            hasConflict: false,
-            isDirty: false,
-          };
-
-          return {
-            editorTabs: [...state.editorTabs, nextTab],
-            activeEditorTabId: nextTab.id,
-            layout: { ...state.layout, editorVisible: true, editorDiffMode: false },
-            pendingEditorSelection: pendingSelection,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      setActiveEditorTab: ({ tabId }) =>
-        set((state) => {
-          if (state.activeEditorTabId === tabId) {
-            return {};
-          }
-          const selectedTab = state.editorTabs.find((tab) => tab.id === tabId);
-          if (!selectedTab) {
-            return {};
-          }
-          const isDiffTab = isDiffEditorTab(selectedTab);
-          return {
-            activeEditorTabId: tabId,
-            layout: {
-              ...state.layout,
-              editorDiffMode: isDiffTab,
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        }),
-      reorderEditorTabs: ({ fromTabId, toTabId }) =>
-        set((state) => {
-          const fromIndex = state.editorTabs.findIndex((tab) => tab.id === fromTabId);
-          const toIndex = state.editorTabs.findIndex((tab) => tab.id === toTabId);
-          if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
-            return {};
-          }
-
-          const nextTabs = [...state.editorTabs];
-          const [movedTab] = nextTabs.splice(fromIndex, 1);
-          if (!movedTab) {
-            return {};
-          }
-          nextTabs.splice(toIndex, 0, movedTab);
-          return {
-            editorTabs: nextTabs,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        }),
-      closeEditorTab: ({ tabId }) =>
-        set((state) => {
-          const closingIndex = state.editorTabs.findIndex((tab) => tab.id === tabId);
-          if (closingIndex < 0) {
-            return {};
-          }
-          const nextPendingEditorSelection = state.pendingEditorSelection?.tabId === tabId
-            ? null
-            : state.pendingEditorSelection;
-          const nextTabs = state.editorTabs.filter((tab) => tab.id !== tabId);
-          if (nextTabs.length === 0) {
-            return {
-              editorTabs: [],
-              activeEditorTabId: null,
-              pendingEditorSelection: null,
-              layout: {
-                ...state.layout,
-                editorVisible: false,
-                editorDiffMode: false,
-              },
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-            };
-          }
-
-          if (state.activeEditorTabId !== tabId) {
-            return {
-              editorTabs: nextTabs,
-              pendingEditorSelection: nextPendingEditorSelection,
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-            };
-          }
-
-          const fallbackIndex = Math.max(0, closingIndex - 1);
-          const fallbackTab = nextTabs[fallbackIndex] ?? nextTabs[0];
-          const isDiffTab = isDiffEditorTab(fallbackTab);
-
-          return {
-            editorTabs: nextTabs,
-            activeEditorTabId: fallbackTab?.id ?? null,
-            pendingEditorSelection: nextPendingEditorSelection,
-            layout: {
-              ...state.layout,
-              editorDiffMode: isDiffTab,
-            },
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        }),
-      requestCloseActiveEditorTab: () =>
-        set((state) => {
-          if (!state.activeEditorTabId) {
-            return {};
-          }
-          return { pendingCloseEditorTabId: state.activeEditorTabId };
-        }),
-      clearPendingCloseEditorTab: () =>
-        set({ pendingCloseEditorTabId: null }),
-      clearPendingEditorSelection: () =>
-        set({ pendingEditorSelection: null }),
-      updateEditorContent: ({ tabId, content }) => {
-        set((state) => {
-          let changed = false;
-          const nextTabs = state.editorTabs.map((tab) => {
-            if (tab.id !== tabId || tab.kind === "image" || tab.content === content) {
-              return tab;
-            }
-            changed = true;
-            return {
-              ...tab,
-              content,
-              isDirty: (tab.savedContent ?? tab.originalContent ?? tab.content) !== content,
-              hasConflict: false,
-            };
-          });
-
-          if (!changed) {
-            return {};
-          }
-
-          return {
-            editorTabs: nextTabs,
-            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
-          };
-        });
-      },
-      saveActiveEditorTab: async () => {
-        const state = get();
-        const tabId = state.activeEditorTabId;
-        const activeTab = state.editorTabs.find((tab) => tab.id === tabId);
-        if (!activeTab) {
-          return { ok: false };
-        }
-        if (activeTab.kind === "image") {
-          return { ok: false };
-        }
-
-        // Format on save with ESLint
-        let contentToSave = activeTab.content;
-        if (state.settings.editorFormatOnSave && state.settings.editorEslintEnabled) {
-          const rootPath = state.workspacePathById[state.activeWorkspaceId] || state.projectPath;
-          if (rootPath) {
-            const formatted = await formatWithEslint({
-              rootPath,
-              filePath: activeTab.filePath,
-              text: activeTab.content,
-            });
-            if (formatted !== null) {
-              contentToSave = formatted;
-              // Update the tab content with formatted text
-              set((s) => ({
-                editorTabs: s.editorTabs.map((tab) =>
-                  tab.id === activeTab.id ? { ...tab, content: formatted } : tab
-                ),
-              }));
-            }
-          }
-        }
-
-        let result = await workspaceFsAdapter.writeFile({
-          filePath: activeTab.filePath,
-          content: contentToSave,
-          expectedRevision: activeTab.baseRevision,
-        });
-        if (!result.ok) {
-          const workspaceRootPath = state.workspacePathById[state.activeWorkspaceId] || state.projectPath;
-          if (workspaceRootPath) {
-            await workspaceFsAdapter.setRoot?.({
-              rootPath: workspaceRootPath,
-              rootName: state.projectName ?? "project",
-            });
-            result = await workspaceFsAdapter.writeFile({
-              filePath: activeTab.filePath,
-              content: activeTab.content,
-              expectedRevision: activeTab.baseRevision,
-            });
-          }
-        }
-
-        if (!result.ok) {
-          if (result.conflict) {
-            set((nextState) => ({
-              editorTabs: nextState.editorTabs.map((tab) =>
-                tab.id === activeTab.id
-                  ? {
-                      ...tab,
-                      hasConflict: true,
-                      baseRevision: result.revision ?? tab.baseRevision,
-                    }
-                  : tab
-              ),
-              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-            }));
-          }
-          return { ok: false, conflict: result.conflict };
-        }
-
-        set((nextState) => ({
-          editorTabs: nextState.editorTabs.map((tab) =>
-            tab.id === activeTab.id
-              ? {
-                  ...tab,
-                  originalContent: tab.id.startsWith("file:") ? tab.content : tab.originalContent,
-                  savedContent: tab.content,
-                  baseRevision: result.revision ?? tab.baseRevision,
-                  hasConflict: false,
-                  isDirty: false,
+          if (
+            !activeTurnId &&
+            userInputPart &&
+            workspaceId &&
+            window.api?.localMcp?.respondUserInput
+          ) {
+            void window.api.localMcp
+              .respondUserInput({
+                workspaceId,
+                taskId,
+                requestId: userInputPart.requestId,
+                answers,
+                denied,
+              })
+              .then((result) => {
+                if (!result.ok) {
+                  appendUserInputFailure(
+                    `User input delivery failed: ${result.message ?? "unknown"}`,
+                  );
+                  return;
                 }
-              : tab
-          ),
-          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-        }));
-
-        return { ok: true };
-      },
-      checkOpenTabConflicts: async () => {
-        const state = get();
-        const updates: Array<{ tabId: string; fromDisk: string; revision: string; dirty: boolean; kind: "text" | "image" }> = [];
-
-        for (const tab of state.editorTabs) {
-          if (tab.kind === "image") {
-            const imageDisk = await workspaceFsAdapter.readFileDataUrl({ filePath: tab.filePath });
-            if (!imageDisk) {
-              continue;
-            }
-            if (tab.baseRevision && imageDisk.revision === tab.baseRevision) {
-              continue;
-            }
-            updates.push({
-              tabId: tab.id,
-              fromDisk: imageDisk.dataUrl,
-              revision: imageDisk.revision,
-              dirty: tab.isDirty,
-              kind: "image",
-            });
-            continue;
+                applyUserInputResponse(userInputPart.requestId);
+              })
+              .catch((error) => {
+                appendUserInputFailure(
+                  `User input delivery failed: ${String(error)}`,
+                );
+              });
+            return;
           }
 
-          const disk = await workspaceFsAdapter.readFile({ filePath: tab.filePath });
-          if (!disk) {
-            continue;
+          if (
+            !activeTurnId &&
+            userInputPart &&
+            window.api?.provider?.respondUserInput
+          ) {
+            appendUserInputFailure(
+              "User input delivery failed: no active turn found for this task.",
+            );
+            return;
           }
-
-          if (tab.baseRevision && disk.revision === tab.baseRevision) {
-            continue;
+          if (userInputPart) {
+            appendUserInputFailure(
+              "User input delivery failed: no active turn found for this task.",
+            );
           }
-
-          updates.push({
-            tabId: tab.id,
-            fromDisk: disk.content,
-            revision: disk.revision,
-            dirty: tab.isDirty,
-            kind: "text",
+        },
+        resolveDiff: ({ taskId, messageId, accepted, partIndex }) => {
+          if (taskId === STAVE_MUSE_SESSION_ID) {
+            set((state) => ({
+              staveMuse: {
+                ...state.staveMuse,
+                messages: updateMessageById({
+                  messages: state.staveMuse.messages,
+                  messageId,
+                  update: (message) => ({
+                    ...message,
+                    parts: message.parts.map((part, index) => {
+                      if (part.type !== "code_diff") {
+                        return part;
+                      }
+                      if (partIndex != null && index !== partIndex) {
+                        return part;
+                      }
+                      return {
+                        ...part,
+                        status: accepted ? "accepted" : "rejected",
+                      };
+                    }),
+                  }),
+                }),
+              },
+            }));
+            return;
+          }
+          set((state) => {
+            const current = state.messagesByTask[taskId] ?? [];
+            return {
+              messagesByTask: {
+                ...state.messagesByTask,
+                [taskId]: updateMessageById({
+                  messages: current,
+                  messageId,
+                  update: (message) => ({
+                    ...message,
+                    parts: message.parts.map((part, index) => {
+                      if (part.type !== "code_diff") {
+                        return part;
+                      }
+                      if (partIndex != null && index !== partIndex) {
+                        return part;
+                      }
+                      return {
+                        ...part,
+                        status: accepted ? "accepted" : "rejected",
+                      };
+                    }),
+                  }),
+                }),
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
           });
-        }
+        },
+        openDiffInEditor: ({
+          editorTabId,
+          filePath,
+          oldContent,
+          newContent,
+        }) => {
+          set((state) => {
+            const existing = state.editorTabs.find(
+              (tab) => tab.id === editorTabId,
+            );
+            const nextLanguage = resolveLanguage({ filePath });
+            if (existing) {
+              const canRefreshExisting = !existing.isDirty;
+              const shouldRefreshExisting =
+                canRefreshExisting &&
+                (existing.filePath !== filePath ||
+                  existing.language !== nextLanguage ||
+                  existing.originalContent !== oldContent ||
+                  existing.content !== newContent ||
+                  existing.savedContent !== newContent);
 
-        if (updates.length === 0) {
-          return;
-        }
-
-        set((nextState) => ({
-          editorTabs: nextState.editorTabs.map((tab) => {
-            const update = updates.find((item) => item.tabId === tab.id);
-            if (!update) {
-              return tab;
-            }
-
-            if (update.dirty) {
               return {
-                ...tab,
-                hasConflict: true,
-                baseRevision: update.revision,
+                editorTabs: shouldRefreshExisting
+                  ? state.editorTabs.map((tab) =>
+                      tab.id === existing.id
+                        ? {
+                            ...tab,
+                            filePath,
+                            language: nextLanguage,
+                            content: newContent,
+                            originalContent: oldContent,
+                            savedContent: newContent,
+                            hasConflict: false,
+                            isDirty: false,
+                          }
+                        : tab,
+                    )
+                  : state.editorTabs,
+                activeEditorTabId: existing.id,
+                layout: {
+                  ...state.layout,
+                  editorVisible: true,
+                  editorDiffMode: true,
+                },
+                workspaceSnapshotVersion:
+                  shouldRefreshExisting ||
+                  state.activeEditorTabId !== existing.id
+                    ? incrementWorkspaceSnapshotVersion(state)
+                    : state.workspaceSnapshotVersion,
               };
             }
 
-            return {
-              ...tab,
-              content: update.fromDisk,
-              originalContent: update.kind === "image"
-                ? tab.originalContent
-                : tab.id.startsWith("file:")
-                ? update.fromDisk
-                : tab.originalContent,
-              savedContent: update.kind === "image" ? tab.savedContent : update.fromDisk,
-              baseRevision: update.revision,
+            const nextTab: EditorTab = {
+              id: editorTabId,
+              filePath,
+              kind: "text",
+              language: nextLanguage,
+              content: newContent,
+              originalContent: oldContent,
+              savedContent: newContent,
+              baseRevision: null,
               hasConflict: false,
               isDirty: false,
             };
-          }),
-          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(nextState),
-        }));
-      },
-      sendEditorContextToChat: ({ taskId, instruction }) => {
-        const state = get();
-        const tabId = state.activeEditorTabId;
-        const activeTab = state.editorTabs.find((tab) => tab.id === tabId);
-        if (!canSendEditorContextToTask({
-          taskId,
-          hasActiveEditorTab: Boolean(activeTab),
-          isTaskResponding: Boolean(taskId && state.activeTurnIdsByTask[taskId]),
-        }) || !activeTab) {
-          return;
-        }
 
-        get().sendWorkspaceFileToChat({
-          taskId,
-          filePath: activeTab.filePath,
-        });
-      },
-      sendWorkspaceFileToChat: ({ taskId, filePath }) => {
-        const state = get();
-        const normalizedFilePath = filePath.trim();
-        if (!canSendWorkspaceFileToTask({
-          taskId,
-          filePath: normalizedFilePath,
-          isTaskResponding: Boolean(taskId && state.activeTurnIdsByTask[taskId]),
-        })) {
-          return;
-        }
-
-        const currentDraft = state.promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
-        if (!currentDraft.attachedFilePaths.includes(normalizedFilePath)) {
-          get().updatePromptDraft({
-            taskId,
-            patch: {
-              attachedFilePaths: [...currentDraft.attachedFilePaths, normalizedFilePath],
-            },
+            return {
+              editorTabs: [...state.editorTabs, nextTab],
+              activeEditorTabId: nextTab.id,
+              layout: {
+                ...state.layout,
+                editorVisible: true,
+                editorDiffMode: true,
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
           });
-        }
+        },
+        openFileFromTree: async ({
+          filePath,
+          line,
+          column,
+          fallbackContent,
+        }) => {
+          const state = get();
+          const workspaceRootPath =
+            state.workspacePathById[state.activeWorkspaceId] ||
+            state.projectPath ||
+            workspaceFsAdapter.getRootPath?.() ||
+            undefined;
+          const normalizedFilePath = resolveWorkspaceRelativeFilePath({
+            filePath,
+            workspacePath: workspaceRootPath,
+          });
+          if (!normalizedFilePath) {
+            return;
+          }
 
-        set((s) => ({ promptFocusNonce: s.promptFocusNonce + 1 }));
-      },
-      });
+          const normalizedLine =
+            typeof line === "number" && Number.isFinite(line)
+              ? Math.max(1, Math.floor(line))
+              : undefined;
+          const normalizedColumn =
+            typeof column === "number" && Number.isFinite(column)
+              ? Math.max(1, Math.floor(column))
+              : undefined;
+          const pendingSelection = normalizedLine
+            ? {
+                tabId: `file:${normalizedFilePath}`,
+                line: normalizedLine,
+                ...(normalizedColumn ? { column: normalizedColumn } : {}),
+              }
+            : null;
+          const isImageFile = isImageFilePath({ filePath: normalizedFilePath });
+          let fileData = isImageFile
+            ? null
+            : await workspaceFsAdapter.readFile({
+                filePath: normalizedFilePath,
+              });
+          let imageData = isImageFile
+            ? await workspaceFsAdapter.readFileDataUrl({
+                filePath: normalizedFilePath,
+              })
+            : null;
+          if (!fileData && !imageData) {
+            if (workspaceRootPath) {
+              await workspaceFsAdapter.setRoot?.({
+                rootPath: workspaceRootPath,
+                rootName: state.projectName ?? "project",
+              });
+              fileData = isImageFile
+                ? null
+                : await workspaceFsAdapter.readFile({
+                    filePath: normalizedFilePath,
+                  });
+              imageData = isImageFile
+                ? await workspaceFsAdapter.readFileDataUrl({
+                    filePath: normalizedFilePath,
+                  })
+                : null;
+            }
+          }
+
+          set((state) => {
+            const tabId = `file:${normalizedFilePath}`;
+            const existing = state.editorTabs.find((tab) => tab.id === tabId);
+            if (existing) {
+              return {
+                activeEditorTabId: existing.id,
+                layout: {
+                  ...state.layout,
+                  editorVisible: true,
+                  editorDiffMode: false,
+                },
+                pendingEditorSelection: pendingSelection,
+                workspaceSnapshotVersion:
+                  state.activeEditorTabId !== existing.id
+                    ? incrementWorkspaceSnapshotVersion(state)
+                    : state.workspaceSnapshotVersion,
+              };
+            }
+
+            const fileContent = isImageFile
+              ? (imageData?.dataUrl ?? "")
+              : (fileData?.content ?? fallbackContent ?? "");
+            const baseRevision = isImageFile
+              ? (imageData?.revision ?? null)
+              : (fileData?.revision ?? null);
+            const nextTab: EditorTab = {
+              id: tabId,
+              filePath: normalizedFilePath,
+              kind: isImageFile ? "image" : "text",
+              language: resolveLanguage({ filePath: normalizedFilePath }),
+              content: fileContent,
+              originalContent: isImageFile ? undefined : fileContent,
+              savedContent: isImageFile ? undefined : fileContent,
+              baseRevision,
+              hasConflict: false,
+              isDirty: false,
+            };
+
+            return {
+              editorTabs: [...state.editorTabs, nextTab],
+              activeEditorTabId: nextTab.id,
+              layout: {
+                ...state.layout,
+                editorVisible: true,
+                editorDiffMode: false,
+              },
+              pendingEditorSelection: pendingSelection,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        setActiveEditorTab: ({ tabId }) =>
+          set((state) => {
+            if (state.activeEditorTabId === tabId) {
+              return {};
+            }
+            const selectedTab = state.editorTabs.find(
+              (tab) => tab.id === tabId,
+            );
+            if (!selectedTab) {
+              return {};
+            }
+            const isDiffTab = isDiffEditorTab(selectedTab);
+            return {
+              activeEditorTabId: tabId,
+              layout: {
+                ...state.layout,
+                editorDiffMode: isDiffTab,
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          }),
+        reorderEditorTabs: ({ fromTabId, toTabId }) =>
+          set((state) => {
+            const fromIndex = state.editorTabs.findIndex(
+              (tab) => tab.id === fromTabId,
+            );
+            const toIndex = state.editorTabs.findIndex(
+              (tab) => tab.id === toTabId,
+            );
+            if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+              return {};
+            }
+
+            const nextTabs = [...state.editorTabs];
+            const [movedTab] = nextTabs.splice(fromIndex, 1);
+            if (!movedTab) {
+              return {};
+            }
+            nextTabs.splice(toIndex, 0, movedTab);
+            return {
+              editorTabs: nextTabs,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          }),
+        closeEditorTab: ({ tabId }) =>
+          set((state) => {
+            const closingIndex = state.editorTabs.findIndex(
+              (tab) => tab.id === tabId,
+            );
+            if (closingIndex < 0) {
+              return {};
+            }
+            const nextPendingEditorSelection =
+              state.pendingEditorSelection?.tabId === tabId
+                ? null
+                : state.pendingEditorSelection;
+            const nextTabs = state.editorTabs.filter((tab) => tab.id !== tabId);
+            if (nextTabs.length === 0) {
+              return {
+                editorTabs: [],
+                activeEditorTabId: null,
+                pendingEditorSelection: null,
+                layout: {
+                  ...state.layout,
+                  editorVisible: false,
+                  editorDiffMode: false,
+                },
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(state),
+              };
+            }
+
+            if (state.activeEditorTabId !== tabId) {
+              return {
+                editorTabs: nextTabs,
+                pendingEditorSelection: nextPendingEditorSelection,
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(state),
+              };
+            }
+
+            const fallbackIndex = Math.max(0, closingIndex - 1);
+            const fallbackTab = nextTabs[fallbackIndex] ?? nextTabs[0];
+            const isDiffTab = isDiffEditorTab(fallbackTab);
+
+            return {
+              editorTabs: nextTabs,
+              activeEditorTabId: fallbackTab?.id ?? null,
+              pendingEditorSelection: nextPendingEditorSelection,
+              layout: {
+                ...state.layout,
+                editorDiffMode: isDiffTab,
+              },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          }),
+        requestCloseActiveEditorTab: () =>
+          set((state) => {
+            if (!state.activeEditorTabId) {
+              return {};
+            }
+            return { pendingCloseEditorTabId: state.activeEditorTabId };
+          }),
+        clearPendingCloseEditorTab: () =>
+          set({ pendingCloseEditorTabId: null }),
+        clearPendingEditorSelection: () =>
+          set({ pendingEditorSelection: null }),
+        updateEditorContent: ({ tabId, content }) => {
+          set((state) => {
+            let changed = false;
+            const nextTabs = state.editorTabs.map((tab) => {
+              if (
+                tab.id !== tabId ||
+                tab.kind === "image" ||
+                tab.content === content
+              ) {
+                return tab;
+              }
+              changed = true;
+              return {
+                ...tab,
+                content,
+                isDirty:
+                  (tab.savedContent ?? tab.originalContent ?? tab.content) !==
+                  content,
+                hasConflict: false,
+              };
+            });
+
+            if (!changed) {
+              return {};
+            }
+
+            return {
+              editorTabs: nextTabs,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        saveActiveEditorTab: async () => {
+          const state = get();
+          const tabId = state.activeEditorTabId;
+          const activeTab = state.editorTabs.find((tab) => tab.id === tabId);
+          if (!activeTab) {
+            return { ok: false };
+          }
+          if (activeTab.kind === "image") {
+            return { ok: false };
+          }
+
+          // Format on save with ESLint
+          let contentToSave = activeTab.content;
+          if (
+            state.settings.editorFormatOnSave &&
+            state.settings.editorEslintEnabled
+          ) {
+            const rootPath =
+              state.workspacePathById[state.activeWorkspaceId] ||
+              state.projectPath;
+            if (rootPath) {
+              const formatted = await formatWithEslint({
+                rootPath,
+                filePath: activeTab.filePath,
+                text: activeTab.content,
+              });
+              if (formatted !== null) {
+                contentToSave = formatted;
+                // Update the tab content with formatted text
+                set((s) => ({
+                  editorTabs: s.editorTabs.map((tab) =>
+                    tab.id === activeTab.id
+                      ? { ...tab, content: formatted }
+                      : tab,
+                  ),
+                }));
+              }
+            }
+          }
+
+          let result = await workspaceFsAdapter.writeFile({
+            filePath: activeTab.filePath,
+            content: contentToSave,
+            expectedRevision: activeTab.baseRevision,
+          });
+          if (!result.ok) {
+            const workspaceRootPath =
+              state.workspacePathById[state.activeWorkspaceId] ||
+              state.projectPath;
+            if (workspaceRootPath) {
+              await workspaceFsAdapter.setRoot?.({
+                rootPath: workspaceRootPath,
+                rootName: state.projectName ?? "project",
+              });
+              result = await workspaceFsAdapter.writeFile({
+                filePath: activeTab.filePath,
+                content: activeTab.content,
+                expectedRevision: activeTab.baseRevision,
+              });
+            }
+          }
+
+          if (!result.ok) {
+            if (result.conflict) {
+              set((nextState) => ({
+                editorTabs: nextState.editorTabs.map((tab) =>
+                  tab.id === activeTab.id
+                    ? {
+                        ...tab,
+                        hasConflict: true,
+                        baseRevision: result.revision ?? tab.baseRevision,
+                      }
+                    : tab,
+                ),
+                workspaceSnapshotVersion:
+                  incrementWorkspaceSnapshotVersion(nextState),
+              }));
+            }
+            return { ok: false, conflict: result.conflict };
+          }
+
+          set((nextState) => ({
+            editorTabs: nextState.editorTabs.map((tab) =>
+              tab.id === activeTab.id
+                ? {
+                    ...tab,
+                    originalContent: tab.id.startsWith("file:")
+                      ? tab.content
+                      : tab.originalContent,
+                    savedContent: tab.content,
+                    baseRevision: result.revision ?? tab.baseRevision,
+                    hasConflict: false,
+                    isDirty: false,
+                  }
+                : tab,
+            ),
+            workspaceSnapshotVersion:
+              incrementWorkspaceSnapshotVersion(nextState),
+          }));
+
+          return { ok: true };
+        },
+        checkOpenTabConflicts: async () => {
+          const state = get();
+          const updates: Array<{
+            tabId: string;
+            fromDisk: string;
+            revision: string;
+            dirty: boolean;
+            kind: "text" | "image";
+          }> = [];
+
+          for (const tab of state.editorTabs) {
+            if (tab.kind === "image") {
+              const imageDisk = await workspaceFsAdapter.readFileDataUrl({
+                filePath: tab.filePath,
+              });
+              if (!imageDisk) {
+                continue;
+              }
+              if (tab.baseRevision && imageDisk.revision === tab.baseRevision) {
+                continue;
+              }
+              updates.push({
+                tabId: tab.id,
+                fromDisk: imageDisk.dataUrl,
+                revision: imageDisk.revision,
+                dirty: tab.isDirty,
+                kind: "image",
+              });
+              continue;
+            }
+
+            const disk = await workspaceFsAdapter.readFile({
+              filePath: tab.filePath,
+            });
+            if (!disk) {
+              continue;
+            }
+
+            if (tab.baseRevision && disk.revision === tab.baseRevision) {
+              continue;
+            }
+
+            updates.push({
+              tabId: tab.id,
+              fromDisk: disk.content,
+              revision: disk.revision,
+              dirty: tab.isDirty,
+              kind: "text",
+            });
+          }
+
+          if (updates.length === 0) {
+            return;
+          }
+
+          set((nextState) => ({
+            editorTabs: nextState.editorTabs.map((tab) => {
+              const update = updates.find((item) => item.tabId === tab.id);
+              if (!update) {
+                return tab;
+              }
+
+              if (update.dirty) {
+                return {
+                  ...tab,
+                  hasConflict: true,
+                  baseRevision: update.revision,
+                };
+              }
+
+              return {
+                ...tab,
+                content: update.fromDisk,
+                originalContent:
+                  update.kind === "image"
+                    ? tab.originalContent
+                    : tab.id.startsWith("file:")
+                      ? update.fromDisk
+                      : tab.originalContent,
+                savedContent:
+                  update.kind === "image" ? tab.savedContent : update.fromDisk,
+                baseRevision: update.revision,
+                hasConflict: false,
+                isDirty: false,
+              };
+            }),
+            workspaceSnapshotVersion:
+              incrementWorkspaceSnapshotVersion(nextState),
+          }));
+        },
+        sendEditorContextToChat: ({ taskId, instruction }) => {
+          const state = get();
+          const tabId = state.activeEditorTabId;
+          const activeTab = state.editorTabs.find((tab) => tab.id === tabId);
+          if (
+            !canSendEditorContextToTask({
+              taskId,
+              hasActiveEditorTab: Boolean(activeTab),
+              isTaskResponding: Boolean(
+                taskId && state.activeTurnIdsByTask[taskId],
+              ),
+            }) ||
+            !activeTab
+          ) {
+            return;
+          }
+
+          get().sendWorkspaceFileToChat({
+            taskId,
+            filePath: activeTab.filePath,
+          });
+        },
+        sendWorkspaceFileToChat: ({ taskId, filePath }) => {
+          const state = get();
+          const normalizedFilePath = filePath.trim();
+          if (
+            !canSendWorkspaceFileToTask({
+              taskId,
+              filePath: normalizedFilePath,
+              isTaskResponding: Boolean(
+                taskId && state.activeTurnIdsByTask[taskId],
+              ),
+            })
+          ) {
+            return;
+          }
+
+          const currentDraft =
+            state.promptDraftByTask[taskId] ?? EMPTY_PROMPT_DRAFT;
+          if (!currentDraft.attachedFilePaths.includes(normalizedFilePath)) {
+            get().updatePromptDraft({
+              taskId,
+              patch: {
+                attachedFilePaths: [
+                  ...currentDraft.attachedFilePaths,
+                  normalizedFilePath,
+                ],
+              },
+            });
+          }
+
+          set((s) => ({ promptFocusNonce: s.promptFocusNonce + 1 }));
+        },
+      };
     },
     {
       name: APP_STORE_KEY,
@@ -8727,69 +10223,113 @@ export const useAppStore = create<AppState>()(
         // Migrate legacy fastModeVisible → per-provider fields.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = state.settings as any;
-        const legacyLayoutZenMode = (state.layout as LayoutState & {
-          zenMode?: boolean;
-        }).zenMode === true;
+        const legacyLayoutZenMode =
+          (
+            state.layout as LayoutState & {
+              zenMode?: boolean;
+            }
+          ).zenMode === true;
         state.settings.appShellMode = normalizeAppShellMode(
-          persistedSettings?.appShellMode ?? (legacyLayoutZenMode ? "zen" : defaultSettings.appShellMode),
+          persistedSettings?.appShellMode ??
+            (legacyLayoutZenMode ? "zen" : defaultSettings.appShellMode),
         );
         state.settings.sidebarArtworkMode = normalizeSidebarArtworkMode(
           raw.sidebarArtworkMode,
         );
-        state.settings.notificationSoundEnabled = typeof raw.notificationSoundEnabled === "boolean"
-          ? raw.notificationSoundEnabled
-          : defaultSettings.notificationSoundEnabled;
-        state.settings.notificationSoundVolume = normalizeNotificationSoundVolume(
-          raw.notificationSoundVolume,
-        );
-        state.settings.notificationSoundPreset = normalizeNotificationSoundPreset(
-          raw.notificationSoundPreset,
-        );
+        state.settings.notificationSoundEnabled =
+          typeof raw.notificationSoundEnabled === "boolean"
+            ? raw.notificationSoundEnabled
+            : defaultSettings.notificationSoundEnabled;
+        state.settings.notificationSoundVolume =
+          normalizeNotificationSoundVolume(raw.notificationSoundVolume);
+        state.settings.notificationSoundPreset =
+          normalizeNotificationSoundPreset(raw.notificationSoundPreset);
         state.settings.notificationSoundMode = normalizeNotificationSoundMode(
           raw.notificationSoundMode,
         );
-        state.settings.commandPaletteShowRecent = typeof raw.commandPaletteShowRecent === "boolean"
-          ? raw.commandPaletteShowRecent
-          : defaultSettings.commandPaletteShowRecent;
-        state.settings.sharedSkillsHome = normalizeSharedSkillsHomeSetting(raw.sharedSkillsHome);
-        state.settings.commandPalettePinnedCommandIds = Array.isArray(raw.commandPalettePinnedCommandIds)
-          ? raw.commandPalettePinnedCommandIds.filter((value: unknown): value is string => typeof value === "string")
+        state.settings.commandPaletteShowRecent =
+          typeof raw.commandPaletteShowRecent === "boolean"
+            ? raw.commandPaletteShowRecent
+            : defaultSettings.commandPaletteShowRecent;
+        state.settings.sharedSkillsHome = normalizeSharedSkillsHomeSetting(
+          raw.sharedSkillsHome,
+        );
+        state.settings.commandPalettePinnedCommandIds = Array.isArray(
+          raw.commandPalettePinnedCommandIds,
+        )
+          ? raw.commandPalettePinnedCommandIds.filter(
+              (value: unknown): value is string => typeof value === "string",
+            )
           : defaultSettings.commandPalettePinnedCommandIds;
-        state.settings.commandPaletteHiddenCommandIds = Array.isArray(raw.commandPaletteHiddenCommandIds)
-          ? raw.commandPaletteHiddenCommandIds.filter((value: unknown): value is string => typeof value === "string")
+        state.settings.commandPaletteHiddenCommandIds = Array.isArray(
+          raw.commandPaletteHiddenCommandIds,
+        )
+          ? raw.commandPaletteHiddenCommandIds.filter(
+              (value: unknown): value is string => typeof value === "string",
+            )
           : defaultSettings.commandPaletteHiddenCommandIds;
-        state.settings.commandPaletteRecentCommandIds = Array.isArray(raw.commandPaletteRecentCommandIds)
-          ? raw.commandPaletteRecentCommandIds.filter((value: unknown): value is string => typeof value === "string")
+        state.settings.commandPaletteRecentCommandIds = Array.isArray(
+          raw.commandPaletteRecentCommandIds,
+        )
+          ? raw.commandPaletteRecentCommandIds.filter(
+              (value: unknown): value is string => typeof value === "string",
+            )
           : defaultSettings.commandPaletteRecentCommandIds;
-        if (typeof raw.staveModelPlanner === "string" && typeof raw.staveAutoPlanModel !== "string") {
+        if (
+          typeof raw.staveModelPlanner === "string" &&
+          typeof raw.staveAutoPlanModel !== "string"
+        ) {
           raw.staveAutoPlanModel = raw.staveModelPlanner;
         }
-        if (typeof raw.staveModelComplex === "string" && typeof raw.staveAutoAnalyzeModel !== "string") {
+        if (
+          typeof raw.staveModelComplex === "string" &&
+          typeof raw.staveAutoAnalyzeModel !== "string"
+        ) {
           raw.staveAutoAnalyzeModel = raw.staveModelComplex;
         }
-        if (typeof raw.staveModelCodeGen === "string" && typeof raw.staveAutoImplementModel !== "string") {
+        if (
+          typeof raw.staveModelCodeGen === "string" &&
+          typeof raw.staveAutoImplementModel !== "string"
+        ) {
           raw.staveAutoImplementModel = raw.staveModelCodeGen;
         }
-        if (typeof raw.staveModelQuickEdit === "string" && typeof raw.staveAutoQuickEditModel !== "string") {
+        if (
+          typeof raw.staveModelQuickEdit === "string" &&
+          typeof raw.staveAutoQuickEditModel !== "string"
+        ) {
           raw.staveAutoQuickEditModel = raw.staveModelQuickEdit;
         }
-        if (typeof raw.staveModelDefault === "string" && typeof raw.staveAutoGeneralModel !== "string") {
+        if (
+          typeof raw.staveModelDefault === "string" &&
+          typeof raw.staveAutoGeneralModel !== "string"
+        ) {
           raw.staveAutoGeneralModel = raw.staveModelDefault;
         }
-        if (typeof raw.stavePreprocessorModel === "string" && typeof raw.staveAutoClassifierModel !== "string") {
+        if (
+          typeof raw.stavePreprocessorModel === "string" &&
+          typeof raw.staveAutoClassifierModel !== "string"
+        ) {
           raw.staveAutoClassifierModel = raw.stavePreprocessorModel;
         }
-        if (typeof raw.staveSupervisorModel === "string" && typeof raw.staveAutoSupervisorModel !== "string") {
+        if (
+          typeof raw.staveSupervisorModel === "string" &&
+          typeof raw.staveAutoSupervisorModel !== "string"
+        ) {
           raw.staveAutoSupervisorModel = raw.staveSupervisorModel;
         }
-        if (typeof raw.staveModelComplex === "string" && typeof raw.staveAutoVerifyModel !== "string") {
+        if (
+          typeof raw.staveModelComplex === "string" &&
+          typeof raw.staveAutoVerifyModel !== "string"
+        ) {
           raw.staveAutoVerifyModel = raw.staveModelComplex;
         }
         if (
-          typeof raw.staveOrchestrationEnabled === "boolean"
-          && typeof raw.staveAutoOrchestrationMode !== "string"
+          typeof raw.staveOrchestrationEnabled === "boolean" &&
+          typeof raw.staveAutoOrchestrationMode !== "string"
         ) {
-          raw.staveAutoOrchestrationMode = raw.staveOrchestrationEnabled ? "auto" : "off";
+          raw.staveAutoOrchestrationMode = raw.staveOrchestrationEnabled
+            ? "auto"
+            : "off";
         }
         delete raw.staveModelPlanner;
         delete raw.staveModelEcosystem;
@@ -8801,12 +10341,17 @@ export const useAppStore = create<AppState>()(
         delete raw.staveSupervisorModel;
         delete raw.staveOrchestrationEnabled;
         // Migrate string font sizes ("base"/"lg"/"xl") to numeric pixel values.
-        const _legacyFontSizeMap: Record<string, number> = { base: 16, lg: 18, xl: 20 };
+        const _legacyFontSizeMap: Record<string, number> = {
+          base: 16,
+          lg: 18,
+          xl: 20,
+        };
         if (typeof raw.messageFontSize === "string") {
           raw.messageFontSize = _legacyFontSizeMap[raw.messageFontSize] ?? 18;
         }
         if (typeof raw.messageCodeFontSize === "string") {
-          raw.messageCodeFontSize = _legacyFontSizeMap[raw.messageCodeFontSize] ?? 14;
+          raw.messageCodeFontSize =
+            _legacyFontSizeMap[raw.messageCodeFontSize] ?? 14;
         }
         if (typeof raw.fastModeVisible === "boolean") {
           state.settings.claudeFastModeVisible ??= raw.fastModeVisible;
@@ -8814,10 +10359,12 @@ export const useAppStore = create<AppState>()(
           delete raw.fastModeVisible;
         }
         if (
-          typeof raw.reasoningDefaultExpanded === "boolean"
-          && typeof persistedSettings?.reasoningExpansionMode !== "string"
+          typeof raw.reasoningDefaultExpanded === "boolean" &&
+          typeof persistedSettings?.reasoningExpansionMode !== "string"
         ) {
-          raw.reasoningExpansionMode = raw.reasoningDefaultExpanded ? "auto" : "manual";
+          raw.reasoningExpansionMode = raw.reasoningDefaultExpanded
+            ? "auto"
+            : "manual";
         }
         delete raw.reasoningDefaultExpanded;
         delete raw.codexSandboxMode;
@@ -8829,10 +10376,13 @@ export const useAppStore = create<AppState>()(
         delete raw.codexShowRawAgentReasoning;
         delete raw.codexSupportsReasoningSummaries;
         delete raw.codexExperimentalPlanMode;
-        state.settings.thinkingPhraseAnimationStyle = normalizeThinkingPhraseAnimationStyle(
-          state.settings.thinkingPhraseAnimationStyle,
+        state.settings.thinkingPhraseAnimationStyle =
+          normalizeThinkingPhraseAnimationStyle(
+            state.settings.thinkingPhraseAnimationStyle,
+          );
+        state.settings.promptResponseStyle = normalizeResponseStylePrompt(
+          state.settings.promptResponseStyle,
         );
-        state.settings.promptResponseStyle = normalizeResponseStylePrompt(state.settings.promptResponseStyle);
         const legacyProjectInitCommand = normalizeProjectWorkspaceInitCommand({
           value: raw.newWorkspaceInitCommand,
         });
@@ -8840,18 +10390,21 @@ export const useAppStore = create<AppState>()(
         state.settings.codexApprovalPolicy = normalizeCodexApprovalPolicy({
           value: state.settings.codexApprovalPolicy,
         });
-        state.settings.claudeTaskBudgetTokens = normalizeClaudeTaskBudgetTokens({
-          value: state.settings.claudeTaskBudgetTokens,
-        });
+        state.settings.claudeTaskBudgetTokens = normalizeClaudeTaskBudgetTokens(
+          {
+            value: state.settings.claudeTaskBudgetTokens,
+          },
+        );
         state.settings.claudeSettingSources = normalizeClaudeSettingSources({
           value: state.settings.claudeSettingSources,
         });
         state.settings.reasoningExpansionMode = normalizeReasoningExpansionMode(
           state.settings.reasoningExpansionMode,
         );
-        state.settings.staveAutoRoleRuntimeOverrides = normalizeStaveAutoRoleRuntimeOverrides({
-          value: raw.staveAutoRoleRuntimeOverrides,
-        });
+        state.settings.staveAutoRoleRuntimeOverrides =
+          normalizeStaveAutoRoleRuntimeOverrides({
+            value: raw.staveAutoRoleRuntimeOverrides,
+          });
         state.settings.providerTimeoutMs = normalizeProviderTimeoutMs({
           value: state.settings.providerTimeoutMs,
         });
@@ -8859,11 +10412,18 @@ export const useAppStore = create<AppState>()(
         state.promptDraftByTask = Object.fromEntries(
           Object.entries(state.promptDraftByTask).map(([taskId, draft]) => {
             const runtimeOverrides = draft.runtimeOverrides;
-            if (!runtimeOverrides || !Object.hasOwn(runtimeOverrides, "codexExperimentalPlanMode")) {
+            if (
+              !runtimeOverrides ||
+              !Object.hasOwn(runtimeOverrides, "codexExperimentalPlanMode")
+            ) {
               return [taskId, draft];
             }
-            const { codexExperimentalPlanMode: _unused, ...nextRuntimeOverrides } =
-              runtimeOverrides as typeof runtimeOverrides & { codexExperimentalPlanMode?: boolean };
+            const {
+              codexExperimentalPlanMode: _unused,
+              ...nextRuntimeOverrides
+            } = runtimeOverrides as typeof runtimeOverrides & {
+              codexExperimentalPlanMode?: boolean;
+            };
             return [
               taskId,
               {
@@ -8890,14 +10450,17 @@ export const useAppStore = create<AppState>()(
         if (state.projectPath && normalizedCurrentProject) {
           state.projectName = normalizeProjectDisplayName({
             projectPath: normalizedCurrentProject.projectPath,
-            projectName: state.projectName?.trim() || normalizedCurrentProject.projectName,
+            projectName:
+              state.projectName?.trim() || normalizedCurrentProject.projectName,
           });
           state.defaultBranch = normalizedCurrentProject.defaultBranch;
           state.workspaces = normalizedCurrentProject.workspaces;
           state.activeWorkspaceId = normalizedCurrentProject.activeWorkspaceId;
-          state.workspaceBranchById = normalizedCurrentProject.workspaceBranchById;
+          state.workspaceBranchById =
+            normalizedCurrentProject.workspaceBranchById;
           state.workspacePathById = normalizedCurrentProject.workspacePathById;
-          state.workspaceDefaultById = normalizedCurrentProject.workspaceDefaultById;
+          state.workspaceDefaultById =
+            normalizedCurrentProject.workspaceDefaultById;
         } else if (state.projectPath) {
           state.workspaces = [];
           state.activeWorkspaceId = "";
@@ -8909,7 +10472,8 @@ export const useAppStore = create<AppState>()(
           state.recentProjects = state.recentProjects.map((project) => ({
             ...cloneRecentProjectState(project),
             newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
-              value: project.newWorkspaceInitCommand || legacyProjectInitCommand,
+              value:
+                project.newWorkspaceInitCommand || legacyProjectInitCommand,
             }),
           }));
         }
@@ -8947,6 +10511,6 @@ export const useAppStore = create<AppState>()(
           messageKoreanFontFamily: state.settings.messageKoreanFontFamily,
         });
       },
-    }
-  )
+    },
+  ),
 );
