@@ -186,6 +186,11 @@ High-level flow:
 5. `turn/start` streams App Server notifications into the same `BridgeEvent` format used by Claude.
 6. File changes are post-processed through `turn-diff-tracker.ts` so the UI can render diffs.
 
+Codex prompt injection note:
+
+- Stave now forwards response-style and project/system prompt overrides through Codex `developer_instructions` config instead of prepending visible `<system>` blocks to each user turn.
+- Task history, selected file context, image attachments, skill context, and retrieved context still render into the provider prompt body because they are part of the actual turn payload rather than hidden session config.
+
 Codex event mapping:
 
 - native `agentMessage` items -> `text`

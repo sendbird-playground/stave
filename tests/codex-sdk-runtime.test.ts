@@ -456,14 +456,27 @@ describe("buildCodexConfigOverrides", () => {
     });
   });
 
+  test("moves Codex response formatting and base prompts into developer instructions", () => {
+    expect(buildCodexConfigOverrides({
+      runtimeOptions: {
+        claudeSystemPrompt: "Project rules",
+        responseStylePrompt: "Use concise markdown.",
+      },
+    })).toEqual({
+      developer_instructions: "Project rules\n\nUse concise markdown.",
+    });
+  });
+
   test("keeps an explicit raw reasoning off toggle so the UI can disable it reliably", () => {
     expect(buildCodexConfigOverrides({
       runtimeOptions: {
         codexShowRawReasoning: false,
+        responseStylePrompt: "Use concise markdown.",
         codexReasoningSummary: "auto",
         codexReasoningSummarySupport: "auto",
       },
     })).toEqual({
+      developer_instructions: "Use concise markdown.",
       show_raw_agent_reasoning: false,
     });
   });
