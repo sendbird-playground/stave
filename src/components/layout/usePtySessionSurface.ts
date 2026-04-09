@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { init as initGhosttyWasm, Terminal, FitAddon } from "ghostty-web";
+import { shouldCreatePtySession } from "@/components/layout/pty-session-surface.utils";
 
 const TERMINAL_POLL_INTERVAL_MS = 120;
 const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
@@ -819,18 +820,27 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   }, [args.getTabKey, args.tabs, args.workspaceId]);
 
   useEffect(() => {
-    if (!args.activeTab || !args.workspaceId) {
+    // Only spawn a new backend session when the surface is actually visible.
+    // Workspace/task switches can preserve an "active" tab id in state even
+    // while the user is looking at a task surface. Creating PTYs in that
+    // hidden state causes fresh CLI sessions to appear just by navigating.
+    if (!args.activeTab || !shouldCreatePtySession({
+      isVisible: args.isVisible,
+      workspaceId: args.workspaceId,
+      hasActiveTab: true,
+    })) {
       return;
     }
 
-    const tabKey = args.getTabKey(args.activeTab);
+    const activeTab = args.activeTab;
+    const tabKey = args.getTabKey(activeTab);
     if (sessionIdByTabKeyRef.current[tabKey] || creatingSessionByTabKeyRef.current[tabKey]) {
       return;
     }
 
     creatingSessionByTabKeyRef.current[tabKey] = true;
     void args.createSession({
-      tab: args.activeTab,
+      tab: activeTab,
       cols: xtermRef.current?.cols ?? 80,
       rows: xtermRef.current?.rows ?? 24,
       deliveryMode: supportsPushTerminalOutput ? "push" : "poll",
