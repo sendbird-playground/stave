@@ -387,28 +387,30 @@ export function TerminalDock() {
                 <span className="truncate text-[11px] text-emerald-600 dark:text-emerald-400">live</span>
               ) : null}
             </div>
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-terminal">
-              {bridgeError ? (
-                <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {bridgeError}
-                </div>
-              ) : null}
-              {!terminalReady ? (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-terminal">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" />
-                    <span>Initializing terminal…</span>
+            <div className="relative min-h-0 flex-1 overflow-hidden bg-background/40 p-2.5">
+              <div className="relative h-full w-full overflow-hidden rounded-lg border border-border/50 bg-terminal">
+                {bridgeError ? (
+                  <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    {bridgeError}
                   </div>
-                </div>
-              ) : null}
-              <div
-                ref={containerRef}
-                data-terminal-surface
-                className={cn(
-                  "h-full w-full",
-                  !activeTab && "opacity-60",
-                )}
-              />
+                ) : null}
+                {!terminalReady ? (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-terminal">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Initializing terminal…</span>
+                    </div>
+                  </div>
+                ) : null}
+                <div
+                  ref={containerRef}
+                  data-terminal-surface
+                  className={cn(
+                    "h-full w-full",
+                    !activeTab && "opacity-60",
+                  )}
+                />
+              </div>
             </div>
           </section>
         </div>

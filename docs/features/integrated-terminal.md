@@ -24,7 +24,7 @@
 1. Click the `Terminal` button to show the docked terminal.
 2. If no terminal tab exists yet, Stave creates one for the active workspace.
 3. Use the dock header tab strip to switch, create, rename, or close docked terminal tabs.
-4. Use `New CLI Session` in the top strip when you want to launch `Claude` or `Codex` in the center panel.
+4. Use `New CLI Session` in the top strip, or from the no-task empty state, when you want to launch `Claude` or `Codex` in the center panel.
 
 ## Interface Walkthrough
 
@@ -33,6 +33,7 @@
 - `Terminal` button in the main workspace chrome toggles the dock visibility.
 - `Open in Stave Terminal` in the top bar workspace path menu opens a terminal tab for the current workspace path.
 - `Open in Stave Terminal` in the Explorer context menu opens a terminal tab rooted at the selected folder or file parent directory.
+- `New CLI Session` in the no-task empty state opens a workspace-scoped `Claude` or `Codex` session before you create the first task.
 - `New CLI Session` in the top strip opens one of four direct launch combinations:
   - `Claude · Workspace`
   - `Claude · Active Task`
@@ -68,6 +69,13 @@
 2. Pick the provider and context combination you want.
 3. Stave opens a new center-panel CLI session tab and starts the provider CLI directly.
 4. If the session is task-linked, use `Paste Handoff` to inject the stored task summary into the live terminal.
+
+### Start A CLI Session Before Creating A Task
+
+1. Open a workspace that does not have any active tasks yet.
+2. In the empty-state card, click `New CLI Session`.
+3. Pick `Claude · Workspace` or `Codex · Workspace`.
+4. Stave opens the CLI session in the center panel without forcing you to create a task first.
 
 ## Files And Data
 

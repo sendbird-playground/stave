@@ -55,10 +55,14 @@ export function ChatArea() {
           state.workspaces.some(
             (workspace) => workspace.id === state.activeWorkspaceId,
           ),
-          state.tasks.some((task) => task.id === state.activeTaskId && !isTaskArchived(task)),
+          state.tasks.some(
+            (task) => task.id === state.activeTaskId && !isTaskArchived(task),
+          ),
           state.messageCountByTask[state.activeTaskId] ??
             (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length,
-          state.tasks.find((task) => task.id === state.activeTaskId && !isTaskArchived(task)) ?? null,
+          state.tasks.find(
+            (task) => task.id === state.activeTaskId && !isTaskArchived(task),
+          ) ?? null,
           state.activeTurnIdsByTask[state.activeTaskId],
           state.refreshActiveManagedTask,
           state.createProject,
@@ -212,6 +216,7 @@ export function ChatArea() {
               layout="top-card"
               onCreateTask={() => createTask({ title: "" })}
               showCreateTaskAction
+              showCreateCliSessionAction
             />
           </div>
         </div>
