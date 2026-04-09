@@ -135,6 +135,16 @@ function getPrewarmedExecutablePath(): string {
   return prewarmExecutablePath;
 }
 
+function resolveClaudeRuntimeExecutablePath(args: {
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  const explicitPath = args.runtimeOptions?.claudeBinaryPath?.trim();
+  if (explicitPath) {
+    return explicitPath;
+  }
+  return getPrewarmedExecutablePath();
+}
+
 /**
  * Trigger eager SDK module import and executable path resolution.
  * Call this early (e.g. at app startup) so the first query() is fast.
@@ -187,7 +197,11 @@ function probeClaudeExecutable(args: { path: string }) {
   };
 }
 
-export function resolveClaudeExecutablePath() {
+export function resolveClaudeExecutablePath(args: { explicitPath?: string } = {}) {
+  if (args.explicitPath?.trim()) {
+    return args.explicitPath.trim();
+  }
+
   const baseResolved = resolveExecutablePath({
     absolutePathEnvVar: "STAVE_CLAUDE_CLI_PATH",
     absolutePathEnvVars: ["CLAUDE_CODE_PATH"],
@@ -1302,7 +1316,9 @@ export async function getClaudeCommandCatalog(args: {
       };
     }
 
-    const claudeExecutablePath = getPrewarmedExecutablePath();
+    const claudeExecutablePath = resolveClaudeRuntimeExecutablePath({
+      runtimeOptions: args.runtimeOptions,
+    });
     const embeddedMcpServers = await resolveEmbeddedStaveLocalMcpServers();
 
     stream = queryFn({
@@ -1355,7 +1371,9 @@ export async function getClaudeContextUsage(args: {
       };
     }
 
-    const claudeExecutablePath = getPrewarmedExecutablePath();
+    const claudeExecutablePath = resolveClaudeRuntimeExecutablePath({
+      runtimeOptions: args.runtimeOptions,
+    });
     const embeddedMcpServers = await resolveEmbeddedStaveLocalMcpServers();
     stream = queryFn({
       prompt: "",
@@ -1402,7 +1420,9 @@ export async function reloadClaudePlugins(args: {
       };
     }
 
-    const claudeExecutablePath = getPrewarmedExecutablePath();
+    const claudeExecutablePath = resolveClaudeRuntimeExecutablePath({
+      runtimeOptions: args.runtimeOptions,
+    });
     const embeddedMcpServers = await resolveEmbeddedStaveLocalMcpServers();
     stream = queryFn({
       prompt: "",
@@ -1485,7 +1505,9 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
       ];
     }
 
-    const claudeExecutablePath = getPrewarmedExecutablePath();
+    const claudeExecutablePath = resolveClaudeRuntimeExecutablePath({
+      runtimeOptions: args.runtimeOptions,
+    });
     selectedClaudePath = claudeExecutablePath;
     diagnostics = buildClaudeDiagnostics({
       executablePath: claudeExecutablePath,

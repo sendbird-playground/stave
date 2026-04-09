@@ -310,12 +310,14 @@ export function ToolingSection() {
     activeWorkspaceId,
     projectPath,
     workspacePathById,
+    claudeBinaryPath,
     codexBinaryPath,
   ] = useAppStore(
     useShallow((state) => [
       state.activeWorkspaceId,
       state.projectPath,
       state.workspacePathById,
+      state.settings.claudeBinaryPath,
       state.settings.codexBinaryPath,
     ] as const),
   );
@@ -355,6 +357,7 @@ export function ToolingSection() {
       try {
         const snapshot = await getStatus({
           cwd: workspaceCwd ?? undefined,
+          claudeBinaryPath: claudeBinaryPath || undefined,
           codexBinaryPath: codexBinaryPath || undefined,
         });
         if (cancelled) {
@@ -382,7 +385,7 @@ export function ToolingSection() {
     return () => {
       cancelled = true;
     };
-  }, [codexBinaryPath, refreshNonce, workspaceCwd]);
+  }, [claudeBinaryPath, codexBinaryPath, refreshNonce, workspaceCwd]);
 
   async function handleOpenTerminal() {
     const openInTerminal = window.api?.shell?.openInTerminal;

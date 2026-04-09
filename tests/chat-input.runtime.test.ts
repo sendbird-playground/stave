@@ -20,6 +20,7 @@ const baseArgs = {
   claudeThinkingMode: "adaptive" as const,
   claudeAgentProgressSummaries: true,
   claudeFastMode: false,
+  claudeBinaryPath: "/opt/homebrew/bin/claude",
   codexFileAccess: "workspace-write" as const,
   codexNetworkAccess: true,
   codexApprovalPolicy: "on-request" as const,
@@ -77,6 +78,7 @@ describe("chat-input runtime helpers", () => {
       modelClaude: "claude-sonnet-4-6",
     })).toMatchObject({
       model: "claude-sonnet-4-6",
+      claudeBinaryPath: "/opt/homebrew/bin/claude",
       claudePermissionMode: "acceptEdits",
       claudeThinkingMode: "adaptive",
     });

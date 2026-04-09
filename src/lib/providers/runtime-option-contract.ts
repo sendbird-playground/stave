@@ -99,6 +99,7 @@ export const PROVIDER_RUNTIME_OPTION_KEYS = [
   "chatStreamingEnabled",
   "debug",
   "providerTimeoutMs",
+  "claudeBinaryPath",
   "claudePermissionMode",
   "claudeAllowDangerouslySkipPermissions",
   "claudeSandboxEnabled",

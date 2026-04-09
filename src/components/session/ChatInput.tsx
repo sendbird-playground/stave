@@ -98,6 +98,7 @@ const INACTIVE_CLAUDE_SETTINGS = [
   "adaptive",
   false,
   false,
+  "",
   true,
 ] as const;
 const INACTIVE_CODEX_SETTINGS = [
@@ -792,6 +793,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     claudeThinkingMode,
     claudeAgentProgressSummaries,
     claudeFastMode,
+    claudeBinaryPath,
     claudeFastModeVisible,
   ] = useAppStore(useShallow((state) => (
     activeProvider === "claude-code" || activeProvider === "stave"
@@ -807,6 +809,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           state.settings.claudeThinkingMode,
           state.settings.claudeAgentProgressSummaries,
           state.settings.claudeFastMode,
+          state.settings.claudeBinaryPath,
           state.settings.claudeFastModeVisible,
         ] as const
       : INACTIVE_CLAUDE_SETTINGS
@@ -958,6 +961,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       claudeThinkingMode,
       claudeAgentProgressSummaries,
       claudeFastMode,
+      claudeBinaryPath,
       codexFileAccess,
       codexNetworkAccess,
       codexApprovalPolicy,
@@ -983,6 +987,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     claudeAllowUnsandboxedCommands,
     claudeEffort,
     claudeFastMode,
+    claudeBinaryPath,
     claudeSandboxEnabled,
     claudeSettingSources,
     claudeTaskBudgetTokens,
@@ -1169,6 +1174,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       claudeEffort,
       claudeThinkingMode,
       claudeAgentProgressSummaries,
+      claudeBinaryPath,
     });
 
     void getCommandCatalog({

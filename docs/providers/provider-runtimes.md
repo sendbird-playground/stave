@@ -310,6 +310,8 @@ When a task switches from one Codex model to another, Stave does not attempt to 
 
 Stave requires a user-installed Codex CLI (`codex` ≥ 0.118.0). Users must have Codex CLI available in their PATH or configured via `runtimeOptions.codexBinaryPath` / `STAVE_CODEX_CLI_PATH`. A user-configured binary path still takes precedence over auto-discovery.
 
+Claude follows the same pattern. Users can force a specific local `claude` install via `runtimeOptions.claudeBinaryPath` or the Settings dialog's Claude Binary override before Stave falls back to environment-based discovery.
+
 ## Executable path resolution
 
 Stave does not hardcode one binary path. It probes a small set of candidates, merges the Electron process PATH with the user's login-shell PATH plus common homebrew/home-bin locations, and accepts only executable files.
@@ -326,13 +328,14 @@ If multiple executable candidates exist, Stave runs `candidate --version`, parse
 
 ### Claude CLI lookup candidates
 
-1. `STAVE_CLAUDE_CLI_PATH`
-2. `CLAUDE_CODE_PATH`
-3. `<user-home>/.claude/local/claude`
-4. `<user-home>/.bun/bin/claude`
-5. `<user-home>/.local/bin/claude`
-6. `STAVE_CLAUDE_CMD` resolved through the merged PATH
-7. default `claude` resolved through the merged PATH
+1. `runtimeOptions.claudeBinaryPath`
+2. `STAVE_CLAUDE_CLI_PATH`
+3. `CLAUDE_CODE_PATH`
+4. `<user-home>/.claude/local/claude`
+5. `<user-home>/.bun/bin/claude`
+6. `<user-home>/.local/bin/claude`
+7. `STAVE_CLAUDE_CMD` resolved through the merged PATH
+8. default `claude` resolved through the merged PATH
 
 Each candidate must be executable and respond successfully to `--version`. If multiple valid candidates exist, Stave sorts them by parsed version and chooses the newest one.
 

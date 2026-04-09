@@ -728,6 +728,7 @@ export interface AppSettings {
   notificationSoundCustomAudioName: string | null;
   providerDebugStream: boolean;
   providerTimeoutMs: number;
+  claudeBinaryPath: string;
   claudePermissionMode: ClaudePermissionMode;
   /** Stores the permission mode that was active before entering plan mode, so it can be restored when plan mode is exited. */
   claudePermissionModeBeforePlan: ClaudePermissionModeBeforePlan;
@@ -1345,6 +1346,7 @@ const defaultSettings: AppSettings = {
   notificationSoundCustomAudioName: null,
   providerDebugStream: false,
   providerTimeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+  claudeBinaryPath: "",
   claudePermissionMode: "auto",
   claudePermissionModeBeforePlan: null,
   claudeAllowDangerouslySkipPermissions: false,
@@ -6060,14 +6062,16 @@ export const useAppStore = create<AppState>()(
         if (!checkAvailability) {
           return;
         }
+        const claudeBinaryPath = get().settings.claudeBinaryPath || undefined;
         const codexBinaryPath = get().settings.codexBinaryPath || undefined;
         const availabilityEntries = await Promise.all(
           listProviderIds().map(async (providerId) => {
             const result = await checkAvailability({
               providerId,
-              runtimeOptions: codexBinaryPath
-                ? { codexBinaryPath }
-                : undefined,
+              runtimeOptions: {
+                ...(claudeBinaryPath ? { claudeBinaryPath } : {}),
+                ...(codexBinaryPath ? { codexBinaryPath } : {}),
+              },
             });
             return [providerId, result.ok && result.available] as const;
           }),

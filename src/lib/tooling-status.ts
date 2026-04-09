@@ -67,6 +67,7 @@ export interface ToolingStatusSnapshot {
 
 export interface ToolingStatusRequest {
   cwd?: string;
+  claudeBinaryPath?: string;
   codexBinaryPath?: string;
 }
 

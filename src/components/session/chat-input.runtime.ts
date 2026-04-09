@@ -29,6 +29,7 @@ interface ChatInputRuntimeArgs {
   claudeThinkingMode: AppSettings["claudeThinkingMode"];
   claudeAgentProgressSummaries: boolean;
   claudeFastMode: boolean;
+  claudeBinaryPath: string;
   codexFileAccess: AppSettings["codexFileAccess"];
   codexNetworkAccess: boolean;
   codexApprovalPolicy: AppSettings["codexApprovalPolicy"];
@@ -58,6 +59,7 @@ type CommandCatalogRuntimeArgs = Pick<
   | "claudeEffort"
   | "claudeThinkingMode"
   | "claudeAgentProgressSummaries"
+  | "claudeBinaryPath"
 > & {
   modelClaude: string;
 };
@@ -145,6 +147,13 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
         value: args.claudeFastMode ? "On" : "Off",
         tone: args.claudeFastMode ? "warning" : "default",
       },
+      ...(args.claudeBinaryPath.trim()
+        ? [{
+            id: "claude-binary",
+            label: "Claude Binary",
+            value: formatShortRuntimePath(args.claudeBinaryPath),
+          } satisfies PromptInputRuntimeStatusItem]
+        : []),
     ];
   }
 
@@ -223,5 +232,6 @@ export function buildCommandCatalogRuntimeOptions(args: CommandCatalogRuntimeArg
     claudeEffort: args.claudeEffort,
     claudeThinkingMode: args.claudeThinkingMode,
     claudeAgentProgressSummaries: args.claudeAgentProgressSummaries,
+    claudeBinaryPath: args.claudeBinaryPath || undefined,
   };
 }

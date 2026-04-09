@@ -234,6 +234,7 @@ export interface ProviderRuntimeOptions {
   chatStreamingEnabled?: boolean;
   debug?: boolean;
   providerTimeoutMs?: number;
+  claudeBinaryPath?: string;
   claudePermissionMode?: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
   claudeAllowDangerouslySkipPermissions?: boolean;
   claudeSandboxEnabled?: boolean;

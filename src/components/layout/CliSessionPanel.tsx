@@ -94,11 +94,13 @@ export function CliSessionPanel() {
       cols: args.cols,
       rows: args.rows,
       deliveryMode: args.deliveryMode,
-      runtimeOptions: args.tab.provider === "codex" && settings.codexBinaryPath.trim()
-        ? { codexBinaryPath: settings.codexBinaryPath.trim() }
-        : undefined,
+      runtimeOptions: args.tab.provider === "claude-code" && settings.claudeBinaryPath.trim()
+        ? { claudeBinaryPath: settings.claudeBinaryPath.trim() }
+        : args.tab.provider === "codex" && settings.codexBinaryPath.trim()
+          ? { codexBinaryPath: settings.codexBinaryPath.trim() }
+          : undefined,
     });
-  }, [activeWorkspaceId, settings.codexBinaryPath, tasks, workspacePath]);
+  }, [activeWorkspaceId, settings.claudeBinaryPath, settings.codexBinaryPath, tasks, workspacePath]);
 
   const {
     activeSessionId,

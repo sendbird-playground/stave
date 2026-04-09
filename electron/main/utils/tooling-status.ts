@@ -40,6 +40,19 @@ function firstMeaningfulLine(value: string) {
     .find(Boolean) ?? null;
 }
 
+function findJsonStart(value: string) {
+  const objectStart = value.indexOf("{");
+  const arrayStart = value.indexOf("[");
+
+  if (objectStart === -1) {
+    return arrayStart;
+  }
+  if (arrayStart === -1) {
+    return objectStart;
+  }
+  return Math.min(objectStart, arrayStart);
+}
+
 function summarizeCommandOutput(value: string, maxLines = 6, maxChars = 1_200) {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -175,10 +188,19 @@ export function parseClaudeAuthState(args: {
   stderr: string;
 }): { authState: ToolingAuthState; authDetail: string | null } {
   const detail = combineCommandDetail(args);
-  const trimmed = args.stdout.trim();
-  if (trimmed) {
+  const jsonCandidates = [
+    args.stdout,
+    args.stderr,
+    `${args.stdout}\n${args.stderr}`,
+    `${args.stderr}\n${args.stdout}`,
+  ];
+  for (const candidate of jsonCandidates) {
+    const startIndex = findJsonStart(candidate);
+    if (startIndex === -1) {
+      continue;
+    }
     try {
-      const parsed = JSON.parse(trimmed) as {
+      const parsed = JSON.parse(candidate.slice(startIndex).trim()) as {
         loggedIn?: unknown;
         email?: unknown;
         orgName?: unknown;
@@ -245,19 +267,6 @@ function toCodexMcpServerStatusSnapshot(value: unknown): CodexMcpServerStatusSna
   };
 }
 
-function findJsonStart(value: string) {
-  const objectStart = value.indexOf("{");
-  const arrayStart = value.indexOf("[");
-
-  if (objectStart === -1) {
-    return arrayStart;
-  }
-  if (arrayStart === -1) {
-    return objectStart;
-  }
-  return Math.min(objectStart, arrayStart);
-}
-
 export function parseCodexMcpServerList(args: {
   stdout: string;
   stderr: string;
@@ -314,12 +323,14 @@ function formatToolDetail(args: {
   executablePath: string | null;
   version: string | null;
   authDetail: string | null;
+  extraLines?: string[];
   failureDetail?: string;
   available: boolean;
 }) {
   if (!args.available) {
     return [
       args.executablePath ? `Resolved path: ${args.executablePath}` : "",
+      ...(args.extraLines ?? []),
       args.failureDetail ?? "",
     ]
       .filter(Boolean)
@@ -329,6 +340,7 @@ function formatToolDetail(args: {
   return [
     args.executablePath ? `Resolved path: ${args.executablePath}` : "",
     args.version ? `Version: ${args.version}` : "",
+    ...(args.extraLines ?? []),
     args.authDetail ? `Auth: ${args.authDetail}` : "",
   ]
     .filter(Boolean)
@@ -484,8 +496,10 @@ async function inspectGhStatus() {
   });
 }
 
-async function inspectClaudeStatus() {
-  const executablePath = resolveClaudeExecutablePath() || null;
+async function inspectClaudeStatus(args: { claudeBinaryPath?: string } = {}) {
+  const executablePath = resolveClaudeExecutablePath({
+    explicitPath: args.claudeBinaryPath,
+  }) || null;
   if (!executablePath) {
     return makeToolEntry({
       id: "claude",
@@ -502,6 +516,9 @@ async function inspectClaudeStatus() {
   }
 
   const env = buildClaudeEnv({ executablePath });
+  const configDir = env.CLAUDE_CONFIG_DIR?.trim()
+    ? env.CLAUDE_CONFIG_DIR.trim()
+    : null;
   const [versionResult, authResult] = await Promise.all([
     runCommandArgs({
       command: executablePath,
@@ -534,6 +551,11 @@ async function inspectClaudeStatus() {
       executablePath,
       version,
       authDetail,
+      extraLines: [
+        configDir
+          ? `Config dir: ${configDir}`
+          : "Config dir: (using Claude CLI default lookup)",
+      ],
       failureDetail: combineCommandDetail(versionResult),
       available,
     }),
@@ -816,7 +838,7 @@ export async function getToolingStatusSnapshot(
     inspectShellStatus(),
     inspectGitStatus(),
     inspectGhStatus(),
-    inspectClaudeStatus(),
+    inspectClaudeStatus({ claudeBinaryPath: args.claudeBinaryPath }),
     inspectCodexStatus({ codexBinaryPath: args.codexBinaryPath }),
   ]);
 

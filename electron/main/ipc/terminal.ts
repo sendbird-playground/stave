@@ -15,6 +15,7 @@ import {
 } from "../../providers/codex-sdk-runtime";
 import { deleteTerminalSession, getTerminalSession, setTerminalSession } from "../state";
 import { resolveCommandCwd, runCommand } from "../utils/command";
+import type { StreamTurnArgs } from "../../providers/types";
 
 function createPtySession(args: {
   command: string;
@@ -135,10 +136,12 @@ function createCliSession(args: {
   rows?: number;
   deliveryMode?: "poll" | "push";
   ownerWebContentsId?: number | null;
-  runtimeOptions?: { codexBinaryPath?: string };
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
   if (args.providerId === "claude-code") {
-    const executablePath = resolveClaudeExecutablePath();
+    const executablePath = resolveClaudeExecutablePath({
+      explicitPath: args.runtimeOptions?.claudeBinaryPath,
+    });
     if (!executablePath) {
       return { ok: false, stderr: "Claude executable not found. Check Claude CLI installation and auth." };
     }
