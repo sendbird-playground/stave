@@ -259,8 +259,9 @@ const WorkspaceCliSessionStripTab = memo(function WorkspaceCliSessionStripTab(ar
         title={`${getCliSessionProviderLabel(args.tab.provider)} · ${getCliSessionContextLabel(args.tab.contextMode)}`}
         onClick={() => args.onSelectTab(args.tab.id)}
       >
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+        <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
           <ModelIcon providerId={args.tab.provider} className="size-4 text-muted-foreground" />
+          <SquareTerminal className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-sm bg-background text-muted-foreground" strokeWidth={2.5} />
         </span>
         <span className="max-w-56 truncate text-sm font-medium">{args.tab.title}</span>
       </button>
