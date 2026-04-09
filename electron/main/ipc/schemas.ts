@@ -35,6 +35,10 @@ export const SuggestPRDescriptionArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),
     baseBranch: z.string().max(200).optional(),
+    /** Branch the component expects (from workspaceBranchById).  When
+     *  provided the handler uses it as the authoritative branch name instead
+     *  of re-detecting from git, and validates that the cwd actually matches. */
+    headBranch: z.string().max(200).optional(),
     promptTemplate: z.string().max(10_000).optional(),
     workspaceContext: z.string().max(12_000).optional(),
   })

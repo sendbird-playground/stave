@@ -1,5 +1,6 @@
 import {
   Bot,
+  Cable,
   Code2,
   Cog,
   Folder,
@@ -22,6 +23,7 @@ export const settingsSections = [
   { id: "chat", label: "Chat", icon: Bot },
   { id: "muse", label: "Muse", icon: Sparkles },
   { id: "providers", label: "Providers", icon: Wrench },
+  { id: "mcp", label: "MCP", icon: Cable },
   { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "skills", label: "Skills", icon: SearchCheck },
   { id: "subagents", label: "Subagents", icon: Network },
@@ -38,6 +40,6 @@ export type SectionId = (typeof settingsSections)[number]["id"];
 export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
   { label: "Workspace", ids: ["general", "projects"] },
   { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
-  { label: "Providers", ids: ["muse", "providers", "prompts", "skills", "subagents", "commandPalette"] },
+  { label: "Providers", ids: ["muse", "providers", "mcp", "prompts", "skills", "subagents", "commandPalette"] },
   { label: "System", ids: ["tooling", "lens", "developer"] },
 ];
