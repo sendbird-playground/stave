@@ -67,6 +67,7 @@ import {
   findPendingApprovalMessageByRequestId,
 } from "../../src/store/provider-message.utils";
 import type { ChatMessage, Task } from "../../src/types/chat";
+import { findWorkspaceTaskOrThrow } from "../../src/lib/tasks";
 import { providerRuntime } from "../providers/runtime";
 import type { BridgeEvent } from "../providers/types";
 import { ensurePersistenceReady } from "./state";
@@ -1454,12 +1455,13 @@ export async function runTask(args: {
     providerId: provider,
   });
 
-  let task = args.taskId
-    ? session.tasks.find((item) => item.id === args.taskId) ?? null
-    : null;
+  let task = findWorkspaceTaskOrThrow({
+    tasks: session.tasks,
+    requestedTaskId: args.taskId,
+  });
 
   if (!task) {
-    const taskId = args.taskId?.trim() || randomUUID();
+    const taskId = randomUUID();
     task = {
       id: taskId,
       title: args.title?.trim() || buildTaskTitleFromPrompt(args.prompt),

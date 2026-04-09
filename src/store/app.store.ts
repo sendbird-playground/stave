@@ -7484,14 +7484,22 @@ export const useAppStore = create<AppState>()(
         if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
           return;
         }
-        const workspaceId = stateBefore.activeWorkspaceId;
-        const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
-        const message = (stateBefore.messagesByTask[taskId] ?? []).find((item) => item.id === messageId);
+        const runtimeTarget = resolveTaskRuntimeTarget({ state: stateBefore, taskId });
+        const workspaceId = runtimeTarget?.workspaceId
+          ?? stateBefore.taskWorkspaceIdById[taskId]
+          ?? stateBefore.activeWorkspaceId;
+        const targetSession = runtimeTarget?.session
+          ?? (workspaceId ? getWorkspaceSessionForState({ state: stateBefore, workspaceId }) : null);
+        const activeTurnId = targetSession?.activeTurnIdsByTask[taskId];
+        const message = (targetSession?.messagesByTask[taskId] ?? []).find((item) => item.id === messageId);
         const approvalPart = findLatestPendingApprovalPart({ message });
 
         const appendApprovalFailure = (failureText: string) => {
           set((state) => {
-            const current = state.messagesByTask[taskId] ?? [];
+            const cachedSession = workspaceId && workspaceId !== state.activeWorkspaceId
+              ? state.workspaceRuntimeCacheById[workspaceId] ?? null
+              : null;
+            const current = (cachedSession?.messagesByTask ?? state.messagesByTask)[taskId] ?? [];
             const systemMessage: ChatMessage = {
               id: buildMessageId({ taskId, count: current.length }),
               role: "assistant",
@@ -7503,6 +7511,27 @@ export const useAppStore = create<AppState>()(
                 content: failureText,
               }],
             };
+            if (cachedSession && workspaceId) {
+              return {
+                workspaceRuntimeCacheById: {
+                  ...state.workspaceRuntimeCacheById,
+                  [workspaceId]: {
+                    ...cachedSession,
+                    messagesByTask: {
+                      ...cachedSession.messagesByTask,
+                      [taskId]: [...current, systemMessage],
+                    },
+                    messageCountByTask: {
+                      ...cachedSession.messageCountByTask,
+                      [taskId]: Math.max(
+                        (cachedSession.messageCountByTask[taskId] ?? current.length) + 1,
+                        current.length + 1,
+                      ),
+                    },
+                  },
+                },
+              };
+            }
             return {
               messagesByTask: {
                 ...state.messagesByTask,
@@ -7521,14 +7550,40 @@ export const useAppStore = create<AppState>()(
         };
 
         const applyApprovalResponse = (requestId: string) => {
-          set((state) => applyApprovalState({
-            messagesByTask: state.messagesByTask,
-            workspaceSnapshotVersion: state.workspaceSnapshotVersion,
-            taskId,
-            messageId,
-            requestId,
-            approved,
-          }));
+          set((state) => {
+            if (workspaceId && workspaceId !== state.activeWorkspaceId) {
+              const cachedSession = state.workspaceRuntimeCacheById[workspaceId];
+              if (!cachedSession) {
+                return state;
+              }
+              const nextMessagesState = applyApprovalState({
+                messagesByTask: cachedSession.messagesByTask,
+                workspaceSnapshotVersion: 0,
+                taskId,
+                messageId,
+                requestId,
+                approved,
+              });
+              return {
+                workspaceRuntimeCacheById: {
+                  ...state.workspaceRuntimeCacheById,
+                  [workspaceId]: {
+                    ...cachedSession,
+                    messagesByTask: nextMessagesState.messagesByTask,
+                  },
+                },
+              };
+            }
+
+            return applyApprovalState({
+              messagesByTask: state.messagesByTask,
+              workspaceSnapshotVersion: state.workspaceSnapshotVersion,
+              taskId,
+              messageId,
+              requestId,
+              approved,
+            });
+          });
         };
 
         if (activeTurnId && approvalPart) {
@@ -7587,14 +7642,22 @@ export const useAppStore = create<AppState>()(
         if (isManagedTaskReadOnly({ state: stateBefore, taskId })) {
           return;
         }
-        const workspaceId = stateBefore.activeWorkspaceId;
-        const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
-        const message = (stateBefore.messagesByTask[taskId] ?? []).find((item) => item.id === messageId);
+        const runtimeTarget = resolveTaskRuntimeTarget({ state: stateBefore, taskId });
+        const workspaceId = runtimeTarget?.workspaceId
+          ?? stateBefore.taskWorkspaceIdById[taskId]
+          ?? stateBefore.activeWorkspaceId;
+        const targetSession = runtimeTarget?.session
+          ?? (workspaceId ? getWorkspaceSessionForState({ state: stateBefore, workspaceId }) : null);
+        const activeTurnId = targetSession?.activeTurnIdsByTask[taskId];
+        const message = (targetSession?.messagesByTask[taskId] ?? []).find((item) => item.id === messageId);
         const userInputPart = findLatestPendingUserInputPart({ message });
 
         const appendUserInputFailure = (failureText: string) => {
           set((state) => {
-            const current = state.messagesByTask[taskId] ?? [];
+            const cachedSession = workspaceId && workspaceId !== state.activeWorkspaceId
+              ? state.workspaceRuntimeCacheById[workspaceId] ?? null
+              : null;
+            const current = (cachedSession?.messagesByTask ?? state.messagesByTask)[taskId] ?? [];
             const systemMessage: ChatMessage = {
               id: buildMessageId({ taskId, count: current.length }),
               role: "assistant",
@@ -7606,6 +7669,27 @@ export const useAppStore = create<AppState>()(
                 content: failureText,
               }],
             };
+            if (cachedSession && workspaceId) {
+              return {
+                workspaceRuntimeCacheById: {
+                  ...state.workspaceRuntimeCacheById,
+                  [workspaceId]: {
+                    ...cachedSession,
+                    messagesByTask: {
+                      ...cachedSession.messagesByTask,
+                      [taskId]: [...current, systemMessage],
+                    },
+                    messageCountByTask: {
+                      ...cachedSession.messageCountByTask,
+                      [taskId]: Math.max(
+                        (cachedSession.messageCountByTask[taskId] ?? current.length) + 1,
+                        current.length + 1,
+                      ),
+                    },
+                  },
+                },
+              };
+            }
             return {
               messagesByTask: {
                 ...state.messagesByTask,
@@ -7624,15 +7708,42 @@ export const useAppStore = create<AppState>()(
         };
 
         const applyUserInputResponse = (requestId: string) => {
-          set((state) => applyUserInputState({
-            messagesByTask: state.messagesByTask,
-            workspaceSnapshotVersion: state.workspaceSnapshotVersion,
-            taskId,
-            messageId,
-            requestId,
-            answers,
-            denied,
-          }));
+          set((state) => {
+            if (workspaceId && workspaceId !== state.activeWorkspaceId) {
+              const cachedSession = state.workspaceRuntimeCacheById[workspaceId];
+              if (!cachedSession) {
+                return state;
+              }
+              const nextMessagesState = applyUserInputState({
+                messagesByTask: cachedSession.messagesByTask,
+                workspaceSnapshotVersion: 0,
+                taskId,
+                messageId,
+                requestId,
+                answers,
+                denied,
+              });
+              return {
+                workspaceRuntimeCacheById: {
+                  ...state.workspaceRuntimeCacheById,
+                  [workspaceId]: {
+                    ...cachedSession,
+                    messagesByTask: nextMessagesState.messagesByTask,
+                  },
+                },
+              };
+            }
+
+            return applyUserInputState({
+              messagesByTask: state.messagesByTask,
+              workspaceSnapshotVersion: state.workspaceSnapshotVersion,
+              taskId,
+              messageId,
+              requestId,
+              answers,
+              denied,
+            });
+          });
         };
 
         if (activeTurnId && userInputPart) {
