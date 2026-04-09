@@ -9,6 +9,25 @@ const TERMINAL_INPUT_BUFFER_CHAR_LIMIT = 200_000;
 /** Maximum RAF attempts when auto-focusing the terminal after tab switch. */
 const AUTO_FOCUS_MAX_ATTEMPTS = 60;
 
+/**
+ * Write data to a ghostty-web Terminal while preserving the current scroll
+ * position.  ghostty-web's `writeInternal` unconditionally calls
+ * `scrollToBottom()` after every write, which rips the viewport away from the
+ * user's scroll position.  We work around this by saving `getViewportY()`
+ * before the write and restoring it afterwards when the user is scrolled up.
+ */
+function writePreservingScroll(terminal: Terminal, data: string) {
+  const viewportY =
+    typeof terminal.getViewportY === "function"
+      ? terminal.getViewportY()
+      : 0;
+  terminal.write(data);
+  // viewportY > 0 means the user was scrolled up into history.
+  if (viewportY > 0) {
+    terminal.scrollToLine(viewportY);
+  }
+}
+
 let ghosttyWasmReady: Promise<void> | null = null;
 
 function ensureGhosttyWasm(): Promise<void> {
@@ -117,6 +136,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   const resizeFrameRef = useRef<number | null>(null);
   const resizeInFlightRef = useRef(false);
   const pendingResizeRef = useRef(false);
+  /** Suppress ResizeObserver callbacks while an IME composition is active. */
+  const isComposingRef = useRef(false);
   const lastResizeRef = useRef<{ cols: number; rows: number }>({
     cols: 0,
     rows: 0,
@@ -263,8 +284,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       TERMINAL_TRANSCRIPT_CHAR_LIMIT,
     );
 
-    if (activeTabKeyRef.current === tabKey) {
-      xtermRef.current?.write(args.output);
+    if (activeTabKeyRef.current === tabKey && xtermRef.current) {
+      writePreservingScroll(xtermRef.current, args.output);
     }
 
     scheduleTranscriptFlush();
@@ -437,7 +458,16 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       fitAddonRef.current = fitAddon;
       lastResizeRef.current = { cols: 0, rows: 0 };
 
-      const ro = new ResizeObserver(() => scheduleResize());
+      const ro = new ResizeObserver(() => {
+        // Skip resize during IME composition — the browser may
+        // temporarily insert text nodes into the contenteditable
+        // container, causing a micro layout shift.  Resizing during
+        // this window causes the terminal to jump.
+        if (isComposingRef.current) {
+          return;
+        }
+        scheduleResize();
+      });
       ro.observe(containerRef.current);
 
       const disposable = terminal.onData((input) => {
@@ -454,6 +484,16 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       const onFocusOut = () => { terminal.options.cursorBlink = false; };
       container.addEventListener("focusin", onFocusIn);
       container.addEventListener("focusout", onFocusOut);
+
+      // Track IME composition state to guard ResizeObserver.
+      const onCompositionStart = () => { isComposingRef.current = true; };
+      const onCompositionEnd = () => {
+        isComposingRef.current = false;
+        // Apply any resize that was deferred while composing.
+        scheduleResize();
+      };
+      container.addEventListener("compositionstart", onCompositionStart);
+      container.addEventListener("compositionend", onCompositionEnd);
 
       await waitForAnimationFrames(2);
       if (cancelled) {
@@ -474,6 +514,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       cleanupRef.current = () => {
         container.removeEventListener("focusin", onFocusIn);
         container.removeEventListener("focusout", onFocusOut);
+        container.removeEventListener("compositionstart", onCompositionStart);
+        container.removeEventListener("compositionend", onCompositionEnd);
         disposable.dispose();
         ro.disconnect();
         terminal.dispose();
@@ -606,6 +648,12 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     };
   }, [runtimeVersion, supportsPushTerminalOutput]);
 
+  // When the active workspace changes, clear the terminal display and reset
+  // transient resize / inflight flags so the newly-active tab renders
+  // cleanly.  We intentionally do NOT kill the PTY sessions — they stay
+  // alive in the background keyed by their tabKey (which includes workspaceId).
+  // This allows the user to switch to another workspace and come back without
+  // losing a running Claude CLI session.
   useEffect(() => {
     const previousWorkspaceId = previousWorkspaceIdRef.current;
     previousWorkspaceIdRef.current = args.workspaceId;
@@ -614,11 +662,18 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       return;
     }
 
-    const sessionIds = Object.values(sessionIdByTabKeyRef.current);
-    void disposeSessionIds(sessionIds).finally(() => {
-      resetRuntimeState();
-      xtermRef.current?.clear();
-    });
+    // Reset only transient UI state — preserve session mappings.
+    previousActiveTabKeyRef.current = null;
+    activeSessionIdRef.current = null;
+    activeTabKeyRef.current = null;
+    resizeInFlightRef.current = false;
+    pendingResizeRef.current = false;
+    lastResizeRef.current = { cols: 0, rows: 0 };
+
+    xtermRef.current?.clear();
+    // Bump runtimeVersion so dependent effects re-evaluate with the
+    // new workspace's tabs.
+    setRuntimeVersion((value) => value + 1);
   }, [args.workspaceId]);
 
   useEffect(() => {
@@ -698,8 +753,13 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
 
     const previousTabKey = previousActiveTabKeyRef.current;
     if (previousTabKey && previousTabKey !== activeTabKey) {
+      // Save the viewport scroll offset so we can restore it when the
+      // user switches back.  `getViewportY()` returns the number of
+      // lines scrolled up from the bottom (0 = at bottom).
       scrollPositionByTabKeyRef.current[previousTabKey] =
-        xtermRef.current.buffer.active.baseY;
+        typeof xtermRef.current.getViewportY === "function"
+          ? xtermRef.current.getViewportY()
+          : 0;
     }
 
     previousActiveTabKeyRef.current = activeTabKey;
