@@ -19,6 +19,10 @@ export interface TerminalSession {
   output: string;
   deliveryMode: "poll" | "push";
   ownerWebContentsId: number | null;
+  closing: boolean;
+  closed: Promise<void>;
+  close: () => void;
+  markClosed: () => void;
 }
 
 export interface RootFileEntry {
