@@ -70,6 +70,8 @@ export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
       const remoteBranches = result.remoteBranches ?? [];
       setAvailableRemoteBranches(remoteBranches);
       setSelectedBaseBranch((current) => remoteBranches.includes(current) ? current : props.baseBranch);
+    }).catch(() => {
+      // IPC failure — swallow; the UI stays in its default state.
     }).finally(() => {
       if (!cancelled) {
         setLoadingBranches(false);

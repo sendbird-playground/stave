@@ -418,7 +418,7 @@ const WorkspaceRespondingCountBadge = memo(function WorkspaceRespondingCountBadg
   );
 });
 
-const IS_MAC = window.api?.platform === "darwin";
+const IS_MAC = typeof window !== "undefined" && window.api?.platform === "darwin";
 const shortcutModifierSymbol = IS_MAC ? "\u2318" : "Ctrl";
 const DEFAULT_COLLAPSED_PROJECT_SIDEBAR_WIDTH = 64;
 /** Height reserved at the top of the collapsed sidebar for macOS traffic-light buttons. */

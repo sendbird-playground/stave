@@ -121,23 +121,31 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
     branchRequestIdRef.current += 1;
     const requestId = branchRequestIdRef.current;
     setIsBusy(true);
-    const result = await listBranches({ cwd: workspaceCwd });
-    if (branchRequestIdRef.current !== requestId) {
-      return;
+    try {
+      const result = await listBranches({ cwd: workspaceCwd });
+      if (branchRequestIdRef.current !== requestId) {
+        return;
+      }
+      if (!result.ok) {
+        setBranchError(result.stderr || "Failed to load branches.");
+        return;
+      }
+      setDetectedCurrentBranch({
+        workspaceId: activeWorkspaceId,
+        branch: result.current || workspaceBranchById[activeWorkspaceId] || null,
+      });
+      setBranches(result.branches);
+      setWorktreePathByBranch(result.worktreePathByBranch ?? {});
+      setBranchError("");
+    } catch (err) {
+      if (branchRequestIdRef.current === requestId) {
+        setBranchError(err instanceof Error ? err.message : "Failed to load branches.");
+      }
+    } finally {
+      if (branchRequestIdRef.current === requestId) {
+        setIsBusy(false);
+      }
     }
-    if (!result.ok) {
-      setBranchError(result.stderr || "Failed to load branches.");
-      setIsBusy(false);
-      return;
-    }
-    setDetectedCurrentBranch({
-      workspaceId: activeWorkspaceId,
-      branch: result.current || workspaceBranchById[activeWorkspaceId] || null,
-    });
-    setBranches(result.branches);
-    setWorktreePathByBranch(result.worktreePathByBranch ?? {});
-    setBranchError("");
-    setIsBusy(false);
   }
 
   useEffect(() => {
@@ -174,15 +182,19 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
     if (!targetName || !currentBranch) return;
 
     setIsBusy(true);
-    const result = await createBranch({ name: targetName, from: currentBranch, cwd: workspaceCwd });
-    if (!result.ok) {
-      setBranchError(result.stderr || "Branch creation failed.");
+    try {
+      const result = await createBranch({ name: targetName, from: currentBranch, cwd: workspaceCwd });
+      if (!result.ok) {
+        setBranchError(result.stderr || "Branch creation failed.");
+        return;
+      }
+      setNewBranchName("");
+      await loadBranches();
+    } catch (err) {
+      setBranchError(err instanceof Error ? err.message : "Branch creation failed.");
+    } finally {
       setIsBusy(false);
-      return;
     }
-    setNewBranchName("");
-    await loadBranches();
-    setIsBusy(false);
   }
 
   async function handleCheckoutBranch(args: { name: string }) {
@@ -212,22 +224,29 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
     }
 
     setIsBusy(true);
-    const result = await checkoutBranch({ name: args.name, cwd: workspaceCwd });
-    if (!result.ok) {
-      const message = result.stderr || "Branch checkout failed.";
+    try {
+      const result = await checkoutBranch({ name: args.name, cwd: workspaceCwd });
+      if (!result.ok) {
+        const message = result.stderr || "Branch checkout failed.";
+        setBranchError(message);
+        toast.error("Branch checkout failed", { description: message });
+        return false;
+      }
+      setWorkspaceBranch({ workspaceId: activeWorkspaceId, branch: args.name });
+      setDetectedCurrentBranch({
+        workspaceId: activeWorkspaceId,
+        branch: args.name,
+      });
+      await loadBranches();
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Branch checkout failed.";
       setBranchError(message);
       toast.error("Branch checkout failed", { description: message });
-      setIsBusy(false);
       return false;
+    } finally {
+      setIsBusy(false);
     }
-    setWorkspaceBranch({ workspaceId: activeWorkspaceId, branch: args.name });
-    setDetectedCurrentBranch({
-      workspaceId: activeWorkspaceId,
-      branch: args.name,
-    });
-    await loadBranches();
-    setIsBusy(false);
-    return true;
   }
 
   if (!hasWorkspaceContext || !currentBranch) return null;
