@@ -6,6 +6,7 @@ import {
   Folder,
   Globe,
   KeyRound,
+  Network,
   Palette,
   ScrollText,
   SearchCheck,
@@ -25,6 +26,7 @@ export const settingsSections = [
   { id: "mcp", label: "MCP", icon: Cable },
   { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "skills", label: "Skills", icon: SearchCheck },
+  { id: "subagents", label: "Subagents", icon: Network },
   { id: "commandPalette", label: "Command Palette", icon: KeyRound },
   { id: "terminal", label: "Terminal", icon: TerminalSquare },
   { id: "editor", label: "Editor", icon: Code2 },
@@ -38,6 +40,6 @@ export type SectionId = (typeof settingsSections)[number]["id"];
 export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> = [
   { label: "Workspace", ids: ["general", "projects"] },
   { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
-  { label: "Providers", ids: ["muse", "providers", "mcp", "prompts", "skills", "commandPalette"] },
+  { label: "Providers", ids: ["muse", "providers", "mcp", "prompts", "skills", "subagents", "commandPalette"] },
   { label: "System", ids: ["tooling", "lens", "developer"] },
 ];

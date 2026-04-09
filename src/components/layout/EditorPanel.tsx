@@ -11,6 +11,7 @@ import { useAppStore } from "@/store/app.store";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import { RightRailPanelShell } from "./RightRailPanelShell";
 import { WorkspaceScriptsPanel } from "./WorkspaceScriptsPanel";
+import { WorkspaceSkillsPanel } from "./WorkspaceSkillsPanel";
 import { WorkspaceChangesPanel } from "./WorkspaceChangesPanel";
 import { WorkspaceExplorerPanel } from "./WorkspaceExplorerPanel";
 import { WorkspaceInformationPanel } from "./WorkspaceInformationPanel";
@@ -896,6 +897,9 @@ export function EditorPanel(props: EditorPanelProps) {
           ) : null}
 
           {rightTab === "information" ? <WorkspaceInformationPanel /> : null}
+          {rightTab === "skills" ? (
+            <WorkspaceSkillsPanel onOpenSettings={props.onOpenSettings} />
+          ) : null}
           {rightTab === "scripts" ? (
             <WorkspaceScriptsPanel onOpenSettings={props.onOpenSettings} />
           ) : null}
