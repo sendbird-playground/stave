@@ -37,6 +37,44 @@ export function getLatestPromptSuggestions(messages: ChatMessage[]) {
   return [] as string[];
 }
 
+export function getLatestUserPromptMessage(messages: ChatMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.role !== "user" || message.providerId !== "user") {
+      continue;
+    }
+    const content = message.content.trim();
+    if (!content) {
+      continue;
+    }
+    return {
+      id: message.id,
+      content,
+    };
+  }
+
+  return null;
+}
+
+export function isStaleActiveTurnDraft(args: {
+  isTurnActive: boolean;
+  draftText: string;
+  latestUserPrompt?: string | null;
+  queuedNextTurn?: { queuedAt: string; sourceTurnId?: string } | null;
+}) {
+  if (!args.isTurnActive || args.queuedNextTurn) {
+    return false;
+  }
+
+  const draftText = args.draftText.trim();
+  const latestUserPrompt = args.latestUserPrompt?.trim() ?? "";
+  if (!draftText || !latestUserPrompt) {
+    return false;
+  }
+
+  return draftText === latestUserPrompt;
+}
+
 export function mergePromptSuggestionWithDraft(args: {
   currentDraft: string;
   suggestion: string;

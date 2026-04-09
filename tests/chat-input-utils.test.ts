@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getLatestUserPromptMessage,
   getLatestPromptSuggestions,
   getPromptHistoryEntries,
+  isStaleActiveTurnDraft,
   mergePromptSuggestionWithDraft,
   shouldHandleApprovalEnterShortcut,
 } from "@/components/session/chat-input.utils";
@@ -45,6 +47,48 @@ describe("getPromptHistoryEntries", () => {
       "first prompt",
       "second prompt",
     ]);
+  });
+});
+
+describe("getLatestUserPromptMessage", () => {
+  test("returns the latest non-empty user prompt", () => {
+    expect(getLatestUserPromptMessage([
+      {
+        id: "m-1",
+        role: "assistant",
+        model: "gpt-5.4",
+        providerId: "codex",
+        content: "response",
+        parts: [],
+      },
+      {
+        id: "m-2",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "  first prompt  ",
+        parts: [],
+      },
+      {
+        id: "m-3",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: " ",
+        parts: [],
+      },
+      {
+        id: "m-4",
+        role: "user",
+        model: "user",
+        providerId: "user",
+        content: "latest prompt",
+        parts: [],
+      },
+    ])).toEqual({
+      id: "m-4",
+      content: "latest prompt",
+    });
   });
 });
 
@@ -174,6 +218,35 @@ describe("shouldHandleApprovalEnterShortcut", () => {
       key: "Enter",
       targetTagName: "div",
       targetIsContentEditable: true,
+    })).toBe(false);
+  });
+});
+
+describe("isStaleActiveTurnDraft", () => {
+  test("treats the currently running prompt as stale while the turn is active", () => {
+    expect(isStaleActiveTurnDraft({
+      isTurnActive: true,
+      draftText: "Fix the failing test",
+      latestUserPrompt: "Fix the failing test",
+    })).toBe(true);
+  });
+
+  test("does not clear a queued next-turn draft", () => {
+    expect(isStaleActiveTurnDraft({
+      isTurnActive: true,
+      draftText: "Follow up after this finishes",
+      latestUserPrompt: "Fix the failing test",
+      queuedNextTurn: {
+        queuedAt: "2026-04-09T00:00:00.000Z",
+      },
+    })).toBe(false);
+  });
+
+  test("does not clear unrelated drafts", () => {
+    expect(isStaleActiveTurnDraft({
+      isTurnActive: true,
+      draftText: "Follow up after this finishes",
+      latestUserPrompt: "Fix the failing test",
     })).toBe(false);
   });
 });
