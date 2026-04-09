@@ -4,7 +4,7 @@ export interface WorkspaceTerminalTab {
   id: string;
   title: string;
   linkedTaskId: string | null;
-  backend: "xterm";
+  backend: "ghostty";
   cwd: string;
   createdAt: number;
 }

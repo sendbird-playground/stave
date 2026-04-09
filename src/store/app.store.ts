@@ -1511,7 +1511,7 @@ function createTerminalTabRecord(args: {
     id: crypto.randomUUID(),
     title,
     linkedTaskId: args.linkedTaskId,
-    backend: "xterm" as const,
+    backend: "ghostty" as const,
     cwd: args.cwd,
     createdAt: Date.now(),
   } satisfies WorkspaceTerminalTab;

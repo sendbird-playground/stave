@@ -1,4 +1,4 @@
-import { Copy, RefreshCw, SquareTerminal, ClipboardPaste, X } from "lucide-react";
+import { Copy, Loader2, RefreshCw, SquareTerminal, ClipboardPaste, X } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ModelIcon } from "@/components/ai-elements";
@@ -17,7 +17,6 @@ const CLI_SESSION_TRANSCRIPT_STORAGE_KEY = "stave:cli-session-transcript:v1";
 const DEFAULT_TERMINAL_FONT_FAMILY =
   '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace';
 const DEFAULT_TERMINAL_FONT_SIZE = 13;
-const DEFAULT_TERMINAL_LINE_HEIGHT = 1.2;
 
 export function CliSessionPanel() {
   const [
@@ -105,6 +104,8 @@ export function CliSessionPanel() {
     bridgeError,
     containerRef,
     restartActiveSession,
+    sessionExited,
+    terminalReady,
     writeToActiveSession,
   } = usePtySessionSurface({
     activeTab,
@@ -115,7 +116,6 @@ export function CliSessionPanel() {
     isVisible: activeSurface.kind === "cli-session",
     fontFamily: settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
     fontSize: settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE,
-    lineHeight: settings.terminalLineHeight || DEFAULT_TERMINAL_LINE_HEIGHT,
     isDarkMode,
     getTabKey,
     createSession,
@@ -192,8 +192,15 @@ export function CliSessionPanel() {
                 {handoffSummary ? (
                   <span>Task handoff ready</span>
                 ) : null}
-                {activeSessionId ? (
-                  <span>live session</span>
+                {sessionExited ? (
+                  <span className={cn(
+                    "font-medium",
+                    sessionExited.exitCode === 0 ? "text-muted-foreground" : "text-destructive",
+                  )}>
+                    exited ({sessionExited.exitCode})
+                  </span>
+                ) : activeSessionId ? (
+                  <span className="text-emerald-600 dark:text-emerald-400">live</span>
                 ) : null}
               </div>
             </div>
@@ -270,14 +277,23 @@ export function CliSessionPanel() {
             </TooltipProvider>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="relative min-h-0 flex-1 overflow-hidden">
           {bridgeError ? (
             <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
               {bridgeError}
             </div>
           ) : null}
+          {!terminalReady ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-terminal">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Initializing terminal…</span>
+              </div>
+            </div>
+          ) : null}
           <div
             ref={containerRef}
+            data-terminal-surface
             className={cn("h-full w-full", !activeTab && "opacity-60")}
           />
         </div>

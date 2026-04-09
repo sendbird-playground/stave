@@ -28,6 +28,7 @@ import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
 import {
   isEditableShortcutTarget,
+  isTerminalSurfaceTarget,
   resolveShortcutChord,
   shouldAbortTaskOnEscape,
   type PendingShortcutChord,
@@ -459,6 +460,13 @@ export function AppShell() {
       }
 
       if (isEditableShortcutTarget(event.target)) {
+        return;
+      }
+
+      // When focus is inside a terminal surface, only allow Cmd-based
+      // shortcuts through (macOS). Ctrl+<key> combos belong to the shell
+      // (Ctrl+C, Ctrl+E, Ctrl+A, etc.) and must not be intercepted.
+      if (isTerminalSurfaceTarget(event.target) && event.ctrlKey && !event.metaKey) {
         return;
       }
 

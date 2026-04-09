@@ -79,6 +79,12 @@ interface TerminalSessionOutputPayload {
   output: string;
 }
 
+interface TerminalSessionExitPayload {
+  sessionId: string;
+  exitCode: number;
+  signal?: number;
+}
+
 interface ScmCommitArgs {
   message: string;
   cwd?: string;
@@ -129,6 +135,18 @@ ipcRenderer.on(
   "terminal:session-output",
   (_event, payload: TerminalSessionOutputPayload) => {
     for (const subscriber of terminalSessionOutputSubscribers) {
+      subscriber(payload);
+    }
+  },
+);
+
+const terminalSessionExitSubscribers = new Set<
+  (payload: TerminalSessionExitPayload) => void
+>();
+ipcRenderer.on(
+  "terminal:session-exit",
+  (_event, payload: TerminalSessionExitPayload) => {
+    for (const subscriber of terminalSessionExitSubscribers) {
       subscriber(payload);
     }
   },
@@ -689,6 +707,14 @@ contextBridge.exposeInMainWorld("api", {
       terminalSessionOutputSubscribers.add(listener);
       return () => {
         terminalSessionOutputSubscribers.delete(listener);
+      };
+    },
+    subscribeSessionExit: (
+      listener: (payload: TerminalSessionExitPayload) => void,
+    ) => {
+      terminalSessionExitSubscribers.add(listener);
+      return () => {
+        terminalSessionExitSubscribers.delete(listener);
       };
     },
     setSessionDeliveryMode: (args: {

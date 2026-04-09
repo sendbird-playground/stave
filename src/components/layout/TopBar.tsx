@@ -211,7 +211,7 @@ export function TopBar() {
                     }}
                   >
                     <SquareTerminal className="size-4" />
-                    Open in Stave Terminal
+                    Open in Ghostty
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() =>

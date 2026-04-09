@@ -527,6 +527,12 @@ interface TerminalSessionOutputPayload {
   output: string;
 }
 
+interface TerminalSessionExitPayload {
+  sessionId: string;
+  exitCode: number;
+  signal?: number;
+}
+
 interface WindowTerminalApi {
   runCommand?: (args: TerminalRunArgs) => Promise<TerminalRunResult>;
   createSession?: (args: TerminalCreateSessionArgs) => Promise<{ ok: boolean; sessionId?: string }>;
@@ -540,6 +546,9 @@ interface WindowTerminalApi {
   }) => Promise<{ ok: boolean; output: string; stderr?: string }>;
   subscribeSessionOutput?: (
     listener: (payload: TerminalSessionOutputPayload) => void,
+  ) => () => void;
+  subscribeSessionExit?: (
+    listener: (payload: TerminalSessionExitPayload) => void,
   ) => () => void;
   setSessionDeliveryMode?: (args: {
     sessionId: string;

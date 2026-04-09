@@ -248,7 +248,7 @@ const WorkspaceTerminalTabSchema = z.object({
   id: z.string(),
   title: z.string(),
   linkedTaskId: z.string().nullable(),
-  backend: z.literal("xterm"),
+  backend: z.literal("ghostty"),
   cwd: z.string(),
   createdAt: z.number().int().nonnegative(),
 });

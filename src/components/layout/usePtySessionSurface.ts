@@ -1,17 +1,22 @@
-import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState } from "react";
-import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
-import { Terminal } from "@xterm/xterm";
-import {
-  openExternalUrl,
-  shouldActivateExternalLinkWithModifier,
-} from "@/lib/external-links";
+import { init as initGhosttyWasm, Terminal, FitAddon } from "ghostty-web";
 
 const TERMINAL_POLL_INTERVAL_MS = 120;
 const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
-const TERMINAL_SESSION_BUFFER_CHAR_LIMIT = 200_000;
 const TERMINAL_TRANSCRIPT_CHAR_LIMIT = 300_000;
+/** Cap for pending input buffer to prevent unbounded memory growth. */
+const TERMINAL_INPUT_BUFFER_CHAR_LIMIT = 200_000;
+/** Maximum RAF attempts when auto-focusing the terminal after tab switch. */
+const AUTO_FOCUS_MAX_ATTEMPTS = 60;
+
+let ghosttyWasmReady: Promise<void> | null = null;
+
+function ensureGhosttyWasm(): Promise<void> {
+  if (!ghosttyWasmReady) {
+    ghosttyWasmReady = initGhosttyWasm();
+  }
+  return ghosttyWasmReady;
+}
 
 function waitForAnimationFrames(count: number) {
   return new Promise<void>((resolve) => {
@@ -24,32 +29,6 @@ function waitForAnimationFrames(count: number) {
     }
     step(count);
   });
-}
-
-async function waitForTerminalFont(args: {
-  fontFamily: string;
-  fontSize: number;
-}) {
-  if (typeof document === "undefined" || !("fonts" in document)) {
-    return;
-  }
-
-  const fonts = document.fonts;
-  const fontSpec = `${args.fontSize}px ${args.fontFamily}`;
-  const timeout = new Promise<void>((resolve) =>
-    window.setTimeout(resolve, 1200),
-  );
-
-  try {
-    await Promise.race([
-      Promise.allSettled([fonts.ready, fonts.load(fontSpec)]).then(
-        () => undefined,
-      ),
-      timeout,
-    ]);
-  } catch {
-    // Ignore font loading failures and continue with best-effort fitting.
-  }
 }
 
 function resolveTerminalTheme() {
@@ -109,7 +88,6 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   isVisible: boolean;
   fontFamily: string;
   fontSize: number;
-  lineHeight: number;
   isDarkMode: boolean;
   getTabKey: (tab: TTab) => string;
   createSession: (args: {
@@ -127,24 +105,34 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   const previousActiveTabKeyRef = useRef<string | null>(null);
   const sessionIdByTabKeyRef = useRef<Record<string, string>>({});
   const tabKeyBySessionIdRef = useRef<Record<string, string>>({});
-  const sessionBufferRef = useRef<Record<string, string>>({});
   const scrollPositionByTabKeyRef = useRef<Record<string, number>>({});
   const pendingInputBySessionRef = useRef<Record<string, string>>({});
   const writeInFlightBySessionRef = useRef<Record<string, boolean>>({});
+  const flushScheduledBySessionRef = useRef<Record<string, boolean>>({});
   const creatingSessionByTabKeyRef = useRef<Record<string, boolean>>({});
+  // Unified transcript: single buffer per tab for both live output and persistence.
+  // Replaces the previous dual-buffer (sessionBuffer + transcript) system.
   const transcriptRef = useRef<Record<string, string>>({});
   const transcriptFlushTimerRef = useRef<number | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
+  const resizeInFlightRef = useRef(false);
+  const pendingResizeRef = useRef(false);
   const lastResizeRef = useRef<{ cols: number; rows: number }>({
     cols: 0,
     rows: 0,
   });
   const transcriptLoadedRef = useRef(false);
   const previousWorkspaceIdRef = useRef<string>("");
+  // Tracks which sessions have exited (keyed by tabKey).
+  const exitedByTabKeyRef = useRef<Record<string, { exitCode: number; signal?: number }>>({});
 
   const [bridgeError, setBridgeError] = useState("");
   const [terminalReady, setTerminalReady] = useState(false);
   const [runtimeVersion, setRuntimeVersion] = useState(0);
+  const [sessionExited, setSessionExited] = useState<{
+    exitCode: number;
+    signal?: number;
+  } | null>(null);
 
   const supportsPushTerminalOutput =
     typeof window !== "undefined" &&
@@ -177,14 +165,16 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   function resetRuntimeState() {
     sessionIdByTabKeyRef.current = {};
     tabKeyBySessionIdRef.current = {};
-    sessionBufferRef.current = {};
     scrollPositionByTabKeyRef.current = {};
     pendingInputBySessionRef.current = {};
     writeInFlightBySessionRef.current = {};
+    flushScheduledBySessionRef.current = {};
     creatingSessionByTabKeyRef.current = {};
     previousActiveTabKeyRef.current = null;
     activeSessionIdRef.current = null;
     activeTabKeyRef.current = null;
+    resizeInFlightRef.current = false;
+    pendingResizeRef.current = false;
     setRuntimeVersion((value) => value + 1);
   }
 
@@ -205,9 +195,16 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     pendingInputBySessionRef.current[args.sessionId] = appendTerminalInput(
       pendingInputBySessionRef.current[args.sessionId] ?? "",
       args.input,
-      TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
+      TERMINAL_INPUT_BUFFER_CHAR_LIMIT,
     );
-    flushTerminalInput(args.sessionId);
+    // Batch keystrokes arriving in the same event-loop tick into one IPC call.
+    if (!flushScheduledBySessionRef.current[args.sessionId]) {
+      flushScheduledBySessionRef.current[args.sessionId] = true;
+      queueMicrotask(() => {
+        flushScheduledBySessionRef.current[args.sessionId] = false;
+        flushTerminalInput(args.sessionId);
+      });
+    }
   }
 
   function flushTerminalInput(sessionId: string) {
@@ -235,7 +232,7 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
         pendingInputBySessionRef.current[sessionId] = appendTerminalInput(
           input,
           pendingInputBySessionRef.current[sessionId] ?? "",
-          TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
+          TERMINAL_INPUT_BUFFER_CHAR_LIMIT,
         );
         xtermRef.current?.writeln(
           "\r\n[error] failed to write terminal input.",
@@ -259,11 +256,7 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       return;
     }
 
-    sessionBufferRef.current[tabKey] = appendTerminalText(
-      sessionBufferRef.current[tabKey] ?? transcriptRef.current[tabKey] ?? "",
-      args.output,
-      TERMINAL_SESSION_BUFFER_CHAR_LIMIT,
-    );
+    // Unified transcript: single rolling buffer per tab.
     transcriptRef.current[tabKey] = appendTerminalText(
       transcriptRef.current[tabKey] ?? "",
       args.output,
@@ -304,36 +297,62 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     const fitAddon = fitAddonRef.current;
     const container = containerRef.current;
     if (!terminal || !fitAddon || !container) {
+      resizeInFlightRef.current = false;
       return;
     }
     if (container.offsetWidth <= 0 || container.offsetHeight <= 0) {
+      resizeInFlightRef.current = false;
       return;
     }
-    fitAddon.fit();
+    // PTY-first resize: calculate proposed dimensions, resize PTY first,
+    // then apply to the frontend terminal. This prevents shell output from
+    // being formatted for stale dimensions during the resize window.
+    const proposed = fitAddon.proposeDimensions();
+    if (!proposed) {
+      resizeInFlightRef.current = false;
+      return;
+    }
+    const cols = Math.max(1, proposed.cols);
+    const rows = Math.max(1, proposed.rows);
     if (
-      lastResizeRef.current.cols === terminal.cols &&
-      lastResizeRef.current.rows === terminal.rows
+      lastResizeRef.current.cols === cols &&
+      lastResizeRef.current.rows === rows
     ) {
+      resizeInFlightRef.current = false;
       return;
     }
-    lastResizeRef.current = {
-      cols: terminal.cols,
-      rows: terminal.rows,
-    };
+    lastResizeRef.current = { cols, rows };
     const resizeSession = window.api?.terminal?.resizeSession;
     const sessionId = activeSessionIdRef.current;
     if (sessionId && resizeSession) {
-      void resizeSession({
-        sessionId,
-        cols: terminal.cols,
-        rows: terminal.rows,
-      });
+      void resizeSession({ sessionId, cols, rows });
+    }
+    terminal.resize(cols, rows);
+
+    // If another resize was requested while this one was in-flight,
+    // schedule one more pass to pick up the latest dimensions.
+    resizeInFlightRef.current = false;
+    if (pendingResizeRef.current) {
+      pendingResizeRef.current = false;
+      scheduleResize();
     }
   }
 
+  /**
+   * RAF-debounced resize with inflight + pending flags.
+   * During window drag, rapid ResizeObserver callbacks are coalesced:
+   * only one RAF runs at a time, and if more arrive during that frame,
+   * exactly one follow-up is scheduled — never a backlog.
+   */
   function scheduleResize() {
-    if (resizeFrameRef.current !== null) {
+    if (resizeInFlightRef.current) {
+      // A resize RAF is already queued; mark that we need another pass.
+      pendingResizeRef.current = true;
       return;
+    }
+    resizeInFlightRef.current = true;
+    if (resizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(resizeFrameRef.current);
     }
     resizeFrameRef.current = window.requestAnimationFrame(() => {
       resizeFrameRef.current = null;
@@ -378,91 +397,105 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     }
     let cancelled = false;
 
-    const terminal = new Terminal({
-      theme: resolveTerminalTheme(),
-      fontFamily: args.fontFamily,
-      fontSize: args.fontSize,
-      lineHeight: args.lineHeight,
-      letterSpacing: 0,
-      cursorBlink: true,
-      convertEol: true,
-      disableStdin: false,
-    });
-    const fitAddon = new FitAddon();
-    const activateExternalLink = (event: MouseEvent, uri: string) => {
-      if (!shouldActivateExternalLinkWithModifier({
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-      })) {
+    const bootstrap = async () => {
+      await ensureGhosttyWasm();
+      if (cancelled || !containerRef.current) {
         return;
       }
-      void openExternalUrl({ url: uri });
-    };
-    const osc8LinkHandler = {
-      activate: (event: MouseEvent, uri: string) => activateExternalLink(event, uri),
-      allowNonHttpProtocols: false,
-    };
-    const webLinksAddon = new WebLinksAddon((event: MouseEvent, uri: string) => {
-      activateExternalLink(event, uri);
-    });
 
-    terminal.loadAddon(fitAddon);
-    terminal.loadAddon(webLinksAddon);
-    terminal.options.linkHandler = osc8LinkHandler;
-    terminal.open(containerRef.current);
+      // Preload terminal font before creating the terminal so ghostty-web
+      // measures correct character cell dimensions on first render.
+      if (typeof document !== "undefined" && "fonts" in document) {
+        const fontSpec = `${args.fontSize}px ${args.fontFamily}`;
+        try {
+          await Promise.race([
+            document.fonts.load(fontSpec),
+            new Promise<void>((r) => setTimeout(r, 1500)),
+          ]);
+        } catch {
+          // Best-effort; continue even if font loading fails.
+        }
+        if (cancelled) {
+          return;
+        }
+      }
 
-    xtermRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-    lastResizeRef.current = { cols: 0, rows: 0 };
-
-    const stabilizeTerminalMetrics = async () => {
-      await waitForAnimationFrames(2);
-      await waitForTerminalFont({
+      const terminal = new Terminal({
+        theme: resolveTerminalTheme(),
         fontFamily: args.fontFamily,
         fontSize: args.fontSize,
+        cursorBlink: false,
+        convertEol: true,
+        disableStdin: false,
       });
-      await waitForAnimationFrames(1);
+      const fitAddon = new FitAddon();
 
+      terminal.loadAddon(fitAddon);
+      terminal.open(containerRef.current);
+
+      xtermRef.current = terminal;
+      fitAddonRef.current = fitAddon;
+      lastResizeRef.current = { cols: 0, rows: 0 };
+
+      const ro = new ResizeObserver(() => scheduleResize());
+      ro.observe(containerRef.current);
+
+      const disposable = terminal.onData((input) => {
+        const currentSessionId = activeSessionIdRef.current;
+        if (!currentSessionId) {
+          return;
+        }
+        enqueueTerminalInput({ sessionId: currentSessionId, input });
+      });
+
+      // Enable cursor blink only when focused to save CPU in background tabs.
+      const container = containerRef.current;
+      const onFocusIn = () => { terminal.options.cursorBlink = true; };
+      const onFocusOut = () => { terminal.options.cursorBlink = false; };
+      container.addEventListener("focusin", onFocusIn);
+      container.addEventListener("focusout", onFocusOut);
+
+      await waitForAnimationFrames(2);
       if (cancelled) {
+        disposable.dispose();
+        ro.disconnect();
+        terminal.dispose();
         return;
       }
 
       fitAddon.fit();
-      terminal.clearTextureAtlas();
-      terminal.refresh(0, Math.max(0, terminal.rows - 1));
       resizeActiveSession();
+
       if (!cancelled) {
         setTerminalReady(true);
       }
+
+      // Store cleanup references for the effect teardown
+      cleanupRef.current = () => {
+        container.removeEventListener("focusin", onFocusIn);
+        container.removeEventListener("focusout", onFocusOut);
+        disposable.dispose();
+        ro.disconnect();
+        terminal.dispose();
+      };
     };
 
-    const ro = new ResizeObserver(() => scheduleResize());
-    ro.observe(containerRef.current);
+    const cleanupRef = { current: () => {} };
 
-    const disposable = terminal.onData((input) => {
-      const currentSessionId = activeSessionIdRef.current;
-      if (!currentSessionId) {
-        return;
-      }
-      enqueueTerminalInput({ sessionId: currentSessionId, input });
-    });
-
-    void stabilizeTerminalMetrics();
+    void bootstrap();
 
     return () => {
       cancelled = true;
       setTerminalReady(false);
-      disposable.dispose();
-      ro.disconnect();
+      cleanupRef.current();
       if (resizeFrameRef.current !== null) {
         window.cancelAnimationFrame(resizeFrameRef.current);
         resizeFrameRef.current = null;
       }
-      terminal.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [args.fontFamily, args.fontSize, args.lineHeight]);
+  }, [args.fontFamily, args.fontSize]);
 
   useEffect(() => {
     if (!xtermRef.current) {
@@ -480,23 +513,16 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
 
     void (async () => {
       await waitForAnimationFrames(2);
-      await waitForTerminalFont({
-        fontFamily: args.fontFamily,
-        fontSize: args.fontSize,
-      });
-      await waitForAnimationFrames(1);
       if (cancelled) {
         return;
       }
-      xtermRef.current?.clearTextureAtlas();
-      xtermRef.current?.refresh(0, Math.max(0, (xtermRef.current?.rows ?? 1) - 1));
       resizeActiveSession();
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [args.fontFamily, args.fontSize, args.isVisible, args.activeTabId]);
+  }, [args.isVisible, args.activeTabId]);
 
   useEffect(() => {
     if (!supportsPushTerminalOutput) {
@@ -515,6 +541,42 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       applyTerminalOutput({ sessionId, output });
     });
   }, [supportsPushTerminalOutput]);
+
+  // Subscribe to PTY process exit events to display exit status in the terminal.
+  useEffect(() => {
+    const subscribeSessionExit = window.api?.terminal?.subscribeSessionExit;
+    if (!subscribeSessionExit) {
+      return;
+    }
+
+    return subscribeSessionExit(({ sessionId, exitCode, signal }) => {
+      const tabKey = tabKeyBySessionIdRef.current[sessionId];
+      if (!tabKey) {
+        return;
+      }
+      exitedByTabKeyRef.current[tabKey] = { exitCode, signal };
+
+      // Write a visible exit marker into the terminal.
+      const signalHint = signal ? ` (signal ${signal})` : "";
+      const exitMessage = exitCode === 0
+        ? `\r\n\x1b[2m[process exited with code 0${signalHint}]\x1b[0m\r\n`
+        : `\r\n\x1b[33m[process exited with code ${exitCode}${signalHint}]\x1b[0m\r\n`;
+      xtermRef.current?.write(exitMessage);
+
+      // Append to transcript so it persists across tab switches.
+      transcriptRef.current[tabKey] = appendTerminalText(
+        transcriptRef.current[tabKey] ?? "",
+        exitMessage,
+        TERMINAL_TRANSCRIPT_CHAR_LIMIT,
+      );
+      scheduleTranscriptFlush();
+
+      // Update React state if this is the currently active tab.
+      if (activeTabKeyRef.current === tabKey) {
+        setSessionExited({ exitCode, signal });
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (supportsPushTerminalOutput) {
@@ -580,7 +642,6 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       for (const [tabKey, sessionId] of removedEntries) {
         delete sessionIdByTabKeyRef.current[tabKey];
         delete tabKeyBySessionIdRef.current[sessionId];
-        delete sessionBufferRef.current[tabKey];
         delete scrollPositionByTabKeyRef.current[tabKey];
         delete pendingInputBySessionRef.current[sessionId];
         delete writeInFlightBySessionRef.current[sessionId];
@@ -619,11 +680,10 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
         setBridgeError("");
         sessionIdByTabKeyRef.current[tabKey] = created.sessionId;
         tabKeyBySessionIdRef.current[created.sessionId] = tabKey;
-        sessionBufferRef.current[tabKey] = sessionBufferRef.current[tabKey]
-          ?? transcriptRef.current[tabKey]
-          ?? "";
         pendingInputBySessionRef.current[created.sessionId] = "";
         writeInFlightBySessionRef.current[created.sessionId] = false;
+        delete exitedByTabKeyRef.current[tabKey];
+        setSessionExited(null);
         setRuntimeVersion((value) => value + 1);
       })
       .finally(() => {
@@ -646,12 +706,16 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     xtermRef.current.clear();
 
     if (!activeTabKey) {
+      setSessionExited(null);
       return;
     }
 
-    const buffer = sessionBufferRef.current[activeTabKey]
-      ?? transcriptRef.current[activeTabKey]
-      ?? "";
+    // Restore exit status for the newly active tab.
+    const exitInfo = exitedByTabKeyRef.current[activeTabKey] ?? null;
+    setSessionExited(exitInfo);
+
+    // Unified transcript: single buffer for both live output and persistence.
+    const buffer = transcriptRef.current[activeTabKey] ?? "";
     if (buffer) {
       xtermRef.current.write(buffer);
     }
@@ -661,13 +725,38 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
         xtermRef.current?.scrollToLine(scrollPosition);
       });
     }
+
+    // Auto-focus the terminal after tab switch.
+    // Retry via RAF loop (up to AUTO_FOCUS_MAX_ATTEMPTS frames) to handle
+    // cases where the terminal textarea isn't ready yet after React renders.
+    let focusAttempt = 0;
+    let focusCancelled = false;
+    const container = containerRef.current;
+    function tryFocus() {
+      if (focusCancelled || !container) {
+        return;
+      }
+      const textarea = container.querySelector("textarea");
+      if (textarea) {
+        textarea.focus({ preventScroll: true });
+        return;
+      }
+      focusAttempt += 1;
+      if (focusAttempt < AUTO_FOCUS_MAX_ATTEMPTS) {
+        window.requestAnimationFrame(tryFocus);
+      }
+    }
+    window.requestAnimationFrame(tryFocus);
+
+    return () => {
+      focusCancelled = true;
+    };
   }, [activeTabKey, runtimeVersion, terminalReady]);
 
   function clearActiveTranscript() {
     if (!activeTabKey) {
       return;
     }
-    sessionBufferRef.current[activeTabKey] = "";
     transcriptRef.current[activeTabKey] = "";
     scheduleTranscriptFlush();
     xtermRef.current?.clear();
@@ -695,10 +784,11 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       delete writeInFlightBySessionRef.current[sessionId];
     }
     delete sessionIdByTabKeyRef.current[activeTabKey];
-    delete sessionBufferRef.current[activeTabKey];
     delete scrollPositionByTabKeyRef.current[activeTabKey];
     delete creatingSessionByTabKeyRef.current[activeTabKey];
+    delete exitedByTabKeyRef.current[activeTabKey];
     transcriptRef.current[activeTabKey] = "";
+    setSessionExited(null);
     scheduleTranscriptFlush();
     xtermRef.current?.clear();
     setRuntimeVersion((value) => value + 1);
@@ -710,6 +800,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     clearActiveTranscript,
     containerRef,
     restartActiveSession,
+    sessionExited,
+    terminalReady,
     writeToActiveSession,
   };
 }

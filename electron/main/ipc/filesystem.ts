@@ -170,8 +170,9 @@ export function registerFilesystemHandlers() {
     }
     const targetPath = parsed.data.path;
     if (process.platform === "darwin") {
-      // Try Terminal.app, fall back to iTerm2
+      // Try Ghostty first, then Terminal.app, fall back to iTerm2
       const launchers: Array<{ command: string; commandArgs: string[] }> = [
+        { command: "open", commandArgs: ["-a", "Ghostty", targetPath] },
         { command: "open", commandArgs: ["-a", "Terminal", targetPath] },
         { command: "open", commandArgs: ["-a", "iTerm", targetPath] },
       ];
