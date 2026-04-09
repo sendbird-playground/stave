@@ -219,6 +219,7 @@ export const RuntimeOptionsObjectSchema = z
       .min(1)
       .max(MAX_PROVIDER_TIMEOUT_MS)
       .optional(),
+    claudeBinaryPath: z.string().max(4096).optional(),
     claudePermissionMode: z
       .union([
         z.literal("default"),
@@ -1155,6 +1156,7 @@ export const OpenPathArgsSchema = z
 export const ToolingStatusArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),
+    claudeBinaryPath: z.string().max(4096).optional(),
     codexBinaryPath: z.string().max(4096).optional(),
   })
   .strict();

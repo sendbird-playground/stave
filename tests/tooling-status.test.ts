@@ -52,6 +52,18 @@ describe("tooling status helpers", () => {
     });
   });
 
+  test("parses Claude auth status JSON with a warning preamble", () => {
+    expect(parseClaudeAuthState({
+      ok: true,
+      stdout: `WARNING: stale symlink detected
+{"loggedIn":true,"email":"dev@example.com","orgName":"Acme"}`,
+      stderr: "",
+    })).toEqual({
+      authState: "authenticated",
+      authDetail: "Authenticated · dev@example.com · org: Acme",
+    });
+  });
+
   test("parses Codex MCP JSON output with warning preamble", () => {
     expect(parseCodexMcpServerList({
       stdout: "",

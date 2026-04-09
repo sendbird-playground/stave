@@ -16,6 +16,7 @@ type RuntimeSettings = Pick<
   | "chatStreamingEnabled"
   | "providerDebugStream"
   | "providerTimeoutMs"
+  | "claudeBinaryPath"
   | "claudePermissionMode"
   | "claudeAllowDangerouslySkipPermissions"
   | "claudeSandboxEnabled"
@@ -129,6 +130,7 @@ export function buildProviderRuntimeOptions(args: {
     chatStreamingEnabled: settings.chatStreamingEnabled,
     debug: settings.providerDebugStream,
     providerTimeoutMs: settings.providerTimeoutMs,
+    claudeBinaryPath: settings.claudeBinaryPath || undefined,
     claudePermissionMode: settings.claudePermissionMode,
     claudeAllowDangerouslySkipPermissions: settings.claudeAllowDangerouslySkipPermissions,
     claudeSandboxEnabled: settings.claudeSandboxEnabled,

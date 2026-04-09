@@ -10,6 +10,7 @@ const settings = {
   chatStreamingEnabled: true,
   providerDebugStream: false,
   providerTimeoutMs: 3600000,
+  claudeBinaryPath: "",
   claudePermissionMode: "acceptEdits",
   claudeAllowDangerouslySkipPermissions: false,
   claudeSandboxEnabled: true,
@@ -93,6 +94,21 @@ describe("buildProviderRuntimeOptions", () => {
       codexApprovalPolicy: "never",
       codexFileAccess: "read-only",
       codexPlanMode: true,
+    });
+  });
+
+  test("forwards the Claude binary override into runtime options", () => {
+    expect(buildProviderRuntimeOptions({
+      provider: "claude-code",
+      model: "claude-sonnet-4-6",
+      settings: {
+        ...settings,
+        claudeBinaryPath: "/tmp/claude",
+      },
+      providerSession: null,
+    })).toMatchObject({
+      model: "claude-sonnet-4-6",
+      claudeBinaryPath: "/tmp/claude",
     });
   });
 

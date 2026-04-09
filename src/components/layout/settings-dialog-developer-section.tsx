@@ -182,6 +182,28 @@ export function CodexBinaryPathCard() {
   );
 }
 
+export function ClaudeBinaryPathCard() {
+  const claudeBinaryPath = useAppStore((state) => state.settings.claudeBinaryPath);
+  const updateSettings = useAppStore((state) => state.updateSettings);
+
+  return (
+    <SettingsCard
+      title="Claude Binary"
+      description="Override the path to the local `claude` binary. Leave empty to let Stave auto-select the newest working Claude install it can resolve."
+    >
+      <DraftInput
+        className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
+        placeholder="/usr/local/bin/claude"
+        value={claudeBinaryPath}
+        onCommit={(nextValue) => updateSettings({ patch: { claudeBinaryPath: nextValue } })}
+      />
+      <p className="rounded-md border border-border/80 bg-muted/25 px-3 py-2 text-sm text-muted-foreground">
+        Use this when the shell `claude` auth state and Stave&apos;s Tooling panel disagree, or when multiple Claude installs exist on the same machine.
+      </p>
+    </SettingsCard>
+  );
+}
+
 export function ClaudeRuntimeToolsCard() {
   const [
     settings,

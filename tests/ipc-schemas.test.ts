@@ -245,6 +245,19 @@ describe("provider IPC schemas", () => {
     expect(CliSessionCreateSessionArgsSchema.safeParse({
       workspaceId: "workspace-1",
       workspacePath: "/tmp/project",
+      cliSessionTabId: "cli-0",
+      providerId: "claude-code",
+      contextMode: "workspace",
+      taskId: null,
+      taskTitle: null,
+      cwd: "/tmp/project",
+      runtimeOptions: {
+        claudeBinaryPath: "/tmp/claude",
+      },
+    }).success).toBe(true);
+    expect(CliSessionCreateSessionArgsSchema.safeParse({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/project",
       cliSessionTabId: "cli-1",
       providerId: "codex",
       contextMode: "active-task",

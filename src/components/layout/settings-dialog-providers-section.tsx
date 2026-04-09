@@ -51,6 +51,7 @@ import {
   SwitchField,
 } from "./settings-dialog.shared";
 import {
+  ClaudeBinaryPathCard,
   ClaudeRuntimeToolsCard,
   CodexBinaryPathCard,
 } from "./settings-dialog-developer-section";
@@ -1146,6 +1147,7 @@ export function ProvidersSection() {
             onCheckedChange={(checked) => updateSettings({ patch: { claudeFastMode: checked } })}
           />
             </SettingsCard>
+            <ClaudeBinaryPathCard />
             <ClaudeRuntimeToolsCard />
           </SectionStack>
         </TabsContent>

@@ -1,4 +1,5 @@
 import {
+  buildClaudeEnv,
   cleanupClaudeTask,
   getClaudeCommandCatalog,
   resolveClaudeExecutablePath,
@@ -133,12 +134,30 @@ function clearActiveTaskSessions(args: { taskId: string }) {
   }
 }
 
-function describeClaudeAvailability() {
-  const executablePath = resolveClaudeExecutablePath();
-  const available = executablePath.length > 0;
+function describeClaudeAvailability(args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {}) {
+  const executablePath = resolveClaudeExecutablePath({
+    explicitPath: args.runtimeOptions?.claudeBinaryPath,
+  });
+  if (!executablePath) {
+    setCachedAvailability("claude-code", false);
+    return {
+      available: false,
+      detail: "Claude CLI not found from runtime override, STAVE_CLAUDE_CLI_PATH, CLAUDE_CODE_PATH, login-shell PATH, or home-bin candidates.",
+    };
+  }
+
+  const versionProbe = probeExecutableVersion({
+    executablePath,
+    env: buildClaudeEnv({ executablePath }),
+  });
+  const available = versionProbe.status === 0;
   const detail = available
     ? `Resolved Claude CLI: ${executablePath}`
-    : "Claude CLI not found from STAVE_CLAUDE_CLI_PATH, CLAUDE_CODE_PATH, login-shell PATH, or home-bin candidates.";
+    : [
+        `Claude executable probe failed: ${executablePath}`,
+        versionProbe.stderr,
+        versionProbe.error,
+      ].filter(Boolean).join("\n");
   setCachedAvailability("claude-code", available);
   return { available, detail };
 }
@@ -175,7 +194,7 @@ function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runt
 }
 
 function describeStaveAvailability(args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {}) {
-  const claude = describeClaudeAvailability();
+  const claude = describeClaudeAvailability(args);
   const codex = describeCodexAvailability(args);
   const available = claude.available || codex.available;
   setCachedAvailability("stave", available);
@@ -680,7 +699,7 @@ export const providerRuntime: ProviderRuntime = {
   }),
   checkAvailability: async ({ providerId, runtimeOptions }) => {
     if (providerId === "claude-code") {
-      const result = describeClaudeAvailability();
+      const result = describeClaudeAvailability({ runtimeOptions });
       return { ok: true, ...result };
     }
     if (providerId === "codex") {
