@@ -39,6 +39,7 @@ import {
 import {
   canTakeOverTask,
   getTaskControlOwner,
+  isTaskArchived,
   isTaskManaged,
   formatTaskUpdatedAt,
 } from "@/lib/tasks";
@@ -302,7 +303,7 @@ function ChatPanelHeader() {
   ] = useAppStore(
     useShallow((state) => {
       const activeTask = state.tasks.find(
-        (task) => task.id === state.activeTaskId,
+        (task) => task.id === state.activeTaskId && !isTaskArchived(task),
       );
       return [
         state.activeTaskId,

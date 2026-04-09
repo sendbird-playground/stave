@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  buildWorkspaceSessionState,
+  createWorkspaceSnapshot,
+} from "@/store/workspace-session-state";
 
 interface StorageLike {
   getItem: (key: string) => string | null;
@@ -126,5 +130,83 @@ describe("archive task regression", () => {
     });
     expect(abortCalls).toEqual(["turn-1"]);
     expect(cleanupCalls).toEqual(["task-1"]);
+  });
+
+  test("ignores attempts to reselect an archived task", async () => {
+    const localStorage = createMemoryStorage();
+
+    (globalThis as { window?: unknown }).window = {
+      localStorage,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    };
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" }],
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "",
+      tasks: [{
+        id: "task-1",
+        title: "Archived Task",
+        provider: "codex",
+        updatedAt: "2026-03-10T00:00:00.000Z",
+        unread: false,
+        archivedAt: "2026-03-10T00:10:00.000Z",
+      }],
+      activeSurface: { kind: "task", taskId: "" },
+    });
+
+    useAppStore.getState().selectTask({ taskId: "task-1" });
+
+    const state = useAppStore.getState();
+    expect(state.activeTaskId).toBe("");
+    expect(state.activeSurface).toEqual({ kind: "task", taskId: "" });
+  });
+
+  test("normalizes archived active task selection out of restored workspace state", () => {
+    const session = buildWorkspaceSessionState({
+      snapshot: createWorkspaceSnapshot({
+        activeTaskId: "task-archived",
+        tasks: [{
+          id: "task-archived",
+          title: "Archived Task",
+          provider: "codex",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+          archivedAt: "2026-03-10T00:10:00.000Z",
+        }],
+        messagesByTask: {
+          "task-archived": [{
+            id: "task-archived-m-1",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "persisted",
+            isStreaming: false,
+            parts: [{
+              type: "text",
+              text: "persisted",
+            }],
+          }],
+        },
+        promptDraftByTask: {},
+        editorTabs: [],
+        activeEditorTabId: null,
+        terminalTabs: [],
+        activeTerminalTabId: null,
+        cliSessionTabs: [],
+        activeCliSessionTabId: null,
+        activeSurface: { kind: "task", taskId: "task-archived" },
+        providerSessionByTask: {},
+      }),
+    });
+
+    expect(session.activeTaskId).toBe("");
+    expect(session.activeSurface).toEqual({ kind: "task", taskId: "" });
   });
 });

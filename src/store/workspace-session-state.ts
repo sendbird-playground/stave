@@ -133,7 +133,7 @@ function resolveActiveSurface(args: {
   activeCliSessionTabId: string | null;
   activeSurface: WorkspaceActiveSurface;
 }) {
-  const hasTask = (taskId: string) => args.tasks.some((task) => task.id === taskId);
+  const hasTask = (taskId: string) => args.tasks.some((task) => task.id === taskId && !isTaskArchived(task));
   const hasCliSession = (cliSessionTabId: string) =>
     args.cliSessionTabs.some((tab) => tab.id === cliSessionTabId);
 
@@ -152,7 +152,7 @@ function resolveActiveSurface(args: {
     return { kind: "cli-session", cliSessionTabId: args.activeCliSessionTabId } satisfies WorkspaceActiveSurface;
   }
 
-  const fallbackTaskId = args.tasks[0]?.id ?? "";
+  const fallbackTaskId = args.tasks.find((task) => !isTaskArchived(task))?.id ?? "";
   if (fallbackTaskId) {
     return { kind: "task", taskId: fallbackTaskId } satisfies WorkspaceActiveSurface;
   }
@@ -163,6 +163,18 @@ function resolveActiveSurface(args: {
   }
 
   return { kind: "task", taskId: "" } satisfies WorkspaceActiveSurface;
+}
+
+function resolveActiveTaskId(args: {
+  tasks: Task[];
+  activeTaskId: string;
+}) {
+  const selectedTask = args.tasks.find((task) => task.id === args.activeTaskId && !isTaskArchived(task)) ?? null;
+  if (selectedTask) {
+    return selectedTask.id;
+  }
+
+  return args.tasks.find((task) => !isTaskArchived(task))?.id ?? "";
 }
 
 export function buildNativeSessionReadyByTask(args: {
@@ -375,7 +387,10 @@ export function buildWorkspaceSessionState(args: {
       .filter((turn) => !turn.completedAt)
       .map((turn) => [turn.taskId, turn.id] as const)
   ) as Record<string, string | undefined>;
-  const activeTaskId = args.snapshot?.activeTaskId ?? empty.activeTaskId;
+  const activeTaskId = resolveActiveTaskId({
+    tasks,
+    activeTaskId: args.snapshot?.activeTaskId ?? empty.activeTaskId,
+  });
   const activeSurface = resolveActiveSurface({
     tasks,
     activeTaskId,
@@ -451,7 +466,10 @@ export function buildWorkspaceSessionStateFromShell(args: {
       .filter((turn) => !turn.completedAt)
       .map((turn) => [turn.taskId, turn.id] as const)
   ) as Record<string, string | undefined>;
-  const activeTaskId = args.shell?.activeTaskId ?? empty.activeTaskId;
+  const activeTaskId = resolveActiveTaskId({
+    tasks,
+    activeTaskId: args.shell?.activeTaskId ?? empty.activeTaskId,
+  });
   const activeSurface = resolveActiveSurface({
     tasks,
     activeTaskId,

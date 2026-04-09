@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent } from "rea
 import { ArrowRightCircle, ClipboardCheck, Copy, Minus, Maximize2 } from "lucide-react";
 import { Button, Textarea, WaveIndicator } from "@/components/ui";
 import { MessageResponse } from "@/components/ai-elements";
-import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
+import { getTaskControlOwner, isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import { APPROVE_PLAN_MESSAGE } from "@/lib/providers/plan-response";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { useAppStore } from "@/store/app.store";
@@ -54,7 +54,7 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const [activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexPlanMode, sendUserMessage, createTask, updatePromptDraft, clearTaskProviderSession] = useAppStore(
     useShallow((state) => [
       state.activeTaskId,
-      state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
+      state.tasks.find((task) => task.id === state.activeTaskId && !isTaskArchived(task)) ?? null,
       state.draftProvider,
       state.promptDraftByTask[state.activeTaskId] ?? EMPTY_PROMPT_DRAFT,
       state.settings.claudePermissionMode,
