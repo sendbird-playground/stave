@@ -123,13 +123,28 @@ describe("skill discovery", () => {
     )).toBeTrue();
   });
 
+  test("scans the shared skills root directory directly without appending /skills", async () => {
+    const sharedRoot = path.join(tempHome, "my-shared-skills");
+    await writeSkill(sharedRoot, "direct-skill", "skill placed directly in shared root");
+
+    const result = await discoverSkillCatalog({ sharedSkillsHome: sharedRoot });
+
+    expect(result.ok).toBeTrue();
+    expect(result.catalog.skills.map((skill) => skill.slug)).toContain("direct-skill");
+    expect(result.catalog.roots.some((root) =>
+      root.provider === "shared"
+      && root.path === sharedRoot
+      && root.detail === "Shared skills root configured in Settings."
+    )).toBeTrue();
+  });
+
   test("prefers the Settings shared root override over the environment root", async () => {
-    const sharedRootFromEnv = path.join(tempHome, "env-shared-home");
-    const sharedRootFromSettings = path.join(tempHome, "settings-shared-home");
+    const sharedRootFromEnv = path.join(tempHome, "env-shared-root");
+    const sharedRootFromSettings = path.join(tempHome, "settings-shared-root");
 
     process.env.STAVE_SHARED_SKILLS_HOME = sharedRootFromEnv;
-    await writeSkill(path.join(sharedRootFromEnv, "skills"), "env-shared", "env shared skill");
-    await writeSkill(path.join(sharedRootFromSettings, "skills"), "settings-shared", "settings shared skill");
+    await writeSkill(sharedRootFromEnv, "env-shared", "env shared skill");
+    await writeSkill(sharedRootFromSettings, "settings-shared", "settings shared skill");
 
     const result = await discoverSkillCatalog({
       sharedSkillsHome: sharedRootFromSettings,
@@ -141,7 +156,7 @@ describe("skill discovery", () => {
     expect(result.catalog.skills.map((skill) => skill.slug)).not.toContain("env-shared");
     expect(result.catalog.roots.some((root) =>
       root.provider === "shared"
-      && root.path === path.join(sharedRootFromSettings, "skills")
+      && root.path === sharedRootFromSettings
       && root.detail === "Shared skills root configured in Settings."
     )).toBeTrue();
   });

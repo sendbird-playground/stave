@@ -5347,11 +5347,17 @@ export const useAppStore = create<AppState>()(
             ...(workspacePath ? { workspacePath } : {}),
             ...(sharedSkillsHome ? { sharedSkillsHome } : {}),
           });
+          // Use the frontend-normalized `workspacePath` and `sharedSkillsHome`
+          // rather than the backend-expanded values so that the comparison keys
+          // in component useEffects stay consistent (the backend expands `~`
+          // and resolves symlinks, but the component compares against the raw
+          // settings string, which would otherwise never match and cause an
+          // infinite re-fetch loop).
           set(() => ({
             skillCatalog: {
               status: result.ok ? "ready" : "error",
-              workspacePath: result.catalog.workspacePath,
-              sharedSkillsHome: result.catalog.sharedSkillsHome,
+              workspacePath,
+              sharedSkillsHome,
               fetchedAt: result.catalog.fetchedAt,
               skills: result.catalog.skills,
               roots: result.catalog.roots,
