@@ -166,9 +166,12 @@ interface WindowProviderApi {
   suggestPRDescription?: (args: {
     cwd?: string;
     baseBranch?: string;
+    /** Workspace branch from the store — used as the authoritative branch
+     *  name and for cwd validation on the main-process side. */
+    headBranch?: string;
     promptTemplate?: string;
     workspaceContext?: string;
-  }) => Promise<{ ok: boolean; title?: string; body?: string }>;
+  }) => Promise<{ ok: boolean; title?: string; body?: string; headBranch?: string }>;
 }
 
 interface WindowFsApi {
