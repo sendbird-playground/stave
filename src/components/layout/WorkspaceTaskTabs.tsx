@@ -1,4 +1,4 @@
-import { Check, Copy, Ellipsis, Plus, X } from "lucide-react";
+import { Check, Copy, Ellipsis, Plus, SquareTerminal, X } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
@@ -213,19 +213,98 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
   );
 });
 
+const WorkspaceTerminalStripTab = memo(function WorkspaceTerminalStripTab(args: {
+  tab: ReturnType<typeof useAppStore.getState>["terminalTabs"][number];
+  isActive: boolean;
+  draggingTabId: string | null;
+  dropTargetTabId: string | null;
+  onSelectTab: (tabId: string) => void;
+  onRenameTab: (tab: { id: string; title: string }) => void;
+  onCloseTab: (tabId: string) => void;
+  onDragStart: (event: DragEvent<HTMLDivElement>, tabId: string) => void;
+  onDragEnd: () => void;
+  onDragOver: (event: DragEvent<HTMLDivElement>, tabId: string) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>, tabId: string) => void;
+}) {
+  const buttonVisibility = args.isActive
+    ? "opacity-100"
+    : "opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150";
+
+  return (
+    <div
+      draggable
+      onDragStart={(event) => args.onDragStart(event, args.tab.id)}
+      onDragEnd={args.onDragEnd}
+      onDragOver={(event) => args.onDragOver(event, args.tab.id)}
+      onDrop={(event) => args.onDrop(event, args.tab.id)}
+      className={cn(
+        "group flex items-center gap-1 border-b-[2.5px] px-3 transition-colors",
+        "cursor-grab",
+        args.isActive
+          ? "border-b-primary bg-background shadow-[1px_0_3px_-1px_rgba(0,0,0,0.1),-1px_0_3px_-1px_rgba(0,0,0,0.1)]"
+          : "border-b-transparent hover:bg-background/60",
+        args.draggingTabId === args.tab.id && "cursor-grabbing opacity-70",
+        args.dropTargetTabId === args.tab.id && args.draggingTabId && args.draggingTabId !== args.tab.id && "bg-primary/5",
+      )}
+    >
+      <button
+        type="button"
+        className="flex min-w-0 items-center gap-2"
+        onClick={() => args.onSelectTab(args.tab.id)}
+      >
+        <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+          <SquareTerminal className="size-4 text-muted-foreground" />
+        </span>
+        <span className="max-w-48 truncate text-sm font-medium">{args.tab.title}</span>
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
+            aria-label={`terminal-menu-${args.tab.id}`}
+          >
+            <Ellipsis className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem onSelect={() => args.onRenameTab({ id: args.tab.id, title: args.tab.title })}>
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => args.onCloseTab(args.tab.id)}
+          >
+            Close
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+});
+
 export function WorkspaceTaskTabs() {
   const [taskHistoryOpen, setTaskHistoryOpen] = useState(false);
   const [taskToArchive, setTaskToArchive] = useState<{ id: string; title: string } | null>(null);
   const [taskToRename, setTaskToRename] = useState<{ id: string; title: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [terminalToRename, setTerminalToRename] = useState<{ id: string; title: string } | null>(null);
+  const [terminalRenameValue, setTerminalRenameValue] = useState("");
   const [taskToViewSession, setTaskToViewSession] = useState<{ id: string; title: string } | null>(null);
   const [copiedSessionIdKey, setCopiedSessionIdKey] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dropTargetTaskId, setDropTargetTaskId] = useState<string | null>(null);
+  const [draggingTerminalTabId, setDraggingTerminalTabId] = useState<string | null>(null);
+  const [dropTargetTerminalTabId, setDropTargetTerminalTabId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const terminalRenameInputRef = useRef<HTMLInputElement | null>(null);
   const [
     tasks,
     activeTaskId,
+    terminalTabs,
+    activeTerminalTabId,
     selectTask,
     createTask,
     archiveTask,
@@ -233,9 +312,16 @@ export function WorkspaceTaskTabs() {
     exportTask,
     restoreTask,
     reorderTasks,
+    createTerminalTab,
+    setActiveTerminalTab,
+    renameTerminalTab,
+    reorderTerminalTabs,
+    closeTerminalTab,
   ] = useAppStore(useShallow((state) => [
     state.tasks,
     state.activeTaskId,
+    state.terminalTabs,
+    state.activeTerminalTabId,
     state.selectTask,
     state.createTask,
     state.archiveTask,
@@ -243,6 +329,11 @@ export function WorkspaceTaskTabs() {
     state.exportTask,
     state.restoreTask,
     state.reorderTasks,
+    state.createTerminalTab,
+    state.setActiveTerminalTab,
+    state.renameTerminalTab,
+    state.reorderTerminalTabs,
+    state.closeTerminalTab,
   ] as const));
 
   const visibleTasks = tasks.filter((task) => !isTaskArchived(task));
@@ -272,6 +363,18 @@ export function WorkspaceTaskTabs() {
   }, [taskToRename]);
 
   useEffect(() => {
+    if (!terminalToRename) {
+      return;
+    }
+    setTerminalRenameValue(terminalToRename.title);
+    const timer = window.setTimeout(() => {
+      terminalRenameInputRef.current?.focus();
+      terminalRenameInputRef.current?.select();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [terminalToRename]);
+
+  useEffect(() => {
     if (!taskToViewSession || !copiedSessionIdKey) {
       return;
     }
@@ -292,6 +395,19 @@ export function WorkspaceTaskTabs() {
     setTaskToRename(null);
   }
 
+  function handleTerminalRenameConfirm() {
+    if (!terminalToRename) {
+      return;
+    }
+    const nextTitle = terminalRenameValue.trim();
+    if (!nextTitle || nextTitle === terminalToRename.title) {
+      setTerminalToRename(null);
+      return;
+    }
+    renameTerminalTab({ tabId: terminalToRename.id, title: nextTitle });
+    setTerminalToRename(null);
+  }
+
   function handleTaskDragStart(event: DragEvent<HTMLDivElement>, taskId: string) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", taskId);
@@ -306,6 +422,16 @@ export function WorkspaceTaskTabs() {
     }
     setDropTargetTaskId(null);
     setDraggingTaskId(null);
+  }
+
+  function handleTerminalTabDrop(event: DragEvent<HTMLDivElement>, overTabId: string) {
+    event.preventDefault();
+    const activeTabId = draggingTerminalTabId ?? event.dataTransfer.getData("text/plain");
+    if (activeTabId && activeTabId !== overTabId) {
+      reorderTerminalTabs({ fromTabId: activeTabId, toTabId: overTabId });
+    }
+    setDropTargetTerminalTabId(null);
+    setDraggingTerminalTabId(null);
   }
 
   async function copySessionIdentifier(args: { key: string; value: string }) {
@@ -362,9 +488,56 @@ export function WorkspaceTaskTabs() {
                   />
                 );
               })}
+              {visibleTasks.length > 0 && terminalTabs.length > 0 ? (
+                <div className="mx-1 my-2 w-px shrink-0 bg-border/70" />
+              ) : null}
+              {terminalTabs.map((tab) => (
+                <WorkspaceTerminalStripTab
+                  key={tab.id}
+                  tab={tab}
+                  isActive={tab.id === activeTerminalTabId}
+                  draggingTabId={draggingTerminalTabId}
+                  dropTargetTabId={dropTargetTerminalTabId}
+                  onSelectTab={(tabId) => setActiveTerminalTab({ tabId, openDock: true })}
+                  onRenameTab={setTerminalToRename}
+                  onCloseTab={(tabId) => closeTerminalTab({ tabId })}
+                  onDragStart={(event, tabId) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", tabId);
+                    setDraggingTerminalTabId(tabId);
+                  }}
+                  onDragEnd={() => {
+                    setDraggingTerminalTabId(null);
+                    setDropTargetTerminalTabId(null);
+                  }}
+                  onDragOver={(event, tabId) => {
+                    event.preventDefault();
+                    if (draggingTerminalTabId && draggingTerminalTabId !== tabId) {
+                      setDropTargetTerminalTabId(tabId);
+                    }
+                  }}
+                  onDrop={(event, tabId) => handleTerminalTabDrop(event, tabId)}
+                />
+              ))}
             </div>
           </div>
           <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 self-center rounded-sm p-0 text-muted-foreground"
+                  onClick={() => createTerminalTab()}
+                  aria-label="new-terminal-tab"
+                >
+                  <SquareTerminal className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <span>New Terminal</span>
+              </TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -450,6 +623,34 @@ export function WorkspaceTaskTabs() {
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setTaskToRename(null)}>Cancel</Button>
               <Button onClick={handleRenameConfirm}>Rename</Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+      {terminalToRename ? (
+        <div className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")} onMouseDown={() => setTerminalToRename(null)}>
+          <Card className="w-full max-w-md rounded-lg border-border/80 bg-card p-4 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
+            <h3 className="text-base font-semibold text-foreground">Rename Terminal</h3>
+            <p className="mt-2 text-sm text-muted-foreground">Enter a new name for this terminal tab.</p>
+            <Input
+              ref={terminalRenameInputRef}
+              className="mt-3 h-10 rounded-sm border-border/80 bg-background"
+              value={terminalRenameValue}
+              onChange={(event) => setTerminalRenameValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  handleTerminalRenameConfirm();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setTerminalToRename(null);
+                }
+              }}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setTerminalToRename(null)}>Cancel</Button>
+              <Button onClick={handleTerminalRenameConfirm}>Rename</Button>
             </div>
           </Card>
         </div>

@@ -1,12 +1,15 @@
 import { ipcMain, webContents } from "electron";
 import { randomUUID } from "node:crypto";
 import * as pty from "node-pty";
+import { TerminalCreateSessionArgsSchema } from "./schemas";
 import { deleteTerminalSession, getTerminalSession, setTerminalSession } from "../state";
 import { resolveCommandCwd, runCommand } from "../utils/command";
 
 function createTerminalSession(args: {
+  workspacePath: string;
+  taskId: string | null;
   shell?: string;
-  cwd?: string;
+  cwd: string;
   cols?: number;
   rows?: number;
   deliveryMode?: "poll" | "push";
@@ -20,8 +23,12 @@ function createTerminalSession(args: {
     name: "xterm-color",
     cols,
     rows,
-    cwd: resolveCommandCwd({ cwd: args.cwd }),
-    env: process.env as Record<string, string>,
+    cwd: resolveCommandCwd({ cwd: args.cwd || args.workspacePath }),
+    env: {
+      ...(process.env as Record<string, string>),
+      STAVE_WORKSPACE_PATH: args.workspacePath,
+      STAVE_TASK_ID: args.taskId ?? "",
+    },
   });
 
   const sessionId = randomUUID();
@@ -91,21 +98,22 @@ export function registerTerminalHandlers() {
     return runCommand({ command: args.command, cwd: args.cwd });
   });
 
-  ipcMain.handle("terminal:create-session", (event, args: {
-    cwd?: string;
-    shell?: string;
-    cols?: number;
-    rows?: number;
-    deliveryMode?: "poll" | "push";
-  }) => {
+  ipcMain.handle("terminal:create-session", (event, args) => {
+    const parsed = TerminalCreateSessionArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: parsed.error.flatten().formErrors.join("\n") };
+    }
+    const request = parsed.data;
     const sessionId = createTerminalSession({
-      cwd: args.cwd,
-      shell: args.shell,
-      cols: args.cols,
-      rows: args.rows,
-      deliveryMode: args.deliveryMode,
+      workspacePath: request.workspacePath,
+      taskId: request.taskId,
+      cwd: request.cwd,
+      shell: request.shell,
+      cols: request.cols,
+      rows: request.rows,
+      deliveryMode: request.deliveryMode,
       ownerWebContentsId:
-        args.deliveryMode === "push" ? event.sender.id : null,
+        request.deliveryMode === "push" ? event.sender.id : null,
     });
     return { ok: true, sessionId };
   });

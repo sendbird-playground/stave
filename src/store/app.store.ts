@@ -94,6 +94,10 @@ import {
   reorderTasksWithinFilter,
   type TaskFilter,
 } from "@/lib/tasks";
+import {
+  getTerminalTabDefaultTitle,
+  type WorkspaceTerminalTab,
+} from "@/lib/terminal/types";
 import { resolveSkillSelections } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry, SkillCatalogRoot } from "@/lib/skills/types";
 import { replayProviderEventsToTaskState } from "@/lib/session/provider-event-replay";
@@ -791,6 +795,8 @@ interface AppState {
   settings: AppSettings;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
+  terminalTabs: WorkspaceTerminalTab[];
+  activeTerminalTabId: string | null;
   pendingCloseEditorTabId: string | null;
   pendingEditorSelection: { tabId: string; line: number; column?: number } | null;
   projectName: string | null;
@@ -871,6 +877,15 @@ interface AppState {
   rollbackToCompactBoundary: (args: { taskId: string; gitRef: string; trigger?: string }) => Promise<void>;
   archiveTask: (args: { taskId: string }) => void;
   setTaskProvider: (args: { taskId: string; provider: ProviderId }) => void;
+  createTerminalTab: (args?: {
+    cwd?: string;
+    linkedTaskId?: string | null;
+    title?: string;
+  }) => string | null;
+  setActiveTerminalTab: (args: { tabId: string | null; openDock?: boolean }) => void;
+  renameTerminalTab: (args: { tabId: string; title: string }) => void;
+  reorderTerminalTabs: (args: { fromTabId: string; toTabId: string }) => void;
+  closeTerminalTab: (args: { tabId: string }) => void;
   setWorkspaceBranch: (args: { workspaceId: string; branch: string }) => void;
   /** Fetch PR status for a single workspace from GitHub. */
   fetchWorkspacePrStatus: (args: { workspaceId: string }) => Promise<void>;
@@ -1423,6 +1438,75 @@ function findTaskById(state: Pick<AppState, "tasks">, taskId: string) {
   return state.tasks.find((task) => task.id === taskId) ?? null;
 }
 
+function findActiveTerminalLinkableTask(args: Pick<AppState, "tasks" | "activeTaskId">) {
+  if (!args.activeTaskId) {
+    return null;
+  }
+  const task = findTaskById(args, args.activeTaskId);
+  if (!task || isTaskArchived(task)) {
+    return null;
+  }
+  return task;
+}
+
+function findTerminalTabById(state: Pick<AppState, "terminalTabs">, tabId: string) {
+  return state.terminalTabs.find((tab) => tab.id === tabId) ?? null;
+}
+
+function createTerminalTabRecord(args: {
+  cwd: string;
+  linkedTaskId: string | null;
+  linkedTaskTitle?: string | null;
+  title?: string;
+  existingTitles?: string[];
+}) {
+  const normalizedTitle = args.title?.trim();
+  const baseTitle = normalizedTitle || getTerminalTabDefaultTitle({
+    cwd: args.cwd,
+    linkedTaskTitle: args.linkedTaskTitle,
+  });
+  const title = normalizedTitle
+    ? normalizedTitle
+    : (() => {
+        const existingTitles = args.existingTitles ?? [];
+        if (!existingTitles.includes(baseTitle)) {
+          return baseTitle;
+        }
+        let suffix = 2;
+        while (existingTitles.includes(`${baseTitle} ${suffix}`)) {
+          suffix += 1;
+        }
+        return `${baseTitle} ${suffix}`;
+      })();
+  return {
+    id: crypto.randomUUID(),
+    title,
+    linkedTaskId: args.linkedTaskId,
+    backend: "xterm" as const,
+    cwd: args.cwd,
+    createdAt: Date.now(),
+  } satisfies WorkspaceTerminalTab;
+}
+
+function moveItemById<T extends { id: string }>(args: {
+  items: T[];
+  fromId: string;
+  toId: string;
+}) {
+  const fromIndex = args.items.findIndex((item) => item.id === args.fromId);
+  const toIndex = args.items.findIndex((item) => item.id === args.toId);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+    return args.items;
+  }
+  const nextItems = [...args.items];
+  const [moved] = nextItems.splice(fromIndex, 1);
+  if (!moved) {
+    return args.items;
+  }
+  nextItems.splice(toIndex, 0, moved);
+  return nextItems;
+}
+
 function isManagedTaskReadOnly(args: {
   state: Pick<AppState, "tasks">;
   taskId: string;
@@ -1452,6 +1536,7 @@ function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspa
     return 0;
   }
   return snapshot.tasks.length
+    + (snapshot.terminalTabs?.length ?? 0)
     + Object.values(snapshot.messageCountByTask).reduce((sum, count) => sum + count, 0);
 }
 
@@ -1460,6 +1545,7 @@ function summarizeWorkspaceSession(session?: WorkspaceSessionState | null) {
     return 0;
   }
   return session.tasks.length
+    + (session.terminalTabs?.length ?? 0)
     + Object.values(session.messageCountByTask).reduce((sum, count) => sum + count, 0);
 }
 
@@ -2110,6 +2196,8 @@ export const useAppStore = create<AppState>()(
             promptDraftByTask: empty.promptDraftByTask,
             editorTabs: empty.editorTabs,
             activeEditorTabId: empty.activeEditorTabId,
+            terminalTabs: empty.terminalTabs,
+            activeTerminalTabId: empty.activeTerminalTabId,
             providerSessionByTask: empty.providerSessionByTask,
           });
           workspaceState = buildWorkspaceSessionState({
@@ -2120,6 +2208,8 @@ export const useAppStore = create<AppState>()(
               promptDraftByTask: empty.promptDraftByTask,
               editorTabs: empty.editorTabs,
               activeEditorTabId: empty.activeEditorTabId,
+              terminalTabs: empty.terminalTabs,
+              activeTerminalTabId: empty.activeTerminalTabId,
               providerSessionByTask: empty.providerSessionByTask,
             }),
           });
@@ -2155,6 +2245,14 @@ export const useAppStore = create<AppState>()(
           workspacePathById: nextProject.workspacePathById,
           workspaceDefaultById: nextProject.workspaceDefaultById,
           ...workspaceState,
+          layout: {
+            ...get().layout,
+            terminalDocked: Boolean(workspaceState.activeTerminalTabId),
+            editorDiffMode: resolveEditorDiffMode({
+              editorTabs: workspaceState.editorTabs,
+              activeEditorTabId: workspaceState.activeEditorTabId,
+            }),
+          },
           projectName: args.projectName,
           projectFiles: args.files,
           workspaceFileCacheByPath: nextWorkspaceFileCacheByPath,
@@ -2669,6 +2767,8 @@ export const useAppStore = create<AppState>()(
       settings: defaultSettings,
       editorTabs: [],
       activeEditorTabId: null,
+      terminalTabs: [],
+      activeTerminalTabId: null,
       pendingCloseEditorTabId: null,
       pendingEditorSelection: null,
       projectName: null,
@@ -2777,6 +2877,8 @@ export const useAppStore = create<AppState>()(
             promptDraftByTask: {},
             editorTabs: [],
             activeEditorTabId: null,
+            terminalTabs: [],
+            activeTerminalTabId: null,
             providerSessionByTask: {},
           });
           initialRows = await listWorkspaceSummaries();
@@ -2973,6 +3075,8 @@ export const useAppStore = create<AppState>()(
                   promptDraftByTask: {},
                   editorTabs: [],
                   activeEditorTabId: null,
+                  terminalTabs: [],
+                  activeTerminalTabId: null,
                   providerSessionByTask: {},
                 });
               }
@@ -3119,6 +3223,16 @@ export const useAppStore = create<AppState>()(
               tasks: workspaceState.tasks,
             }),
             ...workspaceState,
+            layout: {
+              ...state.layout,
+              terminalDocked: workspaceState.activeTerminalTabId
+                ? true
+                : state.layout.terminalDocked,
+              editorDiffMode: resolveEditorDiffMode({
+                editorTabs: workspaceState.editorTabs,
+                activeEditorTabId: workspaceState.activeEditorTabId,
+              }),
+            },
           };
         });
         if (loadedWorkspaceShellState && (preferLoadedWorkspaceState || !cachedWorkspaceState)) {
@@ -3215,6 +3329,8 @@ export const useAppStore = create<AppState>()(
               promptDraftByTask: {},
               editorTabs: [],
               activeEditorTabId: null,
+              terminalTabs: [],
+              activeTerminalTabId: null,
               providerSessionByTask: {},
             });
           }
@@ -3368,6 +3484,8 @@ export const useAppStore = create<AppState>()(
           workspaceInformation: state.workspaceInformation,
           editorTabs: state.editorTabs,
           activeEditorTabId: state.activeEditorTabId,
+          terminalTabs: state.terminalTabs,
+          activeTerminalTabId: state.activeTerminalTabId,
           providerSessionByTask: state.providerSessionByTask,
         });
 
@@ -3393,6 +3511,8 @@ export const useAppStore = create<AppState>()(
           workspaceInformation: state.workspaceInformation,
           editorTabs: state.editorTabs,
           activeEditorTabId: state.activeEditorTabId,
+          terminalTabs: state.terminalTabs,
+          activeTerminalTabId: state.activeTerminalTabId,
           providerSessionByTask: state.providerSessionByTask,
         });
 
@@ -3739,6 +3859,8 @@ export const useAppStore = create<AppState>()(
           promptDraftByTask: empty.promptDraftByTask,
           editorTabs: empty.editorTabs,
           activeEditorTabId: empty.activeEditorTabId,
+          terminalTabs: empty.terminalTabs,
+          activeTerminalTabId: empty.activeTerminalTabId,
           providerSessionByTask: {
             [seededTask.id]: {},
           },
@@ -3752,6 +3874,8 @@ export const useAppStore = create<AppState>()(
           promptDraftByTask: snapshot.promptDraftByTask ?? {},
           editorTabs: snapshot.editorTabs ?? [],
           activeEditorTabId: snapshot.activeEditorTabId ?? null,
+          terminalTabs: snapshot.terminalTabs ?? [],
+          activeTerminalTabId: snapshot.activeTerminalTabId ?? null,
           providerSessionByTask: snapshot.providerSessionByTask ?? {},
         });
         const workspaceState = buildWorkspaceSessionState({ snapshot });
@@ -4133,6 +4257,16 @@ export const useAppStore = create<AppState>()(
               workspaceRuntimeCacheById: nextRuntimeCacheById,
               taskWorkspaceIdById: nextTaskWorkspaceIdById,
               ...workspaceState,
+              layout: {
+                ...nextState.layout,
+                terminalDocked: workspaceState.activeTerminalTabId
+                  ? true
+                  : nextState.layout.terminalDocked,
+                editorDiffMode: resolveEditorDiffMode({
+                  editorTabs: workspaceState.editorTabs,
+                  activeEditorTabId: workspaceState.activeEditorTabId,
+                }),
+              },
             };
           });
           return;
@@ -4249,6 +4383,9 @@ export const useAppStore = create<AppState>()(
             ...workspaceState,
             layout: {
               ...state.layout,
+              terminalDocked: workspaceState.activeTerminalTabId
+                ? true
+                : state.layout.terminalDocked,
               editorDiffMode: resolveEditorDiffMode({
                 editorTabs: workspaceState.editorTabs,
                 activeEditorTabId: workspaceState.activeEditorTabId,
@@ -5346,9 +5483,15 @@ export const useAppStore = create<AppState>()(
           );
           const shouldSwitch = state.activeTaskId === taskId;
           const fallbackTaskId = getArchiveFallbackTaskId({ tasks: state.tasks, archivedTaskId: taskId });
+          const nextTerminalTabs = state.terminalTabs.map((tab) =>
+            tab.linkedTaskId === taskId
+              ? { ...tab, linkedTaskId: null }
+              : tab,
+          );
           return {
             tasks: nextTasks,
             activeTaskId: shouldSwitch ? fallbackTaskId : state.activeTaskId,
+            terminalTabs: nextTerminalTabs,
             messagesByTask: interrupted.messagesByTask,
             messageCountByTask: {
               ...state.messageCountByTask,
@@ -5407,6 +5550,119 @@ export const useAppStore = create<AppState>()(
           };
         });
         void window.api?.provider?.cleanupTask?.({ taskId });
+      },
+      createTerminalTab: (args) => {
+        const state = get();
+        const workspaceId = state.activeWorkspaceId;
+        const workspacePath = state.workspacePathById[workspaceId] ?? state.projectPath ?? "";
+        const cwd = args?.cwd?.trim() || workspacePath;
+        if (!workspaceId || !cwd) {
+          return null;
+        }
+
+        const linkedTask = args?.linkedTaskId === undefined
+          ? findActiveTerminalLinkableTask(state)
+          : (args.linkedTaskId ? findTaskById(state, args.linkedTaskId) : null);
+        const nextTab = createTerminalTabRecord({
+          cwd,
+          linkedTaskId: linkedTask && !isTaskArchived(linkedTask) ? linkedTask.id : null,
+          linkedTaskTitle: linkedTask && !isTaskArchived(linkedTask) ? linkedTask.title : null,
+          title: args?.title,
+          existingTitles: state.terminalTabs.map((tab) => tab.title),
+        });
+
+        set((current) => ({
+          terminalTabs: [...current.terminalTabs, nextTab],
+          activeTerminalTabId: nextTab.id,
+          layout: {
+            ...current.layout,
+            terminalDocked: true,
+          },
+          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(current),
+        }));
+
+        return nextTab.id;
+      },
+      setActiveTerminalTab: ({ tabId, openDock }) => {
+        set((state) => {
+          if (tabId !== null && !findTerminalTabById(state, tabId)) {
+            return state;
+          }
+          const shouldUpdateDock = openDock && !state.layout.terminalDocked;
+          if (state.activeTerminalTabId === tabId && !shouldUpdateDock) {
+            return state;
+          }
+          return {
+            activeTerminalTabId: tabId,
+            ...(shouldUpdateDock ? {
+              layout: {
+                ...state.layout,
+                terminalDocked: true,
+              },
+            } : {}),
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
+      },
+      renameTerminalTab: ({ tabId, title }) => {
+        const normalizedTitle = title.trim();
+        if (!normalizedTitle) {
+          return;
+        }
+        set((state) => {
+          const tab = findTerminalTabById(state, tabId);
+          if (!tab || tab.title === normalizedTitle) {
+            return state;
+          }
+          return {
+            terminalTabs: state.terminalTabs.map((item) =>
+              item.id === tabId
+                ? { ...item, title: normalizedTitle }
+                : item,
+            ),
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
+      },
+      reorderTerminalTabs: ({ fromTabId, toTabId }) => {
+        set((state) => {
+          const nextTabs = moveItemById({
+            items: state.terminalTabs,
+            fromId: fromTabId,
+            toId: toTabId,
+          });
+          if (nextTabs === state.terminalTabs) {
+            return state;
+          }
+          return {
+            terminalTabs: nextTabs,
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
+      },
+      closeTerminalTab: ({ tabId }) => {
+        set((state) => {
+          const closingIndex = state.terminalTabs.findIndex((tab) => tab.id === tabId);
+          if (closingIndex < 0) {
+            return state;
+          }
+          const nextTabs = state.terminalTabs.filter((tab) => tab.id !== tabId);
+          const fallbackTab = nextTabs[Math.min(closingIndex, Math.max(nextTabs.length - 1, 0))] ?? null;
+          const nextActiveTerminalTabId = state.activeTerminalTabId === tabId
+            ? fallbackTab?.id ?? null
+            : state.activeTerminalTabId;
+          return {
+            terminalTabs: nextTabs,
+            activeTerminalTabId: nextActiveTerminalTabId,
+            layout: nextTabs.length === 0
+              ? {
+                  ...state.layout,
+                  terminalDocked: false,
+                }
+              : state.layout,
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
       },
       setWorkspaceBranch: ({ workspaceId, branch }) =>
         set((state) => {
@@ -7024,6 +7280,8 @@ export const useAppStore = create<AppState>()(
                 workspaceInformation: persistedInactiveWorkspaceSession.session.workspaceInformation,
                 editorTabs: persistedInactiveWorkspaceSession.session.editorTabs,
                 activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
+                terminalTabs: persistedInactiveWorkspaceSession.session.terminalTabs,
+                activeTerminalTabId: persistedInactiveWorkspaceSession.session.activeTerminalTabId,
                 providerSessionByTask: persistedInactiveWorkspaceSession.session.providerSessionByTask,
               });
             }

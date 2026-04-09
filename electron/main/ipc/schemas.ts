@@ -118,6 +118,21 @@ export const WorkspaceScriptsStopAllArgsSchema = z
   })
   .strict();
 
+export const TerminalCreateSessionArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+    workspacePath: z.string().min(1).max(4096),
+    taskId: z.string().min(1).max(200).nullable(),
+    taskTitle: z.string().max(500).nullable(),
+    terminalTabId: z.string().min(1).max(200),
+    cwd: z.string().min(1).max(4096),
+    shell: z.string().max(4096).optional(),
+    cols: z.number().int().min(1).max(1000).optional(),
+    rows: z.number().int().min(1).max(1000).optional(),
+    deliveryMode: z.union([z.literal("poll"), z.literal("push")]).optional(),
+  })
+  .strict();
+
 export const GetPrStatusByUrlArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),

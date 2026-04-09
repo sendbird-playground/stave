@@ -102,6 +102,7 @@ export function EditorPanel(props: EditorPanelProps) {
     workspaceCwd,
     openFileFromTree,
     openDiffInEditor,
+    createTerminalTab,
     setLayout,
     refreshProjectFiles,
     closeEditorTab,
@@ -114,6 +115,7 @@ export function EditorPanel(props: EditorPanelProps) {
     state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined,
     state.openFileFromTree,
     state.openDiffInEditor,
+    state.createTerminalTab,
     state.setLayout,
     state.refreshProjectFiles,
     state.closeEditorTab,
@@ -690,6 +692,15 @@ export function EditorPanel(props: EditorPanelProps) {
     void handleOpenExplorerPath({ path, target: "terminal" });
   }
 
+  function handleOpenExplorerInStaveTerminal(path: string) {
+    const absolutePath = resolveWorkspaceAbsolutePath({ workspacePath: workspaceCwd, relativePath: path });
+    if (!absolutePath) {
+      toast.error("Workspace path unavailable");
+      return;
+    }
+    createTerminalTab({ cwd: absolutePath });
+  }
+
   function cancelExplorerCreate() {
     if (isCreatingExplorerEntry) {
       return;
@@ -864,6 +875,7 @@ export function EditorPanel(props: EditorPanelProps) {
               onOpenExplorerInFinder={handleOpenExplorerInFinder}
               onOpenExplorerInVSCode={handleOpenExplorerInVSCode}
               onOpenExplorerInTerminal={handleOpenExplorerInTerminal}
+              onOpenExplorerInStaveTerminal={handleOpenExplorerInStaveTerminal}
               onRefreshExplorerDirectory={handleRefreshExplorerDirectory}
               onRequestDeleteExplorerFile={handleRequestDeleteExplorerFile}
               onRequestDeleteExplorerFolder={handleRequestDeleteExplorerFolder}

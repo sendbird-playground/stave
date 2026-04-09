@@ -59,6 +59,7 @@ export function TopBar() {
     workspacePathById,
     projectPath,
     workspaceSidebarCollapsed,
+    createTerminalTab,
     setLayout,
   ] = useAppStore(
     useShallow(
@@ -68,6 +69,7 @@ export function TopBar() {
           state.workspacePathById,
           state.projectPath,
           state.layout.workspaceSidebarCollapsed,
+          state.createTerminalTab,
           state.setLayout,
         ] as const,
     ),
@@ -199,6 +201,17 @@ export function TopBar() {
                   >
                     <Code2 className="size-4" />
                     Open in VS Code
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      createTerminalTab({
+                        cwd: activeWorkspacePath,
+                        title: workspacePathLabel || undefined,
+                      });
+                    }}
+                  >
+                    <SquareTerminal className="size-4" />
+                    Open in Stave Terminal
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() =>

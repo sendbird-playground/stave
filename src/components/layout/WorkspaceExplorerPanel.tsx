@@ -285,6 +285,7 @@ function ExplorerTreeRow(args: {
   onOpenInFinder: (path: string) => void;
   onOpenInVSCode: (path: string) => void;
   onOpenInTerminal: (path: string) => void;
+  onOpenInStaveTerminal: (path: string) => void;
   onRefreshDirectory: (path: string) => void;
   onRequestDeleteFile: (path: string, name: string) => void;
   onRequestDeleteFolder: (path: string, name: string) => void;
@@ -356,6 +357,10 @@ function ExplorerTreeRow(args: {
             <Code2 className="size-4" />
             Open in VS Code
           </ContextMenuItem>
+          <ContextMenuItem onSelect={() => args.onOpenInStaveTerminal(terminalTargetPath)}>
+            <SquareTerminal className="size-4" />
+            Open in Stave Terminal
+          </ContextMenuItem>
           <ContextMenuItem onSelect={() => args.onOpenInTerminal(terminalTargetPath)}>
             <SquareTerminal className="size-4" />
             Open in Terminal
@@ -412,6 +417,7 @@ function ExplorerTreeRow(args: {
               onCopyAbsolutePath={args.onCopyAbsolutePath}
               onOpenInFinder={args.onOpenInFinder}
               onOpenInVSCode={args.onOpenInVSCode}
+              onOpenInStaveTerminal={args.onOpenInStaveTerminal}
               onOpenInTerminal={args.onOpenInTerminal}
               onRefreshDirectory={args.onRefreshDirectory}
               onRequestDeleteFile={args.onRequestDeleteFile}
@@ -450,6 +456,7 @@ export function WorkspaceExplorerPanel(props: {
   onOpenExplorerInFinder: (path: string) => void;
   onOpenExplorerInVSCode: (path: string) => void;
   onOpenExplorerInTerminal: (path: string) => void;
+  onOpenExplorerInStaveTerminal: (path: string) => void;
   onRefreshExplorerDirectory: (path: string) => void;
   onRequestDeleteExplorerFile: (path: string, name: string) => void;
   onRequestDeleteExplorerFolder: (path: string, name: string) => void;
@@ -620,10 +627,11 @@ export function WorkspaceExplorerPanel(props: {
             onStartCreateFile={props.onStartExplorerFileCreate}
             onStartCreateFolder={props.onStartExplorerFolderCreate}
             onCopyRelativePath={props.onCopyExplorerRelativePath}
-            onCopyAbsolutePath={props.onCopyExplorerAbsolutePath}
-            onOpenInFinder={props.onOpenExplorerInFinder}
-            onOpenInVSCode={props.onOpenExplorerInVSCode}
-            onOpenInTerminal={props.onOpenExplorerInTerminal}
+                  onCopyAbsolutePath={props.onCopyExplorerAbsolutePath}
+                  onOpenInFinder={props.onOpenExplorerInFinder}
+                  onOpenInVSCode={props.onOpenExplorerInVSCode}
+                  onOpenInStaveTerminal={props.onOpenExplorerInStaveTerminal}
+                  onOpenInTerminal={props.onOpenExplorerInTerminal}
             onRefreshDirectory={props.onRefreshExplorerDirectory}
             onRequestDeleteFile={props.onRequestDeleteExplorerFile}
             onRequestDeleteFolder={props.onRequestDeleteExplorerFolder}

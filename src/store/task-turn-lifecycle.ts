@@ -1,4 +1,5 @@
 import type { TaskProviderSessionState } from "@/lib/db/workspaces.db";
+import type { WorkspaceTerminalTab } from "@/lib/terminal/types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 import {
@@ -32,6 +33,8 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
   workspaceInformation?: WorkspaceInformationState;
   editorTabs: EditorTab[];
   activeEditorTabId: string | null;
+  terminalTabs: WorkspaceTerminalTab[];
+  activeTerminalTabId: string | null;
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   workspaceName: string;
@@ -82,6 +85,8 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
     workspaceInformation: args.workspaceInformation,
     editorTabs: args.editorTabs,
     activeEditorTabId: args.activeEditorTabId,
+    terminalTabs: args.terminalTabs,
+    activeTerminalTabId: args.activeTerminalTabId,
     providerSessionByTask: args.providerSessionByTask,
   });
 

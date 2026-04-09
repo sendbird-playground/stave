@@ -351,6 +351,8 @@ export class SqliteStore {
       providerSessionByTask: args.snapshot.providerSessionByTask ?? {},
       editorTabs: args.snapshot.editorTabs ?? [],
       activeEditorTabId: args.snapshot.activeEditorTabId ?? null,
+      terminalTabs: args.snapshot.terminalTabs ?? [],
+      activeTerminalTabId: args.snapshot.activeTerminalTabId ?? null,
       workspaceInformation: args.snapshot.workspaceInformation,
       messageCountByTask: args.messageCountByTask,
     };
@@ -377,6 +379,8 @@ export class SqliteStore {
       providerSessionByTask: {},
       editorTabs: [],
       activeEditorTabId: null,
+      terminalTabs: [],
+      activeTerminalTabId: null,
       messageCountByTask: {},
       ...args.payload,
     };

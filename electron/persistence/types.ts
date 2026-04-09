@@ -1,4 +1,5 @@
 import type { PromptDraft } from "../../src/types/chat";
+import type { WorkspaceTerminalTab } from "../../src/lib/terminal/types";
 import type { WorkspaceInformationState } from "../../src/lib/workspace-information";
 
 export interface PersistenceTaskRow {
@@ -53,6 +54,8 @@ export interface PersistenceWorkspaceSnapshot {
     isDirty: boolean;
   }>;
   activeEditorTabId?: string | null;
+  terminalTabs?: WorkspaceTerminalTab[];
+  activeTerminalTabId?: string | null;
   workspaceInformation?: WorkspaceInformationState;
 }
 
@@ -78,6 +81,8 @@ export interface PersistenceWorkspaceShell {
     isDirty: boolean;
   }>;
   activeEditorTabId?: string | null;
+  terminalTabs?: WorkspaceTerminalTab[];
+  activeTerminalTabId?: string | null;
   workspaceInformation?: WorkspaceInformationState;
   messageCountByTask?: Record<string, number>;
 }

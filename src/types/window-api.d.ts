@@ -23,6 +23,10 @@ import type {
 import type { ProviderSlashCommand } from "@/lib/providers/provider-command-catalog";
 import type { GitHubPrPayload } from "@/lib/pr-status";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
+import type {
+  TerminalCreateSessionArgs,
+  WorkspaceTerminalTab,
+} from "@/lib/terminal/types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 import type { PromptDraft } from "@/types/chat";
 import type {
@@ -522,13 +526,7 @@ interface TerminalSessionOutputPayload {
 
 interface WindowTerminalApi {
   runCommand?: (args: TerminalRunArgs) => Promise<TerminalRunResult>;
-  createSession?: (args: {
-    cwd?: string;
-    shell?: string;
-    cols?: number;
-    rows?: number;
-    deliveryMode?: "poll" | "push";
-  }) => Promise<{ ok: boolean; sessionId?: string }>;
+  createSession?: (args: TerminalCreateSessionArgs) => Promise<{ ok: boolean; sessionId?: string }>;
   writeSession?: (args: {
     sessionId: string;
     input: string;
@@ -774,6 +772,8 @@ interface WindowPersistenceApi {
         isDirty: boolean;
       }>;
       activeEditorTabId?: string | null;
+      terminalTabs?: WorkspaceTerminalTab[];
+      activeTerminalTabId?: string | null;
       workspaceInformation?: WorkspaceInformationState;
       messageCountByTask?: Record<string, number>;
     } | null;
@@ -832,6 +832,8 @@ interface WindowPersistenceApi {
         isDirty: boolean;
       }>;
       activeEditorTabId?: string | null;
+      terminalTabs?: WorkspaceTerminalTab[];
+      activeTerminalTabId?: string | null;
       workspaceInformation?: WorkspaceInformationState;
     } | null;
   }>;
@@ -927,6 +929,8 @@ interface WindowPersistenceApi {
         isDirty: boolean;
       }>;
       activeEditorTabId?: string | null;
+      terminalTabs?: WorkspaceTerminalTab[];
+      activeTerminalTabId?: string | null;
       workspaceInformation?: WorkspaceInformationState;
     };
   }) => Promise<{ ok: boolean }>;
@@ -1057,6 +1061,8 @@ interface WindowPersistenceApi {
         isDirty: boolean;
       }>;
       activeEditorTabId?: string | null;
+      terminalTabs?: WorkspaceTerminalTab[];
+      activeTerminalTabId?: string | null;
       workspaceInformation?: WorkspaceInformationState;
     };
   }) => { ok: boolean };

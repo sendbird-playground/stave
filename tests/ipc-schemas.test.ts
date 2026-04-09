@@ -3,6 +3,7 @@ import {
   FilesystemRepoMapArgsSchema,
   LocalMcpConfigUpdateArgsSchema,
   SuggestPRDescriptionArgsSchema,
+  TerminalCreateSessionArgsSchema,
   StreamTurnArgsSchema,
 } from "../electron/main/ipc/schemas";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
@@ -103,12 +104,22 @@ describe("provider IPC schemas", () => {
         providerSessionByTask: {},
         editorTabs: [],
         activeEditorTabId: null,
+        terminalTabs: [{
+          id: "terminal-1",
+          title: "project",
+          linkedTaskId: null,
+          backend: "xterm",
+          cwd: "/tmp/project",
+          createdAt: 1,
+        }],
+        activeTerminalTabId: "terminal-1",
       },
     });
 
     expect(parsed).not.toBeNull();
     expect(parsed?.messagesByTask["task-1"]?.[0]?.startedAt).toBe("2026-04-02T10:00:00.000Z");
     expect(parsed?.messagesByTask["task-1"]?.[0]?.completedAt).toBe("2026-04-02T10:00:05.000Z");
+    expect(parsed?.activeTerminalTabId).toBe("terminal-1");
     expect(parsed?.messagesByTask["task-1"]?.[0]?.parts[0]).toEqual({
       type: "stave_processing",
       strategy: "direct",
@@ -184,6 +195,28 @@ describe("provider IPC schemas", () => {
       baseBranch: "main",
       workspaceContext: "Use the active workspace task as the primary source of intent.",
     }).success).toBe(true);
+  });
+
+  test("accepts terminal session creation args with workspace metadata", () => {
+    expect(TerminalCreateSessionArgsSchema.safeParse({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/project",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "terminal-1",
+      cwd: "/tmp/project",
+      cols: 120,
+      rows: 40,
+      deliveryMode: "push",
+    }).success).toBe(true);
+    expect(TerminalCreateSessionArgsSchema.safeParse({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/project",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "terminal-1",
+      cwd: "",
+    }).success).toBe(false);
   });
 
   test("accepts Claude Code auto-registration in local MCP config updates", () => {
