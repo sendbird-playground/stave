@@ -58,6 +58,7 @@ import {
   PR_CREATE_BUTTON_CLASS,
   PR_TONE_BADGE_CLASS,
 } from "@/lib/pr-status";
+import { isTaskArchived } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -249,8 +250,8 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
   const currentBranch = workspaceBranchById[activeWorkspaceId];
   const defaultBaseBranch = defaultBranch.trim() || "main";
   const continueBaseBranch = `origin/${defaultBaseBranch}`;
-  const activeTask = tasks.find((task) => task.id === activeTaskId) ?? null;
-  const activeTaskDraft = activeTaskId ? (promptDraftByTask[activeTaskId] ?? null) : null;
+  const activeTask = tasks.find((task) => task.id === activeTaskId && !isTaskArchived(task)) ?? null;
+  const activeTaskDraft = activeTask?.id ? (promptDraftByTask[activeTask.id] ?? null) : null;
 
   const prInfo = workspacePrInfoById[activeWorkspaceId];
   const prStatus: WorkspacePrStatus = prInfo?.derived ?? "no_pr";

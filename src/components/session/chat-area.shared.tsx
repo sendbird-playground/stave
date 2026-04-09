@@ -12,7 +12,7 @@ import {
   EmptyTitle,
 } from "@/components/ui";
 import { resolveChatAreaViewMode } from "@/components/session/chat-area.utils";
-import { isTaskManaged } from "@/lib/tasks";
+import { isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import { useAppStore } from "@/store/app.store";
 import { useShallow } from "zustand/react/shallow";
 
@@ -43,9 +43,9 @@ export function useChatAreaShellState() {
     state.hasHydratedWorkspaces,
     state.workspaces.length > 0,
     state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId),
-    state.tasks.some((task) => task.id === state.activeTaskId),
+    state.tasks.some((task) => task.id === state.activeTaskId && !isTaskArchived(task)),
     state.messageCountByTask[state.activeTaskId] ?? (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length,
-    state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
+    state.tasks.find((task) => task.id === state.activeTaskId && !isTaskArchived(task)) ?? null,
     state.activeTurnIdsByTask[state.activeTaskId],
     state.refreshActiveManagedTask,
     state.createProject,

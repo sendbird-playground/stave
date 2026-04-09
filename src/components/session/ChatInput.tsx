@@ -43,7 +43,7 @@ import {
   findOptionLabel,
 } from "@/lib/providers/runtime-option-contract";
 import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
-import { getTaskControlOwner, isTaskManaged } from "@/lib/tasks";
+import { getTaskControlOwner, isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -750,7 +750,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     state.updateSettings,
     state.refreshSkillCatalog,
   ] as const));
-  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId) ?? null);
+  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId && !isTaskArchived(task)) ?? null);
   const draftProvider = useAppStore((state) => state.draftProvider);
   const activeProvider = activeTask?.provider ?? draftProvider;
   const promptDraftRuntimeOverrides = useAppStore((state) =>

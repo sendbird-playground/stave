@@ -4957,6 +4957,10 @@ export const useAppStore = create<AppState>()(
       },
       selectTask: ({ taskId }) => {
         const stateBefore = get();
+        const targetTask = stateBefore.tasks.find((task) => task.id === taskId) ?? null;
+        if (!targetTask || isTaskArchived(targetTask)) {
+          return;
+        }
         if (stateBefore.activeTaskId === taskId && stateBefore.activeSurface.kind === "task" && stateBefore.activeSurface.taskId === taskId) {
           return;
         }

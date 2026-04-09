@@ -22,7 +22,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui";
-import { isTaskManaged } from "@/lib/tasks";
+import { isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import { RenderProfiler } from "@/lib/render-profiler";
 import { useAppStore } from "@/store/app.store";
 import { useShallow } from "zustand/react/shallow";
@@ -55,10 +55,10 @@ export function ChatArea() {
           state.workspaces.some(
             (workspace) => workspace.id === state.activeWorkspaceId,
           ),
-          state.tasks.some((task) => task.id === state.activeTaskId),
+          state.tasks.some((task) => task.id === state.activeTaskId && !isTaskArchived(task)),
           state.messageCountByTask[state.activeTaskId] ??
             (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length,
-          state.tasks.find((task) => task.id === state.activeTaskId) ?? null,
+          state.tasks.find((task) => task.id === state.activeTaskId && !isTaskArchived(task)) ?? null,
           state.activeTurnIdsByTask[state.activeTaskId],
           state.refreshActiveManagedTask,
           state.createProject,

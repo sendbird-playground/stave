@@ -365,7 +365,7 @@ export function WorkspaceTaskTabs() {
     ? tasks.find((task) => task.id === taskToViewSession.id) ?? null
     : null;
   const activeTask = activeTaskId
-    ? tasks.find((task) => task.id === activeTaskId) ?? null
+    ? tasks.find((task) => task.id === activeTaskId && !isTaskArchived(task)) ?? null
     : null;
   const sessionRows = useMemo(() => listProviderSessions({
     sessions: viewedSessionState,

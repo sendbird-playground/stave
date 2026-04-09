@@ -13,6 +13,7 @@ import {
 } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
+import { isTaskArchived } from "@/lib/tasks";
 import { SCRIPT_LOG_HISTORY_LIMIT, SCRIPT_TRIGGER_METADATA } from "@/lib/workspace-scripts";
 import type {
   ScriptKind,
@@ -262,7 +263,7 @@ export function WorkspaceScriptsPanel(props: {
     [activeWorkspaceId, workspaceBranch, workspaces],
   );
   const activeTask = useMemo(
-    () => tasks.find((task) => task.id === activeTaskId) ?? null,
+    () => tasks.find((task) => task.id === activeTaskId && !isTaskArchived(task)) ?? null,
     [activeTaskId, tasks],
   );
   const activeTurnId = activeTaskId ? activeTurnIdsByTask[activeTaskId] : undefined;
