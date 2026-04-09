@@ -82,6 +82,8 @@ export function CreateWorkspaceDialog({
         localBranches: result.branches,
         remoteBranches: result.remoteBranches ?? [],
       }));
+    }).catch(() => {
+      // IPC failure — swallow; branch lists stay empty.
     }).finally(() => {
       if (!cancelled) {
         setLoadingBranches(false);

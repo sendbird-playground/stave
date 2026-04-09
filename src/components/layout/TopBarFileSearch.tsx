@@ -66,7 +66,9 @@ export function TopBarFileSearch({ noDragStyle }: TopBarFileSearchProps) {
 
     let cancelled = false;
     setIsPreparingFiles(true);
-    void refreshProjectFiles().finally(() => {
+    void refreshProjectFiles().catch(() => {
+      // IPC/fs failure — swallow; file list stays empty.
+    }).finally(() => {
       if (!cancelled) {
         setIsPreparingFiles(false);
       }

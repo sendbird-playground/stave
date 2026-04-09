@@ -32,7 +32,7 @@ import {
 } from "@/lib/fs/repo-map-context-cache";
 import { formatRepoMapForContext } from "@/lib/fs/repo-map.types";
 
-const IS_MAC = window.api?.platform === "darwin";
+const IS_MAC = typeof window !== "undefined" && window.api?.platform === "darwin";
 const TOP_BAR_DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
 const TOP_BAR_NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
