@@ -1583,7 +1583,7 @@ function RulesSection() {
 }
 
 function ChatSection() {
-  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningExpansionMode, thinkingPhraseAnimationStyle, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
+  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningExpansionMode, showInterimMessages, thinkingPhraseAnimationStyle, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
     useShallow((state) => [
       state.settings.smartSuggestions,
       state.settings.chatSendPreview,
@@ -1595,6 +1595,7 @@ function ChatSection() {
       state.settings.messageKoreanFontFamily,
       state.settings.infoPanelScale,
       state.settings.reasoningExpansionMode,
+      state.settings.showInterimMessages,
       state.settings.thinkingPhraseAnimationStyle,
       state.settings.claudeFastModeVisible,
       state.settings.codexFastModeVisible,
@@ -1715,6 +1716,12 @@ function ChatSection() {
               ]}
             />
           </LabeledField>
+          <SwitchField
+            title="Show Interim Messages"
+            description="Show pre-final assistant text segments between execution steps. Hidden by default to keep the final response cleaner."
+            checked={showInterimMessages}
+            onCheckedChange={(checked) => updateSettings({ patch: { showInterimMessages: checked } })}
+          />
           <LabeledField
             title="Reasoning Phrase Animation"
             description="Animation used for in-progress reasoning labels while streaming, including the rotating phrase and the Thinking label in the reasoning step."

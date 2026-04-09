@@ -164,6 +164,43 @@ describe("AssistantMessageBody", () => {
     expect(html).toContain("Keep markdown");
   });
 
+  test("hides interim assistant messages by default", async () => {
+    const { AssistantMessageBody } = await loadAssistantMessageBodies();
+    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+      message: createAssistantMessage({
+        parts: [
+          { type: "text", text: "Inspecting the repo.", segmentId: "commentary-1" },
+          { type: "text", text: "Patched the issue.", segmentId: "final-1" },
+        ],
+      }),
+      taskId: "task-1",
+      messageId: "message-1",
+      streamingEnabled: true,
+    }));
+
+    expect(html).not.toContain("Inspecting the repo.");
+    expect(html).toContain("Patched the issue.");
+  });
+
+  test("renders interim assistant messages when enabled", async () => {
+    const { AssistantMessageBody } = await loadAssistantMessageBodies();
+    const html = renderToStaticMarkup(createElement(AssistantMessageBody, {
+      message: createAssistantMessage({
+        parts: [
+          { type: "text", text: "Inspecting the repo.", segmentId: "commentary-1" },
+          { type: "text", text: "Patched the issue.", segmentId: "final-1" },
+        ],
+      }),
+      taskId: "task-1",
+      messageId: "message-1",
+      streamingEnabled: true,
+      showInterimMessages: true,
+    }));
+
+    expect(html).toContain("Inspecting the repo.");
+    expect(html).toContain("Patched the issue.");
+  });
+
   test("keeps final response text visible in zen mode", async () => {
     const { ZenAssistantMessageBody } = await loadAssistantMessageBodies();
     const html = renderToStaticMarkup(createElement(ZenAssistantMessageBody, {

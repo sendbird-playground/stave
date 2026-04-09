@@ -19,6 +19,9 @@ Assistant messages are rendered in two layers:
    - contains reasoning, tool, subagent, todo, diff, system-oriented steps, and any assistant text emitted before the final response boundary
 2. `AssistantFinalResponse`
    - derived from the trailing `text` parts after the last trace-oriented part
+   - when providers preserve multiple text segment boundaries in one turn, the
+     last logical text segment is treated as the final response and earlier
+     segments are interim commentary
    - rendered below the trace
 
 The renderer does not split by provider. Claude and Codex both normalize into the
@@ -31,6 +34,8 @@ same `ChatMessage.parts` shape before UI rendering.
 - After the turn completes, top-level `ChainOfThought` auto-collapses.
 - Individual steps inside `ChainOfThought` may still be opened and closed independently.
 - `MessageResponse` renders only the final text response area below the trace.
+- Interim assistant text rendered outside the trace is user-configurable in
+  Settings → Chat and defaults to hidden.
 - Earlier assistant text that appears before later tool or system activity remains inside `ChainOfThought` as a trace step instead of being promoted to the final response.
 - Provider text segments must preserve their original item boundaries so in-place tool updates cannot merge commentary text into the final response block.
 - The normal assistant shell is bubbleless so AI Elements composition can stay close

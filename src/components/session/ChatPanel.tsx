@@ -109,6 +109,7 @@ interface MessageRowProps {
   elapsedAnchorMs?: number;
   isFirst?: boolean;
   liveStreamingMessageId?: string;
+  showInterimMessages: boolean;
   traceExpansionMode: "auto" | "manual";
   message: {
     id: string;
@@ -132,6 +133,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
     elapsedAnchorMs,
     isFirst,
     liveStreamingMessageId,
+    showInterimMessages,
     traceExpansionMode,
     message,
   } = args;
@@ -165,6 +167,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
               messageId={message.id}
               streamingEnabled={chatStreamingEnabled}
               traceExpansionMode={traceExpansionMode}
+              showInterimMessages={showInterimMessages}
             />
           </MessageContent>
           <MessageActions
@@ -385,6 +388,7 @@ function ChatPanelMessageList() {
     activeTaskId,
     activeTurnId,
     chatStreamingEnabled,
+    showInterimMessages,
     reasoningExpansionMode,
     loadTaskMessages,
   ] = useAppStore(
@@ -395,6 +399,7 @@ function ChatPanelMessageList() {
           state.activeTaskId,
           state.activeTurnIdsByTask[state.activeTaskId],
           state.settings.chatStreamingEnabled,
+          state.settings.showInterimMessages,
           state.settings.reasoningExpansionMode,
           state.loadTaskMessages,
         ] as const,
@@ -521,6 +526,7 @@ function ChatPanelMessageList() {
               }
               isFirst={index === 0}
               liveStreamingMessageId={liveStreamingMessageId}
+              showInterimMessages={showInterimMessages}
               traceExpansionMode={traceExpansionMode}
               message={message}
             />
