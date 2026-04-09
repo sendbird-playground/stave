@@ -398,6 +398,8 @@ function resolveTaskRuntimeTarget(args: {
     | "workspaceInformation"
     | "editorTabs"
     | "activeEditorTabId"
+    | "terminalTabs"
+    | "activeTerminalTabId"
     | "activeTurnIdsByTask"
     | "providerSessionByTask"
     | "nativeSessionReadyByTask"
@@ -455,6 +457,8 @@ function getWorkspaceSessionForState(args: {
     | "workspaceInformation"
     | "editorTabs"
     | "activeEditorTabId"
+    | "terminalTabs"
+    | "activeTerminalTabId"
     | "activeTurnIdsByTask"
     | "providerSessionByTask"
     | "nativeSessionReadyByTask"
@@ -7237,6 +7241,8 @@ export const useAppStore = create<AppState>()(
               workspaceInformation: inactiveWorkspaceSession.workspaceInformation,
               editorTabs: inactiveWorkspaceSession.editorTabs,
               activeEditorTabId: inactiveWorkspaceSession.activeEditorTabId,
+              terminalTabs: inactiveWorkspaceSession.terminalTabs,
+              activeTerminalTabId: inactiveWorkspaceSession.activeTerminalTabId,
               providerSessionByTask: inactiveWorkspaceSession.providerSessionByTask,
             });
           }
