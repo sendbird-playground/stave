@@ -375,6 +375,17 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
       return;
     }
 
+    // Guard: ensure the cwd comes from the workspace's own worktree path,
+    // not a fallback to the project root.  Using the project root for a
+    // non-default workspace would cause git commands to return data from
+    // the wrong branch, producing stale or cross-workspace PR drafts.
+    if (!workspacePathById[activeWorkspaceId]) {
+      toast.error("Unable to create PR", {
+        description: "Workspace path is not available yet. Try switching away and back.",
+      });
+      return;
+    }
+
     const requestId = suggestionRequestIdRef.current + 1;
     suggestionRequestIdRef.current = requestId;
 
@@ -406,6 +417,7 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         .then((workspaceContext) => suggestPRDescription({
           cwd: workspaceCwd,
           baseBranch: defaultBaseBranch,
+          headBranch: currentBranch || undefined,
           promptTemplate: promptPrDescription,
           workspaceContext: workspaceContext || undefined,
         }))

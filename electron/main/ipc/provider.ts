@@ -379,8 +379,9 @@ export function registerProviderHandlers() {
     const cwd = parsed.data.cwd;
     const baseBranch = parsed.data.baseBranch || "main";
     const safeBaseBranch = quotePath({ value: baseBranch });
+    const expectedBranch = parsed.data.headBranch?.trim() || undefined;
 
-    const [diffResult, workingTreeDiffResult, logResult, statResult, statusResult, prTemplateResult, agentsResult] = await Promise.all([
+    const [diffResult, workingTreeDiffResult, logResult, statResult, statusResult, prTemplateResult, agentsResult, branchResult] = await Promise.all([
       runCommand({ command: `git diff "${safeBaseBranch}"...HEAD`, cwd }),
       runCommand({ command: "git diff HEAD", cwd }),
       runCommand({ command: `git log "${safeBaseBranch}"..HEAD --pretty=format:"%h %s" --no-merges`, cwd }),
@@ -388,9 +389,22 @@ export function registerProviderHandlers() {
       runCommand({ command: "git status --porcelain", cwd }),
       runCommand({ command: "cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true", cwd }),
       runCommand({ command: "cat AGENTS.md 2>/dev/null || true", cwd }),
+      runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd }),
     ]);
 
-    const branchResult = await runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd });
+    const gitDetectedBranch = branchResult.ok ? branchResult.stdout.trim() : "HEAD";
+
+    // Use the component-provided branch as the authoritative value.
+    // Fall back to the git-detected branch only when the component didn't
+    // provide one (backward-compat).
+    const headBranch = expectedBranch || gitDetectedBranch;
+
+    // If the component told us which branch to expect AND git reports a
+    // different branch, the cwd is pointing at the wrong worktree.
+    // Bail out so the component uses its own workspace-correct fallback.
+    if (expectedBranch && gitDetectedBranch !== "HEAD" && gitDetectedBranch !== expectedBranch) {
+      return { ok: false, headBranch: gitDetectedBranch };
+    }
 
     const diff = diffResult.ok ? diffResult.stdout.trim() : "";
     const workingTreeDiff = workingTreeDiffResult.ok ? workingTreeDiffResult.stdout.trim() : "";
@@ -401,7 +415,6 @@ export function registerProviderHandlers() {
     ].filter(Boolean).join("\n");
     const prTemplateContent = prTemplateResult.ok ? prTemplateResult.stdout.trim() : undefined;
     const agentsContent = agentsResult.ok ? agentsResult.stdout.trim() : undefined;
-    const headBranch = branchResult.ok ? branchResult.stdout.trim() : "HEAD";
     const fallbackDraft = generateFallbackPullRequestDraft({
       baseBranch,
       headBranch,
@@ -434,6 +447,6 @@ export function registerProviderHandlers() {
       headBranch,
     });
 
-    return { ok: true, title: resolvedTitle, body: mergedDraft.body };
+    return { ok: true, title: resolvedTitle, body: mergedDraft.body, headBranch };
   });
 }

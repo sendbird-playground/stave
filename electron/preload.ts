@@ -398,11 +398,15 @@ contextBridge.exposeInMainWorld("api", {
         ok: boolean;
         message?: string;
       }>,
-    suggestPRDescription: (args: { cwd?: string; baseBranch?: string; promptTemplate?: string; workspaceContext?: string }) =>
+    suggestPRDescription: (args: { cwd?: string; baseBranch?: string; headBranch?: string; promptTemplate?: string; workspaceContext?: string }) =>
       ipcRenderer.invoke("provider:suggest-pr-description", args) as Promise<{
         ok: boolean;
         title?: string;
         body?: string;
+        /** Git-detected head branch in the resolved cwd.  The handler
+         *  returns `ok: false` when this differs from the provided headBranch,
+         *  signalling a cwd mismatch. */
+        headBranch?: string;
       }>,
   },
   persistence: {
