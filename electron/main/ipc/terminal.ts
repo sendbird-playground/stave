@@ -25,31 +25,61 @@ function createTerminalSession(args: {
   });
 
   const sessionId = randomUUID();
+  let closeResolved = false;
+  let resolveClosed = () => {};
+  const closed = new Promise<void>((resolve) => {
+    resolveClosed = () => {
+      if (closeResolved) {
+        return;
+      }
+      closeResolved = true;
+      resolve();
+    };
+  });
   const session = {
     pty: ptyProcess,
     output: "",
     deliveryMode: args.deliveryMode ?? "poll",
     ownerWebContentsId: args.ownerWebContentsId ?? null,
+    closing: false,
+    closed,
+    close: () => {
+      if (session.closing) {
+        return;
+      }
+      session.closing = true;
+      session.ownerWebContentsId = null;
+      const closablePty = ptyProcess as pty.IPty & {
+        destroy?: () => void;
+      };
+      if (typeof closablePty.destroy === "function") {
+        closablePty.destroy();
+        return;
+      }
+      ptyProcess.kill();
+    },
+    markClosed: resolveClosed,
   };
   setTerminalSession(sessionId, session);
 
   ptyProcess.onData((data) => {
-    const current = getTerminalSession(sessionId);
-    if (current) {
-      if (
-        current.deliveryMode === "push" &&
-        current.ownerWebContentsId !== null
-      ) {
-        const owner = webContents.fromId(current.ownerWebContentsId);
-        if (owner && !owner.isDestroyed()) {
-          owner.send("terminal:session-output", { sessionId, output: data });
-          return;
-        }
-      }
-      current.output += data;
+    if (session.closing) {
+      return;
     }
+    if (
+      session.deliveryMode === "push" &&
+      session.ownerWebContentsId !== null
+    ) {
+      const owner = webContents.fromId(session.ownerWebContentsId);
+      if (owner && !owner.isDestroyed()) {
+        owner.send("terminal:session-output", { sessionId, output: data });
+        return;
+      }
+    }
+    session.output += data;
   });
   ptyProcess.onExit(() => {
+    session.markClosed();
     deleteTerminalSession(sessionId);
   });
 
@@ -125,7 +155,7 @@ export function registerTerminalHandlers() {
     if (!session) {
       return { ok: false, stderr: "Terminal session not found." };
     }
-    session.pty.kill();
+    session.close();
     deleteTerminalSession(args.sessionId);
     return { ok: true, stderr: "" };
   });
