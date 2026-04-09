@@ -136,6 +136,28 @@ describe("canonical request builder", () => {
     expect(prompt).not.toContain("assistant: Inspecting the renderer.Final answer.");
   });
 
+  test("prefers the last provider text segment when Codex emits commentary before the final answer", () => {
+    const request = buildCanonicalConversationRequest({
+      providerId: "codex",
+      model: "gpt-5.4",
+      history: [{
+        id: "assistant-commentary",
+        role: "assistant",
+        model: "gpt-5.4",
+        providerId: "codex",
+        content: "Inspecting the renderer.Final answer.",
+        parts: [
+          { type: "text", text: "Inspecting the renderer.", segmentId: "commentary-1" },
+          { type: "text", text: "Final answer.", segmentId: "final-1" },
+        ],
+      }],
+      userInput: "Continue.",
+      mode: "chat",
+    });
+
+    expect(request.history[0]?.content).toBe("Final answer.");
+  });
+
   test("marks skill-only invocations explicitly instead of serializing an empty current input", () => {
     const request = buildCanonicalConversationRequest({
       providerId: "claude-code",

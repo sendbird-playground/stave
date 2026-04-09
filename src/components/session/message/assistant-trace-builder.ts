@@ -1,4 +1,5 @@
 import { getRenderableMessageParts, isCodeDiffSummarySystemEvent } from "@/components/session/chat-panel.utils";
+import { getAssistantResponseTextStartIndex } from "@/lib/session/assistant-response-parts";
 import type {
   ApprovalPart,
   ChatMessage,
@@ -97,17 +98,7 @@ export function buildAssistantTrace(args: {
     content: args.message.content,
     parts: args.message.parts,
   });
-  const responseBoundaryIndex = renderableParts.reduce((lastIndex, part, index) => {
-    if (
-      part.type === "text"
-      || part.type === "file_context"
-      || part.type === "image_context"
-      || part.type === "system_event"
-    ) {
-      return lastIndex;
-    }
-    return index;
-  }, -1);
+  const responseStartIndex = getAssistantResponseTextStartIndex(renderableParts);
 
   const entries: AssistantTraceEntry[] = [];
   const interimTextParts: TextPart[] = [];
@@ -121,7 +112,7 @@ export function buildAssistantTrace(args: {
         if (!part.text.trim()) {
           return;
         }
-        if (index > responseBoundaryIndex) {
+        if (responseStartIndex !== -1 && index >= responseStartIndex) {
           responseParts.push(part);
           return;
         }

@@ -105,6 +105,20 @@ describe("buildAssistantTrace", () => {
     expect(trace.responseParts.map((p) => p.text)).toEqual(["Done!"]);
   });
 
+  test("uses the final provider text segment as the response for Codex-style interim messages", () => {
+    const trace = buildAssistantTrace({
+      message: createAssistantMessage({
+        parts: [
+          { type: "text", text: "Inspecting the repo.", segmentId: "commentary-1" },
+          { type: "text", text: "Patched the issue.", segmentId: "final-1" },
+        ],
+      }),
+    });
+
+    expect(trace.interimTextParts.map((part) => part.text)).toEqual(["Inspecting the repo."]);
+    expect(trace.responseParts.map((part) => part.text)).toEqual(["Patched the issue."]);
+  });
+
   test("filters noise phrases from interim text parts", () => {
     const trace = buildAssistantTrace({
       message: createAssistantMessage({

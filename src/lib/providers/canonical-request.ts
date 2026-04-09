@@ -3,6 +3,7 @@ import {
   sanitizeChatMessagePayload,
   sanitizeFileContextPayload,
 } from "@/lib/file-context-sanitization";
+import { getAssistantResponseTextStartIndex } from "@/lib/session/assistant-response-parts";
 import type { SkillPromptContext } from "@/lib/skills/types";
 import type {
   CanonicalConversationMessage,
@@ -123,15 +124,12 @@ function cloneContextPart(part: FileContextPart | CanonicalRetrievedContextPart 
 }
 
 function deriveCanonicalMessageContent(message: ChatMessage) {
-  const responseBoundaryIndex = message.parts.reduce((lastIndex, part, index) => {
-    if (part.type === "text" || part.type === "file_context" || part.type === "image_context") {
-      return lastIndex;
-    }
-    return index;
-  }, -1);
+  const responseStartIndex = getAssistantResponseTextStartIndex(message.parts);
 
   const trailingText = message.parts
-    .flatMap((part, index) => part.type === "text" && index > responseBoundaryIndex ? [part.text] : [])
+    .flatMap((part, index) => (
+      part.type === "text" && responseStartIndex !== -1 && index >= responseStartIndex ? [part.text] : []
+    ))
     .join("");
 
   return trailingText.trim().length > 0 ? trailingText : message.content;

@@ -610,8 +610,16 @@ export function AssistantMessageBody(args: {
   messageId: string;
   streamingEnabled: boolean;
   traceExpansionMode?: "auto" | "manual";
+  showInterimMessages?: boolean;
 }) {
-  const { message, taskId, messageId, streamingEnabled, traceExpansionMode = "auto" } = args;
+  const {
+    message,
+    taskId,
+    messageId,
+    streamingEnabled,
+    traceExpansionMode = "auto",
+    showInterimMessages = false,
+  } = args;
   const isActivelyStreaming = Boolean(message.isStreaming);
   const isStreaming = streamingEnabled && isActivelyStreaming;
   const shouldAutoExpandTrace = traceExpansionMode === "auto";
@@ -677,7 +685,7 @@ export function AssistantMessageBody(args: {
         </ChainOfThought>
       ) : null}
 
-      {!isStreaming && trace.interimTextParts.length > 0 ? (
+      {!isStreaming && showInterimMessages && trace.interimTextParts.length > 0 ? (
         <div
           className={cn(
             trace.entries.length > 0 && "mt-4",
@@ -695,7 +703,7 @@ export function AssistantMessageBody(args: {
       {trace.responseParts.length > 0 ? (
         <div
           className={cn(
-            (trace.entries.length > 0 || trace.interimTextParts.length > 0) && "mt-4",
+            (trace.entries.length > 0 || (showInterimMessages && trace.interimTextParts.length > 0)) && "mt-4",
             "space-y-3",
           )}
         >

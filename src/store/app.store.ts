@@ -659,6 +659,7 @@ export interface AppSettings {
   /** Zoom scale for the workspace information panel (0.8 – 1.3, default 1). */
   infoPanelScale: number;
   reasoningExpansionMode: "auto" | "manual";
+  showInterimMessages: boolean;
   thinkingPhraseAnimationStyle: ThinkingPhraseAnimationStyle;
   claudeFastModeVisible: boolean;
   codexFastModeVisible: boolean;
@@ -1288,6 +1289,7 @@ const defaultSettings: AppSettings = {
   messageKoreanFontFamily: "Pretendard Variable",
   infoPanelScale: 1,
   reasoningExpansionMode: "manual",
+  showInterimMessages: false,
   thinkingPhraseAnimationStyle: "soft",
   claudeFastModeVisible: true,
   codexFastModeVisible: true,

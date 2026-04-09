@@ -68,6 +68,7 @@ function AssistantMessageBlock(args: {
     model: string;
     providerId: "claude-code" | "codex" | "stave" | "user";
   };
+  showInterimMessages: boolean;
   streamingEnabled: boolean;
 }) {
   return (
@@ -78,6 +79,7 @@ function AssistantMessageBlock(args: {
         messageId={args.message.id}
         streamingEnabled={args.streamingEnabled}
         traceExpansionMode="manual"
+        showInterimMessages={args.showInterimMessages}
       />
     </div>
   );
@@ -96,6 +98,7 @@ export function StaveMuseWidget(args: {
     focusNonce,
     activeTurnId,
     museAutoHandoffToTask,
+    showInterimMessages,
     projectName,
     projectPath,
     activeWorkspaceName,
@@ -113,6 +116,7 @@ export function StaveMuseWidget(args: {
     state.staveMuse.focusNonce,
     state.staveMuse.activeTurnId,
     state.settings.museAutoHandoffToTask,
+    state.settings.showInterimMessages,
     state.projectName,
     state.projectPath,
     state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
@@ -351,6 +355,7 @@ export function StaveMuseWidget(args: {
                     ) : (
                       <AssistantMessageBlock
                         message={message}
+                        showInterimMessages={showInterimMessages}
                         streamingEnabled
                       />
                     )}
