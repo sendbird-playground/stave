@@ -3,11 +3,16 @@ import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from "reac
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
-import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
+import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
-import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { getProviderSessionLabel, listProviderSessions } from "@/lib/providers/provider-sessions";
+import {
+  getCliSessionContextLabel,
+  getCliSessionProviderLabel,
+  type CliSessionContextMode,
+} from "@/lib/terminal/types";
+import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { filterTasksByName, getRespondingProviderId, isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -84,6 +89,7 @@ function TaskHistoryDrawer(args: {
 }
 
 type TaskItem = ReturnType<typeof useAppStore.getState>["tasks"][number];
+type CliSessionTab = ReturnType<typeof useAppStore.getState>["cliSessionTabs"][number];
 
 function useTaskRespondingState(args: {
   taskId: string;
@@ -213,8 +219,8 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
   );
 });
 
-const WorkspaceTerminalStripTab = memo(function WorkspaceTerminalStripTab(args: {
-  tab: ReturnType<typeof useAppStore.getState>["terminalTabs"][number];
+const WorkspaceCliSessionStripTab = memo(function WorkspaceCliSessionStripTab(args: {
+  tab: CliSessionTab;
   isActive: boolean;
   draggingTabId: string | null;
   dropTargetTabId: string | null;
@@ -250,12 +256,13 @@ const WorkspaceTerminalStripTab = memo(function WorkspaceTerminalStripTab(args: 
       <button
         type="button"
         className="flex min-w-0 items-center gap-2"
+        title={`${getCliSessionProviderLabel(args.tab.provider)} · ${getCliSessionContextLabel(args.tab.contextMode)}`}
         onClick={() => args.onSelectTab(args.tab.id)}
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-          <SquareTerminal className="size-4 text-muted-foreground" />
+          <ModelIcon providerId={args.tab.provider} className="size-4 text-muted-foreground" />
         </span>
-        <span className="max-w-48 truncate text-sm font-medium">{args.tab.title}</span>
+        <span className="max-w-56 truncate text-sm font-medium">{args.tab.title}</span>
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -264,12 +271,12 @@ const WorkspaceTerminalStripTab = memo(function WorkspaceTerminalStripTab(args: 
             variant="ghost"
             size="sm"
             className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
-            aria-label={`terminal-menu-${args.tab.id}`}
+            aria-label={`cli-session-menu-${args.tab.id}`}
           >
             <Ellipsis className="size-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem onSelect={() => args.onRenameTab({ id: args.tab.id, title: args.tab.title })}>
             Rename
           </DropdownMenuItem>
@@ -285,26 +292,37 @@ const WorkspaceTerminalStripTab = memo(function WorkspaceTerminalStripTab(args: 
   );
 });
 
+const CLI_SESSION_CHOICES = [
+  { provider: "claude-code", contextMode: "workspace" },
+  { provider: "claude-code", contextMode: "active-task" },
+  { provider: "codex", contextMode: "workspace" },
+  { provider: "codex", contextMode: "active-task" },
+] as const satisfies readonly {
+  provider: "claude-code" | "codex";
+  contextMode: CliSessionContextMode;
+}[];
+
 export function WorkspaceTaskTabs() {
   const [taskHistoryOpen, setTaskHistoryOpen] = useState(false);
   const [taskToArchive, setTaskToArchive] = useState<{ id: string; title: string } | null>(null);
   const [taskToRename, setTaskToRename] = useState<{ id: string; title: string } | null>(null);
+  const [cliSessionToRename, setCliSessionToRename] = useState<{ id: string; title: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [terminalToRename, setTerminalToRename] = useState<{ id: string; title: string } | null>(null);
-  const [terminalRenameValue, setTerminalRenameValue] = useState("");
+  const [cliSessionRenameValue, setCliSessionRenameValue] = useState("");
   const [taskToViewSession, setTaskToViewSession] = useState<{ id: string; title: string } | null>(null);
   const [copiedSessionIdKey, setCopiedSessionIdKey] = useState<string | null>(null);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dropTargetTaskId, setDropTargetTaskId] = useState<string | null>(null);
-  const [draggingTerminalTabId, setDraggingTerminalTabId] = useState<string | null>(null);
-  const [dropTargetTerminalTabId, setDropTargetTerminalTabId] = useState<string | null>(null);
+  const [draggingCliSessionTabId, setDraggingCliSessionTabId] = useState<string | null>(null);
+  const [dropTargetCliSessionTabId, setDropTargetCliSessionTabId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const terminalRenameInputRef = useRef<HTMLInputElement | null>(null);
+  const cliSessionRenameInputRef = useRef<HTMLInputElement | null>(null);
   const [
     tasks,
     activeTaskId,
-    terminalTabs,
-    activeTerminalTabId,
+    activeSurface,
+    cliSessionTabs,
+    providerAvailability,
     selectTask,
     createTask,
     archiveTask,
@@ -312,16 +330,17 @@ export function WorkspaceTaskTabs() {
     exportTask,
     restoreTask,
     reorderTasks,
-    createTerminalTab,
-    setActiveTerminalTab,
-    renameTerminalTab,
-    reorderTerminalTabs,
-    closeTerminalTab,
+    createCliSessionTab,
+    setActiveCliSessionTab,
+    renameCliSessionTab,
+    reorderCliSessionTabs,
+    closeCliSessionTab,
   ] = useAppStore(useShallow((state) => [
     state.tasks,
     state.activeTaskId,
-    state.terminalTabs,
-    state.activeTerminalTabId,
+    state.activeSurface,
+    state.cliSessionTabs,
+    state.providerAvailability,
     state.selectTask,
     state.createTask,
     state.archiveTask,
@@ -329,11 +348,11 @@ export function WorkspaceTaskTabs() {
     state.exportTask,
     state.restoreTask,
     state.reorderTasks,
-    state.createTerminalTab,
-    state.setActiveTerminalTab,
-    state.renameTerminalTab,
-    state.reorderTerminalTabs,
-    state.closeTerminalTab,
+    state.createCliSessionTab,
+    state.setActiveCliSessionTab,
+    state.renameCliSessionTab,
+    state.reorderCliSessionTabs,
+    state.closeCliSessionTab,
   ] as const));
 
   const visibleTasks = tasks.filter((task) => !isTaskArchived(task));
@@ -344,6 +363,9 @@ export function WorkspaceTaskTabs() {
   const sessionTask = taskToViewSession
     ? tasks.find((task) => task.id === taskToViewSession.id) ?? null
     : null;
+  const activeTask = activeTaskId
+    ? tasks.find((task) => task.id === activeTaskId) ?? null
+    : null;
   const sessionRows = useMemo(() => listProviderSessions({
     sessions: viewedSessionState,
   }), [viewedSessionState]);
@@ -353,8 +375,6 @@ export function WorkspaceTaskTabs() {
       return;
     }
     setRenameValue(taskToRename.title);
-    // Use a small delay so focus is applied after Radix DropdownMenu
-    // finishes restoring focus to the trigger element on close.
     const timer = window.setTimeout(() => {
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
@@ -363,16 +383,16 @@ export function WorkspaceTaskTabs() {
   }, [taskToRename]);
 
   useEffect(() => {
-    if (!terminalToRename) {
+    if (!cliSessionToRename) {
       return;
     }
-    setTerminalRenameValue(terminalToRename.title);
+    setCliSessionRenameValue(cliSessionToRename.title);
     const timer = window.setTimeout(() => {
-      terminalRenameInputRef.current?.focus();
-      terminalRenameInputRef.current?.select();
+      cliSessionRenameInputRef.current?.focus();
+      cliSessionRenameInputRef.current?.select();
     }, 50);
     return () => window.clearTimeout(timer);
-  }, [terminalToRename]);
+  }, [cliSessionToRename]);
 
   useEffect(() => {
     if (!taskToViewSession || !copiedSessionIdKey) {
@@ -395,17 +415,17 @@ export function WorkspaceTaskTabs() {
     setTaskToRename(null);
   }
 
-  function handleTerminalRenameConfirm() {
-    if (!terminalToRename) {
+  function handleCliSessionRenameConfirm() {
+    if (!cliSessionToRename) {
       return;
     }
-    const nextTitle = terminalRenameValue.trim();
-    if (!nextTitle || nextTitle === terminalToRename.title) {
-      setTerminalToRename(null);
+    const nextTitle = cliSessionRenameValue.trim();
+    if (!nextTitle || nextTitle === cliSessionToRename.title) {
+      setCliSessionToRename(null);
       return;
     }
-    renameTerminalTab({ tabId: terminalToRename.id, title: nextTitle });
-    setTerminalToRename(null);
+    renameCliSessionTab({ tabId: cliSessionToRename.id, title: nextTitle });
+    setCliSessionToRename(null);
   }
 
   function handleTaskDragStart(event: DragEvent<HTMLDivElement>, taskId: string) {
@@ -416,22 +436,22 @@ export function WorkspaceTaskTabs() {
 
   function handleTaskDrop(event: DragEvent<HTMLDivElement>, overTaskId: string) {
     event.preventDefault();
-    const activeTaskId = draggingTaskId ?? event.dataTransfer.getData("text/plain");
-    if (activeTaskId && activeTaskId !== overTaskId) {
-      reorderTasks({ activeTaskId, overTaskId, filter: "active" });
+    const reorderedTaskId = draggingTaskId ?? event.dataTransfer.getData("text/plain");
+    if (reorderedTaskId && reorderedTaskId !== overTaskId) {
+      reorderTasks({ activeTaskId: reorderedTaskId, overTaskId, filter: "active" });
     }
     setDropTargetTaskId(null);
     setDraggingTaskId(null);
   }
 
-  function handleTerminalTabDrop(event: DragEvent<HTMLDivElement>, overTabId: string) {
+  function handleCliSessionTabDrop(event: DragEvent<HTMLDivElement>, overTabId: string) {
     event.preventDefault();
-    const activeTabId = draggingTerminalTabId ?? event.dataTransfer.getData("text/plain");
-    if (activeTabId && activeTabId !== overTabId) {
-      reorderTerminalTabs({ fromTabId: activeTabId, toTabId: overTabId });
+    const reorderedTabId = draggingCliSessionTabId ?? event.dataTransfer.getData("text/plain");
+    if (reorderedTabId && reorderedTabId !== overTabId) {
+      reorderCliSessionTabs({ fromTabId: reorderedTabId, toTabId: overTabId });
     }
-    setDropTargetTerminalTabId(null);
-    setDraggingTerminalTabId(null);
+    setDropTargetCliSessionTabId(null);
+    setDraggingCliSessionTabId(null);
   }
 
   async function copySessionIdentifier(args: { key: string; value: string }) {
@@ -449,131 +469,160 @@ export function WorkspaceTaskTabs() {
         <div className="flex min-w-0 w-full items-stretch">
           <div className="min-w-0 flex-1 overflow-x-auto">
             <div className="flex h-full min-w-max items-stretch">
-              {visibleTasks.map((task) => {
-                return (
-                  <WorkspaceTaskTab
-                    key={task.id}
-                    task={task}
-                    isActive={task.id === activeTaskId}
-                    draggingTaskId={draggingTaskId}
-                    dropTargetTaskId={dropTargetTaskId}
-                    onSelectTask={(taskId) => selectTask({ taskId })}
-                    onArchiveTask={setTaskToArchive}
-                    onOpenTaskMenuRename={setTaskToRename}
-                    onOpenTaskMenuSessionIds={(nextTask) => {
-                      setCopiedSessionIdKey(null);
-                      setTaskToViewSession(nextTask);
-                    }}
-                    onDragStart={handleTaskDragStart}
-                    onDragEnd={() => {
-                      setDraggingTaskId(null);
-                      setDropTargetTaskId(null);
-                    }}
-                    onDragOver={(event, taskId, disabled) => {
-                      if (disabled) {
-                        return;
-                      }
-                      event.preventDefault();
-                      if (draggingTaskId && draggingTaskId !== taskId) {
-                        setDropTargetTaskId(taskId);
-                      }
-                    }}
-                    onDrop={(event, taskId, disabled) => {
-                      if (disabled) {
-                        return;
-                      }
-                      handleTaskDrop(event, taskId);
-                    }}
-                    onExportTask={(taskId) => exportTask({ taskId })}
-                  />
-                );
-              })}
-              {visibleTasks.length > 0 && terminalTabs.length > 0 ? (
+              {visibleTasks.map((task) => (
+                <WorkspaceTaskTab
+                  key={task.id}
+                  task={task}
+                  isActive={activeSurface.kind === "task" && activeSurface.taskId === task.id}
+                  draggingTaskId={draggingTaskId}
+                  dropTargetTaskId={dropTargetTaskId}
+                  onSelectTask={(taskId) => selectTask({ taskId })}
+                  onArchiveTask={setTaskToArchive}
+                  onOpenTaskMenuRename={setTaskToRename}
+                  onOpenTaskMenuSessionIds={(nextTask) => {
+                    setCopiedSessionIdKey(null);
+                    setTaskToViewSession(nextTask);
+                  }}
+                  onDragStart={handleTaskDragStart}
+                  onDragEnd={() => {
+                    setDraggingTaskId(null);
+                    setDropTargetTaskId(null);
+                  }}
+                  onDragOver={(event, taskId, disabled) => {
+                    if (disabled) {
+                      return;
+                    }
+                    event.preventDefault();
+                    if (draggingTaskId && draggingTaskId !== taskId) {
+                      setDropTargetTaskId(taskId);
+                    }
+                  }}
+                  onDrop={(event, taskId, disabled) => {
+                    if (disabled) {
+                      return;
+                    }
+                    handleTaskDrop(event, taskId);
+                  }}
+                  onExportTask={(taskId) => exportTask({ taskId })}
+                />
+              ))}
+              {visibleTasks.length > 0 && cliSessionTabs.length > 0 ? (
                 <div className="mx-1 my-2 w-px shrink-0 bg-border/70" />
               ) : null}
-              {terminalTabs.map((tab) => (
-                <WorkspaceTerminalStripTab
+              {cliSessionTabs.map((tab) => (
+                <WorkspaceCliSessionStripTab
                   key={tab.id}
                   tab={tab}
-                  isActive={tab.id === activeTerminalTabId}
-                  draggingTabId={draggingTerminalTabId}
-                  dropTargetTabId={dropTargetTerminalTabId}
-                  onSelectTab={(tabId) => setActiveTerminalTab({ tabId, openDock: true })}
-                  onRenameTab={setTerminalToRename}
-                  onCloseTab={(tabId) => closeTerminalTab({ tabId })}
+                  isActive={activeSurface.kind === "cli-session" && activeSurface.cliSessionTabId === tab.id}
+                  draggingTabId={draggingCliSessionTabId}
+                  dropTargetTabId={dropTargetCliSessionTabId}
+                  onSelectTab={(tabId) => setActiveCliSessionTab({ tabId })}
+                  onRenameTab={setCliSessionToRename}
+                  onCloseTab={(tabId) => closeCliSessionTab({ tabId })}
                   onDragStart={(event, tabId) => {
                     event.dataTransfer.effectAllowed = "move";
                     event.dataTransfer.setData("text/plain", tabId);
-                    setDraggingTerminalTabId(tabId);
+                    setDraggingCliSessionTabId(tabId);
                   }}
                   onDragEnd={() => {
-                    setDraggingTerminalTabId(null);
-                    setDropTargetTerminalTabId(null);
+                    setDraggingCliSessionTabId(null);
+                    setDropTargetCliSessionTabId(null);
                   }}
                   onDragOver={(event, tabId) => {
                     event.preventDefault();
-                    if (draggingTerminalTabId && draggingTerminalTabId !== tabId) {
-                      setDropTargetTerminalTabId(tabId);
+                    if (draggingCliSessionTabId && draggingCliSessionTabId !== tabId) {
+                      setDropTargetCliSessionTabId(tabId);
                     }
                   }}
-                  onDrop={(event, tabId) => handleTerminalTabDrop(event, tabId)}
+                  onDrop={(event, tabId) => handleCliSessionTabDrop(event, tabId)}
                 />
               ))}
             </div>
           </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 shrink-0 self-center rounded-sm p-0 text-muted-foreground"
-                  onClick={() => createTerminalTab()}
-                  aria-label="new-terminal-tab"
-                >
+          <div className="flex shrink-0 items-center gap-1 px-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 gap-2 rounded-sm px-2.5 text-muted-foreground">
                   <SquareTerminal className="size-4" />
+                  New CLI Session
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                <span>New Terminal</span>
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 shrink-0 self-center rounded-sm p-0 text-muted-foreground"
-                  onClick={() => createTask({ title: "" })}
-                >
-                  <Plus className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>Start Here</DropdownMenuLabel>
+                {CLI_SESSION_CHOICES.map((choice) => {
+                  const providerAvailable = providerAvailability[choice.provider];
+                  const requiresTask = choice.contextMode === "active-task";
+                  const disabled = !providerAvailable || (requiresTask && !activeTask) || false;
+                  const providerLabel = getCliSessionProviderLabel(choice.provider);
+                  const contextLabel = getCliSessionContextLabel(choice.contextMode);
+                  const secondaryLabel = !providerAvailable
+                    ? `${providerLabel} is unavailable in this environment`
+                    : requiresTask
+                      ? (activeTask?.title ?? "Select an active task first")
+                      : "Use the current workspace context";
+
+                  return (
+                    <DropdownMenuItem
+                      key={`${choice.provider}:${choice.contextMode}`}
+                      disabled={disabled}
+                      className="items-start"
+                      onSelect={() => {
+                        createCliSessionTab({
+                          provider: choice.provider,
+                          contextMode: choice.contextMode,
+                        });
+                      }}
+                    >
+                      <div className="flex min-w-0 items-start gap-2">
+                        <ModelIcon providerId={choice.provider} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{providerLabel} · {contextLabel}</div>
+                          <div className="mt-0.5 text-xs text-muted-foreground">{secondaryLabel}</div>
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground"
+                    onClick={() => createTask({ title: "" })}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <span>New Task</span>
+                  <KbdGroup className="ml-1">
+                    <Kbd>{shortcutModifierSymbol}</Kbd>
+                    <Kbd>N</Kbd>
+                  </KbdGroup>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground">
+                  <Ellipsis className="size-4" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                <span>New Task</span>
-                <KbdGroup className="ml-1">
-                  <Kbd>{shortcutModifierSymbol}</Kbd>
-                  <Kbd>N</Kbd>
-                </KbdGroup>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 shrink-0 self-center rounded-sm p-0 text-muted-foreground">
-                <Ellipsis className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onSelect={() => setTaskHistoryOpen(true)}>
-                Task History
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => createTask({ title: "" })}>
-                New Task
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onSelect={() => setTaskHistoryOpen(true)}>
+                  Task History
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => createTask({ title: "" })}>
+                  New Task
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
       <TaskHistoryDrawer
@@ -627,30 +676,30 @@ export function WorkspaceTaskTabs() {
           </Card>
         </div>
       ) : null}
-      {terminalToRename ? (
-        <div className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")} onMouseDown={() => setTerminalToRename(null)}>
+      {cliSessionToRename ? (
+        <div className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")} onMouseDown={() => setCliSessionToRename(null)}>
           <Card className="w-full max-w-md rounded-lg border-border/80 bg-card p-4 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
-            <h3 className="text-base font-semibold text-foreground">Rename Terminal</h3>
-            <p className="mt-2 text-sm text-muted-foreground">Enter a new name for this terminal tab.</p>
+            <h3 className="text-base font-semibold text-foreground">Rename CLI Session</h3>
+            <p className="mt-2 text-sm text-muted-foreground">Enter a new name for this CLI session.</p>
             <Input
-              ref={terminalRenameInputRef}
+              ref={cliSessionRenameInputRef}
               className="mt-3 h-10 rounded-sm border-border/80 bg-background"
-              value={terminalRenameValue}
-              onChange={(event) => setTerminalRenameValue(event.target.value)}
+              value={cliSessionRenameValue}
+              onChange={(event) => setCliSessionRenameValue(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  handleTerminalRenameConfirm();
+                  handleCliSessionRenameConfirm();
                 }
                 if (event.key === "Escape") {
                   event.preventDefault();
-                  setTerminalToRename(null);
+                  setCliSessionToRename(null);
                 }
               }}
             />
             <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setTerminalToRename(null)}>Cancel</Button>
-              <Button onClick={handleTerminalRenameConfirm}>Rename</Button>
+              <Button variant="outline" onClick={() => setCliSessionToRename(null)}>Cancel</Button>
+              <Button onClick={handleCliSessionRenameConfirm}>Rename</Button>
             </div>
           </Card>
         </div>

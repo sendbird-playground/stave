@@ -1,7 +1,11 @@
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { parseWorkspaceShell, parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
-import type { WorkspaceTerminalTab } from "@/lib/terminal/types";
+import type {
+  WorkspaceActiveSurface,
+  WorkspaceCliSessionTab,
+  WorkspaceTerminalTab,
+} from "@/lib/terminal/types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
 export interface WorkspaceSummary {
   id: string;
@@ -27,6 +31,9 @@ export interface WorkspaceSnapshot {
   activeEditorTabId?: string | null;
   terminalTabs?: WorkspaceTerminalTab[];
   activeTerminalTabId?: string | null;
+  cliSessionTabs?: WorkspaceCliSessionTab[];
+  activeCliSessionTabId?: string | null;
+  activeSurface?: WorkspaceActiveSurface;
   workspaceInformation: WorkspaceInformationState;
 }
 
@@ -39,6 +46,9 @@ export interface WorkspaceShell {
   activeEditorTabId?: string | null;
   terminalTabs?: WorkspaceTerminalTab[];
   activeTerminalTabId?: string | null;
+  cliSessionTabs?: WorkspaceCliSessionTab[];
+  activeCliSessionTabId?: string | null;
+  activeSurface?: WorkspaceActiveSurface;
   workspaceInformation: WorkspaceInformationState;
   messageCountByTask: Record<string, number>;
 }
@@ -142,6 +152,9 @@ function buildShellFromSnapshot(snapshot: WorkspaceSnapshot): WorkspaceShell {
     activeEditorTabId: snapshot.activeEditorTabId,
     terminalTabs: snapshot.terminalTabs,
     activeTerminalTabId: snapshot.activeTerminalTabId,
+    cliSessionTabs: snapshot.cliSessionTabs,
+    activeCliSessionTabId: snapshot.activeCliSessionTabId,
+    activeSurface: snapshot.activeSurface,
     workspaceInformation: snapshot.workspaceInformation,
     messageCountByTask: Object.fromEntries(
       Object.entries(snapshot.messagesByTask).map(([taskId, messages]) => [taskId, messages.length] as const)

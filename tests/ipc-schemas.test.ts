@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  CliSessionCreateSessionArgsSchema,
   FilesystemRepoMapArgsSchema,
   LocalMcpConfigUpdateArgsSchema,
   SuggestPRDescriptionArgsSchema,
@@ -113,6 +114,22 @@ describe("provider IPC schemas", () => {
           createdAt: 1,
         }],
         activeTerminalTabId: "terminal-1",
+        cliSessionTabs: [{
+          id: "cli-1",
+          title: "Claude Workspace",
+          provider: "claude-code",
+          contextMode: "workspace",
+          linkedTaskId: null,
+          linkedTaskTitle: null,
+          handoffSummary: "",
+          cwd: "/tmp/project",
+          createdAt: 2,
+        }],
+        activeCliSessionTabId: "cli-1",
+        activeSurface: {
+          kind: "cli-session",
+          cliSessionTabId: "cli-1",
+        },
       },
     });
 
@@ -127,6 +144,11 @@ describe("provider IPC schemas", () => {
       reason: "General task",
       fastModeRequested: false,
       fastModeApplied: false,
+    });
+    expect(parsed?.activeCliSessionTabId).toBe("cli-1");
+    expect(parsed?.activeSurface).toEqual({
+      kind: "cli-session",
+      cliSessionTabId: "cli-1",
     });
   });
 
@@ -216,6 +238,35 @@ describe("provider IPC schemas", () => {
       taskTitle: null,
       terminalTabId: "terminal-1",
       cwd: "",
+    }).success).toBe(false);
+  });
+
+  test("accepts CLI session creation args with provider and context metadata", () => {
+    expect(CliSessionCreateSessionArgsSchema.safeParse({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/project",
+      cliSessionTabId: "cli-1",
+      providerId: "codex",
+      contextMode: "active-task",
+      taskId: "task-1",
+      taskTitle: "Task 1",
+      cwd: "/tmp/project",
+      cols: 120,
+      rows: 40,
+      deliveryMode: "push",
+      runtimeOptions: {
+        codexBinaryPath: "/tmp/codex",
+      },
+    }).success).toBe(true);
+    expect(CliSessionCreateSessionArgsSchema.safeParse({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/project",
+      cliSessionTabId: "cli-1",
+      providerId: "stave",
+      contextMode: "workspace",
+      taskId: null,
+      taskTitle: null,
+      cwd: "/tmp/project",
     }).success).toBe(false);
   });
 

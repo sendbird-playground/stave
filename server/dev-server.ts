@@ -507,6 +507,88 @@ const server = Bun.serve({
       return json({ ok: true, sessionId });
     }
 
+    if (url.pathname === "/api/terminal/create-cli" && req.method === "POST") {
+      const body = await readJson<{
+        workspaceId: string;
+        workspacePath: string;
+        cliSessionTabId: string;
+        providerId: ProviderId;
+        contextMode: "workspace" | "active-task";
+        taskId: string | null;
+        taskTitle: string | null;
+        cwd: string;
+        runtimeOptions?: {
+          codexBinaryPath?: string;
+        };
+      }>(req);
+      const command = body.providerId === "claude-code"
+        ? "claude"
+        : (body.runtimeOptions?.codexBinaryPath?.trim() || "codex");
+      let proc: Bun.Subprocess;
+
+      try {
+        proc = Bun.spawn([command], {
+          cwd: body.cwd || body.workspacePath,
+          stderr: "pipe",
+          stdout: "pipe",
+          stdin: "pipe",
+          env: {
+            ...process.env,
+            STAVE_WORKSPACE_PATH: body.workspacePath,
+            STAVE_TASK_ID: body.taskId ?? "",
+            STAVE_TASK_TITLE: body.taskTitle ?? "",
+          },
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          stderr: `Unable to launch ${body.providerId === "claude-code" ? "Claude" : "Codex"} CLI in the web dev bridge: ${String(error)}`,
+        }, 400);
+      }
+
+      const sessionId = randomUUID();
+      const session: TerminalSession = { process: proc, output: "" };
+      terminalSessions.set(sessionId, session);
+
+      (async () => {
+        const reader = proc.stdout?.getReader();
+        if (!reader) {
+          return;
+        }
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          const current = terminalSessions.get(sessionId);
+          if (!current) {
+            break;
+          }
+          current.output += new TextDecoder().decode(value);
+        }
+      })();
+
+      (async () => {
+        const reader = proc.stderr?.getReader();
+        if (!reader) {
+          return;
+        }
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          const current = terminalSessions.get(sessionId);
+          if (!current) {
+            break;
+          }
+          current.output += new TextDecoder().decode(value);
+        }
+      })();
+
+      return json({ ok: true, sessionId });
+    }
+
     if (url.pathname === "/api/terminal/run" && req.method === "POST") {
       const body = await readJson<{ command: string; cwd?: string }>(req);
       return json(await runCommand({ cmd: body.command, cwd: body.cwd }));

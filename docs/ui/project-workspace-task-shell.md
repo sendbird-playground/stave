@@ -86,10 +86,12 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - exposes `Settings > Design > Sidebar Artwork` so the left sidebar backdrop can switch between `Space Haze`, `Wave + Aurora`, and `Gravity Paint`
   - shows thumbnail previews for each sidebar artwork option so the backdrop modes can be compared before switching
 - `WorkspaceTaskTabs`
-  - renders active tasks as horizontal tabs for the selected workspace
+  - renders active tasks and full-panel CLI sessions as horizontal tabs for the selected workspace
   - uses one shared leading slot for responding wave or model icon
-  - supports drag-and-drop reordering directly in the tab strip
+  - keeps docked terminal tabs out of the top strip so the dock stays operationally separate from the task / CLI surface switcher
+  - supports drag-and-drop reordering directly in the tab strip for tasks and CLI sessions
   - exposes the archive action with confirmation, per-task overflow menu, and workspace-level `Task History`
+  - exposes a direct `New CLI Session` launcher with the four provider/context combinations instead of a multi-step dialog
   - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
 - `RightRail`
   - moves the old workspace-bar utility toggles into a vertical strip on the far right

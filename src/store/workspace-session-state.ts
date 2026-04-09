@@ -6,7 +6,11 @@ import {
   loadWorkspaceShell,
   upsertWorkspace,
 } from "@/lib/db/workspaces.db";
-import type { WorkspaceTerminalTab } from "@/lib/terminal/types";
+import type {
+  WorkspaceActiveSurface,
+  WorkspaceCliSessionTab,
+  WorkspaceTerminalTab,
+} from "@/lib/terminal/types";
 import { isTaskArchived, normalizeTaskControl } from "@/lib/tasks";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
 import { createEmptyWorkspaceInformation, type WorkspaceInformationState } from "@/lib/workspace-information";
@@ -29,6 +33,9 @@ export interface WorkspaceSessionState {
   activeEditorTabId: string | null;
   terminalTabs: WorkspaceTerminalTab[];
   activeTerminalTabId: string | null;
+  cliSessionTabs: WorkspaceCliSessionTab[];
+  activeCliSessionTabId: string | null;
+  activeSurface: WorkspaceActiveSurface;
   activeTurnIdsByTask: Record<string, string | undefined>;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   nativeSessionReadyByTask: Record<string, boolean>;
@@ -46,6 +53,9 @@ export function createEmptyWorkspaceState() {
     activeEditorTabId: null as string | null,
     terminalTabs: [] as WorkspaceTerminalTab[],
     activeTerminalTabId: null as string | null,
+    cliSessionTabs: [] as WorkspaceCliSessionTab[],
+    activeCliSessionTabId: null as string | null,
+    activeSurface: { kind: "task", taskId: "" } as WorkspaceActiveSurface,
     providerSessionByTask: {} as Record<string, TaskProviderSessionState>,
   };
 }
@@ -81,6 +91,78 @@ function normalizeTerminalState(args: {
     terminalTabs,
     activeTerminalTabId,
   };
+}
+
+function normalizeCliSessionState(args: {
+  tasks: Task[];
+  cliSessionTabs: WorkspaceCliSessionTab[];
+  activeCliSessionTabId: string | null;
+}) {
+  const activeTaskIds = new Set(
+    args.tasks
+      .filter((task) => !isTaskArchived(task))
+      .map((task) => task.id),
+  );
+  const seenTabIds = new Set<string>();
+  const cliSessionTabs = args.cliSessionTabs.filter((tab) => {
+    if (seenTabIds.has(tab.id)) {
+      return false;
+    }
+    seenTabIds.add(tab.id);
+    return true;
+  }).map((tab) => ({
+    ...tab,
+    linkedTaskId: tab.linkedTaskId && activeTaskIds.has(tab.linkedTaskId)
+      ? tab.linkedTaskId
+      : null,
+  }));
+  const activeCliSessionTabId = cliSessionTabs.some((tab) => tab.id === args.activeCliSessionTabId)
+    ? args.activeCliSessionTabId
+    : null;
+
+  return {
+    cliSessionTabs,
+    activeCliSessionTabId,
+  };
+}
+
+function resolveActiveSurface(args: {
+  tasks: Task[];
+  activeTaskId: string;
+  cliSessionTabs: WorkspaceCliSessionTab[];
+  activeCliSessionTabId: string | null;
+  activeSurface: WorkspaceActiveSurface;
+}) {
+  const hasTask = (taskId: string) => args.tasks.some((task) => task.id === taskId);
+  const hasCliSession = (cliSessionTabId: string) =>
+    args.cliSessionTabs.some((tab) => tab.id === cliSessionTabId);
+
+  if (args.activeSurface.kind === "task" && hasTask(args.activeSurface.taskId)) {
+    return args.activeSurface;
+  }
+  if (args.activeSurface.kind === "cli-session" && hasCliSession(args.activeSurface.cliSessionTabId)) {
+    return args.activeSurface;
+  }
+
+  if (hasTask(args.activeTaskId)) {
+    return { kind: "task", taskId: args.activeTaskId } satisfies WorkspaceActiveSurface;
+  }
+
+  if (args.activeCliSessionTabId && hasCliSession(args.activeCliSessionTabId)) {
+    return { kind: "cli-session", cliSessionTabId: args.activeCliSessionTabId } satisfies WorkspaceActiveSurface;
+  }
+
+  const fallbackTaskId = args.tasks[0]?.id ?? "";
+  if (fallbackTaskId) {
+    return { kind: "task", taskId: fallbackTaskId } satisfies WorkspaceActiveSurface;
+  }
+
+  const fallbackCliSessionId = args.cliSessionTabs[0]?.id ?? "";
+  if (fallbackCliSessionId) {
+    return { kind: "cli-session", cliSessionTabId: fallbackCliSessionId } satisfies WorkspaceActiveSurface;
+  }
+
+  return { kind: "task", taskId: "" } satisfies WorkspaceActiveSurface;
 }
 
 export function buildNativeSessionReadyByTask(args: {
@@ -283,14 +365,27 @@ export function buildWorkspaceSessionState(args: {
     terminalTabs: args.snapshot?.terminalTabs ?? empty.terminalTabs,
     activeTerminalTabId: args.snapshot?.activeTerminalTabId ?? empty.activeTerminalTabId,
   });
+  const normalizedCliSessionState = normalizeCliSessionState({
+    tasks,
+    cliSessionTabs: args.snapshot?.cliSessionTabs ?? empty.cliSessionTabs,
+    activeCliSessionTabId: args.snapshot?.activeCliSessionTabId ?? empty.activeCliSessionTabId,
+  });
   const activeTurnIdsByTask = Object.fromEntries(
     (args.latestTurns ?? [])
       .filter((turn) => !turn.completedAt)
       .map((turn) => [turn.taskId, turn.id] as const)
   ) as Record<string, string | undefined>;
+  const activeTaskId = args.snapshot?.activeTaskId ?? empty.activeTaskId;
+  const activeSurface = resolveActiveSurface({
+    tasks,
+    activeTaskId,
+    cliSessionTabs: normalizedCliSessionState.cliSessionTabs,
+    activeCliSessionTabId: normalizedCliSessionState.activeCliSessionTabId,
+    activeSurface: args.snapshot?.activeSurface ?? { kind: "task", taskId: activeTaskId },
+  });
 
   return {
-    activeTaskId: args.snapshot?.activeTaskId ?? empty.activeTaskId,
+    activeTaskId,
     tasks,
     messagesByTask,
     messageCountByTask,
@@ -300,6 +395,9 @@ export function buildWorkspaceSessionState(args: {
     activeEditorTabId,
     terminalTabs: normalizedTerminalState.terminalTabs,
     activeTerminalTabId: normalizedTerminalState.activeTerminalTabId,
+    cliSessionTabs: normalizedCliSessionState.cliSessionTabs,
+    activeCliSessionTabId: normalizedCliSessionState.activeCliSessionTabId,
+    activeSurface,
     activeTurnIdsByTask,
     providerSessionByTask,
     nativeSessionReadyByTask: buildNativeSessionReadyByTask({
@@ -343,14 +441,27 @@ export function buildWorkspaceSessionStateFromShell(args: {
     terminalTabs: args.shell?.terminalTabs ?? empty.terminalTabs,
     activeTerminalTabId: args.shell?.activeTerminalTabId ?? empty.activeTerminalTabId,
   });
+  const normalizedCliSessionState = normalizeCliSessionState({
+    tasks,
+    cliSessionTabs: args.shell?.cliSessionTabs ?? empty.cliSessionTabs,
+    activeCliSessionTabId: args.shell?.activeCliSessionTabId ?? empty.activeCliSessionTabId,
+  });
   const activeTurnIdsByTask = Object.fromEntries(
     (args.latestTurns ?? [])
       .filter((turn) => !turn.completedAt)
       .map((turn) => [turn.taskId, turn.id] as const)
   ) as Record<string, string | undefined>;
+  const activeTaskId = args.shell?.activeTaskId ?? empty.activeTaskId;
+  const activeSurface = resolveActiveSurface({
+    tasks,
+    activeTaskId,
+    cliSessionTabs: normalizedCliSessionState.cliSessionTabs,
+    activeCliSessionTabId: normalizedCliSessionState.activeCliSessionTabId,
+    activeSurface: args.shell?.activeSurface ?? { kind: "task", taskId: activeTaskId },
+  });
 
   return {
-    activeTaskId: args.shell?.activeTaskId ?? empty.activeTaskId,
+    activeTaskId,
     tasks,
     messagesByTask,
     messageCountByTask,
@@ -360,6 +471,9 @@ export function buildWorkspaceSessionStateFromShell(args: {
     activeEditorTabId,
     terminalTabs: normalizedTerminalState.terminalTabs,
     activeTerminalTabId: normalizedTerminalState.activeTerminalTabId,
+    cliSessionTabs: normalizedCliSessionState.cliSessionTabs,
+    activeCliSessionTabId: normalizedCliSessionState.activeCliSessionTabId,
+    activeSurface,
     activeTurnIdsByTask,
     providerSessionByTask,
     nativeSessionReadyByTask: buildNativeSessionReadyByTask({
@@ -379,6 +493,9 @@ export function createWorkspaceSnapshot(args: {
   activeEditorTabId: string | null;
   terminalTabs: WorkspaceTerminalTab[];
   activeTerminalTabId: string | null;
+  cliSessionTabs: WorkspaceCliSessionTab[];
+  activeCliSessionTabId: string | null;
+  activeSurface: WorkspaceActiveSurface;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
   return {
@@ -391,6 +508,9 @@ export function createWorkspaceSnapshot(args: {
     activeEditorTabId: args.activeEditorTabId,
     terminalTabs: args.terminalTabs,
     activeTerminalTabId: args.activeTerminalTabId,
+    cliSessionTabs: args.cliSessionTabs,
+    activeCliSessionTabId: args.activeCliSessionTabId,
+    activeSurface: args.activeSurface,
     providerSessionByTask: args.providerSessionByTask,
   };
 }
@@ -407,6 +527,9 @@ export async function persistWorkspaceSnapshot(args: {
   activeEditorTabId: string | null;
   terminalTabs: WorkspaceTerminalTab[];
   activeTerminalTabId: string | null;
+  cliSessionTabs: WorkspaceCliSessionTab[];
+  activeCliSessionTabId: string | null;
+  activeSurface: WorkspaceActiveSurface;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
   const persistedShell = await loadWorkspaceShell({ workspaceId: args.workspaceId });
@@ -452,6 +575,9 @@ export async function persistWorkspaceSnapshot(args: {
       activeEditorTabId: args.activeEditorTabId,
       terminalTabs: args.terminalTabs,
       activeTerminalTabId: args.activeTerminalTabId,
+      cliSessionTabs: args.cliSessionTabs,
+      activeCliSessionTabId: args.activeCliSessionTabId,
+      activeSurface: args.activeSurface,
       providerSessionByTask: mergedProviderSessionByTask,
     }),
   });

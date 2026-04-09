@@ -95,7 +95,11 @@ import {
   type TaskFilter,
 } from "@/lib/tasks";
 import {
+  getCliSessionTabDefaultTitle,
   getTerminalTabDefaultTitle,
+  type CliSessionContextMode,
+  type WorkspaceActiveSurface,
+  type WorkspaceCliSessionTab,
   type WorkspaceTerminalTab,
 } from "@/lib/terminal/types";
 import { resolveSkillSelections } from "@/lib/skills/catalog";
@@ -400,6 +404,9 @@ function resolveTaskRuntimeTarget(args: {
     | "activeEditorTabId"
     | "terminalTabs"
     | "activeTerminalTabId"
+    | "cliSessionTabs"
+    | "activeCliSessionTabId"
+    | "activeSurface"
     | "activeTurnIdsByTask"
     | "providerSessionByTask"
     | "nativeSessionReadyByTask"
@@ -459,6 +466,9 @@ function getWorkspaceSessionForState(args: {
     | "activeEditorTabId"
     | "terminalTabs"
     | "activeTerminalTabId"
+    | "cliSessionTabs"
+    | "activeCliSessionTabId"
+    | "activeSurface"
     | "activeTurnIdsByTask"
     | "providerSessionByTask"
     | "nativeSessionReadyByTask"
@@ -801,6 +811,9 @@ interface AppState {
   activeEditorTabId: string | null;
   terminalTabs: WorkspaceTerminalTab[];
   activeTerminalTabId: string | null;
+  cliSessionTabs: WorkspaceCliSessionTab[];
+  activeCliSessionTabId: string | null;
+  activeSurface: WorkspaceActiveSurface;
   pendingCloseEditorTabId: string | null;
   pendingEditorSelection: { tabId: string; line: number; column?: number } | null;
   projectName: string | null;
@@ -886,6 +899,14 @@ interface AppState {
     linkedTaskId?: string | null;
     title?: string;
   }) => string | null;
+  createCliSessionTab: (args: {
+    provider: "claude-code" | "codex";
+    contextMode: CliSessionContextMode;
+  }) => string | null;
+  setActiveCliSessionTab: (args: { tabId: string | null }) => void;
+  renameCliSessionTab: (args: { tabId: string; title: string }) => void;
+  reorderCliSessionTabs: (args: { fromTabId: string; toTabId: string }) => void;
+  closeCliSessionTab: (args: { tabId: string }) => void;
   setActiveTerminalTab: (args: { tabId: string | null; openDock?: boolean }) => void;
   renameTerminalTab: (args: { tabId: string; title: string }) => void;
   reorderTerminalTabs: (args: { fromTabId: string; toTabId: string }) => void;
@@ -1457,6 +1478,10 @@ function findTerminalTabById(state: Pick<AppState, "terminalTabs">, tabId: strin
   return state.terminalTabs.find((tab) => tab.id === tabId) ?? null;
 }
 
+function findCliSessionTabById(state: Pick<AppState, "cliSessionTabs">, tabId: string) {
+  return state.cliSessionTabs.find((tab) => tab.id === tabId) ?? null;
+}
+
 function createTerminalTabRecord(args: {
   cwd: string;
   linkedTaskId: string | null;
@@ -1490,6 +1515,66 @@ function createTerminalTabRecord(args: {
     cwd: args.cwd,
     createdAt: Date.now(),
   } satisfies WorkspaceTerminalTab;
+}
+
+function buildCliSessionHandoffSummary(args: {
+  task: Task;
+  messages: ChatMessage[];
+  workspacePath: string;
+}) {
+  const latestUserMessage = [...args.messages].reverse().find((message) => message.role === "user" && message.content.trim());
+  const latestAssistantMessage = [...args.messages].reverse().find((message) => message.role === "assistant" && message.content.trim());
+  const lines = [
+    `Continue the Stave task "${args.task.title}" in this fresh CLI session.`,
+    `Workspace path: ${args.workspacePath || "current workspace"}`,
+  ];
+
+  if (latestUserMessage?.content.trim()) {
+    lines.push("", "Latest user request:", latestUserMessage.content.trim());
+  }
+  if (latestAssistantMessage?.content.trim()) {
+    lines.push("", "Latest assistant context:", latestAssistantMessage.content.trim());
+  }
+
+  return lines.join("\n").trim();
+}
+
+function createCliSessionTabRecord(args: {
+  provider: "claude-code" | "codex";
+  contextMode: CliSessionContextMode;
+  cwd: string;
+  linkedTaskId: string | null;
+  linkedTaskTitle?: string | null;
+  handoffSummary: string;
+  existingTitles?: string[];
+}) {
+  const baseTitle = getCliSessionTabDefaultTitle({
+    providerId: args.provider,
+    contextMode: args.contextMode,
+    linkedTaskTitle: args.linkedTaskTitle,
+  });
+  const existingTitles = args.existingTitles ?? [];
+  const title = !existingTitles.includes(baseTitle)
+    ? baseTitle
+    : (() => {
+        let suffix = 2;
+        while (existingTitles.includes(`${baseTitle} ${suffix}`)) {
+          suffix += 1;
+        }
+        return `${baseTitle} ${suffix}`;
+      })();
+
+  return {
+    id: crypto.randomUUID(),
+    title,
+    provider: args.provider,
+    contextMode: args.contextMode,
+    linkedTaskId: args.linkedTaskId,
+    linkedTaskTitle: args.linkedTaskTitle ?? null,
+    handoffSummary: args.handoffSummary,
+    cwd: args.cwd,
+    createdAt: Date.now(),
+  } satisfies WorkspaceCliSessionTab;
 }
 
 function moveItemById<T extends { id: string }>(args: {
@@ -1541,6 +1626,7 @@ function summarizeWorkspaceShell(snapshot: Awaited<ReturnType<typeof loadWorkspa
   }
   return snapshot.tasks.length
     + (snapshot.terminalTabs?.length ?? 0)
+    + (snapshot.cliSessionTabs?.length ?? 0)
     + Object.values(snapshot.messageCountByTask).reduce((sum, count) => sum + count, 0);
 }
 
@@ -1550,6 +1636,7 @@ function summarizeWorkspaceSession(session?: WorkspaceSessionState | null) {
   }
   return session.tasks.length
     + (session.terminalTabs?.length ?? 0)
+    + (session.cliSessionTabs?.length ?? 0)
     + Object.values(session.messageCountByTask).reduce((sum, count) => sum + count, 0);
 }
 
@@ -2202,6 +2289,9 @@ export const useAppStore = create<AppState>()(
             activeEditorTabId: empty.activeEditorTabId,
             terminalTabs: empty.terminalTabs,
             activeTerminalTabId: empty.activeTerminalTabId,
+            cliSessionTabs: empty.cliSessionTabs,
+            activeCliSessionTabId: empty.activeCliSessionTabId,
+            activeSurface: empty.activeSurface,
             providerSessionByTask: empty.providerSessionByTask,
           });
           workspaceState = buildWorkspaceSessionState({
@@ -2214,6 +2304,9 @@ export const useAppStore = create<AppState>()(
               activeEditorTabId: empty.activeEditorTabId,
               terminalTabs: empty.terminalTabs,
               activeTerminalTabId: empty.activeTerminalTabId,
+              cliSessionTabs: empty.cliSessionTabs,
+              activeCliSessionTabId: empty.activeCliSessionTabId,
+              activeSurface: empty.activeSurface,
               providerSessionByTask: empty.providerSessionByTask,
             }),
           });
@@ -2773,6 +2866,9 @@ export const useAppStore = create<AppState>()(
       activeEditorTabId: null,
       terminalTabs: [],
       activeTerminalTabId: null,
+      cliSessionTabs: [],
+      activeCliSessionTabId: null,
+      activeSurface: { kind: "task", taskId: "" },
       pendingCloseEditorTabId: null,
       pendingEditorSelection: null,
       projectName: null,
@@ -2883,6 +2979,9 @@ export const useAppStore = create<AppState>()(
             activeEditorTabId: null,
             terminalTabs: [],
             activeTerminalTabId: null,
+            cliSessionTabs: [],
+            activeCliSessionTabId: null,
+            activeSurface: { kind: "task", taskId: "" },
             providerSessionByTask: {},
           });
           initialRows = await listWorkspaceSummaries();
@@ -3081,6 +3180,9 @@ export const useAppStore = create<AppState>()(
                   activeEditorTabId: null,
                   terminalTabs: [],
                   activeTerminalTabId: null,
+                  cliSessionTabs: [],
+                  activeCliSessionTabId: null,
+                  activeSurface: { kind: "task", taskId: "" },
                   providerSessionByTask: {},
                 });
               }
@@ -3335,6 +3437,9 @@ export const useAppStore = create<AppState>()(
               activeEditorTabId: null,
               terminalTabs: [],
               activeTerminalTabId: null,
+              cliSessionTabs: [],
+              activeCliSessionTabId: null,
+              activeSurface: { kind: "task", taskId: "" },
               providerSessionByTask: {},
             });
           }
@@ -3490,6 +3595,9 @@ export const useAppStore = create<AppState>()(
           activeEditorTabId: state.activeEditorTabId,
           terminalTabs: state.terminalTabs,
           activeTerminalTabId: state.activeTerminalTabId,
+          cliSessionTabs: state.cliSessionTabs,
+          activeCliSessionTabId: state.activeCliSessionTabId,
+          activeSurface: state.activeSurface,
           providerSessionByTask: state.providerSessionByTask,
         });
 
@@ -3517,6 +3625,9 @@ export const useAppStore = create<AppState>()(
           activeEditorTabId: state.activeEditorTabId,
           terminalTabs: state.terminalTabs,
           activeTerminalTabId: state.activeTerminalTabId,
+          cliSessionTabs: state.cliSessionTabs,
+          activeCliSessionTabId: state.activeCliSessionTabId,
+          activeSurface: state.activeSurface,
           providerSessionByTask: state.providerSessionByTask,
         });
 
@@ -3865,6 +3976,9 @@ export const useAppStore = create<AppState>()(
           activeEditorTabId: empty.activeEditorTabId,
           terminalTabs: empty.terminalTabs,
           activeTerminalTabId: empty.activeTerminalTabId,
+          cliSessionTabs: empty.cliSessionTabs,
+          activeCliSessionTabId: empty.activeCliSessionTabId,
+          activeSurface: { kind: "task", taskId: seededTask.id },
           providerSessionByTask: {
             [seededTask.id]: {},
           },
@@ -3880,6 +3994,9 @@ export const useAppStore = create<AppState>()(
           activeEditorTabId: snapshot.activeEditorTabId ?? null,
           terminalTabs: snapshot.terminalTabs ?? [],
           activeTerminalTabId: snapshot.activeTerminalTabId ?? null,
+          cliSessionTabs: snapshot.cliSessionTabs ?? [],
+          activeCliSessionTabId: snapshot.activeCliSessionTabId ?? null,
+          activeSurface: snapshot.activeSurface ?? { kind: "task", taskId: snapshot.activeTaskId },
           providerSessionByTask: snapshot.providerSessionByTask ?? {},
         });
         const workspaceState = buildWorkspaceSessionState({ snapshot });
@@ -4832,7 +4949,7 @@ export const useAppStore = create<AppState>()(
       },
       selectTask: ({ taskId }) => {
         const stateBefore = get();
-        if (stateBefore.activeTaskId === taskId) {
+        if (stateBefore.activeTaskId === taskId && stateBefore.activeSurface.kind === "task" && stateBefore.activeSurface.taskId === taskId) {
           return;
         }
         const workspaceId = stateBefore.taskWorkspaceIdById[taskId] ?? stateBefore.activeWorkspaceId;
@@ -4840,6 +4957,7 @@ export const useAppStore = create<AppState>()(
           && (stateBefore.messageCountByTask[taskId] ?? 0) > 0;
         set((state) => ({
           activeTaskId: taskId,
+          activeSurface: { kind: "task", taskId },
           workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
         }));
         if (workspaceId && shouldLoadMessages) {
@@ -4868,6 +4986,9 @@ export const useAppStore = create<AppState>()(
         }
         return {
           activeTaskId: "",
+          activeSurface: state.activeSurface.kind === "task"
+            ? { kind: "task", taskId: "" }
+            : state.activeSurface,
           workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
         };
       }),
@@ -5064,6 +5185,7 @@ export const useAppStore = create<AppState>()(
           return {
             tasks: [nextTask, ...state.tasks],
             activeTaskId: nextTask.id,
+            activeSurface: { kind: "task", taskId: nextTask.id },
             messagesByTask: {
               ...state.messagesByTask,
               [nextTask.id]: [],
@@ -5138,6 +5260,7 @@ export const useAppStore = create<AppState>()(
                 : task
             ),
             activeTaskId: taskId,
+            activeSurface: { kind: "task", taskId },
             workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
           };
         });
@@ -5492,10 +5615,20 @@ export const useAppStore = create<AppState>()(
               ? { ...tab, linkedTaskId: null }
               : tab,
           );
+          const nextCliSessionTabs = state.cliSessionTabs.map((tab) =>
+            tab.linkedTaskId === taskId
+              ? { ...tab, linkedTaskId: null }
+              : tab,
+          );
+          const nextActiveTaskId = shouldSwitch ? fallbackTaskId : state.activeTaskId;
           return {
             tasks: nextTasks,
-            activeTaskId: shouldSwitch ? fallbackTaskId : state.activeTaskId,
+            activeTaskId: nextActiveTaskId,
+            activeSurface: state.activeSurface.kind === "task" && state.activeSurface.taskId === taskId
+              ? { kind: "task", taskId: nextActiveTaskId }
+              : state.activeSurface,
             terminalTabs: nextTerminalTabs,
+            cliSessionTabs: nextCliSessionTabs,
             messagesByTask: interrupted.messagesByTask,
             messageCountByTask: {
               ...state.messageCountByTask,
@@ -5586,6 +5719,132 @@ export const useAppStore = create<AppState>()(
         }));
 
         return nextTab.id;
+      },
+      createCliSessionTab: ({ provider, contextMode }) => {
+        const state = get();
+        const workspaceId = state.activeWorkspaceId;
+        const workspacePath = state.workspacePathById[workspaceId] ?? state.projectPath ?? "";
+        if (!workspaceId || !workspacePath) {
+          return null;
+        }
+
+        const linkedTask = contextMode === "active-task"
+          ? findActiveTerminalLinkableTask(state)
+          : null;
+        if (contextMode === "active-task" && !linkedTask) {
+          return null;
+        }
+
+        const nextTab = createCliSessionTabRecord({
+          provider,
+          contextMode,
+          cwd: workspacePath,
+          linkedTaskId: linkedTask?.id ?? null,
+          linkedTaskTitle: linkedTask?.title ?? null,
+          handoffSummary: linkedTask
+            ? buildCliSessionHandoffSummary({
+                task: linkedTask,
+                messages: state.messagesByTask[linkedTask.id] ?? [],
+                workspacePath,
+              })
+            : "",
+          existingTitles: state.cliSessionTabs.map((tab) => tab.title),
+        });
+
+        set((current) => ({
+          cliSessionTabs: [...current.cliSessionTabs, nextTab],
+          activeCliSessionTabId: nextTab.id,
+          activeSurface: { kind: "cli-session", cliSessionTabId: nextTab.id },
+          workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(current),
+        }));
+
+        return nextTab.id;
+      },
+      setActiveCliSessionTab: ({ tabId }) => {
+        set((state) => {
+          if (tabId === null) {
+            if (state.activeCliSessionTabId === null && state.activeSurface.kind === "task") {
+              return state;
+            }
+            return {
+              activeCliSessionTabId: null,
+              activeSurface: { kind: "task", taskId: state.activeTaskId },
+              workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+            };
+          }
+          if (!findCliSessionTabById(state, tabId)) {
+            return state;
+          }
+          if (state.activeCliSessionTabId === tabId && state.activeSurface.kind === "cli-session" && state.activeSurface.cliSessionTabId === tabId) {
+            return state;
+          }
+          return {
+            activeCliSessionTabId: tabId,
+            activeSurface: { kind: "cli-session", cliSessionTabId: tabId },
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
+      },
+      renameCliSessionTab: ({ tabId, title }) => {
+        const normalizedTitle = title.trim();
+        if (!normalizedTitle) {
+          return;
+        }
+        set((state) => {
+          const tab = findCliSessionTabById(state, tabId);
+          if (!tab || tab.title === normalizedTitle) {
+            return state;
+          }
+          return {
+            cliSessionTabs: state.cliSessionTabs.map((item) =>
+              item.id === tabId
+                ? { ...item, title: normalizedTitle }
+                : item,
+            ),
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
+      },
+      reorderCliSessionTabs: ({ fromTabId, toTabId }) => {
+        set((state) => {
+          const nextTabs = moveItemById({
+            items: state.cliSessionTabs,
+            fromId: fromTabId,
+            toId: toTabId,
+          });
+          if (nextTabs === state.cliSessionTabs) {
+            return state;
+          }
+          return {
+            cliSessionTabs: nextTabs,
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
+      },
+      closeCliSessionTab: ({ tabId }) => {
+        set((state) => {
+          const closingIndex = state.cliSessionTabs.findIndex((tab) => tab.id === tabId);
+          if (closingIndex < 0) {
+            return state;
+          }
+          const nextTabs = state.cliSessionTabs.filter((tab) => tab.id !== tabId);
+          const fallbackTab = nextTabs[Math.min(closingIndex, Math.max(nextTabs.length - 1, 0))] ?? null;
+          const nextActiveCliSessionTabId = state.activeCliSessionTabId === tabId
+            ? fallbackTab?.id ?? null
+            : state.activeCliSessionTabId;
+          return {
+            cliSessionTabs: nextTabs,
+            activeCliSessionTabId: nextActiveCliSessionTabId,
+            activeSurface: state.activeSurface.kind === "cli-session" && state.activeSurface.cliSessionTabId === tabId
+              ? (
+                fallbackTab
+                  ? { kind: "cli-session", cliSessionTabId: fallbackTab.id }
+                  : { kind: "task", taskId: state.activeTaskId }
+              )
+              : state.activeSurface,
+            workspaceSnapshotVersion: incrementWorkspaceSnapshotVersion(state),
+          };
+        });
       },
       setActiveTerminalTab: ({ tabId, openDock }) => {
         set((state) => {
@@ -7243,6 +7502,9 @@ export const useAppStore = create<AppState>()(
               activeEditorTabId: inactiveWorkspaceSession.activeEditorTabId,
               terminalTabs: inactiveWorkspaceSession.terminalTabs,
               activeTerminalTabId: inactiveWorkspaceSession.activeTerminalTabId,
+              cliSessionTabs: inactiveWorkspaceSession.cliSessionTabs,
+              activeCliSessionTabId: inactiveWorkspaceSession.activeCliSessionTabId,
+              activeSurface: inactiveWorkspaceSession.activeSurface,
               providerSessionByTask: inactiveWorkspaceSession.providerSessionByTask,
             });
           }
@@ -7288,6 +7550,9 @@ export const useAppStore = create<AppState>()(
                 activeEditorTabId: persistedInactiveWorkspaceSession.session.activeEditorTabId,
                 terminalTabs: persistedInactiveWorkspaceSession.session.terminalTabs,
                 activeTerminalTabId: persistedInactiveWorkspaceSession.session.activeTerminalTabId,
+                cliSessionTabs: persistedInactiveWorkspaceSession.session.cliSessionTabs,
+                activeCliSessionTabId: persistedInactiveWorkspaceSession.session.activeCliSessionTabId,
+                activeSurface: persistedInactiveWorkspaceSession.session.activeSurface,
                 providerSessionByTask: persistedInactiveWorkspaceSession.session.providerSessionByTask,
               });
             }

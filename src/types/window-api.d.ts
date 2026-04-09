@@ -24,6 +24,9 @@ import type { ProviderSlashCommand } from "@/lib/providers/provider-command-cata
 import type { GitHubPrPayload } from "@/lib/pr-status";
 import type { SkillCatalogResponse } from "@/lib/skills/types";
 import type {
+  CliSessionCreateSessionArgs,
+  WorkspaceActiveSurface,
+  WorkspaceCliSessionTab,
   TerminalCreateSessionArgs,
   WorkspaceTerminalTab,
 } from "@/lib/terminal/types";
@@ -527,6 +530,7 @@ interface TerminalSessionOutputPayload {
 interface WindowTerminalApi {
   runCommand?: (args: TerminalRunArgs) => Promise<TerminalRunResult>;
   createSession?: (args: TerminalCreateSessionArgs) => Promise<{ ok: boolean; sessionId?: string }>;
+  createCliSession?: (args: CliSessionCreateSessionArgs) => Promise<{ ok: boolean; sessionId?: string; stderr?: string }>;
   writeSession?: (args: {
     sessionId: string;
     input: string;
@@ -774,6 +778,9 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
       terminalTabs?: WorkspaceTerminalTab[];
       activeTerminalTabId?: string | null;
+      cliSessionTabs?: WorkspaceCliSessionTab[];
+      activeCliSessionTabId?: string | null;
+      activeSurface?: WorkspaceActiveSurface;
       workspaceInformation?: WorkspaceInformationState;
       messageCountByTask?: Record<string, number>;
     } | null;
@@ -834,6 +841,9 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
       terminalTabs?: WorkspaceTerminalTab[];
       activeTerminalTabId?: string | null;
+      cliSessionTabs?: WorkspaceCliSessionTab[];
+      activeCliSessionTabId?: string | null;
+      activeSurface?: WorkspaceActiveSurface;
       workspaceInformation?: WorkspaceInformationState;
     } | null;
   }>;
@@ -931,6 +941,9 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
       terminalTabs?: WorkspaceTerminalTab[];
       activeTerminalTabId?: string | null;
+      cliSessionTabs?: WorkspaceCliSessionTab[];
+      activeCliSessionTabId?: string | null;
+      activeSurface?: WorkspaceActiveSurface;
       workspaceInformation?: WorkspaceInformationState;
     };
   }) => Promise<{ ok: boolean }>;
