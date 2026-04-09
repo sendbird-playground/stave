@@ -147,16 +147,15 @@ export function CliSessionPanel() {
     toast.message("Handoff pasted");
   }
 
-  if (cliSessionTabs.length === 0) {
-    return null;
-  }
+  const hasTabs = cliSessionTabs.length > 0;
+  const isVisible = hasTabs && activeSurface.kind === "cli-session";
 
   return (
     <section
       data-testid="cli-session-panel"
       className={cn(
         "flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-terminal",
-        activeSurface.kind === "cli-session" ? "flex" : "hidden",
+        isVisible ? "flex" : "hidden",
       )}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-border/40">

@@ -2,10 +2,19 @@ import { app } from "electron";
 import path from "node:path";
 import { disposeAllLspSessions } from "./lsp/session-manager";
 import { destroyAllBrowserSessions } from "./browser/browser-manager";
+import {
+  bindTerminalSessionSlot,
+  clearTerminalSessionSlotRegistry,
+  createTerminalSessionSlotRegistry,
+  getTerminalSessionIdForSlotKey as lookupTerminalSessionIdForSlotKey,
+  unbindTerminalSessionSlotBySessionId,
+  unbindTerminalSessionSlotBySlotKey,
+} from "./terminal-session-slot-registry";
 import { SqliteStore } from "../persistence/sqlite-store";
 import type { TerminalSession } from "./types";
 
 const terminalSessions = new Map<string, TerminalSession>();
+const terminalSessionSlotRegistry = createTerminalSessionSlotRegistry();
 let sqliteStore: SqliteStore | null = null;
 const TERMINAL_SESSION_CLOSE_TIMEOUT_MS = 5_000;
 
@@ -13,12 +22,47 @@ export function getTerminalSession(sessionId: string) {
   return terminalSessions.get(sessionId);
 }
 
-export function setTerminalSession(sessionId: string, session: TerminalSession) {
+export function getTerminalSessionIdForSlotKey(slotKey: string) {
+  const sessionId = lookupTerminalSessionIdForSlotKey({
+    registry: terminalSessionSlotRegistry,
+    slotKey,
+  });
+  if (!sessionId) {
+    return null;
+  }
+
+  if (terminalSessions.has(sessionId)) {
+    return sessionId;
+  }
+
+  unbindTerminalSessionSlotBySlotKey({
+    registry: terminalSessionSlotRegistry,
+    slotKey,
+  });
+  return null;
+}
+
+export function setTerminalSession(
+  sessionId: string,
+  session: TerminalSession,
+  slotKey?: string,
+) {
   terminalSessions.set(sessionId, session);
+  if (slotKey) {
+    bindTerminalSessionSlot({
+      registry: terminalSessionSlotRegistry,
+      sessionId,
+      slotKey,
+    });
+  }
 }
 
 export function deleteTerminalSession(sessionId: string) {
   terminalSessions.delete(sessionId);
+  unbindTerminalSessionSlotBySessionId({
+    registry: terminalSessionSlotRegistry,
+    sessionId,
+  });
 }
 
 function waitForTerminalSessionClose(session: TerminalSession) {
@@ -33,6 +77,7 @@ function waitForTerminalSessionClose(session: TerminalSession) {
 export async function cleanupAllTerminalSessions() {
   const sessions = [...terminalSessions.values()];
   terminalSessions.clear();
+  clearTerminalSessionSlotRegistry({ registry: terminalSessionSlotRegistry });
 
   await Promise.allSettled(
     sessions.map(async (session) => {
@@ -62,6 +107,7 @@ export function ensurePersistenceReadySync() {
 
 export function resetMainProcessState() {
   terminalSessions.clear();
+  clearTerminalSessionSlotRegistry({ registry: terminalSessionSlotRegistry });
   void disposeAllLspSessions();
   destroyAllBrowserSessions();
   sqliteStore = null;

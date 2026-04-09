@@ -1013,7 +1013,7 @@ export function AppShell() {
                           <div className={showCliSurface ? "hidden h-full" : "h-full"}>
                             <ChatArea />
                           </div>
-                          {cliSessionTabs.length > 0 ? <CliSessionPanel /> : null}
+                          <CliSessionPanel />
                         </div>
                       </div>
                       <div className={terminalDocked ? undefined : "hidden"}>
