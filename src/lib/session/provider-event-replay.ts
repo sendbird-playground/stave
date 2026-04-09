@@ -677,10 +677,36 @@ export function appendProviderEventToAssistant(args: {
 
   if (args.event.type === "tool_result") {
     const toolResultEvent = args.event;
-    const updatedParts = message.parts.map((part) => mergeToolResultIntoPart({
+    let updatedParts = message.parts.map((part) => mergeToolResultIntoPart({
       part,
       event: toolResultEvent,
     }));
+
+    // Fallback: if no part was updated by exact toolUseId match (e.g. the
+    // tool_use part was created from a partial message without an id), find
+    // the first tool_use part still waiting for output and adopt the result.
+    const merged = updatedParts.some(
+      (p) => p.type === "tool_use" && p.toolUseId === toolResultEvent.tool_use_id,
+    );
+    if (!merged) {
+      let adopted = false;
+      updatedParts = updatedParts.map((part) => {
+        if (
+          adopted
+          || part.type !== "tool_use"
+          || part.toolUseId != null
+          || (part.state !== "input-available" && part.state !== "input-streaming")
+        ) {
+          return part;
+        }
+        adopted = true;
+        return mergeToolResultIntoPart({
+          part: { ...part, toolUseId: toolResultEvent.tool_use_id },
+          event: toolResultEvent,
+        });
+      });
+    }
+
     return { ...message, parts: updatedParts };
   }
 
@@ -845,6 +871,24 @@ export function appendProviderEventToAssistant(args: {
     for (let index = nextParts.length - 1; index >= 0; index -= 1) {
       const candidate = nextParts[index];
       if (candidate?.type === "tool_use" && candidate.toolName.trim().toLowerCase() === "todowrite") {
+        existingIdx = index;
+        break;
+      }
+    }
+    if (existingIdx !== -1) {
+      nextParts[existingIdx] = part;
+    } else {
+      nextParts.push(part);
+    }
+  } else if (part.type === "tool_use" && part.toolUseId) {
+    // Deduplicate tool_use parts by toolUseId. With includePartialMessages
+    // the same tool_use block may arrive in multiple partial assistant
+    // messages. Replace the existing part in-place so the UI doesn't create
+    // phantom duplicate tool entries that can never receive their result.
+    let existingIdx = -1;
+    for (let index = nextParts.length - 1; index >= 0; index -= 1) {
+      const candidate = nextParts[index];
+      if (candidate?.type === "tool_use" && candidate.toolUseId === part.toolUseId) {
         existingIdx = index;
         break;
       }
