@@ -29,6 +29,7 @@ export interface PromptDraftRuntimeOverrides {
 export interface PromptDraftQueuedNextTurn {
   queuedAt: string;
   sourceTurnId?: string;
+  content?: string;
 }
 
 export interface PromptDraft {

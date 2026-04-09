@@ -1951,10 +1951,11 @@ describe("workspace store hydration ordering", () => {
 
     const queuedState = useAppStore.getState();
     expect(queuedState.promptDraftByTask["task-main"]).toMatchObject({
-      text: "Second prompt",
+      text: "",
     });
     expect(queuedState.promptDraftByTask["task-main"]?.queuedNextTurn).toMatchObject({
       sourceTurnId: started.turnId,
+      content: "Second prompt",
     });
 
     streamListener?.({
