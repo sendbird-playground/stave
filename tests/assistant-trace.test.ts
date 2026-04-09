@@ -31,7 +31,7 @@ describe("getTodoProgress", () => {
 });
 
 describe("deriveTodoTraceStatus", () => {
-  test("keeps the todo step active while unfinished todos remain", () => {
+  test("marks the todo step done when tool state is output-available, even with pending todos", () => {
     expect(deriveTodoTraceStatus({
       state: "output-available",
       input: JSON.stringify({
@@ -40,7 +40,7 @@ describe("deriveTodoTraceStatus", () => {
           { content: "Patch todo trace", status: "pending" },
         ],
       }),
-    })).toBe("active");
+    })).toBe("done");
   });
 
   test("marks the todo step done once every todo is completed", () => {
@@ -53,6 +53,18 @@ describe("deriveTodoTraceStatus", () => {
         ],
       }),
     })).toBe("done");
+  });
+
+  test("keeps the todo step active while streaming with unfinished todos", () => {
+    expect(deriveTodoTraceStatus({
+      state: "input-streaming",
+      input: JSON.stringify({
+        todos: [
+          { content: "Inspect renderer", status: "completed" },
+          { content: "Patch todo trace", status: "in_progress" },
+        ],
+      }),
+    })).toBe("active");
   });
 });
 
