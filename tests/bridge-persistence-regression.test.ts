@@ -2999,4 +2999,277 @@ describe("workspace store hydration ordering", () => {
       content: "Approval delivery failed: no active turn found for this task.",
     });
   });
+
+  test("resolveApproval targets the task-owned inactive workspace turn", async () => {
+    const approvalCalls: Array<{ turnId: string; requestId: string; approved: boolean }> = [];
+
+    setWindowContext({
+      localStorage: createMemoryStorage(),
+      api: {
+        provider: {
+          respondApproval: async (args: { turnId: string; requestId: string; approved: boolean }) => {
+            approvalCalls.push(args);
+            return { ok: true, message: "ok" };
+          },
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-main": "/tmp/stave-project",
+        "ws-alt": "/tmp/stave-project/.stave/workspaces/alt",
+      },
+      workspaceBranchById: {
+        "ws-main": "main",
+        "ws-alt": "alt",
+      },
+      workspaceDefaultById: {
+        "ws-main": true,
+        "ws-alt": false,
+      },
+      tasks: [{
+        id: "task-main",
+        title: "Task Main",
+        provider: "codex",
+        updatedAt: "2026-04-07T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      messagesByTask: { "task-main": [] },
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
+      taskWorkspaceIdById: {
+        "task-main": "ws-main",
+        "task-alt": "ws-alt",
+      },
+      workspaceRuntimeCacheById: {
+        "ws-alt": {
+          activeTaskId: "task-alt",
+          tasks: [{
+            id: "task-alt",
+            title: "Task Alt",
+            provider: "codex",
+            updatedAt: "2026-04-07T00:00:00.000Z",
+            unread: false,
+            archivedAt: null,
+          }],
+          messagesByTask: {
+            "task-alt": [{
+              id: "task-alt-m-1",
+              role: "assistant",
+              model: "gpt-5.4",
+              providerId: "codex",
+              content: "",
+              isStreaming: false,
+              parts: [{
+                type: "approval",
+                toolName: "bash",
+                requestId: "approval-alt-1",
+                description: "Run npm test in alt workspace",
+                state: "approval-requested",
+              }],
+            }],
+          },
+          messageCountByTask: { "task-alt": 1 },
+          promptDraftByTask: {},
+          workspaceInformation: {
+            jiraIssues: [],
+            confluencePages: [],
+            figmaResources: [],
+            linkedPullRequests: [],
+            slackThreads: [],
+            notes: "",
+            todos: [],
+            customFields: [],
+          },
+          editorTabs: [],
+          activeEditorTabId: null,
+          terminalTabs: [],
+          activeTerminalTabId: null,
+          activeTurnIdsByTask: {
+            "task-alt": "turn-alt-1",
+          },
+          providerSessionByTask: {},
+          nativeSessionReadyByTask: {},
+        },
+      },
+    });
+
+    useAppStore.getState().resolveApproval({
+      taskId: "task-alt",
+      messageId: "task-alt-m-1",
+      approved: true,
+    });
+
+    await Bun.sleep(0);
+
+    expect(approvalCalls).toEqual([{
+      turnId: "turn-alt-1",
+      requestId: "approval-alt-1",
+      approved: true,
+    }]);
+    expect(useAppStore.getState().workspaceRuntimeCacheById["ws-alt"]?.messagesByTask["task-alt"]?.[0]?.parts[0]).toMatchObject({
+      type: "approval",
+      requestId: "approval-alt-1",
+      state: "approval-responded",
+    });
+    expect(useAppStore.getState().messagesByTask["task-main"]).toEqual([]);
+  });
+
+  test("resolveUserInput targets the task-owned inactive workspace turn", async () => {
+    const inputCalls: Array<{
+      turnId: string;
+      requestId: string;
+      answers?: Record<string, string>;
+      denied?: boolean;
+    }> = [];
+
+    setWindowContext({
+      localStorage: createMemoryStorage(),
+      api: {
+        provider: {
+          respondUserInput: async (args: {
+            turnId: string;
+            requestId: string;
+            answers?: Record<string, string>;
+            denied?: boolean;
+          }) => {
+            inputCalls.push(args);
+            return { ok: true, message: "ok" };
+          },
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-main": "/tmp/stave-project",
+        "ws-alt": "/tmp/stave-project/.stave/workspaces/alt",
+      },
+      workspaceBranchById: {
+        "ws-main": "main",
+        "ws-alt": "alt",
+      },
+      workspaceDefaultById: {
+        "ws-main": true,
+        "ws-alt": false,
+      },
+      tasks: [{
+        id: "task-main",
+        title: "Task Main",
+        provider: "codex",
+        updatedAt: "2026-04-07T00:00:00.000Z",
+        unread: false,
+        archivedAt: null,
+      }],
+      messagesByTask: { "task-main": [] },
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
+      taskWorkspaceIdById: {
+        "task-main": "ws-main",
+        "task-alt": "ws-alt",
+      },
+      workspaceRuntimeCacheById: {
+        "ws-alt": {
+          activeTaskId: "task-alt",
+          tasks: [{
+            id: "task-alt",
+            title: "Task Alt",
+            provider: "codex",
+            updatedAt: "2026-04-07T00:00:00.000Z",
+            unread: false,
+            archivedAt: null,
+          }],
+          messagesByTask: {
+            "task-alt": [{
+              id: "task-alt-m-1",
+              role: "assistant",
+              model: "gpt-5.4",
+              providerId: "codex",
+              content: "",
+              isStreaming: false,
+              parts: [{
+                type: "user_input",
+                toolName: "request_user_input",
+                requestId: "input-alt-1",
+                questions: [{
+                  id: "name",
+                  header: "Name",
+                  question: "What should I call the branch?",
+                  options: [
+                    {
+                      label: "Use current",
+                      description: "Keep the current branch name.",
+                    },
+                  ],
+                }],
+                state: "input-requested",
+              }],
+            }],
+          },
+          messageCountByTask: { "task-alt": 1 },
+          promptDraftByTask: {},
+          workspaceInformation: {
+            jiraIssues: [],
+            confluencePages: [],
+            figmaResources: [],
+            linkedPullRequests: [],
+            slackThreads: [],
+            notes: "",
+            todos: [],
+            customFields: [],
+          },
+          editorTabs: [],
+          activeEditorTabId: null,
+          terminalTabs: [],
+          activeTerminalTabId: null,
+          activeTurnIdsByTask: {
+            "task-alt": "turn-alt-1",
+          },
+          providerSessionByTask: {},
+          nativeSessionReadyByTask: {},
+        },
+      },
+    });
+
+    useAppStore.getState().resolveUserInput({
+      taskId: "task-alt",
+      messageId: "task-alt-m-1",
+      answers: { name: "feature/alt" },
+    });
+
+    await Bun.sleep(0);
+
+    expect(inputCalls).toEqual([{
+      turnId: "turn-alt-1",
+      requestId: "input-alt-1",
+      answers: { name: "feature/alt" },
+      denied: undefined,
+    }]);
+    expect(useAppStore.getState().workspaceRuntimeCacheById["ws-alt"]?.messagesByTask["task-alt"]?.[0]?.parts[0]).toMatchObject({
+      type: "user_input",
+      requestId: "input-alt-1",
+      state: "input-responded",
+    });
+    expect(useAppStore.getState().messagesByTask["task-main"]).toEqual([]);
+  });
 });

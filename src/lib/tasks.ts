@@ -28,6 +28,23 @@ export function getTaskControlOwner(task: Pick<Task, "controlOwner"> | null | un
   return task?.controlOwner ?? "stave";
 }
 
+export function findWorkspaceTaskOrThrow(args: {
+  tasks: Task[];
+  requestedTaskId?: string | null;
+}) {
+  const requestedTaskId = args.requestedTaskId?.trim();
+  if (!requestedTaskId) {
+    return null;
+  }
+
+  const task = args.tasks.find((candidate) => candidate.id === requestedTaskId) ?? null;
+  if (!task) {
+    throw new Error(`Task not found in this workspace: ${requestedTaskId}`);
+  }
+
+  return task;
+}
+
 export function normalizeTaskControl(task: Task): Task {
   return {
     ...task,

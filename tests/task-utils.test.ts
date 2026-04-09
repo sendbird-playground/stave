@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  findWorkspaceTaskOrThrow,
   getArchiveFallbackTaskId,
   getRespondingTasks,
   getRespondingProviderId,
@@ -125,6 +126,17 @@ describe("task utils", () => {
   test("detects archived tasks", () => {
     expect(isTaskArchived(tasks[0]!)).toBe(false);
     expect(isTaskArchived(tasks[1]!)).toBe(true);
+  });
+
+  test("throws when a requested task id does not exist in the workspace", () => {
+    expect(() => findWorkspaceTaskOrThrow({
+      tasks,
+      requestedTaskId: "task-missing",
+    })).toThrow("Task not found in this workspace: task-missing");
+  });
+
+  test("returns null when no requested task id is provided", () => {
+    expect(findWorkspaceTaskOrThrow({ tasks, requestedTaskId: "" })).toBeNull();
   });
 
   test("normalizes concise suggested task titles", () => {
