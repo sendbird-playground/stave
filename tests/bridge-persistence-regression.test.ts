@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createBridgeProviderSource } from "@/lib/providers/bridge.source";
-import { listWorkspaceSummaries, loadWorkspaceSnapshot, upsertWorkspace } from "@/lib/db/workspaces.db";
+import {
+  listWorkspaceSummaries,
+  loadWorkspaceSnapshot,
+  upsertWorkspace,
+} from "@/lib/db/workspaces.db";
+import { createEmptyWorkspaceInformation } from "@/lib/workspace-information";
+import {
+  buildWorkspaceSessionState,
+  createWorkspaceSnapshot,
+} from "@/store/workspace-session-state";
 import {
   createNotification,
   listNotifications,
@@ -30,7 +39,10 @@ function setWindowApi(api: unknown) {
   (globalThis as { window: unknown }).window = { api } as unknown;
 }
 
-function setWindowContext(args: { api?: unknown; localStorage?: ReturnType<typeof createMemoryStorage> }) {
+function setWindowContext(args: {
+  api?: unknown;
+  localStorage?: ReturnType<typeof createMemoryStorage>;
+}) {
   (globalThis as { window: unknown }).window = {
     api: args.api,
     ...(args.localStorage ? { localStorage: args.localStorage } : {}),
@@ -43,24 +55,38 @@ afterEach(() => {
 
 describe("push stream race handling", () => {
   test("captures done event even when emitted before startPushTurn resolves", async () => {
-    let listener: ((payload: { streamId: string; event: unknown; done: boolean }) => void) | null = null;
+    let listener:
+      | ((payload: { streamId: string; event: unknown; done: boolean }) => void)
+      | null = null;
 
     setWindowApi({
       provider: {
-        subscribeStreamEvents: (cb: (payload: { streamId: string; event: unknown; done: boolean }) => void) => {
+        subscribeStreamEvents: (
+          cb: (payload: {
+            streamId: string;
+            event: unknown;
+            done: boolean;
+          }) => void,
+        ) => {
           listener = cb;
           return () => {
             listener = null;
           };
         },
         startPushTurn: async () => {
-          listener?.({ streamId: "stream-1", event: { type: "done" }, done: true });
+          listener?.({
+            streamId: "stream-1",
+            event: { type: "done" },
+            done: true,
+          });
           return { ok: true, streamId: "stream-1" };
         },
       },
     });
 
-    const source = createBridgeProviderSource<{ type: string }>({ providerId: "claude-code" });
+    const source = createBridgeProviderSource<{ type: string }>({
+      providerId: "claude-code",
+    });
     const out: Array<{ type: string }> = [];
     for await (const event of source.streamTurn({ prompt: "quick fail" })) {
       out.push(event);
@@ -87,13 +113,16 @@ describe("push stream memory release", () => {
         onDone: () => {
           doneResolver?.();
         },
-      }
+      },
     );
 
     expect(started.ok).toBe(true);
     await donePromise;
 
-    const page = runtime.readTurnStream({ streamId: started.streamId, cursor: 0 });
+    const page = runtime.readTurnStream({
+      streamId: started.streamId,
+      cursor: 0,
+    });
     expect(page.ok).toBe(false);
     expect(page.done).toBe(true);
   });
@@ -196,11 +225,16 @@ describe("workspace persistence fallback", () => {
     expect(notifications[0]?.id).toBe("notification-1");
     expect(notifications[0]?.readAt).toBeNull();
 
-    await markNotificationRead({ id: "notification-1", readAt: "2026-03-06T01:12:00.000Z" });
+    await markNotificationRead({
+      id: "notification-1",
+      readAt: "2026-03-06T01:12:00.000Z",
+    });
     notifications = await listNotifications();
     expect(notifications[0]?.readAt).toBe("2026-03-06T01:12:00.000Z");
 
-    const changedCount = await markAllNotificationsRead({ readAt: "2026-03-06T01:13:00.000Z" });
+    const changedCount = await markAllNotificationsRead({
+      readAt: "2026-03-06T01:13:00.000Z",
+    });
     expect(changedCount).toBe(0);
   });
 
@@ -221,7 +255,11 @@ describe("workspace persistence fallback", () => {
     let pickIndex = 0;
     const filesByRoot: Record<string, string[]> = {
       "/tmp/stave-project-a": ["package.json", "src/a.ts"],
-      "/tmp/stave-project-a/.stave/workspaces/feature-a": ["package.json", "src/a.ts", "src/feature-a.ts"],
+      "/tmp/stave-project-a/.stave/workspaces/feature-a": [
+        "package.json",
+        "src/a.ts",
+        "src/feature-a.ts",
+      ],
       "/tmp/stave-project-b": ["package.json", "src/b.ts"],
     };
 
@@ -231,9 +269,7 @@ describe("workspace persistence fallback", () => {
         fs: {
           pickRoot: async () => {
             const root = projectRoots[pickIndex++];
-            return root
-              ? { ok: true, ...root }
-              : { ok: false, files: [] };
+            return root ? { ok: true, ...root } : { ok: false, files: [] };
           },
           listFiles: async ({ rootPath }: { rootPath: string }) => ({
             ok: true,
@@ -244,8 +280,10 @@ describe("workspace persistence fallback", () => {
         },
       },
     });
-    (globalThis.window as Window & typeof globalThis).setTimeout = globalThis.setTimeout.bind(globalThis);
-    (globalThis.window as Window & typeof globalThis).clearTimeout = globalThis.clearTimeout.bind(globalThis);
+    (globalThis.window as Window & typeof globalThis).setTimeout =
+      globalThis.setTimeout.bind(globalThis);
+    (globalThis.window as Window & typeof globalThis).clearTimeout =
+      globalThis.clearTimeout.bind(globalThis);
 
     const { useAppStore } = await import("../src/store/app.store");
     localStorage.clear();
@@ -269,7 +307,8 @@ describe("workspace persistence fallback", () => {
     const stateAfterProjectA = useAppStore.getState();
     const projectADefaultWorkspaceId = stateAfterProjectA.activeWorkspaceId;
     const extraWorkspaceId = "ws-a-extra";
-    const extraWorkspacePath = "/tmp/stave-project-a/.stave/workspaces/feature-a";
+    const extraWorkspacePath =
+      "/tmp/stave-project-a/.stave/workspaces/feature-a";
     const emptySnapshot = {
       activeTaskId: "",
       tasks: [],
@@ -285,7 +324,11 @@ describe("workspace persistence fallback", () => {
     useAppStore.setState({
       workspaces: [
         ...stateAfterProjectA.workspaces,
-        { id: extraWorkspaceId, name: "feature-a", updatedAt: "2026-03-20T00:00:00.000Z" },
+        {
+          id: extraWorkspaceId,
+          name: "feature-a",
+          updatedAt: "2026-03-20T00:00:00.000Z",
+        },
       ],
       activeWorkspaceId: extraWorkspaceId,
       workspaceBranchById: {
@@ -307,7 +350,9 @@ describe("workspace persistence fallback", () => {
     expect(stateAfterProjectB.projectPath).toBe("/tmp/stave-project-b");
     expect(stateAfterProjectB.workspaces).toHaveLength(1);
 
-    await useAppStore.getState().openProject({ projectPath: "/tmp/stave-project-a" });
+    await useAppStore
+      .getState()
+      .openProject({ projectPath: "/tmp/stave-project-a" });
 
     const nextState = useAppStore.getState();
     expect(nextState.projectPath).toBe("/tmp/stave-project-a");
@@ -316,10 +361,9 @@ describe("workspace persistence fallback", () => {
       projectADefaultWorkspaceId,
       extraWorkspaceId,
     ]);
-    expect(nextState.recentProjects.map((project) => project.projectPath)).toEqual([
-      "/tmp/stave-project-a",
-      "/tmp/stave-project-b",
-    ]);
+    expect(
+      nextState.recentProjects.map((project) => project.projectPath),
+    ).toEqual(["/tmp/stave-project-a", "/tmp/stave-project-b"]);
   });
 
   test("preserves manual project order when opening different projects", async () => {
@@ -340,10 +384,19 @@ describe("workspace persistence fallback", () => {
       projectPath: "/tmp/stave-project-a",
       projectName: "project-a",
       defaultBranch: "main",
-      workspaces: [{ id: "ws-a", name: "Default Workspace", updatedAt: "2026-03-20T00:00:00.000Z" }],
+      workspaces: [
+        {
+          id: "ws-a",
+          name: "Default Workspace",
+          updatedAt: "2026-03-20T00:00:00.000Z",
+        },
+      ],
       activeWorkspaceId: "ws-a",
       workspaceBranchById: { "ws-a": "main", "ws-b": "main" },
-      workspacePathById: { "ws-a": "/tmp/stave-project-a", "ws-b": "/tmp/stave-project-b" },
+      workspacePathById: {
+        "ws-a": "/tmp/stave-project-a",
+        "ws-b": "/tmp/stave-project-b",
+      },
       workspaceDefaultById: { "ws-a": true, "ws-b": true },
       recentProjects: [
         {
@@ -351,7 +404,13 @@ describe("workspace persistence fallback", () => {
           projectName: "project-a",
           lastOpenedAt: "2026-03-20T00:00:00.000Z",
           defaultBranch: "main",
-          workspaces: [{ id: "ws-a", name: "Default Workspace", updatedAt: "2026-03-20T00:00:00.000Z" }],
+          workspaces: [
+            {
+              id: "ws-a",
+              name: "Default Workspace",
+              updatedAt: "2026-03-20T00:00:00.000Z",
+            },
+          ],
           activeWorkspaceId: "ws-a",
           workspaceBranchById: { "ws-a": "main" },
           workspacePathById: { "ws-a": "/tmp/stave-project-a" },
@@ -362,7 +421,13 @@ describe("workspace persistence fallback", () => {
           projectName: "project-b",
           lastOpenedAt: "2026-03-20T00:00:01.000Z",
           defaultBranch: "main",
-          workspaces: [{ id: "ws-b", name: "Default Workspace", updatedAt: "2026-03-20T00:00:01.000Z" }],
+          workspaces: [
+            {
+              id: "ws-b",
+              name: "Default Workspace",
+              updatedAt: "2026-03-20T00:00:01.000Z",
+            },
+          ],
           activeWorkspaceId: "ws-b",
           workspaceBranchById: { "ws-b": "main" },
           workspacePathById: { "ws-b": "/tmp/stave-project-b" },
@@ -371,19 +436,189 @@ describe("workspace persistence fallback", () => {
       ],
     });
 
-    useAppStore.getState().moveProjectInList({ projectPath: "/tmp/stave-project-b", direction: "up" });
-    expect(useAppStore.getState().recentProjects.map((project) => project.projectPath)).toEqual([
-      "/tmp/stave-project-b",
-      "/tmp/stave-project-a",
-    ]);
+    useAppStore
+      .getState()
+      .moveProjectInList({
+        projectPath: "/tmp/stave-project-b",
+        direction: "up",
+      });
+    expect(
+      useAppStore
+        .getState()
+        .recentProjects.map((project) => project.projectPath),
+    ).toEqual(["/tmp/stave-project-b", "/tmp/stave-project-a"]);
 
-    await useAppStore.getState().openProject({ projectPath: "/tmp/stave-project-b" });
-    await useAppStore.getState().openProject({ projectPath: "/tmp/stave-project-a" });
+    await useAppStore
+      .getState()
+      .openProject({ projectPath: "/tmp/stave-project-b" });
+    await useAppStore
+      .getState()
+      .openProject({ projectPath: "/tmp/stave-project-a" });
 
-    expect(useAppStore.getState().recentProjects.map((project) => project.projectPath)).toEqual([
-      "/tmp/stave-project-b",
-      "/tmp/stave-project-a",
-    ]);
+    expect(
+      useAppStore
+        .getState()
+        .recentProjects.map((project) => project.projectPath),
+    ).toEqual(["/tmp/stave-project-b", "/tmp/stave-project-a"]);
+  });
+
+  test("openProject restores cached CLI session state before workspace hydration finishes", async () => {
+    const localStorage = createMemoryStorage();
+    let notifyHydrateStarted = () => {};
+    const hydrateStarted = new Promise<void>((resolve) => {
+      notifyHydrateStarted = resolve;
+    });
+    let releaseHydrate = () => {};
+    const hydrateGate = new Promise<void>((resolve) => {
+      releaseHydrate = resolve;
+    });
+
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          listFiles: async () => ({
+            ok: true,
+            files: ["package.json", "src/a.ts"],
+          }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    const cachedCliTab = {
+      id: "cli-a",
+      title: "Codex Workspace",
+      provider: "codex" as const,
+      contextMode: "workspace" as const,
+      linkedTaskId: null,
+      linkedTaskTitle: null,
+      handoffSummary: "",
+      cwd: "/tmp/stave-project-a",
+      createdAt: 1,
+    };
+    const cachedWorkspaceState = buildWorkspaceSessionState({
+      snapshot: createWorkspaceSnapshot({
+        activeTaskId: "",
+        tasks: [],
+        messagesByTask: {},
+        promptDraftByTask: {},
+        workspaceInformation: createEmptyWorkspaceInformation(),
+        editorTabs: [],
+        activeEditorTabId: null,
+        terminalTabs: [],
+        activeTerminalTabId: null,
+        cliSessionTabs: [cachedCliTab],
+        activeCliSessionTabId: cachedCliTab.id,
+        activeSurface: {
+          kind: "cli-session",
+          cliSessionTabId: cachedCliTab.id,
+        },
+        providerSessionByTask: {},
+      }),
+    });
+
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      projectPath: "/tmp/stave-project-b",
+      projectName: "project-b",
+      defaultBranch: "main",
+      workspaces: [
+        {
+          id: "ws-b",
+          name: "Default Workspace",
+          updatedAt: "2026-03-20T00:00:01.000Z",
+        },
+      ],
+      activeWorkspaceId: "ws-b",
+      workspaceBranchById: { "ws-b": "main" },
+      workspacePathById: { "ws-b": "/tmp/stave-project-b" },
+      workspaceDefaultById: { "ws-b": true },
+      projectFiles: ["package.json", "src/b.ts"],
+      recentProjects: [
+        {
+          projectPath: "/tmp/stave-project-a",
+          projectName: "project-a",
+          lastOpenedAt: "2026-03-20T00:00:00.000Z",
+          defaultBranch: "main",
+          workspaces: [
+            {
+              id: "ws-a",
+              name: "Default Workspace",
+              updatedAt: "2026-03-20T00:00:00.000Z",
+            },
+          ],
+          activeWorkspaceId: "ws-a",
+          workspaceBranchById: { "ws-a": "main" },
+          workspacePathById: { "ws-a": "/tmp/stave-project-a" },
+          workspaceDefaultById: { "ws-a": true },
+        },
+        {
+          projectPath: "/tmp/stave-project-b",
+          projectName: "project-b",
+          lastOpenedAt: "2026-03-20T00:00:01.000Z",
+          defaultBranch: "main",
+          workspaces: [
+            {
+              id: "ws-b",
+              name: "Default Workspace",
+              updatedAt: "2026-03-20T00:00:01.000Z",
+            },
+          ],
+          activeWorkspaceId: "ws-b",
+          workspaceBranchById: { "ws-b": "main" },
+          workspacePathById: { "ws-b": "/tmp/stave-project-b" },
+          workspaceDefaultById: { "ws-b": true },
+        },
+      ],
+      workspaceRuntimeCacheById: {
+        "ws-a": cachedWorkspaceState,
+      },
+    });
+    const originalHydrateWorkspaces = useAppStore.getState().hydrateWorkspaces;
+    useAppStore.setState({
+      hydrateWorkspaces: async () => {
+        notifyHydrateStarted();
+        await hydrateGate;
+        await originalHydrateWorkspaces();
+      },
+    });
+
+    let openProjectResolved = false;
+    const openProjectPromise = useAppStore
+      .getState()
+      .openProject({
+        projectPath: "/tmp/stave-project-a",
+      })
+      .then(() => {
+        openProjectResolved = true;
+      });
+
+    await hydrateStarted;
+
+    const interimState = useAppStore.getState();
+    expect(openProjectResolved).toBe(false);
+    expect(interimState.projectPath).toBe("/tmp/stave-project-a");
+    expect(interimState.activeWorkspaceId).toBe("ws-a");
+    expect(interimState.cliSessionTabs).toEqual([cachedCliTab]);
+    expect(interimState.activeCliSessionTabId).toBe(cachedCliTab.id);
+    expect(interimState.activeSurface).toEqual({
+      kind: "cli-session",
+      cliSessionTabId: cachedCliTab.id,
+    });
+
+    releaseHydrate();
+    await openProjectPromise;
+
+    const nextState = useAppStore.getState();
+    expect(nextState.cliSessionTabs).toEqual([cachedCliTab]);
+    expect(nextState.activeCliSessionTabId).toBe(cachedCliTab.id);
+    expect(nextState.activeSurface).toEqual({
+      kind: "cli-session",
+      cliSessionTabId: cachedCliTab.id,
+    });
   });
 
   test("preserves manual workspace order when switching workspaces", async () => {
@@ -418,37 +653,71 @@ describe("workspace persistence fallback", () => {
       projectName: "project-a",
       defaultBranch: "main",
       workspaces: [
-        { id: "ws-a", name: "Default Workspace", updatedAt: "2026-03-20T00:00:00.000Z" },
-        { id: "ws-b", name: "feature-b", updatedAt: "2026-03-20T00:00:01.000Z" },
-        { id: "ws-c", name: "feature-c", updatedAt: "2026-03-20T00:00:02.000Z" },
+        {
+          id: "ws-a",
+          name: "Default Workspace",
+          updatedAt: "2026-03-20T00:00:00.000Z",
+        },
+        {
+          id: "ws-b",
+          name: "feature-b",
+          updatedAt: "2026-03-20T00:00:01.000Z",
+        },
+        {
+          id: "ws-c",
+          name: "feature-c",
+          updatedAt: "2026-03-20T00:00:02.000Z",
+        },
       ],
       activeWorkspaceId: "ws-a",
-      workspaceBranchById: { "ws-a": "main", "ws-b": "feature-b", "ws-c": "feature-c" },
+      workspaceBranchById: {
+        "ws-a": "main",
+        "ws-b": "feature-b",
+        "ws-c": "feature-c",
+      },
       workspacePathById: {
         "ws-a": "/tmp/stave-project-a",
         "ws-b": "/tmp/stave-project-a/.stave/workspaces/feature-b",
         "ws-c": "/tmp/stave-project-a/.stave/workspaces/feature-c",
       },
       workspaceDefaultById: { "ws-a": true, "ws-b": false, "ws-c": false },
-      recentProjects: [{
-        projectPath: "/tmp/stave-project-a",
-        projectName: "project-a",
-        lastOpenedAt: "2026-03-20T00:00:00.000Z",
-        defaultBranch: "main",
-        workspaces: [
-          { id: "ws-a", name: "Default Workspace", updatedAt: "2026-03-20T00:00:00.000Z" },
-          { id: "ws-b", name: "feature-b", updatedAt: "2026-03-20T00:00:01.000Z" },
-          { id: "ws-c", name: "feature-c", updatedAt: "2026-03-20T00:00:02.000Z" },
-        ],
-        activeWorkspaceId: "ws-a",
-        workspaceBranchById: { "ws-a": "main", "ws-b": "feature-b", "ws-c": "feature-c" },
-        workspacePathById: {
-          "ws-a": "/tmp/stave-project-a",
-          "ws-b": "/tmp/stave-project-a/.stave/workspaces/feature-b",
-          "ws-c": "/tmp/stave-project-a/.stave/workspaces/feature-c",
+      recentProjects: [
+        {
+          projectPath: "/tmp/stave-project-a",
+          projectName: "project-a",
+          lastOpenedAt: "2026-03-20T00:00:00.000Z",
+          defaultBranch: "main",
+          workspaces: [
+            {
+              id: "ws-a",
+              name: "Default Workspace",
+              updatedAt: "2026-03-20T00:00:00.000Z",
+            },
+            {
+              id: "ws-b",
+              name: "feature-b",
+              updatedAt: "2026-03-20T00:00:01.000Z",
+            },
+            {
+              id: "ws-c",
+              name: "feature-c",
+              updatedAt: "2026-03-20T00:00:02.000Z",
+            },
+          ],
+          activeWorkspaceId: "ws-a",
+          workspaceBranchById: {
+            "ws-a": "main",
+            "ws-b": "feature-b",
+            "ws-c": "feature-c",
+          },
+          workspacePathById: {
+            "ws-a": "/tmp/stave-project-a",
+            "ws-b": "/tmp/stave-project-a/.stave/workspaces/feature-b",
+            "ws-c": "/tmp/stave-project-a/.stave/workspaces/feature-c",
+          },
+          workspaceDefaultById: { "ws-a": true, "ws-b": false, "ws-c": false },
         },
-        workspaceDefaultById: { "ws-a": true, "ws-b": false, "ws-c": false },
-      }],
+      ],
     });
 
     useAppStore.getState().moveWorkspaceInProjectList({
@@ -457,50 +726,49 @@ describe("workspace persistence fallback", () => {
       direction: "up",
     });
 
-    expect(useAppStore.getState().workspaces.map((workspace) => workspace.id)).toEqual([
-      "ws-a",
-      "ws-c",
-      "ws-b",
-    ]);
+    expect(
+      useAppStore.getState().workspaces.map((workspace) => workspace.id),
+    ).toEqual(["ws-a", "ws-c", "ws-b"]);
 
     await useAppStore.getState().switchWorkspace({ workspaceId: "ws-c" });
     await useAppStore.getState().switchWorkspace({ workspaceId: "ws-b" });
 
-    expect(useAppStore.getState().workspaces.map((workspace) => workspace.id)).toEqual([
-      "ws-a",
-      "ws-c",
-      "ws-b",
-    ]);
+    expect(
+      useAppStore.getState().workspaces.map((workspace) => workspace.id),
+    ).toEqual(["ws-a", "ws-c", "ws-b"]);
   });
 
   test("latest task message loads do not overwrite newer in-memory message versions", async () => {
     const localStorage = createMemoryStorage();
-    let resolvePage: ((value: {
-      ok: boolean;
-      page: {
-        messages: Array<{
-          id: string;
-          role: "user" | "assistant";
-          model: string;
-          providerId: "user" | "codex";
-          content: string;
-          isStreaming: boolean;
-          parts: Array<{ type: "text"; text: string }>;
-        }>;
-        totalCount: number;
-        limit: number;
-        offset: number;
-        hasMoreOlder: boolean;
-      };
-    }) => void) | null = null;
+    let resolvePage:
+      | ((value: {
+          ok: boolean;
+          page: {
+            messages: Array<{
+              id: string;
+              role: "user" | "assistant";
+              model: string;
+              providerId: "user" | "codex";
+              content: string;
+              isStreaming: boolean;
+              parts: Array<{ type: "text"; text: string }>;
+            }>;
+            totalCount: number;
+            limit: number;
+            offset: number;
+            hasMoreOlder: boolean;
+          };
+        }) => void)
+      | null = null;
 
     setWindowContext({
       localStorage,
       api: {
         persistence: {
-          loadTaskMessages: async () => new Promise((resolve) => {
-            resolvePage = resolve as typeof resolvePage;
-          }),
+          loadTaskMessages: async () =>
+            new Promise((resolve) => {
+              resolvePage = resolve as typeof resolvePage;
+            }),
         },
       },
     });
@@ -510,17 +778,21 @@ describe("workspace persistence fallback", () => {
     useAppStore.setState({
       ...initialState,
       hasHydratedWorkspaces: true,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-20T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-03-20T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       activeTaskId: "task-main",
-      tasks: [{
-        id: "task-main",
-        title: "Main Task",
-        provider: "codex",
-        updatedAt: "2026-03-20T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-main",
+          title: "Main Task",
+          provider: "codex",
+          updatedAt: "2026-03-20T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: {
         "task-main": [],
       },
@@ -604,7 +876,9 @@ describe("workspace persistence fallback", () => {
     await loadingPromise;
 
     const nextState = useAppStore.getState();
-    expect(nextState.messagesByTask["task-main"]?.at(-1)?.content).toBe("## 변경\n\n- final summary");
+    expect(nextState.messagesByTask["task-main"]?.at(-1)?.content).toBe(
+      "## 변경\n\n- final summary",
+    );
   });
 });
 
@@ -614,12 +888,14 @@ describe("workspace snapshot schema compatibility", () => {
       persistence: {
         listWorkspaces: async () => ({
           ok: true,
-          rows: [{ id: "base", name: "Base", updatedAt: "2026-03-08T00:00:00.000Z" }],
+          rows: [
+            { id: "base", name: "Base", updatedAt: "2026-03-08T00:00:00.000Z" },
+          ],
         }),
         loadWorkspace: async () => ({
           ok: true,
           snapshot: {
-                  activeTaskId: "task-1",
+            activeTaskId: "task-1",
             tasks: [
               {
                 id: "task-1",
@@ -704,12 +980,14 @@ describe("workspace snapshot schema compatibility", () => {
       persistence: {
         listWorkspaces: async () => ({
           ok: true,
-          rows: [{ id: "base", name: "Base", updatedAt: "2026-03-08T00:00:00.000Z" }],
+          rows: [
+            { id: "base", name: "Base", updatedAt: "2026-03-08T00:00:00.000Z" },
+          ],
         }),
         loadWorkspace: async () => ({
           ok: true,
           snapshot: {
-                  activeTaskId: "task-2",
+            activeTaskId: "task-2",
             tasks: [
               {
                 id: "task-2",
@@ -778,7 +1056,6 @@ describe("workspace snapshot schema compatibility", () => {
     expect(loaded?.editorTabs).toEqual([]);
     expect(loaded?.activeEditorTabId).toBeNull();
   });
-
 });
 
 describe("workspace store hydration ordering", () => {
@@ -791,12 +1068,18 @@ describe("workspace store hydration ordering", () => {
         persistence: {
           listWorkspaces: async () => ({
             ok: true,
-            rows: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" }],
+            rows: [
+              {
+                id: "ws-main",
+                name: "Main",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+            ],
           }),
           loadWorkspace: async () => ({
             ok: true,
             snapshot: {
-                      activeTaskId: "task-db",
+              activeTaskId: "task-db",
               tasks: [
                 {
                   id: "task-db",
@@ -842,7 +1125,9 @@ describe("workspace store hydration ordering", () => {
     const initialState = useAppStore.getInitialState();
     useAppStore.setState({
       ...initialState,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       projectPath: "/tmp/stave-project",
       workspacePathById: { "ws-main": "/tmp/stave-project" },
@@ -863,9 +1148,13 @@ describe("workspace store hydration ordering", () => {
     expect(nextState.hasHydratedWorkspaces).toBe(true);
     expect(nextState.activeTaskId).toBe("task-db");
     expect(nextState.tasks.map((task) => task.id)).toEqual(["task-db"]);
-    expect(nextState.messagesByTask["task-db"]?.[0]?.content).toBe("loaded from db");
+    expect(nextState.messagesByTask["task-db"]?.[0]?.content).toBe(
+      "loaded from db",
+    );
     expect(nextState.promptDraftByTask["task-db"]?.text).toBe("draft from db");
-    expect(nextState.providerSessionByTask["task-db"]).toEqual({ codex: "thread-db-1" });
+    expect(nextState.providerSessionByTask["task-db"]).toEqual({
+      codex: "thread-db-1",
+    });
   });
 
   test("hydrateWorkspaces recovers persisted tasks when the cached workspace session is empty", async () => {
@@ -881,20 +1170,28 @@ describe("workspace store hydration ordering", () => {
         persistence: {
           listWorkspaces: async () => ({
             ok: true,
-            rows: [{ id: "ws-main", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" }],
+            rows: [
+              {
+                id: "ws-main",
+                name: "Default Workspace",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+            ],
           }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
           loadWorkspaceShell: async () => ({
             ok: true,
             shell: {
               activeTaskId: "task-db",
-              tasks: [{
-                id: "task-db",
-                title: "Recovered Task",
-                provider: "codex",
-                updatedAt: "2026-03-10T00:00:00.000Z",
-                unread: false,
-              }],
+              tasks: [
+                {
+                  id: "task-db",
+                  title: "Recovered Task",
+                  provider: "codex",
+                  updatedAt: "2026-03-10T00:00:00.000Z",
+                  unread: false,
+                },
+              ],
               promptDraftByTask: {},
               providerSessionByTask: {},
               messageCountByTask: { "task-db": 0 },
@@ -922,7 +1219,13 @@ describe("workspace store hydration ordering", () => {
     const initialState = useAppStore.getInitialState();
     useAppStore.setState({
       ...initialState,
-      workspaces: [{ id: "ws-main", name: "Default Workspace", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      workspaces: [
+        {
+          id: "ws-main",
+          name: "Default Workspace",
+          updatedAt: "2026-03-09T00:00:00.000Z",
+        },
+      ],
       activeWorkspaceId: "ws-main",
       projectPath: "/tmp/stave-project",
       projectName: "stave-project",
@@ -973,12 +1276,18 @@ describe("workspace store hydration ordering", () => {
         persistence: {
           listWorkspaces: async () => ({
             ok: true,
-            rows: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" }],
+            rows: [
+              {
+                id: "ws-main",
+                name: "Main",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+            ],
           }),
           loadWorkspace: async () => ({
             ok: true,
             snapshot: {
-                      activeTaskId: "task-stale",
+              activeTaskId: "task-stale",
               tasks: [
                 {
                   id: "task-stale",
@@ -1036,7 +1345,9 @@ describe("workspace store hydration ordering", () => {
     const initialState = useAppStore.getInitialState();
     useAppStore.setState({
       ...initialState,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       projectPath: "/tmp/stave-project",
       workspacePathById: { "ws-main": "/tmp/stave-project" },
@@ -1057,11 +1368,16 @@ describe("workspace store hydration ordering", () => {
       requestId: "approval-stale-1",
       state: "approval-interrupted",
     });
-    expect(messages.at(-1)?.content).toBe("Generation interrupted because Stave was closed before this turn completed.");
-    expect(messages.at(-1)?.parts).toEqual([{
-      type: "system_event",
-      content: "Generation interrupted because Stave was closed before this turn completed.",
-    }]);
+    expect(messages.at(-1)?.content).toBe(
+      "Generation interrupted because Stave was closed before this turn completed.",
+    );
+    expect(messages.at(-1)?.parts).toEqual([
+      {
+        type: "system_event",
+        content:
+          "Generation interrupted because Stave was closed before this turn completed.",
+      },
+    ]);
   });
 
   test("hydrateWorkspaces restores projectFiles for the explorer on boot", async () => {
@@ -1079,7 +1395,13 @@ describe("workspace store hydration ordering", () => {
         persistence: {
           listWorkspaces: async () => ({
             ok: true,
-            rows: [{ id: "ws-main", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+            rows: [
+              {
+                id: "ws-main",
+                name: "default",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+            ],
           }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
           listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
@@ -1091,7 +1413,15 @@ describe("workspace store hydration ordering", () => {
       import("../src/lib/fs"),
       import("../src/store/app.store"),
     ]);
-    await (workspaceFsAdapter as { setRoot?: (args: { rootPath: string; rootName: string; files?: string[] }) => Promise<void> }).setRoot?.({
+    await (
+      workspaceFsAdapter as {
+        setRoot?: (args: {
+          rootPath: string;
+          rootName: string;
+          files?: string[];
+        }) => Promise<void>;
+      }
+    ).setRoot?.({
       rootPath: "/tmp/stave-project",
       rootName: "fixture",
       files: [],
@@ -1100,7 +1430,13 @@ describe("workspace store hydration ordering", () => {
     const initialState = useAppStore.getInitialState();
     useAppStore.setState({
       ...initialState,
-      workspaces: [{ id: "ws-main", name: "default", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      workspaces: [
+        {
+          id: "ws-main",
+          name: "default",
+          updatedAt: "2026-03-09T00:00:00.000Z",
+        },
+      ],
       activeWorkspaceId: "ws-main",
       projectPath: "/tmp/stave-project",
       projectName: "fixture",
@@ -1118,24 +1454,26 @@ describe("workspace store hydration ordering", () => {
 
   test("hydrateWorkspaces resolves after shell hydrate and backfills task messages asynchronously", async () => {
     const localStorage = createMemoryStorage();
-    let resolveTaskMessages: ((value: {
-      ok: boolean;
-      page: {
-        messages: Array<{
-          id: string;
-          role: "assistant";
-          model: string;
-          providerId: "codex";
-          content: string;
-          isStreaming: boolean;
-          parts: Array<{ type: "text"; text: string }>;
-        }>;
-        totalCount: number;
-        limit: number;
-        offset: number;
-        hasMoreOlder: boolean;
-      };
-    }) => void) | null = null;
+    let resolveTaskMessages:
+      | ((value: {
+          ok: boolean;
+          page: {
+            messages: Array<{
+              id: string;
+              role: "assistant";
+              model: string;
+              providerId: "codex";
+              content: string;
+              isStreaming: boolean;
+              parts: Array<{ type: "text"; text: string }>;
+            }>;
+            totalCount: number;
+            limit: number;
+            offset: number;
+            hasMoreOlder: boolean;
+          };
+        }) => void)
+      | null = null;
     const taskMessagesPromise = new Promise<{
       ok: boolean;
       page: {
@@ -1168,20 +1506,28 @@ describe("workspace store hydration ordering", () => {
         persistence: {
           listWorkspaces: async () => ({
             ok: true,
-            rows: [{ id: "ws-main-hydrate", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+            rows: [
+              {
+                id: "ws-main-hydrate",
+                name: "default",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+            ],
           }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
           loadWorkspaceShell: async () => ({
             ok: true,
             shell: {
               activeTaskId: "task-main-hydrate",
-              tasks: [{
-                id: "task-main-hydrate",
-                title: "Hydrated Task",
-                provider: "codex",
-                updatedAt: "2026-03-10T00:00:00.000Z",
-                unread: false,
-              }],
+              tasks: [
+                {
+                  id: "task-main-hydrate",
+                  title: "Hydrated Task",
+                  provider: "codex",
+                  updatedAt: "2026-03-10T00:00:00.000Z",
+                  unread: false,
+                },
+              ],
               promptDraftByTask: {},
               providerSessionByTask: {},
               messageCountByTask: { "task-main-hydrate": 1 },
@@ -1213,7 +1559,13 @@ describe("workspace store hydration ordering", () => {
     useAppStore.setState({
       ...initialState,
       hasHydratedWorkspaces: false,
-      workspaces: [{ id: "ws-main-hydrate", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+      workspaces: [
+        {
+          id: "ws-main-hydrate",
+          name: "default",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
+      ],
       activeWorkspaceId: "ws-main-hydrate",
       projectPath: "/tmp/stave-project-hydrate",
       projectName: "stave-project-hydrate",
@@ -1224,31 +1576,42 @@ describe("workspace store hydration ordering", () => {
     });
 
     let hydrated = false;
-    const hydratePromise = useAppStore.getState().hydrateWorkspaces().then(() => {
-      hydrated = true;
-    });
+    const hydratePromise = useAppStore
+      .getState()
+      .hydrateWorkspaces()
+      .then(() => {
+        hydrated = true;
+      });
 
     await Bun.sleep(0);
 
     expect(hydrated).toBe(true);
     expect(useAppStore.getState().activeTaskId).toBe("task-main-hydrate");
-    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual(["task-main-hydrate"]);
+    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual([
+      "task-main-hydrate",
+    ]);
     expect(useAppStore.getState().projectFiles).toEqual(["package.json"]);
-    expect(useAppStore.getState().messagesByTask["task-main-hydrate"]).toBeUndefined();
-    expect(useAppStore.getState().taskMessagesLoadingByTask["task-main-hydrate"]).toBe(true);
+    expect(
+      useAppStore.getState().messagesByTask["task-main-hydrate"],
+    ).toBeUndefined();
+    expect(
+      useAppStore.getState().taskMessagesLoadingByTask["task-main-hydrate"],
+    ).toBe(true);
 
     resolveTaskMessages?.({
       ok: true,
       page: {
-        messages: [{
-          id: "task-main-hydrate-m-1",
-          role: "assistant",
-          model: "gpt-5.4",
-          providerId: "codex",
-          content: "hydrated message",
-          isStreaming: false,
-          parts: [{ type: "text", text: "hydrated message" }],
-        }],
+        messages: [
+          {
+            id: "task-main-hydrate-m-1",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "hydrated message",
+            isStreaming: false,
+            parts: [{ type: "text", text: "hydrated message" }],
+          },
+        ],
         totalCount: 1,
         limit: 120,
         offset: 0,
@@ -1258,30 +1621,37 @@ describe("workspace store hydration ordering", () => {
     await hydratePromise;
     await Bun.sleep(0);
 
-    expect(useAppStore.getState().messagesByTask["task-main-hydrate"]?.at(-1)?.content).toBe("hydrated message");
-    expect(useAppStore.getState().taskMessagesLoadingByTask["task-main-hydrate"]).toBe(false);
+    expect(
+      useAppStore.getState().messagesByTask["task-main-hydrate"]?.at(-1)
+        ?.content,
+    ).toBe("hydrated message");
+    expect(
+      useAppStore.getState().taskMessagesLoadingByTask["task-main-hydrate"],
+    ).toBe(false);
   });
 
   test("hydrateWorkspaces clears stale active turn state before interrupted task messages finish hydrating", async () => {
     const localStorage = createMemoryStorage();
-    let resolveTaskMessages: ((value: {
-      ok: boolean;
-      page: {
-        messages: Array<{
-          id: string;
-          role: "assistant";
-          model: string;
-          providerId: "codex";
-          content: string;
-          isStreaming: boolean;
-          parts: Array<{ type: "text"; text: string }>;
-        }>;
-        totalCount: number;
-        limit: number;
-        offset: number;
-        hasMoreOlder: boolean;
-      };
-    }) => void) | null = null;
+    let resolveTaskMessages:
+      | ((value: {
+          ok: boolean;
+          page: {
+            messages: Array<{
+              id: string;
+              role: "assistant";
+              model: string;
+              providerId: "codex";
+              content: string;
+              isStreaming: boolean;
+              parts: Array<{ type: "text"; text: string }>;
+            }>;
+            totalCount: number;
+            limit: number;
+            offset: number;
+            hasMoreOlder: boolean;
+          };
+        }) => void)
+      | null = null;
     const taskMessagesPromise = new Promise<{
       ok: boolean;
       page: {
@@ -1314,20 +1684,28 @@ describe("workspace store hydration ordering", () => {
         persistence: {
           listWorkspaces: async () => ({
             ok: true,
-            rows: [{ id: "ws-main-interrupted", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+            rows: [
+              {
+                id: "ws-main-interrupted",
+                name: "default",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+            ],
           }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
           loadWorkspaceShell: async () => ({
             ok: true,
             shell: {
               activeTaskId: "task-main-interrupted",
-              tasks: [{
-                id: "task-main-interrupted",
-                title: "Interrupted Hydration Task",
-                provider: "codex",
-                updatedAt: "2026-03-10T00:00:00.000Z",
-                unread: false,
-              }],
+              tasks: [
+                {
+                  id: "task-main-interrupted",
+                  title: "Interrupted Hydration Task",
+                  provider: "codex",
+                  updatedAt: "2026-03-10T00:00:00.000Z",
+                  unread: false,
+                },
+              ],
               promptDraftByTask: {},
               providerSessionByTask: {},
               messageCountByTask: { "task-main-interrupted": 1 },
@@ -1348,15 +1726,17 @@ describe("workspace store hydration ordering", () => {
           loadTaskMessages: async () => taskMessagesPromise,
           listLatestWorkspaceTurns: async () => ({
             ok: true,
-            turns: [{
-              id: "turn-main-interrupted",
-              workspaceId: "ws-main-interrupted",
-              taskId: "task-main-interrupted",
-              providerId: "codex",
-              createdAt: "2026-03-10T00:00:00.000Z",
-              completedAt: null,
-              eventCount: 1,
-            }],
+            turns: [
+              {
+                id: "turn-main-interrupted",
+                workspaceId: "ws-main-interrupted",
+                taskId: "task-main-interrupted",
+                providerId: "codex",
+                createdAt: "2026-03-10T00:00:00.000Z",
+                completedAt: null,
+                eventCount: 1,
+              },
+            ],
           }),
           loadProjectRegistry: async () => ({ ok: true, projects: [] }),
           saveProjectRegistry: async () => ({ ok: true }),
@@ -1370,40 +1750,57 @@ describe("workspace store hydration ordering", () => {
     useAppStore.setState({
       ...initialState,
       hasHydratedWorkspaces: false,
-      workspaces: [{ id: "ws-main-interrupted", name: "default", updatedAt: "2026-03-10T00:00:00.000Z" }],
+      workspaces: [
+        {
+          id: "ws-main-interrupted",
+          name: "default",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
+      ],
       activeWorkspaceId: "ws-main-interrupted",
       projectPath: "/tmp/stave-project-interrupted",
       projectName: "stave-project-interrupted",
-      workspacePathById: { "ws-main-interrupted": "/tmp/stave-project-interrupted" },
+      workspacePathById: {
+        "ws-main-interrupted": "/tmp/stave-project-interrupted",
+      },
       workspaceBranchById: { "ws-main-interrupted": "main" },
       workspaceDefaultById: { "ws-main-interrupted": true },
       projectFiles: [],
     });
 
     let hydrated = false;
-    const hydratePromise = useAppStore.getState().hydrateWorkspaces().then(() => {
-      hydrated = true;
-    });
+    const hydratePromise = useAppStore
+      .getState()
+      .hydrateWorkspaces()
+      .then(() => {
+        hydrated = true;
+      });
 
     await Bun.sleep(0);
 
     const hydratedState = useAppStore.getState();
     expect(hydrated).toBe(true);
-    expect(hydratedState.activeTurnIdsByTask["task-main-interrupted"]).toBeUndefined();
-    expect(hydratedState.taskMessagesLoadingByTask["task-main-interrupted"]).toBe(true);
+    expect(
+      hydratedState.activeTurnIdsByTask["task-main-interrupted"],
+    ).toBeUndefined();
+    expect(
+      hydratedState.taskMessagesLoadingByTask["task-main-interrupted"],
+    ).toBe(true);
 
     resolveTaskMessages?.({
       ok: true,
       page: {
-        messages: [{
-          id: "task-main-interrupted-m-1",
-          role: "assistant",
-          model: "gpt-5.4",
-          providerId: "codex",
-          content: "partial response",
-          isStreaming: false,
-          parts: [{ type: "text", text: "partial response" }],
-        }],
+        messages: [
+          {
+            id: "task-main-interrupted-m-1",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "partial response",
+            isStreaming: false,
+            parts: [{ type: "text", text: "partial response" }],
+          },
+        ],
         totalCount: 1,
         limit: 120,
         offset: 0,
@@ -1413,30 +1810,49 @@ describe("workspace store hydration ordering", () => {
     await hydratePromise;
     await Bun.sleep(0);
 
-    const finalMessages = useAppStore.getState().messagesByTask["task-main-interrupted"] ?? [];
-    expect(finalMessages.at(-1)?.content).toBe("Generation interrupted because Stave was closed before this turn completed.");
+    const finalMessages =
+      useAppStore.getState().messagesByTask["task-main-interrupted"] ?? [];
+    expect(finalMessages.at(-1)?.content).toBe(
+      "Generation interrupted because Stave was closed before this turn completed.",
+    );
   });
 
   test("hydrateWorkspaces auto-imports existing git worktrees missing from the DB", async () => {
     const localStorage = createMemoryStorage();
-    const upsertCalls: Array<{ id: string; name: string; snapshot: unknown }> = [];
+    const upsertCalls: Array<{ id: string; name: string; snapshot: unknown }> =
+      [];
     setWindowContext({
       localStorage,
       api: {
         persistence: {
           listWorkspaces: async () => ({
             ok: true,
-            rows: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" }],
+            rows: [
+              {
+                id: "ws-main",
+                name: "Main",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+            ],
           }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
           listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
-          upsertWorkspace: async (args: { id: string; name: string; snapshot: unknown }) => {
+          upsertWorkspace: async (args: {
+            id: string;
+            name: string;
+            snapshot: unknown;
+          }) => {
             upsertCalls.push(args);
             return { ok: true };
           },
         },
         terminal: {
-          runCommand: async ({ command }: { cwd?: string; command: string }) => {
+          runCommand: async ({
+            command,
+          }: {
+            cwd?: string;
+            command: string;
+          }) => {
             if (command === "git worktree prune") {
               return { ok: true, code: 0, stdout: "", stderr: "" };
             }
@@ -1456,7 +1872,12 @@ describe("workspace store hydration ordering", () => {
                 stderr: "",
               };
             }
-            return { ok: false, code: 1, stdout: "", stderr: `Unexpected command: ${command}` };
+            return {
+              ok: false,
+              code: 1,
+              stdout: "",
+              stderr: `Unexpected command: ${command}`,
+            };
           },
         },
       },
@@ -1466,7 +1887,9 @@ describe("workspace store hydration ordering", () => {
     const initialState = useAppStore.getInitialState();
     useAppStore.setState({
       ...initialState,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       projectPath: "/tmp/stave-project",
       workspacePathById: { "ws-main": "/tmp/stave-project" },
@@ -1478,20 +1901,28 @@ describe("workspace store hydration ordering", () => {
     await useAppStore.getState().hydrateWorkspaces();
 
     const nextState = useAppStore.getState();
-    const importedWorkspace = nextState.workspaces.find((workspace) => workspace.name === "feature/perf");
+    const importedWorkspace = nextState.workspaces.find(
+      (workspace) => workspace.name === "feature/perf",
+    );
 
     expect(importedWorkspace).not.toBeUndefined();
     expect(upsertCalls).toHaveLength(1);
     expect(upsertCalls[0]?.name).toBe("feature/perf");
     expect(importedWorkspace?.id).toBe(upsertCalls[0]?.id);
-    expect(nextState.workspaceBranchById[importedWorkspace?.id ?? ""]).toBe("feature/perf");
-    expect(nextState.workspacePathById[importedWorkspace?.id ?? ""]).toBe("/tmp/stave-project/.stave/workspaces/feature__perf");
+    expect(nextState.workspaceBranchById[importedWorkspace?.id ?? ""]).toBe(
+      "feature/perf",
+    );
+    expect(nextState.workspacePathById[importedWorkspace?.id ?? ""]).toBe(
+      "/tmp/stave-project/.stave/workspaces/feature__perf",
+    );
   });
 
   test("refreshWorkspaces does not overwrite an already persisted imported worktree with an empty snapshot", async () => {
     const localStorage = createMemoryStorage();
-    const upsertCalls: Array<{ id: string; name: string; snapshot: unknown }> = [];
-    const { buildImportedWorktreeWorkspaceId } = await import("../src/store/project.utils");
+    const upsertCalls: Array<{ id: string; name: string; snapshot: unknown }> =
+      [];
+    const { buildImportedWorktreeWorkspaceId } =
+      await import("../src/store/project.utils");
     const importedWorkspaceId = buildImportedWorktreeWorkspaceId({
       projectPath: "/tmp/stave-project",
       worktreePath: "/tmp/stave-project/.stave/workspaces/feature__perf",
@@ -1504,19 +1935,36 @@ describe("workspace store hydration ordering", () => {
           listWorkspaces: async () => ({
             ok: true,
             rows: [
-              { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
-              { id: importedWorkspaceId, name: "feature/perf", updatedAt: "2026-03-10T00:10:00.000Z" },
+              {
+                id: "ws-main",
+                name: "Main",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+              {
+                id: importedWorkspaceId,
+                name: "feature/perf",
+                updatedAt: "2026-03-10T00:10:00.000Z",
+              },
             ],
           }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
           listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
-          upsertWorkspace: async (args: { id: string; name: string; snapshot: unknown }) => {
+          upsertWorkspace: async (args: {
+            id: string;
+            name: string;
+            snapshot: unknown;
+          }) => {
             upsertCalls.push(args);
             return { ok: true };
           },
         },
         terminal: {
-          runCommand: async ({ command }: { cwd?: string; command: string }) => {
+          runCommand: async ({
+            command,
+          }: {
+            cwd?: string;
+            command: string;
+          }) => {
             if (command === "git worktree prune") {
               return { ok: true, code: 0, stdout: "", stderr: "" };
             }
@@ -1536,7 +1984,12 @@ describe("workspace store hydration ordering", () => {
                 stderr: "",
               };
             }
-            return { ok: false, code: 1, stdout: "", stderr: `Unexpected command: ${command}` };
+            return {
+              ok: false,
+              code: 1,
+              stdout: "",
+              stderr: `Unexpected command: ${command}`,
+            };
           },
         },
       },
@@ -1547,7 +2000,9 @@ describe("workspace store hydration ordering", () => {
     useAppStore.setState({
       ...initialState,
       hasHydratedWorkspaces: true,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-03-09T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       projectPath: "/tmp/stave-project",
       workspacePathById: { "ws-main": "/tmp/stave-project" },
@@ -1558,12 +2013,18 @@ describe("workspace store hydration ordering", () => {
     await useAppStore.getState().refreshWorkspaces();
 
     const nextState = useAppStore.getState();
-    const importedWorkspace = nextState.workspaces.find((workspace) => workspace.id === importedWorkspaceId);
+    const importedWorkspace = nextState.workspaces.find(
+      (workspace) => workspace.id === importedWorkspaceId,
+    );
     expect(upsertCalls).toHaveLength(0);
     expect(importedWorkspace).not.toBeUndefined();
     expect(importedWorkspace?.name).toBe("feature/perf");
-    expect(nextState.workspaceBranchById[importedWorkspaceId]).toBe("feature/perf");
-    expect(nextState.workspacePathById[importedWorkspaceId]).toBe("/tmp/stave-project/.stave/workspaces/feature__perf");
+    expect(nextState.workspaceBranchById[importedWorkspaceId]).toBe(
+      "feature/perf",
+    );
+    expect(nextState.workspacePathById[importedWorkspaceId]).toBe(
+      "/tmp/stave-project/.stave/workspaces/feature__perf",
+    );
   });
 
   test("flushActiveWorkspaceSnapshot is blocked until workspace hydration completes", async () => {
@@ -1588,7 +2049,9 @@ describe("workspace store hydration ordering", () => {
     useAppStore.setState({
       ...initialState,
       hasHydratedWorkspaces: false,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       activeTaskId: "task-1",
       tasks: [
@@ -1628,7 +2091,9 @@ describe("workspace store hydration ordering", () => {
     const upsertCalls: Array<unknown> = [];
     const abortCalls: Array<string> = [];
     const cleanupCalls: Array<string> = [];
-    let streamListener: ((payload: { streamId: string; event: unknown; done: boolean }) => void) | null = null;
+    let streamListener:
+      | ((payload: { streamId: string; event: unknown; done: boolean }) => void)
+      | null = null;
 
     (globalThis as { window: unknown }).window = {
       localStorage,
@@ -1662,73 +2127,89 @@ describe("workspace store hydration ordering", () => {
           listWorkspaces: async () => ({
             ok: true,
             rows: [
-              { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
-              { id: "ws-alt", name: "Alt", updatedAt: "2026-03-10T00:00:01.000Z" },
+              {
+                id: "ws-main",
+                name: "Main",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+              {
+                id: "ws-alt",
+                name: "Alt",
+                updatedAt: "2026-03-10T00:00:01.000Z",
+              },
             ],
           }),
-          loadWorkspaceShell: async ({ workspaceId }: { workspaceId: string }) => ({
+          loadWorkspaceShell: async ({
+            workspaceId,
+          }: {
+            workspaceId: string;
+          }) => ({
             ok: true,
-            shell: workspaceId === "ws-main"
-              ? {
-                  activeTaskId: "task-main",
-                  tasks: [
-                    {
-                      id: "task-main",
-                      title: "Main Task",
-                      provider: "codex",
-                      updatedAt: "2026-03-10T00:00:00.000Z",
-                      unread: false,
+            shell:
+              workspaceId === "ws-main"
+                ? {
+                    activeTaskId: "task-main",
+                    tasks: [
+                      {
+                        id: "task-main",
+                        title: "Main Task",
+                        provider: "codex",
+                        updatedAt: "2026-03-10T00:00:00.000Z",
+                        unread: false,
+                      },
+                      {
+                        id: "task-keep",
+                        title: "Keep Task",
+                        provider: "claude-code",
+                        updatedAt: "2026-03-09T23:59:00.000Z",
+                        unread: false,
+                      },
+                    ],
+                    promptDraftByTask: {},
+                    providerSessionByTask: {},
+                    messageCountByTask: {
+                      "task-main": 0,
+                      "task-keep": 1,
                     },
-                    {
-                      id: "task-keep",
-                      title: "Keep Task",
-                      provider: "claude-code",
-                      updatedAt: "2026-03-09T23:59:00.000Z",
-                      unread: false,
-                    },
-                  ],
-                  promptDraftByTask: {},
-                  providerSessionByTask: {},
-                  messageCountByTask: {
-                    "task-main": 0,
-                    "task-keep": 1,
-                  },
-                }
-              : (
-                workspaceId === "ws-alt"
+                  }
+                : workspaceId === "ws-alt"
                   ? {
                       activeTaskId: "task-alt",
-                      tasks: [{
+                      tasks: [
+                        {
+                          id: "task-alt",
+                          title: "Alt Task",
+                          provider: "claude-code",
+                          updatedAt: "2026-03-10T00:00:01.000Z",
+                          unread: false,
+                        },
+                      ],
+                      promptDraftByTask: {},
+                      providerSessionByTask: {},
+                      messageCountByTask: { "task-alt": 0 },
+                    }
+                  : null,
+          }),
+          loadWorkspace: async ({ workspaceId }: { workspaceId: string }) => ({
+            ok: true,
+            snapshot:
+              workspaceId === "ws-alt"
+                ? {
+                    activeTaskId: "task-alt",
+                    tasks: [
+                      {
                         id: "task-alt",
                         title: "Alt Task",
                         provider: "claude-code",
                         updatedAt: "2026-03-10T00:00:01.000Z",
                         unread: false,
-                      }],
-                      promptDraftByTask: {},
-                      providerSessionByTask: {},
-                      messageCountByTask: { "task-alt": 0 },
-                    }
-                  : null
-              ),
-          }),
-          loadWorkspace: async ({ workspaceId }: { workspaceId: string }) => ({
-            ok: true,
-            snapshot: workspaceId === "ws-alt"
-              ? {
-                              activeTaskId: "task-alt",
-                  tasks: [{
-                    id: "task-alt",
-                    title: "Alt Task",
-                    provider: "claude-code",
-                    updatedAt: "2026-03-10T00:00:01.000Z",
-                    unread: false,
-                  }],
-                  messagesByTask: { "task-alt": [] },
-                  promptDraftByTask: {},
-                  providerSessionByTask: {},
-                }
-              : null,
+                      },
+                    ],
+                    messagesByTask: { "task-alt": [] },
+                    promptDraftByTask: {},
+                    providerSessionByTask: {},
+                  }
+                : null,
           }),
           upsertWorkspace: async (args: unknown) => {
             upsertCalls.push(args);
@@ -1766,14 +2247,16 @@ describe("workspace store hydration ordering", () => {
         "ws-alt": false,
       },
       draftProvider: "codex",
-      tasks: [{
-        id: "task-main",
-        title: "Main Task",
-        provider: "codex",
-        updatedAt: "2026-03-10T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-main",
+          title: "Main Task",
+          provider: "codex",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: { "task-main": [] },
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
@@ -1802,12 +2285,23 @@ describe("workspace store hydration ordering", () => {
     expect(switchedState.activeWorkspaceId).toBe("ws-alt");
     expect(switchedState.activeTaskId).toBe("task-alt");
     expect(switchedState.activeTurnIdsByTask["task-main"]).toBeUndefined();
-    expect(switchedState.workspaceRuntimeCacheById["ws-main"]?.activeTurnIdsByTask["task-main"]).toBe(activeTurnId);
-    expect(switchedState.workspaceRuntimeCacheById["ws-main"]?.messagesByTask["task-main"]).toHaveLength(2);
+    expect(
+      switchedState.workspaceRuntimeCacheById["ws-main"]?.activeTurnIdsByTask[
+        "task-main"
+      ],
+    ).toBe(activeTurnId);
+    expect(
+      switchedState.workspaceRuntimeCacheById["ws-main"]?.messagesByTask[
+        "task-main"
+      ],
+    ).toHaveLength(2);
 
     streamListener?.({
       streamId: "stream-1",
-      event: { type: "text", text: "Task 1 kept updating after the workspace switch." },
+      event: {
+        type: "text",
+        text: "Task 1 kept updating after the workspace switch.",
+      },
       done: false,
     });
     streamListener?.({
@@ -1819,11 +2313,17 @@ describe("workspace store hydration ordering", () => {
     await Bun.sleep(25);
 
     const completedState = useAppStore.getState();
-    const inactiveWorkspaceSession = completedState.workspaceRuntimeCacheById["ws-main"];
-    const inactiveWorkspaceAssistant = inactiveWorkspaceSession?.messagesByTask["task-main"]?.at(-1);
+    const inactiveWorkspaceSession =
+      completedState.workspaceRuntimeCacheById["ws-main"];
+    const inactiveWorkspaceAssistant =
+      inactiveWorkspaceSession?.messagesByTask["task-main"]?.at(-1);
 
-    expect(inactiveWorkspaceSession?.activeTurnIdsByTask["task-main"]).toBeUndefined();
-    expect(inactiveWorkspaceAssistant?.content).toBe("Task 1 kept updating after the workspace switch.");
+    expect(
+      inactiveWorkspaceSession?.activeTurnIdsByTask["task-main"],
+    ).toBeUndefined();
+    expect(inactiveWorkspaceAssistant?.content).toBe(
+      "Task 1 kept updating after the workspace switch.",
+    );
     expect(inactiveWorkspaceAssistant?.isStreaming).toBe(false);
     expect(upsertCalls).toHaveLength(1);
     expect(upsertCalls[0]).toMatchObject({
@@ -1833,15 +2333,20 @@ describe("workspace store hydration ordering", () => {
         activeTaskId: "task-main",
       },
     });
-    const persistedSnapshot = (upsertCalls[0] as {
-      snapshot: {
-        tasks: Array<{ id: string }>;
-        messagesByTask: Record<string, Array<{ content: string }>>;
-      };
-    }).snapshot;
-    expect(persistedSnapshot.tasks.map((task) => task.id)).toEqual(["task-main", "task-keep"]);
+    const persistedSnapshot = (
+      upsertCalls[0] as {
+        snapshot: {
+          tasks: Array<{ id: string }>;
+          messagesByTask: Record<string, Array<{ content: string }>>;
+        };
+      }
+    ).snapshot;
+    expect(persistedSnapshot.tasks.map((task) => task.id)).toEqual([
+      "task-main",
+      "task-keep",
+    ]);
     expect(persistedSnapshot.messagesByTask["task-main"]?.at(-1)?.content).toBe(
-      "Task 1 kept updating after the workspace switch."
+      "Task 1 kept updating after the workspace switch.",
     );
 
     await useAppStore.getState().switchWorkspace({ workspaceId: "ws-main" });
@@ -1851,14 +2356,16 @@ describe("workspace store hydration ordering", () => {
     expect(restoredState.activeTaskId).toBe("task-main");
     expect(restoredState.activeTurnIdsByTask["task-main"]).toBeUndefined();
     expect(restoredState.messagesByTask["task-main"]?.at(-1)?.content).toBe(
-      "Task 1 kept updating after the workspace switch."
+      "Task 1 kept updating after the workspace switch.",
     );
   });
 
   test("queues the next prompt during an active turn and auto-dispatches it on completion", async () => {
     const localStorage = createMemoryStorage();
     const startedPrompts: string[] = [];
-    let streamListener: ((payload: { streamId: string; event: unknown; done: boolean }) => void) | null = null;
+    let streamListener:
+      | ((payload: { streamId: string; event: unknown; done: boolean }) => void)
+      | null = null;
 
     (globalThis as { window: unknown }).window = {
       localStorage,
@@ -1887,7 +2394,12 @@ describe("workspace store hydration ordering", () => {
           cleanupTask: async () => ({ ok: true }),
         },
         fs: {
-          readFile: async () => ({ ok: false, content: "", revision: "", stderr: "not found" }),
+          readFile: async () => ({
+            ok: false,
+            content: "",
+            revision: "",
+            stderr: "not found",
+          }),
         },
       },
     } as unknown;
@@ -1897,7 +2409,9 @@ describe("workspace store hydration ordering", () => {
     useAppStore.setState({
       ...initialState,
       hasHydratedWorkspaces: true,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-04-09T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-04-09T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       activeTaskId: "task-main",
       projectPath: "/tmp/stave-project",
@@ -1911,14 +2425,16 @@ describe("workspace store hydration ordering", () => {
         "ws-main": true,
       },
       draftProvider: "codex",
-      tasks: [{
-        id: "task-main",
-        title: "Main Task",
-        provider: "codex",
-        updatedAt: "2026-04-09T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-main",
+          title: "Main Task",
+          provider: "codex",
+          updatedAt: "2026-04-09T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: { "task-main": [] },
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
@@ -1953,7 +2469,9 @@ describe("workspace store hydration ordering", () => {
     expect(queuedState.promptDraftByTask["task-main"]).toMatchObject({
       text: "",
     });
-    expect(queuedState.promptDraftByTask["task-main"]?.queuedNextTurn).toMatchObject({
+    expect(
+      queuedState.promptDraftByTask["task-main"]?.queuedNextTurn,
+    ).toMatchObject({
       sourceTurnId: started.turnId,
       content: "Second prompt",
     });
@@ -1973,44 +2491,57 @@ describe("workspace store hydration ordering", () => {
 
     const autoDispatchedState = useAppStore.getState();
     expect(startedPrompts).toEqual(["First prompt", "Second prompt"]);
-    expect(typeof autoDispatchedState.activeTurnIdsByTask["task-main"]).toBe("string");
-    expect(autoDispatchedState.activeTurnIdsByTask["task-main"]).not.toBe(started.turnId);
-    expect(autoDispatchedState.promptDraftByTask["task-main"]?.text ?? "").toBe("");
-    expect(autoDispatchedState.promptDraftByTask["task-main"]?.queuedNextTurn).toBeUndefined();
-    expect(autoDispatchedState.messagesByTask["task-main"]?.map((message) => message.role)).toEqual([
-      "user",
-      "assistant",
-      "user",
-      "assistant",
-    ]);
+    expect(typeof autoDispatchedState.activeTurnIdsByTask["task-main"]).toBe(
+      "string",
+    );
+    expect(autoDispatchedState.activeTurnIdsByTask["task-main"]).not.toBe(
+      started.turnId,
+    );
+    expect(autoDispatchedState.promptDraftByTask["task-main"]?.text ?? "").toBe(
+      "",
+    );
+    expect(
+      autoDispatchedState.promptDraftByTask["task-main"]?.queuedNextTurn,
+    ).toBeUndefined();
+    expect(
+      autoDispatchedState.messagesByTask["task-main"]?.map(
+        (message) => message.role,
+      ),
+    ).toEqual(["user", "assistant", "user", "assistant"]);
   });
 
   test("clears the submitted prompt draft before async context loading so workspace switches do not revive it", async () => {
     const localStorage = createMemoryStorage();
-    let resolveReadFile: ((value: {
-      ok: boolean;
-      content: string;
-      revision: string;
-      stderr?: string;
-    }) => void) | null = null;
+    let resolveReadFile:
+      | ((value: {
+          ok: boolean;
+          content: string;
+          revision: string;
+          stderr?: string;
+        }) => void)
+      | null = null;
 
     setWindowContext({
       localStorage,
       api: {
         provider: {
           subscribeStreamEvents: () => () => {},
-          startPushTurn: async () => ({ ok: true, streamId: "stream-submit-clear" }),
+          startPushTurn: async () => ({
+            ok: true,
+            streamId: "stream-submit-clear",
+          }),
         },
         fs: {
           listFiles: async () => ({ ok: true, files: [] }),
-          readFile: async () => await new Promise<{
-            ok: boolean;
-            content: string;
-            revision: string;
-            stderr?: string;
-          }>((resolve) => {
-            resolveReadFile = resolve;
-          }),
+          readFile: async () =>
+            await new Promise<{
+              ok: boolean;
+              content: string;
+              revision: string;
+              stderr?: string;
+            }>((resolve) => {
+              resolveReadFile = resolve;
+            }),
         },
       },
     } as unknown);
@@ -2040,14 +2571,16 @@ describe("workspace store hydration ordering", () => {
         "ws-alt": false,
       },
       draftProvider: "codex",
-      tasks: [{
-        id: "task-main",
-        title: "Main Task",
-        provider: "codex",
-        updatedAt: "2026-04-09T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-main",
+          title: "Main Task",
+          provider: "codex",
+          updatedAt: "2026-04-09T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: { "task-main": [] },
       activeTurnIdsByTask: {},
       promptDraftByTask: {
@@ -2076,7 +2609,11 @@ describe("workspace store hydration ordering", () => {
     await useAppStore.getState().switchWorkspace({ workspaceId: "ws-alt" });
 
     const switchedState = useAppStore.getState();
-    expect(switchedState.workspaceRuntimeCacheById["ws-main"]?.promptDraftByTask["task-main"]).toEqual({
+    expect(
+      switchedState.workspaceRuntimeCacheById["ws-main"]?.promptDraftByTask[
+        "task-main"
+      ],
+    ).toEqual({
       text: "",
       attachedFilePaths: [],
       attachments: [],
@@ -2108,40 +2645,55 @@ describe("workspace store hydration ordering", () => {
           listWorkspaces: async () => ({
             ok: true,
             rows: [
-              { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
-              { id: "ws-beta", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
+              {
+                id: "ws-alpha",
+                name: "Default Workspace",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+              {
+                id: "ws-beta",
+                name: "beta",
+                updatedAt: "2026-03-10T00:01:00.000Z",
+              },
             ],
           }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
-          loadWorkspaceShell: async ({ workspaceId }: { workspaceId: string }) => ({
+          loadWorkspaceShell: async ({
+            workspaceId,
+          }: {
+            workspaceId: string;
+          }) => ({
             ok: true,
-            shell: workspaceId === "ws-beta"
-              ? {
-                  activeTaskId: "task-beta",
-                  tasks: [{
-                    id: "task-beta",
-                    title: "Recovered Beta Task",
-                    provider: "codex",
-                    updatedAt: "2026-03-10T00:01:00.000Z",
-                    unread: false,
-                  }],
-                  promptDraftByTask: {},
-                  providerSessionByTask: {},
-                  messageCountByTask: { "task-beta": 0 },
-                  workspaceInformation: {
-                    jiraIssues: [],
-                    confluencePages: [],
-                    figmaResources: [],
-                    linkedPullRequests: [],
-                    slackThreads: [],
-                    notes: "",
-                    todos: [],
-                    customFields: [],
-                  },
-                  editorTabs: [],
-                  activeEditorTabId: null,
-                }
-              : null,
+            shell:
+              workspaceId === "ws-beta"
+                ? {
+                    activeTaskId: "task-beta",
+                    tasks: [
+                      {
+                        id: "task-beta",
+                        title: "Recovered Beta Task",
+                        provider: "codex",
+                        updatedAt: "2026-03-10T00:01:00.000Z",
+                        unread: false,
+                      },
+                    ],
+                    promptDraftByTask: {},
+                    providerSessionByTask: {},
+                    messageCountByTask: { "task-beta": 0 },
+                    workspaceInformation: {
+                      jiraIssues: [],
+                      confluencePages: [],
+                      figmaResources: [],
+                      linkedPullRequests: [],
+                      slackThreads: [],
+                      notes: "",
+                      todos: [],
+                      customFields: [],
+                    },
+                    editorTabs: [],
+                    activeEditorTabId: null,
+                  }
+                : null,
           }),
           listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
           upsertWorkspace: async () => ({ ok: true }),
@@ -2157,7 +2709,11 @@ describe("workspace store hydration ordering", () => {
       projectPath: "/tmp/stave-project",
       projectName: "stave-project",
       workspaces: [
-        { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
+        {
+          id: "ws-alpha",
+          name: "Default Workspace",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
         { id: "ws-beta", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
       ],
       activeWorkspaceId: "ws-alpha",
@@ -2173,14 +2729,16 @@ describe("workspace store hydration ordering", () => {
         "ws-alpha": true,
         "ws-beta": false,
       },
-      tasks: [{
-        id: "task-alpha",
-        title: "Alpha Task",
-        provider: "claude-code",
-        updatedAt: "2026-03-10T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-alpha",
+          title: "Alpha Task",
+          provider: "claude-code",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       activeTaskId: "task-alpha",
       messagesByTask: { "task-alpha": [] },
       messageCountByTask: { "task-alpha": 0 },
@@ -2238,7 +2796,9 @@ describe("workspace store hydration ordering", () => {
   test("late events after an inactive workspace turn completes do not emit redundant store updates", async () => {
     const localStorage = createMemoryStorage();
     const upsertCalls: Array<unknown> = [];
-    let streamListener: ((payload: { streamId: string; event: unknown; done: boolean }) => void) | null = null;
+    let streamListener:
+      | ((payload: { streamId: string; event: unknown; done: boolean }) => void)
+      | null = null;
     const originalWarn = console.warn;
     const warnCalls: unknown[][] = [];
 
@@ -2268,27 +2828,38 @@ describe("workspace store hydration ordering", () => {
           listWorkspaces: async () => ({
             ok: true,
             rows: [
-              { id: "ws-main", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
-              { id: "ws-alt", name: "Alt", updatedAt: "2026-03-10T00:00:01.000Z" },
+              {
+                id: "ws-main",
+                name: "Main",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+              {
+                id: "ws-alt",
+                name: "Alt",
+                updatedAt: "2026-03-10T00:00:01.000Z",
+              },
             ],
           }),
           loadWorkspace: async ({ workspaceId }: { workspaceId: string }) => ({
             ok: true,
-            snapshot: workspaceId === "ws-alt"
-              ? {
-                  activeTaskId: "task-alt",
-                  tasks: [{
-                    id: "task-alt",
-                    title: "Alt Task",
-                    provider: "claude-code",
-                    updatedAt: "2026-03-10T00:00:01.000Z",
-                    unread: false,
-                  }],
-                  messagesByTask: { "task-alt": [] },
-                  promptDraftByTask: {},
-                  providerSessionByTask: {},
-                }
-              : null,
+            snapshot:
+              workspaceId === "ws-alt"
+                ? {
+                    activeTaskId: "task-alt",
+                    tasks: [
+                      {
+                        id: "task-alt",
+                        title: "Alt Task",
+                        provider: "claude-code",
+                        updatedAt: "2026-03-10T00:00:01.000Z",
+                        unread: false,
+                      },
+                    ],
+                    messagesByTask: { "task-alt": [] },
+                    promptDraftByTask: {},
+                    providerSessionByTask: {},
+                  }
+                : null,
           }),
           upsertWorkspace: async (args: unknown) => {
             upsertCalls.push(args);
@@ -2326,14 +2897,16 @@ describe("workspace store hydration ordering", () => {
         "ws-alt": false,
       },
       draftProvider: "codex",
-      tasks: [{
-        id: "task-main",
-        title: "Main Task",
-        provider: "codex",
-        updatedAt: "2026-03-10T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-main",
+          title: "Main Task",
+          provider: "codex",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: { "task-main": [] },
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
@@ -2373,8 +2946,13 @@ describe("workspace store hydration ordering", () => {
 
     const state = useAppStore.getState();
     const inactiveWorkspaceSession = state.workspaceRuntimeCacheById["ws-main"];
-    const inactiveWorkspaceAssistant = inactiveWorkspaceSession?.messagesByTask["task-main"]?.at(-1);
-    const lateDropWarning = warnCalls.find((call) => call[0] === "[provider-turn] dropped late events for inactive cached workspace turn");
+    const inactiveWorkspaceAssistant =
+      inactiveWorkspaceSession?.messagesByTask["task-main"]?.at(-1);
+    const lateDropWarning = warnCalls.find(
+      (call) =>
+        call[0] ===
+        "[provider-turn] dropped late events for inactive cached workspace turn",
+    );
 
     expect(lateDropWarning).toBeDefined();
     expect(lateDropWarning?.[1]).toMatchObject({
@@ -2383,7 +2961,9 @@ describe("workspace store hydration ordering", () => {
       activeTurnId: null,
       eventTypes: ["text"],
     });
-    expect(inactiveWorkspaceSession?.activeTurnIdsByTask["task-main"]).toBeUndefined();
+    expect(
+      inactiveWorkspaceSession?.activeTurnIdsByTask["task-main"],
+    ).toBeUndefined();
     expect(inactiveWorkspaceAssistant?.content).toBe("No response returned.");
     expect(inactiveWorkspaceAssistant?.isStreaming).toBe(false);
     expect(upsertCalls).toHaveLength(1);
@@ -2391,54 +2971,61 @@ describe("workspace store hydration ordering", () => {
 
   test("switchWorkspace restores per-workspace editor tabs", async () => {
     const localStorage = createMemoryStorage();
-    localStorage.setItem("stave:workspace-fallback:v1", JSON.stringify([
-      {
-        id: "ws-alpha",
-        name: "alpha",
-        updatedAt: "2026-03-10T00:00:00.000Z",
-        snapshot: {
-          activeTaskId: "",
-          tasks: [],
-          messagesByTask: {},
-          editorTabs: [{
-            id: "file:src/alpha.ts",
-            filePath: "src/alpha.ts",
-            kind: "text",
-            language: "typescript",
-            content: "export const alpha = 1;\n",
-            originalContent: "export const alpha = 1;\n",
-            savedContent: "export const alpha = 1;\n",
-            baseRevision: "rev-alpha",
-            hasConflict: false,
-            isDirty: false,
-          }],
-          activeEditorTabId: "file:src/alpha.ts",
+    localStorage.setItem(
+      "stave:workspace-fallback:v1",
+      JSON.stringify([
+        {
+          id: "ws-alpha",
+          name: "alpha",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          snapshot: {
+            activeTaskId: "",
+            tasks: [],
+            messagesByTask: {},
+            editorTabs: [
+              {
+                id: "file:src/alpha.ts",
+                filePath: "src/alpha.ts",
+                kind: "text",
+                language: "typescript",
+                content: "export const alpha = 1;\n",
+                originalContent: "export const alpha = 1;\n",
+                savedContent: "export const alpha = 1;\n",
+                baseRevision: "rev-alpha",
+                hasConflict: false,
+                isDirty: false,
+              },
+            ],
+            activeEditorTabId: "file:src/alpha.ts",
+          },
         },
-      },
-      {
-        id: "ws-beta",
-        name: "beta",
-        updatedAt: "2026-03-10T00:01:00.000Z",
-        snapshot: {
-          activeTaskId: "",
-          tasks: [],
-          messagesByTask: {},
-          editorTabs: [{
-            id: "file:src/beta.ts",
-            filePath: "src/beta.ts",
-            kind: "text",
-            language: "typescript",
-            content: "export const beta = 2;\n",
-            originalContent: "export const beta = 2;\n",
-            savedContent: "export const beta = 2;\n",
-            baseRevision: "rev-beta",
-            hasConflict: false,
-            isDirty: false,
-          }],
-          activeEditorTabId: "file:src/beta.ts",
+        {
+          id: "ws-beta",
+          name: "beta",
+          updatedAt: "2026-03-10T00:01:00.000Z",
+          snapshot: {
+            activeTaskId: "",
+            tasks: [],
+            messagesByTask: {},
+            editorTabs: [
+              {
+                id: "file:src/beta.ts",
+                filePath: "src/beta.ts",
+                kind: "text",
+                language: "typescript",
+                content: "export const beta = 2;\n",
+                originalContent: "export const beta = 2;\n",
+                savedContent: "export const beta = 2;\n",
+                baseRevision: "rev-beta",
+                hasConflict: false,
+                isDirty: false,
+              },
+            ],
+            activeEditorTabId: "file:src/beta.ts",
+          },
         },
-      },
-    ]));
+      ]),
+    );
 
     setWindowContext({
       localStorage,
@@ -2456,7 +3043,11 @@ describe("workspace store hydration ordering", () => {
     useAppStore.setState({
       ...initialState,
       workspaces: [
-        { id: "ws-alpha", name: "alpha", updatedAt: "2026-03-10T00:00:00.000Z" },
+        {
+          id: "ws-alpha",
+          name: "alpha",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
         { id: "ws-beta", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
       ],
       activeWorkspaceId: "ws-alpha",
@@ -2479,30 +3070,40 @@ describe("workspace store hydration ordering", () => {
     await useAppStore.getState().hydrateWorkspaces();
 
     let nextState = useAppStore.getState();
-    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual(["src/alpha.ts"]);
+    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual([
+      "src/alpha.ts",
+    ]);
     expect(nextState.activeEditorTabId).toBe("file:src/alpha.ts");
 
     await useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta" });
 
     nextState = useAppStore.getState();
     expect(nextState.activeWorkspaceId).toBe("ws-beta");
-    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual(["src/beta.ts"]);
+    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual([
+      "src/beta.ts",
+    ]);
     expect(nextState.activeEditorTabId).toBe("file:src/beta.ts");
 
     await useAppStore.getState().switchWorkspace({ workspaceId: "ws-alpha" });
 
     nextState = useAppStore.getState();
     expect(nextState.activeWorkspaceId).toBe("ws-alpha");
-    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual(["src/alpha.ts"]);
+    expect(nextState.editorTabs.map((tab) => tab.filePath)).toEqual([
+      "src/alpha.ts",
+    ]);
     expect(nextState.activeEditorTabId).toBe("file:src/alpha.ts");
   });
 
   test("switchWorkspace does not wait for file refresh when the target workspace is cached", async () => {
     const localStorage = createMemoryStorage();
-    let resolveListFiles: ((value: { ok: boolean; files: string[] }) => void) | null = null;
-    const listFilesPromise = new Promise<{ ok: boolean; files: string[] }>((resolve) => {
-      resolveListFiles = resolve;
-    });
+    let resolveListFiles:
+      | ((value: { ok: boolean; files: string[] }) => void)
+      | null = null;
+    const listFilesPromise = new Promise<{ ok: boolean; files: string[] }>(
+      (resolve) => {
+        resolveListFiles = resolve;
+      },
+    );
 
     setWindowContext({
       localStorage,
@@ -2521,8 +3122,16 @@ describe("workspace store hydration ordering", () => {
     useAppStore.setState({
       ...initialState,
       workspaces: [
-        { id: "ws-alpha-fast", name: "alpha", updatedAt: "2026-03-10T00:00:00.000Z" },
-        { id: "ws-beta-fast", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
+        {
+          id: "ws-alpha-fast",
+          name: "alpha",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
+        {
+          id: "ws-beta-fast",
+          name: "beta",
+          updatedAt: "2026-03-10T00:01:00.000Z",
+        },
       ],
       activeWorkspaceId: "ws-alpha-fast",
       projectPath: "/tmp/stave-project-switch-fast",
@@ -2539,14 +3148,16 @@ describe("workspace store hydration ordering", () => {
         "ws-alpha-fast": true,
         "ws-beta-fast": false,
       },
-      tasks: [{
-        id: "task-alpha-fast",
-        title: "Alpha Task",
-        provider: "claude-code",
-        updatedAt: "2026-03-10T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-alpha-fast",
+          title: "Alpha Task",
+          provider: "claude-code",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       activeTaskId: "task-alpha-fast",
       messagesByTask: { "task-alpha-fast": [] },
       messageCountByTask: { "task-alpha-fast": 0 },
@@ -2554,14 +3165,16 @@ describe("workspace store hydration ordering", () => {
       workspaceRuntimeCacheById: {
         "ws-beta-fast": {
           activeTaskId: "task-beta-fast",
-          tasks: [{
-            id: "task-beta-fast",
-            title: "Beta Task",
-            provider: "codex",
-            updatedAt: "2026-03-10T00:01:00.000Z",
-            unread: false,
-            archivedAt: null,
-          }],
+          tasks: [
+            {
+              id: "task-beta-fast",
+              title: "Beta Task",
+              provider: "codex",
+              updatedAt: "2026-03-10T00:01:00.000Z",
+              unread: false,
+              archivedAt: null,
+            },
+          ],
           messagesByTask: { "task-beta-fast": [] },
           messageCountByTask: { "task-beta-fast": 0 },
           promptDraftByTask: {},
@@ -2585,15 +3198,20 @@ describe("workspace store hydration ordering", () => {
     });
 
     let switchResolved = false;
-    const switchPromise = useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta-fast" }).then(() => {
-      switchResolved = true;
-    });
+    const switchPromise = useAppStore
+      .getState()
+      .switchWorkspace({ workspaceId: "ws-beta-fast" })
+      .then(() => {
+        switchResolved = true;
+      });
 
     await Bun.sleep(0);
 
     expect(switchResolved).toBe(true);
     expect(useAppStore.getState().activeWorkspaceId).toBe("ws-beta-fast");
-    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual(["task-beta-fast"]);
+    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual([
+      "task-beta-fast",
+    ]);
     expect(useAppStore.getState().projectFiles).toEqual([]);
 
     resolveListFiles?.({ ok: true, files: ["beta-only.ts"] });
@@ -2632,14 +3250,23 @@ describe("workspace store hydration ordering", () => {
       ...initialState,
       hasHydratedWorkspaces: true,
       workspaces: [
-        { id: "ws-main-close", name: "Main", updatedAt: "2026-03-10T00:00:00.000Z" },
-        { id: "ws-feature-close", name: "feature", updatedAt: "2026-03-10T00:01:00.000Z" },
+        {
+          id: "ws-main-close",
+          name: "Main",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
+        {
+          id: "ws-feature-close",
+          name: "feature",
+          updatedAt: "2026-03-10T00:01:00.000Z",
+        },
       ],
       activeWorkspaceId: "ws-main-close",
       projectPath: "/tmp/stave-project-close",
       workspacePathById: {
         "ws-main-close": "/tmp/stave-project-close",
-        "ws-feature-close": "/tmp/stave-project-close/.stave/workspaces/feature",
+        "ws-feature-close":
+          "/tmp/stave-project-close/.stave/workspaces/feature",
       },
       workspaceBranchById: {
         "ws-main-close": "main",
@@ -2655,10 +3282,14 @@ describe("workspace store hydration ordering", () => {
       },
     });
 
-    await useAppStore.getState().closeWorkspace({ workspaceId: "ws-feature-close" });
+    await useAppStore
+      .getState()
+      .closeWorkspace({ workspaceId: "ws-feature-close" });
 
     expect(closedWorkspaceIds).toEqual(["ws-feature-close"]);
-    expect(useAppStore.getState().workspaces.map((workspace) => workspace.id)).toEqual(["ws-main-close"]);
+    expect(
+      useAppStore.getState().workspaces.map((workspace) => workspace.id),
+    ).toEqual(["ws-main-close"]);
     expect(useAppStore.getState().workspaceFileCacheByPath).toEqual({
       "/tmp/stave-project-close": ["root.ts"],
     });
@@ -2666,24 +3297,26 @@ describe("workspace store hydration ordering", () => {
 
   test("switchWorkspace resolves after shell hydrate and backfills messages asynchronously for uncached workspaces", async () => {
     const localStorage = createMemoryStorage();
-    let resolveTaskMessages: ((value: {
-      ok: boolean;
-      page: {
-        messages: Array<{
-          id: string;
-          role: "assistant";
-          model: string;
-          providerId: "codex";
-          content: string;
-          isStreaming: boolean;
-          parts: Array<{ type: "text"; text: string }>;
-        }>;
-        totalCount: number;
-        limit: number;
-        offset: number;
-        hasMoreOlder: boolean;
-      };
-    }) => void) | null = null;
+    let resolveTaskMessages:
+      | ((value: {
+          ok: boolean;
+          page: {
+            messages: Array<{
+              id: string;
+              role: "assistant";
+              model: string;
+              providerId: "codex";
+              content: string;
+              isStreaming: boolean;
+              parts: Array<{ type: "text"; text: string }>;
+            }>;
+            totalCount: number;
+            limit: number;
+            offset: number;
+            hasMoreOlder: boolean;
+          };
+        }) => void)
+      | null = null;
     const taskMessagesPromise = new Promise<{
       ok: boolean;
       page: {
@@ -2712,35 +3345,42 @@ describe("workspace store hydration ordering", () => {
           listWorkspaces: async () => ({ ok: true, rows: [] }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
           upsertWorkspace: async () => ({ ok: true }),
-          loadWorkspaceShell: async ({ workspaceId }: { workspaceId: string }) => ({
+          loadWorkspaceShell: async ({
+            workspaceId,
+          }: {
+            workspaceId: string;
+          }) => ({
             ok: true,
-            shell: workspaceId === "ws-beta-cold"
-              ? {
-                  activeTaskId: "task-beta-cold",
-                  tasks: [{
-                    id: "task-beta-cold",
-                    title: "Beta Cold Task",
-                    provider: "codex",
-                    updatedAt: "2026-03-10T00:01:00.000Z",
-                    unread: false,
-                  }],
-                  promptDraftByTask: {},
-                  providerSessionByTask: {},
-                  messageCountByTask: { "task-beta-cold": 1 },
-                  workspaceInformation: {
-                    jiraIssues: [],
-                    confluencePages: [],
-                    figmaResources: [],
-                    linkedPullRequests: [],
-                    slackThreads: [],
-                    notes: "",
-                    todos: [],
-                    customFields: [],
-                  },
-                  editorTabs: [],
-                  activeEditorTabId: null,
-                }
-              : null,
+            shell:
+              workspaceId === "ws-beta-cold"
+                ? {
+                    activeTaskId: "task-beta-cold",
+                    tasks: [
+                      {
+                        id: "task-beta-cold",
+                        title: "Beta Cold Task",
+                        provider: "codex",
+                        updatedAt: "2026-03-10T00:01:00.000Z",
+                        unread: false,
+                      },
+                    ],
+                    promptDraftByTask: {},
+                    providerSessionByTask: {},
+                    messageCountByTask: { "task-beta-cold": 1 },
+                    workspaceInformation: {
+                      jiraIssues: [],
+                      confluencePages: [],
+                      figmaResources: [],
+                      linkedPullRequests: [],
+                      slackThreads: [],
+                      notes: "",
+                      todos: [],
+                      customFields: [],
+                    },
+                    editorTabs: [],
+                    activeEditorTabId: null,
+                  }
+                : null,
           }),
           listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
           loadTaskMessages: async () => taskMessagesPromise,
@@ -2758,8 +3398,16 @@ describe("workspace store hydration ordering", () => {
     useAppStore.setState({
       ...initialState,
       workspaces: [
-        { id: "ws-alpha-cold", name: "alpha", updatedAt: "2026-03-10T00:00:00.000Z" },
-        { id: "ws-beta-cold", name: "beta", updatedAt: "2026-03-10T00:01:00.000Z" },
+        {
+          id: "ws-alpha-cold",
+          name: "alpha",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
+        {
+          id: "ws-beta-cold",
+          name: "beta",
+          updatedAt: "2026-03-10T00:01:00.000Z",
+        },
       ],
       activeWorkspaceId: "ws-alpha-cold",
       projectPath: "/tmp/stave-project-cold",
@@ -2776,14 +3424,16 @@ describe("workspace store hydration ordering", () => {
         "ws-alpha-cold": true,
         "ws-beta-cold": false,
       },
-      tasks: [{
-        id: "task-alpha-cold",
-        title: "Alpha Task",
-        provider: "claude-code",
-        updatedAt: "2026-03-10T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-alpha-cold",
+          title: "Alpha Task",
+          provider: "claude-code",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       activeTaskId: "task-alpha-cold",
       messagesByTask: { "task-alpha-cold": [] },
       messageCountByTask: { "task-alpha-cold": 0 },
@@ -2791,32 +3441,43 @@ describe("workspace store hydration ordering", () => {
     });
 
     let switchResolved = false;
-    const switchPromise = useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta-cold" }).then(() => {
-      switchResolved = true;
-    });
+    const switchPromise = useAppStore
+      .getState()
+      .switchWorkspace({ workspaceId: "ws-beta-cold" })
+      .then(() => {
+        switchResolved = true;
+      });
 
     await Bun.sleep(0);
 
     expect(switchResolved).toBe(true);
     expect(useAppStore.getState().activeWorkspaceId).toBe("ws-beta-cold");
     expect(useAppStore.getState().activeTaskId).toBe("task-beta-cold");
-    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual(["task-beta-cold"]);
+    expect(useAppStore.getState().tasks.map((task) => task.id)).toEqual([
+      "task-beta-cold",
+    ]);
     expect(useAppStore.getState().messageCountByTask["task-beta-cold"]).toBe(1);
-    expect(useAppStore.getState().messagesByTask["task-beta-cold"]).toBeUndefined();
-    expect(useAppStore.getState().taskMessagesLoadingByTask["task-beta-cold"]).toBe(true);
+    expect(
+      useAppStore.getState().messagesByTask["task-beta-cold"],
+    ).toBeUndefined();
+    expect(
+      useAppStore.getState().taskMessagesLoadingByTask["task-beta-cold"],
+    ).toBe(true);
 
     resolveTaskMessages?.({
       ok: true,
       page: {
-        messages: [{
-          id: "task-beta-cold-m-1",
-          role: "assistant",
-          model: "gpt-5.4",
-          providerId: "codex",
-          content: "cold beta message",
-          isStreaming: false,
-          parts: [{ type: "text", text: "cold beta message" }],
-        }],
+        messages: [
+          {
+            id: "task-beta-cold-m-1",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "cold beta message",
+            isStreaming: false,
+            parts: [{ type: "text", text: "cold beta message" }],
+          },
+        ],
         totalCount: 1,
         limit: 120,
         offset: 0,
@@ -2826,8 +3487,12 @@ describe("workspace store hydration ordering", () => {
     await switchPromise;
     await Bun.sleep(0);
 
-    expect(useAppStore.getState().messagesByTask["task-beta-cold"]?.at(-1)?.content).toBe("cold beta message");
-    expect(useAppStore.getState().taskMessagesLoadingByTask["task-beta-cold"]).toBe(false);
+    expect(
+      useAppStore.getState().messagesByTask["task-beta-cold"]?.at(-1)?.content,
+    ).toBe("cold beta message");
+    expect(
+      useAppStore.getState().taskMessagesLoadingByTask["task-beta-cold"],
+    ).toBe(false);
   });
 
   test("hydrateWorkspaces only prunes stale worktrees for the active project", async () => {
@@ -2840,32 +3505,62 @@ describe("workspace store hydration ordering", () => {
           listWorkspaces: async () => ({
             ok: true,
             rows: [
-              { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
-              { id: "ws-alpha-feature", name: "feature-a", updatedAt: "2026-03-10T00:01:00.000Z" },
-              { id: "ws-beta", name: "Default Workspace", updatedAt: "2026-03-10T00:02:00.000Z" },
-              { id: "ws-beta-feature", name: "feature-b", updatedAt: "2026-03-10T00:03:00.000Z" },
+              {
+                id: "ws-alpha",
+                name: "Default Workspace",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+              {
+                id: "ws-alpha-feature",
+                name: "feature-a",
+                updatedAt: "2026-03-10T00:01:00.000Z",
+              },
+              {
+                id: "ws-beta",
+                name: "Default Workspace",
+                updatedAt: "2026-03-10T00:02:00.000Z",
+              },
+              {
+                id: "ws-beta-feature",
+                name: "feature-b",
+                updatedAt: "2026-03-10T00:03:00.000Z",
+              },
             ],
           }),
           loadWorkspace: async () => ({ ok: true, snapshot: null }),
           loadProjectRegistry: async () => ({
             ok: true,
-            projects: [{
-              projectPath: "/tmp/project-alpha",
-              projectName: "project-alpha",
-              lastOpenedAt: "2026-03-10T00:00:00.000Z",
-              defaultBranch: "main",
-              workspaces: [
-                { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
-                { id: "ws-alpha-feature", name: "feature-a", updatedAt: "2026-03-10T00:01:00.000Z" },
-              ],
-              activeWorkspaceId: "ws-alpha",
-              workspaceBranchById: { "ws-alpha": "main", "ws-alpha-feature": "feature-a" },
-              workspacePathById: {
-                "ws-alpha": "/tmp/project-alpha",
-                "ws-alpha-feature": "/tmp/project-alpha/.stave/workspaces/feature-a",
+            projects: [
+              {
+                projectPath: "/tmp/project-alpha",
+                projectName: "project-alpha",
+                lastOpenedAt: "2026-03-10T00:00:00.000Z",
+                defaultBranch: "main",
+                workspaces: [
+                  {
+                    id: "ws-alpha",
+                    name: "Default Workspace",
+                    updatedAt: "2026-03-10T00:00:00.000Z",
+                  },
+                  {
+                    id: "ws-alpha-feature",
+                    name: "feature-a",
+                    updatedAt: "2026-03-10T00:01:00.000Z",
+                  },
+                ],
+                activeWorkspaceId: "ws-alpha",
+                workspaceBranchById: {
+                  "ws-alpha": "main",
+                  "ws-alpha-feature": "feature-a",
+                },
+                workspacePathById: {
+                  "ws-alpha": "/tmp/project-alpha",
+                  "ws-alpha-feature":
+                    "/tmp/project-alpha/.stave/workspaces/feature-a",
+                },
+                workspaceDefaultById: { "ws-alpha": true },
               },
-              workspaceDefaultById: { "ws-alpha": true },
-            }],
+            ],
           }),
           saveProjectRegistry: async () => ({ ok: true }),
           listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
@@ -2875,7 +3570,12 @@ describe("workspace store hydration ordering", () => {
           },
         },
         terminal: {
-          runCommand: async ({ command }: { cwd?: string; command: string }) => {
+          runCommand: async ({
+            command,
+          }: {
+            cwd?: string;
+            command: string;
+          }) => {
             if (command === "git worktree prune") {
               return { ok: true, code: 0, stdout: "", stderr: "" };
             }
@@ -2895,7 +3595,12 @@ describe("workspace store hydration ordering", () => {
                 stderr: "",
               };
             }
-            return { ok: false, code: 1, stdout: "", stderr: `Unexpected command: ${command}` };
+            return {
+              ok: false,
+              code: 1,
+              stdout: "",
+              stderr: `Unexpected command: ${command}`,
+            };
           },
         },
         fs: {
@@ -2913,11 +3618,22 @@ describe("workspace store hydration ordering", () => {
       projectPath: "/tmp/project-alpha",
       projectName: "project-alpha",
       workspaces: [
-        { id: "ws-alpha", name: "Default Workspace", updatedAt: "2026-03-10T00:00:00.000Z" },
-        { id: "ws-alpha-feature", name: "feature-a", updatedAt: "2026-03-10T00:01:00.000Z" },
+        {
+          id: "ws-alpha",
+          name: "Default Workspace",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
+        {
+          id: "ws-alpha-feature",
+          name: "feature-a",
+          updatedAt: "2026-03-10T00:01:00.000Z",
+        },
       ],
       activeWorkspaceId: "ws-alpha",
-      workspaceBranchById: { "ws-alpha": "main", "ws-alpha-feature": "feature-a" },
+      workspaceBranchById: {
+        "ws-alpha": "main",
+        "ws-alpha-feature": "feature-a",
+      },
       workspacePathById: {
         "ws-alpha": "/tmp/project-alpha",
         "ws-alpha-feature": "/tmp/project-alpha/.stave/workspaces/feature-a",
@@ -2930,17 +3646,18 @@ describe("workspace store hydration ordering", () => {
     await useAppStore.getState().hydrateWorkspaces();
 
     expect(closedWorkspaceIds).toEqual([]);
-    expect(useAppStore.getState().workspaces.map((workspace) => workspace.id)).toEqual([
-      "ws-alpha",
-      "ws-alpha-feature",
-    ]);
+    expect(
+      useAppStore.getState().workspaces.map((workspace) => workspace.id),
+    ).toEqual(["ws-alpha", "ws-alpha-feature"]);
   });
 
   test("abortTaskTurn calls cleanupTask and clears providerSessionByTask to prevent stale thread resume", async () => {
     const localStorage = createMemoryStorage();
     const abortCalls: string[] = [];
     const cleanupCalls: string[] = [];
-    let streamListener: ((payload: { streamId: string; event: unknown; done: boolean }) => void) | null = null;
+    let streamListener:
+      | ((payload: { streamId: string; event: unknown; done: boolean }) => void)
+      | null = null;
 
     (globalThis as { window: unknown }).window = {
       localStorage,
@@ -2989,30 +3706,36 @@ describe("workspace store hydration ordering", () => {
       activeTaskId: "task-abort-1",
       projectPath: "/tmp/stave-abort-test",
       draftProvider: "codex",
-      tasks: [{
-        id: "task-abort-1",
-        title: "Abort Test",
-        provider: "codex",
-        updatedAt: "2026-04-01T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-abort-1",
+          title: "Abort Test",
+          provider: "codex",
+          updatedAt: "2026-04-01T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: {
-        "task-abort-1": [{
-          id: "task-abort-1-m-1",
-          role: "assistant",
-          model: "gpt-5.4",
-          providerId: "codex",
-          content: "",
-          isStreaming: false,
-          parts: [{
-            type: "approval",
-            toolName: "bash",
-            requestId: "approval-abort-1",
-            description: "Run npm test",
-            state: "approval-requested",
-          }],
-        }],
+        "task-abort-1": [
+          {
+            id: "task-abort-1-m-1",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "",
+            isStreaming: false,
+            parts: [
+              {
+                type: "approval",
+                toolName: "bash",
+                requestId: "approval-abort-1",
+                description: "Run npm test",
+                state: "approval-requested",
+              },
+            ],
+          },
+        ],
       },
       activeTurnIdsByTask: {
         "task-abort-1": "turn-abort-1",
@@ -3038,7 +3761,9 @@ describe("workspace store hydration ordering", () => {
     expect(cleanupCalls).toContain("task-abort-1");
     // providerSessionByTask should no longer hold the stale thread id
     expect(afterAbort.providerSessionByTask["task-abort-1"]).toBeUndefined();
-    expect(afterAbort.messagesByTask["task-abort-1"]?.[0]?.parts[0]).toMatchObject({
+    expect(
+      afterAbort.messagesByTask["task-abort-1"]?.[0]?.parts[0],
+    ).toMatchObject({
       type: "approval",
       requestId: "approval-abort-1",
       state: "approval-interrupted",
@@ -3062,30 +3787,36 @@ describe("workspace store hydration ordering", () => {
       workspacePathById: { "ws-main": "/tmp/stave-project" },
       workspaceBranchById: { "ws-main": "main" },
       workspaceDefaultById: { "ws-main": true },
-      tasks: [{
-        id: "task-1",
-        title: "Task 1",
-        provider: "codex",
-        updatedAt: "2026-04-07T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task 1",
+          provider: "codex",
+          updatedAt: "2026-04-07T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: {
-        "task-1": [{
-          id: "task-1-m-1",
-          role: "assistant",
-          model: "gpt-5.4",
-          providerId: "codex",
-          content: "",
-          isStreaming: false,
-          parts: [{
-            type: "approval",
-            toolName: "bash",
-            requestId: "approval-1",
-            description: "Run npm test",
-            state: "approval-requested",
-          }],
-        }],
+        "task-1": [
+          {
+            id: "task-1-m-1",
+            role: "assistant",
+            model: "gpt-5.4",
+            providerId: "codex",
+            content: "",
+            isStreaming: false,
+            parts: [
+              {
+                type: "approval",
+                toolName: "bash",
+                requestId: "approval-1",
+                description: "Run npm test",
+                state: "approval-requested",
+              },
+            ],
+          },
+        ],
       },
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
@@ -3113,13 +3844,21 @@ describe("workspace store hydration ordering", () => {
   });
 
   test("resolveApproval targets the task-owned inactive workspace turn", async () => {
-    const approvalCalls: Array<{ turnId: string; requestId: string; approved: boolean }> = [];
+    const approvalCalls: Array<{
+      turnId: string;
+      requestId: string;
+      approved: boolean;
+    }> = [];
 
     setWindowContext({
       localStorage: createMemoryStorage(),
       api: {
         provider: {
-          respondApproval: async (args: { turnId: string; requestId: string; approved: boolean }) => {
+          respondApproval: async (args: {
+            turnId: string;
+            requestId: string;
+            approved: boolean;
+          }) => {
             approvalCalls.push(args);
             return { ok: true, message: "ok" };
           },
@@ -3147,14 +3886,16 @@ describe("workspace store hydration ordering", () => {
         "ws-main": true,
         "ws-alt": false,
       },
-      tasks: [{
-        id: "task-main",
-        title: "Task Main",
-        provider: "codex",
-        updatedAt: "2026-04-07T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-main",
+          title: "Task Main",
+          provider: "codex",
+          updatedAt: "2026-04-07T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: { "task-main": [] },
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
@@ -3167,30 +3908,36 @@ describe("workspace store hydration ordering", () => {
       workspaceRuntimeCacheById: {
         "ws-alt": {
           activeTaskId: "task-alt",
-          tasks: [{
-            id: "task-alt",
-            title: "Task Alt",
-            provider: "codex",
-            updatedAt: "2026-04-07T00:00:00.000Z",
-            unread: false,
-            archivedAt: null,
-          }],
+          tasks: [
+            {
+              id: "task-alt",
+              title: "Task Alt",
+              provider: "codex",
+              updatedAt: "2026-04-07T00:00:00.000Z",
+              unread: false,
+              archivedAt: null,
+            },
+          ],
           messagesByTask: {
-            "task-alt": [{
-              id: "task-alt-m-1",
-              role: "assistant",
-              model: "gpt-5.4",
-              providerId: "codex",
-              content: "",
-              isStreaming: false,
-              parts: [{
-                type: "approval",
-                toolName: "bash",
-                requestId: "approval-alt-1",
-                description: "Run npm test in alt workspace",
-                state: "approval-requested",
-              }],
-            }],
+            "task-alt": [
+              {
+                id: "task-alt-m-1",
+                role: "assistant",
+                model: "gpt-5.4",
+                providerId: "codex",
+                content: "",
+                isStreaming: false,
+                parts: [
+                  {
+                    type: "approval",
+                    toolName: "bash",
+                    requestId: "approval-alt-1",
+                    description: "Run npm test in alt workspace",
+                    state: "approval-requested",
+                  },
+                ],
+              },
+            ],
           },
           messageCountByTask: { "task-alt": 1 },
           promptDraftByTask: {},
@@ -3225,12 +3972,17 @@ describe("workspace store hydration ordering", () => {
 
     await Bun.sleep(0);
 
-    expect(approvalCalls).toEqual([{
-      turnId: "turn-alt-1",
-      requestId: "approval-alt-1",
-      approved: true,
-    }]);
-    expect(useAppStore.getState().workspaceRuntimeCacheById["ws-alt"]?.messagesByTask["task-alt"]?.[0]?.parts[0]).toMatchObject({
+    expect(approvalCalls).toEqual([
+      {
+        turnId: "turn-alt-1",
+        requestId: "approval-alt-1",
+        approved: true,
+      },
+    ]);
+    expect(
+      useAppStore.getState().workspaceRuntimeCacheById["ws-alt"]
+        ?.messagesByTask["task-alt"]?.[0]?.parts[0],
+    ).toMatchObject({
       type: "approval",
       requestId: "approval-alt-1",
       state: "approval-responded",
@@ -3283,14 +4035,16 @@ describe("workspace store hydration ordering", () => {
         "ws-main": true,
         "ws-alt": false,
       },
-      tasks: [{
-        id: "task-main",
-        title: "Task Main",
-        provider: "codex",
-        updatedAt: "2026-04-07T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-main",
+          title: "Task Main",
+          provider: "codex",
+          updatedAt: "2026-04-07T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: { "task-main": [] },
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
@@ -3303,40 +4057,48 @@ describe("workspace store hydration ordering", () => {
       workspaceRuntimeCacheById: {
         "ws-alt": {
           activeTaskId: "task-alt",
-          tasks: [{
-            id: "task-alt",
-            title: "Task Alt",
-            provider: "codex",
-            updatedAt: "2026-04-07T00:00:00.000Z",
-            unread: false,
-            archivedAt: null,
-          }],
+          tasks: [
+            {
+              id: "task-alt",
+              title: "Task Alt",
+              provider: "codex",
+              updatedAt: "2026-04-07T00:00:00.000Z",
+              unread: false,
+              archivedAt: null,
+            },
+          ],
           messagesByTask: {
-            "task-alt": [{
-              id: "task-alt-m-1",
-              role: "assistant",
-              model: "gpt-5.4",
-              providerId: "codex",
-              content: "",
-              isStreaming: false,
-              parts: [{
-                type: "user_input",
-                toolName: "request_user_input",
-                requestId: "input-alt-1",
-                questions: [{
-                  id: "name",
-                  header: "Name",
-                  question: "What should I call the branch?",
-                  options: [
-                    {
-                      label: "Use current",
-                      description: "Keep the current branch name.",
-                    },
-                  ],
-                }],
-                state: "input-requested",
-              }],
-            }],
+            "task-alt": [
+              {
+                id: "task-alt-m-1",
+                role: "assistant",
+                model: "gpt-5.4",
+                providerId: "codex",
+                content: "",
+                isStreaming: false,
+                parts: [
+                  {
+                    type: "user_input",
+                    toolName: "request_user_input",
+                    requestId: "input-alt-1",
+                    questions: [
+                      {
+                        id: "name",
+                        header: "Name",
+                        question: "What should I call the branch?",
+                        options: [
+                          {
+                            label: "Use current",
+                            description: "Keep the current branch name.",
+                          },
+                        ],
+                      },
+                    ],
+                    state: "input-requested",
+                  },
+                ],
+              },
+            ],
           },
           messageCountByTask: { "task-alt": 1 },
           promptDraftByTask: {},
@@ -3371,13 +4133,18 @@ describe("workspace store hydration ordering", () => {
 
     await Bun.sleep(0);
 
-    expect(inputCalls).toEqual([{
-      turnId: "turn-alt-1",
-      requestId: "input-alt-1",
-      answers: { name: "feature/alt" },
-      denied: undefined,
-    }]);
-    expect(useAppStore.getState().workspaceRuntimeCacheById["ws-alt"]?.messagesByTask["task-alt"]?.[0]?.parts[0]).toMatchObject({
+    expect(inputCalls).toEqual([
+      {
+        turnId: "turn-alt-1",
+        requestId: "input-alt-1",
+        answers: { name: "feature/alt" },
+        denied: undefined,
+      },
+    ]);
+    expect(
+      useAppStore.getState().workspaceRuntimeCacheById["ws-alt"]
+        ?.messagesByTask["task-alt"]?.[0]?.parts[0],
+    ).toMatchObject({
       type: "user_input",
       requestId: "input-alt-1",
       state: "input-responded",
