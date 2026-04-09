@@ -376,6 +376,9 @@ function normalizePromptDraftForStorage(draft: PromptDraft): PromptDraft {
   if (hasPromptDraftPayload(draft) || !draft.queuedNextTurn) {
     return draft;
   }
+  if (draft.queuedNextTurn.content?.trim()) {
+    return draft;
+  }
   const { queuedNextTurn: _unused, ...nextDraft } = draft;
   return nextDraft;
 }
@@ -385,7 +388,8 @@ function arePromptDraftQueuedNextTurnEqual(
   right?: PromptDraft["queuedNextTurn"],
 ) {
   return left?.queuedAt === right?.queuedAt
-    && left?.sourceTurnId === right?.sourceTurnId;
+    && left?.sourceTurnId === right?.sourceTurnId
+    && left?.content === right?.content;
 }
 
 function resolveTaskRuntimeTarget(args: {
@@ -7225,10 +7229,11 @@ export const useAppStore = create<AppState>()(
         if (activeTurnId) {
           const queuedPromptDraft = normalizePromptDraftForStorage({
             ...(taskWorkspaceSession.promptDraftByTask[resolvedTaskId] ?? sourcePromptDraft),
-            text: content,
+            text: "",
             queuedNextTurn: {
               queuedAt: buildRecentTimestamp(),
               sourceTurnId: activeTurnId,
+              content,
             },
           });
           set((nextState) => {
@@ -7608,10 +7613,11 @@ export const useAppStore = create<AppState>()(
               });
               const queuedPromptDraft = latestWorkspaceSession?.promptDraftByTask[resolvedTaskId];
               if (queuedPromptDraft?.queuedNextTurn) {
-                if (hasPromptDraftPayload(queuedPromptDraft)) {
+                const queuedContent = queuedPromptDraft.queuedNextTurn.content ?? queuedPromptDraft.text;
+                if (queuedContent.trim()) {
                   void get().sendUserMessage({
                     taskId: resolvedTaskId,
-                    content: queuedPromptDraft.text,
+                    content: queuedContent,
                   });
                 } else {
                   get().clearPromptDraft({ taskId: resolvedTaskId });
