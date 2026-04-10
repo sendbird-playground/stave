@@ -244,17 +244,17 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-xs">
                       <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-                        <span className="text-muted-foreground">Input</span>
+                        <span className="text-background/70">Input</span>
                         <span className="text-right font-mono">
                           {message.usage.inputTokens.toLocaleString()} tokens
                         </span>
-                        <span className="text-muted-foreground">Output</span>
+                        <span className="text-background/70">Output</span>
                         <span className="text-right font-mono">
                           {message.usage.outputTokens.toLocaleString()} tokens
                         </span>
                         {message.usage.cacheReadTokens ? (
                           <>
-                            <span className="text-muted-foreground">
+                            <span className="text-background/70">
                               Cache read
                             </span>
                             <span className="text-right font-mono">
@@ -265,7 +265,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                         ) : null}
                         {message.usage.cacheCreationTokens ? (
                           <>
-                            <span className="text-muted-foreground">
+                            <span className="text-background/70">
                               Cache write
                             </span>
                             <span className="text-right font-mono">
@@ -276,7 +276,7 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                         ) : null}
                         {message.usage.totalCostUsd != null ? (
                           <>
-                            <span className="text-muted-foreground">Cost</span>
+                            <span className="text-background/70">Cost</span>
                             <span className="text-right font-mono">
                               {formatCostUsd(message.usage.totalCostUsd)}
                             </span>
