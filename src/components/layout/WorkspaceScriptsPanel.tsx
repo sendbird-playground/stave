@@ -341,14 +341,11 @@ export function WorkspaceScriptsPanel(props: {
 
   useEffect(() => {
     const subscribeEvents = window.api?.scripts?.subscribeEvents;
-    if (!subscribeEvents) {
+    if (!subscribeEvents || !activeWorkspaceId) {
       return undefined;
     }
 
-    return subscribeEvents((payload) => {
-      if (payload.workspaceId !== activeWorkspaceId) {
-        return;
-      }
+    return subscribeEvents({ workspaceId: activeWorkspaceId }, (payload) => {
       const key = scriptKey(payload);
       setEntryStateByKey((current) => {
         const existing = current[key] ?? { running: false, log: "" };

@@ -72,5 +72,7 @@ export const WORKSPACE_SCRIPTS_IPC = {
   STOP_ENTRY: "workspace-scripts:stop-entry",
   RUN_HOOK: "workspace-scripts:run-hook",
   STOP_ALL: "workspace-scripts:stop-all",
+  SUBSCRIBE_EVENTS: "workspace-scripts:subscribe-events",
+  UNSUBSCRIBE_EVENTS: "workspace-scripts:unsubscribe-events",
   EVENT: "workspace-scripts:event",
 } as const;

@@ -630,6 +630,7 @@ interface WindowScriptsApi {
     error?: string;
   }>;
   subscribeEvents?: (
+    args: { workspaceId: string },
     listener: (payload: WorkspaceScriptEventEnvelope) => void,
   ) => () => void;
 }

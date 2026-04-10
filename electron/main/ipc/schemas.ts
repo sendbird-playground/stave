@@ -118,6 +118,12 @@ export const WorkspaceScriptsStopAllArgsSchema = z
   })
   .strict();
 
+export const WorkspaceScriptsEventSubscriptionArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+  })
+  .strict();
+
 export const TerminalCreateSessionArgsSchema = z
   .object({
     workspaceId: z.string().min(1).max(200),

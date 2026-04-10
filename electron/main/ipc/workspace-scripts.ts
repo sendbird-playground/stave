@@ -4,9 +4,13 @@
 
 import { ipcMain, webContents } from "electron";
 import { getScriptEntry } from "../../../src/lib/workspace-scripts/config";
-import type { ScriptKind } from "../../../src/lib/workspace-scripts/types";
+import type {
+  ScriptKind,
+  WorkspaceScriptEventEnvelope,
+} from "../../../src/lib/workspace-scripts/types";
 import { WORKSPACE_SCRIPTS_IPC } from "../../../src/lib/workspace-scripts/constants";
 import {
+  WorkspaceScriptsEventSubscriptionArgsSchema,
   WorkspaceScriptsGetConfigArgsSchema,
   WorkspaceScriptsGetStatusArgsSchema,
   WorkspaceScriptsRunEntryArgsSchema,
@@ -16,15 +20,52 @@ import {
 } from "./schemas";
 import { invokeHostService, onHostServiceEvent } from "../host-service-client";
 import { resolveScriptsForWorkspace } from "../workspace-scripts";
+import {
+  addWorkspaceScriptEventSubscription,
+  createWorkspaceScriptEventSubscriptionRegistry,
+  listWorkspaceScriptEventSubscriberIds,
+  removeAllWorkspaceScriptEventSubscriptions,
+  removeWorkspaceScriptEventSubscription,
+} from "./workspace-script-event-subscriptions";
 
 let workspaceScriptEventBridgeRegistered = false;
+const workspaceScriptEventSubscriptionRegistry = createWorkspaceScriptEventSubscriptionRegistry();
+const workspaceScriptEventCleanupRegisteredContentsIds = new Set<number>();
 
-function broadcastWorkspaceScriptEvent(payload: unknown) {
-  for (const wc of webContents.getAllWebContents()) {
-    if (wc.isDestroyed() || wc.getType() !== "window") {
+function registerWorkspaceScriptEventCleanup(contentsId: number) {
+  if (workspaceScriptEventCleanupRegisteredContentsIds.has(contentsId)) {
+    return;
+  }
+  const contents = webContents.fromId(contentsId);
+  if (!contents || contents.isDestroyed()) {
+    return;
+  }
+  workspaceScriptEventCleanupRegisteredContentsIds.add(contentsId);
+  contents.once("destroyed", () => {
+    removeAllWorkspaceScriptEventSubscriptions({
+      registry: workspaceScriptEventSubscriptionRegistry,
+      contentsId,
+    });
+    workspaceScriptEventCleanupRegisteredContentsIds.delete(contentsId);
+  });
+}
+
+function broadcastWorkspaceScriptEvent(payload: WorkspaceScriptEventEnvelope) {
+  const contentsIds = listWorkspaceScriptEventSubscriberIds({
+    registry: workspaceScriptEventSubscriptionRegistry,
+    workspaceId: payload.workspaceId,
+  });
+  for (const contentsId of contentsIds) {
+    const contents = webContents.fromId(contentsId);
+    if (!contents || contents.isDestroyed() || contents.getType() !== "window") {
+      removeAllWorkspaceScriptEventSubscriptions({
+        registry: workspaceScriptEventSubscriptionRegistry,
+        contentsId,
+      });
+      workspaceScriptEventCleanupRegisteredContentsIds.delete(contentsId);
       continue;
     }
-    wc.send(WORKSPACE_SCRIPTS_IPC.EVENT, payload);
+    contents.send(WORKSPACE_SCRIPTS_IPC.EVENT, payload);
   }
 }
 
@@ -40,6 +81,37 @@ function registerWorkspaceScriptEventBridge() {
 
 export function registerWorkspaceScriptHandlers() {
   registerWorkspaceScriptEventBridge();
+
+  ipcMain.on(
+    WORKSPACE_SCRIPTS_IPC.SUBSCRIBE_EVENTS,
+    (event, rawArgs: unknown) => {
+      const parsed = WorkspaceScriptsEventSubscriptionArgsSchema.safeParse(rawArgs);
+      if (!parsed.success) {
+        return;
+      }
+      addWorkspaceScriptEventSubscription({
+        registry: workspaceScriptEventSubscriptionRegistry,
+        contentsId: event.sender.id,
+        workspaceId: parsed.data.workspaceId,
+      });
+      registerWorkspaceScriptEventCleanup(event.sender.id);
+    },
+  );
+
+  ipcMain.on(
+    WORKSPACE_SCRIPTS_IPC.UNSUBSCRIBE_EVENTS,
+    (event, rawArgs: unknown) => {
+      const parsed = WorkspaceScriptsEventSubscriptionArgsSchema.safeParse(rawArgs);
+      if (!parsed.success) {
+        return;
+      }
+      removeWorkspaceScriptEventSubscription({
+        registry: workspaceScriptEventSubscriptionRegistry,
+        contentsId: event.sender.id,
+        workspaceId: parsed.data.workspaceId,
+      });
+    },
+  );
 
   ipcMain.handle(
     WORKSPACE_SCRIPTS_IPC.GET_CONFIG,

@@ -164,13 +164,17 @@ ipcRenderer.on(
   },
 );
 
-const workspaceScriptEventSubscribers = new Set<
+const workspaceScriptEventSubscribersByWorkspaceId = new Map<string, Set<
   (payload: WorkspaceScriptEventEnvelope) => void
->();
+>>();
 ipcRenderer.on(
   WORKSPACE_SCRIPTS_IPC.EVENT,
   (_event, payload: WorkspaceScriptEventEnvelope) => {
-    for (const subscriber of workspaceScriptEventSubscribers) {
+    const subscribers = workspaceScriptEventSubscribersByWorkspaceId.get(payload.workspaceId);
+    if (!subscribers) {
+      return;
+    }
+    for (const subscriber of subscribers) {
       subscriber(payload);
     }
   },
@@ -279,10 +283,31 @@ const scriptsApi = {
       ok: boolean;
       error?: string;
     }>,
-  subscribeEvents: (listener: (payload: WorkspaceScriptEventEnvelope) => void) => {
-    workspaceScriptEventSubscribers.add(listener);
+  subscribeEvents: (
+    args: { workspaceId: string },
+    listener: (payload: WorkspaceScriptEventEnvelope) => void,
+  ) => {
+    const existing = workspaceScriptEventSubscribersByWorkspaceId.get(args.workspaceId);
+    if (existing) {
+      existing.add(listener);
+    } else {
+      workspaceScriptEventSubscribersByWorkspaceId.set(
+        args.workspaceId,
+        new Set([listener]),
+      );
+      ipcRenderer.send(WORKSPACE_SCRIPTS_IPC.SUBSCRIBE_EVENTS, args);
+    }
     return () => {
-      workspaceScriptEventSubscribers.delete(listener);
+      const subscribers = workspaceScriptEventSubscribersByWorkspaceId.get(args.workspaceId);
+      if (!subscribers) {
+        return;
+      }
+      subscribers.delete(listener);
+      if (subscribers.size > 0) {
+        return;
+      }
+      workspaceScriptEventSubscribersByWorkspaceId.delete(args.workspaceId);
+      ipcRenderer.send(WORKSPACE_SCRIPTS_IPC.UNSUBSCRIBE_EVENTS, args);
     };
   },
 };
