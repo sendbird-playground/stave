@@ -151,10 +151,14 @@ events. Turn appears stuck from the user's perspective.
 drops events when the target `WebContents` is destroyed. The host side
 marks the stream as done, but the renderer never learns about it.
 
-**Mitigation**: The renderer can fall back to `readTurnStream` (poll mode)
-to catch up. The stall timer now acts only as a UI warning signal so users
-can see quiet turns and decide whether to stop them manually, without the
-renderer auto-aborting long but healthy runs.
+**Mitigation (applied)**:
+- Push-mode turns are now started with a replayable host-side buffer so the
+  same `streamId` can be read later via `readTurnStream`.
+- If the renderer receives no push events for 15 seconds, it stops trusting
+  the push bridge and switches that turn to poll mode using the buffered
+  `streamId` cursor, instead of aborting the turn.
+- The stall timer remains a UI-only warning signal. It no longer owns
+  recovery or abort behavior.
 
 ---
 

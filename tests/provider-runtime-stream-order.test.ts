@@ -95,6 +95,54 @@ describe("providerRuntime.startTurnStream", () => {
     expect(events).toContain("done");
   });
 
+  test("keeps a push stream readable when buffered replay is requested", async () => {
+    let resolveDone = () => undefined;
+    const donePromise = new Promise<void>((resolve) => {
+      resolveDone = resolve;
+    });
+
+    const started = providerRuntime.startTurnStream(
+      {
+        providerId: "codex",
+        prompt: "smoke",
+      },
+      {
+        bufferEvents: true,
+        onEvent: () => {},
+        onDone: () => {
+          resolveDone();
+        },
+      },
+    );
+
+    await donePromise;
+
+    expect(
+      providerRuntime.readTurnStream({
+        streamId: started.streamId,
+        cursor: 0,
+      }),
+    ).toEqual({
+      ok: true,
+      events: [{ type: "done" }],
+      cursor: 1,
+      done: true,
+    });
+
+    expect(
+      providerRuntime.readTurnStream({
+        streamId: started.streamId,
+        cursor: 1,
+      }),
+    ).toEqual({
+      ok: false,
+      events: [],
+      cursor: 1,
+      done: true,
+      message: "Stream session not found.",
+    });
+  });
+
   test("shutdown clears buffered polling streams", async () => {
     const started = providerRuntime.startTurnStream({
       providerId: "codex",
