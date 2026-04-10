@@ -359,6 +359,7 @@ function shouldResolveWorkspaceInfoLinkAction(args: {
 
 function summarizeInformationState(info: WorkspaceInformationState) {
   return [
+    `Latest turn summary: ${info.turnSummary ? "present" : "empty"}`,
     `Notes: ${info.notes.trim() ? "present" : "empty"}`,
     `Todos: ${info.todos.length}`,
     `Linked PRs: ${info.linkedPullRequests.length}`,
@@ -385,6 +386,17 @@ function formatMuseContextList(args: {
 }
 
 function buildWorkspaceInformationDetailLines(info: WorkspaceInformationState) {
+  const turnSummaryItems = info.turnSummary
+    ? [
+        [
+          info.turnSummary.taskTitle || "Latest turn",
+          info.turnSummary.requestSummary,
+          info.turnSummary.workSummary,
+        ]
+          .filter((value) => value.trim().length > 0)
+          .join(" | "),
+      ]
+    : [];
   const noteSummary = info.notes.trim()
     ? truncateMuseContextValue(info.notes, 320)
     : "empty";
@@ -427,6 +439,11 @@ function buildWorkspaceInformationDetailLines(info: WorkspaceInformationState) {
     });
 
   return [
+    ...formatMuseContextList({
+      label: "Latest turn summary",
+      items: turnSummaryItems,
+      emptyLabel: "none",
+    }),
     ...formatMuseContextList({
       label: "Notes",
       items: [noteSummary],

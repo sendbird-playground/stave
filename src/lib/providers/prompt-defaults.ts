@@ -141,3 +141,20 @@ export const DEFAULT_PROMPT_INLINE_COMPLETION = [
   "",
   "Output ONLY the raw code that replaces [HOLE]. No markdown. No backticks. No explanation. No prose.",
 ].join("\n");
+
+// ---------------------------------------------------------------------------
+// Workspace Information panel – latest completed turn summary
+// ---------------------------------------------------------------------------
+export const DEFAULT_PROMPT_WORKSPACE_TURN_SUMMARY = [
+  "You summarize the latest completed Stave task turn for the workspace Information panel.",
+  "Return ONLY valid JSON with this exact shape:",
+  '{"requestSummary":"...","workSummary":"..."}',
+  "",
+  "Rules:",
+  "- requestSummary: what the user asked for in this turn.",
+  "- workSummary: what the AI actually did, concluded, or changed in response.",
+  "- Keep both fields concise and concrete.",
+  "- Each field should be one short sentence or phrase.",
+  "- Mention blockers or incomplete work briefly when relevant.",
+  "- No markdown, no code fences, no extra keys, no commentary.",
+].join("\n");
