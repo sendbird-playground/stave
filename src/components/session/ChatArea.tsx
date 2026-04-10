@@ -12,6 +12,7 @@ import { ChatPanel } from "@/components/session/ChatPanel";
 import { resolveChatAreaViewMode } from "@/components/session/chat-area.utils";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { PlanViewer } from "@/components/session/PlanViewer";
+import { TodoFloater } from "@/components/session/TodoFloater";
 import { SessionLoadingState } from "@/components/session/SessionLoadingState";
 import {
   Button,
@@ -256,6 +257,7 @@ export function ChatArea() {
         <RenderProfiler id="PlanViewer">
           <PlanViewer inputDockHeight={chatInputDockHeight} />
         </RenderProfiler>
+        <TodoFloater inputDockHeight={chatInputDockHeight} />
         <div ref={chatInputDockRef} className="relative z-30 shrink-0">
           <RenderProfiler id="ChatInput" thresholdMs={8}>
             <ChatInput />
