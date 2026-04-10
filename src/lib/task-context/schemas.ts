@@ -374,12 +374,23 @@ const WorkspaceInfoCustomFieldSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+const WorkspaceTurnSummarySchema = z.object({
+  turnId: z.string(),
+  taskId: z.string(),
+  taskTitle: z.string().optional().default(""),
+  generatedAt: z.string(),
+  model: z.string().optional().default(""),
+  requestSummary: z.string().optional().default(""),
+  workSummary: z.string().optional().default(""),
+});
+
 const WorkspaceInformationSchema = z.object({
   jiraIssues: z.array(WorkspaceJiraIssueSchema).optional().default([]),
   confluencePages: z.array(WorkspaceConfluencePageSchema).optional().default([]),
   figmaResources: z.array(WorkspaceFigmaResourceSchema).optional().default([]),
   linkedPullRequests: z.array(WorkspaceLinkedPullRequestSchema).optional().default([]),
   slackThreads: z.array(WorkspaceSlackThreadSchema).optional().default([]),
+  turnSummary: WorkspaceTurnSummarySchema.nullable().optional(),
   notes: z.string().optional().default(""),
   todos: z.array(WorkspaceTodoItemSchema).optional().default([]),
   customFields: z.array(WorkspaceInfoCustomFieldSchema).optional().default([]),

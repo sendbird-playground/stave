@@ -22,6 +22,7 @@ function truncateText(value: string, maxChars = MAX_TEXT_CHARS) {
 
 function summarizeWorkspaceInformation(info: WorkspaceInformationState) {
   return [
+    `Latest turn summary: ${info.turnSummary ? "present" : "empty"}`,
     `Notes: ${info.notes.trim() ? "present" : "empty"}`,
     `Todos: ${info.todos.length}`,
     `Linked PRs: ${info.linkedPullRequests.length}`,
@@ -44,6 +45,17 @@ function formatSection(args: { label: string; items: string[]; emptyLabel: strin
 }
 
 function buildWorkspaceInformationDetailLines(info: WorkspaceInformationState) {
+  const turnSummaryItems = info.turnSummary
+    ? [
+        [
+          info.turnSummary.taskTitle || "Latest turn",
+          info.turnSummary.requestSummary,
+          info.turnSummary.workSummary,
+        ]
+          .filter((value) => value.trim().length > 0)
+          .join(" | "),
+      ]
+    : [];
   const noteSummary = info.notes.trim()
     ? truncateText(info.notes, MAX_NOTES_CHARS)
     : "empty";
@@ -92,6 +104,11 @@ function buildWorkspaceInformationDetailLines(info: WorkspaceInformationState) {
     });
 
   return [
+    ...formatSection({
+      label: "Latest turn summary",
+      items: turnSummaryItems,
+      emptyLabel: "none",
+    }),
     ...formatSection({
       label: "Notes",
       items: [noteSummary],

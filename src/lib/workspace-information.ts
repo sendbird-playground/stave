@@ -95,6 +95,16 @@ export interface WorkspaceTodoItem {
   completed: boolean;
 }
 
+export interface WorkspaceTurnSummary {
+  turnId: string;
+  taskId: string;
+  taskTitle: string;
+  generatedAt: string;
+  model: string;
+  requestSummary: string;
+  workSummary: string;
+}
+
 interface WorkspaceInfoFieldBase {
   id: string;
   label: string;
@@ -151,6 +161,7 @@ export interface WorkspaceInformationState {
   figmaResources: WorkspaceFigmaResource[];
   linkedPullRequests: WorkspaceLinkedPullRequest[];
   slackThreads: WorkspaceSlackThread[];
+  turnSummary?: WorkspaceTurnSummary | null;
   notes: string;
   todos: WorkspaceTodoItem[];
   customFields: WorkspaceInfoCustomField[];

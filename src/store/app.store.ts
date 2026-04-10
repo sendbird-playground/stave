@@ -70,6 +70,7 @@ import {
   getDefaultModelForProvider,
   inferProviderIdFromModel,
   listProviderIds,
+  normalizeModelSelection,
 } from "@/lib/providers/model-catalog";
 import {
   DEFAULT_PROMPT_RESPONSE_STYLE,
@@ -78,6 +79,7 @@ import {
   DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS,
   DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
   DEFAULT_PROMPT_INLINE_COMPLETION,
+  DEFAULT_PROMPT_WORKSPACE_TURN_SUMMARY,
   normalizeResponseStylePrompt,
 } from "@/lib/providers/prompt-defaults";
 import {
@@ -126,6 +128,11 @@ import {
   createWorkspaceTodoItem,
   type WorkspaceInformationState,
 } from "@/lib/workspace-information";
+import {
+  buildWorkspaceTurnSummaryPrompt,
+  createWorkspaceTurnSummary,
+  parseWorkspaceTurnSummaryResponse,
+} from "@/lib/workspace-turn-summary";
 import {
   buildStaveMuseContextSnapshot,
   buildStaveMuseLocalActionResponse,
@@ -836,6 +843,12 @@ export interface AppSettings {
   promptPreprocessorClassifier: string;
   /** System prompt for inline code completion. */
   promptInlineCompletion: string;
+  /** Preferred model for the Information panel's automatic latest-turn summary. */
+  workspaceTurnSummaryPrimaryModel: string;
+  /** Fallback model when the primary summary model is unavailable or fails. */
+  workspaceTurnSummaryFallbackModel: string;
+  /** Prompt template for the Information panel's automatic latest-turn summary. */
+  workspaceTurnSummaryPrompt: string;
 
   // -- Lens (built-in browser) --
   /** Heuristic search: AI uses class names, text, ID to grep source files. */
@@ -1558,6 +1571,9 @@ const defaultSettings: AppSettings = {
   promptSupervisorSynthesis: DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS,
   promptPreprocessorClassifier: DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
   promptInlineCompletion: DEFAULT_PROMPT_INLINE_COMPLETION,
+  workspaceTurnSummaryPrimaryModel: "gpt-5.4-mini",
+  workspaceTurnSummaryFallbackModel: "claude-haiku-4-5",
+  workspaceTurnSummaryPrompt: DEFAULT_PROMPT_WORKSPACE_TURN_SUMMARY,
 
   // Lens
   lensSourceMappingHeuristic: true,
@@ -2393,6 +2409,339 @@ export const useAppStore = create<AppState>()(
               trigger: args.trigger,
               error: String(error),
             });
+          });
+      };
+
+      const workspaceTurnSummaryRequestIdByWorkspaceId = new Map<
+        string,
+        string
+      >();
+
+      const hasAsyncIterable = (
+        value: unknown,
+      ): value is AsyncIterable<unknown> => {
+        if (!value || typeof value !== "object") {
+          return false;
+        }
+        return Symbol.asyncIterator in value;
+      };
+
+      const collectProviderEvents = async (
+        value: unknown,
+      ): Promise<NormalizedProviderEvent[]> => {
+        const resolved = await value;
+        if (Array.isArray(resolved)) {
+          return resolved as NormalizedProviderEvent[];
+        }
+        if (!hasAsyncIterable(resolved)) {
+          return [];
+        }
+        const events: NormalizedProviderEvent[] = [];
+        for await (const item of resolved) {
+          events.push(item as NormalizedProviderEvent);
+        }
+        return events;
+      };
+
+      const persistWorkspaceSessionInBackground = (args: {
+        workspaceId: string;
+        session: WorkspaceSessionState;
+      }) => {
+        const latestState = get();
+        void persistWorkspaceSnapshot({
+          workspaceId: args.workspaceId,
+          workspaceName: resolveWorkspaceName({
+            state: latestState,
+            workspaceId: args.workspaceId,
+          }),
+          activeTaskId: args.session.activeTaskId,
+          tasks: args.session.tasks,
+          messagesByTask: args.session.messagesByTask,
+          promptDraftByTask: args.session.promptDraftByTask,
+          workspaceInformation: args.session.workspaceInformation,
+          editorTabs: args.session.editorTabs,
+          activeEditorTabId: args.session.activeEditorTabId,
+          terminalTabs: args.session.terminalTabs,
+          activeTerminalTabId: args.session.activeTerminalTabId,
+          cliSessionTabs: args.session.cliSessionTabs,
+          activeCliSessionTabId: args.session.activeCliSessionTabId,
+          activeSurface: args.session.activeSurface,
+          providerSessionByTask: args.session.providerSessionByTask,
+        });
+      };
+
+      const applyWorkspaceTurnSummaryToState = (args: {
+        workspaceId: string;
+        summary: ReturnType<typeof createWorkspaceTurnSummary>;
+      }) => {
+        let didUpdate = false;
+
+        set((state) => {
+          const cachedSession = state.workspaceRuntimeCacheById[args.workspaceId];
+          const currentWorkspaceInformation = args.workspaceId === state.activeWorkspaceId
+            ? state.workspaceInformation
+            : cachedSession?.workspaceInformation;
+          if (!currentWorkspaceInformation) {
+            return state;
+          }
+
+          const currentSummary = currentWorkspaceInformation.turnSummary ?? null;
+          if (
+            currentSummary?.turnId === args.summary.turnId
+            && currentSummary.requestSummary === args.summary.requestSummary
+            && currentSummary.workSummary === args.summary.workSummary
+            && currentSummary.model === args.summary.model
+          ) {
+            return state;
+          }
+
+          didUpdate = true;
+          const nextWorkspaceInformation = {
+            ...currentWorkspaceInformation,
+            turnSummary: args.summary,
+          };
+
+          if (args.workspaceId === state.activeWorkspaceId) {
+            return {
+              workspaceInformation: nextWorkspaceInformation,
+              workspaceRuntimeCacheById: cachedSession
+                ? {
+                    ...state.workspaceRuntimeCacheById,
+                    [args.workspaceId]: {
+                      ...cachedSession,
+                      workspaceInformation: nextWorkspaceInformation,
+                    },
+                  }
+                : state.workspaceRuntimeCacheById,
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          }
+
+          if (!cachedSession) {
+            return state;
+          }
+
+          return {
+            workspaceRuntimeCacheById: {
+              ...state.workspaceRuntimeCacheById,
+              [args.workspaceId]: {
+                ...cachedSession,
+                workspaceInformation: nextWorkspaceInformation,
+              },
+            },
+          };
+        });
+
+        if (!didUpdate) {
+          return;
+        }
+
+        const latestSession = getWorkspaceSessionForState({
+          state: get(),
+          workspaceId: args.workspaceId,
+        });
+        if (latestSession) {
+          persistWorkspaceSessionInBackground({
+            workspaceId: args.workspaceId,
+            session: latestSession,
+          });
+        }
+      };
+
+      const generateWorkspaceTurnSummaryInBackground = (args: {
+        workspaceId: string;
+        taskId: string;
+        turnId: string;
+      }) => {
+        const state = get();
+        const session = getWorkspaceSessionForState({
+          state,
+          workspaceId: args.workspaceId,
+        });
+        if (!session) {
+          return;
+        }
+
+        const currentSummary = session.workspaceInformation.turnSummary ?? null;
+        if (currentSummary?.turnId === args.turnId) {
+          return;
+        }
+
+        const task = session.tasks.find((item) => item.id === args.taskId) ?? null;
+        const messages = session.messagesByTask[args.taskId] ?? [];
+        const latestUserMessage = [...messages]
+          .reverse()
+          .find((message) => message.role === "user" && message.content.trim());
+        const latestAssistantMessage = [...messages]
+          .reverse()
+          .find((message) => message.role === "assistant" && message.content.trim());
+        const summaryPrompt = state.settings.workspaceTurnSummaryPrompt.trim();
+        if (!summaryPrompt) {
+          return;
+        }
+        if (!latestUserMessage?.content.trim() && !latestAssistantMessage?.content.trim()) {
+          return;
+        }
+
+        const workspacePath = resolveWorkspacePathForId({
+          activeWorkspaceId: state.activeWorkspaceId,
+          workspaceId: args.workspaceId,
+          workspacePathById: state.workspacePathById,
+          workspaceDefaultById: state.workspaceDefaultById,
+          projectPath: state.projectPath,
+        });
+        const settingsSnapshot = state.settings;
+        const primaryModel = normalizeModelSelection({
+          value: settingsSnapshot.workspaceTurnSummaryPrimaryModel,
+          fallback: defaultSettings.workspaceTurnSummaryPrimaryModel,
+        });
+        const fallbackModel = normalizeModelSelection({
+          value: settingsSnapshot.workspaceTurnSummaryFallbackModel,
+          fallback: defaultSettings.workspaceTurnSummaryFallbackModel,
+        });
+        const candidateModels = [...new Set([
+          primaryModel.trim(),
+          fallbackModel.trim(),
+        ].filter(Boolean))];
+        if (candidateModels.length === 0) {
+          return;
+        }
+
+        const prompt = buildWorkspaceTurnSummaryPrompt({
+          instructionPrompt: summaryPrompt,
+          taskTitle: task?.title ?? null,
+          userRequest:
+            latestUserMessage?.content.trim()
+            || task?.title
+            || "No user request was captured for this turn.",
+          assistantResponse:
+            latestAssistantMessage?.content.trim()
+            || "The assistant completed the turn without a plain-text reply.",
+        });
+        const requestId = `${args.turnId}:${Date.now()}`;
+        workspaceTurnSummaryRequestIdByWorkspaceId.set(
+          args.workspaceId,
+          requestId,
+        );
+
+        void (async () => {
+          for (const model of candidateModels) {
+            if (
+              workspaceTurnSummaryRequestIdByWorkspaceId.get(args.workspaceId)
+              !== requestId
+            ) {
+              return;
+            }
+
+            const providerId = inferProviderIdFromModel({ model });
+            const runtimeOptions = {
+              ...buildProviderRuntimeOptions({
+                provider: providerId,
+                model,
+                settings: settingsSnapshot,
+              }),
+              chatStreamingEnabled: false,
+              responseStylePrompt: undefined,
+              promptPrDescription: undefined,
+              promptInlineCompletion: undefined,
+              ...(providerId === "claude-code"
+                ? {
+                    claudeAllowedTools: [],
+                    claudeMaxTurns: 1,
+                    claudePermissionMode: "dontAsk" as const,
+                    claudeAgentProgressSummaries: false,
+                    claudeFastMode: true,
+                  }
+                : providerId === "codex"
+                  ? {
+                      codexApprovalPolicy: "never" as const,
+                      codexFileAccess: "read-only" as const,
+                      codexNetworkAccess: false,
+                      codexWebSearch: "disabled" as const,
+                      codexReasoningSummary: "none" as const,
+                      codexShowRawReasoning: false,
+                      codexPlanMode: false,
+                      codexFastMode: true,
+                    }
+                  : {}),
+            };
+
+            if (window.api?.provider?.checkAvailability) {
+              try {
+                const availability = await window.api.provider.checkAvailability({
+                  providerId,
+                  runtimeOptions,
+                });
+                if (!availability.ok || !availability.available) {
+                  continue;
+                }
+              } catch {
+                continue;
+              }
+            }
+
+            try {
+              const streamTurn = window.api?.provider?.streamTurn;
+              if (!streamTurn) {
+                return;
+              }
+              const events = await collectProviderEvents(streamTurn({
+                providerId,
+                prompt,
+                cwd: workspacePath ?? undefined,
+                runtimeOptions,
+              }));
+              const responseText = events
+                .filter(
+                  (
+                    event,
+                  ): event is Extract<NormalizedProviderEvent, { type: "text" }> =>
+                    event.type === "text",
+                )
+                .map((event) => event.text)
+                .join("")
+                .trim();
+              const parsedSummary = responseText
+                ? parseWorkspaceTurnSummaryResponse(responseText)
+                : null;
+              if (!parsedSummary) {
+                continue;
+              }
+
+              if (
+                workspaceTurnSummaryRequestIdByWorkspaceId.get(args.workspaceId)
+                !== requestId
+              ) {
+                return;
+              }
+
+              applyWorkspaceTurnSummaryToState({
+                workspaceId: args.workspaceId,
+                summary: createWorkspaceTurnSummary({
+                  turnId: args.turnId,
+                  taskId: args.taskId,
+                  taskTitle: task?.title ?? "Untitled Task",
+                  model,
+                  generatedAt: new Date().toISOString(),
+                  draft: parsedSummary,
+                }),
+              });
+              return;
+            } catch {
+              continue;
+            }
+          }
+        })()
+          .finally(() => {
+            if (
+              workspaceTurnSummaryRequestIdByWorkspaceId.get(args.workspaceId)
+              === requestId
+            ) {
+              workspaceTurnSummaryRequestIdByWorkspaceId.delete(
+                args.workspaceId,
+              );
+            }
           });
       };
 
@@ -8988,6 +9337,11 @@ export const useAppStore = create<AppState>()(
                       trigger: "turn.completed",
                       taskId: resolvedTaskId,
                       taskTitle: completedTask?.title,
+                      turnId,
+                    });
+                    generateWorkspaceTurnSummaryInBackground({
+                      workspaceId: taskWorkspaceId,
+                      taskId: resolvedTaskId,
                       turnId,
                     });
                   }

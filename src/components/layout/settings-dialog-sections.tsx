@@ -1,5 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
 import { Check, ChevronDown, ChevronRight, Contrast, FileAudio, Folder, Globe, Monitor, Moon, RefreshCcw, Sun, Trash2, Upload, X } from "lucide-react";
+import {
+  buildModelSelectorOptions,
+  buildModelSelectorValue,
+  buildRecommendedModelSelectorOptions,
+  ModelSelector,
+} from "@/components/ai-elements/model-selector";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import {
   COMMAND_PALETTE_GROUP_LABELS,
@@ -59,6 +65,7 @@ import {
   DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS,
   DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER,
   DEFAULT_PROMPT_INLINE_COMPLETION,
+  DEFAULT_PROMPT_WORKSPACE_TURN_SUMMARY,
 } from "@/lib/providers/prompt-defaults";
 import {
   THINKING_PHRASE_ANIMATION_OPTIONS,
@@ -98,6 +105,14 @@ const NOTIFICATION_SOUND_PRESET_OPTIONS: Array<{ value: NotificationSoundPreset;
   value: preset,
   label: formatNotificationSoundPresetLabel(preset),
 }));
+
+const PROMPT_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
+const PROMPT_MODEL_OPTIONS = buildModelSelectorOptions({
+  providerIds: PROMPT_MODEL_PROVIDER_IDS,
+});
+const PROMPT_RECOMMENDED_MODEL_OPTIONS = buildRecommendedModelSelectorOptions({
+  options: PROMPT_MODEL_OPTIONS,
+});
 
 interface GitRemoteState {
   name: string;
@@ -2428,6 +2443,27 @@ function PromptField({ title, description, value, defaultValue, onCommit }: Prom
   );
 }
 
+function PromptModelField(args: {
+  title: string;
+  description: string;
+  value: string;
+  onSelect: (model: string) => void;
+}) {
+  return (
+    <LabeledField title={args.title} description={args.description}>
+      <ModelSelector
+        value={buildModelSelectorValue({ model: args.value })}
+        options={PROMPT_MODEL_OPTIONS}
+        recommendedOptions={PROMPT_RECOMMENDED_MODEL_OPTIONS}
+        className="w-full"
+        triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
+        menuClassName="sm:max-w-lg"
+        onSelect={({ selection }) => args.onSelect(selection.model)}
+      />
+    </LabeledField>
+  );
+}
+
 function PromptsSection() {
   const [
     promptResponseStyle,
@@ -2436,6 +2472,9 @@ function PromptsSection() {
     promptSupervisorSynthesis,
     promptPreprocessorClassifier,
     promptInlineCompletion,
+    workspaceTurnSummaryPrimaryModel,
+    workspaceTurnSummaryFallbackModel,
+    workspaceTurnSummaryPrompt,
   ] = useAppStore(
     useShallow((state) => [
       state.settings.promptResponseStyle,
@@ -2444,6 +2483,9 @@ function PromptsSection() {
       state.settings.promptSupervisorSynthesis,
       state.settings.promptPreprocessorClassifier,
       state.settings.promptInlineCompletion,
+      state.settings.workspaceTurnSummaryPrimaryModel,
+      state.settings.workspaceTurnSummaryFallbackModel,
+      state.settings.workspaceTurnSummaryPrompt,
     ] as const),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
@@ -2519,6 +2561,40 @@ function PromptsSection() {
             value={promptInlineCompletion}
             defaultValue={DEFAULT_PROMPT_INLINE_COMPLETION}
             onCommit={(v) => updateSettings({ patch: { promptInlineCompletion: v } })}
+          />
+        </SettingsCard>
+
+        <SettingsCard
+          title="Workspace Latest Turn Summary"
+          description="Automatically writes a short 'what the user asked / what the AI did' summary to the top of the Information panel after each completed turn."
+        >
+          <PromptModelField
+            title="Primary Model"
+            description="Preferred model for generating the latest-turn workspace summary."
+            value={workspaceTurnSummaryPrimaryModel}
+            onSelect={(model) =>
+              updateSettings({
+                patch: { workspaceTurnSummaryPrimaryModel: model },
+              })}
+          />
+          <PromptModelField
+            title="Fallback Model"
+            description="Used when the primary model is unavailable or the summary request fails."
+            value={workspaceTurnSummaryFallbackModel}
+            onSelect={(model) =>
+              updateSettings({
+                patch: { workspaceTurnSummaryFallbackModel: model },
+              })}
+          />
+          <PromptField
+            title="Summary Prompt"
+            description="Instruction template for the Information panel's automatic latest-turn summary. Task title, latest user request, and latest assistant response are appended automatically. Empty disables automatic summaries."
+            value={workspaceTurnSummaryPrompt}
+            defaultValue={DEFAULT_PROMPT_WORKSPACE_TURN_SUMMARY}
+            onCommit={(v) =>
+              updateSettings({
+                patch: { workspaceTurnSummaryPrompt: v },
+              })}
           />
         </SettingsCard>
       </SectionStack>

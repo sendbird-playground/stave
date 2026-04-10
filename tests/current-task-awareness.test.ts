@@ -19,6 +19,15 @@ function createTask(args: { id: string; title: string; provider?: Task["provider
 describe("buildCurrentTaskAwarenessRetrievedContext", () => {
   test("builds workspace-scoped task chat guidance with current workspace information", () => {
     const workspaceInformation = createEmptyWorkspaceInformation();
+    workspaceInformation.turnSummary = {
+      turnId: "turn-1",
+      taskId: "task-1",
+      taskTitle: "Make task chat understand the information panel",
+      generatedAt: "2026-04-10T00:00:00.000Z",
+      model: "gpt-5.4-mini",
+      requestSummary: "Summarise the latest workspace activity in the Information panel.",
+      workSummary: "Prepared the UI plan and identified the Information panel integration points.",
+    };
     workspaceInformation.notes = "Check the design handoff before editing the prompt input.";
     workspaceInformation.figmaResources = [{
       id: "figma-1",
@@ -49,6 +58,8 @@ describe("buildCurrentTaskAwarenessRetrievedContext", () => {
     expect(context.content).toContain("workspaceId or taskId");
     expect(context.content).toContain("id: ws-123");
     expect(context.content).toContain("title: Make task chat understand the information panel");
+    expect(context.content).toContain("Latest turn summary: present");
+    expect(context.content).toContain("Summarise the latest workspace activity in the Information panel. | Prepared the UI plan and identified the Information panel integration points.");
     expect(context.content).toContain("Workspace Conventions:");
     expect(context.content).toContain("new workspace plan files belong under `.stave/context/plans`");
     expect(context.content).toContain("Prompt Input Redesign | node 1:2 | https://www.figma.com/design/FILE123/Prompt?node-id=1-2 | Latest approved mock");

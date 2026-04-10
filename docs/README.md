@@ -23,6 +23,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Project Instructions](features/project-instructions.md)
 - [Lens](features/lens.md)
 - [Local MCP user guide](features/local-mcp-user-guide.md)
+- [Workspace latest turn summary](features/workspace-latest-turn-summary.md)
 - [Stave Muse](features/stave-muse.md)
 - [Stave Model Router](features/stave-model-router.md)
 - [Workspace Scripts](features/workspace-scripts.md)
