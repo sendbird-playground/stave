@@ -16,6 +16,8 @@ describe("package scripts", () => {
     const scripts = packageJson.scripts as Record<string, string>;
 
     expect(scripts["rebuild:electron-deps"]).toBe("node scripts/rebuild-electron-deps.mjs");
+    expect(scripts["desktop:built:logged"].startsWith("bun run rebuild:electron-deps && ")).toBe(true);
+    expect(scripts["desktop:built:logged"].endsWith("node scripts/run-desktop-built-logged.mjs")).toBe(true);
     expect(scripts["package:desktop"].startsWith("bun run rebuild:electron-deps && ")).toBe(true);
     expect(scripts["run:desktop:built"].startsWith("bun run rebuild:electron-deps && ")).toBe(true);
     expect(scripts["run:desktop:built"].endsWith("node scripts/run-desktop-built.mjs")).toBe(true);

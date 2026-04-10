@@ -16,7 +16,10 @@ import {
 } from "@/lib/terminal/types";
 import { cn } from "@/lib/utils";
 import { shouldAutoCreateDockTerminalTab } from "@/components/layout/terminal-dock.utils";
-import { TERMINAL_SURFACE_CLASS_NAME } from "@/components/layout/terminal-surface-styles";
+import {
+  TERMINAL_SURFACE_CLASS_NAME,
+  TERMINAL_SURFACE_FRAME_CLASS_NAME,
+} from "@/components/layout/terminal-surface-styles";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
 import { usePtySessionSurface } from "@/components/layout/usePtySessionSurface";
@@ -388,7 +391,7 @@ export function TerminalDock() {
                 <span className="truncate text-[11px] text-emerald-600 dark:text-emerald-400">live</span>
               ) : null}
             </div>
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-background/40 p-2.5">
+            <div className="relative min-h-0 flex-1 overflow-hidden bg-background/40">
               <div className="relative h-full w-full overflow-hidden rounded-lg border border-border/50 bg-terminal">
                 {bridgeError ? (
                   <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -403,14 +406,16 @@ export function TerminalDock() {
                     </div>
                   </div>
                 ) : null}
-                <div
-                  ref={containerRef}
-                  data-terminal-surface
-                  className={cn(
-                    TERMINAL_SURFACE_CLASS_NAME,
-                    !activeTab && "opacity-60",
-                  )}
-                />
+                <div className={TERMINAL_SURFACE_FRAME_CLASS_NAME}>
+                  <div
+                    ref={containerRef}
+                    data-terminal-surface
+                    className={cn(
+                      TERMINAL_SURFACE_CLASS_NAME,
+                      !activeTab && "opacity-60",
+                    )}
+                  />
+                </div>
               </div>
             </div>
           </section>

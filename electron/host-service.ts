@@ -67,35 +67,138 @@ import { isDoneEvent, toEventType } from "./main/utils/provider-events";
 import { quotePath, runCommand } from "./main/utils/command";
 import type { StreamTurnArgs } from "./providers/types";
 
-function writeMessage(message: AnyHostServiceResponseEnvelope | {
+type HostServiceOutboundMessage = AnyHostServiceResponseEnvelope | {
   type: "ready";
 } | {
   type: "event";
   event: HostServiceEventName;
   payload: HostServiceEventMap[HostServiceEventName];
+};
+
+const HOST_SERVICE_QUEUE_WARN_DEPTH = 24;
+const HOST_SERVICE_QUEUE_WARN_BYTES = 256 * 1024;
+const HOST_SERVICE_QUEUE_SLOW_WRITE_MS = 48;
+const HOST_SERVICE_QUEUE_LOG_INTERVAL_MS = 2_000;
+
+let messageWriteChain = Promise.resolve();
+let pendingMessageCount = 0;
+let pendingMessageBytes = 0;
+let peakPendingMessageCount = 0;
+let peakPendingMessageBytes = 0;
+let lastBackpressureLogAt = 0;
+let backpressureWarningActive = false;
+
+function describeOutboundMessage(message: HostServiceOutboundMessage) {
+  if (message.type === "ready") {
+    return "ready";
+  }
+  if (message.type === "response") {
+    return `response:${message.id}`;
+  }
+  return `event:${message.event}`;
+}
+
+function logHostServiceQueue(message: string) {
+  process.stderr.write(`[host-service:backpressure] ${message}\n`);
+}
+
+function maybeLogQueueBackpressure(args: {
+  reason: string;
+  label: string;
+  durationMs?: number;
 }) {
+  const overThreshold =
+    pendingMessageCount >= HOST_SERVICE_QUEUE_WARN_DEPTH
+    || pendingMessageBytes >= HOST_SERVICE_QUEUE_WARN_BYTES;
+  const isSlowWrite =
+    typeof args.durationMs === "number"
+    && args.durationMs >= HOST_SERVICE_QUEUE_SLOW_WRITE_MS;
+  if (!overThreshold && !isSlowWrite) {
+    return;
+  }
+  const now = Date.now();
+  if (now - lastBackpressureLogAt < HOST_SERVICE_QUEUE_LOG_INTERVAL_MS) {
+    return;
+  }
+  lastBackpressureLogAt = now;
+  backpressureWarningActive = true;
+  const durationSuffix = typeof args.durationMs === "number"
+    ? ` durationMs=${args.durationMs}`
+    : "";
+  logHostServiceQueue(
+    `${args.reason} label=${args.label} pendingMessages=${pendingMessageCount} pendingBytes=${pendingMessageBytes} peakMessages=${peakPendingMessageCount} peakBytes=${peakPendingMessageBytes}${durationSuffix}`,
+  );
+}
+
+function maybeLogQueueRecovery() {
+  if (!backpressureWarningActive) {
+    return;
+  }
+  if (pendingMessageCount > 0 || pendingMessageBytes > 0) {
+    return;
+  }
+  backpressureWarningActive = false;
+  logHostServiceQueue(
+    `drained peakMessages=${peakPendingMessageCount} peakBytes=${peakPendingMessageBytes}`,
+  );
+}
+
+function writeMessageNow(serializedMessage: string, label: string) {
   return new Promise<void>((resolve, reject) => {
-    process.stdout.write(`${JSON.stringify(message)}\n`, (error) => {
+    const startedAt = Date.now();
+    process.stdout.write(serializedMessage, (error) => {
       if (error) {
         reject(error);
         return;
       }
+      maybeLogQueueBackpressure({
+        reason: "slow-write",
+        label,
+        durationMs: Date.now() - startedAt,
+      });
       resolve();
     });
   });
+}
+
+function writeMessage(message: HostServiceOutboundMessage) {
+  const label = describeOutboundMessage(message);
+  const serializedMessage = `${JSON.stringify(message)}\n`;
+  const messageBytes = Buffer.byteLength(serializedMessage);
+  pendingMessageCount += 1;
+  pendingMessageBytes += messageBytes;
+  peakPendingMessageCount = Math.max(peakPendingMessageCount, pendingMessageCount);
+  peakPendingMessageBytes = Math.max(peakPendingMessageBytes, pendingMessageBytes);
+  maybeLogQueueBackpressure({
+    reason: "queued",
+    label,
+  });
+  const nextWrite = messageWriteChain.then(
+    () => writeMessageNow(serializedMessage, label),
+    () => writeMessageNow(serializedMessage, label),
+  );
+  const trackedWrite = nextWrite.finally(() => {
+    pendingMessageCount = Math.max(0, pendingMessageCount - 1);
+    pendingMessageBytes = Math.max(0, pendingMessageBytes - messageBytes);
+    maybeLogQueueRecovery();
+  });
+  messageWriteChain = trackedWrite.catch(() => {});
+  return trackedWrite;
 }
 
 function emitEvent<TEvent extends HostServiceEventName>(
   event: TEvent,
   payload: HostServiceEventMap[TEvent],
 ) {
-  void writeMessage({
+  const writePromise = writeMessage({
     type: "event",
     event,
     payload,
-  }).catch((error) => {
+  });
+  void writePromise.catch((error) => {
     process.stderr.write(`[host-service] failed to emit ${event}: ${String(error)}\n`);
   });
+  return writePromise;
 }
 
 const terminalRuntime = createTerminalRuntime({ emitEvent });

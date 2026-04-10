@@ -205,10 +205,16 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     createLatestAsyncDispatcher<TerminalResizeRequest>({
       run: async ({ sessionId, cols, rows }) => {
         const resizeSession = window.api?.terminal?.resizeSession;
-        if (!resizeSession) {
+        if (resizeSession) {
+          const result = await resizeSession({ sessionId, cols, rows });
+          if (!result?.ok) {
+            throw new Error(result?.stderr || "Failed to resize backend session.");
+          }
+        }
+        if (activeSessionIdRef.current !== sessionId) {
           return;
         }
-        await resizeSession({ sessionId, cols, rows });
+        xtermRef.current?.resize(cols, rows);
       },
       onError: (error, request) => {
         const lastResize = lastResizeRef.current;
@@ -222,6 +228,9 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
             cols: 0,
             rows: 0,
           };
+        }
+        if (activeSessionIdRef.current === request.sessionId) {
+          xtermRef.current?.resize(request.cols, request.rows);
         }
         console.warn("[terminal] failed to resize backend session", error, request);
       },
@@ -402,7 +411,9 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       return;
     }
     // Coalesce backend PTY resize RPCs so drag-resize cannot flood
-    // Electron main / host-service with one invoke per frame.
+    // Electron main / host-service with one invoke per frame. For live
+    // sessions, the frontend terminal is resized only after the backend PTY
+    // acknowledges the new geometry so redraws stay in sync.
     const proposed = fitAddon.proposeDimensions();
     if (!proposed) {
       resizeInFlightRef.current = false;
@@ -423,8 +434,9 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     lastResizeRef.current = { sessionId, cols, rows };
     if (sessionId) {
       resizeSessionDispatcherRef.current.schedule({ sessionId, cols, rows });
+    } else {
+      terminal.resize(cols, rows);
     }
-    terminal.resize(cols, rows);
 
     // If another resize was requested while this one was in-flight,
     // schedule one more pass to pick up the latest dimensions.

@@ -29,14 +29,23 @@ import type {
 const DEFAULT_TERMINAL_FOREGROUND = "#d4d4d4";
 const DEFAULT_TERMINAL_BACKGROUND = "#1e1e1e";
 const TERMINAL_SESSION_CLOSE_TIMEOUT_MS = 5_000;
+const TERMINAL_PUSH_BACKLOG_WARN_BYTES = 128 * 1024;
+const TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS = 2_000;
 
 interface TerminalSessionEntry {
   pty: pty.IPty;
   outputChunks: string[];
   pendingPush: string[];
+  pendingPushBytes: number;
+  peakPendingPushBytes: number;
+  lastBackpressureLogAt: number;
+  backlogWarningActive: boolean;
   pushScheduled: boolean;
+  pushWriteInFlight: boolean;
+  lastPushWritePromise: Promise<void> | null;
   deliveryMode: "poll" | "push";
   closing: boolean;
+  slotKey: string | null;
   closed: Promise<void>;
   close: () => void;
   flushPushOutput: () => void;
@@ -107,11 +116,15 @@ function buildTerminalSessionSlotKey(args: {
   return `${args.surface}:${args.workspaceId}:${args.tabId}`;
 }
 
+function logTerminalPushBackpressure(message: string) {
+  process.stderr.write(`[terminal:push-backpressure] ${message}\n`);
+}
+
 export function createTerminalRuntime(args: {
   emitEvent: <TEvent extends keyof HostServiceEventMap>(
     event: TEvent,
     payload: HostServiceEventMap[TEvent],
-  ) => void;
+  ) => Promise<void>;
 }) {
   const { emitEvent } = args;
   const sessions = new Map<string, TerminalSessionEntry>();
@@ -150,7 +163,98 @@ export function createTerminalRuntime(args: {
     }
     session.outputChunks.push(session.pendingPush.join(""));
     session.pendingPush.length = 0;
+    session.pendingPushBytes = 0;
     session.pushScheduled = false;
+  }
+
+  function maybeLogTerminalBackpressure(args: {
+    session: TerminalSessionEntry;
+    sessionId: string;
+    reason: string;
+    flushedBytes?: number;
+  }) {
+    const now = Date.now();
+    if (now - args.session.lastBackpressureLogAt < TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS) {
+      return;
+    }
+    args.session.lastBackpressureLogAt = now;
+    args.session.backlogWarningActive = true;
+    const flushedSuffix = typeof args.flushedBytes === "number"
+      ? ` flushedBytes=${args.flushedBytes}`
+      : "";
+    logTerminalPushBackpressure(
+      `reason=${args.reason} session=${args.sessionId} slot=${args.session.slotKey ?? "none"} deliveryMode=${args.session.deliveryMode} pendingChunks=${args.session.pendingPush.length} pendingBytes=${args.session.pendingPushBytes} peakPendingBytes=${args.session.peakPendingPushBytes}${flushedSuffix}`,
+    );
+  }
+
+  function maybeLogTerminalRecovery(args: {
+    session: TerminalSessionEntry;
+    sessionId: string;
+  }) {
+    if (!args.session.backlogWarningActive || args.session.pendingPushBytes > 0) {
+      return;
+    }
+    args.session.backlogWarningActive = false;
+    logTerminalPushBackpressure(
+      `reason=drained session=${args.sessionId} slot=${args.session.slotKey ?? "none"} peakPendingBytes=${args.session.peakPendingPushBytes}`,
+    );
+  }
+
+  function schedulePushFlush(session: TerminalSessionEntry) {
+    if (
+      session.closing
+      || session.deliveryMode !== "push"
+      || session.pushScheduled
+      || session.pushWriteInFlight
+      || session.pendingPush.length === 0
+    ) {
+      return;
+    }
+    session.pushScheduled = true;
+    setImmediate(session.flushPushOutput);
+  }
+
+  function flushPushOutputNow(args: {
+    session: TerminalSessionEntry;
+    sessionId: string;
+  }) {
+    const { session, sessionId } = args;
+    session.pushScheduled = false;
+    if (
+      session.closing
+      || session.pushWriteInFlight
+      || session.deliveryMode !== "push"
+      || session.pendingPush.length === 0
+    ) {
+      return session.lastPushWritePromise ?? Promise.resolve();
+    }
+    const output = session.pendingPush.join("");
+    const outputBytes = session.pendingPushBytes;
+    session.pendingPush.length = 0;
+    session.pendingPushBytes = 0;
+    session.pushWriteInFlight = true;
+    const pushPromise = emitEvent("terminal.output", { sessionId, output })
+      .catch((error) => {
+        session.outputChunks.push(output);
+        session.deliveryMode = "poll";
+        maybeLogTerminalBackpressure({
+          reason: "emit-failed-fallback-to-poll",
+          session,
+          sessionId,
+          flushedBytes: outputBytes,
+        });
+        console.error("[terminal] failed to emit push output", error);
+      })
+      .finally(() => {
+        session.pushWriteInFlight = false;
+        if (session.lastPushWritePromise === pushPromise) {
+          session.lastPushWritePromise = null;
+        }
+        maybeLogTerminalRecovery({ session, sessionId });
+        schedulePushFlush(session);
+      });
+    session.lastPushWritePromise = pushPromise;
+    return pushPromise;
   }
 
   function setSessionDeliveryMode(args: {
@@ -163,7 +267,7 @@ export function createTerminalRuntime(args: {
     }
     session.deliveryMode = args.deliveryMode;
     if (args.deliveryMode === "push") {
-      session.flushPushOutput();
+      schedulePushFlush(session);
     } else {
       bufferPendingPushOutput(session);
     }
@@ -206,9 +310,16 @@ export function createTerminalRuntime(args: {
       pty: ptyProcess,
       outputChunks: [],
       pendingPush: [],
+      pendingPushBytes: 0,
+      peakPendingPushBytes: 0,
+      lastBackpressureLogAt: 0,
+      backlogWarningActive: false,
       pushScheduled: false,
+      pushWriteInFlight: false,
+      lastPushWritePromise: null,
       deliveryMode: args.deliveryMode ?? "poll",
       closing: false,
+      slotKey: args.slotKey ?? null,
       closed,
       close: () => {
         if (session.closing) {
@@ -223,13 +334,7 @@ export function createTerminalRuntime(args: {
         ptyProcess.kill();
       },
       flushPushOutput: () => {
-        session.pushScheduled = false;
-        if (session.closing || session.pendingPush.length === 0) {
-          return;
-        }
-        const output = session.pendingPush.join("");
-        session.pendingPush.length = 0;
-        emitEvent("terminal.output", { sessionId, output });
+        void flushPushOutputNow({ session, sessionId });
       },
       markClosed: resolveClosed,
     };
@@ -264,10 +369,19 @@ export function createTerminalRuntime(args: {
         }
         if (session.deliveryMode === "push") {
           session.pendingPush.push(filtered);
-          if (!session.pushScheduled) {
-            session.pushScheduled = true;
-            setImmediate(session.flushPushOutput);
+          session.pendingPushBytes += Buffer.byteLength(filtered);
+          session.peakPendingPushBytes = Math.max(
+            session.peakPendingPushBytes,
+            session.pendingPushBytes,
+          );
+          if (session.pendingPushBytes >= TERMINAL_PUSH_BACKLOG_WARN_BYTES) {
+            maybeLogTerminalBackpressure({
+              reason: "queued",
+              session,
+              sessionId,
+            });
           }
+          schedulePushFlush(session);
           return;
         }
         session.outputChunks.push(filtered);
@@ -277,10 +391,15 @@ export function createTerminalRuntime(args: {
     ptyProcess.onExit(({ exitCode, signal }) => {
       session.markClosed();
       deleteSession(sessionId);
-      emitEvent("terminal.exit", {
-        sessionId,
-        exitCode: exitCode ?? -1,
-        signal,
+      void (async () => {
+        await flushPushOutputNow({ session, sessionId });
+        await emitEvent("terminal.exit", {
+          sessionId,
+          exitCode: exitCode ?? -1,
+          signal,
+        });
+      })().catch((error) => {
+        console.error("[terminal] failed to emit session exit", error);
       });
     });
 
