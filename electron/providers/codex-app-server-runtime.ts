@@ -57,6 +57,7 @@ const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
   "SLACK_OAUTH_TOKEN",
   "STAVE_LOCAL_MCP_TOKEN",
 ] as const;
+const APP_SERVER_INTERRUPT_GRACE_MS = 10_000;
 
 type JsonRpcId = string | number;
 type JsonRpcMessage = {
@@ -1348,11 +1349,36 @@ export async function streamCodexWithAppServer(
     cacheReadTokens?: number;
   } | null = null;
   let appServerTurnId = "";
+  let abortRequested = false;
   let completed = false;
+  let resolveTurnCompletion: (() => void) | null = null;
+  let interruptFallbackHandle: ReturnType<typeof setTimeout> | null = null;
   let lastAgentMessageSegmentId = "";
   let sawNativePlan = false;
   let shouldInterruptPlanTurn = false;
   let sentPlanInterrupt = false;
+  const waitForTurnCompletion = new Promise<void>((resolve) => {
+    resolveTurnCompletion = resolve;
+  });
+
+  const clearInterruptFallback = () => {
+    if (interruptFallbackHandle == null) {
+      return;
+    }
+    clearTimeout(interruptFallbackHandle);
+    interruptFallbackHandle = null;
+  };
+
+  const finishTurnWait = () => {
+    if (completed) {
+      return;
+    }
+    completed = true;
+    clearInterruptFallback();
+    const resolve = resolveTurnCompletion;
+    resolveTurnCompletion = null;
+    resolve?.();
+  };
 
   const requestPlanInterrupt = () => {
     if (
@@ -1969,7 +1995,7 @@ export async function streamCodexWithAppServer(
             });
           }
         }
-        if (turn?.status === "failed") {
+        if (turn?.status === "failed" && !abortRequested) {
           emitBridgeEvent({
             type: "error",
             message: toCodexUserFacingErrorMessage({
@@ -1984,8 +2010,12 @@ export async function streamCodexWithAppServer(
             ...latestUsage,
           });
         }
-        emitBridgeEvent({ type: "done" });
-        completed = true;
+        emitBridgeEvent(
+          abortRequested
+            ? { type: "done", stop_reason: "user_abort" }
+            : { type: "done" },
+        );
+        finishTurnWait();
         return;
       }
       default:
@@ -2050,42 +2080,42 @@ export async function streamCodexWithAppServer(
     }
 
     args.registerAbort?.(() => {
+      abortRequested = true;
       if (!appServerTurnId) {
-        // No turn started yet — mark completed so the wait-loop exits.
-        completed = true;
+        finishTurnWait();
         return;
       }
+      clearInterruptFallback();
+      interruptFallbackHandle = setTimeout(() => {
+        interruptFallbackHandle = null;
+        if (completed) {
+          return;
+        }
+        console.warn(
+          "[provider-runtime] Codex app-server interrupt did not settle after 10 seconds",
+          { threadId, appServerTurnId },
+        );
+        emitBridgeEvent({ type: "done", stop_reason: "user_abort" });
+        finishTurnWait();
+      }, APP_SERVER_INTERRUPT_GRACE_MS);
       void client
         .request("turn/interrupt", {
           threadId,
           turnId: appServerTurnId,
         })
-        .catch(() => {})
-        .finally(() => {
-          // Ensure the wait-loop exits even if the interrupt response is lost.
-          completed = true;
+        .catch((error) => {
+          console.warn(
+            "[provider-runtime] Codex app-server interrupt request failed",
+            {
+              threadId,
+              appServerTurnId,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          );
         });
     });
 
-    // Wait for turn completion with a safety-net timeout (5 min) to prevent
-    // hanging forever when the done event is never received (Mux pattern).
-    const WAIT_TIMEOUT_MS = 5 * 60 * 1000;
-    const waitStart = Date.now();
-    while (!completed) {
-      if (Date.now() - waitStart > WAIT_TIMEOUT_MS) {
-        console.warn(
-          "[provider-runtime] Codex app-server turn wait timed out after 5 minutes",
-          { threadId, appServerTurnId },
-        );
-        emitBridgeEvent({
-          type: "error",
-          message: "Codex turn timed out waiting for completion.",
-          recoverable: true,
-        });
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
+    await waitForTurnCompletion;
 
     return events;
   } catch (error) {
@@ -2115,6 +2145,7 @@ export async function streamCodexWithAppServer(
     emitBridgeEvent({ type: "done" });
     return events;
   } finally {
+    clearInterruptFallback();
     // Reject any pending approval/input requests so the Codex app-server
     // doesn't hang waiting for a response that will never arrive.
     for (const [id, pending] of pendingApprovalRequests) {

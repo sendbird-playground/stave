@@ -1,17 +1,28 @@
-import type { NormalizedProviderEvent } from "@/lib/providers/provider.types";
-
-export const PROVIDER_TURN_STALL_THRESHOLD_MS = 45_000;
+import type {
+  NormalizedProviderEvent,
+  ProviderId,
+} from "@/lib/providers/provider.types";
 
 /**
- * Grace period after a turn is marked stalled before auto-recovery kicks in.
- * The total wait before auto-interrupt = STALL_THRESHOLD + AUTO_RECOVERY_GRACE.
+ * How long a turn can be silent (no events) before it is marked stalled in the
+ * UI. Stalled turns are not auto-aborted; this is only a visibility signal.
+ * 5 minutes covers typical long-running Claude and Codex operations (deep
+ * reasoning, multi-file edits, large tool calls) without prematurely
+ * interrupting legitimate work.
  */
-export const PROVIDER_TURN_AUTO_RECOVERY_GRACE_MS = 15_000;
+export const PROVIDER_TURN_STALL_THRESHOLD_MS = 5 * 60 * 1000; // 5 min
+
+export function resolveProviderTurnStallThresholdMs(_args?: {
+  providerId?: ProviderId | null;
+}) {
+  return PROVIDER_TURN_STALL_THRESHOLD_MS;
+}
 
 export type ProviderTurnPendingInteraction = "approval" | "user_input";
 
 export interface ProviderTurnActivitySnapshot {
   turnId: string;
+  providerId: ProviderId;
   startedAt: number;
   lastEventAt: number;
   stalledAt: number | null;
@@ -29,6 +40,7 @@ export function startProviderTurnActivity(args: {
   activityByTask: ProviderTurnActivityByTask;
   taskId: string;
   turnId: string;
+  providerId: ProviderId;
   now?: number;
 }) {
   const now = args.now ?? Date.now();
@@ -38,6 +50,7 @@ export function startProviderTurnActivity(args: {
     ...args.activityByTask,
     [args.taskId]: {
       turnId: args.turnId,
+      providerId: args.providerId,
       startedAt,
       lastEventAt: now,
       stalledAt: null,
@@ -121,10 +134,28 @@ function resolvePendingInteraction(
   return null;
 }
 
+function resolveTurnProviderId(args: {
+  events: NormalizedProviderEvent[];
+  currentProviderId?: ProviderId;
+  fallbackProviderId: ProviderId;
+}) {
+  for (let index = args.events.length - 1; index >= 0; index -= 1) {
+    const event = args.events[index];
+    if (event?.type === "model_resolved") {
+      return event.resolvedProviderId;
+    }
+    if (event?.type === "provider_session") {
+      return event.providerId;
+    }
+  }
+  return args.currentProviderId ?? args.fallbackProviderId;
+}
+
 export function applyProviderTurnActivityEvents(args: {
   activityByTask: ProviderTurnActivityByTask;
   taskId: string;
   turnId: string;
+  providerId: ProviderId;
   events: NormalizedProviderEvent[];
   now?: number;
 }) {
@@ -143,11 +174,18 @@ export function applyProviderTurnActivityEvents(args: {
   const current = args.activityByTask[args.taskId];
   const pendingInteraction = resolvePendingInteraction(args.events);
   const startedAt = current?.turnId === args.turnId ? current.startedAt : now;
+  const providerId = resolveTurnProviderId({
+    events: args.events,
+    currentProviderId:
+      current?.turnId === args.turnId ? current.providerId : undefined,
+    fallbackProviderId: args.providerId,
+  });
 
   return {
     ...args.activityByTask,
     [args.taskId]: {
       turnId: args.turnId,
+      providerId,
       startedAt,
       lastEventAt: now,
       stalledAt: null,
