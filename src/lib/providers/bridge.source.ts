@@ -7,6 +7,10 @@ type PushStreamPayload = {
   done: boolean;
 };
 
+const POLLED_STREAM_ACTIVE_DELAY_MS = 80;
+const POLLED_STREAM_IDLE_DELAY_MS = 1000;
+const PUSH_STREAM_FALLBACK_SILENCE_MS = 15_000;
+
 function hasAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   if (!value || typeof value !== "object") {
     return false;
@@ -30,6 +34,58 @@ async function* emitStartFailure(args: { message?: string }) {
   yield {
     type: "done",
   };
+}
+
+function resolveWindowTimerApi() {
+  const target = typeof window !== "undefined" ? window : undefined;
+  const setTimeoutImpl = target?.setTimeout ?? globalThis.setTimeout;
+  const clearTimeoutImpl = target?.clearTimeout ?? globalThis.clearTimeout;
+  return {
+    setTimeout: setTimeoutImpl.bind(target ?? globalThis),
+    clearTimeout: clearTimeoutImpl.bind(target ?? globalThis),
+  };
+}
+
+async function sleep(ms: number) {
+  const timers = resolveWindowTimerApi();
+  await new Promise((resolve) => timers.setTimeout(resolve, ms));
+}
+
+async function* continueFromPolledStream(args: {
+  streamId: string;
+  cursor: number;
+  readStreamTurn: (args: {
+    streamId: string;
+    cursor: number;
+  }) => Promise<{
+    ok: boolean;
+    events: unknown[];
+    cursor: number;
+    done: boolean;
+    message?: string;
+  }>;
+}) {
+  let cursor = args.cursor;
+  for (;;) {
+    const page = await args.readStreamTurn({ streamId: args.streamId, cursor });
+    if (!page.ok) {
+      yield {
+        type: "error",
+        message: page.message?.trim() || "Provider stream session not found.",
+        recoverable: true,
+      };
+      yield { type: "done" };
+      return;
+    }
+    for (const event of page.events) {
+      yield event;
+    }
+    cursor = page.cursor;
+    if (page.done) {
+      return;
+    }
+    await sleep(page.events.length > 0 ? POLLED_STREAM_ACTIVE_DELAY_MS : POLLED_STREAM_IDLE_DELAY_MS);
+  }
 }
 
 async function* fromPolledStream(args: {
@@ -77,7 +133,7 @@ async function* fromPolledStream(args: {
     if (page.done) {
       return;
     }
-    await new Promise((resolve) => window.setTimeout(resolve, 80));
+    await sleep(POLLED_STREAM_ACTIVE_DELAY_MS);
   }
 }
 
@@ -93,10 +149,12 @@ async function* fromPushStream(args: {
 }) {
   const startPushTurn = window.api?.provider?.startPushTurn;
   const subscribeStreamEvents = window.api?.provider?.subscribeStreamEvents;
+  const readStreamTurn = window.api?.provider?.readStreamTurn;
   if (!startPushTurn || !subscribeStreamEvents) {
     return;
   }
 
+  const timers = resolveWindowTimerApi();
   const queue: unknown[] = [];
   const pending: PushStreamPayload[] = [];
   const bufferedBySequence = new Map<number, PushStreamPayload>();
@@ -104,6 +162,8 @@ async function* fromPushStream(args: {
   let targetStreamId: string | null = null;
   let nextSequence = 1;
   let doneSequence: number | null = null;
+  let pollCursor = 0;
+  let switchedToPolling = false;
   let wake: (() => void) | null = null;
   const wakeUp = () => {
     if (!wake) {
@@ -113,11 +173,15 @@ async function* fromPushStream(args: {
     wake = null;
     resolver();
   };
+  const enqueueEvent = (event: unknown) => {
+    queue.push(event);
+    pollCursor += 1;
+  };
 
   const ingestPayload = (payload: PushStreamPayload) => {
     const sequence = payload.sequence;
     if (typeof sequence !== "number" || !Number.isFinite(sequence)) {
-      queue.push(payload.event);
+      enqueueEvent(payload.event);
       if (payload.done) {
         done = true;
       }
@@ -137,7 +201,7 @@ async function* fromPushStream(args: {
     while (bufferedBySequence.has(nextSequence)) {
       const nextPayload = bufferedBySequence.get(nextSequence)!;
       bufferedBySequence.delete(nextSequence);
-      queue.push(nextPayload.event);
+      enqueueEvent(nextPayload.event);
       nextSequence += 1;
     }
 
@@ -186,9 +250,37 @@ async function* fromPushStream(args: {
 
     while (!done || queue.length > 0) {
       if (queue.length === 0) {
-        await new Promise<void>((resolve) => {
-          wake = resolve;
+        const outcome = await new Promise<"push" | "poll">((resolve) => {
+          let settled = false;
+          const complete = (value: "push" | "poll") => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            if (wake === onWake) {
+              wake = null;
+            }
+            timers.clearTimeout(timeoutHandle);
+            resolve(value);
+          };
+          const onWake = () => {
+            complete("push");
+          };
+          const timeoutHandle = timers.setTimeout(() => {
+            complete("poll");
+          }, PUSH_STREAM_FALLBACK_SILENCE_MS);
+          wake = onWake;
         });
+        if (outcome === "poll" && targetStreamId && readStreamTurn) {
+          switchedToPolling = true;
+          unsubscribe();
+          yield* continueFromPolledStream({
+            streamId: targetStreamId,
+            cursor: pollCursor,
+            readStreamTurn,
+          });
+          return;
+        }
         continue;
       }
       const next = queue.shift();
@@ -197,6 +289,12 @@ async function* fromPushStream(args: {
       }
     }
   } finally {
+    if (!switchedToPolling && done && targetStreamId && readStreamTurn) {
+      await readStreamTurn({
+        streamId: targetStreamId,
+        cursor: pollCursor,
+      }).catch(() => undefined);
+    }
     unsubscribe();
   }
 }

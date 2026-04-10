@@ -155,4 +155,76 @@ describe("codex provider bridge normalization", () => {
       { type: "done" },
     ]);
   });
+
+  test("falls back to buffered polling when the push stream goes silent", async () => {
+    let listener: ((payload: {
+      streamId: string;
+      event: unknown;
+      sequence: number;
+      done: boolean;
+    }) => void) | null = null;
+    const readCalls: Array<{ streamId: string; cursor: number }> = [];
+
+    (globalThis as {
+      window: unknown;
+    }).window = {
+      setTimeout: (callback: (...args: unknown[]) => void) => globalThis.setTimeout(callback, 0),
+      clearTimeout: (handle: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(handle),
+      api: {
+        provider: {
+          subscribeStreamEvents: (cb: typeof listener) => {
+            listener = cb;
+            return () => {
+              listener = null;
+            };
+          },
+          startPushTurn: async () => {
+            listener?.({
+              streamId: "codex-stream-3",
+              event: { type: "text", text: "push event" },
+              sequence: 1,
+              done: false,
+            });
+            return { ok: true, streamId: "codex-stream-3", turnId: "turn-3" };
+          },
+          readStreamTurn: async (args: { streamId: string; cursor: number }) => {
+            readCalls.push(args);
+            if (args.cursor === 1) {
+              return {
+                ok: true,
+                events: [
+                  { type: "text", text: "polled catch-up" },
+                  { type: "done" },
+                ],
+                cursor: 3,
+                done: true,
+              };
+            }
+            return {
+              ok: true,
+              events: [],
+              cursor: args.cursor,
+              done: false,
+            };
+          },
+        },
+      },
+    } as unknown;
+
+    const adapter = getProviderAdapter({ providerId: "codex" });
+    const events: Array<{ type: string; text?: string }> = [];
+    for await (const event of adapter.runTurn({ prompt: "hello" })) {
+      events.push(event as { type: string; text?: string });
+    }
+
+    expect(events).toEqual([
+      { type: "text", text: "push event" },
+      { type: "text", text: "polled catch-up" },
+      { type: "done" },
+    ]);
+    expect(readCalls[0]).toEqual({
+      streamId: "codex-stream-3",
+      cursor: 1,
+    });
+  });
 });

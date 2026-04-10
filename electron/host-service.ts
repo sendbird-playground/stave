@@ -315,6 +315,7 @@ function startPushProviderTurn(args: StreamTurnArgs) {
     ...args,
     turnId,
   }, {
+    bufferEvents: true,
     onEvent: (turnEvent) => {
       sequence += 1;
 

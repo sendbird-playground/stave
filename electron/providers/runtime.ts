@@ -577,7 +577,7 @@ export const providerRuntime: ProviderRuntime = {
     pruneExpiredStreams();
     const streamId = randomUUID();
     const turnId = args.turnId ?? randomUUID();
-    const shouldBufferForPolling = !options?.onEvent;
+    const shouldBufferForPolling = options?.bufferEvents ?? !options?.onEvent;
     const session = { events: [] as BridgeEvent[], done: false, updatedAt: Date.now() };
     activeStreams.set(streamId, session);
     upsertActiveSession({

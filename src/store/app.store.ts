@@ -126,8 +126,7 @@ import {
   clearProviderTurnActivity,
   markProviderTurnInteractionResolved,
   markProviderTurnStalled,
-  PROVIDER_TURN_AUTO_RECOVERY_GRACE_MS,
-  PROVIDER_TURN_STALL_THRESHOLD_MS,
+  resolveProviderTurnStallThresholdMs,
   startProviderTurnActivity,
   type ProviderTurnActivitySnapshot,
 } from "@/lib/providers/turn-status";
@@ -2439,19 +2438,6 @@ export const useAppStore = create<AppState>()(
         string,
         ReturnType<typeof globalThis.setTimeout>
       >();
-      const providerTurnAutoRecoveryTimerByTask = new Map<
-        string,
-        ReturnType<typeof globalThis.setTimeout>
-      >();
-
-      const clearProviderTurnAutoRecoveryTimer = (taskId: string) => {
-        const handle = providerTurnAutoRecoveryTimerByTask.get(taskId);
-        if (handle == null) {
-          return;
-        }
-        globalThis.clearTimeout(handle);
-        providerTurnAutoRecoveryTimerByTask.delete(taskId);
-      };
 
       const clearProviderTurnStallTimer = (taskId: string) => {
         const handle = providerTurnStallTimerByTask.get(taskId);
@@ -2460,7 +2446,6 @@ export const useAppStore = create<AppState>()(
         }
         globalThis.clearTimeout(handle);
         providerTurnStallTimerByTask.delete(taskId);
-        clearProviderTurnAutoRecoveryTimer(taskId);
       };
 
       const scheduleProviderTurnStallTimer = (args: {
@@ -2469,9 +2454,12 @@ export const useAppStore = create<AppState>()(
         lastEventAt: number;
       }) => {
         clearProviderTurnStallTimer(args.taskId);
+        const providerId =
+          get().providerTurnActivityByTask[args.taskId]?.providerId;
         const delayMs = Math.max(
           0,
-          PROVIDER_TURN_STALL_THRESHOLD_MS - (Date.now() - args.lastEventAt),
+          resolveProviderTurnStallThresholdMs({ providerId })
+            - (Date.now() - args.lastEventAt),
         );
         const handle = globalThis.setTimeout(() => {
           providerTurnStallTimerByTask.delete(args.taskId);
@@ -2491,28 +2479,6 @@ export const useAppStore = create<AppState>()(
               providerTurnActivityByTask: nextActivityByTask,
             };
           });
-
-          // Schedule auto-recovery: if the turn is still stalled after the
-          // grace period, automatically abort it so the user doesn't have to.
-          clearProviderTurnAutoRecoveryTimer(args.taskId);
-          const recoveryHandle = globalThis.setTimeout(() => {
-            providerTurnAutoRecoveryTimerByTask.delete(args.taskId);
-            const currentState = get();
-            if (currentState.activeTurnIdsByTask[args.taskId] !== args.turnId) {
-              return;
-            }
-            const activity =
-              currentState.providerTurnActivityByTask[args.taskId];
-            if (!activity || activity.stalledAt == null) {
-              return;
-            }
-            console.warn("[auto-recovery] Aborting stalled provider turn", {
-              taskId: args.taskId,
-              turnId: args.turnId,
-            });
-            currentState.abortTaskTurn({ taskId: args.taskId });
-          }, PROVIDER_TURN_AUTO_RECOVERY_GRACE_MS);
-          providerTurnAutoRecoveryTimerByTask.set(args.taskId, recoveryHandle);
         }, delayMs);
         providerTurnStallTimerByTask.set(args.taskId, handle);
       };
@@ -9300,6 +9266,7 @@ export const useAppStore = create<AppState>()(
                 activityByTask: nextState.providerTurnActivityByTask,
                 taskId: resolvedTaskId,
                 turnId,
+                providerId: provider,
                 now: turnActivityStartedAt,
               }),
             }));
@@ -9334,6 +9301,7 @@ export const useAppStore = create<AppState>()(
                         activityByTask: currentState.providerTurnActivityByTask,
                         taskId: resolvedTaskId,
                         turnId,
+                        providerId: provider,
                         events: pendingEvents,
                       })
                     : currentState.providerTurnActivityByTask;

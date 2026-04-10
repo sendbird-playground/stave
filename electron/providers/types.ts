@@ -87,7 +87,11 @@ export interface ProviderRuntime {
   streamTurn: (args: StreamTurnArgs) => Promise<BridgeEvent[]>;
   startTurnStream: (
     args: StreamTurnArgs,
-    options?: { onEvent?: (event: BridgeEvent) => void; onDone?: () => void }
+    options?: {
+      onEvent?: (event: BridgeEvent) => void;
+      onDone?: () => void;
+      bufferEvents?: boolean;
+    }
   ) => { ok: boolean; streamId: string };
   readTurnStream: (args: { streamId: string; cursor: number }) => {
     ok: boolean;

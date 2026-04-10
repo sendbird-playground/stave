@@ -13,7 +13,7 @@ Renderer (app.store.ts)          IPC bridge             Host service (runtime.ts
 ┌──────────────────────┐   ┌───────────────┐   ┌──────────────────────────────┐
 │ activeTurnIdsByTask   │──▶│ provider:*    │──▶│ activeSessions Map           │
 │ providerTurnActivity  │   │ IPC channels  │   │ activeStreams Map             │
-│ stall / auto-recovery │   └───────────────┘   │                              │
+│ stall indicator       │   └───────────────┘   │                              │
 │ timers                │                       │ streamClaudeWithSdk()        │
 │                       │                       │ streamCodexWithSdk()         │
 │                       │                       │ streamCodexWithAppServer()   │
@@ -98,8 +98,13 @@ JSON-RPC notification is never received (process crash, network drop), the
 loop runs forever.
 
 **Fix (applied)**:
-- Abort handler now sets `completed = true` after sending `turn/interrupt`.
-- A 5-minute hard timeout breaks the loop and emits an error event.
+- The runtime now waits on a completion promise that resolves from
+  `turn/completed` instead of polling every 25 ms.
+- `turn/interrupt` starts a short interrupt-grace fallback so user aborts do
+  not hang forever if the completion notification is lost.
+- Catastrophic hangs are bounded by the outer `providerTimeoutMs` watchdog in
+  `runtime.ts`, not by a separate hard-coded 5-minute cutoff inside the
+  app-server adapter.
 
 ---
 
@@ -146,22 +151,26 @@ events. Turn appears stuck from the user's perspective.
 drops events when the target `WebContents` is destroyed. The host side
 marks the stream as done, but the renderer never learns about it.
 
-**Mitigation**: The renderer can fall back to `readTurnStream` (poll mode)
-to catch up. The stall-detection timer (45 s) + auto-recovery timer (15 s)
-now provide a safety net that automatically aborts stale turns.
+**Mitigation (applied)**:
+- Push-mode turns are now started with a replayable host-side buffer so the
+  same `streamId` can be read later via `readTurnStream`.
+- If the renderer receives no push events for 15 seconds, it stops trusting
+  the push bridge and switches that turn to poll mode using the buffered
+  `streamId` cursor, instead of aborting the turn.
+- The stall timer remains a UI-only warning signal. It no longer owns
+  recovery or abort behavior.
 
 ---
 
-## Stall detection and auto-recovery
+## Stall indication
 
 ### How it works
 
 1. **Turn starts** → `startProviderTurnActivity` records the timestamp.
 2. **Events arrive** → `applyProviderTurnActivityEvents` resets the timer.
-3. **45 s silence** → `markProviderTurnStalled` fires. UI shows "Stalled"
-   badge and warning banner.
-4. **+15 s still stalled** → Auto-recovery timer fires `abortTaskTurn()`,
-   which sends `abortTurn` IPC and cleans up renderer state.
+3. **Quiet window expires** → `markProviderTurnStalled` fires. UI shows
+   "Stalled" badge and warning banner after 5 minutes of silence.
+4. **User choice** → The user can keep waiting or manually stop the turn.
 
 ### Exclusions
 
@@ -173,8 +182,7 @@ legitimately waiting for user input.
 
 | Constant | Value | Location |
 |---|---|---|
-| `PROVIDER_TURN_STALL_THRESHOLD_MS` | 45 000 ms | `turn-status.ts` |
-| `PROVIDER_TURN_AUTO_RECOVERY_GRACE_MS` | 15 000 ms | `turn-status.ts` |
+| `PROVIDER_TURN_STALL_THRESHOLD_MS` | 300 000 ms | `turn-status.ts` |
 
 ---
 
@@ -194,7 +202,8 @@ When editing `claude-sdk-runtime.ts`, `codex-sdk-runtime.ts`, or
       other(s) where the same pattern applies.
 - [ ] **Cache eviction**: any new Map/cache must have either a max-size
       cap or TTL-based cleanup.
-- [ ] **Busy-wait loops** must have a timeout or exit condition.
+- [ ] **Busy-wait loops** must be replaced with event-driven completion or a
+      clearly owned outer timeout.
 
 ---
 
