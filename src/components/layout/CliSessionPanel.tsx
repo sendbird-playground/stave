@@ -2,25 +2,30 @@ import { Copy, Loader2, RefreshCw, SquareTerminal, ClipboardPaste, X } from "luc
 import { useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ModelIcon } from "@/components/ai-elements";
+import { TerminalTabSurface } from "@/components/layout/TerminalTabSurface";
+import { useTerminalSessionManager } from "@/components/layout/useTerminalSessionManager";
+import { useTerminalTabManager } from "@/components/layout/useTerminalTabManager";
+import { TERMINAL_WRITE_ERROR_THRESHOLD } from "@/components/layout/useTerminalInstance";
 import { Badge, Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import {
+  DEFAULT_TERMINAL_FONT_FAMILY,
+  DEFAULT_TERMINAL_FONT_SIZE,
+} from "@/lib/terminal/defaults";
 import {
   getCliSessionContextLabel,
   getCliSessionProviderLabel,
   getWorkspaceCliSessionTabKey,
 } from "@/lib/terminal/types";
 import {
+  TERMINAL_SURFACE_PANEL_CLASS_NAME,
   TERMINAL_SURFACE_CLASS_NAME,
-  TERMINAL_SURFACE_FRAME_CLASS_NAME,
+  TERMINAL_SURFACE_VIEWPORT_CLASS_NAME,
 } from "@/components/layout/terminal-surface-styles";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-import { usePtySessionSurface } from "@/components/layout/usePtySessionSurface";
 
 const CLI_SESSION_TRANSCRIPT_STORAGE_KEY = "stave:cli-session-transcript:v1";
-const DEFAULT_TERMINAL_FONT_FAMILY =
-  '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace';
-const DEFAULT_TERMINAL_FONT_SIZE = 13;
 
 export function CliSessionPanel() {
   const [
@@ -98,26 +103,34 @@ export function CliSessionPanel() {
     });
   }, [activeWorkspaceId, settings.claudeBinaryPath, settings.codexBinaryPath, tasks, workspacePath]);
 
+  const tabManager = useTerminalTabManager({
+    tabs: cliSessionTabs,
+    activeTabId: activeCliSessionTabId,
+    isVisible: activeSurface.kind === "cli-session",
+    getTabKey,
+  });
+
   const {
     activeSessionId,
+    activeWriteErrorCount,
     bridgeError,
-    containerRef,
+    handleTerminalInput,
+    handleTerminalResize,
     restartActiveSession,
+    restartActiveTerminalRenderer,
     sessionExited,
     terminalReady,
     writeToActiveSession,
-  } = usePtySessionSurface({
+  } = useTerminalSessionManager({
     activeTab,
     activeTabId: activeCliSessionTabId,
     tabs: cliSessionTabs,
     workspaceId: activeWorkspaceId,
     transcriptStorageKey: CLI_SESSION_TRANSCRIPT_STORAGE_KEY,
     isVisible: activeSurface.kind === "cli-session",
-    fontFamily: settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
-    fontSize: settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE,
-    isDarkMode,
     getTabKey,
     createSession,
+    tabManager,
   });
 
   async function handleCopyHandoff() {
@@ -146,14 +159,82 @@ export function CliSessionPanel() {
 
   const hasTabs = cliSessionTabs.length > 0;
   const isVisible = hasTabs && activeSurface.kind === "cli-session";
+  const terminalViewport = (
+    <div className={TERMINAL_SURFACE_PANEL_CLASS_NAME}>
+      <div className={TERMINAL_SURFACE_VIEWPORT_CLASS_NAME}>
+        {bridgeError ? (
+          <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+            {bridgeError}
+          </div>
+        ) : null}
+        {activeWriteErrorCount > TERMINAL_WRITE_ERROR_THRESHOLD ? (
+          <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
+            <span>Terminal rendering may be degraded.</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px] text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+              onClick={restartActiveTerminalRenderer}
+              disabled={!activeTab}
+            >
+              Restart renderer
+            </Button>
+          </div>
+        ) : null}
+        {!terminalReady ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-terminal">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              <span>Initializing terminal…</span>
+            </div>
+          </div>
+        ) : null}
+        {cliSessionTabs.map((tab) => {
+          const tabKey = getTabKey(tab);
+          return (
+            <TerminalTabSurface
+              key={tabKey}
+              tabKey={tabKey}
+              isActive={tab.id === activeCliSessionTabId}
+              isVisible={activeSurface.kind === "cli-session"}
+              fontFamily={settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY}
+              fontSize={settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE}
+              isDarkMode={isDarkMode}
+              dimmed={!activeTab}
+              tabManager={tabManager}
+              onData={handleTerminalInput}
+              onResize={handleTerminalResize}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  if (!hasTabs) {
+    return (
+      <section
+        data-testid="cli-session-panel"
+        className="hidden h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
+      />
+    );
+  }
+
+  if (!isVisible) {
+    return (
+      <section
+        data-testid="cli-session-panel"
+        className="hidden h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
+      >
+        {terminalViewport}
+      </section>
+    );
+  }
 
   return (
     <section
       data-testid="cli-session-panel"
-      className={cn(
-        "flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background",
-        isVisible ? "flex" : "hidden",
-      )}
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-border/40">
         <div className="border-b border-border/70 bg-card/95 px-4 py-3 backdrop-blur-sm">
@@ -270,30 +351,7 @@ export function CliSessionPanel() {
             </TooltipProvider>
           </div>
         </div>
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-background/40">
-          <div className="relative h-full w-full overflow-hidden rounded-lg border border-border/50 bg-terminal">
-            {bridgeError ? (
-              <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
-                {bridgeError}
-              </div>
-            ) : null}
-            {!terminalReady ? (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-terminal">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Initializing terminal…</span>
-                </div>
-              </div>
-            ) : null}
-            <div className={TERMINAL_SURFACE_FRAME_CLASS_NAME}>
-              <div
-                ref={containerRef}
-                data-terminal-surface
-                className={cn(TERMINAL_SURFACE_CLASS_NAME, !activeTab && "opacity-60")}
-              />
-            </div>
-          </div>
-        </div>
+        {terminalViewport}
       </div>
     </section>
   );

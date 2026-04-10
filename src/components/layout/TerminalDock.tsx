@@ -8,7 +8,21 @@ import {
   useState,
   type DragEvent,
 } from "react";
+import { TerminalTabSurface } from "@/components/layout/TerminalTabSurface";
 import { Button, Card, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
+import {
+  TERMINAL_WRITE_ERROR_THRESHOLD,
+} from "@/components/layout/useTerminalInstance";
+import {
+  useTerminalSessionManager,
+} from "@/components/layout/useTerminalSessionManager";
+import {
+  useTerminalTabManager,
+} from "@/components/layout/useTerminalTabManager";
+import {
+  DEFAULT_TERMINAL_FONT_FAMILY,
+  DEFAULT_TERMINAL_FONT_SIZE,
+} from "@/lib/terminal/defaults";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import {
   getWorkspaceTerminalTabKey,
@@ -17,17 +31,13 @@ import {
 import { cn } from "@/lib/utils";
 import { shouldAutoCreateDockTerminalTab } from "@/components/layout/terminal-dock.utils";
 import {
-  TERMINAL_SURFACE_CLASS_NAME,
-  TERMINAL_SURFACE_FRAME_CLASS_NAME,
+  TERMINAL_SURFACE_PANEL_CLASS_NAME,
+  TERMINAL_SURFACE_VIEWPORT_CLASS_NAME,
 } from "@/components/layout/terminal-surface-styles";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
-import { usePtySessionSurface } from "@/components/layout/usePtySessionSurface";
 
 const TERMINAL_TRANSCRIPT_STORAGE_KEY = "stave:terminal-tab-transcript:v2";
-const DEFAULT_TERMINAL_FONT_FAMILY =
-  '"JetBrains Mono", Menlo, Monaco, "Courier New", monospace';
-const DEFAULT_TERMINAL_FONT_SIZE = 13;
 
 const DockTerminalTab = memo(function DockTerminalTab(args: {
   tab: ReturnType<typeof useAppStore.getState>["terminalTabs"][number];
@@ -196,25 +206,33 @@ export function TerminalDock() {
     return createSession(request);
   }, [activeWorkspaceId, tasks, workspacePath]);
 
+  const tabManager = useTerminalTabManager({
+    tabs: terminalTabs,
+    activeTabId: activeTerminalTabId,
+    isVisible: terminalDocked,
+    getTabKey,
+  });
+
   const {
     activeSessionId,
+    activeWriteErrorCount,
     bridgeError,
     clearActiveTranscript,
-    containerRef,
+    handleTerminalInput,
+    handleTerminalResize,
+    restartActiveTerminalRenderer,
     sessionExited,
     terminalReady,
-  } = usePtySessionSurface({
+  } = useTerminalSessionManager({
     activeTab,
     activeTabId: activeTerminalTabId,
     tabs: terminalTabs,
     workspaceId: activeWorkspaceId,
     transcriptStorageKey: TERMINAL_TRANSCRIPT_STORAGE_KEY,
     isVisible: terminalDocked,
-    fontFamily: terminalFontFamily,
-    fontSize: terminalFontSize,
-    isDarkMode,
     getTabKey,
     createSession,
+    tabManager,
   });
 
   useEffect(() => {
@@ -391,11 +409,25 @@ export function TerminalDock() {
                 <span className="truncate text-[11px] text-emerald-600 dark:text-emerald-400">live</span>
               ) : null}
             </div>
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-background/40">
-              <div className="relative h-full w-full overflow-hidden rounded-lg border border-border/50 bg-terminal">
+            <div className={TERMINAL_SURFACE_PANEL_CLASS_NAME}>
+              <div className={TERMINAL_SURFACE_VIEWPORT_CLASS_NAME}>
                 {bridgeError ? (
                   <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                     {bridgeError}
+                  </div>
+                ) : null}
+                {activeWriteErrorCount > TERMINAL_WRITE_ERROR_THRESHOLD ? (
+                  <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    <span>Terminal rendering may be degraded.</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[11px] text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+                      onClick={restartActiveTerminalRenderer}
+                      disabled={!activeTab}
+                    >
+                      Restart renderer
+                    </Button>
                   </div>
                 ) : null}
                 {!terminalReady ? (
@@ -406,16 +438,24 @@ export function TerminalDock() {
                     </div>
                   </div>
                 ) : null}
-                <div className={TERMINAL_SURFACE_FRAME_CLASS_NAME}>
-                  <div
-                    ref={containerRef}
-                    data-terminal-surface
-                    className={cn(
-                      TERMINAL_SURFACE_CLASS_NAME,
-                      !activeTab && "opacity-60",
-                    )}
-                  />
-                </div>
+                {terminalTabs.map((tab) => {
+                  const tabKey = getTabKey(tab);
+                  return (
+                    <TerminalTabSurface
+                      key={tabKey}
+                      tabKey={tabKey}
+                      isActive={tab.id === activeTerminalTabId}
+                      isVisible={terminalDocked}
+                      fontFamily={terminalFontFamily}
+                      fontSize={terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE}
+                      isDarkMode={isDarkMode}
+                      dimmed={!activeTab}
+                      tabManager={tabManager}
+                      onData={handleTerminalInput}
+                      onResize={handleTerminalResize}
+                    />
+                  );
+                })}
               </div>
             </div>
           </section>

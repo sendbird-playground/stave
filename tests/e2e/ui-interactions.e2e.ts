@@ -147,6 +147,130 @@ test("terminal dock opens with the shared surface inset", async ({ page }) => {
   });
 });
 
+test("cli session keeps the renderer alive and refocuses after switching back", async ({ page }) => {
+  await page.addInitScript(() => {
+    const sessions = new Map<string, { output: string }>();
+    const testState = { createCliSessionCallCount: 0 };
+
+    window.localStorage.setItem("stave-store", JSON.stringify({
+      state: {
+        projectPath: "/tmp/stave-project",
+        projectName: "stave-project",
+        workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-04-10T01:00:00.000Z" }],
+        activeWorkspaceId: "ws-main",
+        workspaceBranchById: { "ws-main": "main" },
+        workspacePathById: { "ws-main": "/tmp/stave-project" },
+        workspaceDefaultById: { "ws-main": true },
+        activeTaskId: "task-1",
+        tasks: [{
+          id: "task-1",
+          title: "Task 1",
+          provider: "claude-code",
+          updatedAt: "2026-04-10T01:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        }],
+        messagesByTask: { "task-1": [] },
+        cliSessionTabs: [],
+        activeCliSessionTabId: null,
+        activeSurface: { kind: "task", taskId: "task-1" },
+      },
+      version: 0,
+    }));
+
+    (window as unknown as { api?: Record<string, unknown> }).api = {
+      provider: {
+        streamTurn: async () => [],
+      },
+      terminal: {
+        createCliSession: async () => {
+          testState.createCliSessionCallCount += 1;
+          const sessionId = "cli-session-1";
+          if (!sessions.has(sessionId)) {
+            sessions.set(sessionId, { output: "cli ready\r\n" });
+          }
+          return { ok: true, sessionId };
+        },
+        readSession: async (args: { sessionId: string }) => {
+          const session = sessions.get(args.sessionId);
+          if (!session) {
+            return { ok: false, output: "" };
+          }
+          const output = session.output;
+          session.output = "";
+          return { ok: true, output };
+        },
+        writeSession: async () => ({ ok: true }),
+        resizeSession: async () => ({ ok: true }),
+        closeSession: async () => ({ ok: true }),
+        runCommand: async () => ({ ok: true, code: 0, stdout: "", stderr: "" }),
+      },
+      sourceControl: {
+        getStatus: async () => ({
+          ok: true,
+          branch: "main",
+          items: [],
+          hasConflicts: false,
+          stderr: "",
+        }),
+        getHistory: async () => ({
+          ok: true,
+          items: [],
+          stderr: "",
+        }),
+      },
+    };
+    (window as unknown as { __staveTestState?: typeof testState }).__staveTestState = testState;
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "New CLI Session" }).first().click();
+  await page.getByRole("menuitem").filter({ hasText: "Claude · Workspace" }).click();
+  await page.getByRole("button", { name: "Claude Workspace", exact: true }).click();
+  await expect(page.getByTestId("cli-session-panel")).toBeVisible();
+  await expect
+    .poll(async () => page.evaluate(() => (
+      window.localStorage.getItem("stave:cli-session-transcript:v1") ?? ""
+    )))
+    .toContain("cli ready");
+  await expect
+    .poll(async () => page.evaluate(() => (
+      (window as unknown as { __staveTestState?: { createCliSessionCallCount: number } })
+        .__staveTestState?.createCliSessionCallCount ?? 0
+    )))
+    .toBe(1);
+
+  // Switch away from the CLI session surface by clicking the pre-seeded
+  // task-1 tab.  This avoids mounting a *new* WorkspaceTaskTab, which would
+  // trigger a Radix compose-refs infinite loop under React 19 StrictMode
+  // (known radix-ui/react-compose-refs 1.1.2 issue).
+  await page.getByText("Task 1").click();
+  await expect(page.getByTestId("cli-session-panel")).toBeHidden();
+
+  // Switch back to the CLI session surface.
+  await page.getByRole("button", { name: "Claude Workspace", exact: true }).click();
+  await expect
+    .poll(async () => page.evaluate(() => (
+      window.localStorage.getItem("stave:cli-session-transcript:v1") ?? ""
+    )))
+    .toContain("cli ready");
+  await expect
+    .poll(async () => page.evaluate(() => (
+      (window as unknown as { __staveTestState?: { createCliSessionCallCount: number } })
+        .__staveTestState?.createCliSessionCallCount ?? 0
+    )))
+    .toBe(1);
+  const terminalSurface = page.getByTestId("cli-session-panel").locator("[data-terminal-surface]").first();
+  await expect
+    .poll(async () =>
+      terminalSurface.evaluate((element) =>
+        element === document.activeElement || element.contains(document.activeElement),
+      ))
+    .toBe(true);
+});
+
 test("scripts manager waits for default scope and keeps draft entries dirty", async ({ page }) => {
   await page.addInitScript(() => {
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

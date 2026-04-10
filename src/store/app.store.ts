@@ -102,6 +102,11 @@ import {
   type TaskFilter,
 } from "@/lib/tasks";
 import {
+  DEFAULT_TERMINAL_FONT_FAMILY,
+  DEFAULT_TERMINAL_FONT_SIZE,
+  LEGACY_TERMINAL_FONT_FAMILY,
+} from "@/lib/terminal/defaults";
+import {
   getCliSessionTabDefaultTitle,
   getTerminalTabDefaultTitle,
   type CliSessionContextMode,
@@ -1515,8 +1520,8 @@ const defaultSettings: AppSettings = {
   commandPaletteRecentCommandIds: [],
   reviewStrictMode: true,
   reviewChecklistPreset: "safety-first",
-  terminalFontSize: 12,
-  terminalFontFamily: "JetBrains Mono",
+  terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
+  terminalFontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
   terminalCursorStyle: "block",
   terminalLineHeight: 1,
   editorFontSize: 14,
@@ -10596,6 +10601,12 @@ export const useAppStore = create<AppState>()(
         state.settings.sidebarArtworkMode = normalizeSidebarArtworkMode(
           raw.sidebarArtworkMode,
         );
+        if (
+          typeof persistedSettings?.terminalFontFamily === "string" &&
+          persistedSettings.terminalFontFamily.trim() === LEGACY_TERMINAL_FONT_FAMILY
+        ) {
+          state.settings.terminalFontFamily = DEFAULT_TERMINAL_FONT_FAMILY;
+        }
         state.settings.notificationSoundEnabled =
           typeof raw.notificationSoundEnabled === "boolean"
             ? raw.notificationSoundEnabled
@@ -10874,3 +10885,5 @@ export const useAppStore = create<AppState>()(
     },
   ),
 );
+
+

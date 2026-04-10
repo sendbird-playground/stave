@@ -34,6 +34,8 @@ const TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS = 2_000;
 
 interface TerminalSessionEntry {
   pty: pty.IPty;
+  dataSubscription: pty.IDisposable | null;
+  exitSubscription: pty.IDisposable | null;
   outputChunks: string[];
   pendingPush: string[];
   pendingPushBytes: number;
@@ -48,6 +50,7 @@ interface TerminalSessionEntry {
   slotKey: string | null;
   closed: Promise<void>;
   close: () => void;
+  disposePtyListeners: () => void;
   flushPushOutput: () => void;
   markClosed: () => void;
 }
@@ -308,6 +311,8 @@ export function createTerminalRuntime(args: {
 
     const session: TerminalSessionEntry = {
       pty: ptyProcess,
+      dataSubscription: null,
+      exitSubscription: null,
       outputChunks: [],
       pendingPush: [],
       pendingPushBytes: 0,
@@ -326,12 +331,20 @@ export function createTerminalRuntime(args: {
           return;
         }
         session.closing = true;
+        session.disposePtyListeners();
+        session.markClosed();
         const closablePty = ptyProcess as pty.IPty & { destroy?: () => void };
         if (typeof closablePty.destroy === "function") {
           closablePty.destroy();
           return;
         }
         ptyProcess.kill();
+      },
+      disposePtyListeners: () => {
+        session.dataSubscription?.dispose();
+        session.exitSubscription?.dispose();
+        session.dataSubscription = null;
+        session.exitSubscription = null;
       },
       flushPushOutput: () => {
         void flushPushOutputNow({ session, sessionId });
@@ -358,7 +371,7 @@ export function createTerminalRuntime(args: {
       background: args.themeColors?.background ?? DEFAULT_TERMINAL_BACKGROUND,
     });
 
-    ptyProcess.onData(
+    session.dataSubscription = ptyProcess.onData(
       createBufferedDataHandler((data) => {
         if (session.closing) {
           return;
@@ -388,7 +401,8 @@ export function createTerminalRuntime(args: {
       }),
     );
 
-    ptyProcess.onExit(({ exitCode, signal }) => {
+    session.exitSubscription = ptyProcess.onExit(({ exitCode, signal }) => {
+      session.disposePtyListeners();
       session.markClosed();
       deleteSession(sessionId);
       void (async () => {
