@@ -58,6 +58,8 @@ This uses the same authenticated `gh`-based release flow as the terminal install
 
 On packaged macOS builds, the restart helper also carries a Homebrew-friendly PATH so GUI-launched Stave can still find `gh` during the install step.
 
+If macOS keeps re-asking for Desktop, Documents, or Downloads access after install or update, see [macOS Folder Access Prompts](features/macos-folder-access-prompts.md).
+
 ## Automatic Daily Updates
 
 Keep Stave up-to-date automatically with a macOS LaunchAgent that checks for new releases every day at 10:00 AM:
