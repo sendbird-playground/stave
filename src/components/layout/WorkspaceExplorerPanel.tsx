@@ -3,7 +3,6 @@ import {
   ChevronRight,
   ChevronsDown,
   ChevronsUp,
-  Code2,
   Copy,
   File,
   FilePlus,
@@ -16,6 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { GhosttyIcon, VSCodeIcon } from "@/components/brand-icons";
 import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Button, Input, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui";
@@ -285,7 +285,7 @@ function ExplorerTreeRow(args: {
   onOpenInFinder: (path: string) => void;
   onOpenInVSCode: (path: string) => void;
   onOpenInTerminal: (path: string) => void;
-  onOpenInStaveTerminal: (path: string) => void;
+  onOpenInGhostty: (path: string) => void;
   onRefreshDirectory: (path: string) => void;
   onRequestDeleteFile: (path: string, name: string) => void;
   onRequestDeleteFolder: (path: string, name: string) => void;
@@ -354,11 +354,11 @@ function ExplorerTreeRow(args: {
             Open in Finder
           </ContextMenuItem>
           <ContextMenuItem onSelect={() => args.onOpenInVSCode(args.entry.path)}>
-            <Code2 className="size-4" />
+            <VSCodeIcon className="size-4" />
             Open in VS Code
           </ContextMenuItem>
-          <ContextMenuItem onSelect={() => args.onOpenInStaveTerminal(terminalTargetPath)}>
-            <SquareTerminal className="size-4" />
+          <ContextMenuItem onSelect={() => args.onOpenInGhostty(terminalTargetPath)}>
+            <GhosttyIcon className="size-4" />
             Open in Ghostty
           </ContextMenuItem>
           <ContextMenuItem onSelect={() => args.onOpenInTerminal(terminalTargetPath)}>
@@ -417,7 +417,7 @@ function ExplorerTreeRow(args: {
               onCopyAbsolutePath={args.onCopyAbsolutePath}
               onOpenInFinder={args.onOpenInFinder}
               onOpenInVSCode={args.onOpenInVSCode}
-              onOpenInStaveTerminal={args.onOpenInStaveTerminal}
+              onOpenInGhostty={args.onOpenInGhostty}
               onOpenInTerminal={args.onOpenInTerminal}
               onRefreshDirectory={args.onRefreshDirectory}
               onRequestDeleteFile={args.onRequestDeleteFile}
@@ -456,7 +456,7 @@ export function WorkspaceExplorerPanel(props: {
   onOpenExplorerInFinder: (path: string) => void;
   onOpenExplorerInVSCode: (path: string) => void;
   onOpenExplorerInTerminal: (path: string) => void;
-  onOpenExplorerInStaveTerminal: (path: string) => void;
+  onOpenExplorerInGhostty: (path: string) => void;
   onRefreshExplorerDirectory: (path: string) => void;
   onRequestDeleteExplorerFile: (path: string, name: string) => void;
   onRequestDeleteExplorerFolder: (path: string, name: string) => void;
@@ -630,7 +630,7 @@ export function WorkspaceExplorerPanel(props: {
                   onCopyAbsolutePath={props.onCopyExplorerAbsolutePath}
                   onOpenInFinder={props.onOpenExplorerInFinder}
                   onOpenInVSCode={props.onOpenExplorerInVSCode}
-                  onOpenInStaveTerminal={props.onOpenExplorerInStaveTerminal}
+                  onOpenInGhostty={props.onOpenExplorerInGhostty}
                   onOpenInTerminal={props.onOpenExplorerInTerminal}
             onRefreshDirectory={props.onRefreshExplorerDirectory}
             onRequestDeleteFile={props.onRequestDeleteExplorerFile}

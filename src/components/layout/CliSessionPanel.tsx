@@ -9,6 +9,7 @@ import {
   getCliSessionProviderLabel,
   getWorkspaceCliSessionTabKey,
 } from "@/lib/terminal/types";
+import { TERMINAL_SURFACE_CLASS_NAME } from "@/components/layout/terminal-surface-styles";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { usePtySessionSurface } from "@/components/layout/usePtySessionSurface";
@@ -284,7 +285,7 @@ export function CliSessionPanel() {
             <div
               ref={containerRef}
               data-terminal-surface
-              className={cn("h-full w-full", !activeTab && "opacity-60")}
+              className={cn(TERMINAL_SURFACE_CLASS_NAME, !activeTab && "opacity-60")}
             />
           </div>
         </div>

@@ -113,4 +113,5 @@
 
 - [Command Palette](command-palette.md)
 - [Zen Mode](zen-mode.md)
+- [Terminal regression prevention](../developer/terminal-regression-prevention.md)
 - [Project / workspace / task shell redesign](../ui/project-workspace-task-shell.md)

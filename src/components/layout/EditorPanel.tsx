@@ -102,7 +102,6 @@ export function EditorPanel(props: EditorPanelProps) {
     workspaceCwd,
     openFileFromTree,
     openDiffInEditor,
-    createTerminalTab,
     setLayout,
     refreshProjectFiles,
     closeEditorTab,
@@ -115,7 +114,6 @@ export function EditorPanel(props: EditorPanelProps) {
     state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined,
     state.openFileFromTree,
     state.openDiffInEditor,
-    state.createTerminalTab,
     state.setLayout,
     state.refreshProjectFiles,
     state.closeEditorTab,
@@ -535,7 +533,7 @@ export function EditorPanel(props: EditorPanelProps) {
     }
   }
 
-  async function handleOpenExplorerPath(args: { path: string; target: "finder" | "vscode" | "terminal" }) {
+  async function handleOpenExplorerPath(args: { path: string; target: "finder" | "vscode" | "terminal" | "ghostty" }) {
     const shellApi = window.api?.shell;
     if (!shellApi) {
       toast.error("Shell bridge unavailable");
@@ -552,6 +550,8 @@ export function EditorPanel(props: EditorPanelProps) {
       ? shellApi.showInFinder
       : args.target === "vscode"
       ? shellApi.openInVSCode
+      : args.target === "ghostty"
+      ? shellApi.openInGhostty
       : shellApi.openInTerminal;
     if (!action) {
       toast.error("Shell action unavailable");
@@ -567,6 +567,8 @@ export function EditorPanel(props: EditorPanelProps) {
       ? "open in Finder"
       : args.target === "vscode"
       ? "open in VS Code"
+      : args.target === "ghostty"
+      ? "open in Ghostty"
       : "open in Terminal";
     toast.error(`Failed to ${actionLabel}`, { description: result.stderr });
   }
@@ -692,13 +694,8 @@ export function EditorPanel(props: EditorPanelProps) {
     void handleOpenExplorerPath({ path, target: "terminal" });
   }
 
-  function handleOpenExplorerInStaveTerminal(path: string) {
-    const absolutePath = resolveWorkspaceAbsolutePath({ workspacePath: workspaceCwd, relativePath: path });
-    if (!absolutePath) {
-      toast.error("Workspace path unavailable");
-      return;
-    }
-    createTerminalTab({ cwd: absolutePath });
+  function handleOpenExplorerInGhostty(path: string) {
+    void handleOpenExplorerPath({ path, target: "ghostty" });
   }
 
   function cancelExplorerCreate() {
@@ -875,7 +872,7 @@ export function EditorPanel(props: EditorPanelProps) {
               onOpenExplorerInFinder={handleOpenExplorerInFinder}
               onOpenExplorerInVSCode={handleOpenExplorerInVSCode}
               onOpenExplorerInTerminal={handleOpenExplorerInTerminal}
-              onOpenExplorerInStaveTerminal={handleOpenExplorerInStaveTerminal}
+              onOpenExplorerInGhostty={handleOpenExplorerInGhostty}
               onRefreshExplorerDirectory={handleRefreshExplorerDirectory}
               onRequestDeleteExplorerFile={handleRequestDeleteExplorerFile}
               onRequestDeleteExplorerFolder={handleRequestDeleteExplorerFolder}

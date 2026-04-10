@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { init as initGhosttyWasm, Terminal, FitAddon } from "ghostty-web";
-import { shouldCreatePtySession } from "@/components/layout/pty-session-surface.utils";
+import {
+  focusTerminalSurface,
+  shouldCreatePtySession,
+} from "@/components/layout/pty-session-surface.utils";
 
 const TERMINAL_POLL_INTERVAL_MS = 120;
 const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
@@ -436,6 +439,36 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       resizeFrameRef.current = null;
       resizeActiveSession();
     });
+  }
+
+  function scheduleTerminalFocus() {
+    let focusAttempt = 0;
+    let focusCancelled = false;
+
+    function tryFocus() {
+      if (focusCancelled) {
+        return;
+      }
+
+      const didFocus = focusTerminalSurface({
+        terminal: xtermRef.current,
+        container: containerRef.current,
+      });
+      if (didFocus) {
+        return;
+      }
+
+      focusAttempt += 1;
+      if (focusAttempt < AUTO_FOCUS_MAX_ATTEMPTS) {
+        window.requestAnimationFrame(tryFocus);
+      }
+    }
+
+    window.requestAnimationFrame(tryFocus);
+
+    return () => {
+      focusCancelled = true;
+    };
   }
 
   useEffect(() => {
@@ -907,33 +940,15 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
         xtermRef.current?.scrollToLine(scrollPosition);
       });
     }
-
-    // Auto-focus the terminal after tab switch.
-    // Retry via RAF loop (up to AUTO_FOCUS_MAX_ATTEMPTS frames) to handle
-    // cases where the terminal textarea isn't ready yet after React renders.
-    let focusAttempt = 0;
-    let focusCancelled = false;
-    const container = containerRef.current;
-    function tryFocus() {
-      if (focusCancelled || !container) {
-        return;
-      }
-      const textarea = container.querySelector("textarea");
-      if (textarea) {
-        textarea.focus({ preventScroll: true });
-        return;
-      }
-      focusAttempt += 1;
-      if (focusAttempt < AUTO_FOCUS_MAX_ATTEMPTS) {
-        window.requestAnimationFrame(tryFocus);
-      }
-    }
-    window.requestAnimationFrame(tryFocus);
-
-    return () => {
-      focusCancelled = true;
-    };
   }, [activeTabKey, runtimeVersion, terminalReady]);
+
+  useEffect(() => {
+    if (!args.isVisible || !activeTabKey || !terminalReady) {
+      return;
+    }
+
+    return scheduleTerminalFocus();
+  }, [args.isVisible, activeTabKey, runtimeVersion, terminalReady]);
 
   function clearActiveTranscript() {
     if (!activeTabKey) {

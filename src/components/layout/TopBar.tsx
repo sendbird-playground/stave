@@ -1,11 +1,11 @@
 import {
   FolderTree,
-  Code2,
   SquareTerminal,
   FolderOpen,
   ChevronDown,
   PanelLeft,
 } from "lucide-react";
+import { GhosttyIcon, VSCodeIcon } from "@/components/brand-icons";
 import { useEffect, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -59,7 +59,6 @@ export function TopBar() {
     workspacePathById,
     projectPath,
     workspaceSidebarCollapsed,
-    createTerminalTab,
     setLayout,
   ] = useAppStore(
     useShallow(
@@ -69,7 +68,6 @@ export function TopBar() {
           state.workspacePathById,
           state.projectPath,
           state.layout.workspaceSidebarCollapsed,
-          state.createTerminalTab,
           state.setLayout,
         ] as const,
     ),
@@ -199,18 +197,17 @@ export function TopBar() {
                       })
                     }
                   >
-                    <Code2 className="size-4" />
+                    <VSCodeIcon className="size-4" />
                     Open in VS Code
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => {
-                      createTerminalTab({
-                        cwd: activeWorkspacePath,
-                        title: workspacePathLabel || undefined,
-                      });
-                    }}
+                    onClick={() =>
+                      void window.api?.shell?.openInGhostty?.({
+                        path: activeWorkspacePath,
+                      })
+                    }
                   >
-                    <SquareTerminal className="size-4" />
+                    <GhosttyIcon className="size-4" />
                     Open in Ghostty
                   </DropdownMenuItem>
                   <DropdownMenuItem

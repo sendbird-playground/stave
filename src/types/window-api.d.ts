@@ -1297,6 +1297,9 @@ interface WindowApi {
     openInTerminal?: (args: {
       path: string;
     }) => Promise<{ ok: boolean; stderr?: string }>;
+    openInGhostty?: (args: {
+      path: string;
+    }) => Promise<{ ok: boolean; stderr?: string }>;
   };
 }
 

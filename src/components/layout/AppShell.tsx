@@ -832,6 +832,9 @@ export function AppShell() {
       openInTerminal: async (path: string) => {
         await window.api?.shell?.openInTerminal?.({ path });
       },
+      openInGhostty: async (path: string) => {
+        await window.api?.shell?.openInGhostty?.({ path });
+      },
       openInVSCode: async (path: string) => {
         await window.api?.shell?.openInVSCode?.({ path });
       },

@@ -69,6 +69,84 @@ test("right panel tabs switch", async ({ page }) => {
   await expect(rightPanel.getByRole("heading", { name: "Information" })).toBeVisible();
 });
 
+test("terminal dock opens with the shared surface inset", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("stave-store", JSON.stringify({
+      state: {
+        projectPath: "/tmp/stave-project",
+        projectName: "stave-project",
+        workspaces: [{ id: "ws-main", name: "main", updatedAt: "2026-04-10T01:00:00.000Z" }],
+        activeWorkspaceId: "ws-main",
+        workspaceBranchById: { "ws-main": "main" },
+        workspacePathById: { "ws-main": "/tmp/stave-project" },
+        workspaceDefaultById: { "ws-main": true },
+      },
+      version: 0,
+    }));
+
+    (window as unknown as { api?: Record<string, unknown> }).api = {
+      provider: {
+        streamTurn: async () => [],
+      },
+      terminal: {
+        createSession: async () => ({ ok: true, sessionId: "session-terminal-1" }),
+        runCommand: async () => ({ ok: true, code: 0, stdout: "", stderr: "" }),
+      },
+      sourceControl: {
+        getStatus: async () => ({
+          ok: true,
+          branch: "main",
+          items: [],
+          hasConflicts: false,
+          stderr: "",
+        }),
+        getHistory: async () => ({
+          ok: true,
+          items: [],
+          stderr: "",
+        }),
+        listBranches: async () => ({
+          ok: true,
+          current: "main",
+          branches: ["main"],
+          remoteBranches: [],
+          worktreePathByBranch: { main: "/tmp/stave-project" },
+          stderr: "",
+        }),
+      },
+    };
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+
+  await page.getByTestId("workspace-bar").getByRole("button", { name: "Terminal" }).click();
+
+  const terminalDock = page.getByTestId("terminal-dock");
+  await expect(terminalDock).toBeVisible();
+  await expect(page.getByRole("button", { name: "new-terminal-tab" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "hide-terminal" })).toBeVisible();
+
+  const terminalSurface = terminalDock.locator("[data-terminal-surface]").first();
+  await terminalSurface.waitFor({ state: "attached" });
+
+  const padding = await terminalSurface.evaluate((element) => {
+    const styles = window.getComputedStyle(element);
+    return {
+      top: styles.paddingTop,
+      right: styles.paddingRight,
+      bottom: styles.paddingBottom,
+      left: styles.paddingLeft,
+    };
+  });
+  expect(padding).toEqual({
+    top: "16px",
+    right: "20px",
+    bottom: "16px",
+    left: "20px",
+  });
+});
+
 test("scripts manager waits for default scope and keeps draft entries dirty", async ({ page }) => {
   await page.addInitScript(() => {
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
