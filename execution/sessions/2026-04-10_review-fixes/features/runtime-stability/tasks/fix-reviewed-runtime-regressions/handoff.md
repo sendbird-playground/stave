@@ -58,3 +58,14 @@ None.
 - Re-check result for the held items:
   - Event-bridge unsubscribe warnings remain non-issues in the current lifecycle because the bridges are single-registration guards, not accumulating listeners.
   - The terminal delivery-mode race is still not confirmed from the current code path. The updated logic still buffers pending push output before poll reads, and no concrete drop path was reproduced here.
+
+## Auto Snapshot
+
+- Timestamp: 2026-04-10_222835
+- Working Directory: /Users/jacob.kim/workspace/stave/.stave/workspaces/fix__notification-history
+- Snapshot File: /Users/jacob.kim/.agents/claude/session-snapshots/2026-04-10_222835.md
+- Recent Git Status:
+```text
+ M src/components/layout/TopBarNotifications.tsx
+```
+
