@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { writeFileSync, existsSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { app } from "electron";
 
 export interface EslintDiagnostic {
@@ -33,8 +33,14 @@ function getEslint(rootPath, fix) {
   const cache = fix ? fixInstances : lintInstances;
   let instance = cache.get(rootPath);
   if (instance) return instance;
+  const eslintPackage = require(path.join(rootPath, "node_modules", "eslint", "package.json"));
   const { ESLint } = require(path.join(rootPath, "node_modules", "eslint"));
-  instance = new ESLint({ cwd: rootPath, fix, resolvePluginsRelativeTo: rootPath });
+  const eslintMajorVersion = Number.parseInt(String(eslintPackage.version || "0").split(".")[0], 10);
+  const options = { cwd: rootPath, fix };
+  if (Number.isFinite(eslintMajorVersion) && eslintMajorVersion < 10) {
+    options.resolvePluginsRelativeTo = rootPath;
+  }
+  instance = new ESLint(options);
   cache.set(rootPath, instance);
   return instance;
 }
@@ -87,9 +93,8 @@ function getWorkerScriptPath(): string {
   if (workerScriptPath) return workerScriptPath;
   const tmpDir = app.getPath("temp");
   workerScriptPath = path.join(tmpDir, "stave-eslint-worker.cjs");
-  if (!existsSync(workerScriptPath)) {
-    writeFileSync(workerScriptPath, WORKER_CODE, "utf8");
-  }
+  // Always refresh the worker script so app updates do not keep running stale code from temp.
+  writeFileSync(workerScriptPath, WORKER_CODE, "utf8");
   return workerScriptPath;
 }
 
