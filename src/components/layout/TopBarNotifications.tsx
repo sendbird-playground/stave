@@ -1,4 +1,4 @@
-import { Bell, Check, CheckCheck, CircleCheck, ShieldAlert, Archive } from "lucide-react";
+import { Bell, Check, CheckCheck, ChevronDown, CircleCheck, ShieldAlert, Archive } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -23,6 +23,8 @@ import { formatTaskUpdatedAt, isTaskArchived, isTaskManaged } from "@/lib/tasks"
 import { isNotificationUnread } from "@/lib/notifications/notification.types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+
+const HISTORY_PAGE_SIZE = 20;
 
 interface ArchivedNotificationPrompt {
   notificationId: string;
@@ -64,10 +66,13 @@ export function TopBarNotifications(props: {
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [view, setView] = useState<NotificationView>("unread");
   const [archivedPrompt, setArchivedPrompt] = useState<ArchivedNotificationPrompt | null>(null);
+  const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE_SIZE);
 
   const unreadNotifications = notifications.filter(isNotificationUnread);
   const historyNotifications = notifications.filter((notification) => !isNotificationUnread(notification));
-  const visibleNotifications = view === "unread" ? unreadNotifications : historyNotifications;
+  const pagedHistoryNotifications = historyNotifications.slice(0, historyLimit);
+  const hasMoreHistory = historyNotifications.length > historyLimit;
+  const visibleNotifications = view === "unread" ? unreadNotifications : pagedHistoryNotifications;
   const unreadCount = unreadNotifications.length;
   const historyCount = historyNotifications.length;
   const unreadCountLabel = unreadCount > 99 ? "99+" : String(unreadCount);
@@ -85,6 +90,7 @@ export function TopBarNotifications(props: {
     setOpen(nextOpen);
     if (!nextOpen) {
       setArchivedPrompt(null);
+      setHistoryLimit(HISTORY_PAGE_SIZE);
     }
     setView((previousView) => getNextNotificationView({
       isOpening: nextOpen,
@@ -289,7 +295,8 @@ export function TopBarNotifications(props: {
               ) : null}
             </div>
           ) : (
-            visibleNotifications.map((notification) => {
+            <>
+            {visibleNotifications.map((notification) => {
               const unread = isNotificationUnread(notification);
               const locationLabel = buildLocationLabel({
                 projectName: notification.projectName,
@@ -444,7 +451,22 @@ export function TopBarNotifications(props: {
                   </div>
                 </div>
               );
-            })
+            })}
+            {view === "history" && hasMoreHistory ? (
+              <div className="flex items-center justify-center border-t border-border/60 px-4 py-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setHistoryLimit((prev) => prev + HISTORY_PAGE_SIZE)}
+                >
+                  <ChevronDown className="size-3.5" />
+                  Load more ({historyNotifications.length - historyLimit} remaining)
+                </Button>
+              </div>
+            ) : null}
+            </>
           )}
         </div>
       </PopoverContent>
