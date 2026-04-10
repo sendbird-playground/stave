@@ -1,12 +1,11 @@
 import { ipcMain } from "electron";
+import { invokeHostService } from "../host-service-client";
 import {
   SyncOriginMainArgsSchema,
   ToolingStatusArgsSchema,
 } from "./schemas";
 import {
-  getToolingStatusSnapshot,
   inspectWorkspaceSyncStatus,
-  syncWorkspaceWithOriginMain,
 } from "../utils/tooling-status";
 import {
   getAppUpdateStatusSnapshot,
@@ -17,9 +16,9 @@ export function registerToolingHandlers() {
   ipcMain.handle("tooling:get-status", async (_event, args: unknown) => {
     const parsed = ToolingStatusArgsSchema.safeParse(args);
     if (!parsed.success) {
-      return getToolingStatusSnapshot();
+      return invokeHostService("tooling.get-status", {});
     }
-    return getToolingStatusSnapshot(parsed.data);
+    return invokeHostService("tooling.get-status", parsed.data);
   });
 
   ipcMain.handle("tooling:sync-origin-main", async (_event, args: unknown) => {
@@ -32,7 +31,7 @@ export function registerToolingHandlers() {
         workspace: await inspectWorkspaceSyncStatus(),
       };
     }
-    return syncWorkspaceWithOriginMain(parsed.data);
+    return invokeHostService("tooling.sync-origin-main", parsed.data);
   });
 
   ipcMain.handle("tooling:get-app-update-status", async () => {

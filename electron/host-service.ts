@@ -56,7 +56,11 @@ import {
   suggestClaudePRDescription,
   suggestClaudeTaskName,
 } from "./providers/claude-sdk-runtime";
-import { getCodexMcpStatus } from "./main/utils/tooling-status";
+import {
+  getCodexMcpStatus,
+  getToolingStatusSnapshot,
+  syncWorkspaceWithOriginMain,
+} from "./main/utils/tooling-status";
 import { isDoneEvent, toEventType } from "./main/utils/provider-events";
 import { quotePath, runCommand } from "./main/utils/command";
 import type { StreamTurnArgs } from "./providers/types";
@@ -537,6 +541,18 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       await respond(
         request.id,
         await suggestProviderPRDescription(request.params),
+      );
+      return;
+    case "tooling.get-status":
+      await respond(
+        request.id,
+        await getToolingStatusSnapshot(request.params),
+      );
+      return;
+    case "tooling.sync-origin-main":
+      await respond(
+        request.id,
+        await syncWorkspaceWithOriginMain(request.params),
       );
       return;
     case "scm.status":

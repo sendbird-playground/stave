@@ -27,6 +27,12 @@ import type {
   StreamTurnArgs,
 } from "../providers/types";
 import type {
+  SyncOriginMainRequest,
+  SyncOriginMainResult,
+  ToolingStatusRequest,
+  ToolingStatusSnapshot,
+} from "../../src/lib/tooling-status";
+import type {
   CommandResult,
   SourceControlStatusItem,
 } from "../main/types";
@@ -310,6 +316,8 @@ export interface HostServiceRequestMap {
   "provider.suggest-task-name": HostProviderSuggestTaskNameArgs;
   "provider.suggest-commit-message": HostProviderSuggestCommitMessageArgs;
   "provider.suggest-pr-description": HostProviderSuggestPRDescriptionArgs;
+  "tooling.get-status": ToolingStatusRequest;
+  "tooling.sync-origin-main": SyncOriginMainRequest;
   "scm.status": {
     cwd?: string;
   };
@@ -443,6 +451,8 @@ export interface HostServiceResponseMap {
   "provider.suggest-task-name": HostProviderSuggestTaskNameResult;
   "provider.suggest-commit-message": HostProviderSuggestCommitMessageResult;
   "provider.suggest-pr-description": HostProviderSuggestPRDescriptionResult;
+  "tooling.get-status": ToolingStatusSnapshot;
+  "tooling.sync-origin-main": SyncOriginMainResult;
   "scm.status": HostScmStatusResult;
   "scm.stage-all": CommandResult;
   "scm.unstage-all": CommandResult;
