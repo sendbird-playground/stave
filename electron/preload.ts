@@ -883,6 +883,8 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("shell:open-in-vscode", args),
     openInTerminal: (args: { path: string }) =>
       ipcRenderer.invoke("shell:open-in-terminal", args),
+    openInGhostty: (args: { path: string }) =>
+      ipcRenderer.invoke("shell:open-in-ghostty", args),
   },
   metrics: {
     getAppMetrics: () =>

@@ -16,6 +16,7 @@ import {
 } from "@/lib/terminal/types";
 import { cn } from "@/lib/utils";
 import { shouldAutoCreateDockTerminalTab } from "@/components/layout/terminal-dock.utils";
+import { TERMINAL_SURFACE_CLASS_NAME } from "@/components/layout/terminal-surface-styles";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
 import { usePtySessionSurface } from "@/components/layout/usePtySessionSurface";
@@ -406,7 +407,7 @@ export function TerminalDock() {
                   ref={containerRef}
                   data-terminal-surface
                   className={cn(
-                    "h-full w-full",
+                    TERMINAL_SURFACE_CLASS_NAME,
                     !activeTab && "opacity-60",
                   )}
                 />

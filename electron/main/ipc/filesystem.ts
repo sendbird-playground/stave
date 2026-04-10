@@ -163,6 +163,33 @@ export function registerFilesystemHandlers() {
     });
   });
 
+  ipcMain.handle("shell:open-in-ghostty", async (_event, args: unknown) => {
+    const parsed = OpenPathArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return { ok: false, stderr: "Invalid path request." };
+    }
+    const targetPath = parsed.data.path;
+    if (process.platform === "darwin") {
+      return new Promise<{ ok: boolean; stderr?: string }>((resolve) => {
+        const child = spawn("open", ["-a", "Ghostty", targetPath], { detached: true, stdio: "ignore" });
+        child.once("error", (error) => resolve({ ok: false, stderr: String(error) }));
+        child.once("spawn", () => {
+          child.unref();
+          resolve({ ok: true });
+        });
+      });
+    }
+    // Non-macOS: try launching ghostty directly
+    return new Promise<{ ok: boolean; stderr?: string }>((resolve) => {
+      const child = spawn("ghostty", [], { detached: true, stdio: "ignore", cwd: targetPath });
+      child.once("error", (error) => resolve({ ok: false, stderr: String(error) }));
+      child.once("spawn", () => {
+        child.unref();
+        resolve({ ok: true });
+      });
+    });
+  });
+
   ipcMain.handle("shell:open-in-terminal", async (_event, args: unknown) => {
     const parsed = OpenPathArgsSchema.safeParse(args);
     if (!parsed.success) {
@@ -170,26 +197,15 @@ export function registerFilesystemHandlers() {
     }
     const targetPath = parsed.data.path;
     if (process.platform === "darwin") {
-      // Try Ghostty first, then Terminal.app, fall back to iTerm2
-      const launchers: Array<{ command: string; commandArgs: string[] }> = [
-        { command: "open", commandArgs: ["-a", "Ghostty", targetPath] },
-        { command: "open", commandArgs: ["-a", "Terminal", targetPath] },
-        { command: "open", commandArgs: ["-a", "iTerm", targetPath] },
-      ];
-      let lastError = "Failed to open terminal.";
-      for (const launcher of launchers) {
-        const result = await new Promise<{ ok: boolean; stderr?: string }>((resolve) => {
-          const child = spawn(launcher.command, launcher.commandArgs, { detached: true, stdio: "ignore" });
-          child.once("error", (error) => resolve({ ok: false, stderr: String(error) }));
-          child.once("spawn", () => {
-            child.unref();
-            resolve({ ok: true });
-          });
+      // Terminal.app is always present on macOS — no fallback chain needed.
+      return new Promise<{ ok: boolean; stderr?: string }>((resolve) => {
+        const child = spawn("open", ["-a", "Terminal", targetPath], { detached: true, stdio: "ignore" });
+        child.once("error", (error) => resolve({ ok: false, stderr: String(error) }));
+        child.once("spawn", () => {
+          child.unref();
+          resolve({ ok: true });
         });
-        if (result.ok) return { ok: true as const };
-        lastError = result.stderr ?? lastError;
-      }
-      return { ok: false as const, stderr: lastError };
+      });
     }
     if (process.platform === "win32") {
       return new Promise<{ ok: boolean; stderr?: string }>((resolve) => {

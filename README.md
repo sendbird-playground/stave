@@ -256,6 +256,7 @@ Stable project documentation now lives under `docs/`.
 - [Attachments](docs/features/attachments.md)
 - [Language intelligence](docs/features/language-intelligence.md)
 - [Developer diagnostics](docs/developer/diagnostics.md)
+- [Terminal regression prevention](docs/developer/terminal-regression-prevention.md)
 - [shadcn preset](docs/ui/shadcn-preset.md)
 - [Project / workspace / task shell redesign](docs/ui/project-workspace-task-shell.md)
 

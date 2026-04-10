@@ -98,6 +98,7 @@ export interface CommandPaletteCommandHandlers {
   openStaveMuse: () => void;
   openLatestCompletedTurnTask: () => Promise<void> | void;
   openInTerminal: (path: string) => Promise<void> | void;
+  openInGhostty: (path: string) => Promise<void> | void;
   openInVSCode: (path: string) => Promise<void> | void;
   openKeyboardShortcuts: () => void;
   openProject: (projectPath: string) => Promise<void> | void;
@@ -824,7 +825,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
   {
     id: "external.open-active-workspace-terminal",
     title: "Open Active Workspace in Terminal",
-    description: "Open the active workspace folder in a system terminal.",
+    description: "Open the active workspace folder in the OS default terminal.",
     group: "external",
     icon: Terminal,
     keywords: ["external", "terminal", "shell"],
@@ -838,6 +839,28 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
             icon: Terminal,
             keywords: ["external", "terminal", "shell"],
             run: () => args.commands.openInTerminal(args.workspacePath!),
+            source: "core",
+          }
+        : null
+    ),
+  },
+  {
+    id: "external.open-active-workspace-ghostty",
+    title: "Open Active Workspace in Ghostty",
+    description: "Open the active workspace folder in the Ghostty terminal app.",
+    group: "external",
+    icon: Terminal,
+    keywords: ["external", "ghostty", "terminal"],
+    build: (args) => (
+      args.workspacePath
+        ? {
+            id: "external.open-active-workspace-ghostty",
+            title: "Open Active Workspace in Ghostty",
+            subtitle: args.workspacePath,
+            group: "external",
+            icon: Terminal,
+            keywords: ["external", "ghostty", "terminal"],
+            run: () => args.commands.openInGhostty(args.workspacePath!),
             source: "core",
           }
         : null

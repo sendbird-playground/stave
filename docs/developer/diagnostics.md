@@ -27,6 +27,17 @@ When enabled, slow commits are logged to the console and recorded as `performanc
 
 If you are debugging repeated re-renders or `Maximum update depth exceeded`, review [Zustand selector stability](zustand-selector-stability.md) before changing store subscriptions.
 
+## Terminal diagnostics
+
+If you are debugging terminal input loss, session restore bugs, terminal viewport jumps, or dock/CLI surface layout drift, review [Terminal regression prevention](terminal-regression-prevention.md) before changing terminal surface code.
+
+Use that guide as the mandatory check list for:
+
+- `usePtySessionSurface.ts` focus and session lifecycle work
+- docked terminal or CLI session shell layout changes
+- terminal-related workspace/task switching behavior
+- terminal keyboard boundary changes
+
 ## Settings diagnostics
 
 The Settings dialog includes desktop-only diagnostics for renderer and compositor troubleshooting:

@@ -150,6 +150,80 @@ These rules apply when **any** of the following is true:
 
 - **Do not treat any UI or design change as complete** until you have explicitly checked every file in the table above for required updates. TypeScript passing is not sufficient — a missing token in a built-in theme is a silent visual regression, not a type error.
 
+## Terminal Surfaces (mandatory for docked terminal and CLI session work)
+
+**Every change that touches Stave's integrated terminal — docked terminal tabs, full-panel CLI sessions, PTY session lifecycle, terminal input/focus, transcript restore, terminal sizing, or terminal chrome/layout — must verify the terminal regression rules below.**
+
+Terminal regressions tend to look small in code review and expensive in use: lost input after workspace switches, hidden sessions spawning unexpectedly, scroll/viewport jumps, or dock/CLI surface layout drift. Treat these as contract-level bugs, not polish.
+
+### Required check files
+
+| File | Role |
+|------|------|
+| `src/components/layout/usePtySessionSurface.ts` | Shared Ghostty/PTy adapter. Owns focus restore, resize, transcript replay, session creation gating, and session output handling. |
+| `src/components/layout/pty-session-surface.utils.ts` | Pure helper layer for session gating and focus fallback rules. |
+| `src/components/layout/terminal-surface-styles.ts` | Shared inner spacing and focus-visible styling for terminal surfaces. |
+| `src/components/layout/TerminalDock.tsx` | Docked workspace terminal shell and controls. |
+| `src/components/layout/CliSessionPanel.tsx` | Full-panel Claude/Codex terminal shell and controls. |
+| `src/components/layout/app-shell.shortcuts.ts` | Keyboard boundary between shell shortcuts and terminal input. |
+| `src/store/workspace-session-state.ts` | Active surface resolution, workspace restore semantics, and shell-state normalization. |
+| `src/store/app.store.ts` | Terminal/CLI tab creation, active surface switching, and workspace snapshot persistence. |
+| `electron/main/ipc/terminal.ts` | PTY session lifecycle, slot reuse, delivery mode, and renderer event wiring. |
+| `src/types/window-api.d.ts` | Renderer-side terminal IPC contract. |
+| `tests/pty-session-surface.utils.test.ts` | Pure regression tests for focus/session gating helpers. |
+| `tests/terminal-dock.utils.test.ts` | Dock visibility/tab bootstrapping rules. |
+| `tests/terminal-session-slot-registry.test.ts` | Backend slot reuse and cleanup coverage. |
+| `tests/e2e/ui-interactions.e2e.ts` | Lowest-friction browser smoke coverage for terminal surface mounting and workspace chrome interactions. |
+
+### When these rules apply
+
+These rules apply when any of the following is true:
+
+- `usePtySessionSurface` session lifecycle, focus handling, resize behavior, transcript restore, or output delivery changes.
+- Docked terminal or CLI session layout, spacing, borders, padding, focus ring, or header chrome changes.
+- `activeSurface`, terminal tabs, CLI session tabs, or workspace shell persistence behavior changes.
+- Terminal keyboard handling or shortcut suppression changes.
+- Terminal IPC request/response shapes or session slot reuse semantics change.
+
+### Rules
+
+- **Keep Ghostty DOM knowledge centralized.**
+  Do not query or manipulate Ghostty internals (`textarea`, `contenteditable`, canvas children, etc.) from `TerminalDock`, `CliSessionPanel`, or unrelated hooks. If a terminal DOM workaround is required, it belongs in `usePtySessionSurface` or a helper it owns.
+
+- **Keep terminal surface spacing shared.**
+  Inner terminal spacing, focus-visible treatment, and other shell-to-terminal inset values must come from a shared utility such as `terminal-surface-styles.ts`. Do not hardcode separate padding values in the docked and CLI panel surfaces.
+
+- **Treat task/workspace switching as first-class terminal flows.**
+  Hidden surfaces must not create sessions. Visible surfaces must restore focus, scroll position, transcript, and exit state deterministically after task switches, workspace switches, and surface toggles.
+
+- **Preserve the shell/data split.**
+  `TerminalDock` and `CliSessionPanel` own chrome, metadata, and actions. `usePtySessionSurface` owns terminal runtime behavior. Do not leak PTY lifecycle logic upward into the shell components.
+
+- **Respect the terminal keyboard boundary.**
+  If a change touches keyboard handling, verify `app-shell.shortcuts.ts` still lets terminal-native Ctrl shortcuts reach the shell while keeping app-level modifiers working as intended.
+
+- **Treat terminal IPC as a cross-process contract.**
+  If terminal session lifecycle or payload shapes change, verify the full renderer → preload → IPC → main runtime path explicitly. TypeScript passing in one layer is not sufficient.
+
+- **Avoid broad terminal subscriptions.**
+  Do not widen Zustand subscriptions around terminal surfaces unnecessarily. Terminal UI is a hot surface; broad parent subscriptions can cause avoidable rerenders and destabilize focus/viewport behavior.
+
+### Required verification
+
+- Run `bun run typecheck`.
+- Run the relevant terminal unit tests:
+  - `bun test tests/pty-session-surface.utils.test.ts`
+  - `bun test tests/terminal-dock.utils.test.ts`
+  - `bun test tests/terminal-session-slot-registry.test.ts` when slot reuse or backend session wiring changes
+- If the change affects workspace/task switching, terminal focus restore, dock visibility, or CLI session tabs, add or update Playwright coverage under `tests/e2e/`.
+- If the change affects actual terminal input behavior or Electron-only PTY wiring, do a manual desktop smoke check before considering the change complete:
+  1. Open the docked terminal and type in it.
+  2. Open a CLI session and type in it.
+  3. Switch to another task or workspace and back.
+  4. Confirm input still works, no duplicate session appeared, and spacing/focus chrome remain correct.
+
+- **Do not treat a terminal change as complete** until you have checked the required files above. Unit tests or typecheck alone are not sufficient for focus, restore, and layout regressions.
+
 ## Quick Reference
 
 - Runtime: **Bun**
