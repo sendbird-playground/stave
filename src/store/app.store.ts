@@ -8966,6 +8966,12 @@ export const useAppStore = create<AppState>()(
                       const queuedContent =
                         queuedPromptDraft.queuedNextTurn.content ??
                         queuedPromptDraft.text;
+                      // Clear queuedNextTurn immediately so the inline badge
+                      // disappears even if sendUserMessage is blocked.
+                      get().updatePromptDraft({
+                        taskId: resolvedTaskId,
+                        patch: { queuedNextTurn: undefined },
+                      });
                       if (queuedContent.trim()) {
                         void get().sendUserMessage({
                           taskId: resolvedTaskId,
