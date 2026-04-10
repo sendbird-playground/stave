@@ -9,16 +9,16 @@ This is the primary app architecture:
 - `src/` renders the React UI
 - `electron/preload.ts` exposes the safe `window.api` bridge
 - `electron/main.ts` handles window lifecycle, IPC registration, and the host-service bridge
-- `electron/host-service.ts` owns isolated terminal, workspace script, provider, and source-control execution
+- `electron/host-service.ts` owns isolated terminal, workspace script, provider, source-control, and local MCP task/session execution
 - `electron/providers/*` owns Claude, Codex, and Stave routing SDK execution plus event mapping used by the host-service runtime
 - `electron/main/lsp/*` owns optional stdio language-server sessions for Monaco
 - `electron/persistence/*` owns SQLite persistence
 
-The renderer does not call provider SDKs or git/PTY subprocesses directly. It sends provider, terminal, and source-control requests across the preload bridge, Electron main validates and routes them, and the dedicated `host-service` child process executes the heavy runtime work outside the main-process event loop.
+The renderer does not call provider SDKs or git/PTY subprocesses directly. It sends provider, terminal, source-control, and local MCP task/session requests across the preload bridge, Electron main validates and routes them, and the dedicated `host-service` child process executes the heavy runtime work outside the main-process event loop.
 
-The same host-service runtime is also used for local workspace scripts such as running an optional repo-scoped post-create bootstrap command and creating an optional workspace-local symlink to the repository root `node_modules` when a new git worktree workspace is created.
+The same host-service runtime is also used for local workspace scripts such as running an optional repo-scoped post-create bootstrap command, creating an optional workspace-local symlink to the repository root `node_modules` when a new git worktree workspace is created, and owning the local MCP workspace-session cache plus task-turn persistence used by the embedded automation server.
 
-The desktop runtime can also host a local-only automation surface in the main process so same-machine tools can create projects, workspaces, tasks, and turns without going through the renderer.
+The desktop runtime still hosts the local-only MCP HTTP server in Electron main so same-machine tools can connect without the renderer, but the heavy project/workspace/task/session mutations now execute inside the dedicated `host-service` child runtime.
 
 ## Browser dev runtime
 

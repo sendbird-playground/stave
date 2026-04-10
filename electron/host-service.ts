@@ -37,12 +37,14 @@ import {
   unstageSourceControlFile,
   updateScmPrBranch,
 } from "./host-service/scm-runtime";
+import * as localMcpRuntime from "./host-service/local-mcp-runtime";
 import { createTerminalRuntime } from "./host-service/terminal-runtime";
 import type {
   AnyHostServiceRequestEnvelope,
   AnyHostServiceResponseEnvelope,
   HostServiceEventMap,
   HostServiceEventName,
+  HostLocalMcpAction,
   HostServiceMethod,
   HostServiceResponseMap,
   HostServiceSuccessResponseEnvelope,
@@ -100,6 +102,67 @@ const terminalRuntime = createTerminalRuntime({ emitEvent });
 setWorkspaceScriptEventListener((envelope) => {
   emitEvent("workspace-scripts.event", envelope);
 });
+localMcpRuntime.setLocalMcpEventListener((event) => {
+  if (event.type === "workspace-information-updated") {
+    emitEvent("local-mcp.workspace-information-updated", event.payload);
+  }
+});
+
+async function invokeLocalMcpAction(action: HostLocalMcpAction, args: unknown) {
+  switch (action) {
+    case "list-known-projects":
+      return localMcpRuntime.listKnownProjects();
+    case "register-project":
+      return localMcpRuntime.registerProject(args as Parameters<typeof localMcpRuntime.registerProject>[0]);
+    case "create-workspace":
+      return localMcpRuntime.createWorkspace(args as Parameters<typeof localMcpRuntime.createWorkspace>[0]);
+    case "run-task":
+      return localMcpRuntime.runTask(args as Parameters<typeof localMcpRuntime.runTask>[0]);
+    case "get-task-status":
+      return localMcpRuntime.getTaskStatus(args as Parameters<typeof localMcpRuntime.getTaskStatus>[0]);
+    case "list-turn-events":
+      return localMcpRuntime.listTurnEvents(args as Parameters<typeof localMcpRuntime.listTurnEvents>[0]);
+    case "respond-approval":
+      return localMcpRuntime.respondApproval(args as Parameters<typeof localMcpRuntime.respondApproval>[0]);
+    case "respond-user-input":
+      return localMcpRuntime.respondUserInput(args as Parameters<typeof localMcpRuntime.respondUserInput>[0]);
+    case "get-workspace-information":
+      return localMcpRuntime.getWorkspaceInformation(args as Parameters<typeof localMcpRuntime.getWorkspaceInformation>[0]);
+    case "replace-workspace-notes":
+      return localMcpRuntime.replaceWorkspaceNotes(args as Parameters<typeof localMcpRuntime.replaceWorkspaceNotes>[0]);
+    case "append-workspace-notes":
+      return localMcpRuntime.appendWorkspaceNotes(args as Parameters<typeof localMcpRuntime.appendWorkspaceNotes>[0]);
+    case "clear-workspace-notes":
+      return localMcpRuntime.clearWorkspaceNotes(args as Parameters<typeof localMcpRuntime.clearWorkspaceNotes>[0]);
+    case "add-workspace-todo":
+      return localMcpRuntime.addWorkspaceTodo(args as Parameters<typeof localMcpRuntime.addWorkspaceTodo>[0]);
+    case "update-workspace-todo":
+      return localMcpRuntime.updateWorkspaceTodo(args as Parameters<typeof localMcpRuntime.updateWorkspaceTodo>[0]);
+    case "remove-workspace-todo":
+      return localMcpRuntime.removeWorkspaceTodo(args as Parameters<typeof localMcpRuntime.removeWorkspaceTodo>[0]);
+    case "add-workspace-resource":
+      return localMcpRuntime.addWorkspaceResource(args as Parameters<typeof localMcpRuntime.addWorkspaceResource>[0]);
+    case "remove-workspace-resource":
+      return localMcpRuntime.removeWorkspaceResource(args as Parameters<typeof localMcpRuntime.removeWorkspaceResource>[0]);
+    case "add-workspace-custom-field":
+      return localMcpRuntime.addWorkspaceCustomField(args as Parameters<typeof localMcpRuntime.addWorkspaceCustomField>[0]);
+    case "set-workspace-custom-field":
+      return localMcpRuntime.setWorkspaceCustomField(args as Parameters<typeof localMcpRuntime.setWorkspaceCustomField>[0]);
+    case "remove-workspace-custom-field":
+      return localMcpRuntime.removeWorkspaceCustomField(args as Parameters<typeof localMcpRuntime.removeWorkspaceCustomField>[0]);
+    case "add-workspace-jira-issue":
+      return localMcpRuntime.addWorkspaceJiraIssue(args as Parameters<typeof localMcpRuntime.addWorkspaceJiraIssue>[0]);
+    case "add-workspace-confluence-page":
+      return localMcpRuntime.addWorkspaceConfluencePage(args as Parameters<typeof localMcpRuntime.addWorkspaceConfluencePage>[0]);
+    case "add-workspace-figma-resource":
+      return localMcpRuntime.addWorkspaceFigmaResource(args as Parameters<typeof localMcpRuntime.addWorkspaceFigmaResource>[0]);
+    case "add-workspace-slack-thread":
+      return localMcpRuntime.addWorkspaceSlackThread(args as Parameters<typeof localMcpRuntime.addWorkspaceSlackThread>[0]);
+    default:
+      action satisfies never;
+      throw new Error(`Unsupported local MCP action: ${action}`);
+  }
+}
 
 function startPushProviderTurn(args: StreamTurnArgs) {
   const turnId = args.turnId ?? randomUUID();
@@ -344,6 +407,7 @@ async function respondError(id: number, error: unknown) {
 
 async function shutdown() {
   setWorkspaceScriptEventListener(null);
+  localMcpRuntime.setLocalMcpEventListener(null);
   await Promise.allSettled([
     terminalRuntime.cleanupAll(),
     cleanupAllScriptProcesses(),
@@ -623,6 +687,12 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       return;
     case "scm.create-pr":
       await respond(request.id, await createScmPullRequest(request.params));
+      return;
+    case "local-mcp.invoke":
+      await respond(
+        request.id,
+        await invokeLocalMcpAction(request.params.action, request.params.args),
+      );
       return;
     default:
       request satisfies never;

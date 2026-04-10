@@ -36,6 +36,7 @@ import type {
   CommandResult,
   SourceControlStatusItem,
 } from "../main/types";
+import type { WorkspaceInformationState } from "../../src/lib/workspace-information";
 
 export interface HostWorkspaceScriptRunEntryArgs {
   workspaceId: string;
@@ -225,6 +226,32 @@ export interface HostScmPrStatusResult {
   stderr?: string;
 }
 
+export type HostLocalMcpAction =
+  | "list-known-projects"
+  | "register-project"
+  | "create-workspace"
+  | "run-task"
+  | "get-task-status"
+  | "list-turn-events"
+  | "respond-approval"
+  | "respond-user-input"
+  | "get-workspace-information"
+  | "replace-workspace-notes"
+  | "append-workspace-notes"
+  | "clear-workspace-notes"
+  | "add-workspace-todo"
+  | "update-workspace-todo"
+  | "remove-workspace-todo"
+  | "add-workspace-resource"
+  | "remove-workspace-resource"
+  | "add-workspace-custom-field"
+  | "set-workspace-custom-field"
+  | "remove-workspace-custom-field"
+  | "add-workspace-jira-issue"
+  | "add-workspace-confluence-page"
+  | "add-workspace-figma-resource"
+  | "add-workspace-slack-thread";
+
 export interface HostServiceRequestMap {
   "service.shutdown": undefined;
   "terminal.create-session": TerminalCreateSessionArgs;
@@ -399,6 +426,10 @@ export interface HostServiceRequestMap {
     draft?: boolean;
     cwd?: string;
   };
+  "local-mcp.invoke": {
+    action: HostLocalMcpAction;
+    args: unknown;
+  };
 }
 
 export interface HostServiceResponseMap {
@@ -480,6 +511,7 @@ export interface HostServiceResponseMap {
   };
   "scm.update-pr-branch": CommandResult;
   "scm.create-pr": HostScmCreatePrResult;
+  "local-mcp.invoke": unknown;
 }
 
 export interface HostServiceEventMap {
@@ -494,6 +526,10 @@ export interface HostServiceEventMap {
   };
   "workspace-scripts.event": WorkspaceScriptEventEnvelope;
   "provider.stream-event": HostProviderStreamEventPayload;
+  "local-mcp.workspace-information-updated": {
+    workspaceId: string;
+    workspaceInformation: WorkspaceInformationState;
+  };
 }
 
 export type HostServiceMethod = keyof HostServiceRequestMap;
