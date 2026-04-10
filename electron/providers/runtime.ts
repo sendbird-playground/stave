@@ -577,38 +577,40 @@ export const providerRuntime: ProviderRuntime = {
       taskId: args.taskId,
       streamId,
     });
-    void runProviderTurn({
-      ...args,
-      turnId,
-      onEvent: (event) => {
-        if (shouldBufferForPolling) {
-          session.events.push(event);
-        }
-        session.updatedAt = Date.now();
-        options?.onEvent?.(event);
-      },
-    })
-      .catch((error) => {
-        const errorEvent: BridgeEvent = {
-          type: "error",
-          message: `Provider stream failed: ${String(error)}`,
-          recoverable: true,
-        };
-        session.events.push(errorEvent);
-        options?.onEvent?.(errorEvent);
-        const doneEvent: BridgeEvent = { type: "done" };
-        session.events.push(doneEvent);
-        options?.onEvent?.(doneEvent);
+    queueMicrotask(() => {
+      void runProviderTurn({
+        ...args,
+        turnId,
+        onEvent: (event) => {
+          if (shouldBufferForPolling) {
+            session.events.push(event);
+          }
+          session.updatedAt = Date.now();
+          options?.onEvent?.(event);
+        },
       })
-      .finally(() => {
-        session.done = true;
-        session.updatedAt = Date.now();
-        clearActiveTurnState({ turnId });
-        if (!shouldBufferForPolling) {
-          activeStreams.delete(streamId);
-        }
-        options?.onDone?.();
-      });
+        .catch((error) => {
+          const errorEvent: BridgeEvent = {
+            type: "error",
+            message: `Provider stream failed: ${String(error)}`,
+            recoverable: true,
+          };
+          session.events.push(errorEvent);
+          options?.onEvent?.(errorEvent);
+          const doneEvent: BridgeEvent = { type: "done" };
+          session.events.push(doneEvent);
+          options?.onEvent?.(doneEvent);
+        })
+        .finally(() => {
+          session.done = true;
+          session.updatedAt = Date.now();
+          clearActiveTurnState({ turnId });
+          if (!shouldBufferForPolling) {
+            activeStreams.delete(streamId);
+          }
+          options?.onDone?.();
+        });
+    });
     return { ok: true, streamId };
   },
   readTurnStream: ({ streamId, cursor }) => {

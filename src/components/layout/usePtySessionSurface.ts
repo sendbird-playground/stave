@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { init as initGhosttyWasm, Terminal, FitAddon } from "ghostty-web";
 import {
+  createLatestAsyncDispatcher,
   focusTerminalSurface,
   shouldCreatePtySession,
 } from "@/components/layout/pty-session-surface.utils";
@@ -129,6 +130,18 @@ type CreateSessionResult = {
   stderr?: string;
 };
 
+type TerminalResizeRequest = {
+  sessionId: string;
+  cols: number;
+  rows: number;
+};
+
+type TerminalResizeState = {
+  sessionId: string | null;
+  cols: number;
+  rows: number;
+};
+
 export function usePtySessionSurface<TTab extends { id: string }>(args: {
   activeTab: TTab | null;
   activeTabId: string | null;
@@ -169,7 +182,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   const pendingResizeRef = useRef(false);
   /** Suppress ResizeObserver callbacks while an IME composition is active. */
   const isComposingRef = useRef(false);
-  const lastResizeRef = useRef<{ cols: number; rows: number }>({
+  const lastResizeRef = useRef<TerminalResizeState>({
+    sessionId: null,
     cols: 0,
     rows: 0,
   });
@@ -187,6 +201,32 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     exitCode: number;
     signal?: number;
   } | null>(null);
+  const resizeSessionDispatcherRef = useRef(
+    createLatestAsyncDispatcher<TerminalResizeRequest>({
+      run: async ({ sessionId, cols, rows }) => {
+        const resizeSession = window.api?.terminal?.resizeSession;
+        if (!resizeSession) {
+          return;
+        }
+        await resizeSession({ sessionId, cols, rows });
+      },
+      onError: (error, request) => {
+        const lastResize = lastResizeRef.current;
+        if (
+          lastResize.sessionId === request.sessionId
+          && lastResize.cols === request.cols
+          && lastResize.rows === request.rows
+        ) {
+          lastResizeRef.current = {
+            sessionId: null,
+            cols: 0,
+            rows: 0,
+          };
+        }
+        console.warn("[terminal] failed to resize backend session", error, request);
+      },
+    }),
+  );
 
   const supportsPushTerminalOutput =
     typeof window !== "undefined" &&
@@ -228,6 +268,7 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     activeSessionIdRef.current = null;
     activeTabKeyRef.current = null;
     resizeInFlightRef.current = false;
+    resizeSessionDispatcherRef.current.clear();
     pendingResizeRef.current = false;
     setRuntimeVersion((value) => value + 1);
   }
@@ -358,9 +399,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       resizeInFlightRef.current = false;
       return;
     }
-    // PTY-first resize: calculate proposed dimensions, resize PTY first,
-    // then apply to the frontend terminal. This prevents shell output from
-    // being formatted for stale dimensions during the resize window.
+    // Coalesce backend PTY resize RPCs so drag-resize cannot flood
+    // Electron main / host-service with one invoke per frame.
     const proposed = fitAddon.proposeDimensions();
     if (!proposed) {
       resizeInFlightRef.current = false;
@@ -368,18 +408,19 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     }
     const cols = Math.max(1, proposed.cols);
     const rows = Math.max(1, proposed.rows);
+    const sessionId = activeSessionIdRef.current;
     if (
+      lastResizeRef.current.sessionId === sessionId
+      &&
       lastResizeRef.current.cols === cols &&
       lastResizeRef.current.rows === rows
     ) {
       resizeInFlightRef.current = false;
       return;
     }
-    lastResizeRef.current = { cols, rows };
-    const resizeSession = window.api?.terminal?.resizeSession;
-    const sessionId = activeSessionIdRef.current;
-    if (sessionId && resizeSession) {
-      void resizeSession({ sessionId, cols, rows });
+    lastResizeRef.current = { sessionId, cols, rows };
+    if (sessionId) {
+      resizeSessionDispatcherRef.current.schedule({ sessionId, cols, rows });
     }
     terminal.resize(cols, rows);
 
@@ -477,6 +518,10 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   }, [activeSessionId, activeTabKey]);
 
   useEffect(() => {
+    resizeSessionDispatcherRef.current.clear();
+  }, [args.activeTabId]);
+
+  useEffect(() => {
     if (transcriptLoadedRef.current) {
       return;
     }
@@ -546,7 +591,7 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
 
       xtermRef.current = terminal;
       fitAddonRef.current = fitAddon;
-      lastResizeRef.current = { cols: 0, rows: 0 };
+      lastResizeRef.current = { sessionId: null, cols: 0, rows: 0 };
       terminalThemeKeyRef.current = null;
 
       const ro = new ResizeObserver(() => {
@@ -814,7 +859,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
     activeTabKeyRef.current = null;
     resizeInFlightRef.current = false;
     pendingResizeRef.current = false;
-    lastResizeRef.current = { cols: 0, rows: 0 };
+    resizeSessionDispatcherRef.current.clear();
+    lastResizeRef.current = { sessionId: null, cols: 0, rows: 0 };
 
     xtermRef.current?.clear();
     // Bump runtimeVersion so dependent effects re-evaluate with the
@@ -824,6 +870,7 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
 
   useEffect(() => {
     return () => {
+      resizeSessionDispatcherRef.current.clear();
       void disposeSessionIds(Object.values(sessionIdByTabKeyRef.current));
       resetRuntimeState();
     };

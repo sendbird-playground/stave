@@ -69,6 +69,7 @@ import {
 import type { ChatMessage, Task } from "../../src/types/chat";
 import { findWorkspaceTaskOrThrow } from "../../src/lib/tasks";
 import { ensureHostServicePersistenceReady } from "./persistence";
+import { createKeyedAsyncQueue } from "./keyed-async-queue";
 import { providerRuntime } from "../providers/runtime";
 import type { BridgeEvent } from "../providers/types";
 import { runCommand } from "../main/utils/command";
@@ -144,6 +145,7 @@ export interface WorkspaceInformationMutationResult {
 
 const workspaceSessionCacheById = new Map<string, WorkspaceSessionState>();
 const workspacePersistChainById = new Map<string, Promise<void>>();
+const workspaceProviderEventQueue = createKeyedAsyncQueue<string>();
 let localMcpEventListener:
   | ((event: {
       type: "workspace-information-updated";
@@ -1619,14 +1621,24 @@ export async function runTask(args: {
         });
       }
 
-      void handleProviderEvent({
-        workspaceId: args.workspaceId,
-        workspaceName,
-        taskId: task.id,
-        provider,
-        model,
-        turnId,
-        event,
+      void workspaceProviderEventQueue.enqueue(
+        args.workspaceId,
+        () => handleProviderEvent({
+          workspaceId: args.workspaceId,
+          workspaceName,
+          taskId: task.id,
+          provider,
+          model,
+          turnId,
+          event,
+        }),
+      ).catch((error) => {
+        console.error("[stave-mcp] failed to apply provider event", error, {
+          workspaceId: args.workspaceId,
+          taskId: task.id,
+          turnId,
+          eventType: event.type,
+        });
       });
     },
   });
