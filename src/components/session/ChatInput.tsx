@@ -71,7 +71,6 @@ import {
   getLatestUserPromptMessage,
   getPromptHistoryEntries,
   isStaleActiveTurnDraft,
-  mergePromptSuggestionWithDraft,
   shouldHandleApprovalEnterShortcut,
   shouldHandleApprovalTabShortcut,
 } from "./chat-input.utils";
@@ -613,18 +612,18 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               text: value,
             });
           }}
-          onSuggestionSelect={(suggestion) => {
-            const nextText = mergePromptSuggestionWithDraft({
-              currentDraft: draftTextRef.current,
-              suggestion,
+          onSuggestionSelect={async (suggestion) => {
+            cancelPendingDraftSave();
+            const result = await sendUserMessage({
+              taskId: args.activeTaskId,
+              content: suggestion,
             });
-            draftTextRef.current = nextText;
-            setDraftText(nextText);
-            commitPromptDraftText({
-              taskId: args.providerSelectionTarget,
-              text: nextText,
-            });
-            setFocusNonce((current) => current + 1);
+            if (result.status === "started" || result.status === "queued") {
+              adoptPromptDraftText({
+                taskId: args.providerSelectionTarget,
+                text: "",
+              });
+            }
           }}
           onModelSelect={(selectionArgs) => {
             commitCurrentDraftText();
