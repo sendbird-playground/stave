@@ -15,6 +15,7 @@ import {
   type TerminalCreateSessionArgs,
 } from "@/lib/terminal/types";
 import { cn } from "@/lib/utils";
+import { shouldAutoCreateDockTerminalTab } from "@/components/layout/terminal-dock.utils";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
 import { usePtySessionSurface } from "@/components/layout/usePtySessionSurface";
@@ -102,6 +103,7 @@ export function TerminalDock() {
   const [terminalRenameValue, setTerminalRenameValue] = useState("");
   const [draggingTerminalTabId, setDraggingTerminalTabId] = useState<string | null>(null);
   const [dropTargetTerminalTabId, setDropTargetTerminalTabId] = useState<string | null>(null);
+  const wasTerminalDockedRef = useRef<boolean | null>(null);
   const terminalRenameInputRef = useRef<HTMLInputElement | null>(null);
   const [
     terminalDocked,
@@ -212,9 +214,18 @@ export function TerminalDock() {
   });
 
   useEffect(() => {
-    if (!terminalDocked || terminalTabs.length > 0 || !workspacePath) {
+    const wasTerminalDocked = wasTerminalDockedRef.current;
+    wasTerminalDockedRef.current = terminalDocked;
+
+    if (!shouldAutoCreateDockTerminalTab({
+      isTerminalDocked: terminalDocked,
+      wasTerminalDocked,
+      terminalTabCount: terminalTabs.length,
+      workspacePath,
+    })) {
       return;
     }
+
     createTerminalTab({ cwd: workspacePath });
   }, [createTerminalTab, terminalDocked, terminalTabs.length, workspacePath]);
 
