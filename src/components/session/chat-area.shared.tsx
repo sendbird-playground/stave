@@ -1,5 +1,14 @@
 import { FolderOpen, Layers } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { SessionLoadingState } from "@/components/session/SessionLoadingState";
 import {
@@ -38,19 +47,31 @@ export function useChatAreaShellState() {
     refreshActiveManagedTask,
     createProject,
     createTask,
-  ] = useAppStore(useShallow((state) => [
-    state.projectPath,
-    state.hasHydratedWorkspaces,
-    state.workspaces.length > 0,
-    state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId),
-    state.tasks.some((task) => task.id === state.activeTaskId && !isTaskArchived(task)),
-    state.messageCountByTask[state.activeTaskId] ?? (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length,
-    state.tasks.find((task) => task.id === state.activeTaskId && !isTaskArchived(task)) ?? null,
-    state.activeTurnIdsByTask[state.activeTaskId],
-    state.refreshActiveManagedTask,
-    state.createProject,
-    state.createTask,
-  ] as const));
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.projectPath,
+          state.hasHydratedWorkspaces,
+          state.workspaces.length > 0,
+          state.workspaces.some(
+            (workspace) => workspace.id === state.activeWorkspaceId,
+          ),
+          state.tasks.some(
+            (task) => task.id === state.activeTaskId && !isTaskArchived(task),
+          ),
+          state.messageCountByTask[state.activeTaskId] ??
+            (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length,
+          state.tasks.find(
+            (task) => task.id === state.activeTaskId && !isTaskArchived(task),
+          ) ?? null,
+          state.activeTurnIdsByTask[state.activeTaskId],
+          state.refreshActiveManagedTask,
+          state.createProject,
+          state.createTask,
+        ] as const,
+    ),
+  );
   const viewMode = resolveChatAreaViewMode({
     projectPath,
     hasHydratedWorkspaces,
@@ -60,7 +81,8 @@ export function useChatAreaShellState() {
     activeTaskMessageCount,
   });
   const isEmpty = activeTaskMessageCount === 0;
-  const shouldPollManagedTask = isTaskManaged(activeTask) && Boolean(activeTurnId);
+  const shouldPollManagedTask =
+    isTaskManaged(activeTask) && Boolean(activeTurnId);
 
   useEffect(() => {
     if (!shouldPollManagedTask) {
@@ -86,7 +108,9 @@ export function useChatAreaShellState() {
 
     const syncHeight = () => {
       const nextHeight = node.offsetHeight;
-      setChatInputDockHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
+      setChatInputDockHeight((currentHeight) =>
+        currentHeight === nextHeight ? currentHeight : nextHeight,
+      );
     };
 
     syncHeight();
@@ -101,18 +125,25 @@ export function useChatAreaShellState() {
     return () => observer.disconnect();
   }, [isEmpty]);
 
-  const handleSessionAreaMouseDownCapture = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
+  const handleSessionAreaMouseDownCapture = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
 
-    if (target.closest("button, a, input, textarea, select, [role='button'], [role='link'], [role='textbox'], [contenteditable='true']")) {
-      return;
-    }
+      if (
+        target.closest(
+          "button, a, input, textarea, select, [role='button'], [role='link'], [role='textbox'], [contenteditable='true']",
+        )
+      ) {
+        return;
+      }
 
-    sessionAreaRef.current?.focus({ preventScroll: true });
-  }, []);
+      sessionAreaRef.current?.focus({ preventScroll: true });
+    },
+    [],
+  );
 
   return {
     chatInputDockHeight,
@@ -125,7 +156,8 @@ export function useChatAreaShellState() {
       "data-testid": "session-area",
       "data-task-abort-scope": "",
       onMouseDownCapture: handleSessionAreaMouseDownCapture,
-      className: "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background outline-none",
+      className:
+        "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background outline-none",
     } as const,
     viewMode,
   };
@@ -140,7 +172,13 @@ interface ChatAreaScaffoldProps {
 }
 
 export function ChatAreaScaffold(args: ChatAreaScaffoldProps) {
-  const { sessionAreaProps, viewMode, chatInputDockRef, createProject, createTask } = args.state;
+  const {
+    sessionAreaProps,
+    viewMode,
+    chatInputDockRef,
+    createProject,
+    createTask,
+  } = args.state;
   const inputDockMode = args.inputDockMode ?? "flow";
 
   if (viewMode === "no_project") {
@@ -152,7 +190,9 @@ export function ChatAreaScaffold(args: ChatAreaScaffoldProps) {
               <FolderOpen strokeWidth={1.25} />
             </EmptyMedia>
             <EmptyTitle>Open a Project</EmptyTitle>
-            <EmptyDescription>Select a local repository folder to get started.</EmptyDescription>
+            <EmptyDescription>
+              Select a local repository folder to get started.
+            </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button onClick={() => void createProject({})}>
@@ -186,7 +226,9 @@ export function ChatAreaScaffold(args: ChatAreaScaffoldProps) {
               <Layers strokeWidth={1.25} />
             </EmptyMedia>
             <EmptyTitle>Pick a Workspace</EmptyTitle>
-            <EmptyDescription>Select a workspace from the left sidebar to continue.</EmptyDescription>
+            <EmptyDescription>
+              Select a workspace from the left sidebar to continue.
+            </EmptyDescription>
           </EmptyHeader>
         </Empty>
       </div>
@@ -202,6 +244,7 @@ export function ChatAreaScaffold(args: ChatAreaScaffoldProps) {
               layout="top-card"
               onCreateTask={() => createTask({ title: "" })}
               showCreateTaskAction
+              showCreateCliSessionAction
             />
           </div>
         </div>
@@ -237,15 +280,24 @@ export function ChatAreaScaffold(args: ChatAreaScaffoldProps) {
         {args.planViewer ?? null}
         <div
           ref={chatInputDockRef}
-          className={inputDockMode === "overlay" ? "pointer-events-none absolute inset-x-0 bottom-0 z-30" : "relative z-30 shrink-0"}
+          className={
+            inputDockMode === "overlay"
+              ? "pointer-events-none absolute inset-x-0 bottom-0 z-30"
+              : "relative z-30 shrink-0"
+          }
         >
           {inputDockMode === "overlay" ? (
             <div className="relative">
-              <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-24 h-24" style={ZEN_INPUT_DOCK_FADE_STYLE} />
-              <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-background/94 supports-backdrop-filter:backdrop-blur-xl" />
-              <div className="pointer-events-auto relative">
-                {args.input}
-              </div>
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 -top-24 h-24"
+                style={ZEN_INPUT_DOCK_FADE_STYLE}
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-background/94 supports-backdrop-filter:backdrop-blur-xl"
+              />
+              <div className="pointer-events-auto relative">{args.input}</div>
             </div>
           ) : (
             args.input
