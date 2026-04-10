@@ -60,6 +60,11 @@ For ordinary commit/push requests:
 
 ## UI Components
 
+Use `shadcn-ui` for any request that adds or updates shadcn/ui components, forms, dialogs, tables, or theme primitives.
+
+Both Codex and Claude should treat the literal token `shadcn-ui` as an explicit UI-component guardrail trigger.
+The global copy of this skill lives under `~/.agents/skills/shadcn-ui/SKILL.md`.
+
 When using an existing shadcn component, prefer generating it with `bunx --bun shadcn@latest add <component>` instead of hand-writing or directly vendoring the wrapper first.
 
 After generating shadcn components or copying UI code from external sources, verify that import paths match this project's configured aliases before finishing. In this repo, `tsconfig.json` resolves `@/*` to `src/*`, so generated `src/...` imports should be rewritten to `@/...`. More generally, do not assume copied code uses this repo's path layout; reconcile imports with the current `tsconfig` and `components.json` settings.
@@ -80,9 +85,30 @@ The repository-local copy of this skill lives at `skills/stave-design-system/SKI
 - If a UI change alters shared design-system behavior or preset-facing copy, update the related docs in the same change.
 - **All UI work must verify the theme system.** See the "Theme System" section below — it applies to every layout, component, colour, and surface change, not just theme-specific files.
 
+## Runtime Guardrail Skills
+
+Use the installed global guardrail skills aggressively when a task enters one of these risk zones.
+
+Both Codex and Claude should treat the literal tokens below as explicit triggers.
+
+- `the-theme-token-sync`
+  Use for CSS custom properties, `globals.css`, theme presets, built-in themes, semantic tokens, or shadcn preset changes.
+- `the-terminal-surface-guard`
+  Use for docked terminal tabs, CLI session panels, PTY lifecycle, terminal focus, resize, transcript restore, host-service terminal runtime, or terminal keyboard boundaries.
+- `the-ipc-schema-sync`
+  Use for provider runtime options, IPC payloads, `window.api`, preload contracts, `MessagePart`, provider events, and `NormalizedProviderEvent` changes.
+- `the-zustand-guardrail`
+  Use for `useAppStore`, `useStore`, `useShallow`, selector logic, list subscriptions, row subscriptions, and task or workspace switching surfaces.
+- `the-react-effect-guardrail`
+  Use for `useEffect`, `useMemo`, `useCallback`, `useRef`, long-lived observers, timers, IPC listeners, focus restore, resize logic, and stale-closure-prone hooks.
+
+These guardrail skills are global because the patterns apply to Stave and to similar Electron desktop apps such as Superset, mux, cmux, and t3code-style products.
+
 ## Theme System (mandatory for ALL UI work)
 
 **Every change that touches Stave's UI — layout, components, colours, shadcn presets, new surfaces, dialogs, sidebar, editor, terminal, or any visual element — must verify and, if needed, update the theme system.**
+
+Use `the-theme-token-sync` for this work. Do not treat theme-token edits as ordinary CSS changes.
 
 This is not limited to "theme files only". If you add a new component that introduces a colour token, restructure a layout that relies on existing tokens, swap a shadcn preset, or change how any surface looks in light/dark mode, the theme system is part of that change.
 
@@ -153,6 +179,8 @@ These rules apply when **any** of the following is true:
 ## Terminal Surfaces (mandatory for docked terminal and CLI session work)
 
 **Every change that touches Stave's integrated terminal — docked terminal tabs, full-panel CLI sessions, PTY session lifecycle, terminal input/focus, transcript restore, terminal sizing, or terminal chrome/layout — must verify the terminal regression rules below.**
+
+Use `the-terminal-surface-guard` for this work. Terminal regressions are runtime bugs, not shell-level polish issues.
 
 Terminal regressions tend to look small in code review and expensive in use: lost input after workspace switches, hidden sessions spawning unexpectedly, scroll/viewport jumps, or dock/CLI surface layout drift. Treat these as contract-level bugs, not polish.
 
@@ -270,6 +298,8 @@ React renderer         →  src/
 
 ### Provider Schema Guardrails
 
+Use `the-ipc-schema-sync` for this work. If the task changes a payload, event, runtime option, or request field across a process boundary, assume the skill applies unless you can prove the change is renderer-only.
+
 - Treat `runtimeOptions` and all provider IPC payloads as **multi-file contracts**, not local types.
 - `electron/main/ipc/schemas.ts` is a **required check file** for any work touching provider turns, chat message parts, Stave Auto, provider events, replay payloads, preload/window API contracts, or settings that flow into a turn request.
 - Do not treat a change as complete until you have explicitly checked whether `electron/main/ipc/schemas.ts` needs a matching update. TypeScript passing elsewhere is not sufficient.
@@ -311,6 +341,8 @@ All IPC events emitted from `electron/providers/` travel through `adapter.factor
 
 **Treat unstable Zustand selector outputs as a runtime correctness bug, not a micro-optimization.** In this repo, React 19 + Zustand 5 can enter `Maximum update depth exceeded` loops when a selector returns a fresh snapshot every render.
 
+Use `the-zustand-guardrail` for selector and subscription work. If the change also touches long-lived callbacks, observers, or effect dependencies, use `the-react-effect-guardrail` alongside it.
+
 This applies to `useAppStore(...)`, `useStore(...)`, and any equivalent hook built on `useSyncExternalStore`.
 
 ### Rules
@@ -336,6 +368,25 @@ This applies to `useAppStore(...)`, `useStore(...)`, and any equivalent hook bui
 - After changing selector logic on those surfaces, run `bun run typecheck` and the most relevant `bun test` targets.
 - If the change affects task switching, workspace switching, plan mode, replay drawers, or streaming UI, do a manual smoke check for those flows as well.
 - See `docs/developer/zustand-selector-stability.md` for examples and review checklist.
+
+## React Effect and Observer Guardrails
+
+Use `the-react-effect-guardrail` whenever a task edits:
+
+- `useEffect`, `useMemo`, `useCallback`, or `useRef`
+- `ResizeObserver`, `MutationObserver`, `IntersectionObserver`
+- timers, polling loops, or IPC listeners
+- focus restore, resize coalescing, transcript replay, or bootstrap effects
+
+Treat these as common failure zones in Stave:
+
+- stale closures in long-lived callbacks
+- object identity churn in dependency arrays
+- missing cleanup for listeners, observers, and timers
+- bootstrap effects invalidated by visibility or other transient state
+- StrictMode-only duplicate setup bugs that later escape into production regressions
+
+Do not treat hook changes as complete until you have checked cleanup, dependency stability, and the real interaction flow that the effect is coordinating.
 
 ## Code Conventions
 

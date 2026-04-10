@@ -1,11 +1,20 @@
 import type { BridgeEvent, StreamTurnArgs } from "./types";
-import type { Thread, ThreadEvent, ThreadItem, TurnCompletedEvent, TurnOptions } from "@openai/codex-sdk";
+import type {
+  Thread,
+  ThreadEvent,
+  ThreadItem,
+  TurnCompletedEvent,
+  TurnOptions,
+} from "@openai/codex-sdk";
 import type {
   ConnectedToolId,
   ConnectedToolStatusEntry,
   ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
-import { resolveExecutablePath, resolveLoginShellEnvVarValue } from "./executable-path";
+import {
+  resolveExecutablePath,
+  resolveLoginShellEnvVarValue,
+} from "./executable-path";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -31,9 +40,7 @@ import {
   getConnectedToolLabel,
   normalizeConnectedToolIds,
 } from "../../src/lib/providers/connected-tool-status";
-import {
-  readPrimaryStaveLocalMcpManifestSync,
-} from "../main/stave-local-mcp-manifest";
+import { readPrimaryStaveLocalMcpManifestSync } from "../main/stave-local-mcp-manifest";
 import {
   CODEX_STAVE_MCP_TOKEN_ENV_VAR,
   getCodexMcpRegistrationStatus,
@@ -45,6 +52,10 @@ import {
 
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
+const threadLastUsedAt = new Map<string, number>();
+
+/** Maximum number of cached threads before LRU eviction kicks in. */
+const MAX_CACHED_THREADS = 24;
 
 const SUPPORTED_CODEX_SDK_VERSION = "0.118.0";
 const SUPPORTED_CODEX_CLI_VERSION = "0.118.0";
@@ -90,13 +101,17 @@ export function resolveApprovalPolicy(args: {
   fallback?: "never" | "on-request" | "untrusted";
 }): "never" | "on-request" | "untrusted" | undefined {
   const candidate = args.runtimeValue ?? args.envValue;
-  if (candidate !== "never" && candidate !== "on-request" && candidate !== "untrusted") {
+  if (
+    candidate !== "never" &&
+    candidate !== "on-request" &&
+    candidate !== "untrusted"
+  ) {
     return args.fallback == null
       ? undefined
       : resolveEffectiveCodexApprovalPolicy({
-        planMode: args.planMode,
-        fallback: args.fallback,
-      });
+          planMode: args.planMode,
+          fallback: args.fallback,
+        });
   }
   return resolveEffectiveCodexApprovalPolicy({
     approvalPolicy: candidate,
@@ -107,19 +122,28 @@ export function resolveApprovalPolicy(args: {
 
 function toCodexUserFacingErrorMessage(args: { message: string }) {
   const lower = args.message.toLowerCase();
-  if (lower.includes("auth") || lower.includes("api key") || lower.includes("login") || lower.includes("unauthorized")) {
+  if (
+    lower.includes("auth") ||
+    lower.includes("api key") ||
+    lower.includes("login") ||
+    lower.includes("unauthorized")
+  ) {
     return "Codex authentication failed. Run `codex login` and retry.";
   }
-  if (lower.includes("rate limit") || lower.includes("quota") || lower.includes("insufficient_quota")) {
+  if (
+    lower.includes("rate limit") ||
+    lower.includes("quota") ||
+    lower.includes("insufficient_quota")
+  ) {
     return "Codex rate limit/quota reached. Retry after reset or check account limits.";
   }
   if (lower.includes("billing") || lower.includes("payment")) {
     return "Codex billing/subscription issue detected. Check account payment status.";
   }
   if (
-    lower.includes("failed to refresh available models")
-    || lower.includes("stream disconnected")
-    || lower.includes("error sending request for url")
+    lower.includes("failed to refresh available models") ||
+    lower.includes("stream disconnected") ||
+    lower.includes("error sending request for url")
   ) {
     return "Codex network/model endpoint is unreachable. Check internet/proxy/firewall and retry.";
   }
@@ -148,7 +172,9 @@ export function buildCodexEnv(args: { executablePath?: string } = {}) {
     }
   }
   return Object.fromEntries(
-    Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    Object.entries(env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
   );
 }
 
@@ -161,19 +187,24 @@ async function hasConnectedStaveLocalMcpForCodex() {
     autoRegister: false,
     manifest,
   });
-  return status.installed
-    && status.matchesCurrentManifest
-    && status.url === manifest.url
-    && status.bearerTokenEnvVar === CODEX_STAVE_MCP_TOKEN_ENV_VAR;
+  return (
+    status.installed &&
+    status.matchesCurrentManifest &&
+    status.url === manifest.url &&
+    status.bearerTokenEnvVar === CODEX_STAVE_MCP_TOKEN_ENV_VAR
+  );
 }
 
-function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }) {
+function buildCodexDiagnostics(args: {
+  executablePath: string;
+  taskId?: string;
+}) {
   const env = buildCodexEnv({ executablePath: args.executablePath });
   const versionProbe = args.executablePath
     ? probeExecutableVersion({
-      executablePath: args.executablePath,
-      env,
-    })
+        executablePath: args.executablePath,
+        env,
+      })
     : null;
   return {
     taskId: args.taskId ?? "default",
@@ -182,12 +213,12 @@ function buildCodexDiagnostics(args: { executablePath: string; taskId?: string }
     supportedCliVersion: SUPPORTED_CODEX_CLI_VERSION,
     versionProbe: versionProbe
       ? {
-        status: versionProbe.status,
-        signal: versionProbe.signal,
-        error: versionProbe.error,
-        stdout: versionProbe.stdout,
-        stderr: versionProbe.stderr,
-      }
+          status: versionProbe.status,
+          signal: versionProbe.signal,
+          error: versionProbe.error,
+          stdout: versionProbe.stdout,
+          stderr: versionProbe.stderr,
+        }
       : null,
   };
 }
@@ -211,7 +242,9 @@ export function buildCodexConfigOverrides(args: {
     config.developer_instructions = developerInstructions;
   }
   if (hasExplicitRawReasoningToggle) {
-    config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawReasoning);
+    config.show_raw_agent_reasoning = Boolean(
+      args.runtimeOptions?.codexShowRawReasoning,
+    );
   }
   if (summaryMode && summaryMode !== "auto") {
     config.model_reasoning_summary = summaryMode;
@@ -229,7 +262,8 @@ export function buildCodexConfigOverrides(args: {
   if (planModeEnabled) {
     config.collaboration_mode_kind = "plan";
     if (args.runtimeOptions?.codexReasoningEffort) {
-      config.plan_mode_reasoning_effort = args.runtimeOptions.codexReasoningEffort;
+      config.plan_mode_reasoning_effort =
+        args.runtimeOptions.codexReasoningEffort;
     }
   }
 
@@ -249,7 +283,10 @@ function buildThreadKey(args: {
   return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}:${instructionProfile}`;
 }
 
-function resolveThreadId(args: { threadKey: string; fallbackThreadId?: string }) {
+function resolveThreadId(args: {
+  threadKey: string;
+  fallbackThreadId?: string;
+}) {
   return threadIdByTask.get(args.threadKey) ?? args.fallbackThreadId?.trim();
 }
 
@@ -271,16 +308,20 @@ export function resolveCodexResumeThreadFallback(args: {
   });
 }
 
-export function buildCodexThreadStartedEvents(args: { threadId?: string }): BridgeEvent[] {
+export function buildCodexThreadStartedEvents(args: {
+  threadId?: string;
+}): BridgeEvent[] {
   const threadId = args.threadId?.trim();
   if (!threadId) {
     return [];
   }
-  return [{
-    type: "provider_session",
-    providerId: "codex",
-    nativeSessionId: threadId,
-  }];
+  return [
+    {
+      type: "provider_session",
+      providerId: "codex",
+      nativeSessionId: threadId,
+    },
+  ];
 }
 
 function parseVersionFromStdout(args: { stdout: string }) {
@@ -288,11 +329,7 @@ function parseVersionFromStdout(args: { stdout: string }) {
   if (!parsed) {
     return null;
   }
-  return [
-    parsed.major,
-    parsed.minor,
-    parsed.patch,
-  ] as const;
+  return [parsed.major, parsed.minor, parsed.patch] as const;
 }
 
 function compareVersion(a: readonly number[], b: readonly number[]) {
@@ -337,27 +374,37 @@ export function resolveCodexAdditionalDirectories(args: {
     .filter((candidate, index, entries) => entries.indexOf(candidate) === index)
     .filter((candidate) => candidate !== resolvedCwd)
     .filter((candidate) => !resolvedCwd.startsWith(`${candidate}${path.sep}`))
-    .filter((candidate) => (args.pathExists ?? ((value: string) => isReadableDirectory({ path: value })))(candidate));
+    .filter((candidate) =>
+      (
+        args.pathExists ??
+        ((value: string) => isReadableDirectory({ path: value }))
+      )(candidate),
+    );
 }
 
-export function resolveCodexExecutablePath(args: { explicitPath?: string } = {}) {
+export function resolveCodexExecutablePath(
+  args: { explicitPath?: string } = {},
+) {
   if (args.explicitPath?.trim()) {
     return args.explicitPath.trim();
   }
 
-  const baseResolved = resolveExecutablePath({
-    absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
-    commandEnvVar: "STAVE_CODEX_CMD",
-    defaultCommand: "codex",
-    extraPaths: [...CODEX_LOOKUP_PATHS],
-  }) ?? "";
+  const baseResolved =
+    resolveExecutablePath({
+      absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
+      commandEnvVar: "STAVE_CODEX_CMD",
+      defaultCommand: "codex",
+      extraPaths: [...CODEX_LOOKUP_PATHS],
+    }) ?? "";
 
   const candidates = [
     process.env.STAVE_CODEX_CLI_PATH?.trim() || "",
     `${homedir()}/.bun/bin/codex`,
     `${homedir()}/.local/bin/codex`,
     baseResolved,
-  ].filter((value, index, arr) => value.length > 0 && arr.indexOf(value) === index);
+  ].filter(
+    (value, index, arr) => value.length > 0 && arr.indexOf(value) === index,
+  );
 
   let selectedPath = baseResolved;
   let selectedVersion: readonly number[] | null = null;
@@ -449,7 +496,9 @@ function mapCodexConnectedToolStatus(args: {
   }
 
   const serverName = args.toolId === "atlassian" ? "atlassian" : args.toolId;
-  const server = args.servers.find((candidate) => candidate.name.trim().toLowerCase() === serverName);
+  const server = args.servers.find(
+    (candidate) => candidate.name.trim().toLowerCase() === serverName,
+  );
   if (!server) {
     return createCodexConnectedToolStatusEntry({
       id: args.toolId,
@@ -464,7 +513,9 @@ function mapCodexConnectedToolStatus(args: {
       id: args.toolId,
       state: "disabled",
       available: false,
-      detail: server.disabled_reason?.trim() || `${getConnectedToolLabel(args.toolId)} is disabled in Codex MCP config.`,
+      detail:
+        server.disabled_reason?.trim() ||
+        `${getConnectedToolLabel(args.toolId)} is disabled in Codex MCP config.`,
     });
   }
 
@@ -497,17 +548,20 @@ export async function getCodexConnectedToolStatus(args: {
   });
 
   if (!executablePath) {
-    const detail = "Codex executable not found from runtime override, env vars, login-shell PATH, or home-bin candidates.";
+    const detail =
+      "Codex executable not found from runtime override, env vars, login-shell PATH, or home-bin candidates.";
     return {
       ok: false,
       providerId: "codex",
       detail,
-      tools: toolIds.map((toolId) => createCodexConnectedToolStatusEntry({
-        id: toolId,
-        state: "error",
-        available: false,
-        detail,
-      })),
+      tools: toolIds.map((toolId) =>
+        createCodexConnectedToolStatusEntry({
+          id: toolId,
+          state: "error",
+          available: false,
+          detail,
+        }),
+      ),
     };
   }
 
@@ -528,12 +582,14 @@ export async function getCodexConnectedToolStatus(args: {
       ok: false,
       providerId: "codex",
       detail,
-      tools: toolIds.map((toolId) => createCodexConnectedToolStatusEntry({
-        id: toolId,
-        state: "error",
-        available: false,
-        detail,
-      })),
+      tools: toolIds.map((toolId) =>
+        createCodexConnectedToolStatusEntry({
+          id: toolId,
+          state: "error",
+          available: false,
+          detail,
+        }),
+      ),
     };
   }
 
@@ -541,11 +597,13 @@ export async function getCodexConnectedToolStatus(args: {
     ok: true,
     providerId: "codex",
     detail,
-    tools: toolIds.map((toolId) => mapCodexConnectedToolStatus({
-      toolId,
-      servers,
-      env,
-    })),
+    tools: toolIds.map((toolId) =>
+      mapCodexConnectedToolStatus({
+        toolId,
+        servers,
+        env,
+      }),
+    ),
   };
 }
 
@@ -597,12 +655,13 @@ export function looksLikeCodexPlanText(text: string): boolean {
     return true;
   }
 
-  return nonEmptyLines.some((line) => (
-    /^#{1,6}\s/u.test(line)
-    || /^[-*+]\s/u.test(line)
-    || /^\d+\.\s/u.test(line)
-    || /^\[[ xX]\]\s/u.test(line)
-  ));
+  return nonEmptyLines.some(
+    (line) =>
+      /^#{1,6}\s/u.test(line) ||
+      /^[-*+]\s/u.test(line) ||
+      /^\d+\.\s/u.test(line) ||
+      /^\[[ xX]\]\s/u.test(line),
+  );
 }
 
 export function shouldBufferCompletedCodexPlanCandidate(args: {
@@ -611,10 +670,12 @@ export function shouldBufferCompletedCodexPlanCandidate(args: {
   itemType: string;
   text?: string | null;
 }) {
-  return args.planMode
-    && args.lifecycle === "item.completed"
-    && args.itemType === "agent_message"
-    && Boolean(args.text?.trim());
+  return (
+    args.planMode &&
+    args.lifecycle === "item.completed" &&
+    args.itemType === "agent_message" &&
+    Boolean(args.text?.trim())
+  );
 }
 
 function buildCodexTodoToolInput(args: {
@@ -694,7 +755,13 @@ export function mapCodexItemEvent(args: {
       if (lifecycle === "item.completed") {
         codexItemTextLength.delete(itemId);
         return planText
-          ? [{ type: "plan_ready", planText, ...(itemId ? { sourceSegmentId: itemId } : {}) }]
+          ? [
+              {
+                type: "plan_ready",
+                planText,
+                ...(itemId ? { sourceSegmentId: itemId } : {}),
+              },
+            ]
           : [];
       }
       // For started/updated, stream the plan text as regular text so the
@@ -723,13 +790,20 @@ export function mapCodexItemEvent(args: {
           // then emit plan_ready so the plan viewer picks it up.
           const delta = full.slice(prev);
           const events: BridgeEvent[] = [];
-          if (delta) events.push({ type: "text", text: delta, segmentId: itemId || undefined });
+          if (delta)
+            events.push({
+              type: "text",
+              text: delta,
+              segmentId: itemId || undefined,
+            });
           events.push({ type: "plan_ready", planText: proposedPlan });
           return events;
         }
 
         const delta = full.slice(prev);
-        return delta ? [{ type: "text", text: delta, segmentId: itemId || undefined }] : [];
+        return delta
+          ? [{ type: "text", text: delta, segmentId: itemId || undefined }]
+          : [];
       }
       // item.started / item.updated — emit delta for streaming.
       const full = item.text ?? "";
@@ -771,10 +845,10 @@ export function mapCodexItemEvent(args: {
         });
       }
       if (
-        lifecycle === "item.updated"
-        && itemId
-        && typeof item.aggregated_output === "string"
-        && item.aggregated_output.length > 0
+        lifecycle === "item.updated" &&
+        itemId &&
+        typeof item.aggregated_output === "string" &&
+        item.aggregated_output.length > 0
       ) {
         const now = Date.now();
         const lastEmitAt = codexItemLastEmitTime.get(itemId) ?? 0;
@@ -788,7 +862,10 @@ export function mapCodexItemEvent(args: {
           });
         }
       }
-      if (lifecycle === "item.completed" && (item.status === "completed" || item.status === "failed")) {
+      if (
+        lifecycle === "item.completed" &&
+        (item.status === "completed" || item.status === "failed")
+      ) {
         codexItemLastEmitTime.delete(itemId);
         if (itemId) {
           events.push({
@@ -803,7 +880,8 @@ export function mapCodexItemEvent(args: {
             toolName: "bash",
             input: item.command ?? "",
             output: item.aggregated_output ?? "",
-            state: item.status === "failed" ? "output-error" : "output-available",
+            state:
+              item.status === "failed" ? "output-error" : "output-available",
           });
         }
       }
@@ -821,7 +899,10 @@ export function mapCodexItemEvent(args: {
           state: "input-available",
         });
       }
-      if (lifecycle === "item.completed" && (item.status === "completed" || item.status === "failed")) {
+      if (
+        lifecycle === "item.completed" &&
+        (item.status === "completed" || item.status === "failed")
+      ) {
         const isFailed = item.status === "failed";
         const output = item.error?.message
           ? `[error] ${item.error.message}`
@@ -847,53 +928,70 @@ export function mapCodexItemEvent(args: {
     }
     case "web_search": {
       if (lifecycle === "item.started") {
-        return [{
-          type: "tool",
-          ...(itemId ? { toolUseId: itemId } : {}),
-          toolName: "web_search",
-          input: item.query ?? "",
-          state: "input-available",
-        }];
+        return [
+          {
+            type: "tool",
+            ...(itemId ? { toolUseId: itemId } : {}),
+            toolName: "web_search",
+            input: item.query ?? "",
+            state: "input-available",
+          },
+        ];
       }
       if (lifecycle === "item.completed") {
         if (itemId) {
           return [{ type: "tool_result", tool_use_id: itemId, output: "" }];
         }
-        return [{
-          type: "tool",
-          toolName: "web_search",
-          input: item.query ?? "",
-          output: "",
-          state: "output-available",
-        }];
+        return [
+          {
+            type: "tool",
+            toolName: "web_search",
+            input: item.query ?? "",
+            output: "",
+            state: "output-available",
+          },
+        ];
       }
       return [];
     }
     case "file_change": {
       if (lifecycle !== "item.completed") return [];
       if (item.status === "failed") {
-        return [{
-          type: "error",
-          message: `File change failed: ${(item.changes ?? []).map((c) => c.path ?? "").filter(Boolean).join(", ")}`,
-          recoverable: false,
-        }];
+        return [
+          {
+            type: "error",
+            message: `File change failed: ${(item.changes ?? [])
+              .map((c) => c.path ?? "")
+              .filter(Boolean)
+              .join(", ")}`,
+            recoverable: false,
+          },
+        ];
       }
       return [];
     }
     case "todo_list": {
       const input = buildCodexTodoToolInput({ items: item.items ?? [] });
-      return [{
-        type: "tool",
-        ...(itemId ? { toolUseId: itemId } : {}),
-        toolName: "TodoWrite",
-        input,
-        ...(lifecycle === "item.completed"
-          ? { state: "output-available" as const }
-          : { state: "input-streaming" as const }),
-      }];
+      return [
+        {
+          type: "tool",
+          ...(itemId ? { toolUseId: itemId } : {}),
+          toolName: "TodoWrite",
+          input,
+          ...(lifecycle === "item.completed"
+            ? { state: "output-available" as const }
+            : { state: "input-streaming" as const }),
+        },
+      ];
     }
     case "error":
-      return [{ type: "error", message: item.message ?? "Codex item error.", recoverable: false }];
+      return [
+        {
+          type: "error",
+          message: item.message ?? "Codex item error.",
+          recoverable: false,
+        },
+      ];
     default:
       return [];
   }
@@ -907,8 +1005,9 @@ function ensureThread(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }): Thread {
   const planModeEnabled = args.runtimeOptions?.codexPlanMode === true;
-  const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccess
-    ?? parseBooleanEnv({
+  const networkAccessEnabled =
+    args.runtimeOptions?.codexNetworkAccess ??
+    parseBooleanEnv({
       value: process.env.STAVE_CODEX_NETWORK_ACCESS,
       fallback: false,
     });
@@ -931,7 +1030,25 @@ function ensureThread(args: {
   });
   const existing = threadByTask.get(threadKey);
   if (existing) {
+    threadLastUsedAt.set(threadKey, Date.now());
     return existing;
+  }
+
+  // LRU eviction: if cache is at capacity, remove the least-recently-used entry.
+  if (threadByTask.size >= MAX_CACHED_THREADS) {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+    for (const [key, usedAt] of threadLastUsedAt) {
+      if (usedAt < oldestTime) {
+        oldestTime = usedAt;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey) {
+      threadByTask.delete(oldestKey);
+      threadIdByTask.delete(oldestKey);
+      threadLastUsedAt.delete(oldestKey);
+    }
   }
   const resumeThreadId = resolveThreadId({
     threadKey,
@@ -940,15 +1057,21 @@ function ensureThread(args: {
       runtimeOptions: args.runtimeOptions,
     }),
   });
-  const additionalDirectories = resolveCodexAdditionalDirectories({ cwd: args.cwd });
+  const additionalDirectories = resolveCodexAdditionalDirectories({
+    cwd: args.cwd,
+  });
   const threadOptions = {
     ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
     workingDirectory: args.cwd,
     ...(additionalDirectories.length > 0 ? { additionalDirectories } : {}),
     sandboxMode: fileAccessMode,
     networkAccessEnabled,
-    ...(args.runtimeOptions?.codexReasoningEffort ? { modelReasoningEffort: args.runtimeOptions.codexReasoningEffort } : {}),
-    ...(args.runtimeOptions?.codexWebSearch ? { webSearchMode: args.runtimeOptions.codexWebSearch } : {}),
+    ...(args.runtimeOptions?.codexReasoningEffort
+      ? { modelReasoningEffort: args.runtimeOptions.codexReasoningEffort }
+      : {}),
+    ...(args.runtimeOptions?.codexWebSearch
+      ? { webSearchMode: args.runtimeOptions.codexWebSearch }
+      : {}),
     ...(approvalPolicy ? { approvalPolicy } : {}),
   };
   const thread = resumeThreadId
@@ -956,6 +1079,7 @@ function ensureThread(args: {
     : args.codex.startThread(threadOptions);
   rememberThreadId({ threadKey, threadId: resumeThreadId });
   threadByTask.set(threadKey, thread);
+  threadLastUsedAt.set(threadKey, Date.now());
   return thread;
 }
 
@@ -964,6 +1088,7 @@ export function cleanupCodexTask(taskId: string) {
   for (const threadKey of threadByTask.keys()) {
     if (threadKey.startsWith(keyPrefix)) {
       threadByTask.delete(threadKey);
+      threadLastUsedAt.delete(threadKey);
     }
   }
   for (const threadKey of threadIdByTask.keys()) {
@@ -973,20 +1098,26 @@ export function cleanupCodexTask(taskId: string) {
   }
 }
 
-export async function streamCodexWithSdk(args: StreamTurnArgs & {
-  onEvent?: (event: BridgeEvent) => void;
-  registerAbort?: (aborter: () => void) => void;
-}): Promise<BridgeEvent[] | null> {
+export async function streamCodexWithSdk(
+  args: StreamTurnArgs & {
+    onEvent?: (event: BridgeEvent) => void;
+    registerAbort?: (aborter: () => void) => void;
+  },
+): Promise<BridgeEvent[] | null> {
   let diagnostics: ReturnType<typeof buildCodexDiagnostics> | null = null;
   try {
-    const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+    const runtimeCwd =
+      args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
     const mod = await import("@openai/codex-sdk");
-    const CodexCtor = mod.Codex as (typeof import("@openai/codex-sdk").Codex) | undefined;
+    const CodexCtor = mod.Codex as
+      | typeof import("@openai/codex-sdk").Codex
+      | undefined;
     if (!CodexCtor) {
       const unavailableEvents: BridgeEvent[] = [
         {
           type: "error",
-          message: "Codex runtime failure: Codex class is unavailable from SDK import.",
+          message:
+            "Codex runtime failure: Codex class is unavailable from SDK import.",
           recoverable: false,
         },
         { type: "done" },
@@ -998,12 +1129,16 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     const codexExecutablePath = resolveCodexExecutablePath({
       explicitPath: args.runtimeOptions?.codexBinaryPath,
     });
-    diagnostics = buildCodexDiagnostics({ executablePath: codexExecutablePath ?? "", taskId: args.taskId });
+    diagnostics = buildCodexDiagnostics({
+      executablePath: codexExecutablePath ?? "",
+      taskId: args.taskId,
+    });
     if (!codexExecutablePath) {
       const unavailableEvents: BridgeEvent[] = [
         {
           type: "error",
-          message: "Codex runtime failure: Codex CLI not found in runtime override, STAVE_CODEX_CLI_PATH, login-shell PATH, or home-bin candidates. Install `codex` or configure a Codex path override.",
+          message:
+            "Codex runtime failure: Codex CLI not found in runtime override, STAVE_CODEX_CLI_PATH, login-shell PATH, or home-bin candidates. Install `codex` or configure a Codex path override.",
           recoverable: true,
         },
         { type: "done" },
@@ -1012,7 +1147,9 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
       return unavailableEvents;
     }
 
-    const codexConfig = buildCodexConfigOverrides({ runtimeOptions: args.runtimeOptions });
+    const codexConfig = buildCodexConfigOverrides({
+      runtimeOptions: args.runtimeOptions,
+    });
     const codex = new CodexCtor({
       codexBinaryPath: codexExecutablePath,
       env: buildCodexEnv({ executablePath: codexExecutablePath }),
@@ -1040,14 +1177,17 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
       conversation: args.conversation
         ? filterPromptRetrievedContext({
             conversation: args.conversation,
-            excludedSourceIds: hasEmbeddedStaveLocalMcp ? [] : ["stave:current-task-awareness"],
+            excludedSourceIds: hasEmbeddedStaveLocalMcp
+              ? []
+              : ["stave:current-task-awareness"],
           })
         : args.conversation,
     });
 
     const streamed = await thread.runStreamed(providerPrompt, turnOptions);
 
-    const codexDebug = args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";
+    const codexDebug =
+      args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";
     const codexPlanMode = args.runtimeOptions?.codexPlanMode === true;
     const events: BridgeEvent[] = [];
     let sawExperimentalPlanTodo = false;
@@ -1102,13 +1242,20 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
     for await (const event of streamed.events) {
       const threadEvent = event as ThreadEvent;
       if (codexDebug) {
-        console.debug("[codex-sdk-runtime] event", threadEvent.type, threadEvent);
+        console.debug(
+          "[codex-sdk-runtime] event",
+          threadEvent.type,
+          threadEvent,
+        );
       }
       if (
-        codexPlanMode
-        && pendingPlanMessageText
-        && !(threadEvent.type === "item.completed" && threadEvent.item.type === "agent_message")
-        && threadEvent.type !== "turn.completed"
+        codexPlanMode &&
+        pendingPlanMessageText &&
+        !(
+          threadEvent.type === "item.completed" &&
+          threadEvent.item.type === "agent_message"
+        ) &&
+        threadEvent.type !== "turn.completed"
       ) {
         flushPendingPlanMessage(false);
       }
@@ -1131,24 +1278,31 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
               items: threadEvent.item.items ?? [],
             });
           }
-          if (shouldBufferCompletedCodexPlanCandidate({
-            planMode: codexPlanMode,
-            lifecycle: threadEvent.type,
-            itemType: threadEvent.item.type,
-            text: threadEvent.item.type === "agent_message" ? threadEvent.item.text : null,
-          })) {
+          if (
+            shouldBufferCompletedCodexPlanCandidate({
+              planMode: codexPlanMode,
+              lifecycle: threadEvent.type,
+              itemType: threadEvent.item.type,
+              text:
+                threadEvent.item.type === "agent_message"
+                  ? threadEvent.item.text
+                  : null,
+            })
+          ) {
             if (pendingPlanMessageText) {
               flushPendingPlanMessage(false);
             }
             pendingPlanMessageText = threadEvent.item.text ?? "";
             if (
-              !sawExperimentalPlanTodo
-              || looksLikeCodexPlanText(threadEvent.item.text ?? "")
+              !sawExperimentalPlanTodo ||
+              looksLikeCodexPlanText(threadEvent.item.text ?? "")
             ) {
               retainedFinalPlanText = threadEvent.item.text ?? "";
             }
             if (codexDebug) {
-              console.debug("[codex-sdk-runtime] buffering final codex plan candidate");
+              console.debug(
+                "[codex-sdk-runtime] buffering final codex plan candidate",
+              );
             }
             break;
           }
@@ -1157,12 +1311,15 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
             item: threadEvent.item,
           });
           if (
-            threadEvent.type === "item.completed"
-            && threadEvent.item.type === "file_change"
-            && threadEvent.item.status === "completed"
+            threadEvent.type === "item.completed" &&
+            threadEvent.item.type === "file_change" &&
+            threadEvent.item.status === "completed"
           ) {
-            const changedPaths = (threadEvent.item.changes ?? []).map((change) => change.path ?? "").filter(Boolean);
-            const { diffEvents, unresolvedPaths } = await diffTracker.buildDiffEvents({ changedPaths });
+            const changedPaths = (threadEvent.item.changes ?? [])
+              .map((change) => change.path ?? "")
+              .filter(Boolean);
+            const { diffEvents, unresolvedPaths } =
+              await diffTracker.buildDiffEvents({ changedPaths });
             const fallbackEvents = diffTracker.buildFallbackEvents({
               appliedPaths: diffEvents.length === 0 ? changedPaths : [],
               skippedPaths: unresolvedPaths,
@@ -1170,7 +1327,13 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
             mapped.push(...diffEvents, ...fallbackEvents);
           }
           if (codexDebug) {
-            console.debug("[codex-sdk-runtime] item", threadEvent.type, threadEvent.item.type, "→", mapped.map((e) => e.type));
+            console.debug(
+              "[codex-sdk-runtime] item",
+              threadEvent.type,
+              threadEvent.item.type,
+              "→",
+              mapped.map((e) => e.type),
+            );
           }
           emitBridgeEvents(mapped);
           break;
@@ -1181,7 +1344,9 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
           }
           emitBridgeEvent({
             type: "error",
-            message: toCodexUserFacingErrorMessage({ message: threadEvent.error?.message ?? "Codex turn failed." }),
+            message: toCodexUserFacingErrorMessage({
+              message: threadEvent.error?.message ?? "Codex turn failed.",
+            }),
             recoverable: true,
           });
           emitBridgeEvent({ type: "done" });
@@ -1192,12 +1357,20 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
           }
           emitBridgeEvent({
             type: "error",
-            message: toCodexUserFacingErrorMessage({ message: threadEvent.message }),
+            message: toCodexUserFacingErrorMessage({
+              message: threadEvent.message,
+            }),
             recoverable: true,
           });
           break;
         case "turn.completed":
-          if (!hasEmittedPlanReady && codexPlanMode && (retainedFinalPlanText || pendingPlanMessageText || latestTodoPlanText)) {
+          if (
+            !hasEmittedPlanReady &&
+            codexPlanMode &&
+            (retainedFinalPlanText ||
+              pendingPlanMessageText ||
+              latestTodoPlanText)
+          ) {
             flushPendingPlanMessage(true);
           }
           {
@@ -1218,13 +1391,18 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
             threadKey,
             threadId: threadEvent.thread_id,
           });
-          emitBridgeEvents(buildCodexThreadStartedEvents({
-            threadId: threadEvent.thread_id,
-          }));
+          emitBridgeEvents(
+            buildCodexThreadStartedEvents({
+              threadId: threadEvent.thread_id,
+            }),
+          );
           break;
         default:
           if (codexDebug) {
-            console.debug("[codex-sdk-runtime] unhandled event type", threadEvent.type);
+            console.debug(
+              "[codex-sdk-runtime] unhandled event type",
+              threadEvent.type,
+            );
           }
           break;
       }
@@ -1246,12 +1424,30 @@ export async function streamCodexWithSdk(args: StreamTurnArgs & {
 
     return events;
   } catch (error) {
+    // Distinguish abort (user-initiated cancel) from real failures.
+    const isAbort =
+      (error instanceof Error && error.name === "AbortError") ||
+      (error instanceof Error && /aborted|cancel/i.test(error.message));
+    if (isAbort) {
+      console.info("[provider-runtime] Codex turn aborted", {
+        taskId: args.taskId,
+      });
+      const abortEvents: BridgeEvent[] = [
+        { type: "done", stop_reason: "user_abort" },
+      ];
+      abortEvents.forEach((event) => args.onEvent?.(event));
+      return abortEvents;
+    }
     // Evict the cached thread so a subsequent retry does not attempt to
     // resume the same (possibly stale) thread that just failed.
     if (args.taskId) {
       cleanupCodexTask(args.taskId);
     }
-    console.warn("[provider-runtime] Codex SDK unavailable", error, diagnostics);
+    console.warn(
+      "[provider-runtime] Codex SDK unavailable",
+      error,
+      diagnostics,
+    );
     const reason = toCodexUserFacingErrorMessage({ message: toText(error) });
     const failureEvents: BridgeEvent[] = [
       {

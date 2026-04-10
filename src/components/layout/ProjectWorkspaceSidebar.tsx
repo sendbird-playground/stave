@@ -70,6 +70,7 @@ import {
 } from "@/components/ui";
 import { loadWorkspaceShell, type WorkspaceShell } from "@/lib/db/workspaces.db";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
+import { resolveProviderTurnDisplayState, type ProviderTurnActivitySnapshot } from "@/lib/providers/turn-status";
 import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
 import { resolveSidebarArtworkClass } from "@/lib/themes";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
@@ -88,6 +89,7 @@ function resolveRespondingToneClass(args: {
   tasks: ReturnType<typeof useAppStore.getState>["tasks"];
   messagesByTask: Record<string, ChatMessage[]>;
   activeTurnIdsByTask: Record<string, string | undefined>;
+  providerTurnActivityByTask: Record<string, ProviderTurnActivitySnapshot | undefined>;
 }) {
   const respondingTasks = getRespondingTasks({
     tasks: args.tasks,
@@ -110,13 +112,21 @@ function resolveRespondingToneClass(args: {
       ),
     ),
   );
+  const hasStalledTask = respondingTasks.some((task) =>
+    resolveProviderTurnDisplayState({
+      activeTurnId: args.activeTurnIdsByTask[task.id] ?? null,
+      activity: args.providerTurnActivityByTask[task.id] ?? null,
+    }) === "stalled"
+  );
 
   return {
     respondingTaskCount: respondingTasks.length,
     respondingToneClass:
-      providers.length === 1 && providers[0]
-        ? getProviderWaveToneClass({ providerId: providers[0] })
-        : "text-primary",
+      hasStalledTask
+        ? "text-warning"
+        : providers.length === 1 && providers[0]
+          ? getProviderWaveToneClass({ providerId: providers[0] })
+          : "text-primary",
   };
 }
 
@@ -141,23 +151,25 @@ function formatCountLabel(count: number, singular: string) {
 }
 
 function useWorkspaceSidebarActivityState(workspaceId: string) {
-  const [tasks, messagesByTask, activeTurnIdsByTask, prStatus] = useAppStore(
+  const [tasks, messagesByTask, activeTurnIdsByTask, providerTurnActivityByTask, prStatus] = useAppStore(
     useShallow((state) => {
       if (state.activeWorkspaceId === workspaceId) {
         return [
           state.tasks,
           state.messagesByTask,
           state.activeTurnIdsByTask,
+          state.providerTurnActivityByTask,
           state.workspacePrInfoById[workspaceId]?.derived ?? null,
         ] as const;
       }
       const runtimeState = state.workspaceRuntimeCacheById[workspaceId];
       return [
-        runtimeState?.tasks ?? EMPTY_TASKS,
-        runtimeState?.messagesByTask ?? EMPTY_MESSAGES_BY_TASK,
-        runtimeState?.activeTurnIdsByTask ?? EMPTY_ACTIVE_TURN_IDS_BY_TASK,
-        state.workspacePrInfoById[workspaceId]?.derived ?? null,
-      ] as const;
+          runtimeState?.tasks ?? EMPTY_TASKS,
+          runtimeState?.messagesByTask ?? EMPTY_MESSAGES_BY_TASK,
+          runtimeState?.activeTurnIdsByTask ?? EMPTY_ACTIVE_TURN_IDS_BY_TASK,
+          state.providerTurnActivityByTask,
+          state.workspacePrInfoById[workspaceId]?.derived ?? null,
+        ] as const;
     }),
   );
 
@@ -167,10 +179,11 @@ function useWorkspaceSidebarActivityState(workspaceId: string) {
         tasks,
         messagesByTask,
         activeTurnIdsByTask,
+        providerTurnActivityByTask,
       }),
       prStatus,
     }),
-    [activeTurnIdsByTask, messagesByTask, prStatus, tasks],
+    [activeTurnIdsByTask, messagesByTask, prStatus, providerTurnActivityByTask, tasks],
   );
 }
 

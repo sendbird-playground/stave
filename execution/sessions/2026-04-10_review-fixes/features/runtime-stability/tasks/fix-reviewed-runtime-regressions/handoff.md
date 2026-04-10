@@ -68,18 +68,25 @@ None.
 
 ## Auto Snapshot
 
-- Timestamp: 2026-04-10_232719
-- Working Directory: /Users/jacob.kim/workspace/stave/.stave/workspaces/fix__lint-error-log
-- Snapshot File: /Users/jacob.kim/.agents/claude/session-snapshots/2026-04-10_232719.md
+- Timestamp: 2026-04-10_234948
+- Working Directory: /Users/jacob.kim/workspace/stave
+- Snapshot File: /Users/jacob.kim/.agents/claude/session-snapshots/2026-04-10_234948.md
 - Recent Git Status:
 ```text
- M electron/main/eslint/eslint-service.ts
+M  AGENTS.md
+M  CLAUDE.md
+M  electron/providers/claude-sdk-runtime.ts
+M  electron/providers/codex-app-server-runtime.ts
+M  electron/providers/codex-sdk-runtime.ts
+UU execution/sessions/2026-04-10_review-fixes/features/runtime-stability/tasks/fix-reviewed-runtime-regressions/handoff.md
+M  skills/the-ipc-contract-audit/SKILL.md
+M  src/components/layout/ProjectWorkspaceSidebar.tsx
+M  src/components/layout/WorkspaceTaskTabs.tsx
+M  src/components/session/ChatInput.tsx
+M  src/store/app.store.ts
+M  work-handoff.md
+?? docs/developer/provider-session-stability.md
+?? src/lib/providers/turn-status.ts
+?? tests/provider-turn-status.test.ts
 ```
 
-- Timestamp: 2026-04-10_222835
-- Working Directory: /Users/jacob.kim/workspace/stave/.stave/workspaces/fix__notification-history
-- Snapshot File: /Users/jacob.kim/.agents/claude/session-snapshots/2026-04-10_222835.md
-- Recent Git Status:
-```text
- M src/components/layout/TopBarNotifications.tsx
-```

@@ -121,6 +121,16 @@ import {
   DEFAULT_PROVIDER_TIMEOUT_MS,
   PROVIDER_TIMEOUT_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
+import {
+  applyProviderTurnActivityEvents,
+  clearProviderTurnActivity,
+  markProviderTurnInteractionResolved,
+  markProviderTurnStalled,
+  PROVIDER_TURN_AUTO_RECOVERY_GRACE_MS,
+  PROVIDER_TURN_STALL_THRESHOLD_MS,
+  startProviderTurnActivity,
+  type ProviderTurnActivitySnapshot,
+} from "@/lib/providers/turn-status";
 import { resolveWorkspaceRelativeFilePath } from "@/lib/workspace-file-path";
 import {
   createEmptyWorkspaceInformation,
@@ -911,6 +921,10 @@ interface AppState {
   skillCatalog: SkillCatalogState;
   notifications: AppNotification[];
   activeTurnIdsByTask: Record<string, string | undefined>;
+  providerTurnActivityByTask: Record<
+    string,
+    ProviderTurnActivitySnapshot | undefined
+  >;
   nativeSessionReadyByTask: Record<string, boolean>;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
@@ -2421,6 +2435,87 @@ export const useAppStore = create<AppState>()(
         string,
         string
       >();
+      const providerTurnStallTimerByTask = new Map<
+        string,
+        ReturnType<typeof globalThis.setTimeout>
+      >();
+      const providerTurnAutoRecoveryTimerByTask = new Map<
+        string,
+        ReturnType<typeof globalThis.setTimeout>
+      >();
+
+      const clearProviderTurnAutoRecoveryTimer = (taskId: string) => {
+        const handle = providerTurnAutoRecoveryTimerByTask.get(taskId);
+        if (handle == null) {
+          return;
+        }
+        globalThis.clearTimeout(handle);
+        providerTurnAutoRecoveryTimerByTask.delete(taskId);
+      };
+
+      const clearProviderTurnStallTimer = (taskId: string) => {
+        const handle = providerTurnStallTimerByTask.get(taskId);
+        if (handle == null) {
+          return;
+        }
+        globalThis.clearTimeout(handle);
+        providerTurnStallTimerByTask.delete(taskId);
+        clearProviderTurnAutoRecoveryTimer(taskId);
+      };
+
+      const scheduleProviderTurnStallTimer = (args: {
+        taskId: string;
+        turnId: string;
+        lastEventAt: number;
+      }) => {
+        clearProviderTurnStallTimer(args.taskId);
+        const delayMs = Math.max(
+          0,
+          PROVIDER_TURN_STALL_THRESHOLD_MS - (Date.now() - args.lastEventAt),
+        );
+        const handle = globalThis.setTimeout(() => {
+          providerTurnStallTimerByTask.delete(args.taskId);
+          set((state) => {
+            if (state.activeTurnIdsByTask[args.taskId] !== args.turnId) {
+              return state;
+            }
+            const nextActivityByTask = markProviderTurnStalled({
+              activityByTask: state.providerTurnActivityByTask,
+              taskId: args.taskId,
+              turnId: args.turnId,
+            });
+            if (nextActivityByTask === state.providerTurnActivityByTask) {
+              return state;
+            }
+            return {
+              providerTurnActivityByTask: nextActivityByTask,
+            };
+          });
+
+          // Schedule auto-recovery: if the turn is still stalled after the
+          // grace period, automatically abort it so the user doesn't have to.
+          clearProviderTurnAutoRecoveryTimer(args.taskId);
+          const recoveryHandle = globalThis.setTimeout(() => {
+            providerTurnAutoRecoveryTimerByTask.delete(args.taskId);
+            const currentState = get();
+            if (currentState.activeTurnIdsByTask[args.taskId] !== args.turnId) {
+              return;
+            }
+            const activity =
+              currentState.providerTurnActivityByTask[args.taskId];
+            if (!activity || activity.stalledAt == null) {
+              return;
+            }
+            console.warn("[auto-recovery] Aborting stalled provider turn", {
+              taskId: args.taskId,
+              turnId: args.turnId,
+            });
+            currentState.abortTaskTurn({ taskId: args.taskId });
+          }, PROVIDER_TURN_AUTO_RECOVERY_GRACE_MS);
+          providerTurnAutoRecoveryTimerByTask.set(args.taskId, recoveryHandle);
+        }, delayMs);
+        providerTurnStallTimerByTask.set(args.taskId, handle);
+      };
 
       const hasAsyncIterable = (
         value: unknown,
@@ -2482,20 +2577,23 @@ export const useAppStore = create<AppState>()(
         let didUpdate = false;
 
         set((state) => {
-          const cachedSession = state.workspaceRuntimeCacheById[args.workspaceId];
-          const currentWorkspaceInformation = args.workspaceId === state.activeWorkspaceId
-            ? state.workspaceInformation
-            : cachedSession?.workspaceInformation;
+          const cachedSession =
+            state.workspaceRuntimeCacheById[args.workspaceId];
+          const currentWorkspaceInformation =
+            args.workspaceId === state.activeWorkspaceId
+              ? state.workspaceInformation
+              : cachedSession?.workspaceInformation;
           if (!currentWorkspaceInformation) {
             return state;
           }
 
-          const currentSummary = currentWorkspaceInformation.turnSummary ?? null;
+          const currentSummary =
+            currentWorkspaceInformation.turnSummary ?? null;
           if (
-            currentSummary?.turnId === args.summary.turnId
-            && currentSummary.requestSummary === args.summary.requestSummary
-            && currentSummary.workSummary === args.summary.workSummary
-            && currentSummary.model === args.summary.model
+            currentSummary?.turnId === args.summary.turnId &&
+            currentSummary.requestSummary === args.summary.requestSummary &&
+            currentSummary.workSummary === args.summary.workSummary &&
+            currentSummary.model === args.summary.model
           ) {
             return state;
           }
@@ -2573,19 +2671,25 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        const task = session.tasks.find((item) => item.id === args.taskId) ?? null;
+        const task =
+          session.tasks.find((item) => item.id === args.taskId) ?? null;
         const messages = session.messagesByTask[args.taskId] ?? [];
         const latestUserMessage = [...messages]
           .reverse()
           .find((message) => message.role === "user" && message.content.trim());
         const latestAssistantMessage = [...messages]
           .reverse()
-          .find((message) => message.role === "assistant" && message.content.trim());
+          .find(
+            (message) => message.role === "assistant" && message.content.trim(),
+          );
         const summaryPrompt = state.settings.workspaceTurnSummaryPrompt.trim();
         if (!summaryPrompt) {
           return;
         }
-        if (!latestUserMessage?.content.trim() && !latestAssistantMessage?.content.trim()) {
+        if (
+          !latestUserMessage?.content.trim() &&
+          !latestAssistantMessage?.content.trim()
+        ) {
           return;
         }
 
@@ -2605,10 +2709,11 @@ export const useAppStore = create<AppState>()(
           value: settingsSnapshot.workspaceTurnSummaryFallbackModel,
           fallback: defaultSettings.workspaceTurnSummaryFallbackModel,
         });
-        const candidateModels = [...new Set([
-          primaryModel.trim(),
-          fallbackModel.trim(),
-        ].filter(Boolean))];
+        const candidateModels = [
+          ...new Set(
+            [primaryModel.trim(), fallbackModel.trim()].filter(Boolean),
+          ),
+        ];
         if (candidateModels.length === 0) {
           return;
         }
@@ -2617,12 +2722,12 @@ export const useAppStore = create<AppState>()(
           instructionPrompt: summaryPrompt,
           taskTitle: task?.title ?? null,
           userRequest:
-            latestUserMessage?.content.trim()
-            || task?.title
-            || "No user request was captured for this turn.",
+            latestUserMessage?.content.trim() ||
+            task?.title ||
+            "No user request was captured for this turn.",
           assistantResponse:
-            latestAssistantMessage?.content.trim()
-            || "The assistant completed the turn without a plain-text reply.",
+            latestAssistantMessage?.content.trim() ||
+            "The assistant completed the turn without a plain-text reply.",
         });
         const requestId = `${args.turnId}:${Date.now()}`;
         workspaceTurnSummaryRequestIdByWorkspaceId.set(
@@ -2633,8 +2738,9 @@ export const useAppStore = create<AppState>()(
         void (async () => {
           for (const model of candidateModels) {
             if (
-              workspaceTurnSummaryRequestIdByWorkspaceId.get(args.workspaceId)
-              !== requestId
+              workspaceTurnSummaryRequestIdByWorkspaceId.get(
+                args.workspaceId,
+              ) !== requestId
             ) {
               return;
             }
@@ -2674,10 +2780,11 @@ export const useAppStore = create<AppState>()(
 
             if (window.api?.provider?.checkAvailability) {
               try {
-                const availability = await window.api.provider.checkAvailability({
-                  providerId,
-                  runtimeOptions,
-                });
+                const availability =
+                  await window.api.provider.checkAvailability({
+                    providerId,
+                    runtimeOptions,
+                  });
                 if (!availability.ok || !availability.available) {
                   continue;
                 }
@@ -2691,18 +2798,22 @@ export const useAppStore = create<AppState>()(
               if (!streamTurn) {
                 return;
               }
-              const events = await collectProviderEvents(streamTurn({
-                providerId,
-                prompt,
-                cwd: workspacePath ?? undefined,
-                runtimeOptions,
-              }));
+              const events = await collectProviderEvents(
+                streamTurn({
+                  providerId,
+                  prompt,
+                  cwd: workspacePath ?? undefined,
+                  runtimeOptions,
+                }),
+              );
               const responseText = events
                 .filter(
                   (
                     event,
-                  ): event is Extract<NormalizedProviderEvent, { type: "text" }> =>
-                    event.type === "text",
+                  ): event is Extract<
+                    NormalizedProviderEvent,
+                    { type: "text" }
+                  > => event.type === "text",
                 )
                 .map((event) => event.text)
                 .join("")
@@ -2715,8 +2826,9 @@ export const useAppStore = create<AppState>()(
               }
 
               if (
-                workspaceTurnSummaryRequestIdByWorkspaceId.get(args.workspaceId)
-                !== requestId
+                workspaceTurnSummaryRequestIdByWorkspaceId.get(
+                  args.workspaceId,
+                ) !== requestId
               ) {
                 return;
               }
@@ -2737,17 +2849,14 @@ export const useAppStore = create<AppState>()(
               continue;
             }
           }
-        })()
-          .finally(() => {
-            if (
-              workspaceTurnSummaryRequestIdByWorkspaceId.get(args.workspaceId)
-              === requestId
-            ) {
-              workspaceTurnSummaryRequestIdByWorkspaceId.delete(
-                args.workspaceId,
-              );
-            }
-          });
+        })().finally(() => {
+          if (
+            workspaceTurnSummaryRequestIdByWorkspaceId.get(args.workspaceId) ===
+            requestId
+          ) {
+            workspaceTurnSummaryRequestIdByWorkspaceId.delete(args.workspaceId);
+          }
+        });
       };
 
       const activateProject = async (args: {
@@ -3614,6 +3723,7 @@ export const useAppStore = create<AppState>()(
         },
         notifications: [],
         activeTurnIdsByTask: {},
+        providerTurnActivityByTask: {},
         nativeSessionReadyByTask: {},
         providerSessionByTask: {},
         workspaceRuntimeCacheById: {},
@@ -9184,6 +9294,21 @@ export const useAppStore = create<AppState>()(
               }
             }
 
+            const turnActivityStartedAt = Date.now();
+            set((nextState) => ({
+              providerTurnActivityByTask: startProviderTurnActivity({
+                activityByTask: nextState.providerTurnActivityByTask,
+                taskId: resolvedTaskId,
+                turnId,
+                now: turnActivityStartedAt,
+              }),
+            }));
+            scheduleProviderTurnStallTimer({
+              taskId: resolvedTaskId,
+              turnId,
+              lastEventAt: turnActivityStartedAt,
+            });
+
             const providerTurnEventController =
               createProviderTurnEventController({
                 flushEvents: (pendingEvents) => {
@@ -9202,11 +9327,46 @@ export const useAppStore = create<AppState>()(
                     model: activeModel,
                     turnId,
                   });
+                  const turnStillActive =
+                    currentState.activeTurnIdsByTask[resolvedTaskId] === turnId;
+                  const nextTurnActivityByTask = turnStillActive
+                    ? applyProviderTurnActivityEvents({
+                        activityByTask: currentState.providerTurnActivityByTask,
+                        taskId: resolvedTaskId,
+                        turnId,
+                        events: pendingEvents,
+                      })
+                    : currentState.providerTurnActivityByTask;
                   persistInactiveWorkspaceSession =
                     applied.persistInactiveWorkspaceSession;
                   updatedSession = applied.updatedSession;
-                  if (applied.stateChanged) {
-                    set(applied.statePatch);
+                  const activityChanged =
+                    nextTurnActivityByTask !==
+                    currentState.providerTurnActivityByTask;
+                  if (applied.stateChanged || activityChanged) {
+                    set({
+                      ...applied.statePatch,
+                      ...(activityChanged
+                        ? {
+                            providerTurnActivityByTask: nextTurnActivityByTask,
+                          }
+                        : {}),
+                    });
+                  }
+                  if (
+                    !turnStillActive ||
+                    pendingEvents.some((event) => event.type === "done")
+                  ) {
+                    clearProviderTurnStallTimer(resolvedTaskId);
+                  } else {
+                    const nextActivity = nextTurnActivityByTask[resolvedTaskId];
+                    if (nextActivity) {
+                      scheduleProviderTurnStallTimer({
+                        taskId: resolvedTaskId,
+                        turnId,
+                        lastEventAt: nextActivity.lastEventAt,
+                      });
+                    }
                   }
                   const persistedInactiveWorkspaceSession =
                     persistInactiveWorkspaceSession as {
@@ -9413,6 +9573,7 @@ export const useAppStore = create<AppState>()(
             return;
           }
           const activeTurnId = stateBefore.activeTurnIdsByTask[taskId];
+          clearProviderTurnStallTimer(taskId);
           if (activeTurnId) {
             const abortTurn = window.api?.provider?.abortTurn;
             if (abortTurn) {
@@ -9450,6 +9611,10 @@ export const useAppStore = create<AppState>()(
                   ...state.activeTurnIdsByTask,
                   [taskId]: undefined,
                 },
+                providerTurnActivityByTask: clearProviderTurnActivity({
+                  activityByTask: state.providerTurnActivityByTask,
+                  taskId,
+                }),
                 providerSessionByTask: restProviderSession,
                 ...(interruptedMessages === current
                   ? {}
@@ -9482,6 +9647,10 @@ export const useAppStore = create<AppState>()(
                 ...state.activeTurnIdsByTask,
                 [taskId]: undefined,
               },
+              providerTurnActivityByTask: clearProviderTurnActivity({
+                activityByTask: state.providerTurnActivityByTask,
+                taskId,
+              }),
               providerSessionByTask: restProviderSession,
               workspaceSnapshotVersion:
                 incrementWorkspaceSnapshotVersion(state),
@@ -9580,7 +9749,16 @@ export const useAppStore = create<AppState>()(
           };
 
           const applyApprovalResponse = (requestId: string) => {
+            const resolvedAt = Date.now();
             set((state) => {
+              const nextProviderTurnActivityByTask = activeTurnId
+                ? markProviderTurnInteractionResolved({
+                    activityByTask: state.providerTurnActivityByTask,
+                    taskId,
+                    turnId: activeTurnId,
+                    now: resolvedAt,
+                  })
+                : state.providerTurnActivityByTask;
               if (workspaceId && workspaceId !== state.activeWorkspaceId) {
                 const cachedSession =
                   state.workspaceRuntimeCacheById[workspaceId];
@@ -9603,18 +9781,29 @@ export const useAppStore = create<AppState>()(
                       messagesByTask: nextMessagesState.messagesByTask,
                     },
                   },
+                  providerTurnActivityByTask: nextProviderTurnActivityByTask,
                 };
               }
 
-              return applyApprovalState({
-                messagesByTask: state.messagesByTask,
-                workspaceSnapshotVersion: state.workspaceSnapshotVersion,
-                taskId,
-                messageId,
-                requestId,
-                approved,
-              });
+              return {
+                ...applyApprovalState({
+                  messagesByTask: state.messagesByTask,
+                  workspaceSnapshotVersion: state.workspaceSnapshotVersion,
+                  taskId,
+                  messageId,
+                  requestId,
+                  approved,
+                }),
+                providerTurnActivityByTask: nextProviderTurnActivityByTask,
+              };
             });
+            if (activeTurnId) {
+              scheduleProviderTurnStallTimer({
+                taskId,
+                turnId: activeTurnId,
+                lastEventAt: resolvedAt,
+              });
+            }
           };
 
           if (activeTurnId && approvalPart) {
@@ -9786,7 +9975,16 @@ export const useAppStore = create<AppState>()(
           };
 
           const applyUserInputResponse = (requestId: string) => {
+            const resolvedAt = Date.now();
             set((state) => {
+              const nextProviderTurnActivityByTask = activeTurnId
+                ? markProviderTurnInteractionResolved({
+                    activityByTask: state.providerTurnActivityByTask,
+                    taskId,
+                    turnId: activeTurnId,
+                    now: resolvedAt,
+                  })
+                : state.providerTurnActivityByTask;
               if (workspaceId && workspaceId !== state.activeWorkspaceId) {
                 const cachedSession =
                   state.workspaceRuntimeCacheById[workspaceId];
@@ -9810,19 +10008,30 @@ export const useAppStore = create<AppState>()(
                       messagesByTask: nextMessagesState.messagesByTask,
                     },
                   },
+                  providerTurnActivityByTask: nextProviderTurnActivityByTask,
                 };
               }
 
-              return applyUserInputState({
-                messagesByTask: state.messagesByTask,
-                workspaceSnapshotVersion: state.workspaceSnapshotVersion,
-                taskId,
-                messageId,
-                requestId,
-                answers,
-                denied,
-              });
+              return {
+                ...applyUserInputState({
+                  messagesByTask: state.messagesByTask,
+                  workspaceSnapshotVersion: state.workspaceSnapshotVersion,
+                  taskId,
+                  messageId,
+                  requestId,
+                  answers,
+                  denied,
+                }),
+                providerTurnActivityByTask: nextProviderTurnActivityByTask,
+              };
             });
+            if (activeTurnId) {
+              scheduleProviderTurnStallTimer({
+                taskId,
+                turnId: activeTurnId,
+                lastEventAt: resolvedAt,
+              });
+            }
           };
 
           if (activeTurnId && userInputPart) {
@@ -10603,7 +10812,8 @@ export const useAppStore = create<AppState>()(
         );
         if (
           typeof persistedSettings?.terminalFontFamily === "string" &&
-          persistedSettings.terminalFontFamily.trim() === LEGACY_TERMINAL_FONT_FAMILY
+          persistedSettings.terminalFontFamily.trim() ===
+            LEGACY_TERMINAL_FONT_FAMILY
         ) {
           state.settings.terminalFontFamily = DEFAULT_TERMINAL_FONT_FAMILY;
         }
@@ -10885,5 +11095,3 @@ export const useAppStore = create<AppState>()(
     },
   ),
 );
-
-

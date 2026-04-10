@@ -35,7 +35,11 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
-import { canExecutePath, resolveExecutablePath, resolveLoginShellEnvVarValue } from "./executable-path";
+import {
+  canExecutePath,
+  resolveExecutablePath,
+  resolveLoginShellEnvVarValue,
+} from "./executable-path";
 import {
   readPrimaryStaveLocalMcpManifest,
   STAVE_LOCAL_MCP_SERVER_NAME,
@@ -51,7 +55,13 @@ import {
 } from "./runtime-shared";
 
 /** SDK-level permission modes accepted by the claude-agent-sdk query() API. */
-type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
+type ClaudePermissionMode =
+  | "default"
+  | "acceptEdits"
+  | "bypassPermissions"
+  | "plan"
+  | "dontAsk"
+  | "auto";
 
 const ClaudePermissionResultSchema = z.union([
   z.object({
@@ -82,9 +92,7 @@ const CLAUDE_PLAN_MODE_DISALLOWED_TOOLS = [
 const CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES = new Set(
   CLAUDE_PLAN_MODE_DISALLOWED_TOOLS.map((toolName) => toolName.toLowerCase()),
 );
-const CLAUDE_AUTO_ALLOWED_TOOL_NAMES = new Set([
-  "exitplanmode",
-]);
+const CLAUDE_AUTO_ALLOWED_TOOL_NAMES = new Set(["exitplanmode"]);
 const CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES = new Set([
   "stave_get_workspace_information",
   "stave_replace_workspace_notes",
@@ -118,10 +126,14 @@ const CLAUDE_MUTATING_BASH_PATTERNS = [
 // so the first query() call doesn't pay those costs.
 // ---------------------------------------------------------------------------
 
-let prewarmSdkModulePromise: Promise<typeof import("@anthropic-ai/claude-agent-sdk")> | null = null;
+let prewarmSdkModulePromise: Promise<
+  typeof import("@anthropic-ai/claude-agent-sdk")
+> | null = null;
 let prewarmExecutablePath: string | null = null;
 
-async function getPrewarmedSdkModule(): Promise<typeof import("@anthropic-ai/claude-agent-sdk")> {
+async function getPrewarmedSdkModule(): Promise<
+  typeof import("@anthropic-ai/claude-agent-sdk")
+> {
   if (!prewarmSdkModulePromise) {
     prewarmSdkModulePromise = import("@anthropic-ai/claude-agent-sdk");
   }
@@ -165,12 +177,12 @@ function resolveClaudePermissionMode(args: {
 }): ClaudePermissionMode {
   const candidate = args.runtimeValue ?? args.envValue;
   if (
-    candidate === "default"
-    || candidate === "acceptEdits"
-    || candidate === "bypassPermissions"
-    || candidate === "plan"
-    || candidate === "dontAsk"
-    || candidate === "auto"
+    candidate === "default" ||
+    candidate === "acceptEdits" ||
+    candidate === "bypassPermissions" ||
+    candidate === "plan" ||
+    candidate === "dontAsk" ||
+    candidate === "auto"
   ) {
     return candidate;
   }
@@ -197,18 +209,21 @@ function probeClaudeExecutable(args: { path: string }) {
   };
 }
 
-export function resolveClaudeExecutablePath(args: { explicitPath?: string } = {}) {
+export function resolveClaudeExecutablePath(
+  args: { explicitPath?: string } = {},
+) {
   if (args.explicitPath?.trim()) {
     return args.explicitPath.trim();
   }
 
-  const baseResolved = resolveExecutablePath({
-    absolutePathEnvVar: "STAVE_CLAUDE_CLI_PATH",
-    absolutePathEnvVars: ["CLAUDE_CODE_PATH"],
-    commandEnvVar: "STAVE_CLAUDE_CMD",
-    defaultCommand: "claude",
-    extraPaths: [...CLAUDE_LOOKUP_PATHS],
-  }) ?? "";
+  const baseResolved =
+    resolveExecutablePath({
+      absolutePathEnvVar: "STAVE_CLAUDE_CLI_PATH",
+      absolutePathEnvVars: ["CLAUDE_CODE_PATH"],
+      commandEnvVar: "STAVE_CLAUDE_CMD",
+      defaultCommand: "claude",
+      extraPaths: [...CLAUDE_LOOKUP_PATHS],
+    }) ?? "";
 
   const candidates = [
     process.env.STAVE_CLAUDE_CLI_PATH,
@@ -219,7 +234,10 @@ export function resolveClaudeExecutablePath(args: { explicitPath?: string } = {}
     baseResolved,
   ]
     .map((value) => value?.trim())
-    .filter((value, index, entries): value is string => Boolean(value) && entries.indexOf(value) === index);
+    .filter(
+      (value, index, entries): value is string =>
+        Boolean(value) && entries.indexOf(value) === index,
+    );
 
   const available = candidates
     .filter((candidate) => canExecutePath({ path: candidate }))
@@ -254,7 +272,9 @@ export function buildClaudeEnv(args: { executablePath: string }) {
   });
 
   if (!env.CLAUDE_CONFIG_DIR) {
-    const loginShellConfigDir = resolveLoginShellEnvVarValue({ key: "CLAUDE_CONFIG_DIR" })?.trim();
+    const loginShellConfigDir = resolveLoginShellEnvVarValue({
+      key: "CLAUDE_CONFIG_DIR",
+    })?.trim();
     if (loginShellConfigDir) {
       env.CLAUDE_CONFIG_DIR = loginShellConfigDir;
     } else {
@@ -276,16 +296,18 @@ function buildClaudeDiagnostics(args: {
   const env = buildClaudeEnv({ executablePath: args.executablePath });
   const versionProbe = args.executablePath
     ? probeExecutableVersion({
-      executablePath: args.executablePath,
-      env,
-    })
+        executablePath: args.executablePath,
+        env,
+      })
     : null;
 
   return {
     taskId: args.taskId ?? "default",
     cwd: args.cwd,
     executablePath: args.executablePath || "<sdk-default>",
-    executableExists: args.executablePath ? canExecutePath({ path: args.executablePath }) : null,
+    executableExists: args.executablePath
+      ? canExecutePath({ path: args.executablePath })
+      : null,
     envPathHead: summarizePathHead({ value: env.PATH }),
     electronEnv: {
       ELECTRON_RUN_AS_NODE: process.env.ELECTRON_RUN_AS_NODE ?? "",
@@ -294,12 +316,12 @@ function buildClaudeDiagnostics(args: {
     },
     versionProbe: versionProbe
       ? {
-        status: versionProbe.status,
-        signal: versionProbe.signal,
-        error: versionProbe.error,
-        stdout: versionProbe.stdout,
-        stderr: versionProbe.stderr,
-      }
+          status: versionProbe.status,
+          signal: versionProbe.signal,
+          error: versionProbe.error,
+          stdout: versionProbe.stdout,
+          stderr: versionProbe.stderr,
+        }
       : null,
   };
 }
@@ -323,7 +345,14 @@ function normalizeClaudeSkillSlug(value: string) {
 }
 
 function extractClaudeSkillSlugFromRecord(input: Record<string, unknown>) {
-  const candidateKeys = ["skill", "slug", "name", "command", "skill_name", "skillName"] as const;
+  const candidateKeys = [
+    "skill",
+    "slug",
+    "name",
+    "command",
+    "skill_name",
+    "skillName",
+  ] as const;
   for (const key of candidateKeys) {
     const value = input[key];
     if (typeof value !== "string") {
@@ -345,8 +374,14 @@ export function extractClaudeRequestedSkillSlug(args: {
     return direct;
   }
   const nestedInput = args.input.input;
-  if (nestedInput && typeof nestedInput === "object" && !Array.isArray(nestedInput)) {
-    return extractClaudeSkillSlugFromRecord(nestedInput as Record<string, unknown>);
+  if (
+    nestedInput &&
+    typeof nestedInput === "object" &&
+    !Array.isArray(nestedInput)
+  ) {
+    return extractClaudeSkillSlugFromRecord(
+      nestedInput as Record<string, unknown>,
+    );
   }
   return null;
 }
@@ -398,10 +433,13 @@ function validateClaudePermissionResult(args: {
   if (parsed.success) {
     return parsed.data;
   }
-  console.warn("[claude-sdk-runtime] invalid permission callback result; falling back to deny", {
-    context: args.context,
-    error: parsed.error.flatten(),
-  });
+  console.warn(
+    "[claude-sdk-runtime] invalid permission callback result; falling back to deny",
+    {
+      context: args.context,
+      error: parsed.error.flatten(),
+    },
+  );
   return {
     behavior: "deny",
     message: args.fallbackMessage,
@@ -417,7 +455,9 @@ function buildClaudeDenyPermissionResult(args: {
     candidate: {
       behavior: "deny",
       message: args.message,
-      ...(typeof args.interrupt === "boolean" ? { interrupt: args.interrupt } : {}),
+      ...(typeof args.interrupt === "boolean"
+        ? { interrupt: args.interrupt }
+        : {}),
     },
     fallbackMessage: args.message,
     context: args.context,
@@ -475,18 +515,19 @@ export function shouldDenyClaudeToolInPlanMode(args: {
   return typeof command === "string" && isMutatingClaudeBashCommand(command);
 }
 
-export function shouldAutoAllowClaudeTool(args: {
-  toolName: string;
-}) {
+export function shouldAutoAllowClaudeTool(args: { toolName: string }) {
   const normalizedToolName = args.toolName.trim().toLowerCase();
   if (CLAUDE_AUTO_ALLOWED_TOOL_NAMES.has(normalizedToolName)) {
     return true;
   }
-  const leafToolName = normalizedToolName.split("__").at(-1) ?? normalizedToolName;
+  const leafToolName =
+    normalizedToolName.split("__").at(-1) ?? normalizedToolName;
   return CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES.has(leafToolName);
 }
 
-async function resolveEmbeddedStaveLocalMcpServers(): Promise<Record<string, McpServerConfig> | undefined> {
+async function resolveEmbeddedStaveLocalMcpServers(): Promise<
+  Record<string, McpServerConfig> | undefined
+> {
   const manifest = await readPrimaryStaveLocalMcpManifest();
   if (!manifest) {
     return undefined;
@@ -496,9 +537,7 @@ async function resolveEmbeddedStaveLocalMcpServers(): Promise<Record<string, Mcp
   };
 }
 
-function buildClaudePlanModeDenyMessage(args: {
-  toolName: string;
-}) {
+function buildClaudePlanModeDenyMessage(args: { toolName: string }) {
   if (args.toolName.trim().toLowerCase() === "bash") {
     return "Claude plan mode denied a mutating Bash command. Planning turns cannot modify files or task state.";
   }
@@ -533,17 +572,20 @@ export function buildClaudeSystemPrompt(args: {
 
 function extractClaudeTerminalIssue(args: { stdoutTail: string }) {
   const source = args.stdoutTail;
-  if (source.includes("\"error\":\"rate_limit\"") || source.includes("\"rate_limit_event\"")) {
+  if (
+    source.includes('"error":"rate_limit"') ||
+    source.includes('"rate_limit_event"')
+  ) {
     const quoted = source.match(/"You've hit your limit[^"]*"/);
     if (quoted?.[0]) {
       return quoted[0].slice(1, -1);
     }
     return null;
   }
-  if (source.includes("\"error\":\"authentication_failed\"")) {
+  if (source.includes('"error":"authentication_failed"')) {
     return "Claude authentication failed. Run `claude auth login` and retry.";
   }
-  if (source.includes("\"error\":\"billing_error\"")) {
+  if (source.includes('"error":"billing_error"')) {
     return "Claude billing/subscription issue detected. Check plan/payment status and retry.";
   }
   return null;
@@ -585,32 +627,42 @@ function parseClaudeQuestionList(args: { input: Record<string, unknown> }) {
       return [];
     }
     const candidate = rawQuestion as Record<string, unknown>;
-    const question = typeof candidate.question === "string" ? candidate.question : "";
+    const question =
+      typeof candidate.question === "string" ? candidate.question : "";
     const header = typeof candidate.header === "string" ? candidate.header : "";
     const options = Array.isArray(candidate.options)
       ? candidate.options.flatMap((rawOption) => {
-        if (!rawOption || typeof rawOption !== "object") {
-          return [];
-        }
-        const option = rawOption as Record<string, unknown>;
-        if (typeof option.label !== "string" || typeof option.description !== "string") {
-          return [];
-        }
-        return [{
-          label: option.label,
-          description: option.description,
-        }];
-      })
+          if (!rawOption || typeof rawOption !== "object") {
+            return [];
+          }
+          const option = rawOption as Record<string, unknown>;
+          if (
+            typeof option.label !== "string" ||
+            typeof option.description !== "string"
+          ) {
+            return [];
+          }
+          return [
+            {
+              label: option.label,
+              description: option.description,
+            },
+          ];
+        })
       : [];
     if (!question || !header || options.length === 0) {
       return [];
     }
-    return [{
-      question,
-      header,
-      options,
-      ...(typeof candidate.multiSelect === "boolean" ? { multiSelect: candidate.multiSelect } : {}),
-    }];
+    return [
+      {
+        question,
+        header,
+        options,
+        ...(typeof candidate.multiSelect === "boolean"
+          ? { multiSelect: candidate.multiSelect }
+          : {}),
+      },
+    ];
   });
 }
 
@@ -685,7 +737,9 @@ export function buildClaudeUserInputPermissionResult(args: {
   });
 }
 
-function toClaudeThinkingConfig(thinkingMode?: "adaptive" | "enabled" | "disabled") {
+function toClaudeThinkingConfig(
+  thinkingMode?: "adaptive" | "enabled" | "disabled",
+) {
   if (thinkingMode === "adaptive") {
     return { type: "adaptive" as const };
   }
@@ -702,14 +756,19 @@ export function resolveClaudeAgentProgressSummaries(value?: boolean) {
   return typeof value === "boolean" ? value : undefined;
 }
 
-function resolveClaudeSettingSources(value?: NonNullable<StreamTurnArgs["runtimeOptions"]>["claudeSettingSources"]) {
+function resolveClaudeSettingSources(
+  value?: NonNullable<StreamTurnArgs["runtimeOptions"]>["claudeSettingSources"],
+) {
   if (!Array.isArray(value)) {
     return undefined;
   }
 
   const normalized: SettingSource[] = [];
   value.forEach((source) => {
-    if ((source === "user" || source === "project" || source === "local") && !normalized.includes(source)) {
+    if (
+      (source === "user" || source === "project" || source === "local") &&
+      !normalized.includes(source)
+    ) {
       normalized.push(source);
     }
   });
@@ -735,31 +794,43 @@ function buildClaudeQueryOptions(args: {
   canUseTool?: CanUseTool;
   mcpServers?: Record<string, McpServerConfig>;
 }) {
-  const permissionMode = args.permissionMode
-    ?? resolveClaudePermissionMode({
+  const permissionMode =
+    args.permissionMode ??
+    resolveClaudePermissionMode({
       runtimeValue: args.runtimeOptions?.claudePermissionMode,
       envValue: process.env.STAVE_CLAUDE_PERMISSION_MODE?.trim(),
       fallback: "acceptEdits",
     });
-  const allowDangerouslySkipPermissions = args.runtimeOptions?.claudeAllowDangerouslySkipPermissions
-    ?? parseBooleanEnv({
+  const allowDangerouslySkipPermissions =
+    args.runtimeOptions?.claudeAllowDangerouslySkipPermissions ??
+    parseBooleanEnv({
       value: process.env.STAVE_CLAUDE_ALLOW_DANGEROUSLY_SKIP_PERMISSIONS,
       fallback: permissionMode === "bypassPermissions",
     });
-  const claudeSandboxEnabled = args.runtimeOptions?.claudeSandboxEnabled
-    ?? parseBooleanEnv({
+  const claudeSandboxEnabled =
+    args.runtimeOptions?.claudeSandboxEnabled ??
+    parseBooleanEnv({
       value: process.env.STAVE_CLAUDE_SANDBOX_ENABLED,
       fallback: false,
     });
-  const claudeAllowUnsandboxedCommands = args.runtimeOptions?.claudeAllowUnsandboxedCommands
-    ?? parseBooleanEnv({
+  const claudeAllowUnsandboxedCommands =
+    args.runtimeOptions?.claudeAllowUnsandboxedCommands ??
+    parseBooleanEnv({
       value: process.env.STAVE_CLAUDE_ALLOW_UNSANDBOXED_COMMANDS,
       fallback: true,
     });
-  const thinking = toClaudeThinkingConfig(args.runtimeOptions?.claudeThinkingMode);
-  const agentProgressSummaries = resolveClaudeAgentProgressSummaries(args.runtimeOptions?.claudeAgentProgressSummaries);
-  const settingSources = resolveClaudeSettingSources(args.runtimeOptions?.claudeSettingSources);
-  const taskBudget = resolveClaudeTaskBudget(args.runtimeOptions?.claudeTaskBudgetTokens);
+  const thinking = toClaudeThinkingConfig(
+    args.runtimeOptions?.claudeThinkingMode,
+  );
+  const agentProgressSummaries = resolveClaudeAgentProgressSummaries(
+    args.runtimeOptions?.claudeAgentProgressSummaries,
+  );
+  const settingSources = resolveClaudeSettingSources(
+    args.runtimeOptions?.claudeSettingSources,
+  );
+  const taskBudget = resolveClaudeTaskBudget(
+    args.runtimeOptions?.claudeTaskBudgetTokens,
+  );
   const disallowedTools = resolveClaudeDisallowedTools({
     permissionMode,
     runtimeDisallowedTools: args.runtimeOptions?.claudeDisallowedTools,
@@ -767,23 +838,35 @@ function buildClaudeQueryOptions(args: {
 
   return {
     permissionMode,
-    ...(permissionMode === "bypassPermissions" ? { allowDangerouslySkipPermissions } : {}),
+    ...(permissionMode === "bypassPermissions"
+      ? { allowDangerouslySkipPermissions }
+      : {}),
     ...(args.resume ? { resume: args.resume } : {}),
     ...(args.includePartialMessages ? { includePartialMessages: true } : {}),
     promptSuggestions: args.promptSuggestions ?? false,
     cwd: args.cwd,
     ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
     ...(args.systemPrompt ? { systemPrompt: args.systemPrompt } : {}),
-    ...(typeof args.runtimeOptions?.claudeMaxTurns === "number" ? { maxTurns: args.runtimeOptions.claudeMaxTurns } : {}),
-    ...(typeof args.runtimeOptions?.claudeMaxBudgetUsd === "number" ? { maxBudgetUsd: args.runtimeOptions.claudeMaxBudgetUsd } : {}),
+    ...(typeof args.runtimeOptions?.claudeMaxTurns === "number"
+      ? { maxTurns: args.runtimeOptions.claudeMaxTurns }
+      : {}),
+    ...(typeof args.runtimeOptions?.claudeMaxBudgetUsd === "number"
+      ? { maxBudgetUsd: args.runtimeOptions.claudeMaxBudgetUsd }
+      : {}),
     ...(taskBudget ? { taskBudget } : {}),
-    ...(args.runtimeOptions?.claudeEffort ? { effort: args.runtimeOptions.claudeEffort } : {}),
+    ...(args.runtimeOptions?.claudeEffort
+      ? { effort: args.runtimeOptions.claudeEffort }
+      : {}),
     ...(thinking ? { thinking } : {}),
     ...(agentProgressSummaries !== undefined ? { agentProgressSummaries } : {}),
-    ...(args.runtimeOptions?.claudeAllowedTools ? { allowedTools: args.runtimeOptions.claudeAllowedTools } : {}),
+    ...(args.runtimeOptions?.claudeAllowedTools
+      ? { allowedTools: args.runtimeOptions.claudeAllowedTools }
+      : {}),
     ...(disallowedTools.length > 0 ? { disallowedTools } : {}),
     ...(settingSources !== undefined ? { settingSources } : {}),
-    ...(args.runtimeOptions?.claudeFastMode ? { settings: { fastMode: true } } : {}),
+    ...(args.runtimeOptions?.claudeFastMode
+      ? { settings: { fastMode: true } }
+      : {}),
     ...(args.canUseTool ? { canUseTool: args.canUseTool } : {}),
     ...(args.mcpServers ? { mcpServers: args.mcpServers } : {}),
     sandbox: {
@@ -791,11 +874,15 @@ function buildClaudeQueryOptions(args: {
       allowUnsandboxedCommands: claudeAllowUnsandboxedCommands,
     },
     env: buildClaudeEnv({ executablePath: args.claudeExecutablePath }),
-    ...(args.claudeExecutablePath.length > 0 ? { pathToClaudeCodeExecutable: args.claudeExecutablePath } : {}),
+    ...(args.claudeExecutablePath.length > 0
+      ? { pathToClaudeCodeExecutable: args.claudeExecutablePath }
+      : {}),
   };
 }
 
-function toClaudeMcpServerStatusSnapshot(status: McpServerStatus): ClaudeMcpServerStatusSnapshot {
+function toClaudeMcpServerStatusSnapshot(
+  status: McpServerStatus,
+): ClaudeMcpServerStatusSnapshot {
   return {
     name: status.name,
     status: status.status,
@@ -805,13 +892,17 @@ function toClaudeMcpServerStatusSnapshot(status: McpServerStatus): ClaudeMcpServ
   };
 }
 
-function toClaudeContextUsageSnapshot(usage: SDKControlGetContextUsageResponse) {
+function toClaudeContextUsageSnapshot(
+  usage: SDKControlGetContextUsageResponse,
+) {
   return {
     categories: usage.categories.map((category) => ({
       name: category.name,
       tokens: category.tokens,
       color: category.color,
-      ...(category.isDeferred !== undefined ? { isDeferred: category.isDeferred } : {}),
+      ...(category.isDeferred !== undefined
+        ? { isDeferred: category.isDeferred }
+        : {}),
     })),
     totalTokens: usage.totalTokens,
     maxTokens: usage.maxTokens,
@@ -846,10 +937,12 @@ function toClaudePluginReloadSnapshot(reload: SDKControlReloadPluginsResponse) {
   };
 }
 
-function buildClaudeTaskProgressEvents(message: SDKSystemMessage & {
-  subtype?: string;
-  summary?: string;
-}) {
+function buildClaudeTaskProgressEvents(
+  message: SDKSystemMessage & {
+    subtype?: string;
+    summary?: string;
+  },
+) {
   if (message.subtype !== "task_progress") {
     return [];
   }
@@ -857,10 +950,12 @@ function buildClaudeTaskProgressEvents(message: SDKSystemMessage & {
   if (!summary) {
     return [];
   }
-  return [{
-    type: "system" as const,
-    content: `Subagent progress: ${summary}`,
-  }];
+  return [
+    {
+      type: "system" as const,
+      content: `Subagent progress: ${summary}`,
+    },
+  ];
 }
 
 // ── Subagent progress tracking ────────────────────────────────────────────────
@@ -876,7 +971,9 @@ function extractStringField(
     return undefined;
   }
   const val = obj[key];
-  return typeof val === "string" && val.trim().length > 0 ? val.trim() : undefined;
+  return typeof val === "string" && val.trim().length > 0
+    ? val.trim()
+    : undefined;
 }
 
 function isAgentToolName(name: string): boolean {
@@ -894,7 +991,11 @@ export class SubagentProgressTracker {
    * record Agent tool starts and completions.
    */
   trackEvent(event: BridgeEvent): void {
-    if (event.type === "tool" && isAgentToolName(event.toolName) && event.toolUseId) {
+    if (
+      event.type === "tool" &&
+      isAgentToolName(event.toolName) &&
+      event.toolUseId
+    ) {
       this.pendingAgentToolUseIds.push(event.toolUseId);
     }
     if (event.type === "tool_result") {
@@ -911,17 +1012,24 @@ export class SubagentProgressTracker {
    */
   processRawMessage(message: Record<string, unknown>): void {
     const type = message.type;
-    if (type !== "hook_started" && type !== "hook_response" && type !== "hook_progress") {
+    if (
+      type !== "hook_started" &&
+      type !== "hook_response" &&
+      type !== "hook_progress"
+    ) {
       return;
     }
-    const input = (typeof message.input === "object" && message.input !== null)
-      ? message.input as Record<string, unknown>
-      : null;
+    const input =
+      typeof message.input === "object" && message.input !== null
+        ? (message.input as Record<string, unknown>)
+        : null;
 
-    const agentId = extractStringField(message, "agent_id")
-      ?? extractStringField(input, "agent_id");
-    const toolUseId = extractStringField(message, "tool_use_id")
-      ?? extractStringField(input, "tool_use_id");
+    const agentId =
+      extractStringField(message, "agent_id") ??
+      extractStringField(input, "agent_id");
+    const toolUseId =
+      extractStringField(message, "tool_use_id") ??
+      extractStringField(input, "tool_use_id");
 
     if (agentId && toolUseId) {
       this.agentIdToToolUseId.set(agentId, toolUseId);
@@ -937,9 +1045,14 @@ export class SubagentProgressTracker {
    *  2. `agent_id` field mapped through hook metadata
    *  3. Most recently started active Agent (positional heuristic)
    */
-  resolveToolUseId(progressMessage: Record<string, unknown>): string | undefined {
+  resolveToolUseId(
+    progressMessage: Record<string, unknown>,
+  ): string | undefined {
     const directToolUseId = extractStringField(progressMessage, "tool_use_id");
-    if (directToolUseId && this.pendingAgentToolUseIds.includes(directToolUseId)) {
+    if (
+      directToolUseId &&
+      this.pendingAgentToolUseIds.includes(directToolUseId)
+    ) {
       return directToolUseId;
     }
 
@@ -1007,34 +1120,53 @@ export function mapClaudeMessageToEvents(args: {
   const { message, claudeDebugStream } = args;
 
   if (message.type === "system") {
-    const sysMsg = message as SDKSystemMessage & { subtype?: string; content?: string; summary?: string };
-    if (sysMsg.subtype === "local_command_output" && typeof sysMsg.content === "string" && sysMsg.content.trim()) {
+    const sysMsg = message as SDKSystemMessage & {
+      subtype?: string;
+      content?: string;
+      summary?: string;
+    };
+    if (
+      sysMsg.subtype === "local_command_output" &&
+      typeof sysMsg.content === "string" &&
+      sysMsg.content.trim()
+    ) {
       return [{ type: "text", text: sysMsg.content }];
     }
-    if (sysMsg.subtype === "init" && typeof sysMsg.session_id === "string" && sysMsg.session_id.trim()) {
-      return [{
-        type: "provider_session",
-        providerId: "claude-code",
-        nativeSessionId: sysMsg.session_id,
-      }];
+    if (
+      sysMsg.subtype === "init" &&
+      typeof sysMsg.session_id === "string" &&
+      sysMsg.session_id.trim()
+    ) {
+      return [
+        {
+          type: "provider_session",
+          providerId: "claude-code",
+          nativeSessionId: sysMsg.session_id,
+        },
+      ];
     }
     if (sysMsg.subtype === "compact_boundary") {
-      const meta = (sysMsg as { compact_metadata?: { trigger?: string } }).compact_metadata;
+      const meta = (sysMsg as { compact_metadata?: { trigger?: string } })
+        .compact_metadata;
       const trigger = meta?.trigger ?? "auto";
       const gitRef = resolveGitHeadRef({ cwd: args.cwd });
-      return [{
-        type: "system",
-        content: `Context compacted (${trigger}).`,
-        compactBoundary: {
-          trigger,
-          ...(gitRef ? { gitRef } : {}),
+      return [
+        {
+          type: "system",
+          content: `Context compacted (${trigger}).`,
+          compactBoundary: {
+            trigger,
+            ...(gitRef ? { gitRef } : {}),
+          },
         },
-      }];
+      ];
     }
     if (sysMsg.subtype === "status") {
       const status = (sysMsg as { status?: string | null }).status;
       if (status === "compacting") {
-        return [{ type: "system", content: "Compacting conversation context\u2026" }];
+        return [
+          { type: "system", content: "Compacting conversation context\u2026" },
+        ];
       }
       return [];
     }
@@ -1043,7 +1175,11 @@ export function mapClaudeMessageToEvents(args: {
       return taskProgressEvents;
     }
     if (claudeDebugStream) {
-      console.debug("[claude-sdk-runtime] system init", sysMsg.subtype, sysMsg.session_id);
+      console.debug(
+        "[claude-sdk-runtime] system init",
+        sysMsg.subtype,
+        sysMsg.session_id,
+      );
     }
     return [];
   }
@@ -1053,10 +1189,20 @@ export function mapClaudeMessageToEvents(args: {
 
     if (assistantMsg.error) {
       if (assistantMsg.error === "authentication_failed") {
-        return [{ type: "text", text: "Claude authentication failed. Run `claude auth login` and retry." }];
+        return [
+          {
+            type: "text",
+            text: "Claude authentication failed. Run `claude auth login` and retry.",
+          },
+        ];
       }
       if (assistantMsg.error === "billing_error") {
-        return [{ type: "text", text: "Claude billing/subscription issue detected. Check plan/payment status and retry." }];
+        return [
+          {
+            type: "text",
+            text: "Claude billing/subscription issue detected. Check plan/payment status and retry.",
+          },
+        ];
       }
     }
 
@@ -1096,15 +1242,17 @@ export function mapClaudeMessageToEvents(args: {
       }
       if (b.type === "tool_use") {
         if (b.name === "ExitPlanMode") {
-          const planText = typeof (b.input as Record<string, unknown>)?.plan === "string"
-            ? (b.input as Record<string, unknown>).plan as string
-            : "";
+          const planText =
+            typeof (b.input as Record<string, unknown>)?.plan === "string"
+              ? ((b.input as Record<string, unknown>).plan as string)
+              : "";
           events.push({ type: "plan_ready", planText });
           continue;
         }
-        const toolUseId = typeof (b as { id?: string }).id === "string"
-          ? (b as { id: string }).id
-          : undefined;
+        const toolUseId =
+          typeof (b as { id?: string }).id === "string"
+            ? (b as { id: string }).id
+            : undefined;
         events.push({
           type: "tool",
           ...(toolUseId ? { toolUseId } : {}),
@@ -1131,8 +1279,17 @@ export function mapClaudeMessageToEvents(args: {
       error?: { message?: string };
     };
     if (streamEvent.type === "content_block_delta") {
-      if (streamEvent.delta?.type === "thinking_delta" && streamEvent.delta.thinking) {
-        return [{ type: "thinking", text: streamEvent.delta.thinking, isStreaming: true }];
+      if (
+        streamEvent.delta?.type === "thinking_delta" &&
+        streamEvent.delta.thinking
+      ) {
+        return [
+          {
+            type: "thinking",
+            text: streamEvent.delta.thinking,
+            isStreaming: true,
+          },
+        ];
       }
       if (streamEvent.delta?.type === "text_delta" && streamEvent.delta.text) {
         // Keep this in sync with the assistant text-block note above.
@@ -1141,11 +1298,13 @@ export function mapClaudeMessageToEvents(args: {
       return [];
     }
     if (streamEvent.type === "error") {
-      return [{
-        type: "error",
-        message: `Claude stream error: ${toText(streamEvent.error ?? streamEvent)}`,
-        recoverable: false,
-      }];
+      return [
+        {
+          type: "error",
+          message: `Claude stream error: ${toText(streamEvent.error ?? streamEvent)}`,
+          recoverable: false,
+        },
+      ];
     }
     if (claudeDebugStream) {
       console.debug("[claude-sdk-runtime] stream_event", streamEvent);
@@ -1153,9 +1312,15 @@ export function mapClaudeMessageToEvents(args: {
     return [];
   }
 
-  if (message.type === "user" || (message as { type: string }).type === "user_message_replay") {
+  if (
+    message.type === "user" ||
+    (message as { type: string }).type === "user_message_replay"
+  ) {
     // Surface tool_result content blocks so the UI can populate subagent output.
-    const userMsg = message as { type: string; message?: { content?: unknown } };
+    const userMsg = message as {
+      type: string;
+      message?: { content?: unknown };
+    };
     const userContent = userMsg.message?.content;
     if (Array.isArray(userContent)) {
       const toolResultEvents: BridgeEvent[] = [];
@@ -1163,7 +1328,11 @@ export function mapClaudeMessageToEvents(args: {
         if (!block || typeof block !== "object") {
           continue;
         }
-        const b = block as { type?: string; tool_use_id?: string; content?: unknown };
+        const b = block as {
+          type?: string;
+          tool_use_id?: string;
+          content?: unknown;
+        };
         if (b.type !== "tool_result" || typeof b.tool_use_id !== "string") {
           continue;
         }
@@ -1177,11 +1346,17 @@ export function mapClaudeMessageToEvents(args: {
                 return [];
               }
               const cb = c as { type?: string; text?: string };
-              return cb.type === "text" && typeof cb.text === "string" ? [cb.text] : [];
+              return cb.type === "text" && typeof cb.text === "string"
+                ? [cb.text]
+                : [];
             })
             .join("\n");
         }
-        toolResultEvents.push({ type: "tool_result", tool_use_id: b.tool_use_id, output });
+        toolResultEvents.push({
+          type: "tool_result",
+          tool_use_id: b.tool_use_id,
+          output,
+        });
       }
       return toolResultEvents;
     }
@@ -1225,20 +1400,25 @@ export function mapClaudeMessageToEvents(args: {
       const resetTime = info.resetsAt
         ? new Date(info.resetsAt * 1000).toLocaleTimeString()
         : "unknown";
-      return [{
-        type: "error",
-        message: `Rate limit reached. Resets at ${resetTime}.`,
-        recoverable: true,
-      }];
+      return [
+        {
+          type: "error",
+          message: `Rate limit reached. Resets at ${resetTime}.`,
+          recoverable: true,
+        },
+      ];
     }
     if (info?.status === "allowed_warning") {
-      const pct = info.utilization != null
-        ? ` (${Math.round(info.utilization * 100)}% used)`
-        : "";
-      return [{
-        type: "system",
-        content: `Approaching rate limit${pct}. Consider pacing requests.`,
-      }];
+      const pct =
+        info.utilization != null
+          ? ` (${Math.round(info.utilization * 100)}% used)`
+          : "";
+      return [
+        {
+          type: "system",
+          content: `Approaching rate limit${pct}. Consider pacing requests.`,
+        },
+      ];
     }
     return [];
   }
@@ -1252,12 +1432,14 @@ export function mapClaudeMessageToEvents(args: {
     };
     const toolUseId = progressMsg.tool_use_id;
     if (typeof toolUseId === "string" && toolUseId) {
-      return [{
-        type: "tool_progress",
-        toolUseId,
-        toolName: progressMsg.tool_name ?? "tool",
-        elapsedSeconds: progressMsg.elapsed_time_seconds ?? 0,
-      }];
+      return [
+        {
+          type: "tool_progress",
+          toolUseId,
+          toolName: progressMsg.tool_name ?? "tool",
+          elapsedSeconds: progressMsg.elapsed_time_seconds ?? 0,
+        },
+      ];
     }
     return [];
   }
@@ -1272,14 +1454,14 @@ export function mapClaudeMessageToEvents(args: {
   }
 
   if (
-    message.type === "auth_status"
-    || message.type === "task_notification"
-    || message.type === "task_started"
-    || message.type === "task_progress"
-    || message.type === "files_persisted"
-    || message.type === "hook_started"
-    || message.type === "hook_progress"
-    || message.type === "hook_response"
+    message.type === "auth_status" ||
+    message.type === "task_notification" ||
+    message.type === "task_started" ||
+    message.type === "task_progress" ||
+    message.type === "files_persisted" ||
+    message.type === "hook_started" ||
+    message.type === "hook_progress" ||
+    message.type === "hook_response"
   ) {
     if (claudeDebugStream) {
       console.debug("[claude-sdk-runtime] meta", message.type, message);
@@ -1288,7 +1470,13 @@ export function mapClaudeMessageToEvents(args: {
   }
 
   if (message.type === "error") {
-    return [{ type: "error", message: `Claude error: ${toText(message)}`, recoverable: false }];
+    return [
+      {
+        type: "error",
+        message: `Claude error: ${toText(message)}`,
+        recoverable: false,
+      },
+    ];
   }
 
   return [];
@@ -1303,16 +1491,20 @@ export async function getClaudeCommandCatalog(args: {
 }) {
   let stream: Query | null = null;
   try {
-    const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+    const runtimeCwd =
+      args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
     const mod = await getPrewarmedSdkModule();
-    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    const queryFn = (
+      mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }
+    ).query;
 
     if (!queryFn) {
       return {
         ok: false,
         supported: false,
         commands: [],
-        detail: "Claude runtime failure: query() is unavailable from SDK import.",
+        detail:
+          "Claude runtime failure: query() is unavailable from SDK import.",
       };
     }
 
@@ -1338,9 +1530,10 @@ export async function getClaudeCommandCatalog(args: {
       ok: true,
       supported: true,
       commands: commands.map(toProviderSlashCommand),
-      detail: commands.length > 0
-        ? `Loaded ${commands.length} Claude native command${commands.length === 1 ? "" : "s"} for ${runtimeCwd}.`
-        : `Claude reported no native slash commands for ${runtimeCwd}.`,
+      detail:
+        commands.length > 0
+          ? `Loaded ${commands.length} Claude native command${commands.length === 1 ? "" : "s"} for ${runtimeCwd}.`
+          : `Claude reported no native slash commands for ${runtimeCwd}.`,
     };
   } catch (error) {
     return {
@@ -1360,14 +1553,18 @@ export async function getClaudeContextUsage(args: {
 }): Promise<ClaudeContextUsageResponse> {
   let stream: Query | null = null;
   try {
-    const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+    const runtimeCwd =
+      args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
     const mod = await getPrewarmedSdkModule();
-    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    const queryFn = (
+      mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }
+    ).query;
 
     if (!queryFn) {
       return {
         ok: false,
-        detail: "Claude runtime failure: query() is unavailable from SDK import.",
+        detail:
+          "Claude runtime failure: query() is unavailable from SDK import.",
       };
     }
 
@@ -1409,14 +1606,18 @@ export async function reloadClaudePlugins(args: {
 }): Promise<ClaudePluginReloadResponse> {
   let stream: Query | null = null;
   try {
-    const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+    const runtimeCwd =
+      args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
     const mod = await getPrewarmedSdkModule();
-    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    const queryFn = (
+      mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }
+    ).query;
 
     if (!queryFn) {
       return {
         ok: false,
-        detail: "Claude runtime failure: query() is unavailable from SDK import.",
+        detail:
+          "Claude runtime failure: query() is unavailable from SDK import.",
       };
     }
 
@@ -1457,7 +1658,10 @@ export function cleanupClaudeTask(taskId: string) {
   activeRunByTask.delete(taskId);
 }
 
-function resolveSessionId(args: { taskId?: string; fallbackSessionId?: string }) {
+function resolveSessionId(args: {
+  taskId?: string;
+  fallbackSessionId?: string;
+}) {
   const taskKey = args.taskId ?? "default";
   return sessionIdByTask.get(taskKey) ?? args.fallbackSessionId?.trim();
 }
@@ -1471,16 +1675,22 @@ function rememberSessionId(args: { taskId?: string; sessionId?: string }) {
   sessionIdByTask.set(taskKey, nextSessionId);
 }
 
-export async function streamClaudeWithSdk(args: StreamTurnArgs & {
-  onEvent?: (event: BridgeEvent) => void;
-  registerAbort?: (aborter: () => void) => void;
-  registerApprovalResponder?: (responder: (args: { requestId: string; approved: boolean }) => boolean) => void;
-  registerUserInputResponder?: (responder: (args: {
-    requestId: string;
-    answers?: Record<string, string>;
-    denied?: boolean;
-  }) => boolean) => void;
-}): Promise<BridgeEvent[] | null> {
+export async function streamClaudeWithSdk(
+  args: StreamTurnArgs & {
+    onEvent?: (event: BridgeEvent) => void;
+    registerAbort?: (aborter: () => void) => void;
+    registerApprovalResponder?: (
+      responder: (args: { requestId: string; approved: boolean }) => boolean,
+    ) => void;
+    registerUserInputResponder?: (
+      responder: (args: {
+        requestId: string;
+        answers?: Record<string, string>;
+        denied?: boolean;
+      }) => boolean,
+    ) => void;
+  },
+): Promise<BridgeEvent[] | null> {
   const taskKey = args.taskId ?? "default";
   const previousRun = activeRunByTask.get(taskKey) ?? Promise.resolve();
   let releaseCurrentRun: (() => void) | null = null;
@@ -1493,14 +1703,33 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
 
   let selectedClaudePath = "";
   let diagnostics: ReturnType<typeof buildClaudeDiagnostics> | null = null;
+  // Hoisted to outer scope so the finally block can clean up pending resolvers
+  // and close the stream even when an exception is thrown mid-turn.
+  const pendingApprovalResolvers = new Map<
+    string,
+    (approved: boolean) => void
+  >();
+  const pendingUserInputResolvers = new Map<
+    string,
+    (response: { answers?: Record<string, string>; denied?: boolean }) => void
+  >();
+  let stream: Query | null = null;
   try {
-    const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+    const runtimeCwd =
+      args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
     const mod = await getPrewarmedSdkModule();
-    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    const queryFn = (
+      mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }
+    ).query;
 
     if (!queryFn) {
       return [
-        { type: "error", message: "Claude runtime failure: query() is unavailable from SDK import.", recoverable: false },
+        {
+          type: "error",
+          message:
+            "Claude runtime failure: query() is unavailable from SDK import.",
+          recoverable: false,
+        },
         { type: "done" },
       ];
     }
@@ -1516,12 +1745,6 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     });
     const events: BridgeEvent[] = [];
     const diffTracker = await createTurnDiffTracker({ cwd: runtimeCwd });
-    const pendingApprovalResolvers = new Map<string, (approved: boolean) => void>();
-    const pendingUserInputResolvers = new Map<string, (response: {
-      answers?: Record<string, string>;
-      denied?: boolean;
-    }) => void>();
-
     args.registerApprovalResponder?.(({ requestId, approved }) => {
       const resolver = pendingApprovalResolvers.get(requestId);
       if (!resolver) {
@@ -1562,7 +1785,9 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     const promptConversation = args.conversation
       ? filterPromptRetrievedContext({
           conversation: args.conversation,
-          excludedSourceIds: embeddedMcpServers ? [] : ["stave:current-task-awareness"],
+          excludedSourceIds: embeddedMcpServers
+            ? []
+            : ["stave:current-task-awareness"],
         })
       : args.conversation;
     const providerPrompt = buildProviderTurnPrompt({
@@ -1573,7 +1798,7 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     const activatedSkillSlugs = collectClaudeActivatedSkillSlugs({
       conversation: args.conversation,
     });
-    const stream = queryFn({
+    const queryResult = queryFn({
       prompt: providerPrompt,
       options: buildClaudeQueryOptions({
         cwd: runtimeCwd,
@@ -1588,11 +1813,13 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         canUseTool: async (toolName, input, options) => {
           const normalizedInput = normalizeClaudeToolInput(input);
           const requestId = options.toolUseID;
-          const redirectedSkillSlug = shouldRedirectClaudePreloadedSkillToolUse({
-            toolName,
-            input: normalizedInput,
-            preloadedSkillSlugs: activatedSkillSlugs,
-          });
+          const redirectedSkillSlug = shouldRedirectClaudePreloadedSkillToolUse(
+            {
+              toolName,
+              input: normalizedInput,
+              preloadedSkillSlugs: activatedSkillSlugs,
+            },
+          );
           if (redirectedSkillSlug) {
             return buildClaudeDenyPermissionResult({
               message: `Skill "${redirectedSkillSlug}" is already activated by Stave. Do not call the Skill tool for it; follow the [Activated Skills] instructions directly.`,
@@ -1609,10 +1836,13 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
           }
 
           if (toolName === "AskUserQuestion") {
-            const questions = parseClaudeQuestionList({ input: normalizedInput });
+            const questions = parseClaudeQuestionList({
+              input: normalizedInput,
+            });
             if (questions.length === 0) {
               return buildClaudeDenyPermissionResult({
-                message: "AskUserQuestion was requested without any valid questions.",
+                message:
+                  "AskUserQuestion was requested without any valid questions.",
                 context: "user-input:invalid-questions",
               });
             }
@@ -1642,10 +1872,13 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
             });
           }
 
-          if (claudePermissionMode === "plan" && shouldDenyClaudeToolInPlanMode({
-            toolName,
-            input: normalizedInput,
-          })) {
+          if (
+            claudePermissionMode === "plan" &&
+            shouldDenyClaudeToolInPlanMode({
+              toolName,
+              input: normalizedInput,
+            })
+          ) {
             return buildClaudeDenyPermissionResult({
               message: buildClaudePlanModeDenyMessage({ toolName }),
               context: "approval:plan-mode-hard-deny",
@@ -1683,24 +1916,35 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         },
       }),
     }) as Query;
+    stream = queryResult;
 
     // Register abort handler using the official Query.close() method
     args.registerAbort?.(() => {
-      stream.close();
+      stream?.close();
     });
 
     let hasStreamedText = false;
     let hasStreamedThinking = false;
     const emittedToolUseIds = new Set<string>();
     let finalStopReason: string | undefined;
-    const claudeDebugStream = args.runtimeOptions?.debug ?? process.env.STAVE_CLAUDE_DEBUG === "1";
+    const claudeDebugStream =
+      args.runtimeOptions?.debug ?? process.env.STAVE_CLAUDE_DEBUG === "1";
     const subagentTracker = new SubagentProgressTracker();
 
     for await (const message of stream) {
-      if (message.type === "system" && (message as SDKSystemMessage).subtype === "init") {
-        rememberSessionId({ taskId: args.taskId, sessionId: (message as SDKSystemMessage).session_id });
+      if (
+        message.type === "system" &&
+        (message as SDKSystemMessage).subtype === "init"
+      ) {
+        rememberSessionId({
+          taskId: args.taskId,
+          sessionId: (message as SDKSystemMessage).session_id,
+        });
       }
-      if (message.type === "system" && (message as SDKSystemMessage).subtype === "files_persisted") {
+      if (
+        message.type === "system" &&
+        (message as SDKSystemMessage).subtype === "files_persisted"
+      ) {
         const persistedMessage = message as SDKSystemMessage & {
           subtype: "files_persisted";
           files?: Array<{ filename?: string }>;
@@ -1709,12 +1953,15 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
         const changedPaths = (persistedMessage.files ?? [])
           .map((item) => item.filename ?? "")
           .filter(Boolean);
-        const { diffEvents, unresolvedPaths } = await diffTracker.buildDiffEvents({ changedPaths });
+        const { diffEvents, unresolvedPaths } =
+          await diffTracker.buildDiffEvents({ changedPaths });
         const fallbackEvents = diffTracker.buildFallbackEvents({
           appliedPaths: diffEvents.length === 0 ? changedPaths : [],
           skippedPaths: unresolvedPaths,
-          failedPaths: (persistedMessage.failed ?? [])
-            .map((item) => ({ path: item.filename ?? "", error: item.error })),
+          failedPaths: (persistedMessage.failed ?? []).map((item) => ({
+            path: item.filename ?? "",
+            error: item.error,
+          })),
         });
         const persistedEvents = [...diffEvents, ...fallbackEvents];
         events.push(...persistedEvents);
@@ -1727,12 +1974,21 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
 
       // Intercept task_progress messages to emit subagent_progress events with
       // toolUseId correlation instead of generic system events.
-      const sysMsg = message as SDKSystemMessage & { subtype?: string; summary?: string };
+      const sysMsg = message as SDKSystemMessage & {
+        subtype?: string;
+        summary?: string;
+      };
       if (sysMsg.type === "system" && sysMsg.subtype === "task_progress") {
         const summary = sysMsg.summary?.trim();
         if (summary) {
-          const toolUseId = subagentTracker.resolveToolUseId(message as Record<string, unknown>);
-          const progressEvent: BridgeEvent = { type: "subagent_progress", toolUseId, content: summary };
+          const toolUseId = subagentTracker.resolveToolUseId(
+            message as Record<string, unknown>,
+          );
+          const progressEvent: BridgeEvent = {
+            type: "subagent_progress",
+            toolUseId,
+            content: summary,
+          };
           events.push(progressEvent);
           args.onEvent?.(progressEvent);
         }
@@ -1741,22 +1997,41 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
 
       if (message.type === "stream_event") {
         const streamMsg = message as { type: "stream_event"; event: unknown };
-        const streamEvent = streamMsg.event as { type?: string; delta?: { type?: string } };
-        if (streamEvent?.type === "content_block_delta" && streamEvent.delta?.type === "text_delta") {
+        const streamEvent = streamMsg.event as {
+          type?: string;
+          delta?: { type?: string };
+        };
+        if (
+          streamEvent?.type === "content_block_delta" &&
+          streamEvent.delta?.type === "text_delta"
+        ) {
           hasStreamedText = true;
         }
-        if (streamEvent?.type === "content_block_delta" && streamEvent.delta?.type === "thinking_delta") {
+        if (
+          streamEvent?.type === "content_block_delta" &&
+          streamEvent.delta?.type === "thinking_delta"
+        ) {
           hasStreamedThinking = true;
         }
       }
       if (message.type === "result") {
-        finalStopReason = (message as SDKResultMessage).stop_reason ?? undefined;
+        finalStopReason =
+          (message as SDKResultMessage).stop_reason ?? undefined;
       }
-      let normalizedEvents = mapClaudeMessageToEvents({ message, claudeDebugStream, cwd: runtimeCwd });
+      let normalizedEvents = mapClaudeMessageToEvents({
+        message,
+        claudeDebugStream,
+        cwd: runtimeCwd,
+      });
       // Deduplicate: if text/thinking already came through stream_event deltas, skip the
       // full assistant message duplicates (they contain the same content assembled).
-      if (message.type === "assistant" && (hasStreamedText || hasStreamedThinking)) {
-        normalizedEvents = normalizedEvents.filter((event) => event.type !== "text" && event.type !== "thinking");
+      if (
+        message.type === "assistant" &&
+        (hasStreamedText || hasStreamedThinking)
+      ) {
+        normalizedEvents = normalizedEvents.filter(
+          (event) => event.type !== "text" && event.type !== "thinking",
+        );
       }
       // Deduplicate tool events: with includePartialMessages the same tool_use
       // block can appear in multiple partial assistant messages. Only keep the
@@ -1782,20 +2057,42 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     }
 
     if (events[events.length - 1]?.type !== "done") {
-      const done: BridgeEvent = finalStopReason ? { type: "done", stop_reason: finalStopReason } : { type: "done" };
+      const done: BridgeEvent = finalStopReason
+        ? { type: "done", stop_reason: finalStopReason }
+        : { type: "done" };
       events.push(done);
       args.onEvent?.(done);
     }
 
     return events;
   } catch (error) {
-    console.warn("[provider-runtime] Claude SDK unavailable", error, diagnostics);
+    // Distinguish abort (user-initiated cancel / stream.close()) from real failures.
+    const isAbort =
+      (error instanceof Error && error.name === "AbortError") ||
+      (error instanceof Error && /aborted|cancel/i.test(error.message));
+    if (isAbort) {
+      console.info("[provider-runtime] Claude turn aborted", {
+        taskId: args.taskId,
+      });
+      const abortEvents: BridgeEvent[] = [
+        { type: "done", stop_reason: "user_abort" },
+      ];
+      abortEvents.forEach((event) => args.onEvent?.(event));
+      return abortEvents;
+    }
+    console.warn(
+      "[provider-runtime] Claude SDK unavailable",
+      error,
+      diagnostics,
+    );
     const failureEvents: BridgeEvent[] = [
       {
         type: "error",
-        message: `Claude runtime failure: ${toText(error)} | diagnostics=${toText(diagnostics ?? {
-          executablePath: selectedClaudePath || "<sdk-default>",
-        })}`,
+        message: `Claude runtime failure: ${toText(error)} | diagnostics=${toText(
+          diagnostics ?? {
+            executablePath: selectedClaudePath || "<sdk-default>",
+          },
+        )}`,
         recoverable: true,
       },
       { type: "done" },
@@ -1803,6 +2100,36 @@ export async function streamClaudeWithSdk(args: StreamTurnArgs & {
     failureEvents.forEach((event) => args.onEvent?.(event));
     return failureEvents;
   } finally {
+    // ── Cleanup pending resolvers (T3Code pattern) ──────────────────────
+    // If the turn was aborted while waiting for user approval/input, the
+    // SDK's options.signal SHOULD abort the pending waitForClaudeToolDecision
+    // promise.  However, as a safety net (in case the SDK doesn't propagate
+    // abort to canUseTool signals), we forcibly resolve all pending resolvers
+    // so that no promise hangs indefinitely.
+    for (const [id, resolver] of pendingApprovalResolvers) {
+      try {
+        resolver(false);
+      } catch {
+        // Resolver may have already been settled — ignore.
+      }
+      pendingApprovalResolvers.delete(id);
+    }
+    for (const [id, resolver] of pendingUserInputResolvers) {
+      try {
+        resolver({ denied: true });
+      } catch {
+        // Resolver may have already been settled — ignore.
+      }
+      pendingUserInputResolvers.delete(id);
+    }
+
+    // Ensure the SDK stream is closed (idempotent).
+    try {
+      stream?.close();
+    } catch {
+      // stream.close() may throw if already closed — ignore.
+    }
+
     releaseCurrentRun?.();
     if (activeRunByTask.get(taskKey) === chainedRun) {
       activeRunByTask.delete(taskKey);
@@ -1821,7 +2148,9 @@ export async function suggestClaudeTaskName(args: {
 }): Promise<{ ok: boolean; title?: string }> {
   try {
     const mod = await getPrewarmedSdkModule();
-    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    const queryFn = (
+      mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }
+    ).query;
     if (!queryFn) {
       return { ok: false };
     }
@@ -1831,7 +2160,10 @@ export async function suggestClaudeTaskName(args: {
     // Build a conversation summary from the last few exchanges (if any).
     const historyLines = (args.history ?? [])
       .slice(-6)
-      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 300)}`)
+      .map(
+        (m) =>
+          `${m.role === "user" ? "User" : "Assistant"}: ${m.content.slice(0, 300)}`,
+      )
       .join("\n");
 
     const titlePrompt = [
@@ -1849,7 +2181,9 @@ export async function suggestClaudeTaskName(args: {
         maxTurns: 1,
         cwd: process.cwd(),
         model: "claude-haiku-4-5",
-        ...(claudeExecutablePath ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
+        ...(claudeExecutablePath
+          ? { pathToClaudeCodeExecutable: claudeExecutablePath }
+          : {}),
         env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
       },
     }) as Query;
@@ -1887,7 +2221,9 @@ export async function suggestClaudeCommitMessage(args: {
 }): Promise<{ ok: boolean; message?: string }> {
   try {
     const mod = await getPrewarmedSdkModule();
-    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    const queryFn = (
+      mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }
+    ).query;
     if (!queryFn) {
       return { ok: false };
     }
@@ -1906,11 +2242,9 @@ export async function suggestClaudeCommitMessage(args: {
       "",
       "Changed files (git status --porcelain):",
       args.fileList || "(no file list available)",
-      ...(args.diff.length > 0 ? [
-        "",
-        "Git diff (may be truncated):",
-        args.diff.slice(0, 6000),
-      ] : []),
+      ...(args.diff.length > 0
+        ? ["", "Git diff (may be truncated):", args.diff.slice(0, 6000)]
+        : []),
     ].join("\n");
 
     const stream = queryFn({
@@ -1920,7 +2254,9 @@ export async function suggestClaudeCommitMessage(args: {
         maxTurns: 1,
         cwd: process.cwd(),
         model: "claude-haiku-4-5",
-        ...(claudeExecutablePath ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
+        ...(claudeExecutablePath
+          ? { pathToClaudeCodeExecutable: claudeExecutablePath }
+          : {}),
         env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
       },
     }) as Query;
@@ -1968,7 +2304,9 @@ export async function suggestClaudePRDescription(args: {
 }): Promise<{ ok: boolean; title?: string; body?: string }> {
   try {
     const mod = await getPrewarmedSdkModule();
-    const queryFn = (mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }).query;
+    const queryFn = (
+      mod as { query?: typeof import("@anthropic-ai/claude-agent-sdk").query }
+    ).query;
     if (!queryFn) {
       return { ok: false };
     }
@@ -1976,27 +2314,33 @@ export async function suggestClaudePRDescription(args: {
     const claudeExecutablePath = getPrewarmedExecutablePath();
 
     // Use user-provided prompt template or fall back to the built-in default.
-    const { DEFAULT_PROMPT_PR_DESCRIPTION } = await import(
-      "../../src/lib/providers/prompt-defaults"
-    );
-    const baseTemplate = args.promptTemplate?.trim() || DEFAULT_PROMPT_PR_DESCRIPTION;
+    const { DEFAULT_PROMPT_PR_DESCRIPTION } =
+      await import("../../src/lib/providers/prompt-defaults");
+    const baseTemplate =
+      args.promptTemplate?.trim() || DEFAULT_PROMPT_PR_DESCRIPTION;
 
     const prPrompt = [
-      ...(args.prTemplateContent ? [
-        "Repository pull request template (highest priority for PR body structure):",
-        args.prTemplateContent.slice(0, 2000),
-        "",
-      ] : []),
-      ...(args.agentsContent ? [
-        "Repository guidelines from AGENTS.md (apply when consistent with the pull request template):",
-        args.agentsContent.slice(0, 2000),
-        "",
-      ] : []),
-      ...(args.workspaceContext ? [
-        "Current workspace context (treat this as the primary source of intent for the PR draft):",
-        args.workspaceContext.slice(0, 3000),
-        "",
-      ] : []),
+      ...(args.prTemplateContent
+        ? [
+            "Repository pull request template (highest priority for PR body structure):",
+            args.prTemplateContent.slice(0, 2000),
+            "",
+          ]
+        : []),
+      ...(args.agentsContent
+        ? [
+            "Repository guidelines from AGENTS.md (apply when consistent with the pull request template):",
+            args.agentsContent.slice(0, 2000),
+            "",
+          ]
+        : []),
+      ...(args.workspaceContext
+        ? [
+            "Current workspace context (treat this as the primary source of intent for the PR draft):",
+            args.workspaceContext.slice(0, 3000),
+            "",
+          ]
+        : []),
       "Fallback PR generation instructions (use only for gaps not specified above):",
       baseTemplate,
       "",
@@ -2008,16 +2352,20 @@ export async function suggestClaudePRDescription(args: {
       "",
       "Changed files:",
       args.fileList || "(no file list available)",
-      ...(args.diff.length > 0 ? [
-        "",
-        "Branch diff against the base branch (may be truncated):",
-        args.diff.slice(0, 6000),
-      ] : []),
-      ...(args.workingTreeDiff.length > 0 ? [
-        "",
-        "Uncommitted working tree diff (may be truncated):",
-        args.workingTreeDiff.slice(0, 4000),
-      ] : []),
+      ...(args.diff.length > 0
+        ? [
+            "",
+            "Branch diff against the base branch (may be truncated):",
+            args.diff.slice(0, 6000),
+          ]
+        : []),
+      ...(args.workingTreeDiff.length > 0
+        ? [
+            "",
+            "Uncommitted working tree diff (may be truncated):",
+            args.workingTreeDiff.slice(0, 4000),
+          ]
+        : []),
     ].join("\n");
 
     const stream = queryFn({
@@ -2027,7 +2375,9 @@ export async function suggestClaudePRDescription(args: {
         maxTurns: 1,
         cwd: args.cwd || process.cwd(),
         model: "claude-haiku-4-5",
-        ...(claudeExecutablePath ? { pathToClaudeCodeExecutable: claudeExecutablePath } : {}),
+        ...(claudeExecutablePath
+          ? { pathToClaudeCodeExecutable: claudeExecutablePath }
+          : {}),
         env: buildClaudeEnv({ executablePath: claudeExecutablePath }),
       },
     }) as Query;

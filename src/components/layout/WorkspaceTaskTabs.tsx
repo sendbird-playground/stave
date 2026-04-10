@@ -6,6 +6,7 @@ import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants"
 import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
+import { resolveProviderTurnDisplayState } from "@/lib/providers/turn-status";
 import { getProviderSessionLabel, listProviderSessions } from "@/lib/providers/provider-sessions";
 import {
   getCliSessionContextLabel,
@@ -95,17 +96,24 @@ function useTaskRespondingState(args: {
   taskId: string;
   fallbackProviderId: TaskItem["provider"];
 }) {
-  const [isResponding, toneClass] = useAppStore(useShallow((state) => {
-    const isResponding = Boolean(state.activeTurnIdsByTask[args.taskId]);
+  const [turnState, toneClass] = useAppStore(useShallow((state) => {
+    const activeTurnId = state.activeTurnIdsByTask[args.taskId] ?? null;
     const respondingProviderId = getRespondingProviderId({
       fallbackProviderId: args.fallbackProviderId,
       messages: state.messagesByTask[args.taskId] ?? EMPTY_MESSAGES,
     });
-    return [isResponding, getProviderWaveToneClass({ providerId: respondingProviderId })] as const;
+    return [
+      resolveProviderTurnDisplayState({
+        activeTurnId,
+        activity: state.providerTurnActivityByTask[args.taskId] ?? null,
+      }),
+      getProviderWaveToneClass({ providerId: respondingProviderId }),
+    ] as const;
   }));
 
   return {
-    isResponding,
+    isResponding: turnState !== "idle",
+    isStalled: turnState === "stalled",
     toneClass,
   };
 }
@@ -125,7 +133,7 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
   onDrop: (event: DragEvent<HTMLDivElement>, taskId: string, disabled: boolean) => void;
   onExportTask: (taskId: string) => void;
 }) {
-  const { isResponding, toneClass } = useTaskRespondingState({
+  const { isResponding, isStalled, toneClass } = useTaskRespondingState({
     taskId: args.task.id,
     fallbackProviderId: args.task.provider,
   });
@@ -169,6 +177,11 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
           )}
         </span>
         <span className="max-w-56 truncate text-sm font-medium">{args.task.title}</span>
+        {isStalled ? (
+          <Badge variant="warning" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
+            Stalled
+          </Badge>
+        ) : null}
         {isManaged ? (
           <Badge variant="secondary" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
             Managed

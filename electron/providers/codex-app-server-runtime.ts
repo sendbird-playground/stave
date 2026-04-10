@@ -4,7 +4,10 @@ import type {
   ConnectedToolStatusEntry,
   ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
-import { resolveExecutablePath, resolveLoginShellEnvVarValue } from "./executable-path";
+import {
+  resolveExecutablePath,
+  resolveLoginShellEnvVarValue,
+} from "./executable-path";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -123,13 +126,17 @@ function resolveApprovalPolicy(args: {
   fallback?: "never" | "on-request" | "untrusted";
 }): "never" | "on-request" | "untrusted" | undefined {
   const candidate = args.runtimeValue ?? args.envValue;
-  if (candidate !== "never" && candidate !== "on-request" && candidate !== "untrusted") {
+  if (
+    candidate !== "never" &&
+    candidate !== "on-request" &&
+    candidate !== "untrusted"
+  ) {
     return args.fallback == null
       ? undefined
       : resolveEffectiveCodexApprovalPolicy({
-        planMode: args.planMode,
-        fallback: args.fallback,
-      });
+          planMode: args.planMode,
+          fallback: args.fallback,
+        });
   }
   return resolveEffectiveCodexApprovalPolicy({
     approvalPolicy: candidate,
@@ -153,7 +160,9 @@ function buildCodexEnv(args: { executablePath?: string } = {}) {
     }
   }
   return Object.fromEntries(
-    Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+    Object.entries(env).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
   );
 }
 
@@ -171,16 +180,28 @@ async function hasConnectedStaveLocalMcpForCodex() {
 
 function toCodexUserFacingErrorMessage(args: { message: string }) {
   const lower = args.message.toLowerCase();
-  if (lower.includes("auth") || lower.includes("api key") || lower.includes("login") || lower.includes("unauthorized")) {
+  if (
+    lower.includes("auth") ||
+    lower.includes("api key") ||
+    lower.includes("login") ||
+    lower.includes("unauthorized")
+  ) {
     return "Codex authentication failed. Run `codex login` and retry.";
   }
-  if (lower.includes("rate limit") || lower.includes("quota") || lower.includes("insufficient_quota")) {
+  if (
+    lower.includes("rate limit") ||
+    lower.includes("quota") ||
+    lower.includes("insufficient_quota")
+  ) {
     return "Codex rate limit/quota reached. Retry after reset or check account limits.";
   }
   if (lower.includes("billing") || lower.includes("payment")) {
     return "Codex billing/subscription issue detected. Check account payment status.";
   }
-  if (lower.includes("stream disconnected") || lower.includes("error sending request for url")) {
+  if (
+    lower.includes("stream disconnected") ||
+    lower.includes("error sending request for url")
+  ) {
     return "Codex network/model endpoint is unreachable. Check internet/proxy/firewall and retry.";
   }
   return args.message;
@@ -204,7 +225,9 @@ function buildCodexConfigOverrides(args: {
     config.developer_instructions = developerInstructions;
   }
   if (hasExplicitRawReasoningToggle) {
-    config.show_raw_agent_reasoning = Boolean(args.runtimeOptions?.codexShowRawReasoning);
+    config.show_raw_agent_reasoning = Boolean(
+      args.runtimeOptions?.codexShowRawReasoning,
+    );
   }
   if (summaryMode && summaryMode !== "auto") {
     config.model_reasoning_summary = summaryMode;
@@ -241,7 +264,10 @@ function buildThreadKey(args: {
   return `${args.taskId ?? "default"}:${args.cwd}:${model}:${mode}:${instructionProfile}`;
 }
 
-function resolveThreadId(args: { threadKey: string; fallbackThreadId?: string }) {
+function resolveThreadId(args: {
+  threadKey: string;
+  fallbackThreadId?: string;
+}) {
   return threadIdByTask.get(args.threadKey) ?? args.fallbackThreadId?.trim();
 }
 
@@ -263,16 +289,20 @@ function resolveCodexResumeThreadFallback(args: {
   });
 }
 
-function buildCodexThreadStartedEvents(args: { threadId?: string }): BridgeEvent[] {
+function buildCodexThreadStartedEvents(args: {
+  threadId?: string;
+}): BridgeEvent[] {
   const threadId = args.threadId?.trim();
   if (!threadId) {
     return [];
   }
-  return [{
-    type: "provider_session",
-    providerId: "codex",
-    nativeSessionId: threadId,
-  }];
+  return [
+    {
+      type: "provider_session",
+      providerId: "codex",
+      nativeSessionId: threadId,
+    },
+  ];
 }
 
 function isExecutableFile(args: { path: string }) {
@@ -293,24 +323,29 @@ function isReadableDirectory(args: { path: string }) {
   }
 }
 
-export function resolveCodexExecutablePath(args: { explicitPath?: string } = {}) {
+export function resolveCodexExecutablePath(
+  args: { explicitPath?: string } = {},
+) {
   if (args.explicitPath?.trim()) {
     return args.explicitPath.trim();
   }
 
-  const baseResolved = resolveExecutablePath({
-    absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
-    commandEnvVar: "STAVE_CODEX_CMD",
-    defaultCommand: "codex",
-    extraPaths: [...CODEX_LOOKUP_PATHS],
-  }) ?? "";
+  const baseResolved =
+    resolveExecutablePath({
+      absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
+      commandEnvVar: "STAVE_CODEX_CMD",
+      defaultCommand: "codex",
+      extraPaths: [...CODEX_LOOKUP_PATHS],
+    }) ?? "";
 
   const candidates = [
     process.env.STAVE_CODEX_CLI_PATH?.trim() || "",
     `${homedir()}/.bun/bin/codex`,
     `${homedir()}/.local/bin/codex`,
     baseResolved,
-  ].filter((value, index, arr) => value.length > 0 && arr.indexOf(value) === index);
+  ].filter(
+    (value, index, arr) => value.length > 0 && arr.indexOf(value) === index,
+  );
 
   for (const candidate of candidates) {
     if (!isExecutableFile({ path: candidate })) {
@@ -342,7 +377,12 @@ function resolveCodexAdditionalDirectories(args: {
     .filter((candidate, index, entries) => entries.indexOf(candidate) === index)
     .filter((candidate) => candidate !== resolvedCwd)
     .filter((candidate) => !resolvedCwd.startsWith(`${candidate}${path.sep}`))
-    .filter((candidate) => (args.pathExists ?? ((value: string) => isReadableDirectory({ path: value })))(candidate));
+    .filter((candidate) =>
+      (
+        args.pathExists ??
+        ((value: string) => isReadableDirectory({ path: value }))
+      )(candidate),
+    );
 }
 
 function buildSandboxPolicy(args: {
@@ -350,8 +390,9 @@ function buildSandboxPolicy(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
   const planModeEnabled = args.runtimeOptions?.codexPlanMode === true;
-  const networkAccessEnabled = args.runtimeOptions?.codexNetworkAccess
-    ?? parseBooleanEnv({
+  const networkAccessEnabled =
+    args.runtimeOptions?.codexNetworkAccess ??
+    parseBooleanEnv({
       value: process.env.STAVE_CODEX_NETWORK_ACCESS,
       fallback: false,
     });
@@ -400,16 +441,26 @@ function buildApprovalDescription(args: {
   method: ServerRequestMethod;
   params: Record<string, unknown>;
 }) {
-  const reason = typeof args.params.reason === "string" && args.params.reason.trim().length > 0
-    ? args.params.reason.trim()
-    : null;
-  if (typeof args.params.command === "string" && args.params.command.trim().length > 0) {
+  const reason =
+    typeof args.params.reason === "string" &&
+    args.params.reason.trim().length > 0
+      ? args.params.reason.trim()
+      : null;
+  if (
+    typeof args.params.command === "string" &&
+    args.params.command.trim().length > 0
+  ) {
     return reason ? `${args.params.command}\n\n${reason}` : args.params.command;
   }
   if (args.method === "item/fileChange/requestApproval") {
-    const grantRoot = typeof args.params.grantRoot === "string" ? args.params.grantRoot.trim() : "";
+    const grantRoot =
+      typeof args.params.grantRoot === "string"
+        ? args.params.grantRoot.trim()
+        : "";
     if (grantRoot) {
-      return reason ? `${reason}\n\nGrant root: ${grantRoot}` : `Grant root: ${grantRoot}`;
+      return reason
+        ? `${reason}\n\nGrant root: ${grantRoot}`
+        : `Grant root: ${grantRoot}`;
     }
   }
   return reason ?? `Codex requested approval for ${args.method}.`;
@@ -439,9 +490,10 @@ function mapUserInputQuestions(questions: Array<Record<string, unknown>>) {
     inputType: "text" as const,
     options: Array.isArray(question.options)
       ? question.options.map((option) => ({
-        label: typeof option?.label === "string" ? option.label : "",
-        description: typeof option?.description === "string" ? option.description : "",
-      }))
+          label: typeof option?.label === "string" ? option.label : "",
+          description:
+            typeof option?.description === "string" ? option.description : "",
+        }))
       : [],
   }));
 }
@@ -451,7 +503,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toTrimmedString(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
 }
 
 function parseStringOptions(args: {
@@ -463,22 +517,33 @@ function parseStringOptions(args: {
   }
   const parsed = args.rawOptions.flatMap((option) => {
     if (typeof option === "string" && option.trim()) {
-      return [{
-        label: option.trim(),
-        value: option.trim(),
-        description: args.fallbackDescription ?? option.trim(),
-      }];
+      return [
+        {
+          label: option.trim(),
+          value: option.trim(),
+          description: args.fallbackDescription ?? option.trim(),
+        },
+      ];
     }
-    if (!isRecord(option) || typeof option.const !== "string" || !option.const.trim()) {
+    if (
+      !isRecord(option) ||
+      typeof option.const !== "string" ||
+      !option.const.trim()
+    ) {
       return [];
     }
     const value = option.const.trim();
-    const label = typeof option.title === "string" && option.title.trim() ? option.title.trim() : value;
-    return [{
-      label,
-      value,
-      description: args.fallbackDescription ?? value,
-    }];
+    const label =
+      typeof option.title === "string" && option.title.trim()
+        ? option.title.trim()
+        : value;
+    return [
+      {
+        label,
+        value,
+        description: args.fallbackDescription ?? value,
+      },
+    ];
   });
   return parsed.length > 0 ? parsed : null;
 }
@@ -490,7 +555,9 @@ function mapDefaultValueToLabel(args: {
   if (typeof args.value !== "string") {
     return undefined;
   }
-  const matched = Object.entries(args.optionValueByLabel).find(([, optionValue]) => optionValue === args.value);
+  const matched = Object.entries(args.optionValueByLabel).find(
+    ([, optionValue]) => optionValue === args.value,
+  );
   return matched?.[0];
 }
 
@@ -501,7 +568,8 @@ function buildElicitationQuestionFromProperty(args: {
   requiredKeys: Set<string>;
 }): { question: UserInputQuestion; field: ElicitationFieldDescriptor } | null {
   const title = toTrimmedString(args.property.title) ?? args.key;
-  const description = toTrimmedString(args.property.description) ?? `Provide ${title}.`;
+  const description =
+    toTrimmedString(args.property.description) ?? `Provide ${title}.`;
   const required = args.requiredKeys.has(args.key);
 
   if (args.property.type === "boolean") {
@@ -517,9 +585,12 @@ function buildElicitationQuestionFromProperty(args: {
         ],
         allowCustom: false,
         required,
-        defaultValue: typeof args.property.default === "boolean"
-          ? (args.property.default ? "Yes" : "No")
-          : undefined,
+        defaultValue:
+          typeof args.property.default === "boolean"
+            ? args.property.default
+              ? "Yes"
+              : "No"
+            : undefined,
       },
       field: {
         key: args.key,
@@ -543,7 +614,10 @@ function buildElicitationQuestionFromProperty(args: {
         allowCustom: true,
         required,
         placeholder: title,
-        defaultValue: typeof args.property.default === "number" ? String(args.property.default) : undefined,
+        defaultValue:
+          typeof args.property.default === "number"
+            ? String(args.property.default)
+            : undefined,
       },
       field: {
         key: args.key,
@@ -554,18 +628,27 @@ function buildElicitationQuestionFromProperty(args: {
 
   if (args.property.type === "array" && isRecord(args.property.items)) {
     const options = parseStringOptions({
-      rawOptions: args.property.items.anyOf ?? args.property.items.oneOf ?? args.property.items.enum,
+      rawOptions:
+        args.property.items.anyOf ??
+        args.property.items.oneOf ??
+        args.property.items.enum,
       fallbackDescription: description,
     });
     if (!options) {
       return null;
     }
-    const optionValueByLabel = Object.fromEntries(options.map((option) => [option.label, option.value]));
+    const optionValueByLabel = Object.fromEntries(
+      options.map((option) => [option.label, option.value]),
+    );
     const defaultValue = Array.isArray(args.property.default)
       ? args.property.default
-        .map((value) => mapDefaultValueToLabel({ value, optionValueByLabel }) ?? (typeof value === "string" ? value : ""))
-        .filter(Boolean)
-        .join(", ")
+          .map(
+            (value) =>
+              mapDefaultValueToLabel({ value, optionValueByLabel }) ??
+              (typeof value === "string" ? value : ""),
+          )
+          .filter(Boolean)
+          .join(", ")
       : undefined;
     return {
       question: {
@@ -591,11 +674,14 @@ function buildElicitationQuestionFromProperty(args: {
   }
 
   const scalarOptions = parseStringOptions({
-    rawOptions: args.property.oneOf ?? args.property.anyOf ?? args.property.enum,
+    rawOptions:
+      args.property.oneOf ?? args.property.anyOf ?? args.property.enum,
     fallbackDescription: description,
   });
   if (scalarOptions) {
-    const optionValueByLabel = Object.fromEntries(scalarOptions.map((option) => [option.label, option.value]));
+    const optionValueByLabel = Object.fromEntries(
+      scalarOptions.map((option) => [option.label, option.value]),
+    );
     return {
       question: {
         key: args.key,
@@ -632,7 +718,10 @@ function buildElicitationQuestionFromProperty(args: {
         allowCustom: true,
         required,
         placeholder: title,
-        defaultValue: typeof args.property.default === "string" ? args.property.default : undefined,
+        defaultValue:
+          typeof args.property.default === "string"
+            ? args.property.default
+            : undefined,
       },
       field: {
         key: args.key,
@@ -644,9 +733,13 @@ function buildElicitationQuestionFromProperty(args: {
   return null;
 }
 
-export function mapCodexElicitationToUserInput(params: Record<string, unknown>) {
+export function mapCodexElicitationToUserInput(
+  params: Record<string, unknown>,
+) {
   const mode = params.mode === "url" ? "url" : "form";
-  const message = toTrimmedString(params.message) ?? "Additional input is required to continue.";
+  const message =
+    toTrimmedString(params.message) ??
+    "Additional input is required to continue.";
 
   if (mode === "url") {
     const linkUrl = toTrimmedString(params.url);
@@ -655,30 +748,37 @@ export function mapCodexElicitationToUserInput(params: Record<string, unknown>) 
     }
     return {
       mode,
-      questions: [{
-        key: "__elicitation_url__",
-        header: "MCP URL Elicitation",
-        question: message,
-        inputType: "url_notice" as const,
-        options: [],
-        allowCustom: false,
-        required: false,
-        linkUrl,
-      }],
+      questions: [
+        {
+          key: "__elicitation_url__",
+          header: "MCP URL Elicitation",
+          question: message,
+          inputType: "url_notice" as const,
+          options: [],
+          allowCustom: false,
+          required: false,
+          linkUrl,
+        },
+      ],
       fields: [] as ElicitationFieldDescriptor[],
     };
   }
 
-  const requestedSchema = isRecord(params.requestedSchema) ? params.requestedSchema : null;
-  const properties = requestedSchema && isRecord(requestedSchema.properties)
-    ? requestedSchema.properties
+  const requestedSchema = isRecord(params.requestedSchema)
+    ? params.requestedSchema
     : null;
+  const properties =
+    requestedSchema && isRecord(requestedSchema.properties)
+      ? requestedSchema.properties
+      : null;
   if (!properties) {
     return null;
   }
   const requiredKeys = new Set(
     Array.isArray(requestedSchema.required)
-      ? requestedSchema.required.filter((value): value is string => typeof value === "string")
+      ? requestedSchema.required.filter(
+          (value): value is string => typeof value === "string",
+        )
       : [],
   );
 
@@ -724,7 +824,8 @@ function coerceElicitationAnswer(args: {
     return Number.isInteger(parsed) ? parsed : undefined;
   }
   if (args.field.kind === "boolean") {
-    const normalized = args.field.optionValueByLabel?.[trimmed] ?? trimmed.toLowerCase();
+    const normalized =
+      args.field.optionValueByLabel?.[trimmed] ?? trimmed.toLowerCase();
     if (normalized === "true") {
       return true;
     }
@@ -760,7 +861,9 @@ function mapCodexMcpServerStatus(args: {
   }
 
   const serverName = args.toolId === "atlassian" ? "atlassian" : args.toolId;
-  const server = args.servers.find((candidate) => candidate.name.trim().toLowerCase() === serverName);
+  const server = args.servers.find(
+    (candidate) => candidate.name.trim().toLowerCase() === serverName,
+  );
   if (!server) {
     return createCodexConnectedToolStatusEntry({
       id: args.toolId,
@@ -816,17 +919,18 @@ class CodexAppServerClient {
   private process: ChildProcessWithoutNullStreams | null = null;
   private startupPromise: Promise<void> | null = null;
   private nextRequestId = 1;
-  private pendingResponses = new Map<JsonRpcId, {
-    resolve: (value: unknown) => void;
-    reject: (reason?: unknown) => void;
-  }>();
+  private pendingResponses = new Map<
+    JsonRpcId,
+    {
+      resolve: (value: unknown) => void;
+      reject: (reason?: unknown) => void;
+    }
+  >();
   private listeners = new Set<(message: JsonRpcMessage) => void>();
   private initialized = false;
   private lastErrorMessage: string | null = null;
 
-  constructor(
-    private readonly executablePath: string,
-  ) {}
+  constructor(private readonly executablePath: string) {}
 
   async ensureStarted() {
     if (this.process && this.initialized) {
@@ -857,11 +961,13 @@ class CodexAppServerClient {
 
   async respond(requestId: JsonRpcId, result: unknown) {
     await this.ensureStarted();
-    this.process?.stdin.write(JSON.stringify({
-      jsonrpc: "2.0",
-      id: requestId,
-      result,
-    }) + "\n");
+    this.process?.stdin.write(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result,
+      }) + "\n",
+    );
   }
 
   getLastErrorMessage() {
@@ -873,11 +979,15 @@ class CodexAppServerClient {
       this.teardownProcess("Restarting Codex App Server.");
     }
 
-    const child = spawn(this.executablePath, ["app-server", "--listen", "stdio://"], {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: buildCodexEnv({ executablePath: this.executablePath }),
-      cwd: process.cwd(),
-    });
+    const child = spawn(
+      this.executablePath,
+      ["app-server", "--listen", "stdio://"],
+      {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: buildCodexEnv({ executablePath: this.executablePath }),
+        cwd: process.cwd(),
+      },
+    );
     this.process = child;
     this.initialized = false;
 
@@ -894,7 +1004,11 @@ class CodexAppServerClient {
     });
 
     child.once("exit", (_code, signal) => {
-      this.teardownProcess(signal ? `Codex App Server exited with signal ${signal}.` : "Codex App Server exited.");
+      this.teardownProcess(
+        signal
+          ? `Codex App Server exited with signal ${signal}.`
+          : "Codex App Server exited.",
+      );
     });
 
     await this.sendRequest("initialize", {
@@ -906,15 +1020,20 @@ class CodexAppServerClient {
         experimentalApi: true,
       },
     });
-    child.stdin.write(JSON.stringify({
-      jsonrpc: "2.0",
-      method: "initialized",
-      params: {},
-    }) + "\n");
+    child.stdin.write(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        method: "initialized",
+        params: {},
+      }) + "\n",
+    );
     this.initialized = true;
   }
 
-  private async sendRequest<T = unknown>(method: string, params: unknown): Promise<T> {
+  private async sendRequest<T = unknown>(
+    method: string,
+    params: unknown,
+  ): Promise<T> {
     const child = this.process;
     if (!child) {
       throw new Error("Codex App Server is not running.");
@@ -923,12 +1042,14 @@ class CodexAppServerClient {
     const requestId = this.nextRequestId++;
     return new Promise<T>((resolve, reject) => {
       this.pendingResponses.set(requestId, { resolve, reject });
-      child.stdin.write(JSON.stringify({
-        jsonrpc: "2.0",
-        id: requestId,
-        method,
-        params,
-      }) + "\n");
+      child.stdin.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          method,
+          params,
+        }) + "\n",
+      );
     });
   }
 
@@ -940,8 +1061,10 @@ class CodexAppServerClient {
       return;
     }
 
-    const hasResponseId = Object.prototype.hasOwnProperty.call(message, "id")
-      && (Object.prototype.hasOwnProperty.call(message, "result") || Object.prototype.hasOwnProperty.call(message, "error"));
+    const hasResponseId =
+      Object.prototype.hasOwnProperty.call(message, "id") &&
+      (Object.prototype.hasOwnProperty.call(message, "result") ||
+        Object.prototype.hasOwnProperty.call(message, "error"));
     if (hasResponseId) {
       const id = message.id as JsonRpcId;
       const pending = this.pendingResponses.get(id);
@@ -950,7 +1073,11 @@ class CodexAppServerClient {
       }
       this.pendingResponses.delete(id);
       if (message.error) {
-        pending.reject(new Error(message.error.message || "Codex App Server request failed."));
+        pending.reject(
+          new Error(
+            message.error.message || "Codex App Server request failed.",
+          ),
+        );
       } else {
         pending.resolve(message.result);
       }
@@ -1008,7 +1135,9 @@ async function ensureCodexThread(args: {
     }),
   });
 
-  const config = buildCodexConfigOverrides({ runtimeOptions: args.runtimeOptions });
+  const config = buildCodexConfigOverrides({
+    runtimeOptions: args.runtimeOptions,
+  });
   const params = {
     ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
     cwd: args.cwd,
@@ -1019,10 +1148,13 @@ async function ensureCodexThread(args: {
 
   const response = resumeThreadId
     ? await args.client.request<{ thread: { id: string } }>("thread/resume", {
-      threadId: resumeThreadId,
-      ...params,
-    })
-    : await args.client.request<{ thread: { id: string } }>("thread/start", params);
+        threadId: resumeThreadId,
+        ...params,
+      })
+    : await args.client.request<{ thread: { id: string } }>(
+        "thread/start",
+        params,
+      );
   const threadId = response.thread.id;
   rememberThreadId({ threadKey, threadId });
   return { threadId, threadKey };
@@ -1051,26 +1183,33 @@ export async function getCodexConnectedToolStatus(args: {
       ok: false,
       providerId: "codex",
       detail: "Codex executable not found.",
-      tools: toolIds.map((toolId) => createCodexConnectedToolStatusEntry({
-        id: toolId,
-        state: "error",
-        available: false,
-        detail: "Codex executable not found.",
-      })),
+      tools: toolIds.map((toolId) =>
+        createCodexConnectedToolStatusEntry({
+          id: toolId,
+          state: "error",
+          available: false,
+          detail: "Codex executable not found.",
+        }),
+      ),
     };
   }
 
   try {
     const client = getCodexAppServerClient({ executablePath });
-    const response = await client.request<{ data: CodexMcpServerStatus[] }>("mcpServerStatus/list", {});
+    const response = await client.request<{ data: CodexMcpServerStatus[] }>(
+      "mcpServerStatus/list",
+      {},
+    );
     return {
       ok: true,
       providerId: "codex",
       detail: "Loaded Codex MCP server status from App Server.",
-      tools: toolIds.map((toolId) => mapCodexMcpServerStatus({
-        toolId,
-        servers: response.data ?? [],
-      })),
+      tools: toolIds.map((toolId) =>
+        mapCodexMcpServerStatus({
+          toolId,
+          servers: response.data ?? [],
+        }),
+      ),
     };
   } catch (error) {
     const detail = toCodexUserFacingErrorMessage({
@@ -1080,27 +1219,36 @@ export async function getCodexConnectedToolStatus(args: {
       ok: false,
       providerId: "codex",
       detail,
-      tools: toolIds.map((toolId) => createCodexConnectedToolStatusEntry({
-        id: toolId,
-        state: "error",
-        available: false,
-        detail,
-      })),
+      tools: toolIds.map((toolId) =>
+        createCodexConnectedToolStatusEntry({
+          id: toolId,
+          state: "error",
+          available: false,
+          detail,
+        }),
+      ),
     };
   }
 }
 
-export async function streamCodexWithAppServer(args: StreamTurnArgs & {
-  onEvent?: (event: BridgeEvent) => void;
-  registerAbort?: (aborter: () => void) => void;
-  registerApprovalResponder?: (responder: (args: { requestId: string; approved: boolean }) => boolean) => void;
-  registerUserInputResponder?: (responder: (args: {
-    requestId: string;
-    answers?: Record<string, string>;
-    denied?: boolean;
-  }) => boolean) => void;
-}): Promise<BridgeEvent[] | null> {
-  const runtimeCwd = args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
+export async function streamCodexWithAppServer(
+  args: StreamTurnArgs & {
+    onEvent?: (event: BridgeEvent) => void;
+    registerAbort?: (aborter: () => void) => void;
+    registerApprovalResponder?: (
+      responder: (args: { requestId: string; approved: boolean }) => boolean,
+    ) => void;
+    registerUserInputResponder?: (
+      responder: (args: {
+        requestId: string;
+        answers?: Record<string, string>;
+        denied?: boolean;
+      }) => boolean,
+    ) => void;
+  },
+): Promise<BridgeEvent[] | null> {
+  const runtimeCwd =
+    args.cwd && path.isAbsolute(args.cwd) ? args.cwd : process.cwd();
   const codexExecutablePath = resolveCodexExecutablePath({
     explicitPath: args.runtimeOptions?.codexBinaryPath,
   });
@@ -1108,7 +1256,8 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
     const unavailableEvents: BridgeEvent[] = [
       {
         type: "error",
-        message: "Codex runtime failure: Codex CLI not found in runtime override, STAVE_CODEX_CLI_PATH, login-shell PATH, or home-bin candidates. Install `codex` or configure a Codex path override.",
+        message:
+          "Codex runtime failure: Codex CLI not found in runtime override, STAVE_CODEX_CLI_PATH, login-shell PATH, or home-bin candidates. Install `codex` or configure a Codex path override.",
         recoverable: true,
       },
       { type: "done" },
@@ -1117,9 +1266,14 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
     return unavailableEvents;
   }
 
-  const client = getCodexAppServerClient({ executablePath: codexExecutablePath });
+  const client = getCodexAppServerClient({
+    executablePath: codexExecutablePath,
+  });
   try {
-    const account = await client.request<{ account: unknown | null; requiresOpenaiAuth: boolean }>("account/read", {});
+    const account = await client.request<{
+      account: unknown | null;
+      requiresOpenaiAuth: boolean;
+    }>("account/read", {});
     if (!account.account && account.requiresOpenaiAuth) {
       const events: BridgeEvent[] = [
         {
@@ -1174,7 +1328,9 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
     conversation: args.conversation
       ? filterPromptRetrievedContext({
           conversation: args.conversation,
-          excludedSourceIds: hasEmbeddedStaveLocalMcp ? [] : ["stave:current-task-awareness"],
+          excludedSourceIds: hasEmbeddedStaveLocalMcp
+            ? []
+            : ["stave:current-task-awareness"],
         })
       : args.conversation,
   });
@@ -1186,7 +1342,11 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
   const planBuffers = new Map<string, string>();
   const pendingApprovalRequests = new Map<string, PendingApprovalRequest>();
   const pendingUserInputRequests = new Map<string, PendingUserInputRequest>();
-  let latestUsage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number } | null = null;
+  let latestUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+  } | null = null;
   let appServerTurnId = "";
   let completed = false;
   let lastAgentMessageSegmentId = "";
@@ -1196,18 +1356,20 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
 
   const requestPlanInterrupt = () => {
     if (
-      !args.runtimeOptions?.codexPlanMode
-      || sentPlanInterrupt
-      || !appServerTurnId
-      || completed
+      !args.runtimeOptions?.codexPlanMode ||
+      sentPlanInterrupt ||
+      !appServerTurnId ||
+      completed
     ) {
       return;
     }
     sentPlanInterrupt = true;
-    void client.request("turn/interrupt", {
-      threadId,
-      turnId: appServerTurnId,
-    }).catch(() => {});
+    void client
+      .request("turn/interrupt", {
+        threadId,
+        turnId: appServerTurnId,
+      })
+      .catch(() => {});
   };
 
   args.registerApprovalResponder?.(({ requestId, approved }) => {
@@ -1216,26 +1378,33 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
       return false;
     }
     pendingApprovalRequests.delete(requestId);
-    void client.respond(pending.serverRequestId, (() => {
-      if (pending.responseKind === "commandExecution") {
-        return { decision: approved ? "accept" : "decline" };
-      }
-      if (pending.responseKind === "fileChange") {
-        return { decision: approved ? "accept" : "decline" };
-      }
-      if (pending.responseKind === "permissions") {
-        return approved
-          ? {
-            permissions: {
-              ...(pending.permissions?.network ? { network: pending.permissions.network } : {}),
-              ...(pending.permissions?.fileSystem ? { fileSystem: pending.permissions.fileSystem } : {}),
-            },
-            scope: "turn",
-          }
-          : { permissions: {}, scope: "turn" };
-      }
-      return { decision: approved ? "approved" : "denied" };
-    })());
+    void client.respond(
+      pending.serverRequestId,
+      (() => {
+        if (pending.responseKind === "commandExecution") {
+          return { decision: approved ? "accept" : "decline" };
+        }
+        if (pending.responseKind === "fileChange") {
+          return { decision: approved ? "accept" : "decline" };
+        }
+        if (pending.responseKind === "permissions") {
+          return approved
+            ? {
+                permissions: {
+                  ...(pending.permissions?.network
+                    ? { network: pending.permissions.network }
+                    : {}),
+                  ...(pending.permissions?.fileSystem
+                    ? { fileSystem: pending.permissions.fileSystem }
+                    : {}),
+                },
+                scope: "turn",
+              }
+            : { permissions: {}, scope: "turn" };
+        }
+        return { decision: approved ? "approved" : "denied" };
+      })(),
+    );
     return true;
   });
 
@@ -1281,7 +1450,10 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
     }
 
     const responseAnswers = Object.fromEntries(
-      Object.entries(answers ?? {}).map(([key, value]) => [key, { answers: [value] }]),
+      Object.entries(answers ?? {}).map(([key, value]) => [
+        key,
+        { answers: [value] },
+      ]),
     );
     void client.respond(pending.serverRequestId, {
       answers: denied ? {} : responseAnswers,
@@ -1339,9 +1511,10 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
           pendingApprovalRequests.set(requestId, {
             serverRequestId: message.id as JsonRpcId,
             responseKind: "permissions",
-            permissions: typeof params.permissions === "object" && params.permissions
-              ? params.permissions as PendingApprovalRequest["permissions"]
-              : null,
+            permissions:
+              typeof params.permissions === "object" && params.permissions
+                ? (params.permissions as PendingApprovalRequest["permissions"])
+                : null,
           });
           emitBridgeEvent({
             type: "approval",
@@ -1363,7 +1536,9 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
           });
           emitBridgeEvent({
             type: "approval",
-            toolName: mapApprovalToolName(message.method as ServerRequestMethod),
+            toolName: mapApprovalToolName(
+              message.method as ServerRequestMethod,
+            ),
             requestId,
             description: buildApprovalDescription({
               method: message.method as ServerRequestMethod,
@@ -1375,7 +1550,9 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
         case "item/tool/requestUserInput": {
           const params = (message.params ?? {}) as Record<string, unknown>;
           const questions = Array.isArray(params.questions)
-            ? mapUserInputQuestions(params.questions as Array<Record<string, unknown>>)
+            ? mapUserInputQuestions(
+                params.questions as Array<Record<string, unknown>>,
+              )
             : [];
           pendingUserInputRequests.set(requestId, {
             serverRequestId: message.id as JsonRpcId,
@@ -1432,7 +1609,11 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
     }
 
     const params = (message.params ?? {}) as Record<string, unknown>;
-    if (typeof params.turnId === "string" && appServerTurnId && params.turnId !== appServerTurnId) {
+    if (
+      typeof params.turnId === "string" &&
+      appServerTurnId &&
+      params.turnId !== appServerTurnId
+    ) {
       return;
     }
     if (typeof params.threadId === "string" && params.threadId !== threadId) {
@@ -1448,7 +1629,10 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
         }
         streamedAgentMessageIds.add(itemId);
         if (itemId) {
-          agentMessageBuffers.set(itemId, `${agentMessageBuffers.get(itemId) ?? ""}${delta}`);
+          agentMessageBuffers.set(
+            itemId,
+            `${agentMessageBuffers.get(itemId) ?? ""}${delta}`,
+          );
           lastAgentMessageSegmentId = itemId;
         }
         emitBridgeEvent({
@@ -1520,7 +1704,8 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
       }
       case "item/mcpToolCall/progress": {
         const itemId = typeof params.itemId === "string" ? params.itemId : "";
-        const progressMessage = typeof params.message === "string" ? params.message : "";
+        const progressMessage =
+          typeof params.message === "string" ? params.message : "";
         if (!progressMessage) {
           return;
         }
@@ -1532,29 +1717,33 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
         return;
       }
       case "thread/tokenUsage/updated": {
-        const tokenUsage = params.tokenUsage as {
-          last?: {
-            inputTokens?: number;
-            outputTokens?: number;
-            cachedInputTokens?: number;
-          };
-        } | undefined;
+        const tokenUsage = params.tokenUsage as
+          | {
+              last?: {
+                inputTokens?: number;
+                outputTokens?: number;
+                cachedInputTokens?: number;
+              };
+            }
+          | undefined;
         if (!tokenUsage?.last) {
           return;
         }
         latestUsage = {
           inputTokens: tokenUsage.last.inputTokens ?? 0,
           outputTokens: tokenUsage.last.outputTokens ?? 0,
-          ...(typeof tokenUsage.last.cachedInputTokens === "number" && tokenUsage.last.cachedInputTokens > 0
+          ...(typeof tokenUsage.last.cachedInputTokens === "number" &&
+          tokenUsage.last.cachedInputTokens > 0
             ? { cacheReadTokens: tokenUsage.last.cachedInputTokens }
             : {}),
         };
         return;
       }
       case "error": {
-        const errorMessage = typeof params.message === "string"
-          ? params.message
-          : "Codex App Server error.";
+        const errorMessage =
+          typeof params.message === "string"
+            ? params.message
+            : "Codex App Server error.";
         emitBridgeEvent({
           type: "error",
           message: toCodexUserFacingErrorMessage({ message: errorMessage }),
@@ -1570,9 +1759,10 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
         const itemId = typeof item.id === "string" ? item.id : "";
         switch (item.type) {
           case "agentMessage": {
-            const text = typeof (item as { text?: unknown }).text === "string"
-              ? String((item as { text?: unknown }).text)
-              : "";
+            const text =
+              typeof (item as { text?: unknown }).text === "string"
+                ? String((item as { text?: unknown }).text)
+                : "";
             if (itemId && text) {
               agentMessageBuffers.set(itemId, text);
               lastAgentMessageSegmentId = itemId;
@@ -1587,9 +1777,10 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
             return;
           }
           case "plan": {
-            const text = typeof (item as { text?: unknown }).text === "string"
-              ? String((item as { text?: unknown }).text)
-              : "";
+            const text =
+              typeof (item as { text?: unknown }).text === "string"
+                ? String((item as { text?: unknown }).text)
+                : "";
             const planText = text || planBuffers.get(itemId) || "";
             if (planText.trim().length > 0) {
               sawNativePlan = true;
@@ -1606,9 +1797,15 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
             return;
           }
           case "reasoning": {
-            const reasoningItem = item as { content?: string[]; summary?: string[] };
+            const reasoningItem = item as {
+              content?: string[];
+              summary?: string[];
+            };
             if (!streamedReasoningIds.has(itemId)) {
-              const text = [...(reasoningItem.summary ?? []), ...(reasoningItem.content ?? [])].join("\n");
+              const text = [
+                ...(reasoningItem.summary ?? []),
+                ...(reasoningItem.content ?? []),
+              ].join("\n");
               if (text.trim().length > 0) {
                 emitBridgeEvent({
                   type: "thinking",
@@ -1632,22 +1829,29 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
               aggregatedOutput?: string | null;
               status?: string;
             };
-            const output = typeof commandItem.aggregatedOutput === "string"
-              ? commandItem.aggregatedOutput
-              : (toolOutputBuffers.get(itemId) ?? "");
+            const output =
+              typeof commandItem.aggregatedOutput === "string"
+                ? commandItem.aggregatedOutput
+                : (toolOutputBuffers.get(itemId) ?? "");
             emitBridgeEvents([
               {
                 type: "tool",
                 ...(itemId ? { toolUseId: itemId } : {}),
                 toolName: "bash",
-                input: typeof commandItem.command === "string" ? commandItem.command : "",
+                input:
+                  typeof commandItem.command === "string"
+                    ? commandItem.command
+                    : "",
                 state: "input-available",
               },
               {
                 type: "tool_result",
                 tool_use_id: itemId,
                 output,
-                ...(commandItem.status === "failed" || commandItem.status === "declined" ? { isError: true } : {}),
+                ...(commandItem.status === "failed" ||
+                commandItem.status === "declined"
+                  ? { isError: true }
+                  : {}),
               },
             ]);
             return;
@@ -1682,9 +1886,10 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
             return;
           }
           case "webSearch": {
-            const query = typeof (item as { query?: unknown }).query === "string"
-              ? String((item as { query?: unknown }).query)
-              : "";
+            const query =
+              typeof (item as { query?: unknown }).query === "string"
+                ? String((item as { query?: unknown }).query)
+                : "";
             emitBridgeEvents([
               {
                 type: "tool",
@@ -1709,13 +1914,19 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
             if (fileChangeItem.status === "failed") {
               emitBridgeEvent({
                 type: "error",
-                message: `File change failed: ${(fileChangeItem.changes ?? []).map((change) => change.path ?? "").filter(Boolean).join(", ")}`,
+                message: `File change failed: ${(fileChangeItem.changes ?? [])
+                  .map((change) => change.path ?? "")
+                  .filter(Boolean)
+                  .join(", ")}`,
                 recoverable: false,
               });
               return;
             }
-            const changedPaths = (fileChangeItem.changes ?? []).map((change) => change.path ?? "").filter(Boolean);
-            void diffTracker.buildDiffEvents({ changedPaths })
+            const changedPaths = (fileChangeItem.changes ?? [])
+              .map((change) => change.path ?? "")
+              .filter(Boolean);
+            void diffTracker
+              .buildDiffEvents({ changedPaths })
               .then(({ diffEvents, unresolvedPaths }) => {
                 const fallbackEvents = diffTracker.buildFallbackEvents({
                   appliedPaths: diffEvents.length === 0 ? changedPaths : [],
@@ -1724,9 +1935,11 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
                 emitBridgeEvents([...diffEvents, ...fallbackEvents]);
               })
               .catch(() => {
-                emitBridgeEvents(diffTracker.buildFallbackEvents({
-                  appliedPaths: changedPaths,
-                }));
+                emitBridgeEvents(
+                  diffTracker.buildFallbackEvents({
+                    appliedPaths: changedPaths,
+                  }),
+                );
               });
             return;
           }
@@ -1735,10 +1948,12 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
         }
       }
       case "turn/completed": {
-        const turn = params.turn as {
-          status?: string;
-          error?: { message?: string | null } | null;
-        } | undefined;
+        const turn = params.turn as
+          | {
+              status?: string;
+              error?: { message?: string | null } | null;
+            }
+          | undefined;
         if (args.runtimeOptions?.codexPlanMode && !sawNativePlan) {
           const fallbackSegmentId = lastAgentMessageSegmentId.trim();
           const fallbackPlanText = fallbackSegmentId
@@ -1748,7 +1963,9 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
             emitBridgeEvent({
               type: "plan_ready",
               planText: fallbackPlanText,
-              ...(fallbackSegmentId ? { sourceSegmentId: fallbackSegmentId } : {}),
+              ...(fallbackSegmentId
+                ? { sourceSegmentId: fallbackSegmentId }
+                : {}),
             });
           }
         }
@@ -1783,37 +2000,50 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
       planMode: args.runtimeOptions?.codexPlanMode === true,
       fallback: "untrusted",
     });
-    const turnResponse = await client.request<{ turn: { id: string } }>("turn/start", {
-      threadId,
-      input: [{
-        type: "text",
-        text: providerPrompt,
-        text_elements: [],
-      }],
-      cwd: runtimeCwd,
-      ...(approvalPolicy ? { approvalPolicy } : {}),
-      sandboxPolicy: buildSandboxPolicy({
-        cwd: runtimeCwd,
-        runtimeOptions: args.runtimeOptions,
-      }),
-      ...(args.runtimeOptions?.model ? { model: args.runtimeOptions.model } : {}),
-      ...(args.runtimeOptions?.codexReasoningEffort ? { effort: args.runtimeOptions.codexReasoningEffort } : {}),
-      ...(args.runtimeOptions?.codexReasoningSummary ? { summary: args.runtimeOptions.codexReasoningSummary } : {}),
-      ...(args.runtimeOptions?.codexPlanMode
-        ? {
-          collaborationMode: {
-            mode: "plan",
-            settings: {
-              model: args.runtimeOptions?.model?.trim() || "gpt-5.4",
-              reasoning_effort: args.runtimeOptions?.codexReasoningEffort ?? null,
-              developer_instructions: buildCodexDeveloperInstructions({
-                runtimeOptions: args.runtimeOptions,
-              }) ?? null,
-            },
+    const turnResponse = await client.request<{ turn: { id: string } }>(
+      "turn/start",
+      {
+        threadId,
+        input: [
+          {
+            type: "text",
+            text: providerPrompt,
+            text_elements: [],
           },
-        }
-        : {}),
-    });
+        ],
+        cwd: runtimeCwd,
+        ...(approvalPolicy ? { approvalPolicy } : {}),
+        sandboxPolicy: buildSandboxPolicy({
+          cwd: runtimeCwd,
+          runtimeOptions: args.runtimeOptions,
+        }),
+        ...(args.runtimeOptions?.model
+          ? { model: args.runtimeOptions.model }
+          : {}),
+        ...(args.runtimeOptions?.codexReasoningEffort
+          ? { effort: args.runtimeOptions.codexReasoningEffort }
+          : {}),
+        ...(args.runtimeOptions?.codexReasoningSummary
+          ? { summary: args.runtimeOptions.codexReasoningSummary }
+          : {}),
+        ...(args.runtimeOptions?.codexPlanMode
+          ? {
+              collaborationMode: {
+                mode: "plan",
+                settings: {
+                  model: args.runtimeOptions?.model?.trim() || "gpt-5.4",
+                  reasoning_effort:
+                    args.runtimeOptions?.codexReasoningEffort ?? null,
+                  developer_instructions:
+                    buildCodexDeveloperInstructions({
+                      runtimeOptions: args.runtimeOptions,
+                    }) ?? null,
+                },
+              },
+            }
+          : {}),
+      },
+    );
     appServerTurnId = turnResponse.turn.id;
     if (shouldInterruptPlanTurn) {
       requestPlanInterrupt();
@@ -1821,20 +2051,59 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
 
     args.registerAbort?.(() => {
       if (!appServerTurnId) {
+        // No turn started yet — mark completed so the wait-loop exits.
+        completed = true;
         return;
       }
-      void client.request("turn/interrupt", {
-        threadId,
-        turnId: appServerTurnId,
-      }).catch(() => {});
+      void client
+        .request("turn/interrupt", {
+          threadId,
+          turnId: appServerTurnId,
+        })
+        .catch(() => {})
+        .finally(() => {
+          // Ensure the wait-loop exits even if the interrupt response is lost.
+          completed = true;
+        });
     });
 
+    // Wait for turn completion with a safety-net timeout (5 min) to prevent
+    // hanging forever when the done event is never received (Mux pattern).
+    const WAIT_TIMEOUT_MS = 5 * 60 * 1000;
+    const waitStart = Date.now();
     while (!completed) {
+      if (Date.now() - waitStart > WAIT_TIMEOUT_MS) {
+        console.warn(
+          "[provider-runtime] Codex app-server turn wait timed out after 5 minutes",
+          { threadId, appServerTurnId },
+        );
+        emitBridgeEvent({
+          type: "error",
+          message: "Codex turn timed out waiting for completion.",
+          recoverable: true,
+        });
+        break;
+      }
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
 
     return events;
   } catch (error) {
+    // Distinguish abort from real failures (symmetric with claude-sdk-runtime).
+    const isAbort =
+      (error instanceof Error && error.name === "AbortError") ||
+      (error instanceof Error && /aborted|cancel/i.test(error.message));
+    if (isAbort) {
+      console.info("[provider-runtime] Codex app-server turn aborted", {
+        threadId,
+        appServerTurnId,
+      });
+      const abortEvents: BridgeEvent[] = [
+        { type: "done", stop_reason: "user_abort" },
+      ];
+      abortEvents.forEach((event) => args.onEvent?.(event));
+      return abortEvents;
+    }
     const errorEvent: BridgeEvent = {
       type: "error",
       message: toCodexUserFacingErrorMessage({
@@ -1846,6 +2115,24 @@ export async function streamCodexWithAppServer(args: StreamTurnArgs & {
     emitBridgeEvent({ type: "done" });
     return events;
   } finally {
+    // Reject any pending approval/input requests so the Codex app-server
+    // doesn't hang waiting for a response that will never arrive.
+    for (const [id, pending] of pendingApprovalRequests) {
+      void client
+        .respond(pending.serverRequestId, { decision: "decline" })
+        .catch(() => {});
+      pendingApprovalRequests.delete(id);
+    }
+    for (const [id, pending] of pendingUserInputRequests) {
+      const declinePayload =
+        pending.responseKind === "elicitation"
+          ? { action: "decline" as const }
+          : { answers: {} };
+      void client
+        .respond(pending.serverRequestId, declinePayload)
+        .catch(() => {});
+      pendingUserInputRequests.delete(id);
+    }
     unsubscribe();
   }
 }

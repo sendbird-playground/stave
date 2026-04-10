@@ -8,7 +8,7 @@ import {
 } from "@/components/ai-elements/model-selector";
 import type { PromptInputProviderModeStatus } from "@/components/ai-elements/prompt-input-provider-mode";
 import type { PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
-import { toast } from "@/components/ui";
+import { Badge, Kbd, toast } from "@/components/ui";
 import { buildCommandPaletteItems, type CommandPaletteItem, type CommandPaletteProviderNote } from "@/lib/commands";
 import {
   buildClaudeProviderModeSettingsPatch,
@@ -42,6 +42,10 @@ import {
   CODEX_EFFORT_OPTIONS,
   findOptionLabel,
 } from "@/lib/providers/runtime-option-contract";
+import {
+  formatProviderTurnIdleDuration,
+  resolveProviderTurnDisplayState,
+} from "@/lib/providers/turn-status";
 import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
 import { getTaskControlOwner, isTaskArchived, isTaskManaged } from "@/lib/tasks";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
@@ -207,6 +211,7 @@ function ChatInputComposer(args: ChatInputComposerProps) {
   }, [pendingUserInputMessageId, pendingUserInputPart]);
   const activeTaskMessages = useAppStore((state) => state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES);
   const activeTurnId = useAppStore((state) => state.activeTurnIdsByTask[args.activeTaskId] ?? null);
+  const providerTurnActivity = useAppStore((state) => state.providerTurnActivityByTask[args.activeTaskId] ?? null);
   const pendingApprovals = useMemo(
     () => findPendingApprovals({ messages: activeTaskMessages }),
     [activeTaskMessages],
@@ -218,6 +223,21 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     [activeTaskMessages],
   );
   const isInputBlocked = pendingApproval != null || pendingUserInput != null;
+  const providerTurnDisplayState = useMemo(
+    () =>
+      resolveProviderTurnDisplayState({
+        activeTurnId,
+        activity: providerTurnActivity,
+      }),
+    [activeTurnId, providerTurnActivity],
+  );
+  const stalledDurationLabel = useMemo(
+    () =>
+      providerTurnDisplayState === "stalled"
+        ? formatProviderTurnIdleDuration({ activity: providerTurnActivity })
+        : null,
+    [providerTurnActivity, providerTurnDisplayState],
+  );
   const promptHistoryEntries = useMemo(
     () => getPromptHistoryEntries(activeTaskMessages),
     [activeTaskMessages],
@@ -574,6 +594,18 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               });
             }}
           />
+        ) : null}
+        {providerTurnDisplayState === "stalled" ? (
+          <div className="mb-3 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-muted-foreground dark:bg-warning/15">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="warning" className="uppercase tracking-[0.12em]">
+                Stalled
+              </Badge>
+              <span>
+                No provider events for {stalledDurationLabel ?? "a while"}. This run may be stuck. Press <Kbd>Esc</Kbd> or use stop to interrupt it.
+              </span>
+            </div>
+          </div>
         ) : null}
         <PromptInputComponent
           focusToken={`${args.providerSelectionTarget}:${focusNonce}`}
