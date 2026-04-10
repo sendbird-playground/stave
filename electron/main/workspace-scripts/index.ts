@@ -17,6 +17,7 @@ export {
   getScriptStatuses,
   runScriptEntry,
   runScriptHook,
+  setWorkspaceScriptEventListener,
   stopAllWorkspaceScriptProcesses,
   stopScriptEntry,
 } from "./executor";

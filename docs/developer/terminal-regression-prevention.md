@@ -43,7 +43,9 @@ When that ownership blurs, the same classes of bugs return:
 | `src/components/layout/app-shell.shortcuts.ts` | Keyboard boundary between app shortcuts and terminal-native shortcuts |
 | `src/store/workspace-session-state.ts` | Workspace restore semantics for active surfaces and shell state |
 | `src/store/app.store.ts` | Terminal and CLI tab lifecycle plus workspace snapshot persistence |
-| `electron/main/ipc/terminal.ts` | PTY session creation, slot reuse, delivery mode, and renderer event flow |
+| `electron/main/ipc/terminal.ts` | Main-process bridge that maps renderer ownership to backend session events |
+| `electron/main/host-service-client.ts` | Child-process bootstrap, RPC routing, and owner-targeted delivery recovery |
+| `electron/host-service/terminal-runtime.ts` | Real PTY session creation, slot reuse, delivery mode, and output buffering |
 | `src/types/window-api.d.ts` | Terminal IPC contract exposed to the renderer |
 
 ## Ownership Rules
@@ -99,6 +101,14 @@ The terminal must behave correctly across:
 - restore from persisted shell state
 
 These are not edge cases. They are the normal usage pattern of the product.
+
+The backend now runs in a dedicated host-service child process. Keep the renderer ownership model exactly the same:
+
+- `usePtySessionSurface.ts` still decides when a surface is visible, ready, and allowed to create or resume a session
+- `electron/main/ipc/terminal.ts` stays a thin bridge
+- `electron/host-service/terminal-runtime.ts` owns PTY state, buffering, slot reuse, and push/poll delivery
+
+Do not move PTY decisions back into Electron main or React shell components.
 
 ```tsx
 // ❌ DON'T — focus only reacts to tab change, misses visibility restore
@@ -248,6 +258,7 @@ If a change touches real PTY input, focus restore, Electron IPC wiring, or works
 4. Confirm typing still works.
 5. Confirm no duplicate session appears.
 6. Confirm dock and CLI spacing still match the intended shell inset.
+7. Confirm the host-service child still starts and exits cleanly when the desktop app launches and quits.
 
 ## Review Checklist
 

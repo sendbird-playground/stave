@@ -1,13 +1,11 @@
-import { createRequire } from "node:module";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   canExecutePath,
   resolveExecutablePath,
   toAsarUnpackedPath,
 } from "../../providers/executable-path";
 import type { ResolvedWorkspaceScriptOrbitConfig } from "../../../src/lib/workspace-scripts/types";
-
-const require = createRequire(import.meta.url);
 
 export const ORBIT_URL_MARKER = "__STAVE_ORBIT_URL__=";
 export const DEFAULT_ORBIT_PROXY_PORT = 1355;
@@ -50,15 +48,12 @@ export function sanitizeOrbitName(value: string | undefined) {
 
 function resolveBundledPortlessPath() {
   try {
-    const packageJsonPath = require.resolve("portless/package.json");
-    const packageJson = require(packageJsonPath) as { bin?: string | Record<string, string> };
-    const binRelative = typeof packageJson.bin === "string"
-      ? packageJson.bin
-      : packageJson.bin?.portless;
-    if (!binRelative) {
+    const portlessEntryUrl = import.meta.resolve?.("portless");
+    if (!portlessEntryUrl) {
       return null;
     }
-    const candidate = toAsarUnpackedPath(path.resolve(path.dirname(packageJsonPath), binRelative));
+    const portlessEntryPath = fileURLToPath(portlessEntryUrl);
+    const candidate = toAsarUnpackedPath(path.resolve(path.dirname(portlessEntryPath), "cli.js"));
     return canExecutePath({ path: candidate }) ? candidate : null;
   } catch {
     return null;

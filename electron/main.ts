@@ -1,10 +1,10 @@
 import { app, Menu } from "electron";
 import { registerHandlers } from "./main/ipc";
+import { startHostService, stopHostService } from "./main/host-service-client";
 import { configurePersistenceUserDataPath } from "./main/runtime-profile";
-import { cleanupAllTerminalSessions, resetMainProcessState } from "./main/state";
+import { resetMainProcessState } from "./main/state";
 import { startStaveMcpServer, stopStaveMcpServer } from "./main/stave-mcp-server";
 import { createMainWindow } from "./main/window";
-import { cleanupAllScriptProcesses } from "./main/workspace-scripts";
 import { prewarmClaudeSdk } from "./providers/claude-sdk-runtime";
 
 configurePersistenceUserDataPath(app);
@@ -20,8 +20,7 @@ function runBeforeQuitCleanup() {
   beforeQuitCleanupPromise = (async () => {
     const results = await Promise.allSettled([
       stopStaveMcpServer(),
-      cleanupAllTerminalSessions(),
-      cleanupAllScriptProcesses(),
+      stopHostService(),
     ]);
 
     for (const result of results) {
@@ -40,6 +39,9 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   registerHandlers();
   createMainWindow();
+  void startHostService().catch((error) => {
+    console.error("[host-service] failed to start", error);
+  });
   prewarmClaudeSdk();
   void startStaveMcpServer().catch((error) => {
     console.error("[stave-mcp] failed to start local MCP server", error);

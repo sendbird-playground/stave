@@ -38,6 +38,13 @@ Use that guide as the mandatory check list for:
 - terminal-related workspace/task switching behavior
 - terminal keyboard boundary changes
 
+The terminal backend now runs in a dedicated `host-service` child process. If the dock or CLI terminal surface opens but no live shell appears:
+
+- check main-process logs for `[host-service]` stderr lines
+- verify the built desktop app includes `out/main/host-service.js`
+- smoke-test the child directly with `node out/main/host-service.js` and confirm it prints `{"type":"ready"}`
+- if the child boots but the renderer still shows no output, inspect `electron/main/ipc/terminal.ts` and `electron/main/host-service-client.ts` before changing renderer code
+
 ## Settings diagnostics
 
 The Settings dialog includes desktop-only diagnostics for renderer and compositor troubleshooting:

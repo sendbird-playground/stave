@@ -6,6 +6,7 @@
   - a docked workspace terminal for general shell work
   - full-panel CLI sessions for running Claude or Codex directly inside the main workspace area
 - You can open a terminal for the workspace root or for a specific Explorer path without leaving Stave.
+- Live PTY sessions now run in an isolated host-service child process instead of sharing the Electron main-process event loop.
 
 ## When To Use It
 
@@ -82,6 +83,7 @@
 - Docked terminal tabs and CLI session tabs are both stored as part of the workspace shell state.
 - Terminal transcript cache is best-effort and local to the app for both surfaces.
 - Live shell processes are reset when you switch workspaces.
+- Renderer ownership stays the same even though PTY execution is isolated in the desktop backend child process.
 
 ## Limitations And Advanced Options
 

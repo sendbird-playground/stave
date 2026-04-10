@@ -33,6 +33,7 @@ export default defineConfig({
         external: mainExternalDeps,
         input: {
           index: path.resolve(__dirname, "electron/main.ts"),
+          "host-service": path.resolve(__dirname, "electron/host-service.ts"),
           // Standalone stdio proxy — compiled separately so it can be
           // executed by `node` outside the Electron process.
           "stave-mcp-stdio-proxy": path.resolve(__dirname, "electron/main/stave-mcp-stdio-proxy.ts"),

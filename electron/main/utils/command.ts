@@ -7,11 +7,21 @@ import {
 import { buildExecutableLookupEnv } from "../../providers/executable-path";
 import type { CommandResult, SourceControlStatusItem } from "../types";
 
+const COMMAND_OUTPUT_LIMIT = 128_000;
+
 export function resolveCommandCwd(args: { cwd?: string }) {
   if (args.cwd && path.isAbsolute(args.cwd)) {
     return args.cwd;
   }
   return process.cwd();
+}
+
+export function appendCommandOutput(current: string, chunk: string) {
+  const next = current + chunk;
+  if (next.length <= COMMAND_OUTPUT_LIMIT) {
+    return next;
+  }
+  return next.slice(next.length - COMMAND_OUTPUT_LIMIT);
 }
 
 export function runCommand(args: {
@@ -29,10 +39,10 @@ export function runCommand(args: {
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      stdout = appendCommandOutput(stdout, chunk.toString());
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      stderr = appendCommandOutput(stderr, chunk.toString());
     });
     child.on("error", (error) => {
       resolve({
@@ -69,10 +79,10 @@ export function runCommandArgs(args: {
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      stdout = appendCommandOutput(stdout, chunk.toString());
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      stderr = appendCommandOutput(stderr, chunk.toString());
     });
     child.on("error", (error) => {
       resolve({

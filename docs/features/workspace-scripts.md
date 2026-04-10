@@ -4,6 +4,7 @@
 
 - Workspace Scripts let Stave run workspace actions, long-running services, and lifecycle hooks from the right rail.
 - The Scripts Manager now lives under `Settings > Projects`, where it provides a lightweight GUI for editing shared `actions`, `services`, and `hooks` in `.stave/scripts.json` without exposing a raw JSON editor.
+- Script execution now runs through the isolated desktop host-service child process, which keeps long-lived output and hook churn off the Electron main-process event loop.
 
 ## When To Use It
 

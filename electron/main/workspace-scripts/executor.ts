@@ -5,7 +5,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { webContents } from "electron";
 import * as pty from "node-pty";
 import {
   SCRIPT_ENV_VARS,
@@ -37,6 +36,7 @@ import {
   setWorkspaceScriptProcess,
   type WorkspaceScriptProcess,
 } from "./state";
+import { createScriptOutputBuffer } from "./output-buffer";
 import {
   buildOrbitDisplayCommand,
   buildOrbitEnv,
@@ -50,12 +50,14 @@ import {
 
 const SIGTERM_GRACE_MS = 5_000;
 
-function broadcastScriptEvent(envelope: WorkspaceScriptEventEnvelope) {
-  for (const wc of webContents.getAllWebContents()) {
-    if (!wc.isDestroyed()) {
-      wc.send("workspace-scripts:event", envelope);
-    }
-  }
+let workspaceScriptEventListener:
+  | ((envelope: WorkspaceScriptEventEnvelope) => void)
+  | null = null;
+
+export function setWorkspaceScriptEventListener(
+  listener: ((envelope: WorkspaceScriptEventEnvelope) => void) | null,
+) {
+  workspaceScriptEventListener = listener;
 }
 
 function emitScriptEvent(args: {
@@ -68,7 +70,7 @@ function emitScriptEvent(args: {
   event: WorkspaceScriptEvent;
 }) {
   recordWorkspaceScriptEvent(args);
-  broadcastScriptEvent(args);
+  workspaceScriptEventListener?.(args);
 }
 
 function buildScriptEnv(args: {
@@ -241,6 +243,16 @@ async function runFiniteScript(args: {
     source: args.source,
     process: null,
   });
+  const outputBuffer = createScriptOutputBuffer((data) => {
+    emitScriptEvent({
+      workspaceId: args.workspaceId,
+      scriptId: args.scriptEntry.id,
+      scriptKind: args.scriptEntry.kind,
+      runId,
+      source: args.source,
+      event: { type: "output", data },
+    });
+  });
 
   let lastExitCode = 0;
 
@@ -276,25 +288,11 @@ async function runFiniteScript(args: {
         entry.process = child;
 
         child.stdout?.on("data", (chunk: Buffer) => {
-          emitScriptEvent({
-            workspaceId: args.workspaceId,
-            scriptId: args.scriptEntry.id,
-            scriptKind: args.scriptEntry.kind,
-            runId,
-            source: args.source,
-            event: { type: "output", data: chunk.toString() },
-          });
+          outputBuffer.push(chunk.toString());
         });
 
         child.stderr?.on("data", (chunk: Buffer) => {
-          emitScriptEvent({
-            workspaceId: args.workspaceId,
-            scriptId: args.scriptEntry.id,
-            scriptKind: args.scriptEntry.kind,
-            runId,
-            source: args.source,
-            event: { type: "output", data: chunk.toString() },
-          });
+          outputBuffer.push(chunk.toString());
         });
 
         child.on("error", reject);
@@ -315,6 +313,7 @@ async function runFiniteScript(args: {
         }
       });
     } catch (error) {
+      outputBuffer.flush();
       const message = error instanceof Error ? error.message : String(error);
       emitScriptEvent({
         workspaceId: args.workspaceId,
@@ -328,6 +327,7 @@ async function runFiniteScript(args: {
       return { ok: false as const, runId, exitCode: -1, error: message };
     }
 
+    outputBuffer.flush();
     entry.process = null;
     emitScriptEvent({
       workspaceId: args.workspaceId,
@@ -493,6 +493,17 @@ async function runServiceScript(args: {
     process: ptyProcess,
     sessionId,
   });
+  const outputBuffer = createScriptOutputBuffer((data) => {
+    emitScriptEvent({
+      workspaceId: args.workspaceId,
+      scriptId: args.scriptEntry.id,
+      scriptKind: args.scriptEntry.kind,
+      runId,
+      sessionId,
+      source: args.source,
+      event: { type: "output", data },
+    });
+  });
 
   emitScriptEvent({
     workspaceId: args.workspaceId,
@@ -559,41 +570,18 @@ async function runServiceScript(args: {
         return;
       }
 
-      emitScriptEvent({
-        workspaceId: args.workspaceId,
-        scriptId: args.scriptEntry.id,
-        scriptKind: args.scriptEntry.kind,
-        runId,
-        sessionId,
-        source: args.source,
-        event: { type: "output", data: parsed.output },
-      });
+      outputBuffer.push(parsed.output);
       return;
     }
 
-    emitScriptEvent({
-      workspaceId: args.workspaceId,
-      scriptId: args.scriptEntry.id,
-      scriptKind: args.scriptEntry.kind,
-      runId,
-      sessionId,
-      source: args.source,
-      event: { type: "output", data },
-    });
+    outputBuffer.push(data);
   });
 
   ptyProcess.onExit(({ exitCode }) => {
     if (orbitUsesShellWrapper && orbitBuffer) {
-      emitScriptEvent({
-        workspaceId: args.workspaceId,
-        scriptId: args.scriptEntry.id,
-        scriptKind: args.scriptEntry.kind,
-        runId,
-        sessionId,
-        source: args.source,
-        event: { type: "output", data: orbitBuffer },
-      });
+      outputBuffer.push(orbitBuffer);
     }
+    outputBuffer.flush();
     emitScriptEvent({
       workspaceId: args.workspaceId,
       scriptId: args.scriptEntry.id,
