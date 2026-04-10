@@ -70,6 +70,9 @@ function buildSessionKey(args: { rootPath: string; languageId: SupportedLspLangu
 }
 
 function subscribeSessionToSender(session: LspSession, sender: WebContents) {
+  if (session.subscribers.has(sender.id)) {
+    return;
+  }
   session.subscribers.set(sender.id, sender);
   sender.once("destroyed", () => {
     session.subscribers.delete(sender.id);
