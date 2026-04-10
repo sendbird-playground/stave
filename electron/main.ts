@@ -5,9 +5,9 @@ import { configurePersistenceUserDataPath } from "./main/runtime-profile";
 import { resetMainProcessState } from "./main/state";
 import { startStaveMcpServer, stopStaveMcpServer } from "./main/stave-mcp-server";
 import { createMainWindow } from "./main/window";
-import { prewarmClaudeSdk } from "./providers/claude-sdk-runtime";
 
-configurePersistenceUserDataPath(app);
+const persistenceRuntime = configurePersistenceUserDataPath(app);
+process.env.STAVE_USER_DATA_PATH = persistenceRuntime.userDataPath;
 
 let quittingAfterCleanup = false;
 let beforeQuitCleanupPromise: Promise<void> | null = null;
@@ -42,7 +42,6 @@ app.whenReady().then(() => {
   void startHostService().catch((error) => {
     console.error("[host-service] failed to start", error);
   });
-  prewarmClaudeSdk();
   void startStaveMcpServer().catch((error) => {
     console.error("[stave-mcp] failed to start local MCP server", error);
   });

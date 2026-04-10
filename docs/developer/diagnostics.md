@@ -45,6 +45,16 @@ The terminal backend now runs in a dedicated `host-service` child process. If th
 - smoke-test the child directly with `node out/main/host-service.js` and confirm it prints `{"type":"ready"}`
 - if the child boots but the renderer still shows no output, inspect `electron/main/ipc/terminal.ts` and `electron/main/host-service-client.ts` before changing renderer code
 
+## Provider diagnostics
+
+Provider turn execution now shares the same dedicated `host-service` child process as terminal PTY runtime and workspace scripts. If a chat turn fails before any provider output appears:
+
+- check main-process logs for `[host-service]` stderr lines
+- verify the built desktop app includes `out/main/host-service.js`
+- smoke-test the child directly with `node out/main/host-service.js` and confirm it prints `{"type":"ready"}`
+- inspect `electron/main/ipc/provider.ts`, `electron/main/host-service-client.ts`, and `electron/host-service.ts` before changing renderer store code
+- if push-stream events stop only after renderer ownership changes, inspect the owner-routing map in `electron/main/ipc/provider.ts`
+
 ## Settings diagnostics
 
 The Settings dialog includes desktop-only diagnostics for renderer and compositor troubleshooting:

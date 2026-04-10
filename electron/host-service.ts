@@ -1,4 +1,10 @@
 import { createInterface } from "node:readline";
+import { randomUUID } from "node:crypto";
+import {
+  generateFallbackPullRequestDraft,
+  mergePullRequestDraft,
+  resolvePullRequestTitle,
+} from "../src/lib/source-control-pr";
 import {
   cleanupAllScriptProcesses,
   getScriptStatuses,
@@ -8,6 +14,7 @@ import {
   stopAllWorkspaceScriptProcesses,
   stopScriptEntry,
 } from "./main/workspace-scripts";
+import { ensureHostServicePersistenceReady, resetHostServicePersistence } from "./host-service/persistence";
 import { createTerminalRuntime } from "./host-service/terminal-runtime";
 import type {
   AnyHostServiceRequestEnvelope,
@@ -18,6 +25,19 @@ import type {
   HostServiceResponseMap,
   HostServiceSuccessResponseEnvelope,
 } from "./host-service/protocol";
+import { providerRuntime } from "./providers/runtime";
+import {
+  getClaudeContextUsage,
+  prewarmClaudeSdk,
+  reloadClaudePlugins,
+  suggestClaudeCommitMessage,
+  suggestClaudePRDescription,
+  suggestClaudeTaskName,
+} from "./providers/claude-sdk-runtime";
+import { getCodexMcpStatus } from "./main/utils/tooling-status";
+import { isDoneEvent, toEventType } from "./main/utils/provider-events";
+import { quotePath, runCommand } from "./main/utils/command";
+import type { StreamTurnArgs } from "./providers/types";
 
 function writeMessage(message: AnyHostServiceResponseEnvelope | {
   type: "ready";
@@ -55,6 +75,225 @@ setWorkspaceScriptEventListener((envelope) => {
   emitEvent("workspace-scripts.event", envelope);
 });
 
+function startPushProviderTurn(args: StreamTurnArgs) {
+  const turnId = args.turnId ?? randomUUID();
+  const store = args.taskId ? ensureHostServicePersistenceReady() : null;
+  let sequence = 0;
+  let completed = false;
+
+  if (args.taskId && store) {
+    try {
+      store.beginTurn({
+        id: turnId,
+        workspaceId: args.workspaceId ?? "default",
+        taskId: args.taskId,
+        providerId: args.providerId,
+      });
+    } catch (error) {
+      console.warn("[provider:persistence] failed to begin turn", error, {
+        turnId,
+        providerId: args.providerId,
+        taskId: args.taskId,
+        workspaceId: args.workspaceId ?? null,
+      });
+    }
+
+    try {
+      store.appendTurnEvent({
+        id: randomUUID(),
+        turnId,
+        sequence: 0,
+        eventType: "request_snapshot",
+        payload: {
+          type: "request_snapshot",
+          prompt: args.prompt,
+          conversation: args.conversation ?? null,
+        },
+      });
+    } catch (error) {
+      console.warn("[provider:persistence] failed to append request snapshot", error, {
+        turnId,
+        providerId: args.providerId,
+        taskId: args.taskId,
+      });
+    }
+  }
+
+  const started = providerRuntime.startTurnStream({
+    ...args,
+    turnId,
+  }, {
+    onEvent: (turnEvent) => {
+      sequence += 1;
+
+      if (args.taskId && store) {
+        try {
+          store.appendTurnEvent({
+            id: randomUUID(),
+            turnId,
+            sequence,
+            eventType: toEventType({ event: turnEvent }),
+            payload: turnEvent,
+          });
+        } catch (error) {
+          console.warn("[provider:persistence] failed to append turn event", error, {
+            turnId,
+            sequence,
+            providerId: args.providerId,
+            taskId: args.taskId,
+            eventType: toEventType({ event: turnEvent }),
+          });
+        }
+      }
+
+      emitEvent("provider.stream-event", {
+        streamId: started.streamId,
+        event: turnEvent,
+        sequence,
+        done: isDoneEvent({ event: turnEvent }),
+        taskId: args.taskId ?? null,
+        workspaceId: args.workspaceId ?? null,
+        providerId: args.providerId,
+        turnId: args.taskId ? turnId : null,
+      });
+    },
+    onDone: () => {
+      if (!completed && args.taskId && store) {
+        completed = true;
+        try {
+          store.completeTurn({
+            id: turnId,
+            completedAt: new Date().toISOString(),
+          });
+        } catch (error) {
+          console.warn("[provider:persistence] failed to complete turn", error, {
+            turnId,
+            providerId: args.providerId,
+            taskId: args.taskId,
+          });
+        }
+      }
+    },
+  });
+
+  return {
+    ok: true,
+    streamId: started.streamId,
+    turnId: args.taskId ? turnId : null,
+  } as const;
+}
+
+async function suggestProviderCommitMessage(args: { cwd?: string }) {
+  const cwd = args.cwd;
+  const [diffResult, statusResult] = await Promise.all([
+    runCommand({ command: "git diff HEAD", cwd }),
+    runCommand({ command: "git status --porcelain", cwd }),
+  ]);
+
+  const diff = diffResult.ok ? diffResult.stdout.trim() : "";
+  const fileList = statusResult.ok ? statusResult.stdout.trim() : "";
+  return suggestClaudeCommitMessage({ diff, fileList });
+}
+
+async function suggestProviderPRDescription(args: {
+  cwd?: string;
+  baseBranch?: string;
+  headBranch?: string;
+  promptTemplate?: string;
+  workspaceContext?: string;
+}) {
+  const cwd = args.cwd;
+  const baseBranch = args.baseBranch || "main";
+  const safeBaseBranch = quotePath({ value: baseBranch });
+  const expectedBranch = args.headBranch?.trim() || undefined;
+
+  const [
+    diffResult,
+    workingTreeDiffResult,
+    logResult,
+    statResult,
+    statusResult,
+    prTemplateResult,
+    agentsResult,
+    branchResult,
+  ] = await Promise.all([
+    runCommand({ command: `git diff "${safeBaseBranch}"...HEAD`, cwd }),
+    runCommand({ command: "git diff HEAD", cwd }),
+    runCommand({
+      command: `git log "${safeBaseBranch}"..HEAD --pretty=format:"%h %s" --no-merges`,
+      cwd,
+    }),
+    runCommand({ command: `git diff "${safeBaseBranch}"...HEAD --stat`, cwd }),
+    runCommand({ command: "git status --porcelain", cwd }),
+    runCommand({ command: "cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true", cwd }),
+    runCommand({ command: "cat AGENTS.md 2>/dev/null || true", cwd }),
+    runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd }),
+  ]);
+
+  const gitDetectedBranch = branchResult.ok ? branchResult.stdout.trim() : "HEAD";
+  const headBranch = expectedBranch || gitDetectedBranch;
+
+  if (
+    expectedBranch
+    && gitDetectedBranch !== "HEAD"
+    && gitDetectedBranch !== expectedBranch
+  ) {
+    return { ok: false, headBranch: gitDetectedBranch };
+  }
+
+  const diff = diffResult.ok ? diffResult.stdout.trim() : "";
+  const workingTreeDiff = workingTreeDiffResult.ok
+    ? workingTreeDiffResult.stdout.trim()
+    : "";
+  const commitLog = logResult.ok ? logResult.stdout.trim() : "";
+  const fileList = [
+    statResult.ok ? statResult.stdout.trim() : "",
+    statusResult.ok ? statusResult.stdout.trim() : "",
+  ].filter(Boolean).join("\n");
+  const prTemplateContent = prTemplateResult.ok
+    ? prTemplateResult.stdout.trim()
+    : undefined;
+  const agentsContent = agentsResult.ok ? agentsResult.stdout.trim() : undefined;
+  const fallbackDraft = generateFallbackPullRequestDraft({
+    baseBranch,
+    headBranch,
+    commitLog,
+    fileList,
+  });
+
+  const suggestion = await suggestClaudePRDescription({
+    cwd,
+    diff,
+    workingTreeDiff,
+    commitLog,
+    fileList,
+    baseBranch,
+    headBranch,
+    prTemplateContent,
+    agentsContent,
+    promptTemplate: args.promptTemplate,
+    workspaceContext: args.workspaceContext,
+  });
+  const mergedDraft = mergePullRequestDraft({
+    fallbackTitle: fallbackDraft.title,
+    fallbackBody: fallbackDraft.body,
+    generatedTitle: suggestion.title,
+    generatedBody: suggestion.body,
+  });
+  const resolvedTitle = resolvePullRequestTitle({
+    currentTitle: mergedDraft.title,
+    commitLog,
+    headBranch,
+  });
+
+  return {
+    ok: true,
+    title: resolvedTitle,
+    body: mergedDraft.body,
+    headBranch,
+  };
+}
+
 async function respond<TMethod extends HostServiceMethod>(
   id: number,
   result: HostServiceResponseMap[TMethod],
@@ -83,6 +322,7 @@ async function shutdown() {
     terminalRuntime.cleanupAll(),
     cleanupAllScriptProcesses(),
   ]);
+  resetHostServicePersistence();
 }
 
 async function handleRequest(request: AnyHostServiceRequestEnvelope) {
@@ -173,12 +413,117 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       await cleanupAllScriptProcesses();
       await respond(request.id, { ok: true });
       return;
+    case "provider.stream-turn":
+      await respond(
+        request.id,
+        await providerRuntime.streamTurn(request.params),
+      );
+      return;
+    case "provider.start-stream-turn":
+      await respond(
+        request.id,
+        providerRuntime.startTurnStream(request.params),
+      );
+      return;
+    case "provider.start-push-turn":
+      await respond(
+        request.id,
+        startPushProviderTurn(request.params),
+      );
+      return;
+    case "provider.read-stream-turn":
+      await respond(
+        request.id,
+        providerRuntime.readTurnStream(request.params),
+      );
+      return;
+    case "provider.abort-turn":
+      await respond(
+        request.id,
+        providerRuntime.abortTurn(request.params),
+      );
+      return;
+    case "provider.cleanup-task":
+      await respond(
+        request.id,
+        providerRuntime.cleanupTask(request.params),
+      );
+      return;
+    case "provider.respond-approval":
+      await respond(
+        request.id,
+        providerRuntime.respondApproval(request.params),
+      );
+      return;
+    case "provider.respond-user-input":
+      await respond(
+        request.id,
+        providerRuntime.respondUserInput(request.params),
+      );
+      return;
+    case "provider.check-availability":
+      await respond(
+        request.id,
+        await providerRuntime.checkAvailability(request.params),
+      );
+      return;
+    case "provider.get-command-catalog":
+      await respond(
+        request.id,
+        await providerRuntime.getCommandCatalog(request.params),
+      );
+      return;
+    case "provider.get-connected-tool-status":
+      await respond(
+        request.id,
+        await providerRuntime.getConnectedToolStatus(request.params),
+      );
+      return;
+    case "provider.get-claude-context-usage":
+      await respond(
+        request.id,
+        await getClaudeContextUsage(request.params),
+      );
+      return;
+    case "provider.reload-claude-plugins":
+      await respond(
+        request.id,
+        await reloadClaudePlugins(request.params),
+      );
+      return;
+    case "provider.get-codex-mcp-status":
+      await respond(
+        request.id,
+        await getCodexMcpStatus({
+          codexBinaryPath: request.params.runtimeOptions?.codexBinaryPath,
+        }),
+      );
+      return;
+    case "provider.suggest-task-name":
+      await respond(
+        request.id,
+        await suggestClaudeTaskName(request.params),
+      );
+      return;
+    case "provider.suggest-commit-message":
+      await respond(
+        request.id,
+        await suggestProviderCommitMessage(request.params),
+      );
+      return;
+    case "provider.suggest-pr-description":
+      await respond(
+        request.id,
+        await suggestProviderPRDescription(request.params),
+      );
+      return;
     default:
       request satisfies never;
   }
 }
 
 async function main() {
+  prewarmClaudeSdk();
   await writeMessage({ type: "ready" });
   const rl = createInterface({
     input: process.stdin,

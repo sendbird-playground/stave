@@ -9,11 +9,12 @@ The Stave Model Router is a meta-provider that sits above the real Claude and Co
 High-level flow:
 
 1. The renderer submits a turn with `providerId: "stave"`.
-2. `electron/providers/runtime.ts` detects the `stave` provider and builds the active `staveAuto` profile from settings.
-3. If the task is in Stave plan mode (`claudePermissionMode: "plan"`), Stave bypasses classifier / skill fast-path / orchestration and routes the turn directly to the profile `planModel`.
-4. Otherwise, `electron/providers/stave-preprocessor.ts` asks a lightweight classifier to return either `strategy: "direct"` with an intent (`plan`, `analyze`, `implement`, `quick_edit`, `general`) or `strategy: "orchestrate"`.
-5. For direct execution, Stave resolves the configured model for that intent from the profile, emits `stave:execution_processing`, rewrites the `StreamTurnArgs`, and re-enters the normal provider runtime.
-6. For orchestration, `electron/providers/stave-orchestrator.ts` asks the supervisor to produce role-based subtasks (`plan`, `analyze`, `implement`, `verify`, `general`), resolves each role to a configured model, executes subtasks, then synthesises the result.
+2. `electron/main/ipc/provider.ts` validates the request and forwards it into the dedicated desktop `host-service` child process.
+3. `electron/providers/runtime.ts` inside that child detects the `stave` provider and builds the active `staveAuto` profile from settings.
+4. If the task is in Stave plan mode (`claudePermissionMode: "plan"`), Stave bypasses classifier / skill fast-path / orchestration and routes the turn directly to the profile `planModel`.
+5. Otherwise, `electron/providers/stave-preprocessor.ts` asks a lightweight classifier to return either `strategy: "direct"` with an intent (`plan`, `analyze`, `implement`, `quick_edit`, `general`) or `strategy: "orchestrate"`.
+6. For direct execution, Stave resolves the configured model for that intent from the profile, emits `stave:execution_processing`, rewrites the `StreamTurnArgs`, and re-enters the normal provider runtime.
+7. For orchestration, `electron/providers/stave-orchestrator.ts` asks the supervisor to produce role-based subtasks (`plan`, `analyze`, `implement`, `verify`, `general`), resolves each role to a configured model, executes subtasks, then synthesises the result.
 
 When Stave plan mode resolves to a Codex-family `planModel`, Stave also forces `codexPlanMode: true` on the rewritten direct turn so the underlying Codex runtime still gets `read-only` sandboxing plus `approvalPolicy = never`.
 
@@ -61,10 +62,11 @@ Claude turns are handled in `electron/providers/claude-sdk-runtime.ts`.
 High-level flow:
 
 1. The renderer submits a turn through `window.api.provider.streamTurn(...)`.
-2. `electron/main.ts` forwards that request into `electron/providers/runtime.ts`.
-3. `streamClaudeWithSdk(...)` imports `@anthropic-ai/claude-agent-sdk` and runs the turn from Electron.
-4. Claude SDK messages are converted into Stave `BridgeEvent` records.
-5. The renderer consumes those normalized events and renders chat text, thinking, tools, approval prompts, user-input prompts, plans, and completion state.
+2. `electron/main/ipc/provider.ts` validates the request and forwards it into the dedicated desktop `host-service` child process.
+3. `electron/providers/runtime.ts` inside that child selects the Claude path and calls `streamClaudeWithSdk(...)`.
+4. `streamClaudeWithSdk(...)` imports `@anthropic-ai/claude-agent-sdk` and runs the turn from the host-service process instead of the Electron main-process event loop.
+5. Claude SDK messages are converted into Stave `BridgeEvent` records.
+6. The renderer consumes those normalized events and renders chat text, thinking, tools, approval prompts, user-input prompts, plans, and completion state.
 
 Claude event mapping:
 
@@ -93,11 +95,10 @@ Claude text-boundary note:
 
 Claude SDK prewarm:
 
-- At Electron app startup, Stave calls `prewarmClaudeSdk()` which eagerly
+- At host-service startup, Stave calls `prewarmClaudeSdk()` which eagerly
   imports the `@anthropic-ai/claude-agent-sdk` module and resolves the Claude
   executable path. This front-loads the two most expensive initialization costs
-  so the first `query()` call in either the main runtime or inline-completion
-  path is faster.
+  so the first `query()` call in the dedicated provider runtime is faster.
 - Subsequent SDK calls reuse the cached module and executable path rather than
   repeating the dynamic import and filesystem probing.
 

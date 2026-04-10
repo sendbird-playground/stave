@@ -3,6 +3,15 @@ import type {
   TerminalCreateSessionArgs,
 } from "../../src/lib/terminal/types";
 import type {
+  ClaudeContextUsageResponse,
+  ClaudePluginReloadResponse,
+  CodexMcpStatusResponse,
+} from "../../src/lib/providers/provider.types";
+import type {
+  ConnectedToolStatusRequest,
+  ConnectedToolStatusResponse,
+} from "../../src/lib/providers/connected-tool-status";
+import type {
   ResolvedWorkspaceScript,
   ResolvedWorkspaceScriptsConfig,
   ScriptHookContext,
@@ -12,6 +21,11 @@ import type {
   WorkspaceScriptStatusEntry,
   WorkspaceScriptHookRunSummary,
 } from "../../src/lib/workspace-scripts/types";
+import type {
+  BridgeEvent,
+  ProviderCommandCatalogResult,
+  StreamTurnArgs,
+} from "../providers/types";
 
 export interface HostWorkspaceScriptRunEntryArgs {
   workspaceId: string;
@@ -72,6 +86,75 @@ export interface HostTerminalMutationResult {
   stderr?: string;
 }
 
+export interface HostProviderStartStreamResult {
+  ok: boolean;
+  streamId: string;
+  message?: string;
+}
+
+export interface HostProviderStartPushTurnResult
+  extends HostProviderStartStreamResult {
+  turnId: string | null;
+}
+
+export interface HostProviderReadStreamResult {
+  ok: boolean;
+  events: BridgeEvent[];
+  cursor: number;
+  done: boolean;
+  message?: string;
+}
+
+export interface HostProviderMutationResult {
+  ok: boolean;
+  message?: string;
+}
+
+export interface HostProviderSuggestTaskNameArgs {
+  prompt: string;
+  history?: Array<{ role: string; content: string }>;
+}
+
+export interface HostProviderSuggestTaskNameResult {
+  ok: boolean;
+  title?: string;
+}
+
+export interface HostProviderSuggestCommitMessageArgs {
+  cwd?: string;
+}
+
+export interface HostProviderSuggestCommitMessageResult {
+  ok: boolean;
+  message?: string;
+}
+
+export interface HostProviderSuggestPRDescriptionArgs {
+  cwd?: string;
+  baseBranch?: string;
+  headBranch?: string;
+  promptTemplate?: string;
+  workspaceContext?: string;
+}
+
+export interface HostProviderSuggestPRDescriptionResult {
+  ok: boolean;
+  title?: string;
+  body?: string;
+  headBranch?: string;
+}
+
+export interface HostProviderStreamEventPayload {
+  streamId: string;
+  event: BridgeEvent;
+  sequence: number;
+  done: boolean;
+  taskId: string | null;
+  workspaceId: string | null;
+  providerId: StreamTurnArgs["providerId"];
+  turnId: string | null;
+}
+
 export interface HostServiceRequestMap {
   "service.shutdown": undefined;
   "terminal.create-session": TerminalCreateSessionArgs;
@@ -114,6 +197,55 @@ export interface HostServiceRequestMap {
     workspaceId: string;
   };
   "workspace-scripts.cleanup-all": undefined;
+  "provider.stream-turn": StreamTurnArgs;
+  "provider.start-stream-turn": StreamTurnArgs;
+  "provider.start-push-turn": StreamTurnArgs;
+  "provider.read-stream-turn": {
+    streamId: string;
+    cursor: number;
+  };
+  "provider.abort-turn": {
+    turnId: string;
+  };
+  "provider.cleanup-task": {
+    taskId: string;
+  };
+  "provider.respond-approval": {
+    turnId: string;
+    requestId: string;
+    approved: boolean;
+  };
+  "provider.respond-user-input": {
+    turnId: string;
+    requestId: string;
+    answers?: Record<string, string>;
+    denied?: boolean;
+  };
+  "provider.check-availability": {
+    providerId: StreamTurnArgs["providerId"];
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.get-command-catalog": {
+    providerId: StreamTurnArgs["providerId"];
+    cwd?: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.get-connected-tool-status": ConnectedToolStatusRequest;
+  "provider.get-claude-context-usage": {
+    cwd?: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.reload-claude-plugins": {
+    cwd?: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.get-codex-mcp-status": {
+    cwd?: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.suggest-task-name": HostProviderSuggestTaskNameArgs;
+  "provider.suggest-commit-message": HostProviderSuggestCommitMessageArgs;
+  "provider.suggest-pr-description": HostProviderSuggestPRDescriptionArgs;
 }
 
 export interface HostServiceResponseMap {
@@ -145,6 +277,27 @@ export interface HostServiceResponseMap {
   "workspace-scripts.cleanup-all": {
     ok: true;
   };
+  "provider.stream-turn": BridgeEvent[];
+  "provider.start-stream-turn": HostProviderStartStreamResult;
+  "provider.start-push-turn": HostProviderStartPushTurnResult;
+  "provider.read-stream-turn": HostProviderReadStreamResult;
+  "provider.abort-turn": HostProviderMutationResult;
+  "provider.cleanup-task": HostProviderMutationResult;
+  "provider.respond-approval": HostProviderMutationResult;
+  "provider.respond-user-input": HostProviderMutationResult;
+  "provider.check-availability": {
+    ok: boolean;
+    available: boolean;
+    detail: string;
+  };
+  "provider.get-command-catalog": ProviderCommandCatalogResult;
+  "provider.get-connected-tool-status": ConnectedToolStatusResponse;
+  "provider.get-claude-context-usage": ClaudeContextUsageResponse;
+  "provider.reload-claude-plugins": ClaudePluginReloadResponse;
+  "provider.get-codex-mcp-status": CodexMcpStatusResponse;
+  "provider.suggest-task-name": HostProviderSuggestTaskNameResult;
+  "provider.suggest-commit-message": HostProviderSuggestCommitMessageResult;
+  "provider.suggest-pr-description": HostProviderSuggestPRDescriptionResult;
 }
 
 export interface HostServiceEventMap {
@@ -158,6 +311,7 @@ export interface HostServiceEventMap {
     signal?: number;
   };
   "workspace-scripts.event": WorkspaceScriptEventEnvelope;
+  "provider.stream-event": HostProviderStreamEventPayload;
 }
 
 export type HostServiceMethod = keyof HostServiceRequestMap;

@@ -17,7 +17,7 @@ This file is the fast entrypoint for codebase orientation.
 ## Top-Level Layout
 
 - `src/` renderer, state, session UI, editor UI
-- `electron/` main process, preload bridge, provider runtimes, persistence
+- `electron/` main process, preload bridge, host-service child runtime, provider runtimes, persistence
 - `electron/main/stave-*` packaged-app local automation / MCP surface
 - `server/` browser-only dev bridge
 - `docs/` stable product and architecture reference
