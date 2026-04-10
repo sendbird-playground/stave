@@ -116,4 +116,5 @@ export interface ProviderRuntime {
     runtimeOptions?: StreamTurnArgs["runtimeOptions"];
   }) => Promise<ProviderCommandCatalogResult>;
   getConnectedToolStatus: (args: ConnectedToolStatusRequest) => Promise<ConnectedToolStatusResponse>;
+  shutdown: () => Promise<void>;
 }

@@ -24,6 +24,7 @@ export interface WorkspaceScriptProcess {
   log: string;
   error?: string;
   orbitUrl?: string;
+  cleanup?: () => void;
 }
 
 const workspaceScriptProcesses = new Map<string, WorkspaceScriptProcess>();
@@ -45,6 +46,12 @@ export function setWorkspaceScriptProcess(key: string, entry: WorkspaceScriptPro
 }
 
 export function deleteWorkspaceScriptProcess(key: string): void {
+  const entry = workspaceScriptProcesses.get(key);
+  if (entry?.cleanup) {
+    const cleanup = entry.cleanup;
+    entry.cleanup = undefined;
+    cleanup();
+  }
   workspaceScriptProcesses.delete(key);
 }
 

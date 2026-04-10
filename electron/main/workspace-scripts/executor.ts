@@ -32,6 +32,7 @@ import {
   getScriptProcessKey,
   recordWorkspaceScriptEvent,
   getWorkspaceScriptProcess,
+  listWorkspaceScriptProcessesForWorkspace,
   listWorkspaceScriptProcessKeys,
   setWorkspaceScriptProcess,
   type WorkspaceScriptProcess,
@@ -176,7 +177,10 @@ function killProcess(proc: ChildProcess | pty.IPty): Promise<void> {
         done();
       });
     } else if ("onExit" in proc && typeof proc.onExit === "function") {
-      (proc as pty.IPty).onExit(() => {
+      let exitSubscription: pty.IDisposable | null = null;
+      exitSubscription = (proc as pty.IPty).onExit(() => {
+        exitSubscription?.dispose();
+        exitSubscription = null;
         clearTimeout(timer);
         done();
       });
@@ -195,6 +199,8 @@ export async function stopScriptEntry(args: {
     return;
   }
   entry.aborted = true;
+  entry.cleanup?.();
+  entry.cleanup = undefined;
   if (entry.process) {
     await killProcess(entry.process);
   }
@@ -284,6 +290,13 @@ async function runFiniteScript(args: {
           cwd,
           env,
         });
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+        const clearScriptTimeout = () => {
+          if (timeoutHandle != null) {
+            clearTimeout(timeoutHandle);
+            timeoutHandle = null;
+          }
+        };
 
         entry.process = child;
 
@@ -295,11 +308,18 @@ async function runFiniteScript(args: {
           outputBuffer.push(chunk.toString());
         });
 
-        child.on("error", reject);
-        child.on("close", (code) => resolve(code ?? -1));
+        child.once("error", (error) => {
+          clearScriptTimeout();
+          reject(error);
+        });
+        child.once("close", (code) => {
+          clearScriptTimeout();
+          resolve(code ?? -1);
+        });
 
         if (args.scriptEntry.timeoutMs) {
-          setTimeout(() => {
+          timeoutHandle = setTimeout(() => {
+            timeoutHandle = null;
             if (!entry.aborted) {
               entry.aborted = true;
               try {
@@ -546,7 +566,18 @@ async function runServiceScript(args: {
   }
 
   let orbitBuffer = "";
-  ptyProcess.onData((data) => {
+  let dataSubscription: pty.IDisposable | null = null;
+  let exitSubscription: pty.IDisposable | null = null;
+  const cleanupSubscriptions = () => {
+    dataSubscription?.dispose();
+    exitSubscription?.dispose();
+    dataSubscription = null;
+    exitSubscription = null;
+    entry.cleanup = undefined;
+  };
+  entry.cleanup = cleanupSubscriptions;
+
+  dataSubscription = ptyProcess.onData((data) => {
     if (args.scriptEntry.orbit && orbitUsesShellWrapper) {
       const parsed = extractOrbitOutput({
         buffer: orbitBuffer,
@@ -577,11 +608,16 @@ async function runServiceScript(args: {
     outputBuffer.push(data);
   });
 
-  ptyProcess.onExit(({ exitCode }) => {
+  exitSubscription = ptyProcess.onExit(({ exitCode }) => {
+    cleanupSubscriptions();
     if (orbitUsesShellWrapper && orbitBuffer) {
       outputBuffer.push(orbitBuffer);
     }
     outputBuffer.flush();
+    if (entry.aborted) {
+      deleteWorkspaceScriptProcess(key);
+      return;
+    }
     emitScriptEvent({
       workspaceId: args.workspaceId,
       scriptId: args.scriptEntry.id,
@@ -701,6 +737,8 @@ export async function cleanupAllScriptProcesses(): Promise<void> {
       return;
     }
     entry.aborted = true;
+    entry.cleanup?.();
+    entry.cleanup = undefined;
     if (entry.process) {
       await killProcess(entry.process);
     }

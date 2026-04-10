@@ -40,7 +40,43 @@ function formatSchemaFailureMessage(args: {
 }
 
 const providerOwnerWebContentsIdByStreamId = new Map<string, number>();
+const providerStreamIdsByWebContentsId = new Map<number, Set<string>>();
+const providerCleanupRegisteredContentsIds = new Set<number>();
 let providerEventBridgeRegistered = false;
+
+function forgetProviderStreamOwner(streamId: string) {
+  const ownerWebContentsId = providerOwnerWebContentsIdByStreamId.get(streamId);
+  if (ownerWebContentsId == null) {
+    return;
+  }
+  providerOwnerWebContentsIdByStreamId.delete(streamId);
+  const streamIds = providerStreamIdsByWebContentsId.get(ownerWebContentsId);
+  if (!streamIds) {
+    return;
+  }
+  streamIds.delete(streamId);
+  if (streamIds.size === 0) {
+    providerStreamIdsByWebContentsId.delete(ownerWebContentsId);
+  }
+}
+
+function registerProviderEventCleanup(contentsId: number) {
+  if (providerCleanupRegisteredContentsIds.has(contentsId)) {
+    return;
+  }
+  const contents = webContents.fromId(contentsId);
+  if (!contents || contents.isDestroyed()) {
+    return;
+  }
+  providerCleanupRegisteredContentsIds.add(contentsId);
+  contents.once("destroyed", () => {
+    const streamIds = [...(providerStreamIdsByWebContentsId.get(contentsId) ?? [])];
+    for (const streamId of streamIds) {
+      forgetProviderStreamOwner(streamId);
+    }
+    providerCleanupRegisteredContentsIds.delete(contentsId);
+  });
+}
 
 function rememberProviderStreamOwner(args: {
   streamId?: string;
@@ -50,10 +86,15 @@ function rememberProviderStreamOwner(args: {
     return;
   }
   if (args.ownerWebContentsId == null) {
-    providerOwnerWebContentsIdByStreamId.delete(args.streamId);
+    forgetProviderStreamOwner(args.streamId);
     return;
   }
+  forgetProviderStreamOwner(args.streamId);
   providerOwnerWebContentsIdByStreamId.set(args.streamId, args.ownerWebContentsId);
+  const streamIds = providerStreamIdsByWebContentsId.get(args.ownerWebContentsId) ?? new Set<string>();
+  streamIds.add(args.streamId);
+  providerStreamIdsByWebContentsId.set(args.ownerWebContentsId, streamIds);
+  registerProviderEventCleanup(args.ownerWebContentsId);
 }
 
 function registerProviderEventBridge() {
@@ -67,7 +108,7 @@ function registerProviderEventBridge() {
       payload.streamId,
     );
     if (payload.done) {
-      providerOwnerWebContentsIdByStreamId.delete(payload.streamId);
+      forgetProviderStreamOwner(payload.streamId);
     }
     if (ownerWebContentsId == null) {
       return;
@@ -75,7 +116,7 @@ function registerProviderEventBridge() {
 
     const owner = webContents.fromId(ownerWebContentsId);
     if (!owner || owner.isDestroyed()) {
-      providerOwnerWebContentsIdByStreamId.delete(payload.streamId);
+      forgetProviderStreamOwner(payload.streamId);
       return;
     }
 

@@ -411,6 +411,8 @@ async function shutdown() {
   await Promise.allSettled([
     terminalRuntime.cleanupAll(),
     cleanupAllScriptProcesses(),
+    providerRuntime.shutdown(),
+    localMcpRuntime.cleanupLocalMcpRuntime(),
   ]);
   resetHostServicePersistence();
 }

@@ -238,6 +238,8 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
   const activeTabKey = args.activeTab
     ? args.getTabKey(args.activeTab)
     : null;
+  const liveTabKeysRef = useRef<Set<string>>(new Set());
+  liveTabKeysRef.current = new Set(args.tabs.map((tab) => args.getTabKey(tab)));
   const activeSessionId = activeTabKey
     ? (sessionIdByTabKeyRef.current[activeTabKey] ?? null)
     : null;
@@ -926,6 +928,14 @@ export function usePtySessionSurface<TTab extends { id: string }>(args: {
       deliveryMode: supportsPushTerminalOutput ? "push" : "poll",
     })
       .then((created) => {
+        const tabStillExists = liveTabKeysRef.current.has(tabKey);
+        if (!tabStillExists) {
+          if (created.ok && created.sessionId) {
+            void window.api?.terminal?.closeSession?.({ sessionId: created.sessionId });
+          }
+          return;
+        }
+
         if (!created.ok || !created.sessionId) {
           setBridgeError(created.stderr?.trim() || "Failed to create terminal session.");
           xtermRef.current?.writeln(

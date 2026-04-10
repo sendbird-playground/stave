@@ -146,6 +146,7 @@ export interface WorkspaceInformationMutationResult {
 const workspaceSessionCacheById = new Map<string, WorkspaceSessionState>();
 const workspacePersistChainById = new Map<string, Promise<void>>();
 const workspaceProviderEventQueue = createKeyedAsyncQueue<string>();
+const WORKSPACE_SESSION_CACHE_LIMIT = 32;
 let localMcpEventListener:
   | ((event: {
       type: "workspace-information-updated";
@@ -241,16 +242,22 @@ function queueWorkspaceSessionPersist(args: {
   session: WorkspaceSessionState;
 }) {
   const previous = workspacePersistChainById.get(args.workspaceId) ?? Promise.resolve();
-  const next = previous
+  let tracked: Promise<void>;
+  tracked = previous
     .catch(() => undefined)
     .then(() => persistWorkspaceSession(args))
     .catch((error) => {
       console.error("[stave-mcp] failed to persist workspace session", error, {
         workspaceId: args.workspaceId,
       });
+    })
+    .finally(() => {
+      if (workspacePersistChainById.get(args.workspaceId) === tracked) {
+        workspacePersistChainById.delete(args.workspaceId);
+      }
     });
-  workspacePersistChainById.set(args.workspaceId, next);
-  return next;
+  workspacePersistChainById.set(args.workspaceId, tracked);
+  return tracked;
 }
 
 async function loadNormalizedProjects() {
@@ -382,6 +389,8 @@ async function ensureProjectRegistryEntry(args: {
 async function loadWorkspaceSession(workspaceId: string) {
   const cached = workspaceSessionCacheById.get(workspaceId);
   if (cached) {
+    workspaceSessionCacheById.delete(workspaceId);
+    workspaceSessionCacheById.set(workspaceId, cached);
     return cached;
   }
 
@@ -395,12 +404,19 @@ async function loadWorkspaceSession(workspaceId: string) {
     snapshot: snapshot as never,
     latestTurns: latestTurns as never,
   });
-  workspaceSessionCacheById.set(workspaceId, session);
-  return session;
+  return cacheWorkspaceSession(workspaceId, session);
 }
 
 function cacheWorkspaceSession(workspaceId: string, session: WorkspaceSessionState) {
+  workspaceSessionCacheById.delete(workspaceId);
   workspaceSessionCacheById.set(workspaceId, session);
+  while (workspaceSessionCacheById.size > WORKSPACE_SESSION_CACHE_LIMIT) {
+    const oldestWorkspaceId = workspaceSessionCacheById.keys().next().value;
+    if (!oldestWorkspaceId) {
+      break;
+    }
+    workspaceSessionCacheById.delete(oldestWorkspaceId);
+  }
   return session;
 }
 
@@ -408,6 +424,14 @@ export function setLocalMcpEventListener(
   listener: typeof localMcpEventListener,
 ) {
   localMcpEventListener = listener;
+}
+
+export async function cleanupLocalMcpRuntime() {
+  localMcpEventListener = null;
+  const pendingPersists = [...workspacePersistChainById.values()];
+  workspacePersistChainById.clear();
+  await Promise.allSettled(pendingPersists);
+  workspaceSessionCacheById.clear();
 }
 
 function emitWorkspaceInformationUpdate(payload: WorkspaceInformationMutationResult) {

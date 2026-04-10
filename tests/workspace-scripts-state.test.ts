@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   clearWorkspaceScriptProcesses,
+  deleteWorkspaceScriptProcess,
   getWorkspaceScriptStatusesForWorkspace,
   recordWorkspaceScriptEvent,
   setWorkspaceScriptProcess,
@@ -82,5 +83,28 @@ describe("workspace script runtime snapshots", () => {
     });
 
     expect(getWorkspaceScriptStatusesForWorkspace("ws-1")[0]?.log).toBe("");
+  });
+
+  test("disposes process cleanup handlers when deleting an entry", () => {
+    let cleanupCalls = 0;
+
+    setWorkspaceScriptProcess("ws-1:service:dev", {
+      workspaceId: "ws-1",
+      scriptId: "dev",
+      scriptKind: "service",
+      runId: "run-1",
+      source: { kind: "manual" },
+      process: null,
+      aborted: false,
+      log: "",
+      cleanup: () => {
+        cleanupCalls += 1;
+      },
+    });
+
+    deleteWorkspaceScriptProcess("ws-1:service:dev");
+    deleteWorkspaceScriptProcess("ws-1:service:dev");
+
+    expect(cleanupCalls).toBe(1);
   });
 });

@@ -38,6 +38,8 @@ import { buildRuntimeProcessEnv, probeExecutableVersion } from "./runtime-shared
 
 const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000);
 const ACTIVE_STREAM_TTL_MS = 15 * 60 * 1000;
+const COMPLETED_STREAM_TTL_MS = 60 * 1000;
+const DEFAULT_PROVIDER_TASK_KEY = "default";
 type ActiveRuntimeSession = {
   turnId: string;
   providerId: StreamTurnArgs["providerId"];
@@ -118,10 +120,17 @@ function clearActiveTurnState(args: { turnId: string }) {
 
 function pruneExpiredStreams(now = Date.now()) {
   for (const [streamId, session] of activeStreams.entries()) {
-    if (now - session.updatedAt > ACTIVE_STREAM_TTL_MS) {
+    const ttl = session.done ? COMPLETED_STREAM_TTL_MS : ACTIVE_STREAM_TTL_MS;
+    if (now - session.updatedAt > ttl) {
       activeStreams.delete(streamId);
     }
   }
+}
+
+function cleanupProviderTaskState(taskId: string) {
+  cleanupClaudeTask(taskId);
+  cleanupCodexTask(taskId);
+  cleanupCodexAppServerTask(taskId);
 }
 
 function clearActiveTaskSessions(args: { taskId: string }) {
@@ -650,9 +659,7 @@ export const providerRuntime: ProviderRuntime = {
   },
   cleanupTask: ({ taskId }) => {
     clearActiveTaskSessions({ taskId });
-    cleanupClaudeTask(taskId);
-    cleanupCodexTask(taskId);
-    cleanupCodexAppServerTask(taskId);
+    cleanupProviderTaskState(taskId);
     return { ok: true, message: `Cleaned provider runtime state for task ${taskId}.` };
   },
   respondApproval: ({ turnId, requestId, approved }) => ({
@@ -742,4 +749,19 @@ export const providerRuntime: ProviderRuntime = {
     };
   },
   getConnectedToolStatus: async (args) => getProviderConnectedToolStatus(args),
+  shutdown: async () => {
+    const taskIds = new Set<string>();
+    for (const session of activeSessions.values()) {
+      session.abort?.();
+      if (session.taskId) {
+        taskIds.add(session.taskId);
+      }
+    }
+    activeSessions.clear();
+    activeStreams.clear();
+    cleanupProviderTaskState(DEFAULT_PROVIDER_TASK_KEY);
+    for (const taskId of taskIds) {
+      cleanupProviderTaskState(taskId);
+    }
+  },
 };

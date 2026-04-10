@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 mock.module("../electron/providers/claude-sdk-runtime", () => ({
   buildClaudeEnv: () => ({}),
@@ -55,6 +55,10 @@ mock.module("../electron/providers/connected-tool-status", () => ({
 
 const { providerRuntime } = await import("../electron/providers/runtime");
 
+afterEach(async () => {
+  await providerRuntime.shutdown();
+});
+
 describe("providerRuntime.startTurnStream", () => {
   test("does not synchronously emit push events before returning", async () => {
     let returned = false;
@@ -89,5 +93,29 @@ describe("providerRuntime.startTurnStream", () => {
     expect(started.ok).toBe(true);
     expect(sawSynchronousEvent).toBe(false);
     expect(events).toContain("done");
+  });
+
+  test("shutdown clears buffered polling streams", async () => {
+    const started = providerRuntime.startTurnStream({
+      providerId: "codex",
+      prompt: "smoke",
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await providerRuntime.shutdown();
+
+    expect(
+      providerRuntime.readTurnStream({
+        streamId: started.streamId,
+        cursor: 0,
+      }),
+    ).toEqual({
+      ok: false,
+      events: [],
+      cursor: 0,
+      done: true,
+      message: "Stream session not found.",
+    });
   });
 });
