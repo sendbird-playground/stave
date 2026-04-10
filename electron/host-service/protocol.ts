@@ -26,6 +26,10 @@ import type {
   ProviderCommandCatalogResult,
   StreamTurnArgs,
 } from "../providers/types";
+import type {
+  CommandResult,
+  SourceControlStatusItem,
+} from "../main/types";
 
 export interface HostWorkspaceScriptRunEntryArgs {
   workspaceId: string;
@@ -155,6 +159,66 @@ export interface HostProviderStreamEventPayload {
   turnId: string | null;
 }
 
+export interface HostScmStatusResult {
+  ok: boolean;
+  branch: string;
+  items: SourceControlStatusItem[];
+  hasConflicts: boolean;
+  stderr: string;
+}
+
+export interface HostScmDiffResult {
+  ok: boolean;
+  content: string;
+  oldContent: string;
+  newContent: string;
+  stderr: string;
+}
+
+export interface HostScmHistoryResult {
+  ok: boolean;
+  items: Array<{
+    hash: string;
+    relativeDate: string;
+    subject: string;
+  }>;
+  stderr: string;
+}
+
+export interface HostScmListBranchesResult {
+  ok: boolean;
+  current: string;
+  branches: string[];
+  remoteBranches: string[];
+  worktreePathByBranch: Record<string, string>;
+  stderr: string;
+}
+
+export interface HostScmCreatePrResult {
+  ok: boolean;
+  prUrl?: string;
+  stderr?: string;
+}
+
+export interface HostScmPrStatusResult {
+  ok: boolean;
+  pr: {
+    number: number;
+    title: string;
+    state: "OPEN" | "CLOSED" | "MERGED";
+    isDraft: boolean;
+    url: string;
+    reviewDecision: string | null;
+    mergeable: string;
+    mergeStateStatus: string;
+    checksRollup: "SUCCESS" | "FAILURE" | "PENDING" | null;
+    mergedAt: string | null;
+    baseRefName: string;
+    headRefName: string;
+  } | null;
+  stderr?: string;
+}
+
 export interface HostServiceRequestMap {
   "service.shutdown": undefined;
   "terminal.create-session": TerminalCreateSessionArgs;
@@ -246,6 +310,87 @@ export interface HostServiceRequestMap {
   "provider.suggest-task-name": HostProviderSuggestTaskNameArgs;
   "provider.suggest-commit-message": HostProviderSuggestCommitMessageArgs;
   "provider.suggest-pr-description": HostProviderSuggestPRDescriptionArgs;
+  "scm.status": {
+    cwd?: string;
+  };
+  "scm.stage-all": {
+    cwd?: string;
+  };
+  "scm.unstage-all": {
+    cwd?: string;
+  };
+  "scm.commit": {
+    message: string;
+    cwd?: string;
+  };
+  "scm.stage-file": {
+    path: string;
+    cwd?: string;
+  };
+  "scm.unstage-file": {
+    path: string;
+    cwd?: string;
+  };
+  "scm.discard-file": {
+    path: string;
+    cwd?: string;
+  };
+  "scm.diff": {
+    path: string;
+    cwd?: string;
+  };
+  "scm.history": {
+    cwd?: string;
+    limit?: number;
+  };
+  "scm.list-branches": {
+    cwd?: string;
+  };
+  "scm.create-branch": {
+    name: string;
+    cwd?: string;
+    from?: string;
+  };
+  "scm.checkout-branch": {
+    name: string;
+    cwd?: string;
+  };
+  "scm.merge-branch": {
+    branch: string;
+    cwd?: string;
+  };
+  "scm.rebase-branch": {
+    branch: string;
+    cwd?: string;
+  };
+  "scm.cherry-pick": {
+    commit: string;
+    cwd?: string;
+  };
+  "scm.get-pr-status": {
+    cwd?: string;
+  };
+  "scm.get-pr-status-for-url": {
+    url: string;
+    cwd?: string;
+  };
+  "scm.set-pr-ready": {
+    cwd?: string;
+  };
+  "scm.merge-pr": {
+    method?: "merge" | "squash" | "rebase";
+    cwd?: string;
+  };
+  "scm.update-pr-branch": {
+    cwd?: string;
+  };
+  "scm.create-pr": {
+    title: string;
+    body?: string;
+    baseBranch?: string;
+    draft?: boolean;
+    cwd?: string;
+  };
 }
 
 export interface HostServiceResponseMap {
@@ -298,6 +443,33 @@ export interface HostServiceResponseMap {
   "provider.suggest-task-name": HostProviderSuggestTaskNameResult;
   "provider.suggest-commit-message": HostProviderSuggestCommitMessageResult;
   "provider.suggest-pr-description": HostProviderSuggestPRDescriptionResult;
+  "scm.status": HostScmStatusResult;
+  "scm.stage-all": CommandResult;
+  "scm.unstage-all": CommandResult;
+  "scm.commit": CommandResult;
+  "scm.stage-file": CommandResult;
+  "scm.unstage-file": CommandResult;
+  "scm.discard-file": CommandResult;
+  "scm.diff": HostScmDiffResult;
+  "scm.history": HostScmHistoryResult;
+  "scm.list-branches": HostScmListBranchesResult;
+  "scm.create-branch": CommandResult;
+  "scm.checkout-branch": CommandResult;
+  "scm.merge-branch": CommandResult;
+  "scm.rebase-branch": CommandResult;
+  "scm.cherry-pick": CommandResult;
+  "scm.get-pr-status": HostScmPrStatusResult;
+  "scm.get-pr-status-for-url": HostScmPrStatusResult;
+  "scm.set-pr-ready": CommandResult | {
+    ok: false;
+    stderr: string;
+  };
+  "scm.merge-pr": CommandResult | {
+    ok: false;
+    stderr: string;
+  };
+  "scm.update-pr-branch": CommandResult;
+  "scm.create-pr": HostScmCreatePrResult;
 }
 
 export interface HostServiceEventMap {

@@ -29,6 +29,8 @@ This file is the fast entrypoint for codebase orientation.
 - `src/store/app.store.ts`
   - main renderer-side coordination point
   - read targeted slices instead of the whole file
+- `electron/host-service.ts`
+  - isolated child runtime router for terminal, provider, workspace scripts, and source control
 - `electron/providers/claude-sdk-runtime.ts`
   - Claude turn execution, event normalization, subagent progress
 - `electron/providers/codex-app-server-runtime.ts`

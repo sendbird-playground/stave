@@ -8,14 +8,15 @@ This is the primary app architecture:
 
 - `src/` renders the React UI
 - `electron/preload.ts` exposes the safe `window.api` bridge
-- `electron/main.ts` handles IPC
-- `electron/providers/*` owns Claude, Codex, and Stave routing SDK execution plus event mapping
+- `electron/main.ts` handles window lifecycle, IPC registration, and the host-service bridge
+- `electron/host-service.ts` owns isolated terminal, workspace script, provider, and source-control execution
+- `electron/providers/*` owns Claude, Codex, and Stave routing SDK execution plus event mapping used by the host-service runtime
 - `electron/main/lsp/*` owns optional stdio language-server sessions for Monaco
 - `electron/persistence/*` owns SQLite persistence
 
-The renderer does not call provider SDKs directly. It sends provider turn requests across the preload bridge, and Electron executes the SDK work in the main process.
+The renderer does not call provider SDKs or git/PTY subprocesses directly. It sends provider, terminal, and source-control requests across the preload bridge, Electron main validates and routes them, and the dedicated `host-service` child process executes the heavy runtime work outside the main-process event loop.
 
-The same terminal bridge is also used for local workspace scripts such as running an optional repo-scoped post-create bootstrap command and creating an optional workspace-local symlink to the repository root `node_modules` when a new git worktree workspace is created.
+The same host-service runtime is also used for local workspace scripts such as running an optional repo-scoped post-create bootstrap command and creating an optional workspace-local symlink to the repository root `node_modules` when a new git worktree workspace is created.
 
 The desktop runtime can also host a local-only automation surface in the main process so same-machine tools can create projects, workspaces, tasks, and turns without going through the renderer.
 

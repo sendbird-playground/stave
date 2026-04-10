@@ -15,6 +15,28 @@ import {
   stopScriptEntry,
 } from "./main/workspace-scripts";
 import { ensureHostServicePersistenceReady, resetHostServicePersistence } from "./host-service/persistence";
+import {
+  checkoutScmBranch,
+  cherryPickScmCommit,
+  commitSourceControl,
+  createScmBranch,
+  createScmPullRequest,
+  diffSourceControlFile,
+  discardSourceControlPath,
+  fetchGitHubPrStatus,
+  getScmHistory,
+  getScmStatus,
+  listScmBranches,
+  mergeScmBranch,
+  mergeScmPr,
+  rebaseScmBranch,
+  setScmPrReady,
+  stageAllSourceControl,
+  stageSourceControlFile,
+  unstageAllSourceControl,
+  unstageSourceControlFile,
+  updateScmPrBranch,
+} from "./host-service/scm-runtime";
 import { createTerminalRuntime } from "./host-service/terminal-runtime";
 import type {
   AnyHostServiceRequestEnvelope,
@@ -516,6 +538,75 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
         request.id,
         await suggestProviderPRDescription(request.params),
       );
+      return;
+    case "scm.status":
+      await respond(request.id, await getScmStatus(request.params));
+      return;
+    case "scm.stage-all":
+      await respond(request.id, await stageAllSourceControl(request.params));
+      return;
+    case "scm.unstage-all":
+      await respond(request.id, await unstageAllSourceControl(request.params));
+      return;
+    case "scm.commit":
+      await respond(request.id, await commitSourceControl(request.params));
+      return;
+    case "scm.stage-file":
+      await respond(request.id, await stageSourceControlFile(request.params));
+      return;
+    case "scm.unstage-file":
+      await respond(request.id, await unstageSourceControlFile(request.params));
+      return;
+    case "scm.discard-file":
+      await respond(request.id, await discardSourceControlPath(request.params));
+      return;
+    case "scm.diff":
+      await respond(request.id, await diffSourceControlFile(request.params));
+      return;
+    case "scm.history":
+      await respond(request.id, await getScmHistory(request.params));
+      return;
+    case "scm.list-branches":
+      await respond(request.id, await listScmBranches(request.params));
+      return;
+    case "scm.create-branch":
+      await respond(request.id, await createScmBranch(request.params));
+      return;
+    case "scm.checkout-branch":
+      await respond(request.id, await checkoutScmBranch(request.params));
+      return;
+    case "scm.merge-branch":
+      await respond(request.id, await mergeScmBranch(request.params));
+      return;
+    case "scm.rebase-branch":
+      await respond(request.id, await rebaseScmBranch(request.params));
+      return;
+    case "scm.cherry-pick":
+      await respond(request.id, await cherryPickScmCommit(request.params));
+      return;
+    case "scm.get-pr-status":
+      await respond(request.id, await fetchGitHubPrStatus(request.params));
+      return;
+    case "scm.get-pr-status-for-url":
+      await respond(
+        request.id,
+        await fetchGitHubPrStatus({
+          cwd: request.params.cwd,
+          target: request.params.url,
+        }),
+      );
+      return;
+    case "scm.set-pr-ready":
+      await respond(request.id, await setScmPrReady(request.params));
+      return;
+    case "scm.merge-pr":
+      await respond(request.id, await mergeScmPr(request.params));
+      return;
+    case "scm.update-pr-branch":
+      await respond(request.id, await updateScmPrBranch(request.params));
+      return;
+    case "scm.create-pr":
+      await respond(request.id, await createScmPullRequest(request.params));
       return;
     default:
       request satisfies never;

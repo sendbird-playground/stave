@@ -55,6 +55,16 @@ Provider turn execution now shares the same dedicated `host-service` child proce
 - inspect `electron/main/ipc/provider.ts`, `electron/main/host-service-client.ts`, and `electron/host-service.ts` before changing renderer store code
 - if push-stream events stop only after renderer ownership changes, inspect the owner-routing map in `electron/main/ipc/provider.ts`
 
+## Source control diagnostics
+
+Source control and GitHub PR actions now use the same dedicated `host-service` child process as terminal, workspace scripts, and provider turns. If staging, branching, diff, or PR actions fail before the renderer receives a result:
+
+- check main-process logs for `[host-service]` stderr lines
+- verify the built desktop app includes `out/main/host-service.js`
+- smoke-test the child directly with `node out/main/host-service.js`, then send an `scm.status` request and confirm a structured response arrives
+- inspect `electron/main/ipc/scm.ts`, `electron/main/host-service-client.ts`, `electron/host-service.ts`, and `electron/host-service/scm-runtime.ts` before changing renderer-side source-control UI
+- if only GitHub PR actions fail, check `gh auth status` in the target workspace and confirm the host-service cwd matches the expected repository root
+
 ## Settings diagnostics
 
 The Settings dialog includes desktop-only diagnostics for renderer and compositor troubleshooting:
