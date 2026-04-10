@@ -16,3 +16,4 @@ AGENTS.local.md
 tracking/
 claude-progress.txt
 .superset/
+execution/
