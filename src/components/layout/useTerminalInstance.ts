@@ -224,6 +224,46 @@ function describeTerminalError(error: unknown, fallback: string) {
     : fallback;
 }
 
+type VisibleTerminalRendererLike = {
+  render: (...args: any[]) => void;
+};
+
+type VisibleTerminalLike = {
+  resize: (cols: number, rows: number) => void;
+  getViewportY: () => number;
+  renderer?: VisibleTerminalRendererLike | null;
+  wasmTerm?: unknown;
+};
+
+export function restoreVisibleTerminalViewport(args: {
+  terminal?: VisibleTerminalLike | null;
+  proposed?: { cols: number; rows: number };
+  notifyResize?: (cols: number, rows: number) => void;
+}) {
+  const terminal = args.terminal;
+  if (!terminal) {
+    return;
+  }
+
+  if (args.proposed) {
+    // Hidden WebGL surfaces can require a local resize even when the PTY
+    // geometry did not visibly change. Re-emit the measured size as well so
+    // backend/session geometry catches up with any layout changes that happened
+    // while the surface was hidden.
+    terminal.resize(args.proposed.cols, args.proposed.rows);
+    args.notifyResize?.(args.proposed.cols, args.proposed.rows);
+  }
+
+  if (terminal.renderer && terminal.wasmTerm) {
+    terminal.renderer.render(
+      terminal.wasmTerm,
+      true,
+      terminal.getViewportY(),
+      terminal,
+    );
+  }
+}
+
 export interface TerminalInstanceController {
   readonly terminal: Terminal | null;
   readonly fitAddon: FitAddon | null;
@@ -713,23 +753,30 @@ export function useTerminalInstance(
       if (cancelled) {
         return;
       }
-      emitResize();
-
-      const terminal = terminalRef.current;
-      if (terminal?.renderer && terminal?.wasmTerm) {
-        terminal.renderer.render(
-          terminal.wasmTerm,
-          true,
-          terminal.getViewportY(),
-          terminal,
-        );
-      }
+      const proposed = measureProposedDimensions();
+      executeTerminalOperation(
+        "restore-terminal-viewport",
+        () => {
+          restoreVisibleTerminalViewport({
+            terminal: terminalRef.current,
+            proposed,
+            notifyResize: onResizeRef.current,
+          });
+        },
+        { message: "Failed to restore terminal viewport." },
+      );
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [args.enabled, args.visible, emitResize, ready]);
+  }, [
+    args.enabled,
+    args.visible,
+    executeTerminalOperation,
+    measureProposedDimensions,
+    ready,
+  ]);
 
   useEffect(() => {
     if (args.visible) {
