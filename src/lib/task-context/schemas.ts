@@ -188,6 +188,7 @@ const PromptDraftRuntimeOverridesSchema = z
         z.literal("bypassPermissions"),
         z.literal("plan"),
         z.literal("dontAsk"),
+        z.literal("auto"),
       ])
       .optional(),
     claudePermissionModeBeforePlan: z
@@ -196,6 +197,7 @@ const PromptDraftRuntimeOverridesSchema = z
         z.literal("acceptEdits"),
         z.literal("bypassPermissions"),
         z.literal("dontAsk"),
+        z.literal("auto"),
         z.null(),
       ])
       .optional(),
@@ -207,6 +209,7 @@ const PromptDraftQueuedNextTurnSchema = z
   .object({
     queuedAt: z.string(),
     sourceTurnId: z.string().optional(),
+    content: z.string().optional(),
   })
   .strict();
 

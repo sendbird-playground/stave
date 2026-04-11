@@ -68,4 +68,58 @@ describe("task-context workspace schemas", () => {
     expect(parsed).not.toBeNull();
     expect(parsed?.terminalTabs?.[0]?.backend).toBe("ghostty");
   });
+
+  test("parses prompt draft runtime overrides and queued-next-turn content from snapshots", () => {
+    const parsed = parseWorkspaceSnapshot({
+      payload: {
+        ...createWorkspaceBase(),
+        activeTaskId: "task-1",
+        tasks: [{
+          id: "task-1",
+          title: "Task 1",
+          provider: "claude-code",
+          updatedAt: "2026-04-11T00:00:00.000Z",
+          unread: false,
+          controlMode: "interactive",
+          controlOwner: "stave",
+        }],
+        messagesByTask: {
+          "task-1": [],
+        },
+        promptDraftByTask: {
+          "task-1": {
+            text: "",
+            attachedFilePaths: [],
+            attachments: [],
+            runtimeOverrides: {
+              claudePermissionMode: "auto",
+              claudePermissionModeBeforePlan: "auto",
+              codexPlanMode: true,
+            },
+            queuedNextTurn: {
+              queuedAt: "2026-04-11T00:00:00.000Z",
+              sourceTurnId: "turn-1",
+              content: "follow-up prompt",
+            },
+          },
+        },
+      },
+    });
+
+    expect(parsed?.promptDraftByTask["task-1"]).toEqual({
+      text: "",
+      attachedFilePaths: [],
+      attachments: [],
+      runtimeOverrides: {
+        claudePermissionMode: "auto",
+        claudePermissionModeBeforePlan: "auto",
+        codexPlanMode: true,
+      },
+      queuedNextTurn: {
+        queuedAt: "2026-04-11T00:00:00.000Z",
+        sourceTurnId: "turn-1",
+        content: "follow-up prompt",
+      },
+    });
+  });
 });

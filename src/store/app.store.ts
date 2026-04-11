@@ -332,6 +332,9 @@ import {
   applyUserInputState,
 } from "@/store/editor.utils";
 
+const LOCAL_ABORT_SYSTEM_EVENT_CONTENT =
+  "Generation was stopped locally before completion.";
+
 export {
   WORKSPACE_SIDEBAR_MIN_WIDTH,
   MIN_EDITOR_PANEL_WIDTH,
@@ -8553,7 +8556,7 @@ export const useAppStore = create<AppState>()(
                 ...target.parts,
                 {
                   type: "system_event",
-                  content: "Generation aborted by user.",
+                  content: LOCAL_ABORT_SYSTEM_EVENT_CONTENT,
                 },
               ],
             };
@@ -9642,7 +9645,7 @@ export const useAppStore = create<AppState>()(
                 ...target.parts,
                 {
                   type: "system_event",
-                  content: "Generation aborted by user.",
+                  content: LOCAL_ABORT_SYSTEM_EVENT_CONTENT,
                 },
               ],
             };

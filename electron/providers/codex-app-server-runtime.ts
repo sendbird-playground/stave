@@ -482,6 +482,113 @@ function mapApprovalToolName(method: ServerRequestMethod) {
   }
 }
 
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+type CodexElicitationPauseClient = {
+  request<T = unknown>(method: string, params: unknown): Promise<T>;
+};
+
+export function createCodexAppServerElicitationPauseController(args: {
+  client: CodexElicitationPauseClient;
+  threadId: string;
+  debug?: boolean;
+}) {
+  const pendingRequestIds = new Set<string>();
+  let queue = Promise.resolve();
+
+  const enqueue = (operation: () => Promise<void>) => {
+    const next = queue.then(operation, operation);
+    queue = next.catch(() => {});
+    return next;
+  };
+
+  const logFailure = (phase: "pause" | "resume", requestId: string, error: unknown) => {
+    console.warn(`[provider-runtime] Codex app-server elicitation ${phase} failed`, {
+      threadId: args.threadId,
+      requestId,
+      error: toErrorMessage(error),
+    });
+  };
+
+  const logState = (
+    phase: "pause" | "resume",
+    requestId: string,
+    response: { count?: number; paused?: boolean } | undefined,
+  ) => {
+    if (!args.debug) {
+      return;
+    }
+    console.debug(`[codex-app-server-runtime] elicitation ${phase} applied`, {
+      threadId: args.threadId,
+      requestId,
+      count: response?.count,
+      paused: response?.paused,
+    });
+  };
+
+  return {
+    begin(requestId: string) {
+      return enqueue(async () => {
+        if (!requestId || pendingRequestIds.has(requestId)) {
+          return;
+        }
+        pendingRequestIds.add(requestId);
+        try {
+          const response = await args.client.request<{
+            count?: number;
+            paused?: boolean;
+          }>("thread/increment_elicitation", {
+            threadId: args.threadId,
+          });
+          logState("pause", requestId, response);
+        } catch (error) {
+          pendingRequestIds.delete(requestId);
+          logFailure("pause", requestId, error);
+        }
+      });
+    },
+    end(requestId: string) {
+      return enqueue(async () => {
+        if (!requestId || !pendingRequestIds.delete(requestId)) {
+          return;
+        }
+        try {
+          const response = await args.client.request<{
+            count?: number;
+            paused?: boolean;
+          }>("thread/decrement_elicitation", {
+            threadId: args.threadId,
+          });
+          logState("resume", requestId, response);
+        } catch (error) {
+          logFailure("resume", requestId, error);
+        }
+      });
+    },
+    endAll() {
+      return enqueue(async () => {
+        const requestIds = [...pendingRequestIds];
+        pendingRequestIds.clear();
+        for (const requestId of requestIds) {
+          try {
+            const response = await args.client.request<{
+              count?: number;
+              paused?: boolean;
+            }>("thread/decrement_elicitation", {
+              threadId: args.threadId,
+            });
+            logState("resume", requestId, response);
+          } catch (error) {
+            logFailure("resume", requestId, error);
+          }
+        }
+      });
+    },
+  };
+}
+
 function mapUserInputQuestions(questions: Array<Record<string, unknown>>) {
   return questions.map((question) => ({
     header: typeof question.header === "string" ? question.header : "",
@@ -501,6 +608,50 @@ function mapUserInputQuestions(questions: Array<Record<string, unknown>>) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function shouldDebugCodexAppServerMessage(message: JsonRpcMessage) {
+  return (
+    message.method === "error" ||
+    message.method === "turn/started" ||
+    message.method === "turn/completed"
+  );
+}
+
+export function summarizeCodexAppServerDebugMessage(message: JsonRpcMessage) {
+  const params = isRecord(message.params) ? message.params : null;
+  const turn = params && isRecord(params.turn) ? params.turn : null;
+  const item = params && isRecord(params.item) ? params.item : null;
+  const error = params && isRecord(params.error) ? params.error : null;
+  const turnError = turn && isRecord(turn.error) ? turn.error : null;
+
+  return {
+    id: Object.prototype.hasOwnProperty.call(message, "id")
+      ? message.id
+      : undefined,
+    method: typeof message.method === "string" ? message.method : undefined,
+    threadId: typeof params?.threadId === "string" ? params.threadId : undefined,
+    turnId:
+      typeof params?.turnId === "string"
+        ? params.turnId
+        : typeof turn?.id === "string"
+          ? turn.id
+          : undefined,
+    status:
+      typeof turn?.status === "string"
+        ? turn.status
+        : typeof item?.status === "string"
+          ? item.status
+          : undefined,
+    errorMessage:
+      typeof params?.message === "string"
+        ? params.message
+        : typeof error?.message === "string"
+          ? error.message
+          : typeof turnError?.message === "string"
+            ? turnError.message
+            : undefined,
+  };
 }
 
 function toTrimmedString(value: unknown) {
@@ -928,6 +1079,7 @@ class CodexAppServerClient {
     }
   >();
   private listeners = new Set<(message: JsonRpcMessage) => void>();
+  private exitListeners = new Set<(message: string) => void>();
   private initialized = false;
   private lastErrorMessage: string | null = null;
 
@@ -952,6 +1104,17 @@ class CodexAppServerClient {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  /**
+   * Register a callback that fires when the underlying app-server process
+   * exits (or is torn down). Returns an unsubscribe function.
+   */
+  onProcessExit(listener: (message: string) => void) {
+    this.exitListeners.add(listener);
+    return () => {
+      this.exitListeners.delete(listener);
     };
   }
 
@@ -1102,6 +1265,16 @@ class CodexAppServerClient {
       pending.reject(new Error(message));
     }
     this.pendingResponses.clear();
+
+    // Notify turn-level listeners so waitForTurnCompletion resolves.
+    for (const listener of this.exitListeners) {
+      try {
+        listener(message);
+      } catch {
+        // Swallow — listener errors must not break teardown.
+      }
+    }
+    this.exitListeners.clear();
   }
 }
 
@@ -1357,6 +1530,14 @@ export async function streamCodexWithAppServer(
   let sawNativePlan = false;
   let shouldInterruptPlanTurn = false;
   let sentPlanInterrupt = false;
+  const codexDebug =
+    args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";
+  const elicitationPauseController =
+    createCodexAppServerElicitationPauseController({
+      client,
+      threadId,
+      debug: codexDebug,
+    });
   const waitForTurnCompletion = new Promise<void>((resolve) => {
     resolveTurnCompletion = resolve;
   });
@@ -1404,33 +1585,35 @@ export async function streamCodexWithAppServer(
       return false;
     }
     pendingApprovalRequests.delete(requestId);
-    void client.respond(
-      pending.serverRequestId,
-      (() => {
-        if (pending.responseKind === "commandExecution") {
-          return { decision: approved ? "accept" : "decline" };
-        }
-        if (pending.responseKind === "fileChange") {
-          return { decision: approved ? "accept" : "decline" };
-        }
-        if (pending.responseKind === "permissions") {
-          return approved
-            ? {
-                permissions: {
-                  ...(pending.permissions?.network
-                    ? { network: pending.permissions.network }
-                    : {}),
-                  ...(pending.permissions?.fileSystem
-                    ? { fileSystem: pending.permissions.fileSystem }
-                    : {}),
-                },
-                scope: "turn",
-              }
-            : { permissions: {}, scope: "turn" };
-        }
-        return { decision: approved ? "approved" : "denied" };
-      })(),
-    );
+    void client
+      .respond(
+        pending.serverRequestId,
+        (() => {
+          if (pending.responseKind === "commandExecution") {
+            return { decision: approved ? "accept" : "decline" };
+          }
+          if (pending.responseKind === "fileChange") {
+            return { decision: approved ? "accept" : "decline" };
+          }
+          if (pending.responseKind === "permissions") {
+            return approved
+              ? {
+                  permissions: {
+                    ...(pending.permissions?.network
+                      ? { network: pending.permissions.network }
+                      : {}),
+                    ...(pending.permissions?.fileSystem
+                      ? { fileSystem: pending.permissions.fileSystem }
+                      : {}),
+                  },
+                  scope: "turn",
+                }
+              : { permissions: {}, scope: "turn" };
+          }
+          return { decision: approved ? "approved" : "denied" };
+        })(),
+      )
+      .finally(() => elicitationPauseController.end(requestId));
     return true;
   });
 
@@ -1442,16 +1625,20 @@ export async function streamCodexWithAppServer(
     pendingUserInputRequests.delete(requestId);
     if (pending.responseKind === "elicitation") {
       if (denied) {
-        void client.respond(pending.serverRequestId, {
-          action: "decline",
-        });
+        void client
+          .respond(pending.serverRequestId, {
+            action: "decline",
+          })
+          .finally(() => elicitationPauseController.end(requestId));
         return true;
       }
 
       if (pending.elicitationMode === "url") {
-        void client.respond(pending.serverRequestId, {
-          action: "accept",
-        });
+        void client
+          .respond(pending.serverRequestId, {
+            action: "accept",
+          })
+          .finally(() => elicitationPauseController.end(requestId));
         return true;
       }
 
@@ -1468,10 +1655,12 @@ export async function streamCodexWithAppServer(
           return coerced === undefined ? [] : [[field.key, coerced]];
         }),
       );
-      void client.respond(pending.serverRequestId, {
-        action: "accept",
-        content,
-      });
+      void client
+        .respond(pending.serverRequestId, {
+          action: "accept",
+          content,
+        })
+        .finally(() => elicitationPauseController.end(requestId));
       return true;
     }
 
@@ -1481,13 +1670,22 @@ export async function streamCodexWithAppServer(
         { answers: [value] },
       ]),
     );
-    void client.respond(pending.serverRequestId, {
-      answers: denied ? {} : responseAnswers,
-    });
+    void client
+      .respond(pending.serverRequestId, {
+        answers: denied ? {} : responseAnswers,
+      })
+      .finally(() => elicitationPauseController.end(requestId));
     return true;
   });
 
   const unsubscribe = client.subscribe((message) => {
+    if (codexDebug && shouldDebugCodexAppServerMessage(message)) {
+      console.debug("[codex-app-server-runtime] raw lifecycle message", {
+        activeThreadId: threadId,
+        activeTurnId: appServerTurnId || null,
+        message: summarizeCodexAppServerDebugMessage(message),
+      });
+    }
     if (completed) {
       return;
     }
@@ -1504,6 +1702,7 @@ export async function streamCodexWithAppServer(
             serverRequestId: message.id as JsonRpcId,
             responseKind: "commandExecution",
           });
+          void elicitationPauseController.begin(requestId);
           emitBridgeEvent({
             type: "approval",
             toolName: "bash",
@@ -1521,6 +1720,7 @@ export async function streamCodexWithAppServer(
             serverRequestId: message.id as JsonRpcId,
             responseKind: "fileChange",
           });
+          void elicitationPauseController.begin(requestId);
           emitBridgeEvent({
             type: "approval",
             toolName: "apply_patch",
@@ -1542,6 +1742,7 @@ export async function streamCodexWithAppServer(
                 ? (params.permissions as PendingApprovalRequest["permissions"])
                 : null,
           });
+          void elicitationPauseController.begin(requestId);
           emitBridgeEvent({
             type: "approval",
             toolName: "permissions",
@@ -1560,6 +1761,7 @@ export async function streamCodexWithAppServer(
             serverRequestId: message.id as JsonRpcId,
             responseKind: "review",
           });
+          void elicitationPauseController.begin(requestId);
           emitBridgeEvent({
             type: "approval",
             toolName: mapApprovalToolName(
@@ -1584,6 +1786,7 @@ export async function streamCodexWithAppServer(
             serverRequestId: message.id as JsonRpcId,
             responseKind: "tool",
           });
+          void elicitationPauseController.begin(requestId);
           emitBridgeEvent({
             type: "user_input",
             toolName: "request_user_input",
@@ -1612,6 +1815,7 @@ export async function streamCodexWithAppServer(
             elicitationMode: elicitation.mode,
             elicitationFields: elicitation.fields,
           });
+          void elicitationPauseController.begin(requestId);
           emitBridgeEvent({
             type: "user_input",
             toolName: "mcp_elicitation",
@@ -2023,6 +2227,71 @@ export async function streamCodexWithAppServer(
     }
   });
 
+  // ── Process-death listener: resolve waitForTurnCompletion if the app
+  // server exits unexpectedly so the turn never hangs forever. ──
+  const unsubscribeProcessExit = client.onProcessExit((exitMessage) => {
+    if (completed) {
+      return;
+    }
+    console.warn(
+      "[provider-runtime] Codex app-server process exited during turn",
+      { threadId, appServerTurnId: appServerTurnId || null, exitMessage },
+    );
+    emitBridgeEvent({
+      type: "error",
+      message: toCodexUserFacingErrorMessage({ message: exitMessage }),
+      recoverable: true,
+    });
+    emitBridgeEvent(
+      abortRequested
+        ? { type: "done", stop_reason: "user_abort" }
+        : { type: "done" },
+    );
+    finishTurnWait();
+  });
+
+  // ── Register abort BEFORE turn/start so the user can cancel at any
+  // point, including while the turn/start request is still in flight. ──
+  args.registerAbort?.(() => {
+    abortRequested = true;
+    if (!appServerTurnId) {
+      // turn/start hasn't resolved yet — no turnId to interrupt.
+      // Resolve the wait so the Promise.race below exits.
+      emitBridgeEvent({ type: "done", stop_reason: "user_abort" });
+      finishTurnWait();
+      return;
+    }
+    // Normal interrupt: we have a turnId.
+    clearInterruptFallback();
+    interruptFallbackHandle = setTimeout(() => {
+      interruptFallbackHandle = null;
+      if (completed) {
+        return;
+      }
+      console.warn(
+        "[provider-runtime] Codex app-server interrupt did not settle after 10 seconds",
+        { threadId, appServerTurnId },
+      );
+      emitBridgeEvent({ type: "done", stop_reason: "user_abort" });
+      finishTurnWait();
+    }, APP_SERVER_INTERRUPT_GRACE_MS);
+    void client
+      .request("turn/interrupt", {
+        threadId,
+        turnId: appServerTurnId,
+      })
+      .catch((error) => {
+        console.warn(
+          "[provider-runtime] Codex app-server interrupt request failed",
+          {
+            threadId,
+            appServerTurnId,
+            error: toErrorMessage(error),
+          },
+        );
+      });
+  });
+
   try {
     const approvalPolicy = resolveApprovalPolicy({
       runtimeValue: args.runtimeOptions?.codexApprovalPolicy,
@@ -2030,7 +2299,11 @@ export async function streamCodexWithAppServer(
       planMode: args.runtimeOptions?.codexPlanMode === true,
       fallback: "untrusted",
     });
-    const turnResponse = await client.request<{ turn: { id: string } }>(
+
+    // Race turn/start against waitForTurnCompletion so an abort (or
+    // process death) during the request isn't blocked until the outer
+    // 3-hour timeout.
+    const turnStartPromise = client.request<{ turn: { id: string } }>(
       "turn/start",
       {
         threadId,
@@ -2074,27 +2347,45 @@ export async function streamCodexWithAppServer(
           : {}),
       },
     );
-    appServerTurnId = turnResponse.turn.id;
-    if (shouldInterruptPlanTurn) {
-      requestPlanInterrupt();
+
+    const turnResponse = await Promise.race([
+      turnStartPromise,
+      waitForTurnCompletion.then(() => null as null),
+    ]);
+
+    // If waitForTurnCompletion won the race (abort or process death during
+    // turn/start), clean up the orphaned turn/start and return.
+    if (turnResponse == null || completed) {
+      void turnStartPromise
+        .then((resolved) => {
+          void client
+            .request("turn/interrupt", {
+              threadId,
+              turnId: resolved.turn.id,
+            })
+            .catch(() => {});
+        })
+        .catch(() => {});
+      return events;
     }
 
-    args.registerAbort?.(() => {
-      abortRequested = true;
-      if (!appServerTurnId) {
-        finishTurnWait();
-        return;
-      }
+    appServerTurnId = turnResponse.turn.id;
+    if (codexDebug) {
+      console.debug("[codex-app-server-runtime] turn/start acknowledged", {
+        threadId,
+        turnId: appServerTurnId,
+      });
+    }
+
+    // If the user pressed stop while turn/start was in flight, we now have
+    // a turnId and can send a proper interrupt.
+    if (abortRequested) {
       clearInterruptFallback();
       interruptFallbackHandle = setTimeout(() => {
         interruptFallbackHandle = null;
         if (completed) {
           return;
         }
-        console.warn(
-          "[provider-runtime] Codex app-server interrupt did not settle after 10 seconds",
-          { threadId, appServerTurnId },
-        );
         emitBridgeEvent({ type: "done", stop_reason: "user_abort" });
         finishTurnWait();
       }, APP_SERVER_INTERRUPT_GRACE_MS);
@@ -2103,17 +2394,12 @@ export async function streamCodexWithAppServer(
           threadId,
           turnId: appServerTurnId,
         })
-        .catch((error) => {
-          console.warn(
-            "[provider-runtime] Codex app-server interrupt request failed",
-            {
-              threadId,
-              appServerTurnId,
-              error: error instanceof Error ? error.message : String(error),
-            },
-          );
-        });
-    });
+        .catch(() => {});
+    }
+
+    if (shouldInterruptPlanTurn) {
+      requestPlanInterrupt();
+    }
 
     await waitForTurnCompletion;
 
@@ -2146,6 +2432,7 @@ export async function streamCodexWithAppServer(
     return events;
   } finally {
     clearInterruptFallback();
+    unsubscribeProcessExit();
     // Reject any pending approval/input requests so the Codex app-server
     // doesn't hang waiting for a response that will never arrive.
     for (const [id, pending] of pendingApprovalRequests) {
@@ -2164,6 +2451,7 @@ export async function streamCodexWithAppServer(
         .catch(() => {});
       pendingUserInputRequests.delete(id);
     }
+    await elicitationPauseController.endAll();
     unsubscribe();
   }
 }
