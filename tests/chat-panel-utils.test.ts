@@ -289,7 +289,9 @@ describe("system event visibility", () => {
   });
 
   test("keeps useful non-error notices visible inline", () => {
-    expect(shouldRenderInlineSystemEvent({ content: "Generation aborted by user." })).toBe(true);
+    expect(shouldRenderInlineSystemEvent({
+      content: "Generation was stopped locally before completion.",
+    })).toBe(true);
     expect(shouldRenderInlineSystemEvent({ content: "No response returned." })).toBe(true);
     expect(hasVisibleMessagePartContent({
       type: "system_event",

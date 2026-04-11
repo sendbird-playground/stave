@@ -102,9 +102,23 @@ loop runs forever.
   `turn/completed` instead of polling every 25 ms.
 - `turn/interrupt` starts a short interrupt-grace fallback so user aborts do
   not hang forever if the completion notification is lost.
+- **Process-death detection**: `CodexAppServerClient.onProcessExit()` fires
+  when the child process exits. The turn registers a listener that emits
+  an error + done event and calls `finishTurnWait()`, so the wait never
+  hangs on a dead process.
+- **Abort during `turn/start`**: `registerAbort` is registered _before_
+  `turn/start`. The `turn/start` request races against
+  `waitForTurnCompletion`, so an abort (or process death) during the
+  request unblocks immediately instead of waiting for the outer timeout.
+  If `turn/start` resolves after abort, the orphaned turn is interrupted
+  fire-and-forget.
 - Catastrophic hangs are bounded by the outer `providerTimeoutMs` watchdog in
-  `runtime.ts`, not by a separate hard-coded 5-minute cutoff inside the
-  app-server adapter.
+  `runtime.ts`; the adapter itself does not add a second 5-minute timer.
+- The Codex app server still maintains its own internal completion-timeout
+  accounting. When Stave surfaces approval or user-input prompts outside the
+  app-server request loop, the adapter must pause that accounting via
+  `thread/increment_elicitation` and resume it via
+  `thread/decrement_elicitation`.
 
 ---
 

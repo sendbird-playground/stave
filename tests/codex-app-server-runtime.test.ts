@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mapCodexElicitationToUserInput } from "../electron/providers/codex-app-server-runtime";
+import {
+  createCodexAppServerElicitationPauseController,
+  mapCodexElicitationToUserInput,
+  summarizeCodexAppServerDebugMessage,
+} from "../electron/providers/codex-app-server-runtime";
 
 describe("mapCodexElicitationToUserInput", () => {
   test("maps form-mode elicitation schema into shared user-input questions", () => {
@@ -96,5 +100,197 @@ describe("mapCodexElicitationToUserInput", () => {
       }],
       fields: [],
     });
+  });
+});
+
+describe("summarizeCodexAppServerDebugMessage", () => {
+  test("summarizes app-server error notifications", () => {
+    const summary = summarizeCodexAppServerDebugMessage({
+      jsonrpc: "2.0",
+      method: "error",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        message: "Codex turn timed out waiting for completion.",
+      },
+    });
+
+    expect(summary).toEqual({
+      id: undefined,
+      method: "error",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      status: undefined,
+      errorMessage: "Codex turn timed out waiting for completion.",
+    });
+  });
+
+  test("summarizes failed turn completions", () => {
+    const summary = summarizeCodexAppServerDebugMessage({
+      jsonrpc: "2.0",
+      method: "turn/completed",
+      params: {
+        threadId: "thread-2",
+        turn: {
+          id: "turn-2",
+          status: "failed",
+          error: {
+            message: "Codex turn timed out waiting for completion.",
+          },
+        },
+      },
+    });
+
+    expect(summary).toEqual({
+      id: undefined,
+      method: "turn/completed",
+      threadId: "thread-2",
+      turnId: "turn-2",
+      status: "failed",
+      errorMessage: "Codex turn timed out waiting for completion.",
+    });
+  });
+});
+
+describe("createCodexAppServerElicitationPauseController", () => {
+  test("increments and decrements timeout pause state for a resolved request", async () => {
+    const calls: Array<{ method: string; params: unknown }> = [];
+    const controller = createCodexAppServerElicitationPauseController({
+      client: {
+        request: async (method, params) => {
+          calls.push({ method, params });
+          return { count: method === "thread/increment_elicitation" ? 1 : 0, paused: true };
+        },
+      },
+      threadId: "thread-1",
+    });
+
+    await controller.begin("request-1");
+    await controller.end("request-1");
+
+    expect(calls).toEqual([
+      {
+        method: "thread/increment_elicitation",
+        params: { threadId: "thread-1" },
+      },
+      {
+        method: "thread/decrement_elicitation",
+        params: { threadId: "thread-1" },
+      },
+    ]);
+  });
+
+  test("serializes resume behind an in-flight pause request", async () => {
+    const calls: string[] = [];
+    let releasePause: (() => void) | null = null;
+    const pauseStarted = new Promise<void>((resolve) => {
+      releasePause = resolve;
+    });
+    const controller = createCodexAppServerElicitationPauseController({
+      client: {
+        request: async (method) => {
+          calls.push(method);
+          if (method === "thread/increment_elicitation") {
+            await pauseStarted;
+            return { count: 1, paused: true };
+          }
+          return { count: 0, paused: false };
+        },
+      },
+      threadId: "thread-race",
+    });
+
+    const beginPromise = controller.begin("request-1");
+    const endPromise = controller.end("request-1");
+
+    await Promise.resolve();
+    expect(calls).toEqual(["thread/increment_elicitation"]);
+
+    releasePause?.();
+    await beginPromise;
+    await endPromise;
+
+    expect(calls).toEqual([
+      "thread/increment_elicitation",
+      "thread/decrement_elicitation",
+    ]);
+  });
+
+  test("deduplicates request ids and drains outstanding pauses on endAll", async () => {
+    const calls: string[] = [];
+    const controller = createCodexAppServerElicitationPauseController({
+      client: {
+        request: async (method) => {
+          calls.push(method);
+          return { count: 1, paused: true };
+        },
+      },
+      threadId: "thread-2",
+    });
+
+    await controller.begin("request-1");
+    await controller.begin("request-1");
+    await controller.begin("request-2");
+    await controller.endAll();
+
+    expect(calls).toEqual([
+      "thread/increment_elicitation",
+      "thread/increment_elicitation",
+      "thread/decrement_elicitation",
+      "thread/decrement_elicitation",
+    ]);
+  });
+
+  test("endAll is safe after individual end calls", async () => {
+    const calls: string[] = [];
+    const controller = createCodexAppServerElicitationPauseController({
+      client: {
+        request: async (method) => {
+          calls.push(method);
+          return { count: 1, paused: true };
+        },
+      },
+      threadId: "thread-endall-safe",
+    });
+
+    await controller.begin("req-1");
+    await controller.begin("req-2");
+    await controller.end("req-1");
+    // endAll should only decrement req-2 (req-1 already ended)
+    await controller.endAll();
+
+    expect(calls).toEqual([
+      "thread/increment_elicitation",
+      "thread/increment_elicitation",
+      "thread/decrement_elicitation",
+      "thread/decrement_elicitation",
+    ]);
+  });
+
+  test("does not decrement if the pause request failed", async () => {
+    const calls: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+      const controller = createCodexAppServerElicitationPauseController({
+        client: {
+          request: async (method) => {
+            calls.push(method);
+            if (method === "thread/increment_elicitation") {
+              throw new Error("method failed");
+            }
+            return { count: 0, paused: false };
+          },
+        },
+        threadId: "thread-3",
+      });
+
+      await controller.begin("request-1");
+      await controller.end("request-1");
+
+      expect(calls).toEqual(["thread/increment_elicitation"]);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 });
