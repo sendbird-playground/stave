@@ -1,4 +1,5 @@
 import {
+  Bot,
   CalendarIcon,
   ClipboardCheck,
   CheckCircle2,
@@ -16,7 +17,9 @@ import {
   Plus,
   RefreshCcw,
   SlidersHorizontal,
+  Sparkles,
   StickyNote,
+  UserRound,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -435,6 +438,32 @@ function SectionHeader(props: {
         {props.children}
       </AccordionContent>
     </AccordionItem>
+  );
+}
+
+function SummaryEntry(props: {
+  icon: ReactNode;
+  label: string;
+  children: ReactNode;
+  tone?: "default" | "muted";
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted/70 text-muted-foreground">
+          {props.icon}
+        </span>
+        <span>{props.label}</span>
+      </div>
+      <p
+        className={cn(
+          "pl-7 text-[15px] leading-6 text-foreground/95",
+          props.tone === "muted" && "text-muted-foreground",
+        )}
+      >
+        {props.children}
+      </p>
+    </div>
   );
 }
 
@@ -1095,74 +1124,6 @@ export function WorkspaceInformationPanel() {
       className="flex h-full min-h-0 flex-col overflow-auto origin-top-left"
       style={infoPanelScale !== 1 ? { zoom: infoPanelScale } : undefined}
     >
-      <div className="px-2 pb-1 pt-2">
-        <section className="rounded-xl border border-border/80 bg-card/90 px-3 py-3 shadow-xs">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant="secondary"
-                  className="h-5 rounded-full px-2 py-0 text-[11px] font-medium"
-                >
-                  Latest turn
-                </Badge>
-                {latestTurnSummary?.taskTitle ? (
-                  <p className="truncate text-xs text-muted-foreground">
-                    {latestTurnSummary.taskTitle}
-                  </p>
-                ) : null}
-              </div>
-              <p className="text-[13px] text-muted-foreground">
-                Auto-updated after each completed turn so you can quickly see
-                what this workspace was working on.
-              </p>
-            </div>
-            {latestTurnSummary ? (
-              <span className="shrink-0 text-[11px] text-muted-foreground">
-                {formatTaskUpdatedAt({ value: latestTurnSummary.generatedAt })}
-              </span>
-            ) : null}
-          </div>
-
-          {latestTurnSummary ? (
-            <div className="mt-3 space-y-3">
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
-                  User asked
-                </p>
-                <p className="text-sm leading-6 text-foreground/95">
-                  {latestTurnSummary.requestSummary}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
-                  AI work
-                </p>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {latestTurnSummary.workSummary}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <Badge
-                  variant="outline"
-                  className="h-5 rounded-full px-2 py-0 text-[11px] font-normal leading-none"
-                >
-                  {toHumanModelName({ model: latestTurnSummary.model })}
-                </Badge>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">
-              No automatic summary yet. Finish a turn to capture the latest
-              request and AI work for this workspace.
-            </p>
-          )}
-        </section>
-      </div>
-
-      {/* ── Accordion sections ───────────────────────────────── */}
       <div className="px-2 py-2">
         <Accordion
           type="multiple"
@@ -1171,13 +1132,65 @@ export function WorkspaceInformationPanel() {
             setOpenSections(value as WorkspaceInformationSectionId[])
           }
         >
+          <SectionHeader
+            value="overview"
+            title="Summary"
+            icon={<Sparkles className="size-4" />}
+            first
+            action={
+              latestTurnSummary ? (
+                <span className="pr-1 text-[11px] text-muted-foreground/70">
+                  {formatTaskUpdatedAt({ value: latestTurnSummary.generatedAt })}
+                </span>
+              ) : null
+            }
+          >
+            {latestTurnSummary ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {latestTurnSummary.taskTitle ? (
+                    <span className="min-w-0 truncate font-medium text-foreground/80">
+                      {latestTurnSummary.taskTitle}
+                    </span>
+                  ) : null}
+                  <Badge
+                    variant="outline"
+                    className="h-5 rounded-full px-2 py-0 text-[11px] font-normal leading-none"
+                  >
+                    {toHumanModelName({ model: latestTurnSummary.model })}
+                  </Badge>
+                </div>
+
+                <div className="space-y-3">
+                  <SummaryEntry
+                    icon={<UserRound className="size-3.5" />}
+                    label="user"
+                  >
+                    {latestTurnSummary.requestSummary}
+                  </SummaryEntry>
+                  <div className="border-t border-border/40" />
+                  <SummaryEntry
+                    icon={<Bot className="size-3.5" />}
+                    label="ai"
+                    tone="muted"
+                  >
+                    {latestTurnSummary.workSummary}
+                  </SummaryEntry>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[15px] leading-6 text-muted-foreground">
+                No summary yet. Finish a turn.
+              </p>
+            )}
+          </SectionHeader>
+
           {/* ── Todo ──────────────────────────────────────────── */}
           <SectionHeader
             value="todo"
             title="Todos"
             icon={<CheckCircle2 className="size-4" />}
             count={openTodoCount}
-            first
             action={
               <AddButton
                 onClick={() =>
@@ -1929,9 +1942,6 @@ export function WorkspaceInformationPanel() {
               ))}
             </div>
           </SectionHeader>
-
-          {/* Hidden overview section (kept for accordion state compat) */}
-          <AccordionItem value="overview" className="hidden" />
         </Accordion>
       </div>
     </div>
