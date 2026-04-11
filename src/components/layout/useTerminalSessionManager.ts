@@ -787,6 +787,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     args.slotKeyForTab,
     args.tabs,
     args.workspaceId,
+    runtimeVersion,
     setBridgeErrorForTabKey,
     supportsPushTerminalOutput,
     tabStatusByTabKey,
