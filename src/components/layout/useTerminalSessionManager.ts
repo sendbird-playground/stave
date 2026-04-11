@@ -103,9 +103,11 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   args: UseTerminalSessionManagerArgs<TTab>,
 ): UseTerminalSessionManagerReturn {
   const tabManagerRef = useRef(args.tabManager);
+  const tabsRef = useRef(args.tabs);
   useEffect(() => {
     tabManagerRef.current = args.tabManager;
-  }, [args.tabManager]);
+    tabsRef.current = args.tabs;
+  }, [args.tabManager, args.tabs]);
 
   const activeSessionIdRef = useRef<string | null>(null);
   const activeTabKeyRef = useRef<string | null>(null);
@@ -549,6 +551,14 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     // (which will re-attach if the user already returned to this workspace).
     void detachSessionIds(sessionIdsToDetach).then(() => {
       for (const [tabKey, sessionId] of entriesToDetach) {
+        // Guard: if the user switched back to this workspace before the
+        // detach settled, the bootstrap effect may have already re-attached
+        // (or created) a new session under the same tabKey. Only wipe refs
+        // when the sessionId still matches what we detached — otherwise we
+        // would destroy the freshly registered session's bookkeeping.
+        if (sessionIdByTabKeyRef.current[tabKey] !== sessionId) {
+          continue;
+        }
         delete sessionIdByTabKeyRef.current[tabKey];
         delete tabKeyBySessionIdRef.current[sessionId];
         delete pendingInputBySessionRef.current[sessionId];
@@ -713,7 +723,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         slotState.sessionId &&
         (slotState.state === "background" || slotState.state === "running")
       ) {
-        if (!args.tabs.some((tab) => args.getTabKey(tab) === tabKey)) {
+        if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
           return true;
         }
         const attached = await attachSession({
@@ -768,7 +778,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         rows,
         deliveryMode,
       });
-      if (!args.tabs.some((tab) => args.getTabKey(tab) === tabKey)) {
+      if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
         if (created.ok && created.sessionId) {
           void window.api?.terminal?.closeSession?.({
             sessionId: created.sessionId,

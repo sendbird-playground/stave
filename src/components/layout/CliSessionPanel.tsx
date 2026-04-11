@@ -273,155 +273,162 @@ export function CliSessionPanel() {
     );
   }
 
-  if (!isVisible) {
-    return (
-      <section
-        data-testid="cli-session-panel"
-        className="hidden h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
-      >
-        {terminalViewport}
-      </section>
-    );
-  }
-
+  // Always render the same React element tree regardless of `isVisible`.
+  // Before this fix, invisible renders returned `<section>{terminalViewport}</section>`
+  // while visible renders returned `<section><div><header/>{terminalViewport}</div></section>`.
+  // The different tree shapes caused React reconciliation to unmount/remount
+  // TerminalTabSurface components on every visibility toggle, destroying the
+  // ghostty-web Terminal instance and forcing a full transcript re-hydration
+  // (~2 MB raw replay) which produced garbled WebGL rendering.
   return (
     <section
       data-testid="cli-session-panel"
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background"
+      className={cn(
+        "h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background",
+        isVisible ? "flex" : "hidden",
+      )}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-border/40">
+        {/* Header container always at child position 0 so {terminalViewport}
+            stays at position 1 and React never unmounts the terminal surface. */}
         <div className="border-b border-border/70 bg-card/95 px-4 py-3 backdrop-blur-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                {activeTab ? (
-                  <>
+          {isVisible ? (
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {activeTab ? (
+                    <>
+                      <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <ModelIcon
+                          providerId={activeTab.provider}
+                          className="size-4 text-muted-foreground"
+                        />
+                        <span className="truncate">{activeTab.title}</span>
+                      </span>
+                      <Badge
+                        variant="secondary"
+                        className="rounded-sm text-[10px] uppercase tracking-[0.14em]"
+                      >
+                        {getCliSessionProviderLabel(activeTab.provider)}
+                      </Badge>
+                      <Badge
+                        variant="secondary"
+                        className="rounded-sm text-[10px] uppercase tracking-[0.14em]"
+                      >
+                        {getCliSessionContextLabel(activeTab.contextMode)}
+                      </Badge>
+                    </>
+                  ) : (
                     <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <ModelIcon
-                        providerId={activeTab.provider}
-                        className="size-4 text-muted-foreground"
-                      />
-                      <span className="truncate">{activeTab.title}</span>
+                      <SquareTerminal className="size-4 text-muted-foreground" />
+                      CLI Session
                     </span>
-                    <Badge
-                      variant="secondary"
-                      className="rounded-sm text-[10px] uppercase tracking-[0.14em]"
+                  )}
+                </div>
+                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span className="truncate">
+                    {activeTab?.cwd ?? workspacePath ?? "Workspace"}
+                  </span>
+                  {handoffSummary ? <span>Task handoff ready</span> : null}
+                  {sessionExited ? (
+                    <span
+                      className={cn(
+                        "font-medium",
+                        sessionExited.exitCode === 0
+                          ? "text-muted-foreground"
+                          : "text-destructive",
+                      )}
                     >
-                      {getCliSessionProviderLabel(activeTab.provider)}
-                    </Badge>
-                    <Badge
-                      variant="secondary"
-                      className="rounded-sm text-[10px] uppercase tracking-[0.14em]"
-                    >
-                      {getCliSessionContextLabel(activeTab.contextMode)}
-                    </Badge>
-                  </>
-                ) : (
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <SquareTerminal className="size-4 text-muted-foreground" />
-                    CLI Session
-                  </span>
-                )}
+                      exited ({sessionExited.exitCode})
+                    </span>
+                  ) : activeSessionId ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      live
+                    </span>
+                  ) : null}
+                </div>
               </div>
-              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className="truncate">
-                  {activeTab?.cwd ?? workspacePath ?? "Workspace"}
-                </span>
-                {handoffSummary ? <span>Task handoff ready</span> : null}
-                {sessionExited ? (
-                  <span
-                    className={cn(
-                      "font-medium",
-                      sessionExited.exitCode === 0
-                        ? "text-muted-foreground"
-                        : "text-destructive",
-                    )}
-                  >
-                    exited ({sessionExited.exitCode})
-                  </span>
-                ) : activeSessionId ? (
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    live
-                  </span>
-                ) : null}
-              </div>
+              <TooltipProvider>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-2"
+                        onClick={handleCopyHandoff}
+                        disabled={!handoffSummary}
+                      >
+                        <Copy className="size-3.5" />
+                        Copy Handoff
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Copy the task handoff summary
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-2"
+                        onClick={handlePasteHandoff}
+                        disabled={!handoffSummary || !activeSessionId}
+                      >
+                        <ClipboardPaste className="size-3.5" />
+                        Paste Handoff
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Paste the handoff into the live CLI session
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 rounded-md p-0 text-muted-foreground"
+                        onClick={() => {
+                          restartActiveSession();
+                          toast.message("CLI session restarted");
+                        }}
+                        disabled={!activeTab}
+                        aria-label="restart-cli-session"
+                      >
+                        <RefreshCw className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Restart Session
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 rounded-md p-0 text-muted-foreground"
+                        onClick={() => {
+                          if (activeTab) {
+                            closeCliSessionTab({ tabId: activeTab.id });
+                          }
+                        }}
+                        disabled={!activeTab}
+                        aria-label="close-cli-session"
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      Close Session
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
             </div>
-            <TooltipProvider>
-              <div className="flex shrink-0 items-center gap-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-2"
-                      onClick={handleCopyHandoff}
-                      disabled={!handoffSummary}
-                    >
-                      <Copy className="size-3.5" />
-                      Copy Handoff
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    Copy the task handoff summary
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 gap-2"
-                      onClick={handlePasteHandoff}
-                      disabled={!handoffSummary || !activeSessionId}
-                    >
-                      <ClipboardPaste className="size-3.5" />
-                      Paste Handoff
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    Paste the handoff into the live CLI session
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 rounded-md p-0 text-muted-foreground"
-                      onClick={() => {
-                        restartActiveSession();
-                        toast.message("CLI session restarted");
-                      }}
-                      disabled={!activeTab}
-                      aria-label="restart-cli-session"
-                    >
-                      <RefreshCw className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Restart Session</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 rounded-md p-0 text-muted-foreground"
-                      onClick={() => {
-                        if (activeTab) {
-                          closeCliSessionTab({ tabId: activeTab.id });
-                        }
-                      }}
-                      disabled={!activeTab}
-                      aria-label="close-cli-session"
-                    >
-                      <X className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Close Session</TooltipContent>
-                </Tooltip>
-              </div>
-            </TooltipProvider>
-          </div>
+          ) : null}
         </div>
         {terminalViewport}
       </div>
