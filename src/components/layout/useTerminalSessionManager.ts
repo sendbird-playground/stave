@@ -535,19 +535,31 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     const entriesToDetach = Object.entries(sessionIdByTabKeyRef.current).filter(
       ([tabKey]) => tabKey.startsWith(`${previousWorkspaceId}:`),
     );
+    if (entriesToDetach.length === 0) {
+      return;
+    }
     const sessionIdsToDetach = entriesToDetach.map(
       ([, sessionId]) => sessionId,
     );
-    for (const [tabKey, sessionId] of entriesToDetach) {
-      delete sessionIdByTabKeyRef.current[tabKey];
-      delete tabKeyBySessionIdRef.current[sessionId];
-      delete pendingInputBySessionRef.current[sessionId];
-      delete writeInFlightBySessionRef.current[sessionId];
-      delete flushScheduledBySessionRef.current[sessionId];
-      delete creatingSessionByTabKeyRef.current[tabKey];
-      delete lastResizeByTabKeyRef.current[tabKey];
-    }
-    void detachSessionIds(sessionIdsToDetach);
+    // Detach first (host switches to background buffer), THEN clear refs.
+    // Refs stay intact during the async gap so push events arriving before
+    // the host processes the detach are still captured in transcriptRef.
+    void detachSessionIds(sessionIdsToDetach).then(() => {
+      // If the user already returned to this workspace, keep refs intact
+      // so the live session stays connected.
+      if (previousWorkspaceIdRef.current === previousWorkspaceId) {
+        return;
+      }
+      for (const [tabKey, sessionId] of entriesToDetach) {
+        delete sessionIdByTabKeyRef.current[tabKey];
+        delete tabKeyBySessionIdRef.current[sessionId];
+        delete pendingInputBySessionRef.current[sessionId];
+        delete writeInFlightBySessionRef.current[sessionId];
+        delete flushScheduledBySessionRef.current[sessionId];
+        delete creatingSessionByTabKeyRef.current[tabKey];
+        delete lastResizeByTabKeyRef.current[tabKey];
+      }
+    });
   }, [args.workspaceId]);
 
   useEffect(() => {
