@@ -47,7 +47,7 @@ Recommended starting points:
 - The composer `Runtime` drawer, which shows the effective file access, approval, network, and plan state before send
 - The composer-side `Approval Queue`, which appears above the prompt box when a turn is waiting for one or more approval decisions
 - The composer-side `Guide Instead` action, which rejects the latest approval request and stages your next instruction in the composer
-- The composer-side queued follow-up banner, which appears while a running turn already has a staged `Queue next` prompt
+- The composer-side queued follow-up banner, which appears while a running turn already has a staged `Queue next` prompt and previews the queued text
 - The composer plan toggle switches Claude turns into `Permission Mode = plan`
 - The composer plan toggle enables Codex planning for the current draft turn, backed by native App Server plan items
 
@@ -87,7 +87,7 @@ Provider differences that matter in practice:
 2. Send a harmless prompt such as “summarize repo status” or “list likely files to inspect first.”
 3. If the turn pauses for approval, use the composer `Approval Queue` to approve or deny without reopening the message trace, or use the notification center if you are working elsewhere in the app.
 4. If the request should be rejected but you already know the next instruction, press `Tab` or choose `Guide Instead` in the queue. Stave denies that approval and stages your follow-up prompt for the next turn.
-5. If the turn is still running but you already know the follow-up, keep typing and choose `Queue next`. Stave stores that next prompt on the task, shows a queued banner, and auto-sends it when the running turn fully finishes.
+5. If the turn is still running but you already know the follow-up, keep typing and choose `Queue next`. Stave stores that next prompt on the task, shows the queued prompt preview in the composer, and auto-sends it when the running turn fully finishes.
 6. Success looks like the runtime drawer reflecting the expected state before send. For Codex planning, look for `Planning: On` and an effective `Files: Read Only`. For Claude turns, look for `Sandbox: Enabled/Disabled` and `Unsandboxed: On/Off`.
 
 ## Files And Data

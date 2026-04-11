@@ -1,5 +1,5 @@
 import { Brain, ClipboardCheck, FolderOpen, Globe2, OctagonX, Paperclip, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
-import type { Attachment, UserInputPart } from "@/types/chat";
+import type { Attachment, PromptDraftQueuedNextTurn, UserInputPart } from "@/types/chat";
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
@@ -35,7 +35,7 @@ interface PromptInputProps {
   disabled?: boolean;
   isTurnActive?: boolean;
   submitMode?: "send" | "queue-next";
-  queuedNextTurn?: { queuedAt: string; sourceTurnId?: string } | null;
+  queuedNextTurn?: PromptDraftQueuedNextTurn | null;
   focusToken?: string;
   selectedModel: ModelSelectorOption;
   modelOptions: readonly ModelSelectorOption[];
@@ -169,6 +169,7 @@ export function PromptInput(args: PromptInputProps) {
     onClearQueuedNextTurn,
     onAbort,
   } = args;
+  const queuedPromptPreview = queuedNextTurn?.content?.trim() ?? "";
   const imageAttachments = useMemo(
     () => (attachments ?? []).filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image"),
     [attachments],
@@ -654,26 +655,34 @@ export function PromptInput(args: PromptInputProps) {
         </Suggestions>
       ) : null}
       {queuedNextTurn ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
-            Queued next turn
-          </Badge>
-          <span>
-            {isTurnActive
-              ? "Sends automatically when the current response finishes."
-              : "Next-turn draft is staged."}
-          </span>
-          {onClearQueuedNextTurn ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => onClearQueuedNextTurn()}
-              className="ml-auto h-7 px-2 text-xs"
-            >
-              Clear
-            </Button>
-          ) : null}
+        <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+              Queued next turn
+            </Badge>
+            {onClearQueuedNextTurn ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onClearQueuedNextTurn()}
+                className="ml-auto h-7 px-2 text-xs"
+              >
+                Clear
+              </Button>
+            ) : null}
+          </div>
+          {queuedPromptPreview ? (
+            <p className="mt-2 max-h-28 overflow-auto rounded-md border border-border/60 bg-background/85 px-2.5 py-2 text-xs leading-5 text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+              {queuedPromptPreview}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isTurnActive
+                ? "Sends automatically when the current response finishes."
+                : "Next-turn draft is staged."}
+            </p>
+          )}
         </div>
       ) : null}
       {!minimal && !isPromptInputFocused && !interactionsDisabled ? (
