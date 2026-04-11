@@ -124,6 +124,11 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     Record<string, { exitCode: number; signal?: number }>
   >({});
   const lastResizeByTabKeyRef = useRef<Record<string, TerminalResizeState>>({});
+  // Monotonic counter per tabKey — incremented every time a session is
+  // registered (attach or create).  Used by the detach callback to detect
+  // that a fresh attach happened *after* the detach started, even when the
+  // reattached sessionId is the same string value (reattach-same-session).
+  const attachGenerationByTabKeyRef = useRef<Record<string, number>>({});
   const hydratedRevisionByTabKeyRef = useRef<Record<string, number>>({});
 
   const [bridgeErrorByTabKey, setBridgeErrorByTabKey] = useState<
@@ -543,6 +548,17 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     const sessionIdsToDetach = entriesToDetach.map(
       ([, sessionId]) => sessionId,
     );
+    // Capture the attach generation for each tabKey at the moment we START
+    // the detach.  If registerSession() runs before the detach settles
+    // (reattach-same-session), the generation will have been bumped even
+    // though the sessionId string is identical.  Checking generation avoids
+    // wiping refs that belong to the freshly re-attached session.
+    const generationSnapshot: Record<string, number> = {};
+    for (const [tabKey] of entriesToDetach) {
+      generationSnapshot[tabKey] =
+        attachGenerationByTabKeyRef.current[tabKey] ?? 0;
+    }
+
     // Detach first (host switches to background buffer), THEN clear refs.
     // Refs stay intact during the async gap so push events arriving before
     // the host processes the detach are still captured in transcriptRef.
@@ -554,9 +570,16 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         // Guard: if the user switched back to this workspace before the
         // detach settled, the bootstrap effect may have already re-attached
         // (or created) a new session under the same tabKey. Only wipe refs
-        // when the sessionId still matches what we detached — otherwise we
-        // would destroy the freshly registered session's bookkeeping.
-        if (sessionIdByTabKeyRef.current[tabKey] !== sessionId) {
+        // when BOTH the sessionId AND the attach generation still match
+        // what we captured at detach-start.  A generation bump means
+        // registerSession() ran after we began detaching — even when the
+        // reattached sessionId is the same string value.
+        const currentGen =
+          attachGenerationByTabKeyRef.current[tabKey] ?? 0;
+        if (
+          sessionIdByTabKeyRef.current[tabKey] !== sessionId ||
+          currentGen !== generationSnapshot[tabKey]
+        ) {
           continue;
         }
         delete sessionIdByTabKeyRef.current[tabKey];
@@ -686,6 +709,8 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       tabKeyBySessionIdRef.current[sessionId] = tabKey;
       pendingInputBySessionRef.current[sessionId] = "";
       writeInFlightBySessionRef.current[sessionId] = false;
+      attachGenerationByTabKeyRef.current[tabKey] =
+        (attachGenerationByTabKeyRef.current[tabKey] ?? 0) + 1;
       delete exitedByTabKeyRef.current[tabKey];
       delete lastResizeByTabKeyRef.current[tabKey];
       setSessionExited(null);

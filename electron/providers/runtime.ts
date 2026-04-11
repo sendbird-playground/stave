@@ -63,6 +63,13 @@ type ActiveStreamSession = {
 };
 
 const activeStreams = new Map<string, ActiveStreamSession>();
+/**
+ * Tracks in-flight turn promises so `shutdown()` can await their completion
+ * before the caller closes the persistence layer.  Without this, abort is
+ * fire-and-forget and the `.finally()` → `onDone()` callback races with
+ * SQLite being closed → "database connection is not open".
+ */
+const activeTurnPromises = new Map<string, Promise<void>>();
 const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
@@ -616,7 +623,7 @@ export const providerRuntime: ProviderRuntime = {
       streamId,
     });
     queueMicrotask(() => {
-      void runProviderTurn({
+      const turnPromise = runProviderTurn({
         ...args,
         turnId,
         onEvent: (event) => {
@@ -643,11 +650,13 @@ export const providerRuntime: ProviderRuntime = {
           session.done = true;
           session.updatedAt = Date.now();
           clearActiveTurnState({ turnId });
+          activeTurnPromises.delete(turnId);
           if (!shouldBufferForPolling) {
             activeStreams.delete(streamId);
           }
           options?.onDone?.();
         });
+      activeTurnPromises.set(turnId, turnPromise);
     });
     return { ok: true, streamId };
   },
@@ -820,8 +829,17 @@ export const providerRuntime: ProviderRuntime = {
         taskIds.add(session.taskId);
       }
     }
+
+    // Wait for in-flight turn promises so their `.finally()` → `onDone()`
+    // callbacks complete *before* the caller closes the persistence layer.
+    // Without this, completeTurn() races with SQLite close.
+    if (activeTurnPromises.size > 0) {
+      await Promise.allSettled(Array.from(activeTurnPromises.values()));
+    }
+
     activeSessions.clear();
     activeStreams.clear();
+    activeTurnPromises.clear();
     cleanupProviderTaskState(DEFAULT_PROVIDER_TASK_KEY);
     for (const taskId of taskIds) {
       cleanupProviderTaskState(taskId);

@@ -106,6 +106,11 @@ const MAX_LOCAL_MCP_REQUEST_LOGS = 500;
 
 export class SqliteStore {
   private db: Database.Database;
+  private _closed = false;
+
+  get closed() {
+    return this._closed;
+  }
 
   constructor(args: { dbPath: string }) {
     const dbPath = path.resolve(args.dbPath);
@@ -1073,6 +1078,9 @@ export class SqliteStore {
     payload: unknown;
     createdAt?: string;
   }) {
+    if (this._closed) {
+      return;
+    }
     const createdAt = args.createdAt ?? new Date().toISOString();
     this.db.prepare(`
       INSERT INTO turn_events (id, turn_id, sequence, event_type, payload_json, created_at)
@@ -1088,6 +1096,9 @@ export class SqliteStore {
   }
 
   completeTurn(args: { id: string; completedAt?: string }) {
+    if (this._closed) {
+      return;
+    }
     const completedAt = args.completedAt ?? new Date().toISOString();
     this.db.prepare(`
       UPDATE turns
@@ -1231,6 +1242,7 @@ export class SqliteStore {
   }
 
   close() {
+    this._closed = true;
     this.db.close();
   }
 }
