@@ -21,7 +21,7 @@
 
 1. Open a workspace and run a task turn to completion.
 2. Open the right-side `Information` panel.
-3. Read the `Latest turn` card at the top for the short `User asked` and `AI work` recap.
+3. Read the `Summary` section at the top for the short `user` and `ai` recap.
 
 ## Interface Walkthrough
 
@@ -32,9 +32,9 @@
 
 ### Key Controls
 
-- `Latest turn` card: shows the newest automatic workspace summary.
-- `User asked`: short restatement of the completed turn's request.
-- `AI work`: short summary of what the assistant changed, concluded, or reported.
+- `Summary` section: shows the newest automatic workspace summary and starts expanded until you collapse it.
+- `user`: short restatement of the completed turn's request.
+- `ai`: short summary of what the assistant changed, concluded, or reported.
 - Model badge: shows which model produced the summary.
 - `Settings → Prompts → Workspace Latest Turn Summary`: lets you change the primary model, fallback model, and prompt template.
 
@@ -51,7 +51,7 @@
 
 1. Send a task message and wait for the turn to finish.
 2. Open the workspace `Information` panel.
-3. Confirm the top card updates with the latest request/work recap and a fresh timestamp.
+3. Confirm the top summary section updates with the latest request/work recap and a fresh timestamp.
 
 ## Files And Data
 
@@ -67,15 +67,15 @@
 
 ## Limitations And Advanced Options
 
-- The card shows the latest completed turn summary for the workspace, not a full history of older summaries.
-- Summary generation runs after the main task turn finishes, so the card can update a moment after the task chat stops streaming.
+- The summary section shows the latest completed turn summary for the workspace, not a full history of older summaries.
+- Summary generation runs after the main task turn finishes, so the section can update a moment after the task chat stops streaming.
 - If the primary model is unavailable or fails, Stave tries the configured fallback model.
 
 ## Troubleshooting
 
-### The Summary Card Does Not Update
+### The Summary Section Does Not Update
 
-- Symptom: the `Latest turn` card stays empty after a completed task turn.
+- Symptom: the `Summary` section stays empty after a completed task turn.
 - Cause: the summary prompt is blank, both configured models are unavailable, or the workspace has not completed a turn yet.
 - Fix: check `Settings → Prompts → Workspace Latest Turn Summary`, restore the default prompt if needed, and verify that at least one configured provider is available.
 
