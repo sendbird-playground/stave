@@ -532,10 +532,22 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     if (previousWorkspaceId === args.workspaceId) {
       return;
     }
-    const sessionsToDetach = Object.entries(sessionIdByTabKeyRef.current)
-      .filter(([tabKey]) => tabKey.startsWith(`${previousWorkspaceId}:`))
-      .map(([, sessionId]) => sessionId);
-    void detachSessionIds(sessionsToDetach);
+    const entriesToDetach = Object.entries(sessionIdByTabKeyRef.current).filter(
+      ([tabKey]) => tabKey.startsWith(`${previousWorkspaceId}:`),
+    );
+    const sessionIdsToDetach = entriesToDetach.map(
+      ([, sessionId]) => sessionId,
+    );
+    for (const [tabKey, sessionId] of entriesToDetach) {
+      delete sessionIdByTabKeyRef.current[tabKey];
+      delete tabKeyBySessionIdRef.current[sessionId];
+      delete pendingInputBySessionRef.current[sessionId];
+      delete writeInFlightBySessionRef.current[sessionId];
+      delete flushScheduledBySessionRef.current[sessionId];
+      delete creatingSessionByTabKeyRef.current[tabKey];
+      delete lastResizeByTabKeyRef.current[tabKey];
+    }
+    void detachSessionIds(sessionIdsToDetach);
   }, [args.workspaceId]);
 
   useEffect(() => {
