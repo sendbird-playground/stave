@@ -753,6 +753,21 @@ export function useTerminalInstance(
       if (cancelled) {
         return;
       }
+
+      // Force fitAddon to re-measure the container and update the WebGL
+      // canvas pixel dimensions. After a display:none → display:flex toggle
+      // the canvas backing store is stale (0×0 or previous size).
+      // terminal.resize() alone short-circuits when cols/rows haven't changed,
+      // leaving the canvas at wrong pixel dimensions → garbled rendering.
+      // fitAddon.fit() recalculates everything including the canvas size.
+      executeTerminalOperation(
+        "fit-terminal-on-visibility-restore",
+        () => {
+          fitAddonRef.current?.fit();
+        },
+        { message: "Failed to fit terminal on visibility restore." },
+      );
+
       const proposed = measureProposedDimensions();
       executeTerminalOperation(
         "restore-terminal-viewport",
