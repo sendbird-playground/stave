@@ -544,12 +544,10 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     // Detach first (host switches to background buffer), THEN clear refs.
     // Refs stay intact during the async gap so push events arriving before
     // the host processes the detach are still captured in transcriptRef.
+    // After detach settles, always clear refs and bump runtimeVersion so
+    // the bootstrap effect re-runs and calls tryReattachExistingSession
+    // (which will re-attach if the user already returned to this workspace).
     void detachSessionIds(sessionIdsToDetach).then(() => {
-      // If the user already returned to this workspace, keep refs intact
-      // so the live session stays connected.
-      if (previousWorkspaceIdRef.current === previousWorkspaceId) {
-        return;
-      }
       for (const [tabKey, sessionId] of entriesToDetach) {
         delete sessionIdByTabKeyRef.current[tabKey];
         delete tabKeyBySessionIdRef.current[sessionId];
@@ -559,6 +557,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         delete creatingSessionByTabKeyRef.current[tabKey];
         delete lastResizeByTabKeyRef.current[tabKey];
       }
+      setRuntimeVersion((v) => v + 1);
     });
   }, [args.workspaceId]);
 
