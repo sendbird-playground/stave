@@ -139,8 +139,19 @@ export function createTerminalRuntime(args: {
   const { emitEvent } = args;
   const sessions = new Map<string, TerminalSessionEntry>();
   const sessionSlotRegistry = createTerminalSessionSlotRegistry();
+  const exitedSlotInfo = new Map<
+    string,
+    { exitCode: number; signal?: number }
+  >();
 
   function deleteSession(sessionId: string) {
+    const session = sessions.get(sessionId);
+    if (session?.slotKey != null) {
+      exitedSlotInfo.set(session.slotKey, {
+        exitCode: session.exitCode ?? -1,
+        signal: session.exitSignal,
+      });
+    }
     sessions.delete(sessionId);
     unbindTerminalSessionSlotBySessionId({
       registry: sessionSlotRegistry,
@@ -434,6 +445,7 @@ export function createTerminalRuntime(args: {
 
     sessions.set(sessionId, session);
     if (args.slotKey) {
+      exitedSlotInfo.delete(args.slotKey);
       bindTerminalSessionSlot({
         registry: sessionSlotRegistry,
         sessionId,
@@ -709,6 +721,11 @@ export function createTerminalRuntime(args: {
         closedCount++;
       }
     }
+    for (const slotKey of exitedSlotInfo.keys()) {
+      if (slotKey.startsWith(args.prefix)) {
+        exitedSlotInfo.delete(slotKey);
+      }
+    }
     return { ok: true, closedCount };
   }
 
@@ -778,6 +795,14 @@ export function createTerminalRuntime(args: {
   } {
     const existing = getSessionBySlotKey(args.slotKey);
     if (!existing) {
+      const exited = exitedSlotInfo.get(args.slotKey);
+      if (exited) {
+        return {
+          state: "exited",
+          exitCode: exited.exitCode,
+          signal: exited.signal,
+        };
+      }
       return { state: "idle" };
     }
     const { sessionId, session } = existing;

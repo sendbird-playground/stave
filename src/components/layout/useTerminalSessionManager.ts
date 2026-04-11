@@ -525,6 +525,19 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     };
   }, []);
 
+  const previousWorkspaceIdRef = useRef(args.workspaceId);
+  useEffect(() => {
+    const previousWorkspaceId = previousWorkspaceIdRef.current;
+    previousWorkspaceIdRef.current = args.workspaceId;
+    if (previousWorkspaceId === args.workspaceId) {
+      return;
+    }
+    const sessionsToDetach = Object.entries(sessionIdByTabKeyRef.current)
+      .filter(([tabKey]) => tabKey.startsWith(`${previousWorkspaceId}:`))
+      .map(([, sessionId]) => sessionId);
+    void detachSessionIds(sessionsToDetach);
+  }, [args.workspaceId]);
+
   useEffect(() => {
     const liveEntries = Object.entries(sessionIdByTabKeyRef.current).filter(
       ([tabKey]) => tabKey.startsWith(`${args.workspaceId}:`),
