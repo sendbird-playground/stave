@@ -33,5 +33,18 @@ export function createKeyedAsyncQueue<TKey>() {
       tails.set(key, tail);
       return result;
     },
+
+    /**
+     * Wait for every in-flight task chain to settle, then clear the queue.
+     * Used during shutdown to ensure queued handlers (e.g. handleProviderEvent)
+     * finish before the persistence layer is closed.
+     */
+    async drain() {
+      if (tails.size === 0) {
+        return;
+      }
+      await Promise.allSettled(Array.from(tails.values()));
+      tails.clear();
+    },
   };
 }

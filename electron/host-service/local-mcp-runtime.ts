@@ -428,6 +428,11 @@ export function setLocalMcpEventListener(
 
 export async function cleanupLocalMcpRuntime() {
   localMcpEventListener = null;
+  // Drain the provider-event queue first — handlers inside it call
+  // store.completeTurn() and queueWorkspaceSessionPersist(), both of which
+  // write to SQLite.  If we close persistence before the queue drains,
+  // those writes either crash or silently lose data.
+  await workspaceProviderEventQueue.drain();
   const pendingPersists = [...workspacePersistChainById.values()];
   workspacePersistChainById.clear();
   await Promise.allSettled(pendingPersists);

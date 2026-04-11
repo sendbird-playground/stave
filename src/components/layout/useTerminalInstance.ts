@@ -348,6 +348,11 @@ export function useTerminalInstance(
     setReady(false);
   }, [clearPendingThemeWork]);
 
+  // Track consecutive successes so the degraded banner can auto-clear once
+  // the renderer stabilises (e.g. resize drag ends and writes start
+  // succeeding again).
+  const consecutiveWriteSuccessRef = useRef(0);
+
   const executeTerminalOperation = useCallback(
     <T>(
       context: string,
@@ -358,9 +363,21 @@ export function useTerminalInstance(
       } = {},
     ) => {
       try {
-        return operation();
+        const result = operation();
+        if (options.countWriteError) {
+          consecutiveWriteSuccessRef.current += 1;
+          // After a streak of successful writes, reset the error count so the
+          // "terminal degraded" banner auto-clears without requiring a manual
+          // renderer restart.
+          if (consecutiveWriteSuccessRef.current >= TERMINAL_WRITE_ERROR_THRESHOLD) {
+            consecutiveWriteSuccessRef.current = 0;
+            setWriteErrorCount(0);
+          }
+        }
+        return result;
       } catch (caughtError) {
         if (options.countWriteError) {
+          consecutiveWriteSuccessRef.current = 0;
           setWriteErrorCount((count) => count + 1);
         }
 
@@ -500,6 +517,7 @@ export function useTerminalInstance(
     setReady(false);
     setError(null);
     setWriteErrorCount(0);
+    consecutiveWriteSuccessRef.current = 0;
 
     const bootstrap = async () => {
       try {
@@ -571,13 +589,30 @@ export function useTerminalInstance(
       fitAddonRef.current = fitAddon;
       themeKeyRef.current = null;
 
+      // Gate ResizeObserver through requestAnimationFrame so resize-heavy
+      // interactions (e.g. dragging the information-panel splitter) produce
+      // at most one measure + emit per frame instead of flooding the main
+      // thread with synchronous fitAddon.proposeDimensions() calls that can
+      // destabilise the WebGL backing store and cascade into write errors →
+      // "terminal degraded" banner.
+      let resizeRafPending = false;
       const resizeObserver =
         typeof ResizeObserver !== "undefined"
           ? new ResizeObserver(() => {
               if (!visibleRef.current || isComposingRef.current) {
                 return;
               }
-              emitResize();
+              if (resizeRafPending) {
+                return;
+              }
+              resizeRafPending = true;
+              requestAnimationFrame(() => {
+                resizeRafPending = false;
+                if (!visibleRef.current || isComposingRef.current) {
+                  return;
+                }
+                emitResize();
+              });
             })
           : null;
       resizeObserver?.observe(container);
