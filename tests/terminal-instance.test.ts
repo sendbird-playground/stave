@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   focusTerminalInstanceSurface,
   isSwallowableTerminalRuntimeError,
+  restoreVisibleTerminalViewport,
 } from "../src/components/layout/useTerminalInstance";
 
 describe("focusTerminalInstanceSurface", () => {
@@ -111,5 +112,68 @@ describe("isSwallowableTerminalRuntimeError", () => {
   test("ignores unrelated failures", () => {
     expect(isSwallowableTerminalRuntimeError(new Error("boom"))).toBe(false);
     expect(isSwallowableTerminalRuntimeError("memory access out of bounds")).toBe(false);
+  });
+});
+
+describe("restoreVisibleTerminalViewport", () => {
+  test("forces a local resize and repaint when the terminal becomes visible again", () => {
+    const resizeCalls: Array<{ cols: number; rows: number }> = [];
+    const backendResizeCalls: Array<{ cols: number; rows: number }> = [];
+    const renderCalls: Array<{ viewportY: number }> = [];
+    const terminal = {
+      resize(cols: number, rows: number) {
+        resizeCalls.push({ cols, rows });
+      },
+      getViewportY() {
+        return 18;
+      },
+      renderer: {
+        render(
+          _wasmTerm: unknown,
+          force: boolean,
+          viewportY: number,
+          receiver: unknown,
+        ) {
+          expect(force).toBe(true);
+          expect(receiver).toBe(terminal);
+          renderCalls.push({ viewportY });
+        },
+      },
+      wasmTerm: { id: "wasm-term" },
+    };
+
+    restoreVisibleTerminalViewport({
+      terminal,
+      proposed: { cols: 120, rows: 40 },
+      notifyResize: (cols, rows) => {
+        backendResizeCalls.push({ cols, rows });
+      },
+    });
+
+    expect(resizeCalls).toEqual([{ cols: 120, rows: 40 }]);
+    expect(backendResizeCalls).toEqual([{ cols: 120, rows: 40 }]);
+    expect(renderCalls).toEqual([{ viewportY: 18 }]);
+  });
+
+  test("still repaints when a resize measurement is unavailable", () => {
+    let rendered = false;
+    const terminal = {
+      resize() {
+        throw new Error("resize should not run without measured dimensions");
+      },
+      getViewportY() {
+        return 4;
+      },
+      renderer: {
+        render() {
+          rendered = true;
+        },
+      },
+      wasmTerm: { id: "wasm-term" },
+    };
+
+    restoreVisibleTerminalViewport({ terminal });
+
+    expect(rendered).toBe(true);
   });
 });
