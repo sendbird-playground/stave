@@ -370,6 +370,8 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("provider:start-push-turn", args),
     readStreamTurn: (args: { streamId: string; cursor: number }) =>
       ipcRenderer.invoke("provider:read-stream-turn", args),
+    ackStreamTurn: (args: { streamId: string; cursor: number }) =>
+      ipcRenderer.invoke("provider:ack-stream-turn", args),
     subscribeStreamEvents: (
       listener: (payload: StreamEventPayload) => void,
     ) => {

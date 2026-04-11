@@ -10,6 +10,7 @@ import {
   ConnectedToolStatusArgsSchema,
   CleanupTaskArgsSchema,
   ProviderCommandCatalogArgsSchema,
+  StreamAckArgsSchema,
   StreamReadArgsSchema,
   StreamTurnArgsSchema,
   SuggestCommitMessageArgsSchema,
@@ -196,6 +197,17 @@ export function registerProviderHandlers() {
       };
     }
     return invokeHostService("provider.read-stream-turn", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:ack-stream-turn", async (_event, args: unknown) => {
+    const parsedArgs = StreamAckArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        message: "Invalid stream ack request.",
+      };
+    }
+    return invokeHostService("provider.ack-stream-turn", parsedArgs.data);
   });
 
   ipcMain.handle("provider:abort-turn", (_event, args: unknown) => {

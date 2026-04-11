@@ -27,8 +27,9 @@ mock.module("../electron/providers/codex-sdk-runtime", () => ({
   cleanupCodexTask: () => {},
   resolveCodexExecutablePath: () => "/tmp/codex",
   streamCodexWithSdk: async (args: { onEvent?: (event: { type: string }) => void }) => {
+    args.onEvent?.({ type: "text", text: "progress" });
     args.onEvent?.({ type: "done" });
-    return [{ type: "done" }];
+    return [{ type: "text", text: "progress" }, { type: "done" }];
   },
 }));
 
@@ -40,8 +41,9 @@ mock.module("../electron/providers/codex-app-server-runtime", () => ({
     tools: [],
   }),
   streamCodexWithAppServer: async (args: { onEvent?: (event: { type: string }) => void }) => {
+    args.onEvent?.({ type: "text", text: "progress" });
     args.onEvent?.({ type: "done" });
-    return [{ type: "done" }];
+    return [{ type: "text", text: "progress" }, { type: "done" }];
   },
 }));
 
@@ -124,9 +126,66 @@ describe("providerRuntime.startTurnStream", () => {
       }),
     ).toEqual({
       ok: true,
-      events: [{ type: "done" }],
-      cursor: 1,
+      events: [{ type: "text", text: "progress" }, { type: "done" }],
+      cursor: 2,
       done: true,
+    });
+
+    expect(
+      providerRuntime.readTurnStream({
+        streamId: started.streamId,
+        cursor: 2,
+      }),
+    ).toEqual({
+      ok: true,
+      events: [],
+      cursor: 2,
+      done: true,
+    });
+
+    expect(
+      providerRuntime.readTurnStream({
+        streamId: started.streamId,
+        cursor: 2,
+      }),
+    ).toEqual({
+      ok: false,
+      events: [],
+      cursor: 2,
+      done: true,
+      message: "Stream session not found.",
+    });
+  });
+
+  test("acknowledges buffered push progress and trims replayed events", async () => {
+    let resolveDone = () => undefined;
+    const donePromise = new Promise<void>((resolve) => {
+      resolveDone = resolve;
+    });
+
+    const started = providerRuntime.startTurnStream(
+      {
+        providerId: "codex",
+        prompt: "smoke",
+      },
+      {
+        bufferEvents: true,
+        onEvent: () => {},
+        onDone: () => {
+          resolveDone();
+        },
+      },
+    );
+
+    await donePromise;
+
+    expect(
+      providerRuntime.ackTurnStream({
+        streamId: started.streamId,
+        cursor: 1,
+      }),
+    ).toEqual({
+      ok: true,
     });
 
     expect(
@@ -135,11 +194,10 @@ describe("providerRuntime.startTurnStream", () => {
         cursor: 1,
       }),
     ).toEqual({
-      ok: false,
-      events: [],
-      cursor: 1,
+      ok: true,
+      events: [{ type: "done" }],
+      cursor: 2,
       done: true,
-      message: "Stream session not found.",
     });
   });
 

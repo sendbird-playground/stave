@@ -55,7 +55,14 @@ type ActiveRuntimeSession = {
 };
 
 const activeSessions = new Map<string, ActiveRuntimeSession>();
-const activeStreams = new Map<string, { events: BridgeEvent[]; done: boolean; updatedAt: number }>();
+type ActiveStreamSession = {
+  events: BridgeEvent[];
+  done: boolean;
+  updatedAt: number;
+  baseCursor: number;
+};
+
+const activeStreams = new Map<string, ActiveStreamSession>();
 const CODEX_LOOKUP_PATHS = [
   `${homedir()}/.bun/bin`,
   `${homedir()}/.local/bin`,
@@ -125,6 +132,23 @@ function pruneExpiredStreams(now = Date.now()) {
       activeStreams.delete(streamId);
     }
   }
+}
+
+function getStreamEndCursor(session: ActiveStreamSession) {
+  return session.baseCursor + session.events.length;
+}
+
+function compactStreamToCursor(session: ActiveStreamSession, cursor: number) {
+  const nextCursor = Math.max(
+    session.baseCursor,
+    Math.min(cursor, getStreamEndCursor(session)),
+  );
+  const dropCount = nextCursor - session.baseCursor;
+  if (dropCount > 0) {
+    session.events.splice(0, dropCount);
+    session.baseCursor = nextCursor;
+  }
+  return nextCursor;
 }
 
 function cleanupProviderTaskState(taskId: string) {
@@ -578,7 +602,12 @@ export const providerRuntime: ProviderRuntime = {
     const streamId = randomUUID();
     const turnId = args.turnId ?? randomUUID();
     const shouldBufferForPolling = options?.bufferEvents ?? !options?.onEvent;
-    const session = { events: [] as BridgeEvent[], done: false, updatedAt: Date.now() };
+    const session: ActiveStreamSession = {
+      events: [],
+      done: false,
+      updatedAt: Date.now(),
+      baseCursor: 0,
+    };
     activeStreams.set(streamId, session);
     upsertActiveSession({
       turnId,
@@ -635,12 +664,21 @@ export const providerRuntime: ProviderRuntime = {
       };
     }
     const safeCursor = Number.isFinite(cursor) ? cursor : 0;
-    const nextCursor = Math.max(0, Math.min(safeCursor, session.events.length));
-    const events = session.events.slice(nextCursor);
+    if (safeCursor < session.baseCursor) {
+      return {
+        ok: false,
+        events: [],
+        cursor: session.baseCursor,
+        done: session.done,
+        message: "Stream cursor is older than the retained replay window.",
+      };
+    }
+    const nextCursor = compactStreamToCursor(session, safeCursor);
+    const events = session.events.slice();
     const outCursor = nextCursor + events.length;
     const done = session.done;
     session.updatedAt = Date.now();
-    if (done && outCursor >= session.events.length) {
+    if (done && session.events.length === 0) {
       activeStreams.delete(streamId);
     }
     return {
@@ -648,6 +686,31 @@ export const providerRuntime: ProviderRuntime = {
       events,
       cursor: outCursor,
       done,
+    };
+  },
+  ackTurnStream: ({ streamId, cursor }) => {
+    pruneExpiredStreams();
+    const session = activeStreams.get(streamId);
+    if (!session) {
+      return {
+        ok: false,
+        message: "Stream session not found.",
+      };
+    }
+    const safeCursor = Number.isFinite(cursor) ? cursor : 0;
+    if (safeCursor < session.baseCursor) {
+      return {
+        ok: false,
+        message: "Stream cursor is older than the retained replay window.",
+      };
+    }
+    compactStreamToCursor(session, safeCursor);
+    session.updatedAt = Date.now();
+    if (session.done && session.events.length === 0) {
+      activeStreams.delete(streamId);
+    }
+    return {
+      ok: true,
     };
   },
   abortTurn: ({ turnId }) => {

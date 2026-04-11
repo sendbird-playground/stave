@@ -709,6 +709,9 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
     case "provider.read-stream-turn":
       await respond(request.id, providerRuntime.readTurnStream(request.params));
       return;
+    case "provider.ack-stream-turn":
+      await respond(request.id, providerRuntime.ackTurnStream(request.params));
+      return;
     case "provider.abort-turn":
       await respond(request.id, providerRuntime.abortTurn(request.params));
       return;
