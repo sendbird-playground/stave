@@ -10,6 +10,7 @@ type PushStreamPayload = {
 const POLLED_STREAM_ACTIVE_DELAY_MS = 80;
 const POLLED_STREAM_IDLE_DELAY_MS = 1000;
 const PUSH_STREAM_FALLBACK_SILENCE_MS = 15_000;
+const PUSH_STREAM_ACK_DELAY_MS = 250;
 
 function hasAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   if (!value || typeof value !== "object") {
@@ -150,6 +151,7 @@ async function* fromPushStream(args: {
   const startPushTurn = window.api?.provider?.startPushTurn;
   const subscribeStreamEvents = window.api?.provider?.subscribeStreamEvents;
   const readStreamTurn = window.api?.provider?.readStreamTurn;
+  const ackStreamTurn = window.api?.provider?.ackStreamTurn;
   if (!startPushTurn || !subscribeStreamEvents) {
     return;
   }
@@ -164,6 +166,10 @@ async function* fromPushStream(args: {
   let doneSequence: number | null = null;
   let pollCursor = 0;
   let switchedToPolling = false;
+  let ackedCursor = 0;
+  let targetAckCursor = 0;
+  let ackHandle: ReturnType<typeof setTimeout> | null = null;
+  let ackInFlight: Promise<void> | null = null;
   let wake: (() => void) | null = null;
   const wakeUp = () => {
     if (!wake) {
@@ -178,6 +184,67 @@ async function* fromPushStream(args: {
     pollCursor += 1;
   };
 
+  const clearAckTimer = () => {
+    if (!ackHandle) {
+      return;
+    }
+    timers.clearTimeout(ackHandle);
+    ackHandle = null;
+  };
+
+  const flushAck = (force = false) => {
+    if (!ackStreamTurn || !targetStreamId) {
+      return Promise.resolve();
+    }
+    targetAckCursor = Math.max(targetAckCursor, pollCursor);
+    if (!force && targetAckCursor <= ackedCursor) {
+      return Promise.resolve();
+    }
+    if (ackInFlight) {
+      return ackInFlight;
+    }
+    const cursorToAck = targetAckCursor;
+    if (cursorToAck <= ackedCursor) {
+      return Promise.resolve();
+    }
+    let delivered = false;
+    ackInFlight = ackStreamTurn({
+      streamId: targetStreamId,
+      cursor: cursorToAck,
+    })
+      .then(() => {
+        delivered = true;
+        ackedCursor = Math.max(ackedCursor, cursorToAck);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        ackInFlight = null;
+        if (delivered && targetAckCursor > ackedCursor) {
+          void flushAck(true);
+        }
+      });
+    return ackInFlight;
+  };
+
+  const scheduleAck = (force = false) => {
+    if (!ackStreamTurn || !targetStreamId) {
+      return;
+    }
+    targetAckCursor = Math.max(targetAckCursor, pollCursor);
+    if (force) {
+      clearAckTimer();
+      void flushAck(true);
+      return;
+    }
+    if (ackHandle) {
+      return;
+    }
+    ackHandle = timers.setTimeout(() => {
+      ackHandle = null;
+      void flushAck();
+    }, PUSH_STREAM_ACK_DELAY_MS);
+  };
+
   const ingestPayload = (payload: PushStreamPayload) => {
     const sequence = payload.sequence;
     if (typeof sequence !== "number" || !Number.isFinite(sequence)) {
@@ -185,6 +252,7 @@ async function* fromPushStream(args: {
       if (payload.done) {
         done = true;
       }
+      scheduleAck(payload.done);
       wakeUp();
       return;
     }
@@ -208,6 +276,7 @@ async function* fromPushStream(args: {
     if (doneSequence !== null && nextSequence > doneSequence) {
       done = true;
     }
+    scheduleAck(done);
     wakeUp();
   };
 
@@ -289,6 +358,10 @@ async function* fromPushStream(args: {
       }
     }
   } finally {
+    clearAckTimer();
+    if (!switchedToPolling) {
+      await flushAck(true);
+    }
     if (!switchedToPolling && done && targetStreamId && readStreamTurn) {
       await readStreamTurn({
         streamId: targetStreamId,

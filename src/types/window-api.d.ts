@@ -85,6 +85,10 @@ interface WindowProviderApi {
     done: boolean;
     message?: string;
   }>;
+  ackStreamTurn?: (args: { streamId: string; cursor: number }) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>;
   subscribeStreamEvents?: (
     listener: (payload: {
       streamId: string;

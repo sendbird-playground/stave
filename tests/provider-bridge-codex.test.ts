@@ -227,4 +227,70 @@ describe("codex provider bridge normalization", () => {
       cursor: 1,
     });
   });
+
+  test("acknowledges consumed push events so host replay can be trimmed", async () => {
+    let listener: ((payload: {
+      streamId: string;
+      event: unknown;
+      sequence: number;
+      done: boolean;
+    }) => void) | null = null;
+    const ackCalls: Array<{ streamId: string; cursor: number }> = [];
+
+    (globalThis as {
+      window: unknown;
+    }).window = {
+      setTimeout: (callback: (...args: unknown[]) => void) => globalThis.setTimeout(callback, 0),
+      clearTimeout: (handle: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(handle),
+      api: {
+        provider: {
+          subscribeStreamEvents: (cb: typeof listener) => {
+            listener = cb;
+            return () => {
+              listener = null;
+            };
+          },
+          startPushTurn: async () => {
+            queueMicrotask(() => {
+              listener?.({
+                streamId: "codex-stream-4",
+                event: { type: "text", text: "push event" },
+                sequence: 1,
+                done: false,
+              });
+              listener?.({
+                streamId: "codex-stream-4",
+                event: { type: "done" },
+                sequence: 2,
+                done: true,
+              });
+            });
+            return { ok: true, streamId: "codex-stream-4", turnId: "turn-4" };
+          },
+          ackStreamTurn: async (args: { streamId: string; cursor: number }) => {
+            ackCalls.push(args);
+            return { ok: true };
+          },
+          readStreamTurn: async (args: { streamId: string; cursor: number }) => ({
+            ok: true,
+            events: [],
+            cursor: args.cursor,
+            done: true,
+          }),
+        },
+      },
+    } as unknown;
+
+    const adapter = getProviderAdapter({ providerId: "codex" });
+    const events: Array<{ type: string; text?: string }> = [];
+    for await (const event of adapter.runTurn({ prompt: "hello" })) {
+      events.push(event as { type: string; text?: string });
+    }
+
+    expect(events).toEqual([
+      { type: "text", text: "push event" },
+      { type: "done" },
+    ]);
+    expect(ackCalls.some((call) => call.streamId === "codex-stream-4" && call.cursor >= 2)).toBe(true);
+  });
 });

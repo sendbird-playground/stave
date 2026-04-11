@@ -1141,6 +1141,13 @@ export const StreamReadArgsSchema = z
   })
   .strict();
 
+export const StreamAckArgsSchema = z
+  .object({
+    streamId: z.string().min(1).max(200),
+    cursor: z.number().int().min(0),
+  })
+  .strict();
+
 export const CleanupTaskArgsSchema = z
   .object({
     taskId: z.string().min(1).max(200),

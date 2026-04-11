@@ -100,6 +100,10 @@ export interface ProviderRuntime {
     done: boolean;
     message?: string;
   };
+  ackTurnStream: (args: { streamId: string; cursor: number }) => {
+    ok: boolean;
+    message?: string;
+  };
   abortTurn: (args: { turnId: string }) => { ok: boolean; message: string };
   cleanupTask: (args: { taskId: string }) => { ok: boolean; message: string };
   respondApproval: (args: { turnId: string; requestId: string; approved: boolean }) => { ok: boolean; message: string };
