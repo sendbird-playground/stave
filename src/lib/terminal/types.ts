@@ -1,4 +1,16 @@
-import type { ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
+import type {
+  ProviderId,
+  ProviderRuntimeOptions,
+} from "@/lib/providers/provider.types";
+
+export type SessionSlotState = "idle" | "running" | "background" | "exited";
+
+export interface SessionSlotStateInfo {
+  state: SessionSlotState;
+  sessionId?: string;
+  exitCode?: number;
+  signal?: number;
+}
 
 export interface WorkspaceTerminalTab {
   id: string;
@@ -21,6 +33,8 @@ export interface WorkspaceCliSessionTab {
   handoffSummary: string;
   cwd: string;
   createdAt: number;
+  lastKnownSlotState?: SessionSlotState;
+  lastExit?: { exitCode: number; signal?: number; at: string };
 }
 
 export type WorkspaceActiveSurface =
@@ -69,7 +83,9 @@ export function getTerminalTabDefaultTitle(args: {
   return segments.at(-1) ?? "Terminal";
 }
 
-export function getCliSessionProviderLabel(providerId: Exclude<ProviderId, "stave">) {
+export function getCliSessionProviderLabel(
+  providerId: Exclude<ProviderId, "stave">,
+) {
   return providerId === "claude-code" ? "Claude" : "Codex";
 }
 
@@ -102,4 +118,12 @@ export function getWorkspaceCliSessionTabKey(args: {
   cliSessionTabId: string;
 }) {
   return `${args.workspaceId}:${args.cliSessionTabId}`;
+}
+
+export function buildTerminalSessionSlotKey(args: {
+  surface: "terminal" | "cli";
+  workspaceId: string;
+  tabId: string;
+}) {
+  return `${args.surface}:${args.workspaceId}:${args.tabId}`;
 }

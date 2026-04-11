@@ -15,14 +15,17 @@ That combination makes terminal bugs easy to reintroduce unless ownership and ve
 
 ## Core Principle
 
-Treat the integrated terminal as a platform boundary with a single runtime adapter and a small number of explicit shell components.
+Treat the integrated terminal as a platform boundary with explicit lifecycle separation between **PTY sessions** (host-service), **I/O transport** (renderer hooks), and **viewport rendering** (Ghostty-web).
 
 In Stave today, that means:
 
-- `usePtySessionSurface.ts` owns runtime behavior
+- `useTerminalSessionManager.ts` owns session lifecycle (attach/detach, create/close) and I/O transport (input flush, output subscription, transcript)
+- `useTerminalTabManager.ts` owns tab mount/unmount decisions and Ghostty instance registry
+- `useTerminalInstance.ts` owns Ghostty-web WASM lifecycle, DOM rendering, resize, and theme sync
 - `TerminalDock.tsx` owns dock chrome
 - `CliSessionPanel.tsx` owns full-panel CLI session chrome
 - `terminal-surface-styles.ts` owns shared shell-to-terminal inset styling
+- `terminal-runtime.ts` (host-service) owns PTY state, slot registry, attach/detach, and output buffering
 
 When that ownership blurs, the same classes of bugs return:
 
@@ -31,46 +34,59 @@ When that ownership blurs, the same classes of bugs return:
 - terminal viewport or scroll position jumps
 - dock and CLI session surfaces drift apart visually
 
+## Session Lifecycle Model
+
+Stave uses a **hybrid keep-alive + attach/detach** session lifecycle:
+
+### Within the same workspace (CLI/Task/tab switches)
+
+- Ghostty instances stay alive (`display:none` when hidden)
+- PTY sessions remain attached and push events continue flowing
+- On visibility restore: forced WebGL re-render + resize sync
+- **No session disposal, no transcript replay needed**
+
+### Across workspace or project switches
+
+- Ghostty instances are disposed (WebGL context limit)
+- PTY sessions are **detached, not killed** (background mode)
+- Host-service buffers output in a bounded ring buffer (32MB)
+- On return: slot state query -> attach -> backlog hydration -> push resume
+- localStorage transcript (2MB) provides pre-detach content; host backlog provides post-detach content
+
+### Session destruction (only these cases)
+
+- Explicit tab close
+- Workspace deletion (`closeSessionsBySlotPrefix`)
+- Project deletion (all workspaces' sessions)
+- App quit (`cleanupAll`)
+
 ## Required Check Files
 
 | File | Why it matters |
 |------|----------------|
-| `src/components/layout/usePtySessionSurface.ts` | Single owner for focus restore, transcript replay, resize, output flow, and session gating |
-| `src/components/layout/pty-session-surface.utils.ts` | Shared pure rules for creation gating and focus fallback |
+| `src/components/layout/useTerminalSessionManager.ts` | Session lifecycle: attach/detach, create/close, slot reconciliation, I/O transport, transcript |
+| `src/components/layout/useTerminalTabManager.ts` | Tab mount/unmount decisions, Ghostty instance registry, status tracking |
+| `src/components/layout/useTerminalInstance.ts` | Ghostty-web WASM init, DOM rendering, resize, theme sync, forced re-render on visibility |
+| `src/components/layout/TerminalTabSurface.tsx` | Bridges useTerminalInstance to useTerminalTabManager per tab |
+| `src/components/layout/pty-session-surface.utils.ts` | Shared pure rules for creation gating |
 | `src/components/layout/terminal-surface-styles.ts` | Shared terminal inset/focus styling so dock and CLI surfaces do not diverge |
 | `src/components/layout/TerminalDock.tsx` | Dock shell, controls, and surface mounting |
 | `src/components/layout/CliSessionPanel.tsx` | CLI shell, controls, and surface mounting |
 | `src/components/layout/app-shell.shortcuts.ts` | Keyboard boundary between app shortcuts and terminal-native shortcuts |
 | `src/store/workspace-session-state.ts` | Workspace restore semantics for active surfaces and shell state |
-| `src/store/app.store.ts` | Terminal and CLI tab lifecycle plus workspace snapshot persistence |
-| `electron/main/ipc/terminal.ts` | Main-process bridge that maps renderer ownership to backend session events |
-| `electron/main/host-service-client.ts` | Child-process bootstrap, RPC routing, and owner-targeted delivery recovery |
-| `electron/host-service/terminal-runtime.ts` | Real PTY session creation, slot reuse, delivery mode, and output buffering |
+| `src/store/app.store.ts` | Terminal and CLI tab lifecycle, workspace snapshot persistence, session cleanup on delete |
+| `src/lib/terminal/types.ts` | Terminal types, slot key builder (`buildTerminalSessionSlotKey`), session slot state |
+| `electron/main/ipc/terminal.ts` | Main-process bridge: IPC handlers, attach registry, push event routing |
+| `electron/host-service/terminal-runtime.ts` | PTY session supervisor: create, attach, detach, close, slot state, background buffer, output bounds |
 | `src/types/window-api.d.ts` | Terminal IPC contract exposed to the renderer |
 
 ## Ownership Rules
 
 ### 1. Keep terminal DOM workarounds in one place
 
-Ghostty-specific DOM behavior such as focus handling, hidden textarea fallback, composition quirks, and resize timing belongs in `usePtySessionSurface.ts` or a helper it owns.
+Ghostty-specific DOM behavior such as focus handling, hidden textarea fallback, composition quirks, and resize timing belongs in `useTerminalInstance.ts` or a helper it owns.
 
 Do not add `querySelector("textarea")`, `contenteditable`, or canvas-child assumptions to shell components or unrelated hooks.
-
-```tsx
-// ❌ DON'T — shell component reaching into Ghostty internals
-function TerminalDock() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const textarea = containerRef.current?.querySelector("textarea");
-    textarea?.focus({ preventScroll: true });
-  }, [activeTabKey]);
-  // ...
-}
-
-// ✅ DO — delegate to the shared focus helper via the adapter hook
-// usePtySessionSurface already calls focusTerminalSurface() internally
-// on tab switch and visibility restore. The shell component does nothing.
-```
 
 ### 2. Keep dock and CLI surface spacing shared
 
@@ -78,100 +94,31 @@ If docked terminal and CLI session surfaces need the same visual inset, focus ri
 
 Do not let the dock use one padding system while the CLI panel uses another.
 
-```tsx
-// ❌ DON'T — hardcoded padding in each shell component
-// TerminalDock.tsx
-<div className="h-full w-full px-4 py-3" />
-// CliSessionPanel.tsx
-<div className="h-full w-full px-5 py-4" />   // drifted!
+### 3. Respect the session lifecycle boundaries
 
-// ✅ DO — single shared class name
-import { TERMINAL_SURFACE_CLASS_NAME } from "./terminal-surface-styles";
-<div className={cn(TERMINAL_SURFACE_CLASS_NAME, !activeTab && "opacity-60")} />
-```
+- **Renderer unmount = detach** (not close). PTY stays alive.
+- **Tab close = close**. Only explicit tab close kills the PTY.
+- **Workspace/project delete = close by prefix**. All sessions for that workspace are killed.
+- **Visibility hide = keep Ghostty alive** (within same workspace). Use `display:none`.
+- **Visibility restore = forced re-render**. Call `renderer.render(wasmTerm, true)` after animation frames.
 
-### 3. Treat switching flows as product-critical
-
-The terminal must behave correctly across:
-
-- task switch
-- workspace switch
-- dock show/hide
-- CLI session tab switch
-- restore from persisted shell state
-
-These are not edge cases. They are the normal usage pattern of the product.
-
-The backend now runs in a dedicated host-service child process. Keep the renderer ownership model exactly the same:
-
-- `usePtySessionSurface.ts` still decides when a surface is visible, ready, and allowed to create or resume a session
-- `electron/main/ipc/terminal.ts` stays a thin bridge
-- `electron/host-service/terminal-runtime.ts` owns PTY state, buffering, slot reuse, and push/poll delivery
-
-Do not move PTY decisions back into Electron main or React shell components.
-
-```tsx
-// ❌ DON'T — focus only reacts to tab change, misses visibility restore
-useEffect(() => {
-  return scheduleTerminalFocus();
-}, [activeTabKey, terminalReady]);
-
-// ✅ DO — separate effect that also fires on visibility change
-useEffect(() => {
-  if (!args.isVisible || !activeTabKey || !terminalReady) return;
-  return scheduleTerminalFocus();
-}, [args.isVisible, activeTabKey, runtimeVersion, terminalReady]);
-```
-
-```tsx
-// ❌ DON'T — create sessions regardless of surface visibility
-useEffect(() => {
-  createSession(activeTabKey);
-}, [activeTabKey]);
-
-// ✅ DO — gate session creation on visibility and workspace presence
-if (!shouldCreatePtySession({ isVisible, workspaceId, hasActiveTab })) return;
-```
+Do not move PTY lifecycle decisions into React shell components.
 
 ### 4. Preserve the shell/runtime split
 
 `TerminalDock.tsx` and `CliSessionPanel.tsx` should describe:
 
-- headers
-- labels
-- buttons
-- badges
-- error banners
-- shell layout
+- headers, labels, buttons, badges, error banners, shell layout
 
-`usePtySessionSurface.ts` should describe:
+`useTerminalSessionManager.ts` should describe:
 
-- when a session exists
-- how it restores
-- where focus goes
-- how output enters the terminal
-- how resize and scroll restoration work
+- when a session exists, how it attaches/detaches, how output enters the terminal, how input is flushed
+
+`useTerminalInstance.ts` should describe:
+
+- Ghostty WASM init, resize, theme sync, focus, re-render on visibility
 
 When shell components start owning runtime behavior, regressions spread faster.
-
-```tsx
-// ❌ DON'T — shell component managing session lifecycle
-function TerminalDock() {
-  useEffect(() => {
-    window.api.terminal.createSession({ cols, rows }).then((res) => {
-      sessionIdRef.current = res.sessionId;
-    });
-  }, [activeTab]);
-}
-
-// ✅ DO — shell component delegates to the adapter hook
-function TerminalDock() {
-  const { containerRef, clearActiveTranscript } = usePtySessionSurface({
-    // ... declarative config only
-  });
-  // shell only renders chrome around containerRef
-}
-```
 
 ### 5. Keep terminal keyboard boundaries explicit
 
@@ -181,42 +128,15 @@ App shortcuts and shell shortcuts compete for the same key events. Any terminal 
 - app-level modifier shortcuts still work where intended
 - editable vs terminal vs app-shell boundaries remain clear
 
-```tsx
-// ❌ DON'T — global shortcut handler that swallows Ctrl+C unconditionally
-function handleKeyDown(e: KeyboardEvent) {
-  if (e.ctrlKey && e.key === "c") {
-    e.preventDefault();
-    copyToClipboard();
-  }
-}
-
-// ✅ DO — check whether the terminal surface is focused first
-function handleKeyDown(e: KeyboardEvent) {
-  if (isTerminalSurfaceFocused()) return; // let PTY handle it
-  if (e.ctrlKey && e.key === "c") {
-    e.preventDefault();
-    copyToClipboard();
-  }
-}
-```
-
 ### 6. Avoid broad terminal subscriptions
 
 Terminal UI is a hot render surface. Widening a Zustand selector around terminal state causes unnecessary rerenders that can destabilize focus and viewport behavior.
 
-```tsx
-// ❌ DON'T — subscribe to the entire workspace slice
-const workspace = useAppStore((s) => s.workspaces.find((w) => w.id === id));
-// every workspace field change rerenders the terminal surface
+### 7. Use shared helpers for slot keys and batch operations
 
-// ✅ DO — narrow selector with useShallow
-const { terminalTabs, activeTerminalTabId } = useAppStore(
-  useShallow((s) => ({
-    terminalTabs: s.terminalTabsByWorkspaceId[id] ?? [],
-    activeTerminalTabId: s.activeTerminalTabIdByWorkspaceId[id],
-  })),
-);
-```
+Slot key format (`surface:workspaceId:tabId`) is defined once in `buildTerminalSessionSlotKey` in `src/lib/terminal/types.ts`. Do not hardcode the format elsewhere.
+
+Batch session operations (close, detach) use the `batchSessionOp` factory in `useTerminalSessionManager.ts`. Do not duplicate the pattern.
 
 ## Verification Matrix
 
@@ -236,38 +156,32 @@ These should cover:
 - focus fallback order
 - dock auto-create rules
 - slot reuse and cleanup semantics
-
-### Playwright smoke coverage
-
-Use `tests/e2e/` for browser-level shell regressions that are still worth catching cheaply:
-
-- terminal dock opens from workspace chrome
-- terminal surface mounts inside the shell
-- workspace chrome remains stable with terminal visible
-- controls for docked terminal shell are present
-
-If a change alters visible terminal shell behavior, add or update a Playwright smoke.
+- attach/detach state transitions
 
 ### Manual desktop smoke
 
 If a change touches real PTY input, focus restore, Electron IPC wiring, or workspace/session restore behavior, run a manual desktop smoke check:
 
-1. Open the docked terminal and type.
-2. Open a CLI session and type.
-3. Switch to another task or workspace and back.
-4. Confirm typing still works.
-5. Confirm no duplicate session appears.
-6. Confirm dock and CLI spacing still match the intended shell inset.
-7. Confirm the host-service child still starts and exits cleanly when the desktop app launches and quits.
+1. Open a CLI session and type `ls`.
+2. Switch to a Task in the same workspace and back. Confirm instant restore, no flicker.
+3. Switch to another workspace and back. Confirm content restored via backlog.
+4. Switch to another project and back. Confirm PTY still alive, content restored.
+5. Close a CLI session tab. Confirm PTY is killed (not just detached).
+6. Delete a workspace. Confirm all its terminal sessions are killed.
+7. Confirm no duplicate sessions appear.
+8. Confirm dock and CLI spacing still match the intended shell inset.
 
 ## Review Checklist
 
 Before shipping a terminal change, ask:
 
-- Is `usePtySessionSurface.ts` still the only place that knows terminal internals?
+- Is session lifecycle (attach/detach/create/close) still in `useTerminalSessionManager.ts`?
+- Is Ghostty DOM behavior still in `useTerminalInstance.ts`?
 - Did docked terminal and CLI session spacing stay shared?
-- Does a hidden surface avoid creating a session?
-- Does a visible surface restore focus deterministically?
+- Does a hidden surface avoid creating a NEW session (but keep existing ones alive)?
+- Does visibility restore trigger a forced WebGL re-render?
+- Does unmount call detach (not close)?
+- Are slot key strings using `buildTerminalSessionSlotKey` (not hardcoded)?
 - Did a store selector widen unnecessarily around the terminal subtree?
 - Did I verify both shell layout and actual input behavior?
 
@@ -278,3 +192,4 @@ If any answer is unclear, the change is not done.
 - [Integrated Terminal](../features/integrated-terminal.md)
 - [Developer Diagnostics](diagnostics.md)
 - [Zustand Selector Stability](zustand-selector-stability.md)
+- [Provider Session Stability](provider-session-stability.md)

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { FitAddon, Terminal, init as initGhosttyWasm } from "ghostty-web";
 
 const AUTO_FOCUS_MAX_ATTEMPTS = 60;
@@ -65,10 +72,13 @@ function focusAndVerify(args: {
     return true;
   }
 
-  return activeElement === args.target || isFocusInsideContainer({
-    container: args.container,
-    activeElement,
-  });
+  return (
+    activeElement === args.target ||
+    isFocusInsideContainer({
+      container: args.container,
+      activeElement,
+    })
+  );
 }
 
 export function focusTerminalInstanceSurface(args: {
@@ -76,44 +86,45 @@ export function focusTerminalInstanceSurface(args: {
   container?: QueryableContainer | null;
   getActiveElement?: () => unknown;
 }) {
-  if (
-    args.terminal
-    && typeof args.terminal.focus === "function"
-  ) {
-    if (focusAndVerify({
-      target: args.terminal,
-      container: args.container,
-      getActiveElement: args.getActiveElement,
-    })) {
+  if (args.terminal && typeof args.terminal.focus === "function") {
+    if (
+      focusAndVerify({
+        target: args.terminal,
+        container: args.container,
+        getActiveElement: args.getActiveElement,
+      })
+    ) {
       return true;
     }
   }
 
   const textarea = args.container?.querySelector?.("textarea");
   if (
-    textarea
-    && typeof (textarea as FocusableTarget | null | undefined)?.focus === "function"
+    textarea &&
+    typeof (textarea as FocusableTarget | null | undefined)?.focus ===
+      "function"
   ) {
-    if (focusAndVerify({
-      target: textarea as FocusableTarget,
-      focusOptions: { preventScroll: true },
-      container: args.container,
-      getActiveElement: args.getActiveElement,
-    })) {
+    if (
+      focusAndVerify({
+        target: textarea as FocusableTarget,
+        focusOptions: { preventScroll: true },
+        container: args.container,
+        getActiveElement: args.getActiveElement,
+      })
+    ) {
       return true;
     }
   }
 
-  if (
-    args.container
-    && typeof args.container.focus === "function"
-  ) {
-    if (focusAndVerify({
-      target: args.container,
-      focusOptions: { preventScroll: true },
-      container: args.container,
-      getActiveElement: args.getActiveElement,
-    })) {
+  if (args.container && typeof args.container.focus === "function") {
+    if (
+      focusAndVerify({
+        target: args.container,
+        focusOptions: { preventScroll: true },
+        container: args.container,
+        getActiveElement: args.getActiveElement,
+      })
+    ) {
       return true;
     }
   }
@@ -122,7 +133,9 @@ export function focusTerminalInstanceSurface(args: {
 }
 
 export function isSwallowableTerminalRuntimeError(error: unknown) {
-  return error instanceof Error && /memory access out of bounds/i.test(error.message);
+  return (
+    error instanceof Error && /memory access out of bounds/i.test(error.message)
+  );
 }
 
 function waitForAnimationFrames(count: number) {
@@ -218,7 +231,7 @@ export interface TerminalInstanceController {
   write: (data: string) => void;
   writeln: (data: string) => void;
   resize: (cols: number, rows: number) => void;
-  focus: () => (() => void);
+  focus: () => () => void;
   proposeDimensions: () => { cols: number; rows: number } | undefined;
   getSize: () => { cols: number; rows: number };
 }
@@ -243,7 +256,9 @@ export interface UseTerminalInstanceReturn {
   revision: number;
 }
 
-export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalInstanceReturn {
+export function useTerminalInstance(
+  args: UseTerminalInstanceArgs,
+): UseTerminalInstanceReturn {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const cleanupRef = useRef<() => void>(() => {});
@@ -293,31 +308,39 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
     setReady(false);
   }, [clearPendingThemeWork]);
 
-  const executeTerminalOperation = useCallback(<T,>(
-    context: string,
-    operation: () => T,
-    options: {
-      countWriteError?: boolean;
-      message?: string;
-    } = {},
-  ) => {
-    try {
-      return operation();
-    } catch (caughtError) {
-      if (options.countWriteError) {
-        setWriteErrorCount((count) => count + 1);
-      }
+  const executeTerminalOperation = useCallback(
+    <T>(
+      context: string,
+      operation: () => T,
+      options: {
+        countWriteError?: boolean;
+        message?: string;
+      } = {},
+    ) => {
+      try {
+        return operation();
+      } catch (caughtError) {
+        if (options.countWriteError) {
+          setWriteErrorCount((count) => count + 1);
+        }
 
-      if (isSwallowableTerminalRuntimeError(caughtError)) {
-        console.warn(`[terminal] ${context} (swallowed)`, caughtError);
+        if (isSwallowableTerminalRuntimeError(caughtError)) {
+          console.warn(`[terminal] ${context} (swallowed)`, caughtError);
+          return undefined;
+        }
+
+        console.error(`[terminal] ${context}`, caughtError);
+        setError(
+          describeTerminalError(
+            caughtError,
+            options.message ?? "Terminal renderer failed.",
+          ),
+        );
         return undefined;
       }
-
-      console.error(`[terminal] ${context}`, caughtError);
-      setError(describeTerminalError(caughtError, options.message ?? "Terminal renderer failed."));
-      return undefined;
-    }
-  }, []);
+    },
+    [],
+  );
 
   const measureProposedDimensions = useCallback(() => {
     const fitAddon = fitAddonRef.current;
@@ -355,34 +378,44 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
     onResizeRef.current(proposed.cols, proposed.rows);
   }, [measureProposedDimensions]);
 
-  const syncTerminalTheme = useCallback((force = false) => {
-    const terminal = terminalRef.current;
-    if (!terminal || typeof document === "undefined") {
-      return;
-    }
+  const syncTerminalTheme = useCallback(
+    (force = false) => {
+      const terminal = terminalRef.current;
+      if (!terminal || typeof document === "undefined") {
+        return;
+      }
 
-    const theme = resolveTerminalTheme();
-    const themeKey = getResolvedTerminalThemeKey(theme);
-    if (!force && themeKeyRef.current === themeKey) {
-      return;
-    }
+      const theme = resolveTerminalTheme();
+      const themeKey = getResolvedTerminalThemeKey(theme);
+      if (!force && themeKeyRef.current === themeKey) {
+        return;
+      }
 
-    themeKeyRef.current = themeKey;
-    executeTerminalOperation("sync-terminal-theme", () => {
-      applyTerminalTheme({ terminal, theme });
-    }, { message: "Failed to apply terminal theme." });
-  }, [executeTerminalOperation]);
+      themeKeyRef.current = themeKey;
+      executeTerminalOperation(
+        "sync-terminal-theme",
+        () => {
+          applyTerminalTheme({ terminal, theme });
+        },
+        { message: "Failed to apply terminal theme." },
+      );
+    },
+    [executeTerminalOperation],
+  );
 
-  const scheduleTerminalThemeSync = useCallback((force = false) => {
-    if (themeSyncFrameRef.current !== null) {
-      window.cancelAnimationFrame(themeSyncFrameRef.current);
-    }
+  const scheduleTerminalThemeSync = useCallback(
+    (force = false) => {
+      if (themeSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(themeSyncFrameRef.current);
+      }
 
-    themeSyncFrameRef.current = window.requestAnimationFrame(() => {
-      themeSyncFrameRef.current = null;
-      syncTerminalTheme(force);
-    });
-  }, [syncTerminalTheme]);
+      themeSyncFrameRef.current = window.requestAnimationFrame(() => {
+        themeSyncFrameRef.current = null;
+        syncTerminalTheme(force);
+      });
+    },
+    [syncTerminalTheme],
+  );
 
   const focus = useCallback(() => {
     let cancelled = false;
@@ -433,7 +466,12 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
         await ensureGhosttyWasm();
       } catch (caughtError) {
         if (!cancelled) {
-          setError(describeTerminalError(caughtError, "Failed to load terminal renderer."));
+          setError(
+            describeTerminalError(
+              caughtError,
+              "Failed to load terminal renderer.",
+            ),
+          );
         }
         return;
       }
@@ -479,7 +517,12 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
           // Ignore best-effort cleanup after failed bootstrap.
         }
         if (!cancelled) {
-          setError(describeTerminalError(caughtError, "Failed to initialize terminal renderer."));
+          setError(
+            describeTerminalError(
+              caughtError,
+              "Failed to initialize terminal renderer.",
+            ),
+          );
         }
         return;
       }
@@ -488,14 +531,15 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
       fitAddonRef.current = fitAddon;
       themeKeyRef.current = null;
 
-      const resizeObserver = typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => {
-            if (!visibleRef.current || isComposingRef.current) {
-              return;
-            }
-            emitResize();
-          })
-        : null;
+      const resizeObserver =
+        typeof ResizeObserver !== "undefined"
+          ? new ResizeObserver(() => {
+              if (!visibleRef.current || isComposingRef.current) {
+                return;
+              }
+              emitResize();
+            })
+          : null;
       resizeObserver?.observe(container);
 
       const dataDisposable = terminal.onData((input) => {
@@ -507,7 +551,10 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
       };
       const onFocusOut = (event: FocusEvent) => {
         const relatedTarget = event.relatedTarget;
-        if (relatedTarget instanceof Node && container.contains(relatedTarget)) {
+        if (
+          relatedTarget instanceof Node &&
+          container.contains(relatedTarget)
+        ) {
           return;
         }
         terminal.options.cursorBlink = false;
@@ -535,9 +582,13 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
 
       const proposed = measureProposedDimensions();
       if (proposed) {
-        executeTerminalOperation("resize-terminal-on-bootstrap", () => {
-          terminal.resize(proposed.cols, proposed.rows);
-        }, { message: "Failed to size terminal renderer." });
+        executeTerminalOperation(
+          "resize-terminal-on-bootstrap",
+          () => {
+            terminal.resize(proposed.cols, proposed.rows);
+          },
+          { message: "Failed to size terminal renderer." },
+        );
         onResizeRef.current(proposed.cols, proposed.rows);
       }
 
@@ -579,18 +630,28 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
   ]);
 
   useEffect(() => {
-    if (!args.enabled || typeof MutationObserver === "undefined" || typeof document === "undefined") {
+    if (
+      !args.enabled ||
+      typeof MutationObserver === "undefined" ||
+      typeof document === "undefined"
+    ) {
       return;
     }
 
-    const themeStyleIds = new Set(["stave-custom-theme", "stave-theme-overrides"]);
+    const themeStyleIds = new Set([
+      "stave-custom-theme",
+      "stave-theme-overrides",
+    ]);
     const isTrackedThemeNode = (node: Node | null) => {
       if (!node) {
         return false;
       }
 
       if (node instanceof Element) {
-        return themeStyleIds.has(node.id) || themeStyleIds.has(node.parentElement?.id ?? "");
+        return (
+          themeStyleIds.has(node.id) ||
+          themeStyleIds.has(node.parentElement?.id ?? "")
+        );
       }
 
       return themeStyleIds.has(node.parentElement?.id ?? "");
@@ -606,7 +667,9 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
           return true;
         }
 
-        return [...record.addedNodes, ...record.removedNodes].some(isTrackedThemeNode);
+        return [...record.addedNodes, ...record.removedNodes].some(
+          isTrackedThemeNode,
+        );
       });
 
       if (shouldSync) {
@@ -651,6 +714,16 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
         return;
       }
       emitResize();
+
+      const terminal = terminalRef.current;
+      if (terminal?.renderer && terminal?.wasmTerm) {
+        terminal.renderer.render(
+          terminal.wasmTerm,
+          true,
+          terminal.getViewportY(),
+          terminal,
+        );
+      }
     })();
 
     return () => {
@@ -662,69 +735,89 @@ export function useTerminalInstance(args: UseTerminalInstanceArgs): UseTerminalI
     if (args.visible) {
       return;
     }
-    terminalRef.current?.options && (terminalRef.current.options.cursorBlink = false);
+    terminalRef.current?.options &&
+      (terminalRef.current.options.cursorBlink = false);
   }, [args.visible]);
 
-  const controller = useMemo<TerminalInstanceController>(() => ({
-    get terminal() {
-      return terminalRef.current;
-    },
-    get fitAddon() {
-      return fitAddonRef.current;
-    },
-    clear() {
-      executeTerminalOperation("clear-terminal", () => {
-        terminalRef.current?.clear();
-      }, { message: "Failed to clear terminal renderer." });
-    },
-    write(data: string) {
-      if (!data) {
-        return;
-      }
-      executeTerminalOperation("write-terminal-output", () => {
-        if (!terminalRef.current) {
+  const controller = useMemo<TerminalInstanceController>(
+    () => ({
+      get terminal() {
+        return terminalRef.current;
+      },
+      get fitAddon() {
+        return fitAddonRef.current;
+      },
+      clear() {
+        executeTerminalOperation(
+          "clear-terminal",
+          () => {
+            terminalRef.current?.clear();
+          },
+          { message: "Failed to clear terminal renderer." },
+        );
+      },
+      write(data: string) {
+        if (!data) {
           return;
         }
-        writePreservingScroll({
-          terminal: terminalRef.current,
-          data,
-        });
-      }, {
-        countWriteError: true,
-        message: "Failed to render terminal output.",
-      });
-    },
-    writeln(data: string) {
-      executeTerminalOperation("write-terminal-line", () => {
-        if (!terminalRef.current) {
-          return;
-        }
-        writePreservingScroll({
-          terminal: terminalRef.current,
-          data,
-          appendNewline: true,
-        });
-      }, {
-        countWriteError: true,
-        message: "Failed to render terminal output.",
-      });
-    },
-    resize(cols: number, rows: number) {
-      executeTerminalOperation("resize-terminal", () => {
-        terminalRef.current?.resize(cols, rows);
-      }, { message: "Failed to resize terminal renderer." });
-    },
-    focus,
-    proposeDimensions() {
-      return measureProposedDimensions();
-    },
-    getSize() {
-      return {
-        cols: terminalRef.current?.cols ?? 0,
-        rows: terminalRef.current?.rows ?? 0,
-      };
-    },
-  }), [executeTerminalOperation, focus, measureProposedDimensions]);
+        executeTerminalOperation(
+          "write-terminal-output",
+          () => {
+            if (!terminalRef.current) {
+              return;
+            }
+            writePreservingScroll({
+              terminal: terminalRef.current,
+              data,
+            });
+          },
+          {
+            countWriteError: true,
+            message: "Failed to render terminal output.",
+          },
+        );
+      },
+      writeln(data: string) {
+        executeTerminalOperation(
+          "write-terminal-line",
+          () => {
+            if (!terminalRef.current) {
+              return;
+            }
+            writePreservingScroll({
+              terminal: terminalRef.current,
+              data,
+              appendNewline: true,
+            });
+          },
+          {
+            countWriteError: true,
+            message: "Failed to render terminal output.",
+          },
+        );
+      },
+      resize(cols: number, rows: number) {
+        executeTerminalOperation(
+          "resize-terminal",
+          () => {
+            terminalRef.current?.resize(cols, rows);
+          },
+          { message: "Failed to resize terminal renderer." },
+        );
+      },
+      focus,
+      proposeDimensions() {
+        return measureProposedDimensions();
+      },
+      getSize() {
+        return {
+          cols: terminalRef.current?.cols ?? 0,
+          rows: terminalRef.current?.rows ?? 0,
+        };
+      },
+    }),
+    [executeTerminalOperation, focus, measureProposedDimensions],
+  );
 
   return {
     controller,

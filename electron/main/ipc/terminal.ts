@@ -1,12 +1,12 @@
 import { ipcMain, webContents } from "electron";
 import {
   CliSessionCreateSessionArgsSchema,
+  TerminalAttachSessionArgsSchema,
   TerminalCreateSessionArgsSchema,
+  TerminalDetachSessionArgsSchema,
+  TerminalGetSlotStateArgsSchema,
 } from "./schemas";
-import {
-  invokeHostService,
-  onHostServiceEvent,
-} from "../host-service-client";
+import { invokeHostService, onHostServiceEvent } from "../host-service-client";
 import { runCommand } from "../utils/command";
 
 const terminalOwnerWebContentsIdBySessionId = new Map<string, number>();
@@ -40,7 +40,10 @@ function registerTerminalEventBridge() {
           }),
         )
         .catch((error) => {
-          console.error("[terminal] failed to fall back to poll delivery", error);
+          console.error(
+            "[terminal] failed to fall back to poll delivery",
+            error,
+          );
         });
       return;
     }
@@ -150,7 +153,10 @@ export function registerTerminalHandlers() {
 
   ipcMain.handle(
     "terminal:set-session-delivery-mode",
-    async (event, args: { sessionId: string; deliveryMode: "poll" | "push" }) => {
+    async (
+      event,
+      args: { sessionId: string; deliveryMode: "poll" | "push" },
+    ) => {
       const result = await invokeHostService(
         "terminal.set-session-delivery-mode",
         args,
@@ -178,6 +184,70 @@ export function registerTerminalHandlers() {
     async (_event, args: { sessionId: string }) => {
       terminalOwnerWebContentsIdBySessionId.delete(args.sessionId);
       return invokeHostService("terminal.close-session", args);
+    },
+  );
+
+  ipcMain.handle("terminal:attach-session", async (event, args) => {
+    const parsed = TerminalAttachSessionArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        stderr: parsed.error.flatten().formErrors.join("\n"),
+      };
+    }
+
+    const result = await invokeHostService(
+      "terminal.attach-session",
+      parsed.data,
+    );
+    if (result.ok) {
+      syncTerminalSessionOwner({
+        sessionId: parsed.data.sessionId,
+        deliveryMode: parsed.data.deliveryMode,
+        ownerWebContentsId:
+          parsed.data.deliveryMode === "push" ? event.sender.id : null,
+      });
+    }
+    return result;
+  });
+
+  ipcMain.handle("terminal:detach-session", async (_event, args) => {
+    const parsed = TerminalDetachSessionArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        stderr: parsed.error.flatten().formErrors.join("\n"),
+      };
+    }
+
+    const result = await invokeHostService(
+      "terminal.detach-session",
+      parsed.data,
+    );
+    if (result.ok) {
+      terminalOwnerWebContentsIdBySessionId.delete(parsed.data.sessionId);
+    }
+    return result;
+  });
+
+  ipcMain.handle("terminal:get-slot-state", async (_event, args) => {
+    const parsed = TerminalGetSlotStateArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return {
+        state: "idle" as const,
+      };
+    }
+
+    return invokeHostService("terminal.get-slot-state", parsed.data);
+  });
+
+  ipcMain.handle(
+    "terminal:close-sessions-by-slot-prefix",
+    async (_event, args: { prefix: string }) => {
+      if (!args.prefix || args.prefix.length > 600) {
+        return { ok: true, closedCount: 0 };
+      }
+      return invokeHostService("terminal.close-sessions-by-slot-prefix", args);
     },
   );
 }

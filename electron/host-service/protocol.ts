@@ -32,10 +32,7 @@ import type {
   ToolingStatusRequest,
   ToolingStatusSnapshot,
 } from "../../src/lib/tooling-status";
-import type {
-  CommandResult,
-  SourceControlStatusItem,
-} from "../main/types";
+import type { CommandResult, SourceControlStatusItem } from "../main/types";
 import type { WorkspaceInformationState } from "../../src/lib/workspace-information";
 
 export interface HostWorkspaceScriptRunEntryArgs {
@@ -97,14 +94,26 @@ export interface HostTerminalMutationResult {
   stderr?: string;
 }
 
+export interface HostTerminalAttachSessionResult {
+  ok: boolean;
+  backlog?: string;
+  stderr?: string;
+}
+
+export interface HostTerminalSlotStateResult {
+  state: "idle" | "running" | "background" | "exited";
+  sessionId?: string;
+  exitCode?: number;
+  signal?: number;
+}
+
 export interface HostProviderStartStreamResult {
   ok: boolean;
   streamId: string;
   message?: string;
 }
 
-export interface HostProviderStartPushTurnResult
-  extends HostProviderStartStreamResult {
+export interface HostProviderStartPushTurnResult extends HostProviderStartStreamResult {
   turnId: string | null;
 }
 
@@ -279,6 +288,19 @@ export interface HostServiceRequestMap {
     sessionId: string;
     output: string;
   };
+  "terminal.attach-session": {
+    sessionId: string;
+    deliveryMode: "poll" | "push";
+  };
+  "terminal.detach-session": {
+    sessionId: string;
+  };
+  "terminal.get-slot-state": {
+    slotKey: string;
+  };
+  "terminal.close-sessions-by-slot-prefix": {
+    prefix: string;
+  };
   "terminal.cleanup-all": undefined;
   "workspace-scripts.run-entry": HostWorkspaceScriptRunEntryArgs;
   "workspace-scripts.run-hook": HostWorkspaceScriptRunHookArgs;
@@ -444,6 +466,13 @@ export interface HostServiceResponseMap {
   "terminal.resize-session": HostTerminalMutationResult;
   "terminal.close-session": HostTerminalMutationResult;
   "terminal.buffer-session-output": HostTerminalMutationResult;
+  "terminal.attach-session": HostTerminalAttachSessionResult;
+  "terminal.detach-session": HostTerminalMutationResult;
+  "terminal.get-slot-state": HostTerminalSlotStateResult;
+  "terminal.close-sessions-by-slot-prefix": {
+    ok: true;
+    closedCount: number;
+  };
   "terminal.cleanup-all": {
     ok: true;
   };
@@ -501,14 +530,18 @@ export interface HostServiceResponseMap {
   "scm.cherry-pick": CommandResult;
   "scm.get-pr-status": HostScmPrStatusResult;
   "scm.get-pr-status-for-url": HostScmPrStatusResult;
-  "scm.set-pr-ready": CommandResult | {
-    ok: false;
-    stderr: string;
-  };
-  "scm.merge-pr": CommandResult | {
-    ok: false;
-    stderr: string;
-  };
+  "scm.set-pr-ready":
+    | CommandResult
+    | {
+        ok: false;
+        stderr: string;
+      };
+  "scm.merge-pr":
+    | CommandResult
+    | {
+        ok: false;
+        stderr: string;
+      };
   "scm.update-pr-branch": CommandResult;
   "scm.create-pr": HostScmCreatePrResult;
   "local-mcp.invoke": unknown;

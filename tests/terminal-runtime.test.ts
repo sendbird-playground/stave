@@ -109,3 +109,120 @@ describe("terminal runtime PTY cleanup", () => {
     expect(emitted).toEqual([]);
   });
 });
+
+describe("terminal runtime slot lifecycle", () => {
+  test("reuses the existing PTY for the same terminal slot", () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const args = {
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push" as const,
+    };
+
+    const first = runtime.createSession(args);
+    const second = runtime.createSession(args);
+
+    expect(first.ok).toBe(true);
+    expect(second).toEqual({
+      ok: true,
+      sessionId: first.sessionId,
+    });
+    expect(fakePtys).toHaveLength(1);
+  });
+
+  test("restores detached terminal backlog when the same slot reattaches", () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    expect(created.ok).toBe(true);
+    const sessionId = created.sessionId!;
+    const slotKey = "terminal:workspace-1:tab-1";
+    const fake = fakePtys[0]!;
+
+    expect(runtime.detachSession({ sessionId })).toEqual({ ok: true });
+
+    fake.fireData("while detached\r\n");
+
+    expect(runtime.getSlotState({ slotKey })).toEqual({
+      state: "background",
+      sessionId,
+    });
+    expect(
+      runtime.attachSession({ sessionId, deliveryMode: "push" }),
+    ).toEqual({
+      ok: true,
+      backlog: "while detached\r\n",
+    });
+    expect(runtime.getSlotState({ slotKey })).toEqual({
+      state: "running",
+      sessionId,
+    });
+  });
+
+  test("preserves exited slot state for background sessions until the slot is recreated", () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    expect(created.ok).toBe(true);
+    const sessionId = created.sessionId!;
+    const slotKey = "terminal:workspace-1:tab-1";
+    const fake = fakePtys[0]!;
+
+    expect(runtime.detachSession({ sessionId })).toEqual({ ok: true });
+
+    fake.fireExit({ exitCode: 0 });
+
+    expect(runtime.getSlotState({ slotKey })).toEqual({
+      state: "exited",
+      exitCode: 0,
+      signal: undefined,
+    });
+
+    const recreated = runtime.createSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    expect(recreated.ok).toBe(true);
+    expect(recreated.sessionId).not.toBe(sessionId);
+    expect(fakePtys).toHaveLength(2);
+    expect(runtime.getSlotState({ slotKey })).toEqual({
+      state: "running",
+      sessionId: recreated.sessionId,
+    });
+  });
+});
