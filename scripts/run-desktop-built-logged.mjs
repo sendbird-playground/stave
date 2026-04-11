@@ -17,6 +17,19 @@ function resolveLocalBin(name) {
   return path.join(repoRoot, "node_modules", ".bin", binaryName);
 }
 
+export function resolveDesktopPackagingCommand(args = {}) {
+  if (!shouldRunPackagedDesktopApp({ platform: args.platform })) {
+    return null;
+  }
+
+  return {
+    command: args.command ?? resolveLocalBin("electron-builder"),
+    args: ["--config", "electron-builder.yml", "--dir"],
+    cwd: repoRoot,
+    env: args.env ?? process.env,
+  };
+}
+
 export function resolveDesktopBuiltLogDir(args = {}) {
   return args.logDir ?? path.join(tmpdir(), "stave-logs");
 }
@@ -92,10 +105,10 @@ function resolveDesktopRuntimeCommand() {
   };
 }
 
-function spawnLoggedDesktopApp(args) {
+function spawnLoggedCommand(args) {
   return new Promise((resolve, reject) => {
     const child = spawn(args.command, args.args, {
-      cwd: repoRoot,
+      cwd: args.cwd ?? repoRoot,
       env: args.env,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -130,6 +143,21 @@ function spawnLoggedDesktopApp(args) {
   });
 }
 
+async function packageDesktopAppIfNeeded(args) {
+  const packagingCommand = resolveDesktopPackagingCommand();
+  if (!packagingCommand) {
+    return;
+  }
+
+  process.stderr.write(
+    "[desktop:built:logged] packaging release bundle under release/\n",
+  );
+  await spawnLoggedCommand({
+    ...packagingCommand,
+    logStream: args.logStream,
+  });
+}
+
 async function main() {
   rotateDesktopBuiltLogs();
   const logPath = createDesktopBuiltLogPath();
@@ -138,8 +166,9 @@ async function main() {
   process.stderr.write(`[desktop:built:logged] writing log to ${logPath}\n`);
 
   try {
+    await packageDesktopAppIfNeeded({ logStream });
     const runtime = resolveDesktopRuntimeCommand();
-    await spawnLoggedDesktopApp({
+    await spawnLoggedCommand({
       ...runtime,
       logStream,
     });

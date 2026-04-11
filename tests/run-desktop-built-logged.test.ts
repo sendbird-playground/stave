@@ -4,6 +4,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import {
   createDesktopBuiltLogPath,
+  resolveDesktopPackagingCommand,
   resolveDesktopBuiltLogDir,
   rotateDesktopBuiltLogs,
 } from "../scripts/run-desktop-built-logged.mjs";
@@ -23,6 +24,19 @@ afterEach(() => {
 });
 
 describe("run-desktop-built-logged helpers", () => {
+  test("packages a fresh release bundle before running on macOS", () => {
+    const command = resolveDesktopPackagingCommand({ platform: "darwin" });
+
+    expect(command).not.toBeNull();
+    expect(command?.command).toContain("electron-builder");
+    expect(command?.args).toEqual(["--config", "electron-builder.yml", "--dir"]);
+  });
+
+  test("skips the packaging step outside macOS", () => {
+    expect(resolveDesktopPackagingCommand({ platform: "linux" })).toBeNull();
+    expect(resolveDesktopPackagingCommand({ platform: "win32" })).toBeNull();
+  });
+
   test("resolves the default log directory under the OS temp folder", () => {
     expect(resolveDesktopBuiltLogDir()).toBe(path.join(tmpdir(), "stave-logs"));
   });

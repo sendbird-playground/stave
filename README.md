@@ -143,18 +143,25 @@ bun run dev:desktop:poll
 - `bun run test:ci`
 - `bun run build`
 - `bun run build:desktop`
-- `bun run package:desktop`
-- `bun run run:desktop:built`
+- `bun run package:desktop:dir`
+- `bun run run:desktop:packaged`
+- `bun run run:desktop:packaged:logged`
 - `bun run package:linux:dir`
 - `bun run package:linux:appimage`
 - `bun run package:linux:deb`
+
+Legacy aliases kept for compatibility:
+
+- `bun run package:desktop` → `bun run package:desktop:dir`
+- `bun run run:desktop:built` → `bun run run:desktop:packaged`
+- `bun run desktop:built:logged` → `bun run run:desktop:packaged:logged`
 
 ## Running the desktop app
 
 The primary way to build and launch Stave locally is:
 
 ```bash
-bun run run:desktop:built
+bun run run:desktop:packaged
 ```
 
 This single command:
@@ -164,6 +171,13 @@ This single command:
 4. Launches the app:
    - **macOS** — packages with `electron-builder --dir` and opens `Stave.app` so the OS titlebar shows "Stave" instead of "Electron"
    - **Linux / Windows** — runs `electron .` with `STAVE_RUNTIME_PROFILE=production`
+
+If you want the same packaged run plus a timestamped log file under the OS temp
+directory:
+
+```bash
+bun run run:desktop:packaged:logged
+```
 
 ## Desktop packaging
 
@@ -187,10 +201,13 @@ The rebuild reads the **actual installed Electron version** from `node_modules/e
 
 ```bash
 # Build and run locally (primary workflow)
-bun run run:desktop:built
+bun run run:desktop:packaged
 
 # Package as unpacked directory
-bun run package:desktop
+bun run package:desktop:dir
+
+# Build, package, run, and capture logs
+bun run run:desktop:packaged:logged
 
 # Linux targets
 bun run package:linux:dir
@@ -198,7 +215,10 @@ bun run package:linux:appimage
 bun run package:linux:deb
 ```
 
-`bun run package:desktop` creates an unpacked `.app` bundle for local validation.
+`bun run package:desktop:dir` creates an unpacked `.app` bundle for local validation.
+The legacy aliases `package:desktop`, `run:desktop:built`, and
+`desktop:built:logged` remain available, but the `*:packaged*` names are the
+canonical forms.
 
 ### GitHub release packaging
 
