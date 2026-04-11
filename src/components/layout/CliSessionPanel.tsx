@@ -1,4 +1,11 @@
-import { Copy, Loader2, RefreshCw, SquareTerminal, ClipboardPaste, X } from "lucide-react";
+import {
+  Copy,
+  Loader2,
+  RefreshCw,
+  SquareTerminal,
+  ClipboardPaste,
+  X,
+} from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ModelIcon } from "@/components/ai-elements";
@@ -6,13 +13,22 @@ import { TerminalTabSurface } from "@/components/layout/TerminalTabSurface";
 import { useTerminalSessionManager } from "@/components/layout/useTerminalSessionManager";
 import { useTerminalTabManager } from "@/components/layout/useTerminalTabManager";
 import { TERMINAL_WRITE_ERROR_THRESHOLD } from "@/components/layout/useTerminalInstance";
-import { Badge, Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, toast } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  toast,
+} from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import {
   DEFAULT_TERMINAL_FONT_FAMILY,
   DEFAULT_TERMINAL_FONT_SIZE,
 } from "@/lib/terminal/defaults";
 import {
+  buildTerminalSessionSlotKey,
   getCliSessionContextLabel,
   getCliSessionProviderLabel,
   getWorkspaceCliSessionTabKey,
@@ -38,70 +54,92 @@ export function CliSessionPanel() {
     closeCliSessionTab,
     settings,
     isDarkMode,
-  ] = useAppStore(useShallow((state) => [
-    state.activeWorkspaceId,
-    state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? "",
-    state.tasks,
-    state.cliSessionTabs,
-    state.activeCliSessionTabId,
-    state.activeSurface,
-    state.closeCliSessionTab,
-    state.settings,
-    state.isDarkMode,
-  ] as const));
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.activeWorkspaceId,
+          state.workspacePathById[state.activeWorkspaceId] ??
+            state.projectPath ??
+            "",
+          state.tasks,
+          state.cliSessionTabs,
+          state.activeCliSessionTabId,
+          state.activeSurface,
+          state.closeCliSessionTab,
+          state.settings,
+          state.isDarkMode,
+        ] as const,
+    ),
+  );
 
   const activeTab = useMemo(
-    () => cliSessionTabs.find((tab) => tab.id === activeCliSessionTabId) ?? null,
+    () =>
+      cliSessionTabs.find((tab) => tab.id === activeCliSessionTabId) ?? null,
     [activeCliSessionTabId, cliSessionTabs],
   );
   const handoffSummary = activeTab?.handoffSummary?.trim() ?? "";
-  const getTabKey = useCallback((tab: NonNullable<typeof activeTab>) => (
-    getWorkspaceCliSessionTabKey({
-      workspaceId: activeWorkspaceId,
-      cliSessionTabId: tab.id,
-    })
-  ), [activeWorkspaceId]);
-  const createSession = useCallback(async (args: {
-    tab: NonNullable<typeof activeTab>;
-    cols: number;
-    rows: number;
-    deliveryMode: "poll" | "push";
-  }) => {
-    if (!workspacePath) {
-      return { ok: false, stderr: "Workspace path unavailable." };
-    }
+  const getTabKey = useCallback(
+    (tab: NonNullable<typeof activeTab>) =>
+      getWorkspaceCliSessionTabKey({
+        workspaceId: activeWorkspaceId,
+        cliSessionTabId: tab.id,
+      }),
+    [activeWorkspaceId],
+  );
+  const createSession = useCallback(
+    async (args: {
+      tab: NonNullable<typeof activeTab>;
+      cols: number;
+      rows: number;
+      deliveryMode: "poll" | "push";
+    }) => {
+      if (!workspacePath) {
+        return { ok: false, stderr: "Workspace path unavailable." };
+      }
 
-    const createCliSession = window.api?.terminal?.createCliSession;
-    if (!createCliSession) {
-      return {
-        ok: false,
-        stderr: "CLI session bridge unavailable. Use bun run dev:desktop.",
-      };
-    }
+      const createCliSession = window.api?.terminal?.createCliSession;
+      if (!createCliSession) {
+        return {
+          ok: false,
+          stderr: "CLI session bridge unavailable. Use bun run dev:desktop.",
+        };
+      }
 
-    const currentLinkedTaskTitle = args.tab.linkedTaskId
-      ? (tasks.find((task) => task.id === args.tab.linkedTaskId)?.title ?? args.tab.linkedTaskTitle)
-      : args.tab.linkedTaskTitle;
+      const currentLinkedTaskTitle = args.tab.linkedTaskId
+        ? (tasks.find((task) => task.id === args.tab.linkedTaskId)?.title ??
+          args.tab.linkedTaskTitle)
+        : args.tab.linkedTaskTitle;
 
-    return createCliSession({
-      workspaceId: activeWorkspaceId,
+      return createCliSession({
+        workspaceId: activeWorkspaceId,
+        workspacePath,
+        cliSessionTabId: args.tab.id,
+        providerId: args.tab.provider,
+        contextMode: args.tab.contextMode,
+        taskId: args.tab.linkedTaskId,
+        taskTitle: currentLinkedTaskTitle,
+        cwd: args.tab.cwd,
+        cols: args.cols,
+        rows: args.rows,
+        deliveryMode: args.deliveryMode,
+        runtimeOptions:
+          args.tab.provider === "claude-code" &&
+          settings.claudeBinaryPath.trim()
+            ? { claudeBinaryPath: settings.claudeBinaryPath.trim() }
+            : args.tab.provider === "codex" && settings.codexBinaryPath.trim()
+              ? { codexBinaryPath: settings.codexBinaryPath.trim() }
+              : undefined,
+      });
+    },
+    [
+      activeWorkspaceId,
+      settings.claudeBinaryPath,
+      settings.codexBinaryPath,
+      tasks,
       workspacePath,
-      cliSessionTabId: args.tab.id,
-      providerId: args.tab.provider,
-      contextMode: args.tab.contextMode,
-      taskId: args.tab.linkedTaskId,
-      taskTitle: currentLinkedTaskTitle,
-      cwd: args.tab.cwd,
-      cols: args.cols,
-      rows: args.rows,
-      deliveryMode: args.deliveryMode,
-      runtimeOptions: args.tab.provider === "claude-code" && settings.claudeBinaryPath.trim()
-        ? { claudeBinaryPath: settings.claudeBinaryPath.trim() }
-        : args.tab.provider === "codex" && settings.codexBinaryPath.trim()
-          ? { codexBinaryPath: settings.codexBinaryPath.trim() }
-          : undefined,
-    });
-  }, [activeWorkspaceId, settings.claudeBinaryPath, settings.codexBinaryPath, tasks, workspacePath]);
+    ],
+  );
 
   const tabManager = useTerminalTabManager({
     tabs: cliSessionTabs,
@@ -109,6 +147,16 @@ export function CliSessionPanel() {
     isVisible: activeSurface.kind === "cli-session",
     getTabKey,
   });
+
+  const slotKeyForTab = useCallback(
+    (tab: NonNullable<typeof activeTab>) =>
+      buildTerminalSessionSlotKey({
+        surface: "cli",
+        workspaceId: activeWorkspaceId,
+        tabId: tab.id,
+      }),
+    [activeWorkspaceId],
+  );
 
   const {
     activeSessionId,
@@ -130,6 +178,7 @@ export function CliSessionPanel() {
     isVisible: activeSurface.kind === "cli-session",
     getTabKey,
     createSession,
+    slotKeyForTab,
     tabManager,
   });
 
@@ -149,7 +198,9 @@ export function CliSessionPanel() {
     if (!handoffSummary || !activeSessionId) {
       return;
     }
-    const input = handoffSummary.endsWith("\n") ? handoffSummary : `${handoffSummary}\n`;
+    const input = handoffSummary.endsWith("\n")
+      ? handoffSummary
+      : `${handoffSummary}\n`;
     if (!writeToActiveSession(input)) {
       toast.error("CLI session is not ready yet");
       return;
@@ -197,7 +248,9 @@ export function CliSessionPanel() {
               tabKey={tabKey}
               isActive={tab.id === activeCliSessionTabId}
               isVisible={activeSurface.kind === "cli-session"}
-              fontFamily={settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY}
+              fontFamily={
+                settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY
+              }
               fontSize={settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE}
               isDarkMode={isDarkMode}
               dimmed={!activeTab}
@@ -244,13 +297,22 @@ export function CliSessionPanel() {
                 {activeTab ? (
                   <>
                     <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <ModelIcon providerId={activeTab.provider} className="size-4 text-muted-foreground" />
+                      <ModelIcon
+                        providerId={activeTab.provider}
+                        className="size-4 text-muted-foreground"
+                      />
                       <span className="truncate">{activeTab.title}</span>
                     </span>
-                    <Badge variant="secondary" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
+                    <Badge
+                      variant="secondary"
+                      className="rounded-sm text-[10px] uppercase tracking-[0.14em]"
+                    >
                       {getCliSessionProviderLabel(activeTab.provider)}
                     </Badge>
-                    <Badge variant="secondary" className="rounded-sm text-[10px] uppercase tracking-[0.14em]">
+                    <Badge
+                      variant="secondary"
+                      className="rounded-sm text-[10px] uppercase tracking-[0.14em]"
+                    >
                       {getCliSessionContextLabel(activeTab.contextMode)}
                     </Badge>
                   </>
@@ -262,19 +324,25 @@ export function CliSessionPanel() {
                 )}
               </div>
               <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className="truncate">{activeTab?.cwd ?? workspacePath ?? "Workspace"}</span>
-                {handoffSummary ? (
-                  <span>Task handoff ready</span>
-                ) : null}
+                <span className="truncate">
+                  {activeTab?.cwd ?? workspacePath ?? "Workspace"}
+                </span>
+                {handoffSummary ? <span>Task handoff ready</span> : null}
                 {sessionExited ? (
-                  <span className={cn(
-                    "font-medium",
-                    sessionExited.exitCode === 0 ? "text-muted-foreground" : "text-destructive",
-                  )}>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      sessionExited.exitCode === 0
+                        ? "text-muted-foreground"
+                        : "text-destructive",
+                    )}
+                  >
                     exited ({sessionExited.exitCode})
                   </span>
                 ) : activeSessionId ? (
-                  <span className="text-emerald-600 dark:text-emerald-400">live</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    live
+                  </span>
                 ) : null}
               </div>
             </div>
@@ -293,7 +361,9 @@ export function CliSessionPanel() {
                       Copy Handoff
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">Copy the task handoff summary</TooltipContent>
+                  <TooltipContent side="bottom">
+                    Copy the task handoff summary
+                  </TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -308,7 +378,9 @@ export function CliSessionPanel() {
                       Paste Handoff
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">Paste the handoff into the live CLI session</TooltipContent>
+                  <TooltipContent side="bottom">
+                    Paste the handoff into the live CLI session
+                  </TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>

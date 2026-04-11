@@ -19,7 +19,7 @@ The generic safety skills in `~/.agents/skills/` apply to this project with thes
 | `the-zustand-guardrail` | `src/store/app.store.ts` (~2 100 lines). Hot surfaces: `ChatInput`, `PlanViewer`, `ChatPanel`, `ProjectWorkspaceSidebar`, `WorkspaceTaskTabs`. See `docs/developer/zustand-selector-stability.md`. |
 | `the-ipc-schema-sync` | 6-file chain: `electron/providers/types.ts` → `src/lib/providers/provider.types.ts` → `src/types/window-api.d.ts` → `electron/preload.ts` → `electron/main/ipc/schemas.ts` → call sites. Event schemas: `src/lib/providers/schemas.ts`. |
 | `the-theme-token-sync` | 8-file table in AGENTS.md "Theme System" section. Test: `tests/custom-theme.test.ts`. |
-| `the-terminal-surface-guard` | File table in AGENTS.md "Terminal Surfaces" section. Key hooks: `usePtySessionSurface.ts`, `useTerminalInstance.ts`, `useTerminalTabManager.ts`, `useTerminalSessionManager.ts`. |
+| `the-terminal-surface-guard` | File table in AGENTS.md "Terminal Surfaces" section. Key hooks: `useTerminalSessionManager.ts` (session lifecycle + I/O), `useTerminalTabManager.ts` (mount/unmount), `useTerminalInstance.ts` (Ghostty-web). Session model: keep-alive + attach/detach. |
 | `the-react-effect-guardrail` | Applies broadly. Highest risk in terminal hooks (ResizeObserver, MutationObserver, PTY listeners), provider subscription effects, and workspace/task switch lifecycle. Always use `useRef` for values read inside long-lived observers; never put toggling props like `visible` in bootstrap effect deps. |
 
 ## Release and Push Requests

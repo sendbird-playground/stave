@@ -35,7 +35,10 @@ const CodeDiffPartSchema = z.object({
   filePath: z.string(),
   oldContent: z.string(),
   newContent: z.string(),
-  status: z.union([z.literal("pending"), z.literal("accepted"), z.literal("rejected")]).optional().default("pending"),
+  status: z
+    .union([z.literal("pending"), z.literal("accepted"), z.literal("rejected")])
+    .optional()
+    .default("pending"),
 });
 
 const FileContextPartSchema = z.object({
@@ -63,28 +66,34 @@ const UserInputPartSchema = z.object({
   type: z.literal("user_input"),
   requestId: z.string(),
   toolName: z.string(),
-  questions: z.array(z.object({
-    key: z.string().optional(),
-    question: z.string(),
-    header: z.string(),
-    options: z.array(z.object({
-      label: z.string(),
-      description: z.string(),
-    })),
-    multiSelect: z.boolean().optional(),
-    inputType: z.union([
-      z.literal("text"),
-      z.literal("number"),
-      z.literal("integer"),
-      z.literal("boolean"),
-      z.literal("url_notice"),
-    ]).optional(),
-    required: z.boolean().optional(),
-    placeholder: z.string().optional(),
-    allowCustom: z.boolean().optional(),
-    defaultValue: z.string().optional(),
-    linkUrl: z.string().optional(),
-  })),
+  questions: z.array(
+    z.object({
+      key: z.string().optional(),
+      question: z.string(),
+      header: z.string(),
+      options: z.array(
+        z.object({
+          label: z.string(),
+          description: z.string(),
+        }),
+      ),
+      multiSelect: z.boolean().optional(),
+      inputType: z
+        .union([
+          z.literal("text"),
+          z.literal("number"),
+          z.literal("integer"),
+          z.literal("boolean"),
+          z.literal("url_notice"),
+        ])
+        .optional(),
+      required: z.boolean().optional(),
+      placeholder: z.string().optional(),
+      allowCustom: z.boolean().optional(),
+      defaultValue: z.string().optional(),
+      linkUrl: z.string().optional(),
+    }),
+  ),
   answers: z.record(z.string(), z.string()).optional(),
   state: z.union([
     z.literal("input-requested"),
@@ -104,18 +113,17 @@ const ImageContextPartSchema = z.object({
 const SystemEventPartSchema = z.object({
   type: z.literal("system_event"),
   content: z.string(),
-  compactBoundary: z.object({
-    trigger: z.string().optional(),
-    gitRef: z.string().optional(),
-  }).optional(),
+  compactBoundary: z
+    .object({
+      trigger: z.string().optional(),
+      gitRef: z.string().optional(),
+    })
+    .optional(),
 });
 
 const StaveProcessingPartSchema = z.object({
   type: z.literal("stave_processing"),
-  strategy: z.union([
-    z.literal("direct"),
-    z.literal("orchestrate"),
-  ]),
+  strategy: z.union([z.literal("direct"), z.literal("orchestrate")]),
   model: z.string().optional(),
   supervisorModel: z.string().optional(),
   reason: z.string(),
@@ -126,17 +134,19 @@ const StaveProcessingPartSchema = z.object({
 const OrchestrationProgressPartSchema = z.object({
   type: z.literal("orchestration_progress"),
   supervisorModel: z.string(),
-  subtasks: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    model: z.string(),
-    status: z.union([
-      z.literal("pending"),
-      z.literal("running"),
-      z.literal("done"),
-      z.literal("error"),
-    ]),
-  })),
+  subtasks: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      model: z.string(),
+      status: z.union([
+        z.literal("pending"),
+        z.literal("running"),
+        z.literal("done"),
+        z.literal("error"),
+      ]),
+    }),
+  ),
   status: z.union([
     z.literal("planning"),
     z.literal("executing"),
@@ -161,25 +171,34 @@ const MessagePartSchema = z.discriminatedUnion("type", [
 
 const AttachmentSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("file"), filePath: z.string() }),
-  z.object({ kind: z.literal("image"), id: z.string(), dataUrl: z.string(), label: z.string() }),
+  z.object({
+    kind: z.literal("image"),
+    id: z.string(),
+    dataUrl: z.string(),
+    label: z.string(),
+  }),
 ]);
 
 const PromptDraftRuntimeOverridesSchema = z
   .object({
-    claudePermissionMode: z.union([
-      z.literal("default"),
-      z.literal("acceptEdits"),
-      z.literal("bypassPermissions"),
-      z.literal("plan"),
-      z.literal("dontAsk"),
-    ]).optional(),
-    claudePermissionModeBeforePlan: z.union([
-      z.literal("default"),
-      z.literal("acceptEdits"),
-      z.literal("bypassPermissions"),
-      z.literal("dontAsk"),
-      z.null(),
-    ]).optional(),
+    claudePermissionMode: z
+      .union([
+        z.literal("default"),
+        z.literal("acceptEdits"),
+        z.literal("bypassPermissions"),
+        z.literal("plan"),
+        z.literal("dontAsk"),
+      ])
+      .optional(),
+    claudePermissionModeBeforePlan: z
+      .union([
+        z.literal("default"),
+        z.literal("acceptEdits"),
+        z.literal("bypassPermissions"),
+        z.literal("dontAsk"),
+        z.null(),
+      ])
+      .optional(),
     codexPlanMode: z.boolean().optional(),
   })
   .strict();
@@ -195,20 +214,27 @@ const ChatMessageSchema = z.object({
   id: z.string(),
   role: z.union([z.literal("user"), z.literal("assistant")]),
   model: z.string(),
-  providerId: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave"), z.literal("user")]),
+  providerId: z.union([
+    z.literal("claude-code"),
+    z.literal("codex"),
+    z.literal("stave"),
+    z.literal("user"),
+  ]),
   content: z.string(),
   startedAt: z.string().optional(),
   completedAt: z.string().optional(),
   isStreaming: z.boolean().optional(),
   isPlanResponse: z.boolean().optional(),
   planText: z.string().optional(),
-  usage: z.object({
-    inputTokens: z.number(),
-    outputTokens: z.number(),
-    cacheReadTokens: z.number().optional(),
-    cacheCreationTokens: z.number().optional(),
-    totalCostUsd: z.number().optional(),
-  }).optional(),
+  usage: z
+    .object({
+      inputTokens: z.number(),
+      outputTokens: z.number(),
+      cacheReadTokens: z.number().optional(),
+      cacheCreationTokens: z.number().optional(),
+      totalCostUsd: z.number().optional(),
+    })
+    .optional(),
   promptSuggestions: z.array(z.string()).optional(),
   parts: z.array(MessagePartSchema),
 });
@@ -216,12 +242,26 @@ const ChatMessageSchema = z.object({
 const TaskSchema = z.object({
   id: z.string(),
   title: z.string(),
-  provider: z.union([z.literal("claude-code"), z.literal("codex"), z.literal("stave")]),
+  provider: z.union([
+    z.literal("claude-code"),
+    z.literal("codex"),
+    z.literal("stave"),
+  ]),
   updatedAt: z.string(),
   unread: z.boolean(),
-  archivedAt: z.string().nullable().optional().transform((value) => value ?? null),
-  controlMode: z.union([z.literal("interactive"), z.literal("managed")]).optional().default("interactive"),
-  controlOwner: z.union([z.literal("stave"), z.literal("external")]).optional().default("stave"),
+  archivedAt: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  controlMode: z
+    .union([z.literal("interactive"), z.literal("managed")])
+    .optional()
+    .default("interactive"),
+  controlOwner: z
+    .union([z.literal("stave"), z.literal("external")])
+    .optional()
+    .default("stave"),
   planFilePaths: z.array(z.string()).optional().default([]),
 });
 
@@ -244,20 +284,25 @@ const EditorTabSchema = z.object({
   isDirty: z.boolean(),
 });
 
-const WorkspaceTerminalTabSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  linkedTaskId: z.string().nullable(),
-  // Legacy persisted shells may still contain xterm tabs from before the
-  // Ghostty migration. Normalize those payloads instead of dropping the entire
-  // workspace shell at parse time.
-  backend: z.union([z.literal("ghostty"), z.literal("xterm")]).optional().default("ghostty"),
-  cwd: z.string(),
-  createdAt: z.number().int().nonnegative(),
-}).transform((tab) => ({
-  ...tab,
-  backend: "ghostty" as const,
-}));
+const WorkspaceTerminalTabSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    linkedTaskId: z.string().nullable(),
+    // Legacy persisted shells may still contain xterm tabs from before the
+    // Ghostty migration. Normalize those payloads instead of dropping the entire
+    // workspace shell at parse time.
+    backend: z
+      .union([z.literal("ghostty"), z.literal("xterm")])
+      .optional()
+      .default("ghostty"),
+    cwd: z.string(),
+    createdAt: z.number().int().nonnegative(),
+  })
+  .transform((tab) => ({
+    ...tab,
+    backend: "ghostty" as const,
+  }));
 
 const WorkspaceCliSessionTabSchema = z.object({
   id: z.string(),
@@ -269,6 +314,21 @@ const WorkspaceCliSessionTabSchema = z.object({
   handoffSummary: z.string(),
   cwd: z.string(),
   createdAt: z.number().int().nonnegative(),
+  lastKnownSlotState: z
+    .union([
+      z.literal("idle"),
+      z.literal("running"),
+      z.literal("background"),
+      z.literal("exited"),
+    ])
+    .optional(),
+  lastExit: z
+    .object({
+      exitCode: z.number(),
+      signal: z.number().optional(),
+      at: z.string(),
+    })
+    .optional(),
 });
 
 const WorkspaceActiveSurfaceSchema = z.discriminatedUnion("kind", [
@@ -303,13 +363,16 @@ const WorkspaceLinkedPullRequestSchema = z.object({
   id: z.string(),
   title: z.string().optional().default(""),
   url: z.string().optional().default(""),
-  status: z.union([
-    z.literal("planned"),
-    z.literal("open"),
-    z.literal("review"),
-    z.literal("merged"),
-    z.literal("closed"),
-  ]).optional().default("planned"),
+  status: z
+    .union([
+      z.literal("planned"),
+      z.literal("open"),
+      z.literal("review"),
+      z.literal("merged"),
+      z.literal("closed"),
+    ])
+    .optional()
+    .default("planned"),
   note: z.string().optional().default(""),
 });
 
@@ -392,9 +455,15 @@ const WorkspaceTurnSummarySchema = z.object({
 
 const WorkspaceInformationSchema = z.object({
   jiraIssues: z.array(WorkspaceJiraIssueSchema).optional().default([]),
-  confluencePages: z.array(WorkspaceConfluencePageSchema).optional().default([]),
+  confluencePages: z
+    .array(WorkspaceConfluencePageSchema)
+    .optional()
+    .default([]),
   figmaResources: z.array(WorkspaceFigmaResourceSchema).optional().default([]),
-  linkedPullRequests: z.array(WorkspaceLinkedPullRequestSchema).optional().default([]),
+  linkedPullRequests: z
+    .array(WorkspaceLinkedPullRequestSchema)
+    .optional()
+    .default([]),
   slackThreads: z.array(WorkspaceSlackThreadSchema).optional().default([]),
   turnSummary: WorkspaceTurnSummarySchema.nullable().optional(),
   notes: z.string().optional().default(""),
@@ -406,14 +475,23 @@ export const WorkspaceSnapshotSchema = z.object({
   activeTaskId: z.string(),
   tasks: z.array(TaskSchema),
   messagesByTask: z.record(z.string(), z.array(ChatMessageSchema)),
-  promptDraftByTask: z.record(z.string(), z.object({
-    text: z.string(),
-    attachedFilePaths: z.array(z.string()).optional().default([]),
-    attachments: z.array(AttachmentSchema).optional().default([]),
-    runtimeOverrides: PromptDraftRuntimeOverridesSchema.optional(),
-    queuedNextTurn: PromptDraftQueuedNextTurnSchema.optional(),
-  })).optional().default({}),
-  providerSessionByTask: z.record(z.string(), TaskProviderSessionStateSchema).optional().default({}),
+  promptDraftByTask: z
+    .record(
+      z.string(),
+      z.object({
+        text: z.string(),
+        attachedFilePaths: z.array(z.string()).optional().default([]),
+        attachments: z.array(AttachmentSchema).optional().default([]),
+        runtimeOverrides: PromptDraftRuntimeOverridesSchema.optional(),
+        queuedNextTurn: PromptDraftQueuedNextTurnSchema.optional(),
+      }),
+    )
+    .optional()
+    .default({}),
+  providerSessionByTask: z
+    .record(z.string(), TaskProviderSessionStateSchema)
+    .optional()
+    .default({}),
   editorTabs: z.array(EditorTabSchema).optional().default([]),
   activeEditorTabId: z.string().nullable().optional().default(null),
   terminalTabs: z.array(WorkspaceTerminalTabSchema).optional().default([]),
@@ -439,22 +517,35 @@ export const WorkspaceSnapshotSchema = z.object({
 export const WorkspaceShellSchema = WorkspaceSnapshotSchema.omit({
   messagesByTask: true,
 }).extend({
-  messageCountByTask: z.record(z.string(), z.number().int().nonnegative()).optional().default({}),
+  messageCountByTask: z
+    .record(z.string(), z.number().int().nonnegative())
+    .optional()
+    .default({}),
 });
 
-export function parseWorkspaceSnapshot(args: { payload: unknown }): WorkspaceSnapshot | null {
+export function parseWorkspaceSnapshot(args: {
+  payload: unknown;
+}): WorkspaceSnapshot | null {
   const parsed = WorkspaceSnapshotSchema.safeParse(args.payload);
   if (!parsed.success) {
-    console.error("[task-context] invalid workspace snapshot payload", parsed.error.flatten());
+    console.error(
+      "[task-context] invalid workspace snapshot payload",
+      parsed.error.flatten(),
+    );
     return null;
   }
   return parsed.data as WorkspaceSnapshot;
 }
 
-export function parseWorkspaceShell(args: { payload: unknown }): WorkspaceShell | null {
+export function parseWorkspaceShell(args: {
+  payload: unknown;
+}): WorkspaceShell | null {
   const parsed = WorkspaceShellSchema.safeParse(args.payload);
   if (!parsed.success) {
-    console.error("[task-context] invalid workspace shell payload", parsed.error.flatten());
+    console.error(
+      "[task-context] invalid workspace shell payload",
+      parsed.error.flatten(),
+    );
     return null;
   }
   return parsed.data as WorkspaceShell;

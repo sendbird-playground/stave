@@ -156,6 +156,25 @@ export const CliSessionCreateSessionArgsSchema = z
   })
   .strict();
 
+export const TerminalAttachSessionArgsSchema = z
+  .object({
+    sessionId: z.string().min(1).max(200),
+    deliveryMode: z.union([z.literal("poll"), z.literal("push")]),
+  })
+  .strict();
+
+export const TerminalDetachSessionArgsSchema = z
+  .object({
+    sessionId: z.string().min(1).max(200),
+  })
+  .strict();
+
+export const TerminalGetSlotStateArgsSchema = z
+  .object({
+    slotKey: z.string().min(1).max(600),
+  })
+  .strict();
+
 export const GetPrStatusByUrlArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),
@@ -335,318 +354,446 @@ export const RuntimeOptionsObjectSchema = z
         fastMode: z.boolean().optional(),
         roleRuntimeOverrides: z
           .object({
-            classifier: z.object({
-              claude: z.object({
-                permissionMode: z.union([
-                  z.literal("default"),
-                  z.literal("acceptEdits"),
-                  z.literal("bypassPermissions"),
-                  z.literal("plan"),
-                  z.literal("dontAsk"),
-                  z.literal("auto"),
-                ]).optional(),
-                thinkingMode: z.union([
-                  z.literal("adaptive"),
-                  z.literal("enabled"),
-                  z.literal("disabled"),
-                ]).optional(),
-                effort: z.union([
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("max"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-              codex: z.object({
-                approvalPolicy: z.union([
-                  z.literal("never"),
-                  z.literal("on-request"),
-                  z.literal("untrusted"),
-                ]).optional(),
-                reasoningEffort: z.union([
-                  z.literal("minimal"),
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("xhigh"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-            }).strict(),
-            supervisor: z.object({
-              claude: z.object({
-                permissionMode: z.union([
-                  z.literal("default"),
-                  z.literal("acceptEdits"),
-                  z.literal("bypassPermissions"),
-                  z.literal("plan"),
-                  z.literal("dontAsk"),
-                  z.literal("auto"),
-                ]).optional(),
-                thinkingMode: z.union([
-                  z.literal("adaptive"),
-                  z.literal("enabled"),
-                  z.literal("disabled"),
-                ]).optional(),
-                effort: z.union([
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("max"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-              codex: z.object({
-                approvalPolicy: z.union([
-                  z.literal("never"),
-                  z.literal("on-request"),
-                  z.literal("untrusted"),
-                ]).optional(),
-                reasoningEffort: z.union([
-                  z.literal("minimal"),
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("xhigh"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-            }).strict(),
-            plan: z.object({
-              claude: z.object({
-                permissionMode: z.union([
-                  z.literal("default"),
-                  z.literal("acceptEdits"),
-                  z.literal("bypassPermissions"),
-                  z.literal("plan"),
-                  z.literal("dontAsk"),
-                  z.literal("auto"),
-                ]).optional(),
-                thinkingMode: z.union([
-                  z.literal("adaptive"),
-                  z.literal("enabled"),
-                  z.literal("disabled"),
-                ]).optional(),
-                effort: z.union([
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("max"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-              codex: z.object({
-                approvalPolicy: z.union([
-                  z.literal("never"),
-                  z.literal("on-request"),
-                  z.literal("untrusted"),
-                ]).optional(),
-                reasoningEffort: z.union([
-                  z.literal("minimal"),
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("xhigh"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-            }).strict(),
-            analyze: z.object({
-              claude: z.object({
-                permissionMode: z.union([
-                  z.literal("default"),
-                  z.literal("acceptEdits"),
-                  z.literal("bypassPermissions"),
-                  z.literal("plan"),
-                  z.literal("dontAsk"),
-                  z.literal("auto"),
-                ]).optional(),
-                thinkingMode: z.union([
-                  z.literal("adaptive"),
-                  z.literal("enabled"),
-                  z.literal("disabled"),
-                ]).optional(),
-                effort: z.union([
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("max"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-              codex: z.object({
-                approvalPolicy: z.union([
-                  z.literal("never"),
-                  z.literal("on-request"),
-                  z.literal("untrusted"),
-                ]).optional(),
-                reasoningEffort: z.union([
-                  z.literal("minimal"),
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("xhigh"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-            }).strict(),
-            implement: z.object({
-              claude: z.object({
-                permissionMode: z.union([
-                  z.literal("default"),
-                  z.literal("acceptEdits"),
-                  z.literal("bypassPermissions"),
-                  z.literal("plan"),
-                  z.literal("dontAsk"),
-                  z.literal("auto"),
-                ]).optional(),
-                thinkingMode: z.union([
-                  z.literal("adaptive"),
-                  z.literal("enabled"),
-                  z.literal("disabled"),
-                ]).optional(),
-                effort: z.union([
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("max"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-              codex: z.object({
-                approvalPolicy: z.union([
-                  z.literal("never"),
-                  z.literal("on-request"),
-                  z.literal("untrusted"),
-                ]).optional(),
-                reasoningEffort: z.union([
-                  z.literal("minimal"),
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("xhigh"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-            }).strict(),
-            quick_edit: z.object({
-              claude: z.object({
-                permissionMode: z.union([
-                  z.literal("default"),
-                  z.literal("acceptEdits"),
-                  z.literal("bypassPermissions"),
-                  z.literal("plan"),
-                  z.literal("dontAsk"),
-                  z.literal("auto"),
-                ]).optional(),
-                thinkingMode: z.union([
-                  z.literal("adaptive"),
-                  z.literal("enabled"),
-                  z.literal("disabled"),
-                ]).optional(),
-                effort: z.union([
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("max"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-              codex: z.object({
-                approvalPolicy: z.union([
-                  z.literal("never"),
-                  z.literal("on-request"),
-                  z.literal("untrusted"),
-                ]).optional(),
-                reasoningEffort: z.union([
-                  z.literal("minimal"),
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("xhigh"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-            }).strict(),
-            general: z.object({
-              claude: z.object({
-                permissionMode: z.union([
-                  z.literal("default"),
-                  z.literal("acceptEdits"),
-                  z.literal("bypassPermissions"),
-                  z.literal("plan"),
-                  z.literal("dontAsk"),
-                  z.literal("auto"),
-                ]).optional(),
-                thinkingMode: z.union([
-                  z.literal("adaptive"),
-                  z.literal("enabled"),
-                  z.literal("disabled"),
-                ]).optional(),
-                effort: z.union([
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("max"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-              codex: z.object({
-                approvalPolicy: z.union([
-                  z.literal("never"),
-                  z.literal("on-request"),
-                  z.literal("untrusted"),
-                ]).optional(),
-                reasoningEffort: z.union([
-                  z.literal("minimal"),
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("xhigh"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-            }).strict(),
-            verify: z.object({
-              claude: z.object({
-                permissionMode: z.union([
-                  z.literal("default"),
-                  z.literal("acceptEdits"),
-                  z.literal("bypassPermissions"),
-                  z.literal("plan"),
-                  z.literal("dontAsk"),
-                  z.literal("auto"),
-                ]).optional(),
-                thinkingMode: z.union([
-                  z.literal("adaptive"),
-                  z.literal("enabled"),
-                  z.literal("disabled"),
-                ]).optional(),
-                effort: z.union([
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("max"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-              codex: z.object({
-                approvalPolicy: z.union([
-                  z.literal("never"),
-                  z.literal("on-request"),
-                  z.literal("untrusted"),
-                ]).optional(),
-                reasoningEffort: z.union([
-                  z.literal("minimal"),
-                  z.literal("low"),
-                  z.literal("medium"),
-                  z.literal("high"),
-                  z.literal("xhigh"),
-                ]).optional(),
-                fastMode: z.boolean().optional(),
-              }).strict(),
-            }).strict(),
+            classifier: z
+              .object({
+                claude: z
+                  .object({
+                    permissionMode: z
+                      .union([
+                        z.literal("default"),
+                        z.literal("acceptEdits"),
+                        z.literal("bypassPermissions"),
+                        z.literal("plan"),
+                        z.literal("dontAsk"),
+                        z.literal("auto"),
+                      ])
+                      .optional(),
+                    thinkingMode: z
+                      .union([
+                        z.literal("adaptive"),
+                        z.literal("enabled"),
+                        z.literal("disabled"),
+                      ])
+                      .optional(),
+                    effort: z
+                      .union([
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("max"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+                codex: z
+                  .object({
+                    approvalPolicy: z
+                      .union([
+                        z.literal("never"),
+                        z.literal("on-request"),
+                        z.literal("untrusted"),
+                      ])
+                      .optional(),
+                    reasoningEffort: z
+                      .union([
+                        z.literal("minimal"),
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("xhigh"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+            supervisor: z
+              .object({
+                claude: z
+                  .object({
+                    permissionMode: z
+                      .union([
+                        z.literal("default"),
+                        z.literal("acceptEdits"),
+                        z.literal("bypassPermissions"),
+                        z.literal("plan"),
+                        z.literal("dontAsk"),
+                        z.literal("auto"),
+                      ])
+                      .optional(),
+                    thinkingMode: z
+                      .union([
+                        z.literal("adaptive"),
+                        z.literal("enabled"),
+                        z.literal("disabled"),
+                      ])
+                      .optional(),
+                    effort: z
+                      .union([
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("max"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+                codex: z
+                  .object({
+                    approvalPolicy: z
+                      .union([
+                        z.literal("never"),
+                        z.literal("on-request"),
+                        z.literal("untrusted"),
+                      ])
+                      .optional(),
+                    reasoningEffort: z
+                      .union([
+                        z.literal("minimal"),
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("xhigh"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+            plan: z
+              .object({
+                claude: z
+                  .object({
+                    permissionMode: z
+                      .union([
+                        z.literal("default"),
+                        z.literal("acceptEdits"),
+                        z.literal("bypassPermissions"),
+                        z.literal("plan"),
+                        z.literal("dontAsk"),
+                        z.literal("auto"),
+                      ])
+                      .optional(),
+                    thinkingMode: z
+                      .union([
+                        z.literal("adaptive"),
+                        z.literal("enabled"),
+                        z.literal("disabled"),
+                      ])
+                      .optional(),
+                    effort: z
+                      .union([
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("max"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+                codex: z
+                  .object({
+                    approvalPolicy: z
+                      .union([
+                        z.literal("never"),
+                        z.literal("on-request"),
+                        z.literal("untrusted"),
+                      ])
+                      .optional(),
+                    reasoningEffort: z
+                      .union([
+                        z.literal("minimal"),
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("xhigh"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+            analyze: z
+              .object({
+                claude: z
+                  .object({
+                    permissionMode: z
+                      .union([
+                        z.literal("default"),
+                        z.literal("acceptEdits"),
+                        z.literal("bypassPermissions"),
+                        z.literal("plan"),
+                        z.literal("dontAsk"),
+                        z.literal("auto"),
+                      ])
+                      .optional(),
+                    thinkingMode: z
+                      .union([
+                        z.literal("adaptive"),
+                        z.literal("enabled"),
+                        z.literal("disabled"),
+                      ])
+                      .optional(),
+                    effort: z
+                      .union([
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("max"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+                codex: z
+                  .object({
+                    approvalPolicy: z
+                      .union([
+                        z.literal("never"),
+                        z.literal("on-request"),
+                        z.literal("untrusted"),
+                      ])
+                      .optional(),
+                    reasoningEffort: z
+                      .union([
+                        z.literal("minimal"),
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("xhigh"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+            implement: z
+              .object({
+                claude: z
+                  .object({
+                    permissionMode: z
+                      .union([
+                        z.literal("default"),
+                        z.literal("acceptEdits"),
+                        z.literal("bypassPermissions"),
+                        z.literal("plan"),
+                        z.literal("dontAsk"),
+                        z.literal("auto"),
+                      ])
+                      .optional(),
+                    thinkingMode: z
+                      .union([
+                        z.literal("adaptive"),
+                        z.literal("enabled"),
+                        z.literal("disabled"),
+                      ])
+                      .optional(),
+                    effort: z
+                      .union([
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("max"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+                codex: z
+                  .object({
+                    approvalPolicy: z
+                      .union([
+                        z.literal("never"),
+                        z.literal("on-request"),
+                        z.literal("untrusted"),
+                      ])
+                      .optional(),
+                    reasoningEffort: z
+                      .union([
+                        z.literal("minimal"),
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("xhigh"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+            quick_edit: z
+              .object({
+                claude: z
+                  .object({
+                    permissionMode: z
+                      .union([
+                        z.literal("default"),
+                        z.literal("acceptEdits"),
+                        z.literal("bypassPermissions"),
+                        z.literal("plan"),
+                        z.literal("dontAsk"),
+                        z.literal("auto"),
+                      ])
+                      .optional(),
+                    thinkingMode: z
+                      .union([
+                        z.literal("adaptive"),
+                        z.literal("enabled"),
+                        z.literal("disabled"),
+                      ])
+                      .optional(),
+                    effort: z
+                      .union([
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("max"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+                codex: z
+                  .object({
+                    approvalPolicy: z
+                      .union([
+                        z.literal("never"),
+                        z.literal("on-request"),
+                        z.literal("untrusted"),
+                      ])
+                      .optional(),
+                    reasoningEffort: z
+                      .union([
+                        z.literal("minimal"),
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("xhigh"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+            general: z
+              .object({
+                claude: z
+                  .object({
+                    permissionMode: z
+                      .union([
+                        z.literal("default"),
+                        z.literal("acceptEdits"),
+                        z.literal("bypassPermissions"),
+                        z.literal("plan"),
+                        z.literal("dontAsk"),
+                        z.literal("auto"),
+                      ])
+                      .optional(),
+                    thinkingMode: z
+                      .union([
+                        z.literal("adaptive"),
+                        z.literal("enabled"),
+                        z.literal("disabled"),
+                      ])
+                      .optional(),
+                    effort: z
+                      .union([
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("max"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+                codex: z
+                  .object({
+                    approvalPolicy: z
+                      .union([
+                        z.literal("never"),
+                        z.literal("on-request"),
+                        z.literal("untrusted"),
+                      ])
+                      .optional(),
+                    reasoningEffort: z
+                      .union([
+                        z.literal("minimal"),
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("xhigh"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+            verify: z
+              .object({
+                claude: z
+                  .object({
+                    permissionMode: z
+                      .union([
+                        z.literal("default"),
+                        z.literal("acceptEdits"),
+                        z.literal("bypassPermissions"),
+                        z.literal("plan"),
+                        z.literal("dontAsk"),
+                        z.literal("auto"),
+                      ])
+                      .optional(),
+                    thinkingMode: z
+                      .union([
+                        z.literal("adaptive"),
+                        z.literal("enabled"),
+                        z.literal("disabled"),
+                      ])
+                      .optional(),
+                    effort: z
+                      .union([
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("max"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+                codex: z
+                  .object({
+                    approvalPolicy: z
+                      .union([
+                        z.literal("never"),
+                        z.literal("on-request"),
+                        z.literal("untrusted"),
+                      ])
+                      .optional(),
+                    reasoningEffort: z
+                      .union([
+                        z.literal("minimal"),
+                        z.literal("low"),
+                        z.literal("medium"),
+                        z.literal("high"),
+                        z.literal("xhigh"),
+                      ])
+                      .optional(),
+                    fastMode: z.boolean().optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
           })
           .strict()
           .optional(),
@@ -692,13 +839,15 @@ const UserInputQuestionSchema = z
     header: z.string().max(200),
     options: z.array(UserInputOptionSchema).max(20),
     multiSelect: z.boolean().optional(),
-    inputType: z.union([
-      z.literal("text"),
-      z.literal("number"),
-      z.literal("integer"),
-      z.literal("boolean"),
-      z.literal("url_notice"),
-    ]).optional(),
+    inputType: z
+      .union([
+        z.literal("text"),
+        z.literal("number"),
+        z.literal("integer"),
+        z.literal("boolean"),
+        z.literal("url_notice"),
+      ])
+      .optional(),
     required: z.boolean().optional(),
     placeholder: z.string().max(500).optional(),
     allowCustom: z.boolean().optional(),
@@ -1215,7 +1364,8 @@ export const FilesystemCreateDirectoryArgsSchema = z
 
 export const FilesystemCreateFileArgsSchema = FilesystemFileArgsSchema;
 
-export const FilesystemDeleteDirectoryArgsSchema = FilesystemCreateDirectoryArgsSchema;
+export const FilesystemDeleteDirectoryArgsSchema =
+  FilesystemCreateDirectoryArgsSchema;
 
 export const FilesystemDeleteFileArgsSchema = FilesystemFileArgsSchema;
 

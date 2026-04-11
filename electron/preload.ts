@@ -164,13 +164,16 @@ ipcRenderer.on(
   },
 );
 
-const workspaceScriptEventSubscribersByWorkspaceId = new Map<string, Set<
-  (payload: WorkspaceScriptEventEnvelope) => void
->>();
+const workspaceScriptEventSubscribersByWorkspaceId = new Map<
+  string,
+  Set<(payload: WorkspaceScriptEventEnvelope) => void>
+>();
 ipcRenderer.on(
   WORKSPACE_SCRIPTS_IPC.EVENT,
   (_event, payload: WorkspaceScriptEventEnvelope) => {
-    const subscribers = workspaceScriptEventSubscribersByWorkspaceId.get(payload.workspaceId);
+    const subscribers = workspaceScriptEventSubscribersByWorkspaceId.get(
+      payload.workspaceId,
+    );
     if (!subscribers) {
       return;
     }
@@ -287,7 +290,9 @@ const scriptsApi = {
     args: { workspaceId: string },
     listener: (payload: WorkspaceScriptEventEnvelope) => void,
   ) => {
-    const existing = workspaceScriptEventSubscribersByWorkspaceId.get(args.workspaceId);
+    const existing = workspaceScriptEventSubscribersByWorkspaceId.get(
+      args.workspaceId,
+    );
     if (existing) {
       existing.add(listener);
     } else {
@@ -298,7 +303,9 @@ const scriptsApi = {
       ipcRenderer.send(WORKSPACE_SCRIPTS_IPC.SUBSCRIBE_EVENTS, args);
     }
     return () => {
-      const subscribers = workspaceScriptEventSubscribersByWorkspaceId.get(args.workspaceId);
+      const subscribers = workspaceScriptEventSubscribersByWorkspaceId.get(
+        args.workspaceId,
+      );
       if (!subscribers) {
         return;
       }
@@ -407,7 +414,10 @@ contextBridge.exposeInMainWorld("api", {
       runtimeOptions?: StreamTurnArgs["runtimeOptions"];
       toolIds?: ConnectedToolId[];
     }) =>
-      ipcRenderer.invoke("provider:get-connected-tool-status", args) as Promise<ConnectedToolStatusResponse>,
+      ipcRenderer.invoke(
+        "provider:get-connected-tool-status",
+        args,
+      ) as Promise<ConnectedToolStatusResponse>,
     getClaudeContextUsage: (args: {
       cwd?: string;
       runtimeOptions?: StreamTurnArgs["runtimeOptions"];
@@ -445,7 +455,13 @@ contextBridge.exposeInMainWorld("api", {
         ok: boolean;
         message?: string;
       }>,
-    suggestPRDescription: (args: { cwd?: string; baseBranch?: string; headBranch?: string; promptTemplate?: string; workspaceContext?: string }) =>
+    suggestPRDescription: (args: {
+      cwd?: string;
+      baseBranch?: string;
+      headBranch?: string;
+      promptTemplate?: string;
+      workspaceContext?: string;
+    }) =>
       ipcRenderer.invoke("provider:suggest-pr-description", args) as Promise<{
         ok: boolean;
         title?: string;
@@ -557,13 +573,19 @@ contextBridge.exposeInMainWorld("api", {
     searchContent: (args: { rootPath: string; query: string }) =>
       ipcRenderer.invoke("fs:search-content", args) as Promise<{
         ok: boolean;
-        results: Array<{ file: string; matches: Array<{ line: number; text: string }> }>;
+        results: Array<{
+          file: string;
+          matches: Array<{ line: number; text: string }>;
+        }>;
         limitHit: boolean;
         stderr?: string;
       }>,
   },
   skills: {
-    getCatalog: (args?: { workspacePath?: string; sharedSkillsHome?: string }) =>
+    getCatalog: (args?: {
+      workspacePath?: string;
+      sharedSkillsHome?: string;
+    }) =>
       ipcRenderer.invoke(
         "skills:get-catalog",
         args ?? {},
@@ -750,6 +772,16 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("terminal:resize-session", args),
     closeSession: (args: { sessionId: string }) =>
       ipcRenderer.invoke("terminal:close-session", args),
+    attachSession: (args: {
+      sessionId: string;
+      deliveryMode: "poll" | "push";
+    }) => ipcRenderer.invoke("terminal:attach-session", args),
+    detachSession: (args: { sessionId: string }) =>
+      ipcRenderer.invoke("terminal:detach-session", args),
+    getSlotState: (args: { slotKey: string }) =>
+      ipcRenderer.invoke("terminal:get-slot-state", args),
+    closeSessionsBySlotPrefix: (args: { prefix: string }) =>
+      ipcRenderer.invoke("terminal:close-sessions-by-slot-prefix", args),
   },
   tooling: {
     getStatus: (args: ToolingStatusRequest) =>

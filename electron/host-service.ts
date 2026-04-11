@@ -14,7 +14,10 @@ import {
   stopAllWorkspaceScriptProcesses,
   stopScriptEntry,
 } from "./main/workspace-scripts";
-import { ensureHostServicePersistenceReady, resetHostServicePersistence } from "./host-service/persistence";
+import {
+  ensureHostServicePersistenceReady,
+  resetHostServicePersistence,
+} from "./host-service/persistence";
 import {
   checkoutScmBranch,
   cherryPickScmCommit,
@@ -47,7 +50,6 @@ import type {
   HostLocalMcpAction,
   HostServiceMethod,
   HostServiceResponseMap,
-  HostServiceSuccessResponseEnvelope,
 } from "./host-service/protocol";
 import { providerRuntime } from "./providers/runtime";
 import {
@@ -67,13 +69,16 @@ import { isDoneEvent, toEventType } from "./main/utils/provider-events";
 import { quotePath, runCommand } from "./main/utils/command";
 import type { StreamTurnArgs } from "./providers/types";
 
-type HostServiceOutboundMessage = AnyHostServiceResponseEnvelope | {
-  type: "ready";
-} | {
-  type: "event";
-  event: HostServiceEventName;
-  payload: HostServiceEventMap[HostServiceEventName];
-};
+type HostServiceOutboundMessage =
+  | AnyHostServiceResponseEnvelope
+  | {
+      type: "ready";
+    }
+  | {
+      type: "event";
+      event: HostServiceEventName;
+      payload: HostServiceEventMap[HostServiceEventName];
+    };
 
 const HOST_SERVICE_QUEUE_WARN_DEPTH = 24;
 const HOST_SERVICE_QUEUE_WARN_BYTES = 256 * 1024;
@@ -108,11 +113,11 @@ function maybeLogQueueBackpressure(args: {
   durationMs?: number;
 }) {
   const overThreshold =
-    pendingMessageCount >= HOST_SERVICE_QUEUE_WARN_DEPTH
-    || pendingMessageBytes >= HOST_SERVICE_QUEUE_WARN_BYTES;
+    pendingMessageCount >= HOST_SERVICE_QUEUE_WARN_DEPTH ||
+    pendingMessageBytes >= HOST_SERVICE_QUEUE_WARN_BYTES;
   const isSlowWrite =
-    typeof args.durationMs === "number"
-    && args.durationMs >= HOST_SERVICE_QUEUE_SLOW_WRITE_MS;
+    typeof args.durationMs === "number" &&
+    args.durationMs >= HOST_SERVICE_QUEUE_SLOW_WRITE_MS;
   if (!overThreshold && !isSlowWrite) {
     return;
   }
@@ -122,9 +127,8 @@ function maybeLogQueueBackpressure(args: {
   }
   lastBackpressureLogAt = now;
   backpressureWarningActive = true;
-  const durationSuffix = typeof args.durationMs === "number"
-    ? ` durationMs=${args.durationMs}`
-    : "";
+  const durationSuffix =
+    typeof args.durationMs === "number" ? ` durationMs=${args.durationMs}` : "";
   logHostServiceQueue(
     `${args.reason} label=${args.label} pendingMessages=${pendingMessageCount} pendingBytes=${pendingMessageBytes} peakMessages=${peakPendingMessageCount} peakBytes=${peakPendingMessageBytes}${durationSuffix}`,
   );
@@ -167,8 +171,14 @@ function writeMessage(message: HostServiceOutboundMessage) {
   const messageBytes = Buffer.byteLength(serializedMessage);
   pendingMessageCount += 1;
   pendingMessageBytes += messageBytes;
-  peakPendingMessageCount = Math.max(peakPendingMessageCount, pendingMessageCount);
-  peakPendingMessageBytes = Math.max(peakPendingMessageBytes, pendingMessageBytes);
+  peakPendingMessageCount = Math.max(
+    peakPendingMessageCount,
+    pendingMessageCount,
+  );
+  peakPendingMessageBytes = Math.max(
+    peakPendingMessageBytes,
+    pendingMessageBytes,
+  );
   maybeLogQueueBackpressure({
     reason: "queued",
     label,
@@ -196,7 +206,9 @@ function emitEvent<TEvent extends HostServiceEventName>(
     payload,
   });
   void writePromise.catch((error) => {
-    process.stderr.write(`[host-service] failed to emit ${event}: ${String(error)}\n`);
+    process.stderr.write(
+      `[host-service] failed to emit ${event}: ${String(error)}\n`,
+    );
   });
   return writePromise;
 }
@@ -216,51 +228,101 @@ async function invokeLocalMcpAction(action: HostLocalMcpAction, args: unknown) {
     case "list-known-projects":
       return localMcpRuntime.listKnownProjects();
     case "register-project":
-      return localMcpRuntime.registerProject(args as Parameters<typeof localMcpRuntime.registerProject>[0]);
+      return localMcpRuntime.registerProject(
+        args as Parameters<typeof localMcpRuntime.registerProject>[0],
+      );
     case "create-workspace":
-      return localMcpRuntime.createWorkspace(args as Parameters<typeof localMcpRuntime.createWorkspace>[0]);
+      return localMcpRuntime.createWorkspace(
+        args as Parameters<typeof localMcpRuntime.createWorkspace>[0],
+      );
     case "run-task":
-      return localMcpRuntime.runTask(args as Parameters<typeof localMcpRuntime.runTask>[0]);
+      return localMcpRuntime.runTask(
+        args as Parameters<typeof localMcpRuntime.runTask>[0],
+      );
     case "get-task-status":
-      return localMcpRuntime.getTaskStatus(args as Parameters<typeof localMcpRuntime.getTaskStatus>[0]);
+      return localMcpRuntime.getTaskStatus(
+        args as Parameters<typeof localMcpRuntime.getTaskStatus>[0],
+      );
     case "list-turn-events":
-      return localMcpRuntime.listTurnEvents(args as Parameters<typeof localMcpRuntime.listTurnEvents>[0]);
+      return localMcpRuntime.listTurnEvents(
+        args as Parameters<typeof localMcpRuntime.listTurnEvents>[0],
+      );
     case "respond-approval":
-      return localMcpRuntime.respondApproval(args as Parameters<typeof localMcpRuntime.respondApproval>[0]);
+      return localMcpRuntime.respondApproval(
+        args as Parameters<typeof localMcpRuntime.respondApproval>[0],
+      );
     case "respond-user-input":
-      return localMcpRuntime.respondUserInput(args as Parameters<typeof localMcpRuntime.respondUserInput>[0]);
+      return localMcpRuntime.respondUserInput(
+        args as Parameters<typeof localMcpRuntime.respondUserInput>[0],
+      );
     case "get-workspace-information":
-      return localMcpRuntime.getWorkspaceInformation(args as Parameters<typeof localMcpRuntime.getWorkspaceInformation>[0]);
+      return localMcpRuntime.getWorkspaceInformation(
+        args as Parameters<typeof localMcpRuntime.getWorkspaceInformation>[0],
+      );
     case "replace-workspace-notes":
-      return localMcpRuntime.replaceWorkspaceNotes(args as Parameters<typeof localMcpRuntime.replaceWorkspaceNotes>[0]);
+      return localMcpRuntime.replaceWorkspaceNotes(
+        args as Parameters<typeof localMcpRuntime.replaceWorkspaceNotes>[0],
+      );
     case "append-workspace-notes":
-      return localMcpRuntime.appendWorkspaceNotes(args as Parameters<typeof localMcpRuntime.appendWorkspaceNotes>[0]);
+      return localMcpRuntime.appendWorkspaceNotes(
+        args as Parameters<typeof localMcpRuntime.appendWorkspaceNotes>[0],
+      );
     case "clear-workspace-notes":
-      return localMcpRuntime.clearWorkspaceNotes(args as Parameters<typeof localMcpRuntime.clearWorkspaceNotes>[0]);
+      return localMcpRuntime.clearWorkspaceNotes(
+        args as Parameters<typeof localMcpRuntime.clearWorkspaceNotes>[0],
+      );
     case "add-workspace-todo":
-      return localMcpRuntime.addWorkspaceTodo(args as Parameters<typeof localMcpRuntime.addWorkspaceTodo>[0]);
+      return localMcpRuntime.addWorkspaceTodo(
+        args as Parameters<typeof localMcpRuntime.addWorkspaceTodo>[0],
+      );
     case "update-workspace-todo":
-      return localMcpRuntime.updateWorkspaceTodo(args as Parameters<typeof localMcpRuntime.updateWorkspaceTodo>[0]);
+      return localMcpRuntime.updateWorkspaceTodo(
+        args as Parameters<typeof localMcpRuntime.updateWorkspaceTodo>[0],
+      );
     case "remove-workspace-todo":
-      return localMcpRuntime.removeWorkspaceTodo(args as Parameters<typeof localMcpRuntime.removeWorkspaceTodo>[0]);
+      return localMcpRuntime.removeWorkspaceTodo(
+        args as Parameters<typeof localMcpRuntime.removeWorkspaceTodo>[0],
+      );
     case "add-workspace-resource":
-      return localMcpRuntime.addWorkspaceResource(args as Parameters<typeof localMcpRuntime.addWorkspaceResource>[0]);
+      return localMcpRuntime.addWorkspaceResource(
+        args as Parameters<typeof localMcpRuntime.addWorkspaceResource>[0],
+      );
     case "remove-workspace-resource":
-      return localMcpRuntime.removeWorkspaceResource(args as Parameters<typeof localMcpRuntime.removeWorkspaceResource>[0]);
+      return localMcpRuntime.removeWorkspaceResource(
+        args as Parameters<typeof localMcpRuntime.removeWorkspaceResource>[0],
+      );
     case "add-workspace-custom-field":
-      return localMcpRuntime.addWorkspaceCustomField(args as Parameters<typeof localMcpRuntime.addWorkspaceCustomField>[0]);
+      return localMcpRuntime.addWorkspaceCustomField(
+        args as Parameters<typeof localMcpRuntime.addWorkspaceCustomField>[0],
+      );
     case "set-workspace-custom-field":
-      return localMcpRuntime.setWorkspaceCustomField(args as Parameters<typeof localMcpRuntime.setWorkspaceCustomField>[0]);
+      return localMcpRuntime.setWorkspaceCustomField(
+        args as Parameters<typeof localMcpRuntime.setWorkspaceCustomField>[0],
+      );
     case "remove-workspace-custom-field":
-      return localMcpRuntime.removeWorkspaceCustomField(args as Parameters<typeof localMcpRuntime.removeWorkspaceCustomField>[0]);
+      return localMcpRuntime.removeWorkspaceCustomField(
+        args as Parameters<
+          typeof localMcpRuntime.removeWorkspaceCustomField
+        >[0],
+      );
     case "add-workspace-jira-issue":
-      return localMcpRuntime.addWorkspaceJiraIssue(args as Parameters<typeof localMcpRuntime.addWorkspaceJiraIssue>[0]);
+      return localMcpRuntime.addWorkspaceJiraIssue(
+        args as Parameters<typeof localMcpRuntime.addWorkspaceJiraIssue>[0],
+      );
     case "add-workspace-confluence-page":
-      return localMcpRuntime.addWorkspaceConfluencePage(args as Parameters<typeof localMcpRuntime.addWorkspaceConfluencePage>[0]);
+      return localMcpRuntime.addWorkspaceConfluencePage(
+        args as Parameters<
+          typeof localMcpRuntime.addWorkspaceConfluencePage
+        >[0],
+      );
     case "add-workspace-figma-resource":
-      return localMcpRuntime.addWorkspaceFigmaResource(args as Parameters<typeof localMcpRuntime.addWorkspaceFigmaResource>[0]);
+      return localMcpRuntime.addWorkspaceFigmaResource(
+        args as Parameters<typeof localMcpRuntime.addWorkspaceFigmaResource>[0],
+      );
     case "add-workspace-slack-thread":
-      return localMcpRuntime.addWorkspaceSlackThread(args as Parameters<typeof localMcpRuntime.addWorkspaceSlackThread>[0]);
+      return localMcpRuntime.addWorkspaceSlackThread(
+        args as Parameters<typeof localMcpRuntime.addWorkspaceSlackThread>[0],
+      );
     default:
       action satisfies never;
       throw new Error(`Unsupported local MCP action: ${action}`);
@@ -303,71 +365,86 @@ function startPushProviderTurn(args: StreamTurnArgs) {
         },
       });
     } catch (error) {
-      console.warn("[provider:persistence] failed to append request snapshot", error, {
-        turnId,
-        providerId: args.providerId,
-        taskId: args.taskId,
-      });
+      console.warn(
+        "[provider:persistence] failed to append request snapshot",
+        error,
+        {
+          turnId,
+          providerId: args.providerId,
+          taskId: args.taskId,
+        },
+      );
     }
   }
 
-  const started = providerRuntime.startTurnStream({
-    ...args,
-    turnId,
-  }, {
-    bufferEvents: true,
-    onEvent: (turnEvent) => {
-      sequence += 1;
-
-      if (args.taskId && store) {
-        try {
-          store.appendTurnEvent({
-            id: randomUUID(),
-            turnId,
-            sequence,
-            eventType: toEventType({ event: turnEvent }),
-            payload: turnEvent,
-          });
-        } catch (error) {
-          console.warn("[provider:persistence] failed to append turn event", error, {
-            turnId,
-            sequence,
-            providerId: args.providerId,
-            taskId: args.taskId,
-            eventType: toEventType({ event: turnEvent }),
-          });
-        }
-      }
-
-      emitEvent("provider.stream-event", {
-        streamId: started.streamId,
-        event: turnEvent,
-        sequence,
-        done: isDoneEvent({ event: turnEvent }),
-        taskId: args.taskId ?? null,
-        workspaceId: args.workspaceId ?? null,
-        providerId: args.providerId,
-        turnId: args.taskId ? turnId : null,
-      });
+  const started = providerRuntime.startTurnStream(
+    {
+      ...args,
+      turnId,
     },
-    onDone: () => {
-      if (!completed && args.taskId && store) {
-        completed = true;
-        try {
-          store.completeTurn({
-            id: turnId,
-            completedAt: new Date().toISOString(),
-          });
-        } catch (error) {
-          console.warn("[provider:persistence] failed to complete turn", error, {
-            turnId,
-            providerId: args.providerId,
-            taskId: args.taskId,
-          });
+    {
+      bufferEvents: true,
+      onEvent: (turnEvent) => {
+        sequence += 1;
+
+        if (args.taskId && store) {
+          try {
+            store.appendTurnEvent({
+              id: randomUUID(),
+              turnId,
+              sequence,
+              eventType: toEventType({ event: turnEvent }),
+              payload: turnEvent,
+            });
+          } catch (error) {
+            console.warn(
+              "[provider:persistence] failed to append turn event",
+              error,
+              {
+                turnId,
+                sequence,
+                providerId: args.providerId,
+                taskId: args.taskId,
+                eventType: toEventType({ event: turnEvent }),
+              },
+            );
+          }
         }
-      }
+
+        emitEvent("provider.stream-event", {
+          streamId: started.streamId,
+          event: turnEvent,
+          sequence,
+          done: isDoneEvent({ event: turnEvent }),
+          taskId: args.taskId ?? null,
+          workspaceId: args.workspaceId ?? null,
+          providerId: args.providerId,
+          turnId: args.taskId ? turnId : null,
+        });
+      },
+      onDone: () => {
+        if (!completed && args.taskId && store) {
+          completed = true;
+          try {
+            store.completeTurn({
+              id: turnId,
+              completedAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            console.warn(
+              "[provider:persistence] failed to complete turn",
+              error,
+              {
+                turnId,
+                providerId: args.providerId,
+                taskId: args.taskId,
+              },
+            );
+          }
+        }
+      },
     },
-  });
+  );
 
   return {
     ok: true,
@@ -418,18 +495,23 @@ async function suggestProviderPRDescription(args: {
     }),
     runCommand({ command: `git diff "${safeBaseBranch}"...HEAD --stat`, cwd }),
     runCommand({ command: "git status --porcelain", cwd }),
-    runCommand({ command: "cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true", cwd }),
+    runCommand({
+      command: "cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true",
+      cwd,
+    }),
     runCommand({ command: "cat AGENTS.md 2>/dev/null || true", cwd }),
     runCommand({ command: "git rev-parse --abbrev-ref HEAD", cwd }),
   ]);
 
-  const gitDetectedBranch = branchResult.ok ? branchResult.stdout.trim() : "HEAD";
+  const gitDetectedBranch = branchResult.ok
+    ? branchResult.stdout.trim()
+    : "HEAD";
   const headBranch = expectedBranch || gitDetectedBranch;
 
   if (
-    expectedBranch
-    && gitDetectedBranch !== "HEAD"
-    && gitDetectedBranch !== expectedBranch
+    expectedBranch &&
+    gitDetectedBranch !== "HEAD" &&
+    gitDetectedBranch !== expectedBranch
   ) {
     return { ok: false, headBranch: gitDetectedBranch };
   }
@@ -442,11 +524,15 @@ async function suggestProviderPRDescription(args: {
   const fileList = [
     statResult.ok ? statResult.stdout.trim() : "",
     statusResult.ok ? statusResult.stdout.trim() : "",
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
   const prTemplateContent = prTemplateResult.ok
     ? prTemplateResult.stdout.trim()
     : undefined;
-  const agentsContent = agentsResult.ok ? agentsResult.stdout.trim() : undefined;
+  const agentsContent = agentsResult.ok
+    ? agentsResult.stdout.trim()
+    : undefined;
   const fallbackDraft = generateFallbackPullRequestDraft({
     baseBranch,
     headBranch,
@@ -491,13 +577,12 @@ async function respond<TMethod extends HostServiceMethod>(
   id: number,
   result: HostServiceResponseMap[TMethod],
 ) {
-  const response: HostServiceSuccessResponseEnvelope<TMethod> = {
+  await writeMessage({
     type: "response",
     id,
     ok: true,
     result,
-  };
-  await writeMessage(response);
+  } as AnyHostServiceResponseEnvelope);
 }
 
 async function respondError(id: number, error: unknown) {
@@ -529,10 +614,7 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       setImmediate(() => process.exit(0));
       return;
     case "terminal.create-session":
-      await respond(
-        request.id,
-        terminalRuntime.createSession(request.params),
-      );
+      await respond(request.id, terminalRuntime.createSession(request.params));
       return;
     case "terminal.create-cli-session":
       await respond(
@@ -541,16 +623,10 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       );
       return;
     case "terminal.write-session":
-      await respond(
-        request.id,
-        terminalRuntime.writeSession(request.params),
-      );
+      await respond(request.id, terminalRuntime.writeSession(request.params));
       return;
     case "terminal.read-session":
-      await respond(
-        request.id,
-        terminalRuntime.readSession(request.params),
-      );
+      await respond(request.id, terminalRuntime.readSession(request.params));
       return;
     case "terminal.set-session-delivery-mode":
       await respond(
@@ -559,16 +635,10 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       );
       return;
     case "terminal.resize-session":
-      await respond(
-        request.id,
-        terminalRuntime.resizeSession(request.params),
-      );
+      await respond(request.id, terminalRuntime.resizeSession(request.params));
       return;
     case "terminal.close-session":
-      await respond(
-        request.id,
-        terminalRuntime.closeSession(request.params),
-      );
+      await respond(request.id, terminalRuntime.closeSession(request.params));
       return;
     case "terminal.buffer-session-output":
       await respond(
@@ -576,15 +646,27 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
         terminalRuntime.bufferSessionOutput(request.params),
       );
       return;
+    case "terminal.attach-session":
+      await respond(request.id, terminalRuntime.attachSession(request.params));
+      return;
+    case "terminal.detach-session":
+      await respond(request.id, terminalRuntime.detachSession(request.params));
+      return;
+    case "terminal.get-slot-state":
+      await respond(request.id, terminalRuntime.getSlotState(request.params));
+      return;
+    case "terminal.close-sessions-by-slot-prefix":
+      await respond(
+        request.id,
+        terminalRuntime.closeSessionsBySlotPrefix(request.params),
+      );
+      return;
     case "terminal.cleanup-all":
       await terminalRuntime.cleanupAll();
       await respond(request.id, { ok: true });
       return;
     case "workspace-scripts.run-entry":
-      await respond(
-        request.id,
-        await runScriptEntry(request.params),
-      );
+      await respond(request.id, await runScriptEntry(request.params));
       return;
     case "workspace-scripts.run-hook":
       await respond(request.id, {
@@ -622,28 +704,16 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       );
       return;
     case "provider.start-push-turn":
-      await respond(
-        request.id,
-        startPushProviderTurn(request.params),
-      );
+      await respond(request.id, startPushProviderTurn(request.params));
       return;
     case "provider.read-stream-turn":
-      await respond(
-        request.id,
-        providerRuntime.readTurnStream(request.params),
-      );
+      await respond(request.id, providerRuntime.readTurnStream(request.params));
       return;
     case "provider.abort-turn":
-      await respond(
-        request.id,
-        providerRuntime.abortTurn(request.params),
-      );
+      await respond(request.id, providerRuntime.abortTurn(request.params));
       return;
     case "provider.cleanup-task":
-      await respond(
-        request.id,
-        providerRuntime.cleanupTask(request.params),
-      );
+      await respond(request.id, providerRuntime.cleanupTask(request.params));
       return;
     case "provider.respond-approval":
       await respond(
@@ -676,16 +746,10 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       );
       return;
     case "provider.get-claude-context-usage":
-      await respond(
-        request.id,
-        await getClaudeContextUsage(request.params),
-      );
+      await respond(request.id, await getClaudeContextUsage(request.params));
       return;
     case "provider.reload-claude-plugins":
-      await respond(
-        request.id,
-        await reloadClaudePlugins(request.params),
-      );
+      await respond(request.id, await reloadClaudePlugins(request.params));
       return;
     case "provider.get-codex-mcp-status":
       await respond(
@@ -696,10 +760,7 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       );
       return;
     case "provider.suggest-task-name":
-      await respond(
-        request.id,
-        await suggestClaudeTaskName(request.params),
-      );
+      await respond(request.id, await suggestClaudeTaskName(request.params));
       return;
     case "provider.suggest-commit-message":
       await respond(
@@ -714,10 +775,7 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       );
       return;
     case "tooling.get-status":
-      await respond(
-        request.id,
-        await getToolingStatusSnapshot(request.params),
-      );
+      await respond(request.id, await getToolingStatusSnapshot(request.params));
       return;
     case "tooling.sync-origin-main":
       await respond(
@@ -839,7 +897,9 @@ async function main() {
   rl.on("close", () => {
     void shutdown()
       .catch((error) => {
-        process.stderr.write(`[host-service] shutdown error: ${String(error)}\n`);
+        process.stderr.write(
+          `[host-service] shutdown error: ${String(error)}\n`,
+        );
       })
       .finally(() => {
         process.exit(0);

@@ -178,7 +178,12 @@ interface WindowProviderApi {
     headBranch?: string;
     promptTemplate?: string;
     workspaceContext?: string;
-  }) => Promise<{ ok: boolean; title?: string; body?: string; headBranch?: string }>;
+  }) => Promise<{
+    ok: boolean;
+    title?: string;
+    body?: string;
+    headBranch?: string;
+  }>;
 }
 
 interface WindowFsApi {
@@ -189,9 +194,7 @@ interface WindowFsApi {
     files: string[];
     stderr?: string;
   }>;
-  pickFiles?: (args: {
-    rootPath: string;
-  }) => Promise<{
+  pickFiles?: (args: { rootPath: string }) => Promise<{
     ok: boolean;
     filePaths: string[];
     stderr?: string;
@@ -259,10 +262,7 @@ interface WindowFsApi {
     alreadyExists?: boolean;
     stderr?: string;
   }>;
-  deleteFile?: (args: {
-    rootPath: string;
-    filePath: string;
-  }) => Promise<{
+  deleteFile?: (args: { rootPath: string; filePath: string }) => Promise<{
     ok: boolean;
     stderr?: string;
   }>;
@@ -289,12 +289,12 @@ interface WindowFsApi {
     files: Array<{ content: string; filePath: string }>;
     stderr?: string;
   }>;
-  searchContent?: (args: {
-    rootPath: string;
-    query: string;
-  }) => Promise<{
+  searchContent?: (args: { rootPath: string; query: string }) => Promise<{
     ok: boolean;
-    results: Array<{ file: string; matches: Array<{ line: number; text: string }> }>;
+    results: Array<{
+      file: string;
+      matches: Array<{ line: number; text: string }>;
+    }>;
     limitHit: boolean;
     stderr?: string;
   }>;
@@ -535,8 +535,12 @@ interface TerminalSessionExitPayload {
 
 interface WindowTerminalApi {
   runCommand?: (args: TerminalRunArgs) => Promise<TerminalRunResult>;
-  createSession?: (args: TerminalCreateSessionArgs) => Promise<{ ok: boolean; sessionId?: string }>;
-  createCliSession?: (args: CliSessionCreateSessionArgs) => Promise<{ ok: boolean; sessionId?: string; stderr?: string }>;
+  createSession?: (
+    args: TerminalCreateSessionArgs,
+  ) => Promise<{ ok: boolean; sessionId?: string }>;
+  createCliSession?: (
+    args: CliSessionCreateSessionArgs,
+  ) => Promise<{ ok: boolean; sessionId?: string; stderr?: string }>;
   writeSession?: (args: {
     sessionId: string;
     input: string;
@@ -562,6 +566,22 @@ interface WindowTerminalApi {
   closeSession?: (args: {
     sessionId: string;
   }) => Promise<{ ok: boolean; stderr?: string }>;
+  attachSession?: (args: {
+    sessionId: string;
+    deliveryMode: "poll" | "push";
+  }) => Promise<{ ok: boolean; backlog?: string; stderr?: string }>;
+  detachSession?: (args: {
+    sessionId: string;
+  }) => Promise<{ ok: boolean; stderr?: string }>;
+  getSlotState?: (args: { slotKey: string }) => Promise<{
+    state: "idle" | "running" | "background" | "exited";
+    sessionId?: string;
+    exitCode?: number;
+    signal?: number;
+  }>;
+  closeSessionsBySlotPrefix?: (args: {
+    prefix: string;
+  }) => Promise<{ ok: boolean; closedCount: number }>;
 }
 
 interface WindowToolingApi {
@@ -1165,9 +1185,7 @@ interface WindowLensApi {
   createView?: (args: {
     workspaceId: string;
   }) => Promise<{ ok: boolean; message?: string }>;
-  destroyView?: (args: {
-    workspaceId: string;
-  }) => Promise<{ ok: boolean }>;
+  destroyView?: (args: { workspaceId: string }) => Promise<{ ok: boolean }>;
   setBounds?: (args: {
     workspaceId: string;
     bounds: { x: number; y: number; width: number; height: number };
@@ -1203,10 +1221,7 @@ interface WindowLensApi {
     workspaceId: string;
     expression: string;
   }) => Promise<{ ok: boolean; result?: unknown; message?: string }>;
-  getConsoleLog?: (args: {
-    workspaceId: string;
-    limit?: number;
-  }) => Promise<{
+  getConsoleLog?: (args: { workspaceId: string; limit?: number }) => Promise<{
     ok: boolean;
     entries?: Array<{
       level: string;
@@ -1216,10 +1231,7 @@ interface WindowLensApi {
     }>;
     message?: string;
   }>;
-  getNetworkLog?: (args: {
-    workspaceId: string;
-    limit?: number;
-  }) => Promise<{
+  getNetworkLog?: (args: { workspaceId: string; limit?: number }) => Promise<{
     ok: boolean;
     entries?: Array<{
       url: string;

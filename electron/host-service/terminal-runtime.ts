@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import * as pty from "node-pty";
-import type {
-  CliSessionCreateSessionArgs,
-  TerminalCreateSessionArgs,
+import {
+  buildTerminalSessionSlotKey,
+  type CliSessionCreateSessionArgs,
+  type TerminalCreateSessionArgs,
 } from "../../src/lib/terminal/types";
 import {
   buildClaudeCliEnv,
@@ -32,11 +33,15 @@ const TERMINAL_SESSION_CLOSE_TIMEOUT_MS = 5_000;
 const TERMINAL_PUSH_BACKLOG_WARN_BYTES = 128 * 1024;
 const TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS = 2_000;
 
+const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
+const TERMINAL_OUTPUT_CHUNKS_MAX_BYTES = 8 * 1024 * 1024;
+
 interface TerminalSessionEntry {
   pty: pty.IPty;
   dataSubscription: pty.IDisposable | null;
   exitSubscription: pty.IDisposable | null;
   outputChunks: string[];
+  outputChunksBytes: number;
   pendingPush: string[];
   pendingPushBytes: number;
   peakPendingPushBytes: number;
@@ -53,6 +58,11 @@ interface TerminalSessionEntry {
   disposePtyListeners: () => void;
   flushPushOutput: () => void;
   markClosed: () => void;
+  attached: boolean;
+  backgroundBuffer: string[];
+  backgroundBufferBytes: number;
+  exitCode: number | null;
+  exitSignal: number | undefined;
 }
 
 function createBufferedDataHandler(onData: (data: string) => void) {
@@ -105,18 +115,15 @@ function createOscColorInterceptor(args: {
   const background = hexToX11(args.background);
 
   return (data: string) =>
-    data.replace(/\x1b\](10|11);?\?(?:\x07|\x1b\\)/g, (_match, code: string) => {
-      args.writeToPty(`\x1b]${code};${code === "10" ? foreground : background}\x1b\\`);
-      return "";
-    });
-}
-
-function buildTerminalSessionSlotKey(args: {
-  workspaceId: string;
-  surface: "terminal" | "cli";
-  tabId: string;
-}) {
-  return `${args.surface}:${args.workspaceId}:${args.tabId}`;
+    data.replace(
+      /\x1b\](10|11);?\?(?:\x07|\x1b\\)/g,
+      (_match, code: string) => {
+        args.writeToPty(
+          `\x1b]${code};${code === "10" ? foreground : background}\x1b\\`,
+        );
+        return "";
+      },
+    );
 }
 
 function logTerminalPushBackpressure(message: string) {
@@ -164,10 +171,66 @@ export function createTerminalRuntime(args: {
     if (session.pendingPush.length === 0) {
       return;
     }
-    session.outputChunks.push(session.pendingPush.join(""));
+    appendOutputChunk(session, session.pendingPush.join(""));
     session.pendingPush.length = 0;
     session.pendingPushBytes = 0;
     session.pushScheduled = false;
+  }
+
+  function appendBounded(
+    buffer: string[],
+    tracker: { bytes: number },
+    data: string,
+    maxBytes: number,
+  ) {
+    buffer.push(data);
+    tracker.bytes += Buffer.byteLength(data);
+    while (tracker.bytes > maxBytes && buffer.length > 1) {
+      const removed = buffer.shift()!;
+      tracker.bytes -= Buffer.byteLength(removed);
+    }
+  }
+
+  function appendBackgroundBuffer(session: TerminalSessionEntry, data: string) {
+    appendBounded(
+      session.backgroundBuffer,
+      {
+        get bytes() {
+          return session.backgroundBufferBytes;
+        },
+        set bytes(v) {
+          session.backgroundBufferBytes = v;
+        },
+      },
+      data,
+      TERMINAL_BACKGROUND_BUFFER_MAX_BYTES,
+    );
+  }
+
+  function appendOutputChunk(session: TerminalSessionEntry, data: string) {
+    appendBounded(
+      session.outputChunks,
+      {
+        get bytes() {
+          return session.outputChunksBytes;
+        },
+        set bytes(v) {
+          session.outputChunksBytes = v;
+        },
+      },
+      data,
+      TERMINAL_OUTPUT_CHUNKS_MAX_BYTES,
+    );
+  }
+
+  function drainBackgroundBuffer(session: TerminalSessionEntry): string {
+    if (session.backgroundBuffer.length === 0) {
+      return "";
+    }
+    const backlog = session.backgroundBuffer.join("");
+    session.backgroundBuffer.length = 0;
+    session.backgroundBufferBytes = 0;
+    return backlog;
   }
 
   function maybeLogTerminalBackpressure(args: {
@@ -177,14 +240,18 @@ export function createTerminalRuntime(args: {
     flushedBytes?: number;
   }) {
     const now = Date.now();
-    if (now - args.session.lastBackpressureLogAt < TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS) {
+    if (
+      now - args.session.lastBackpressureLogAt <
+      TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS
+    ) {
       return;
     }
     args.session.lastBackpressureLogAt = now;
     args.session.backlogWarningActive = true;
-    const flushedSuffix = typeof args.flushedBytes === "number"
-      ? ` flushedBytes=${args.flushedBytes}`
-      : "";
+    const flushedSuffix =
+      typeof args.flushedBytes === "number"
+        ? ` flushedBytes=${args.flushedBytes}`
+        : "";
     logTerminalPushBackpressure(
       `reason=${args.reason} session=${args.sessionId} slot=${args.session.slotKey ?? "none"} deliveryMode=${args.session.deliveryMode} pendingChunks=${args.session.pendingPush.length} pendingBytes=${args.session.pendingPushBytes} peakPendingBytes=${args.session.peakPendingPushBytes}${flushedSuffix}`,
     );
@@ -194,7 +261,10 @@ export function createTerminalRuntime(args: {
     session: TerminalSessionEntry;
     sessionId: string;
   }) {
-    if (!args.session.backlogWarningActive || args.session.pendingPushBytes > 0) {
+    if (
+      !args.session.backlogWarningActive ||
+      args.session.pendingPushBytes > 0
+    ) {
       return;
     }
     args.session.backlogWarningActive = false;
@@ -205,11 +275,11 @@ export function createTerminalRuntime(args: {
 
   function schedulePushFlush(session: TerminalSessionEntry) {
     if (
-      session.closing
-      || session.deliveryMode !== "push"
-      || session.pushScheduled
-      || session.pushWriteInFlight
-      || session.pendingPush.length === 0
+      session.closing ||
+      session.deliveryMode !== "push" ||
+      session.pushScheduled ||
+      session.pushWriteInFlight ||
+      session.pendingPush.length === 0
     ) {
       return;
     }
@@ -224,10 +294,10 @@ export function createTerminalRuntime(args: {
     const { session, sessionId } = args;
     session.pushScheduled = false;
     if (
-      session.closing
-      || session.pushWriteInFlight
-      || session.deliveryMode !== "push"
-      || session.pendingPush.length === 0
+      session.closing ||
+      session.pushWriteInFlight ||
+      session.deliveryMode !== "push" ||
+      session.pendingPush.length === 0
     ) {
       return session.lastPushWritePromise ?? Promise.resolve();
     }
@@ -238,8 +308,12 @@ export function createTerminalRuntime(args: {
     session.pushWriteInFlight = true;
     const pushPromise = emitEvent("terminal.output", { sessionId, output })
       .catch((error) => {
-        session.outputChunks.push(output);
-        session.deliveryMode = "poll";
+        if (session.attached) {
+          appendOutputChunk(session, output);
+          session.deliveryMode = "poll";
+        } else {
+          appendBackgroundBuffer(session, output);
+        }
         maybeLogTerminalBackpressure({
           reason: "emit-failed-fallback-to-poll",
           session,
@@ -314,6 +388,7 @@ export function createTerminalRuntime(args: {
       dataSubscription: null,
       exitSubscription: null,
       outputChunks: [],
+      outputChunksBytes: 0,
       pendingPush: [],
       pendingPushBytes: 0,
       peakPendingPushBytes: 0,
@@ -326,6 +401,11 @@ export function createTerminalRuntime(args: {
       closing: false,
       slotKey: args.slotKey ?? null,
       closed,
+      attached: true,
+      backgroundBuffer: [],
+      backgroundBufferBytes: 0,
+      exitCode: null,
+      exitSignal: undefined,
       close: () => {
         if (session.closing) {
           return;
@@ -380,6 +460,10 @@ export function createTerminalRuntime(args: {
         if (!filtered) {
           return;
         }
+        if (!session.attached) {
+          appendBackgroundBuffer(session, filtered);
+          return;
+        }
         if (session.deliveryMode === "push") {
           session.pendingPush.push(filtered);
           session.pendingPushBytes += Buffer.byteLength(filtered);
@@ -397,11 +481,13 @@ export function createTerminalRuntime(args: {
           schedulePushFlush(session);
           return;
         }
-        session.outputChunks.push(filtered);
+        appendOutputChunk(session, filtered);
       }),
     );
 
     session.exitSubscription = ptyProcess.onExit(({ exitCode, signal }) => {
+      session.exitCode = exitCode ?? -1;
+      session.exitSignal = signal;
       session.disposePtyListeners();
       session.markClosed();
       deleteSession(sessionId);
@@ -420,7 +506,9 @@ export function createTerminalRuntime(args: {
     return sessionId;
   }
 
-  function createSession(args: TerminalCreateSessionArgs): HostTerminalCreateSessionResult {
+  function createSession(
+    args: TerminalCreateSessionArgs,
+  ): HostTerminalCreateSessionResult {
     const slotKey = buildTerminalSessionSlotKey({
       workspaceId: args.workspaceId,
       surface: "terminal",
@@ -478,7 +566,8 @@ export function createTerminalRuntime(args: {
       if (!executablePath) {
         return {
           ok: false,
-          stderr: "Claude executable not found. Check Claude CLI installation and auth.",
+          stderr:
+            "Claude executable not found. Check Claude CLI installation and auth.",
         };
       }
       const env = buildClaudeCliEnv({ executablePath });
@@ -507,7 +596,8 @@ export function createTerminalRuntime(args: {
     if (!executablePath) {
       return {
         ok: false,
-        stderr: "Codex executable not found. Check Codex CLI installation or the configured binary path.",
+        stderr:
+          "Codex executable not found. Check Codex CLI installation or the configured binary path.",
       };
     }
     const env = buildCodexCliEnv({ executablePath });
@@ -554,8 +644,13 @@ export function createTerminalRuntime(args: {
       };
     }
     bufferPendingPushOutput(session);
-    const output = session.outputChunks.join("");
+    const backgroundOutput = drainBackgroundBuffer(session);
+    const pollOutput = session.outputChunks.join("");
     session.outputChunks.length = 0;
+    session.outputChunksBytes = 0;
+    const output = backgroundOutput
+      ? `${backgroundOutput}${pollOutput}`
+      : pollOutput;
     return { ok: true, output };
   }
 
@@ -593,9 +688,28 @@ export function createTerminalRuntime(args: {
       return { ok: false, stderr: "Terminal session not found." };
     }
     if (args.output) {
-      session.outputChunks.push(args.output);
+      appendOutputChunk(session, args.output);
     }
     return { ok: true };
+  }
+
+  function closeSessionsBySlotPrefix(args: { prefix: string }): {
+    ok: true;
+    closedCount: number;
+  } {
+    let closedCount = 0;
+    for (const [slotKey, sessionId] of sessionSlotRegistry.sessionIdBySlotKey) {
+      if (!slotKey.startsWith(args.prefix)) {
+        continue;
+      }
+      const session = sessions.get(sessionId);
+      if (session && !session.closing) {
+        session.close();
+        deleteSession(sessionId);
+        closedCount++;
+      }
+    }
+    return { ok: true, closedCount };
   }
 
   async function cleanupAll() {
@@ -616,6 +730,71 @@ export function createTerminalRuntime(args: {
     );
   }
 
+  function attachSession(args: {
+    sessionId: string;
+    deliveryMode: "poll" | "push";
+  }): { ok: boolean; backlog?: string; stderr?: string } {
+    const session = sessions.get(args.sessionId);
+    if (!session) {
+      return { ok: false, stderr: "Terminal session not found." };
+    }
+    session.attached = true;
+    const backlog = drainBackgroundBuffer(session);
+    bufferPendingPushOutput(session);
+    const polledOutput = session.outputChunks.join("");
+    session.outputChunks.length = 0;
+    session.outputChunksBytes = 0;
+    const fullBacklog = polledOutput ? `${polledOutput}${backlog}` : backlog;
+    session.deliveryMode = args.deliveryMode;
+    if (args.deliveryMode === "push") {
+      schedulePushFlush(session);
+    }
+    return { ok: true, backlog: fullBacklog };
+  }
+
+  function detachSession(args: {
+    sessionId: string;
+  }): HostTerminalMutationResult {
+    const session = sessions.get(args.sessionId);
+    if (!session) {
+      return { ok: false, stderr: "Terminal session not found." };
+    }
+    session.attached = false;
+    bufferPendingPushOutput(session);
+    for (const chunk of session.outputChunks) {
+      appendBackgroundBuffer(session, chunk);
+    }
+    session.outputChunks.length = 0;
+    session.outputChunksBytes = 0;
+    session.deliveryMode = "poll";
+    return { ok: true };
+  }
+
+  function getSlotState(args: { slotKey: string }): {
+    state: "idle" | "running" | "background" | "exited";
+    sessionId?: string;
+    exitCode?: number;
+    signal?: number;
+  } {
+    const existing = getSessionBySlotKey(args.slotKey);
+    if (!existing) {
+      return { state: "idle" };
+    }
+    const { sessionId, session } = existing;
+    if (session.closing) {
+      return {
+        state: "exited",
+        sessionId,
+        exitCode: session.exitCode ?? -1,
+        signal: session.exitSignal,
+      };
+    }
+    if (!session.attached) {
+      return { state: "background", sessionId };
+    }
+    return { state: "running", sessionId };
+  }
+
   return {
     createSession,
     createCliSession,
@@ -625,6 +804,10 @@ export function createTerminalRuntime(args: {
     resizeSession,
     closeSession,
     bufferSessionOutput,
+    attachSession,
+    detachSession,
+    getSlotState,
+    closeSessionsBySlotPrefix,
     cleanupAll,
   };
 }

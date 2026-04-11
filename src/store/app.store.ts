@@ -109,6 +109,7 @@ import {
 import {
   getCliSessionTabDefaultTitle,
   getTerminalTabDefaultTitle,
+  buildTerminalSessionSlotKey,
   type CliSessionContextMode,
   type WorkspaceActiveSurface,
   type WorkspaceCliSessionTab,
@@ -1901,6 +1902,31 @@ function summarizeWorkspaceSession(session?: WorkspaceSessionState | null) {
       (sum, count) => sum + count,
       0,
     )
+  );
+}
+
+async function closeTerminalSessionsForWorkspaces(workspaceIds: string[]) {
+  const api = window.api?.terminal?.closeSessionsBySlotPrefix;
+  if (!api || workspaceIds.length === 0) {
+    return;
+  }
+  await Promise.allSettled(
+    workspaceIds.flatMap((wsId) => [
+      api({
+        prefix: buildTerminalSessionSlotKey({
+          surface: "terminal",
+          workspaceId: wsId,
+          tabId: "",
+        }),
+      }),
+      api({
+        prefix: buildTerminalSessionSlotKey({
+          surface: "cli",
+          workspaceId: wsId,
+          tabId: "",
+        }),
+      }),
+    ]),
   );
 }
 
@@ -4773,6 +4799,20 @@ export const useAppStore = create<AppState>()(
             await get().flushActiveWorkspaceSnapshot({ sync: true });
           }
 
+          const currentState = get();
+          const matchingProjectForCleanup = currentState.recentProjects.find(
+            (project) => project.projectPath === normalizedProjectPath,
+          );
+          const workspaceIdsForCleanup = [
+            ...(matchingProjectForCleanup?.workspaces.map(
+              (workspace) => workspace.id,
+            ) ?? []),
+            ...(isCurrentProject
+              ? currentState.workspaces.map((workspace) => workspace.id)
+              : []),
+          ];
+          await closeTerminalSessionsForWorkspaces(workspaceIdsForCleanup);
+
           set((state) => {
             const matchingProject = state.recentProjects.find(
               (project) => project.projectPath === normalizedProjectPath,
@@ -5426,6 +5466,7 @@ export const useAppStore = create<AppState>()(
           if (stopWorkspaceScripts) {
             await stopWorkspaceScripts({ workspaceId });
           }
+          await closeTerminalSessionsForWorkspaces([workspaceId]);
           if (runner && projectPath && workspacePath) {
             const removeResult = await runner({
               cwd: projectPath,

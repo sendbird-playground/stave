@@ -10,7 +10,7 @@ import {
 
 const TERMINAL_POLL_INTERVAL_MS = 120;
 const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
-const TERMINAL_TRANSCRIPT_CHAR_LIMIT = 300_000;
+const TERMINAL_TRANSCRIPT_CHAR_LIMIT = 2_000_000;
 const TERMINAL_INPUT_BUFFER_CHAR_LIMIT = 200_000;
 
 function appendTerminalText(
@@ -78,6 +78,7 @@ export interface UseTerminalSessionManagerArgs<TTab extends { id: string }> {
     rows: number;
     deliveryMode: "poll" | "push";
   }) => Promise<CreateSessionResult>;
+  slotKeyForTab?: (tab: TTab) => string | null;
   tabManager: UseTerminalTabManagerReturn;
 }
 
@@ -102,7 +103,9 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   args: UseTerminalSessionManagerArgs<TTab>,
 ): UseTerminalSessionManagerReturn {
   const tabManagerRef = useRef(args.tabManager);
-  useEffect(() => { tabManagerRef.current = args.tabManager; }, [args.tabManager]);
+  useEffect(() => {
+    tabManagerRef.current = args.tabManager;
+  }, [args.tabManager]);
 
   const activeSessionIdRef = useRef<string | null>(null);
   const activeTabKeyRef = useRef<string | null>(null);
@@ -115,11 +118,15 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   const transcriptRef = useRef<Record<string, string>>({});
   const transcriptFlushTimerRef = useRef<number | null>(null);
   const transcriptLoadedRef = useRef(false);
-  const exitedByTabKeyRef = useRef<Record<string, { exitCode: number; signal?: number }>>({});
+  const exitedByTabKeyRef = useRef<
+    Record<string, { exitCode: number; signal?: number }>
+  >({});
   const lastResizeByTabKeyRef = useRef<Record<string, TerminalResizeState>>({});
   const hydratedRevisionByTabKeyRef = useRef<Record<string, number>>({});
 
-  const [bridgeErrorByTabKey, setBridgeErrorByTabKey] = useState<Record<string, string>>({});
+  const [bridgeErrorByTabKey, setBridgeErrorByTabKey] = useState<
+    Record<string, string>
+  >({});
   const [runtimeVersion, setRuntimeVersion] = useState(0);
   const [sessionExited, setSessionExited] = useState<{
     exitCode: number;
@@ -128,19 +135,15 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
 
   const supportsPushTerminalOutput =
     typeof window !== "undefined" &&
-    Boolean(
-      window.api?.terminal?.subscribeSessionOutput
-      && window.api?.terminal?.setSessionDeliveryMode,
-    );
+    Boolean(window.api?.terminal?.subscribeSessionOutput);
 
-  const activeTabKey = args.activeTab
-    ? args.getTabKey(args.activeTab)
-    : null;
+  const activeTabKey = args.activeTab ? args.getTabKey(args.activeTab) : null;
   const activeSessionId = activeTabKey
     ? (sessionIdByTabKeyRef.current[activeTabKey] ?? null)
     : null;
   const activeTerminalStatus = activeTabKey
-    ? (args.tabManager.statusByTabKey[activeTabKey] ?? EMPTY_TERMINAL_TAB_INSTANCE_STATUS)
+    ? (args.tabManager.statusByTabKey[activeTabKey] ??
+      EMPTY_TERMINAL_TAB_INSTANCE_STATUS)
     : EMPTY_TERMINAL_TAB_INSTANCE_STATUS;
 
   const terminalReady = activeTerminalStatus.ready;
@@ -159,7 +162,9 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
 
         const result = await resizeSession({ sessionId, cols, rows });
         if (!result?.ok) {
-          throw new Error(result?.stderr || "Failed to resize backend session.");
+          throw new Error(
+            result?.stderr || "Failed to resize backend session.",
+          );
         }
 
         if (sessionIdByTabKeyRef.current[tabKey] !== sessionId) {
@@ -171,39 +176,46 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       onError: (error, request) => {
         const lastResize = lastResizeByTabKeyRef.current[request.tabKey];
         if (
-          lastResize
-          && lastResize.sessionId === request.sessionId
-          && lastResize.cols === request.cols
-          && lastResize.rows === request.rows
+          lastResize &&
+          lastResize.sessionId === request.sessionId &&
+          lastResize.cols === request.cols &&
+          lastResize.rows === request.rows
         ) {
           delete lastResizeByTabKeyRef.current[request.tabKey];
         }
-        console.warn("[terminal] failed to resize backend session", error, request);
+        console.warn(
+          "[terminal] failed to resize backend session",
+          error,
+          request,
+        );
       },
     }),
   );
 
-  const setBridgeErrorForTabKey = useCallback((tabKey: string, message: string) => {
-    setBridgeErrorByTabKey((previous) => {
-      if (!message) {
-        if (!(tabKey in previous)) {
+  const setBridgeErrorForTabKey = useCallback(
+    (tabKey: string, message: string) => {
+      setBridgeErrorByTabKey((previous) => {
+        if (!message) {
+          if (!(tabKey in previous)) {
+            return previous;
+          }
+          const next = { ...previous };
+          delete next[tabKey];
+          return next;
+        }
+
+        if (previous[tabKey] === message) {
           return previous;
         }
-        const next = { ...previous };
-        delete next[tabKey];
-        return next;
-      }
 
-      if (previous[tabKey] === message) {
-        return previous;
-      }
-
-      return {
-        ...previous,
-        [tabKey]: message,
-      };
-    });
-  }, []);
+        return {
+          ...previous,
+          [tabKey]: message,
+        };
+      });
+    },
+    [],
+  );
 
   function scheduleTranscriptFlush() {
     if (transcriptFlushTimerRef.current !== null) {
@@ -219,18 +231,30 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     }, TERMINAL_TRANSCRIPT_FLUSH_MS);
   }
 
-  async function disposeSessionIds(sessionIds: string[]) {
-    if (sessionIds.length === 0) {
-      return;
-    }
-
-    const closeSessionApi = window.api?.terminal?.closeSession;
-    if (closeSessionApi) {
-      await Promise.allSettled(
-        sessionIds.map((sessionId) => closeSessionApi({ sessionId })),
-      );
-    }
+  function batchSessionOp(
+    getApi: () =>
+      | ((args: { sessionId: string }) => Promise<unknown>)
+      | undefined,
+  ) {
+    return async (sessionIds: string[]) => {
+      if (sessionIds.length === 0) {
+        return;
+      }
+      const api = getApi();
+      if (api) {
+        await Promise.allSettled(
+          sessionIds.map((sessionId) => api({ sessionId })),
+        );
+      }
+    };
   }
+
+  const disposeSessionIds = batchSessionOp(
+    () => window.api?.terminal?.closeSession,
+  );
+  const detachSessionIds = batchSessionOp(
+    () => window.api?.terminal?.detachSession,
+  );
 
   function enqueueTerminalInput(args: { sessionId: string; input: string }) {
     pendingInputBySessionRef.current[args.sessionId] = appendTerminalInput(
@@ -262,8 +286,14 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     const tabKey = tabKeyBySessionIdRef.current[sessionId];
     if (!writeSession) {
       if (tabKey) {
-        tabManagerRef.current.writeln(tabKey, "\r\n[error] terminal bridge unavailable.");
-        setBridgeErrorForTabKey(tabKey, "Terminal bridge unavailable. Use bun run dev:desktop.");
+        tabManagerRef.current.writeln(
+          tabKey,
+          "\r\n[error] terminal bridge unavailable.",
+        );
+        setBridgeErrorForTabKey(
+          tabKey,
+          "Terminal bridge unavailable. Use bun run dev:desktop.",
+        );
       }
       delete pendingInputBySessionRef.current[sessionId];
       return;
@@ -280,7 +310,10 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
           TERMINAL_INPUT_BUFFER_CHAR_LIMIT,
         );
         if (tabKey) {
-          tabManagerRef.current.writeln(tabKey, "\r\n[error] failed to write terminal input.");
+          tabManagerRef.current.writeln(
+            tabKey,
+            "\r\n[error] failed to write terminal input.",
+          );
         }
       })
       .finally(() => {
@@ -319,7 +352,10 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     }
 
     const reads = await Promise.all(
-      sessionIds.map(async (sessionId) => [sessionId, await readSession({ sessionId })] as const),
+      sessionIds.map(
+        async (sessionId) =>
+          [sessionId, await readSession({ sessionId })] as const,
+      ),
     );
 
     for (const [sessionId, read] of reads) {
@@ -330,26 +366,34 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     }
   }
 
-  const handleTerminalResize = useCallback((tabKey: string, cols: number, rows: number) => {
-    const sessionId = sessionIdByTabKeyRef.current[tabKey];
-    if (!sessionId) {
-      tabManagerRef.current.resize(tabKey, cols, rows);
-      return;
-    }
+  const handleTerminalResize = useCallback(
+    (tabKey: string, cols: number, rows: number) => {
+      const sessionId = sessionIdByTabKeyRef.current[tabKey];
+      if (!sessionId) {
+        tabManagerRef.current.resize(tabKey, cols, rows);
+        return;
+      }
 
-    const lastResize = lastResizeByTabKeyRef.current[tabKey];
-    if (
-      lastResize
-      && lastResize.sessionId === sessionId
-      && lastResize.cols === cols
-      && lastResize.rows === rows
-    ) {
-      return;
-    }
+      const lastResize = lastResizeByTabKeyRef.current[tabKey];
+      if (
+        lastResize &&
+        lastResize.sessionId === sessionId &&
+        lastResize.cols === cols &&
+        lastResize.rows === rows
+      ) {
+        return;
+      }
 
-    lastResizeByTabKeyRef.current[tabKey] = { sessionId, cols, rows };
-    resizeSessionDispatcherRef.current.schedule({ tabKey, sessionId, cols, rows });
-  }, []);
+      lastResizeByTabKeyRef.current[tabKey] = { sessionId, cols, rows };
+      resizeSessionDispatcherRef.current.schedule({
+        tabKey,
+        sessionId,
+        cols,
+        rows,
+      });
+    },
+    [],
+  );
 
   const handleTerminalInput = useCallback((tabKey: string, input: string) => {
     const sessionId = sessionIdByTabKeyRef.current[tabKey];
@@ -427,9 +471,10 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       exitedByTabKeyRef.current[tabKey] = { exitCode, signal };
 
       const signalHint = signal ? ` (signal ${signal})` : "";
-      const exitMessage = exitCode === 0
-        ? `\r\n\x1b[2m[process exited with code 0${signalHint}]\x1b[0m\r\n`
-        : `\r\n\x1b[33m[process exited with code ${exitCode}${signalHint}]\x1b[0m\r\n`;
+      const exitMessage =
+        exitCode === 0
+          ? `\r\n\x1b[2m[process exited with code 0${signalHint}]\x1b[0m\r\n`
+          : `\r\n\x1b[33m[process exited with code ${exitCode}${signalHint}]\x1b[0m\r\n`;
 
       transcriptRef.current[tabKey] = appendTerminalText(
         transcriptRef.current[tabKey] ?? "",
@@ -476,7 +521,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   useEffect(() => {
     return () => {
       resizeSessionDispatcherRef.current.clear();
-      void disposeSessionIds(Object.values(sessionIdByTabKeyRef.current));
+      void detachSessionIds(Object.values(sessionIdByTabKeyRef.current));
     };
   }, []);
 
@@ -485,12 +530,16 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       ([tabKey]) => tabKey.startsWith(`${args.workspaceId}:`),
     );
     const liveTabKeys = new Set(args.tabs.map((tab) => args.getTabKey(tab)));
-    const removedEntries = liveEntries.filter(([tabKey]) => !liveTabKeys.has(tabKey));
+    const removedEntries = liveEntries.filter(
+      ([tabKey]) => !liveTabKeys.has(tabKey),
+    );
     if (removedEntries.length === 0) {
       return;
     }
 
-    void disposeSessionIds(removedEntries.map(([, sessionId]) => sessionId)).finally(() => {
+    void disposeSessionIds(
+      removedEntries.map(([, sessionId]) => sessionId),
+    ).finally(() => {
       for (const [tabKey, sessionId] of removedEntries) {
         delete sessionIdByTabKeyRef.current[tabKey];
         delete tabKeyBySessionIdRef.current[sessionId];
@@ -535,7 +584,13 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         tabManagerWrite(tabKey, transcript);
       }
     }
-  }, [args.getTabKey, args.tabs, tabStatusByTabKey, tabManagerClear, tabManagerWrite]);
+  }, [
+    args.getTabKey,
+    args.tabs,
+    tabStatusByTabKey,
+    tabManagerClear,
+    tabManagerWrite,
+  ]);
 
   useEffect(() => {
     if (!activeTabKey) {
@@ -551,11 +606,14 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   const tabManagerWriteln = args.tabManager.writeln;
 
   useEffect(() => {
-    if (!args.activeTab || !shouldCreatePtySession({
-      isVisible: args.isVisible,
-      workspaceId: args.workspaceId,
-      hasActiveTab: true,
-    })) {
+    if (
+      !args.activeTab ||
+      !shouldCreatePtySession({
+        isVisible: args.isVisible,
+        workspaceId: args.workspaceId,
+        hasActiveTab: true,
+      })
+    ) {
       return;
     }
 
@@ -563,7 +621,10 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     if (!tabStatusByTabKey[tabKey]?.ready) {
       return;
     }
-    if (sessionIdByTabKeyRef.current[tabKey] || creatingSessionByTabKeyRef.current[tabKey]) {
+    if (
+      sessionIdByTabKeyRef.current[tabKey] ||
+      creatingSessionByTabKeyRef.current[tabKey]
+    ) {
       return;
     }
 
@@ -571,50 +632,123 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     const proposed = tabManagerProposeDimensions(tabKey);
     const cols = measured.cols || proposed?.cols || 80;
     const rows = measured.rows || proposed?.rows || 24;
+    const deliveryMode = supportsPushTerminalOutput ? "push" : "poll";
+
+    function registerSession(sessionId: string) {
+      setBridgeErrorForTabKey(tabKey, "");
+      sessionIdByTabKeyRef.current[tabKey] = sessionId;
+      tabKeyBySessionIdRef.current[sessionId] = tabKey;
+      pendingInputBySessionRef.current[sessionId] = "";
+      writeInFlightBySessionRef.current[sessionId] = false;
+      delete exitedByTabKeyRef.current[tabKey];
+      delete lastResizeByTabKeyRef.current[tabKey];
+      setSessionExited(null);
+      setRuntimeVersion((value) => value + 1);
+    }
+
+    function hydrateBacklog(backlog: string) {
+      if (!backlog) {
+        return;
+      }
+      transcriptRef.current[tabKey] = appendTerminalText(
+        transcriptRef.current[tabKey] ?? "",
+        backlog,
+        TERMINAL_TRANSCRIPT_CHAR_LIMIT,
+      );
+      scheduleTranscriptFlush();
+      tabManagerRef.current.write(tabKey, backlog);
+    }
+
+    async function tryReattachExistingSession(): Promise<boolean> {
+      if (!args.slotKeyForTab || !args.activeTab) {
+        return false;
+      }
+      const getSlotState = window.api?.terminal?.getSlotState;
+      const attachSession = window.api?.terminal?.attachSession;
+      if (!getSlotState || !attachSession) {
+        return false;
+      }
+      const slotKey = args.slotKeyForTab(args.activeTab);
+      if (!slotKey) {
+        return false;
+      }
+      const slotState = await getSlotState({ slotKey });
+      if (
+        slotState.sessionId &&
+        (slotState.state === "background" || slotState.state === "running")
+      ) {
+        if (!args.tabs.some((tab) => args.getTabKey(tab) === tabKey)) {
+          return true;
+        }
+        const attached = await attachSession({
+          sessionId: slotState.sessionId,
+          deliveryMode,
+        });
+        if (attached.ok) {
+          registerSession(slotState.sessionId);
+          hydrateBacklog(attached.backlog ?? "");
+          return true;
+        }
+      }
+      if (slotState.state === "exited") {
+        exitedByTabKeyRef.current[tabKey] = {
+          exitCode: slotState.exitCode ?? -1,
+          signal: slotState.signal,
+        };
+        if (activeTabKeyRef.current === tabKey) {
+          setSessionExited({
+            exitCode: slotState.exitCode ?? -1,
+            signal: slotState.signal,
+          });
+        }
+      }
+      return false;
+    }
+
+    async function createNewSession() {
+      const created = await args.createSession({
+        tab: args.activeTab!,
+        cols,
+        rows,
+        deliveryMode,
+      });
+      if (!args.tabs.some((tab) => args.getTabKey(tab) === tabKey)) {
+        if (created.ok && created.sessionId) {
+          void window.api?.terminal?.closeSession?.({
+            sessionId: created.sessionId,
+          });
+        }
+        return;
+      }
+      if (!created.ok || !created.sessionId) {
+        const message =
+          created.stderr?.trim() || "Failed to create terminal session.";
+        setBridgeErrorForTabKey(tabKey, message);
+        tabManagerRef.current.writeln(
+          tabKey,
+          `\r\n[error] ${created.stderr?.trim() || "failed to create terminal session."}`,
+        );
+        return;
+      }
+      registerSession(created.sessionId);
+    }
 
     creatingSessionByTabKeyRef.current[tabKey] = true;
-    void args.createSession({
-      tab: args.activeTab,
-      cols,
-      rows,
-      deliveryMode: supportsPushTerminalOutput ? "push" : "poll",
-    })
-      .then((created) => {
-        if (!args.tabs.some((tab) => args.getTabKey(tab) === tabKey)) {
-          if (created.ok && created.sessionId) {
-            void window.api?.terminal?.closeSession?.({ sessionId: created.sessionId });
-          }
-          return;
-        }
 
-        if (!created.ok || !created.sessionId) {
-          const message = created.stderr?.trim() || "Failed to create terminal session.";
-          setBridgeErrorForTabKey(tabKey, message);
-          tabManagerRef.current.writeln(
-            tabKey,
-            `\r\n[error] ${created.stderr?.trim() || "failed to create terminal session."}`,
-          );
-          return;
-        }
-
-        setBridgeErrorForTabKey(tabKey, "");
-        sessionIdByTabKeyRef.current[tabKey] = created.sessionId;
-        tabKeyBySessionIdRef.current[created.sessionId] = tabKey;
-        pendingInputBySessionRef.current[created.sessionId] = "";
-        writeInFlightBySessionRef.current[created.sessionId] = false;
-        delete exitedByTabKeyRef.current[tabKey];
-        delete lastResizeByTabKeyRef.current[tabKey];
-        setSessionExited(null);
-        setRuntimeVersion((value) => value + 1);
-      })
-      .finally(() => {
-        delete creatingSessionByTabKeyRef.current[tabKey];
-      });
+    void (async () => {
+      const reattached = await tryReattachExistingSession();
+      if (!reattached) {
+        await createNewSession();
+      }
+    })().finally(() => {
+      delete creatingSessionByTabKeyRef.current[tabKey];
+    });
   }, [
     args.activeTab,
     args.createSession,
     args.getTabKey,
     args.isVisible,
+    args.slotKeyForTab,
     args.tabs,
     args.workspaceId,
     setBridgeErrorForTabKey,
