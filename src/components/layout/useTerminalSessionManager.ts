@@ -239,13 +239,22 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       return;
     }
 
-    transcriptFlushTimerRef.current = window.setTimeout(() => {
+    const doFlush = () => {
       transcriptFlushTimerRef.current = null;
-      window.localStorage.setItem(
-        args.transcriptStorageKey,
-        JSON.stringify(transcriptRef.current),
-      );
-    }, TERMINAL_TRANSCRIPT_FLUSH_MS);
+      try {
+        window.localStorage.setItem(
+          args.transcriptStorageKey,
+          JSON.stringify(transcriptRef.current),
+        );
+      } catch {
+        // Ignore localStorage quota errors.
+      }
+    };
+
+    transcriptFlushTimerRef.current =
+      typeof requestIdleCallback === "function"
+        ? requestIdleCallback(doFlush, { timeout: TERMINAL_TRANSCRIPT_FLUSH_MS })
+        : window.setTimeout(doFlush, TERMINAL_TRANSCRIPT_FLUSH_MS);
   }
 
   function batchSessionOp(
@@ -457,13 +466,20 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
 
     return () => {
       if (transcriptFlushTimerRef.current !== null) {
+        if (typeof cancelIdleCallback === "function") {
+          cancelIdleCallback(transcriptFlushTimerRef.current);
+        }
         window.clearTimeout(transcriptFlushTimerRef.current);
         transcriptFlushTimerRef.current = null;
       }
-      window.localStorage.setItem(
-        args.transcriptStorageKey,
-        JSON.stringify(transcriptRef.current),
-      );
+      try {
+        window.localStorage.setItem(
+          args.transcriptStorageKey,
+          JSON.stringify(transcriptRef.current),
+        );
+      } catch {
+        // Ignore localStorage quota errors on unmount.
+      }
     };
   }, [args.transcriptStorageKey]);
 

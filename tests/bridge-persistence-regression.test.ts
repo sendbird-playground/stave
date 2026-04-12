@@ -9,6 +9,7 @@ import { createEmptyWorkspaceInformation } from "@/lib/workspace-information";
 import {
   buildWorkspaceSessionState,
   createWorkspaceSnapshot,
+  flushPendingSnapshotPersists,
 } from "@/store/workspace-session-state";
 import {
   createNotification,
@@ -2325,6 +2326,7 @@ describe("workspace store hydration ordering", () => {
       "Task 1 kept updating after the workspace switch.",
     );
     expect(inactiveWorkspaceAssistant?.isStreaming).toBe(false);
+    await flushPendingSnapshotPersists();
     expect(upsertCalls).toHaveLength(1);
     expect(upsertCalls[0]).toMatchObject({
       id: "ws-main",
@@ -2966,6 +2968,7 @@ describe("workspace store hydration ordering", () => {
     ).toBeUndefined();
     expect(inactiveWorkspaceAssistant?.content).toBe("No response returned.");
     expect(inactiveWorkspaceAssistant?.isStreaming).toBe(false);
+    await flushPendingSnapshotPersists();
     expect(upsertCalls).toHaveLength(1);
   });
 

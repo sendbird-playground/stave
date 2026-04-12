@@ -241,6 +241,7 @@ import {
   defaultWorkspaceName,
   interruptActiveTaskTurns,
   persistWorkspaceSnapshot,
+  scheduleWorkspaceSnapshotPersist,
   starterWorkspaceId,
   type WorkspaceSessionState,
 } from "@/store/workspace-session-state";
@@ -2547,7 +2548,7 @@ export const useAppStore = create<AppState>()(
         session: WorkspaceSessionState;
       }) => {
         const latestState = get();
-        void persistWorkspaceSnapshot({
+        scheduleWorkspaceSnapshotPersist({
           workspaceId: args.workspaceId,
           workspaceName: resolveWorkspaceName({
             state: latestState,
@@ -9299,7 +9300,7 @@ export const useAppStore = create<AppState>()(
               const inactiveWorkspaceSession =
                 get().workspaceRuntimeCacheById[taskWorkspaceId];
               if (inactiveWorkspaceSession) {
-                void persistWorkspaceSnapshot({
+                scheduleWorkspaceSnapshotPersist({
                   workspaceId: taskWorkspaceId,
                   workspaceName: resolveWorkspaceName({
                     state: get(),
@@ -9409,7 +9410,7 @@ export const useAppStore = create<AppState>()(
                     } | null;
                   const latestState = get();
                   if (persistedInactiveWorkspaceSession !== null) {
-                    void persistWorkspaceSnapshot({
+                    scheduleWorkspaceSnapshotPersist({
                       workspaceId:
                         persistedInactiveWorkspaceSession.workspaceId,
                       workspaceName: resolveWorkspaceName({

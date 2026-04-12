@@ -600,3 +600,43 @@ export async function persistWorkspaceSnapshot(args: {
     }),
   });
 }
+
+/**
+ * Trailing-edge debounce for fire-and-forget `persistWorkspaceSnapshot` calls.
+ * Groups by workspaceId — rapid calls for the same workspace are coalesced so
+ * only the last snapshot is persisted after a short quiet period.
+ */
+const pendingSnapshots = new Map<
+  string,
+  {
+    timer: ReturnType<typeof setTimeout>;
+    args: Parameters<typeof persistWorkspaceSnapshot>[0];
+  }
+>();
+const SNAPSHOT_DEBOUNCE_MS = 400;
+
+export function scheduleWorkspaceSnapshotPersist(
+  args: Parameters<typeof persistWorkspaceSnapshot>[0],
+) {
+  const existing = pendingSnapshots.get(args.workspaceId);
+  if (existing) {
+    clearTimeout(existing.timer);
+  }
+  pendingSnapshots.set(args.workspaceId, {
+    timer: setTimeout(() => {
+      pendingSnapshots.delete(args.workspaceId);
+      void persistWorkspaceSnapshot(args);
+    }, SNAPSHOT_DEBOUNCE_MS),
+    args,
+  });
+}
+
+/** Immediately execute all pending debounced snapshot persists. */
+export async function flushPendingSnapshotPersists() {
+  const entries = Array.from(pendingSnapshots.entries());
+  for (const [workspaceId, entry] of entries) {
+    clearTimeout(entry.timer);
+    pendingSnapshots.delete(workspaceId);
+    await persistWorkspaceSnapshot(entry.args);
+  }
+}

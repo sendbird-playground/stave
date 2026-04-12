@@ -46,6 +46,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
+const CLI_SESSION_TRANSCRIPT_STORAGE_KEY = "stave:cli-session-transcript:v1";
+
 export const CliSessionPanel = memo(CliSessionPanelImpl);
 
 function CliSessionPanelImpl() {
@@ -193,6 +195,7 @@ function CliSessionPanelImpl() {
     activeTabId: activeCliSessionTabId,
     tabs: cliSessionTabs,
     workspaceId: activeWorkspaceId,
+    transcriptStorageKey: CLI_SESSION_TRANSCRIPT_STORAGE_KEY,
     isVisible: activeSurface.kind === "cli-session",
     getTabKey,
     createSession,
