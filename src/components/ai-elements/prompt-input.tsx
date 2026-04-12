@@ -1,7 +1,7 @@
 import { Brain, ClipboardCheck, FolderOpen, Globe2, OctagonX, Paperclip, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
 import type { Attachment, PromptDraftQueuedNextTurn, UserInputPart } from "@/types/chat";
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
+import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger, buttonVariants } from "@/components/ui";
 import { UserInputCard } from "./user-input-card";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
 import type { ProviderModePresetDefinition, ProviderModePresetId } from "@/lib/providers/provider-mode-presets";
@@ -92,6 +92,18 @@ const PROMPT_TOOLBAR_BUTTON =
   `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} h-9 rounded-md border border-transparent bg-transparent px-2.5 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground`;
 const PROMPT_TOOLBAR_ICON_BUTTON =
   `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} rounded-md border border-transparent bg-transparent p-0 text-muted-foreground hover:bg-muted/60 hover:text-foreground`;
+
+function tooltipTriggerButtonClassName(args: {
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
+  size?: "default" | "xs" | "sm" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg";
+  className?: string;
+}) {
+  return buttonVariants({
+    variant: args.variant ?? "ghost",
+    size: args.size ?? "sm",
+    className: args.className,
+  });
+}
 
 function getPromptToolbarAccentClass(tone: "plan" | "thinking" | "effort" | "fast") {
   if (tone === "thinking") return "text-prompt-role-thinking hover:text-prompt-role-thinking";
@@ -1180,41 +1192,37 @@ export function PromptInput(args: PromptInputProps) {
             ) : null}
             {onPlanModeChange ? (
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={interactionsDisabled}
-                    onClick={() => onPlanModeChange(!planMode)}
-                    className={cn(
+                <TooltipTrigger
+                  type="button"
+                  disabled={interactionsDisabled}
+                  onClick={() => onPlanModeChange(!planMode)}
+                  className={tooltipTriggerButtonClassName({
+                    className: cn(
                       PROMPT_TOOLBAR_BUTTON,
                       planMode
                         ? getPromptToolbarAccentClass("plan")
                         : undefined,
                       interactionsDisabled && "cursor-not-allowed opacity-60",
-                    )}
-                  >
-                    <ClipboardCheck className="size-3.5" />
-                    <span>Plan</span>
-                  </Button>
+                    ),
+                  })}
+                >
+                  <ClipboardCheck className="size-3.5" />
+                  <span>Plan</span>
                 </TooltipTrigger>
                 <TooltipContent side="top">{planMode ? "Plan mode ON" : "Plan mode OFF"}</TooltipContent>
               </Tooltip>
             ) : null}
             {onThinkingModeChange ? (
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={interactionsDisabled}
-                    onClick={() => {
-                      const cycle = { adaptive: "enabled", enabled: "disabled", disabled: "adaptive" } as const;
-                      onThinkingModeChange(cycle[thinkingMode ?? "adaptive"]);
-                    }}
-                    className={cn(
+                <TooltipTrigger
+                  type="button"
+                  disabled={interactionsDisabled}
+                  onClick={() => {
+                    const cycle = { adaptive: "enabled", enabled: "disabled", disabled: "adaptive" } as const;
+                    onThinkingModeChange(cycle[thinkingMode ?? "adaptive"]);
+                  }}
+                  className={tooltipTriggerButtonClassName({
+                    className: cn(
                       PROMPT_TOOLBAR_BUTTON,
                       thinkingMode === "enabled"
                         ? getPromptToolbarAccentClass("thinking")
@@ -1222,62 +1230,58 @@ export function PromptInput(args: PromptInputProps) {
                           ? "text-muted-foreground/50"
                           : undefined,
                       interactionsDisabled && "cursor-not-allowed opacity-60",
-                    )}
-                  >
-                    <Brain className={cn("size-3.5", thinkingMode === "adaptive" && "text-prompt-role-thinking")} />
-                    <span>Thinking</span>
-                  </Button>
+                    ),
+                  })}
+                >
+                  <Brain className={cn("size-3.5", thinkingMode === "adaptive" && "text-prompt-role-thinking")} />
+                  <span>Thinking</span>
                 </TooltipTrigger>
                 <TooltipContent side="top">{`Thinking: ${thinkingMode ?? "adaptive"}`}</TooltipContent>
               </Tooltip>
             ) : null}
             {onEffortCycle && effortLabel ? (
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={interactionsDisabled}
-                    onClick={() => onEffortCycle()}
-                    className={cn(
+                <TooltipTrigger
+                  type="button"
+                  disabled={interactionsDisabled}
+                  onClick={() => onEffortCycle()}
+                  className={tooltipTriggerButtonClassName({
+                    className: cn(
                       PROMPT_TOOLBAR_BUTTON,
                       isHighestEffortValue(effortValue)
                         ? getPromptToolbarAccentClass("effort")
                         : undefined,
                       interactionsDisabled && "cursor-not-allowed opacity-60",
-                    )}
-                  >
-                    <Sparkles className={cn(
-                      "size-3.5",
-                      getEffortIconToneClass(effortValue),
-                    )} />
-                    <span>{effortLabel}</span>
-                  </Button>
+                    ),
+                  })}
+                >
+                  <Sparkles className={cn(
+                    "size-3.5",
+                    getEffortIconToneClass(effortValue),
+                  )} />
+                  <span>{effortLabel}</span>
                 </TooltipTrigger>
                 <TooltipContent side="top">{`Effort: ${effortLabel} — click to cycle`}</TooltipContent>
               </Tooltip>
             ) : null}
             {onFastModeChange ? (
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={interactionsDisabled}
-                    onClick={() => onFastModeChange(!fastMode)}
-                    className={cn(
+                <TooltipTrigger
+                  type="button"
+                  disabled={interactionsDisabled}
+                  onClick={() => onFastModeChange(!fastMode)}
+                  className={tooltipTriggerButtonClassName({
+                    className: cn(
                       PROMPT_TOOLBAR_BUTTON,
                       fastMode
                         ? getPromptToolbarAccentClass("fast")
                         : undefined,
                       interactionsDisabled && "cursor-not-allowed opacity-60",
-                    )}
-                  >
-                    <Zap className={cn("size-3.5", fastMode && "fill-current")} />
-                    <span>Fast</span>
-                  </Button>
+                    ),
+                  })}
+                >
+                  <Zap className={cn("size-3.5", fastMode && "fill-current")} />
+                  <span>Fast</span>
                 </TooltipTrigger>
                 <TooltipContent side="top">
                   {fastMode ? "Fast mode ON — faster responses with smaller model" : "Fast mode OFF"}
@@ -1286,24 +1290,20 @@ export function PromptInput(args: PromptInputProps) {
             ) : null}
             {hasRuntimeDrawerContent ? (
               <Drawer direction="bottom">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DrawerTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={interactionsDisabled}
-                        className={cn(PROMPT_TOOLBAR_BUTTON)}
-                        aria-label="Current Runtime"
-                      >
-                        <SlidersHorizontal className="size-3.5" />
-                        <span>Runtime</span>
-                      </Button>
-                    </DrawerTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Current runtime status</TooltipContent>
-                </Tooltip>
+                <DrawerTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={interactionsDisabled}
+                    className={cn(PROMPT_TOOLBAR_BUTTON)}
+                    aria-label="Current Runtime"
+                    title="Current runtime status"
+                  >
+                    <SlidersHorizontal className="size-3.5" />
+                    <span>Runtime</span>
+                  </Button>
+                </DrawerTrigger>
                 <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
                   <DrawerHeader className="gap-2 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
                     <DrawerTitle className="text-lg font-semibold">Current Runtime</DrawerTitle>
@@ -1324,40 +1324,38 @@ export function PromptInput(args: PromptInputProps) {
         ) : null}
         <div className="flex items-center gap-2">
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                disabled={interactionsDisabled || !onOpenFileSelector}
-                onClick={() => {
-                  void onOpenFileSelector?.();
-                }}
-                className={cn(PROMPT_TOOLBAR_ICON_BUTTON, minimal && "h-8 w-8 rounded-md border border-border/60 bg-background/50 text-foreground hover:bg-muted/40")}
-                aria-label="Attach files"
-              >
-                <Paperclip className="size-3.5" />
-              </Button>
+            <TooltipTrigger
+              type="button"
+              disabled={interactionsDisabled || !onOpenFileSelector}
+              onClick={() => {
+                void onOpenFileSelector?.();
+              }}
+              className={tooltipTriggerButtonClassName({
+                size: "icon-sm",
+                className: cn(PROMPT_TOOLBAR_ICON_BUTTON, minimal && "h-8 w-8 rounded-md border border-border/60 bg-background/50 text-foreground hover:bg-muted/40"),
+              })}
+              aria-label="Attach files"
+            >
+              <Paperclip className="size-3.5" />
             </TooltipTrigger>
             <TooltipContent side="top">Attach files</TooltipContent>
           </Tooltip>
           {isTurnActive ? (
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  className={cn(
+              <TooltipTrigger
+                type="button"
+                className={tooltipTriggerButtonClassName({
+                  size: "icon-sm",
+                  className: cn(
                     PROMPT_TOOLBAR_ICON_BUTTON,
                     "text-destructive hover:bg-destructive/10 hover:text-destructive",
                     minimal && "h-8 w-8 rounded-md border border-destructive/30 bg-background/50",
-                  )}
-                  aria-label="Abort"
-                  onClick={() => onAbort?.()}
-                >
-                  <OctagonX className="size-3.5" />
-                </Button>
+                  ),
+                })}
+                aria-label="Abort"
+                onClick={() => onAbort?.()}
+              >
+                <OctagonX className="size-3.5" />
               </TooltipTrigger>
               <TooltipContent side="top">
                 <span>Stop responding</span>
@@ -1366,23 +1364,24 @@ export function PromptInput(args: PromptInputProps) {
             </Tooltip>
           ) : null}
           <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="submit"
-                size={isQueueNextMode ? "sm" : "icon-sm"}
-                className={cn(
+            <TooltipTrigger
+              type="submit"
+              className={tooltipTriggerButtonClassName({
+                variant: "default",
+                size: isQueueNextMode ? "sm" : "icon-sm",
+                className: cn(
                   "rounded-md",
                   PROMPT_SURFACE_PRIMARY_FOCUS,
                   isQueueNextMode && "h-8 gap-2 px-3",
                   minimal && !isQueueNextMode && "h-8 w-8 border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
                   minimal && isQueueNextMode && "border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
-                )}
-                disabled={primaryActionDisabled}
-                aria-label={isQueueNextMode ? (queuedNextTurn ? "Update queued next turn" : "Queue next turn") : "Send"}
-              >
-                <Send className="size-3.5" />
-                {isQueueNextMode ? <span>{queuedNextTurn ? "Update queued" : "Queue next"}</span> : null}
-              </Button>
+                ),
+              })}
+              disabled={primaryActionDisabled}
+              aria-label={isQueueNextMode ? (queuedNextTurn ? "Update queued next turn" : "Queue next turn") : "Send"}
+            >
+              <Send className="size-3.5" />
+              {isQueueNextMode ? <span>{queuedNextTurn ? "Update queued" : "Queue next"}</span> : null}
             </TooltipTrigger>
             <TooltipContent side="top">
               <span>{isQueueNextMode ? "Queue the next turn" : "Send message"}</span>

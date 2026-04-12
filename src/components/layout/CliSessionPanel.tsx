@@ -6,13 +6,12 @@ import {
   ClipboardPaste,
   X,
 } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ModelIcon } from "@/components/ai-elements";
-import { TerminalTabSurface } from "@/components/layout/TerminalTabSurface";
-import { useTerminalSessionManager } from "@/components/layout/useTerminalSessionManager";
-import { useTerminalTabManager } from "@/components/layout/useTerminalTabManager";
 import { TERMINAL_WRITE_ERROR_THRESHOLD } from "@/components/layout/useTerminalInstance";
+import { useCliSessionManager } from "@/components/layout/useCliSessionManager";
+import { useCliTerminalInstance } from "@/components/layout/useCliTerminalInstance";
 import {
   Badge,
   Button,
@@ -33,15 +32,13 @@ import {
   getCliSessionProviderLabel,
   getWorkspaceCliSessionTabKey,
 } from "@/lib/terminal/types";
+import { TERMINAL_SURFACE_CLASS_NAME } from "@/components/layout/terminal-surface-styles";
 import {
   TERMINAL_SURFACE_PANEL_CLASS_NAME,
-  TERMINAL_SURFACE_CLASS_NAME,
   TERMINAL_SURFACE_VIEWPORT_CLASS_NAME,
 } from "@/components/layout/terminal-surface-styles";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-
-const CLI_SESSION_TRANSCRIPT_STORAGE_KEY = "stave:cli-session-transcript:v1";
 
 export function CliSessionPanel() {
   const [
@@ -87,6 +84,13 @@ export function CliSessionPanel() {
       }),
     [activeWorkspaceId],
   );
+  const activeTabKey = activeTab ? getTabKey(activeTab) : null;
+  const [rendererRestartToken, setRendererRestartToken] = useState(0);
+  const terminalContainerRef = useRef<HTMLDivElement | null>(null);
+  const terminalInputHandlerRef = useRef<(input: string) => void>(() => {});
+  const terminalResizeHandlerRef = useRef<
+    (cols: number, rows: number) => Promise<void>
+  >(() => Promise.resolve());
   const createSession = useCallback(
     async (args: {
       tab: NonNullable<typeof activeTab>;
@@ -141,13 +145,6 @@ export function CliSessionPanel() {
     ],
   );
 
-  const tabManager = useTerminalTabManager({
-    tabs: cliSessionTabs,
-    activeTabId: activeCliSessionTabId,
-    isVisible: activeSurface.kind === "cli-session",
-    getTabKey,
-  });
-
   const slotKeyForTab = useCallback(
     (tab: NonNullable<typeof activeTab>) =>
       buildTerminalSessionSlotKey({
@@ -158,30 +155,41 @@ export function CliSessionPanel() {
     [activeWorkspaceId],
   );
 
+  const terminalInstance = useCliTerminalInstance({
+    containerRef: terminalContainerRef,
+    instanceKey: activeTabKey ?? "no-cli-session",
+    enabled: Boolean(activeTab) && activeSurface.kind === "cli-session",
+    visible: activeSurface.kind === "cli-session",
+    restartToken: rendererRestartToken,
+    fontFamily: settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY,
+    fontSize: settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE,
+    isDarkMode,
+    onData: (input) => terminalInputHandlerRef.current(input),
+    onResize: (cols, rows) => terminalResizeHandlerRef.current(cols, rows),
+  });
+
   const {
     activeSessionId,
-    activeWriteErrorCount,
     bridgeError,
-    getSessionIdForTabKey,
     handleTerminalInput,
     handleTerminalResize,
     restartActiveSession,
-    restartActiveTerminalRenderer,
     sessionExited,
-    terminalReady,
     writeToActiveSession,
-  } = useTerminalSessionManager({
+  } = useCliSessionManager({
     activeTab,
     activeTabId: activeCliSessionTabId,
     tabs: cliSessionTabs,
     workspaceId: activeWorkspaceId,
-    transcriptStorageKey: CLI_SESSION_TRANSCRIPT_STORAGE_KEY,
     isVisible: activeSurface.kind === "cli-session",
     getTabKey,
     createSession,
     slotKeyForTab,
-    tabManager,
+    terminalController: terminalInstance.controller,
+    terminalReady: terminalInstance.ready,
   });
+  terminalInputHandlerRef.current = handleTerminalInput;
+  terminalResizeHandlerRef.current = handleTerminalResize;
 
   async function handleCopyHandoff() {
     if (!handoffSummary) {
@@ -211,29 +219,30 @@ export function CliSessionPanel() {
 
   const hasTabs = cliSessionTabs.length > 0;
   const isVisible = hasTabs && activeSurface.kind === "cli-session";
+  const surfaceError = bridgeError || terminalInstance.error || "";
   const terminalViewport = (
     <div className={TERMINAL_SURFACE_PANEL_CLASS_NAME}>
       <div className={TERMINAL_SURFACE_VIEWPORT_CLASS_NAME}>
-        {bridgeError ? (
+        {surfaceError ? (
           <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive">
-            {bridgeError}
+            {surfaceError}
           </div>
         ) : null}
-        {activeWriteErrorCount > TERMINAL_WRITE_ERROR_THRESHOLD ? (
+        {terminalInstance.writeErrorCount > TERMINAL_WRITE_ERROR_THRESHOLD ? (
           <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
             <span>Terminal rendering may be degraded.</span>
             <Button
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-[11px] text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
-              onClick={restartActiveTerminalRenderer}
+              onClick={() => setRendererRestartToken((value) => value + 1)}
               disabled={!activeTab}
             >
               Restart renderer
             </Button>
           </div>
         ) : null}
-        {!terminalReady ? (
+        {!terminalInstance.ready ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-terminal">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
@@ -241,28 +250,16 @@ export function CliSessionPanel() {
             </div>
           </div>
         ) : null}
-        {cliSessionTabs.map((tab) => {
-          const tabKey = getTabKey(tab);
-          return (
-            <TerminalTabSurface
-              key={tabKey}
-              tabKey={tabKey}
-              sessionId={getSessionIdForTabKey(tabKey)}
-              surface="cli-session"
-              isActive={tab.id === activeCliSessionTabId}
-              isVisible={activeSurface.kind === "cli-session"}
-              fontFamily={
-                settings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY
-              }
-              fontSize={settings.terminalFontSize || DEFAULT_TERMINAL_FONT_SIZE}
-              isDarkMode={isDarkMode}
-              dimmed={!activeTab}
-              tabManager={tabManager}
-              onData={handleTerminalInput}
-              onResize={handleTerminalResize}
-            />
-          );
-        })}
+        <div
+          key={`${activeTabKey ?? "no-cli-session"}:${rendererRestartToken}`}
+          ref={terminalContainerRef}
+          data-terminal-surface
+          data-cli-terminal-surface
+          className={cn(
+            TERMINAL_SURFACE_CLASS_NAME,
+            !activeTab && "opacity-60",
+          )}
+        />
       </div>
     </div>
   );
@@ -276,13 +273,6 @@ export function CliSessionPanel() {
     );
   }
 
-  // Always render the same React element tree regardless of `isVisible`.
-  // Before this fix, invisible renders returned `<section>{terminalViewport}</section>`
-  // while visible renders returned `<section><div><header/>{terminalViewport}</div></section>`.
-  // The different tree shapes caused React reconciliation to unmount/remount
-  // TerminalTabSurface components on every visibility toggle, destroying the
-  // ghostty-web Terminal instance and forcing a full transcript re-hydration
-  // (~2 MB raw replay) which produced garbled WebGL rendering.
   return (
     <section
       data-testid="cli-session-panel"

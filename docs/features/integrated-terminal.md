@@ -81,14 +81,15 @@
 ## Files And Data
 
 - Docked terminal tabs and CLI session tabs are both stored as part of the workspace shell state.
-- Terminal transcript cache is best-effort and local to the app for both surfaces.
-- Live shell processes are reset when you switch workspaces.
-- Renderer ownership stays the same even though PTY execution is isolated in the desktop backend child process.
+- The dock keeps a best-effort local transcript cache for fast restore.
+- CLI sessions restore from the host-side PTY snapshot and bounded backlog instead of a hidden renderer cache.
+- Live shell and provider CLI processes can survive a workspace switch and reattach when you return.
+- Renderer ownership is surface-specific even though PTY execution is isolated in the desktop backend child process.
 
 ## Limitations And Advanced Options
 
 - The dock shows one active terminal viewport at a time even when multiple docked terminal tabs exist.
-- CLI sessions persist as workspace tabs, but their live provider processes do not survive a workspace switch.
+- CLI sessions rebuild their renderer when you reactivate them, so local selection and viewport position are not preserved even when the live process is.
 - `Open in Terminal` still opens the external system terminal. It is separate from `Open in Stave Terminal`.
 
 ## Troubleshooting

@@ -7,7 +7,7 @@ The integrated terminal is not "just another panel". It crosses:
 - React rendering
 - Zustand subscription boundaries
 - browser focus and layout behavior
-- Ghostty DOM/runtime behavior
+- terminal renderer runtime behavior (`ghostty-web` in the dock, `xterm.js` in CLI sessions)
 - Electron PTY session lifecycle
 - workspace shell persistence
 
@@ -15,13 +15,15 @@ That combination makes terminal bugs easy to reintroduce unless ownership and ve
 
 ## Core Principle
 
-Treat the integrated terminal as a platform boundary with explicit lifecycle separation between **PTY sessions** (host-service), **I/O transport** (renderer hooks), and **viewport rendering** (Ghostty-web).
+Treat the integrated terminal as a platform boundary with explicit lifecycle separation between **PTY sessions** (host-service), **I/O transport** (renderer hooks), and **viewport rendering** (dock Ghostty / CLI xterm).
 
 In Stave today, that means:
 
-- `useTerminalSessionManager.ts` owns session lifecycle (attach/detach, create/close) and I/O transport (input flush, output subscription, transcript)
-- `useTerminalTabManager.ts` owns tab mount/unmount decisions and Ghostty instance registry
-- `useTerminalInstance.ts` owns Ghostty-web WASM lifecycle, DOM rendering, resize, and theme sync
+- `useTerminalSessionManager.ts` owns dock terminal session lifecycle (attach/detach, create/close) and I/O transport
+- `useTerminalTabManager.ts` owns dock tab mount/unmount decisions and Ghostty instance registry
+- `useTerminalInstance.ts` owns dock `ghostty-web` WASM lifecycle, DOM rendering, resize, and theme sync
+- `useCliSessionManager.ts` owns CLI session lifecycle and host snapshot restore
+- `useCliTerminalInstance.ts` owns CLI `xterm.js` renderer lifecycle, fit/resize, and focus
 - `TerminalDock.tsx` owns dock chrome
 - `CliSessionPanel.tsx` owns full-panel CLI session chrome
 - `terminal-surface-styles.ts` owns shared shell-to-terminal inset styling
@@ -36,22 +38,23 @@ When that ownership blurs, the same classes of bugs return:
 
 ## Session Lifecycle Model
 
-Stave uses a **hybrid keep-alive + attach/detach** session lifecycle:
+Stave uses a **surface-specific renderer model on top of a shared attach/detach PTY lifecycle**:
 
-### Within the same workspace (CLI/Task/tab switches)
+### Within the same workspace
 
-- Ghostty instances stay alive (`display:none` when hidden)
-- PTY sessions remain attached and push events continue flowing
-- On visibility restore: forced WebGL re-render + resize sync
-- **No session disposal, no transcript replay needed**
+- Dock terminal tabs keep Ghostty instances alive (`display:none` when hidden)
+- CLI session tabs dispose inactive renderers and rebuild them when reactivated
+- PTY sessions are detached/reattached through the host contract instead of depending on hidden renderer state
+- On CLI restore: attach -> hydrate canonical screen state/backlog -> resume output
+- On dock restore: keep-alive renderer + resize/WebGL recovery still applies
 
 ### Across workspace or project switches
 
-- Ghostty instances are disposed (WebGL context limit)
+- Renderer instances are disposed
 - PTY sessions are **detached, not killed** (background mode)
 - Host-service buffers output in a bounded ring buffer (32MB)
-- On return: slot state query -> attach -> backlog hydration -> push resume
-- localStorage transcript (2MB) provides pre-detach content; host backlog provides post-detach content
+- On return: slot state query -> attach -> screen snapshot/backlog hydration -> push resume
+- The host snapshot is the restore source of truth for CLI sessions
 
 ### Session destruction (only these cases)
 
@@ -64,10 +67,12 @@ Stave uses a **hybrid keep-alive + attach/detach** session lifecycle:
 
 | File | Why it matters |
 |------|----------------|
-| `src/components/layout/useTerminalSessionManager.ts` | Session lifecycle: attach/detach, create/close, slot reconciliation, I/O transport, transcript |
-| `src/components/layout/useTerminalTabManager.ts` | Tab mount/unmount decisions, Ghostty instance registry, status tracking |
-| `src/components/layout/useTerminalInstance.ts` | Ghostty-web WASM init, DOM rendering, resize, theme sync, forced re-render on visibility |
-| `src/components/layout/TerminalTabSurface.tsx` | Bridges useTerminalInstance to useTerminalTabManager per tab |
+| `src/components/layout/useTerminalSessionManager.ts` | Dock session lifecycle, attach/detach, slot reconciliation, I/O transport |
+| `src/components/layout/useTerminalTabManager.ts` | Dock tab mount/unmount decisions and Ghostty instance registry |
+| `src/components/layout/useTerminalInstance.ts` | Dock `ghostty-web` WASM init, DOM rendering, resize, theme sync |
+| `src/components/layout/TerminalTabSurface.tsx` | Dock bridge between Ghostty renderer instances and tab manager |
+| `src/components/layout/useCliSessionManager.ts` | CLI session lifecycle, attach/detach, slot reconciliation, active renderer hydration |
+| `src/components/layout/useCliTerminalInstance.ts` | CLI `xterm.js` renderer init, fit/resize, and focus recovery |
 | `src/components/layout/pty-session-surface.utils.ts` | Shared pure rules for creation gating |
 | `src/components/layout/terminal-surface-styles.ts` | Shared terminal inset/focus styling so dock and CLI surfaces do not diverge |
 | `src/components/layout/TerminalDock.tsx` | Dock shell, controls, and surface mounting |
@@ -82,9 +87,9 @@ Stave uses a **hybrid keep-alive + attach/detach** session lifecycle:
 
 ## Ownership Rules
 
-### 1. Keep terminal DOM workarounds in one place
+### 1. Keep renderer-specific DOM workarounds in one place
 
-Ghostty-specific DOM behavior such as focus handling, hidden textarea fallback, composition quirks, and resize timing belongs in `useTerminalInstance.ts` or a helper it owns.
+Ghostty-specific DOM behavior belongs in `useTerminalInstance.ts`. xterm-specific fit/focus behavior belongs in `useCliTerminalInstance.ts`.
 
 Do not add `querySelector("textarea")`, `contenteditable`, or canvas-child assumptions to shell components or unrelated hooks.
 
@@ -99,8 +104,9 @@ Do not let the dock use one padding system while the CLI panel uses another.
 - **Renderer unmount = detach** (not close). PTY stays alive.
 - **Tab close = close**. Only explicit tab close kills the PTY.
 - **Workspace/project delete = close by prefix**. All sessions for that workspace are killed.
-- **Visibility hide = keep Ghostty alive** (within same workspace). Use `display:none`.
-- **Visibility restore = forced re-render**. Call `renderer.render(wasmTerm, true)` after animation frames.
+- **Dock visibility hide = keep Ghostty alive** (within the same workspace). Use `display:none`.
+- **CLI visibility hide = dispose renderer and reattach later**. Do not rely on hidden renderer keep-alive.
+- **Ghostty visibility restore = forced re-render**. Call the renderer-specific recovery path after animation frames.
 
 Do not move PTY lifecycle decisions into React shell components.
 
@@ -110,13 +116,13 @@ Do not move PTY lifecycle decisions into React shell components.
 
 - headers, labels, buttons, badges, error banners, shell layout
 
-`useTerminalSessionManager.ts` should describe:
+`useTerminalSessionManager.ts` and `useCliSessionManager.ts` should describe:
 
 - when a session exists, how it attaches/detaches, how output enters the terminal, how input is flushed
 
-`useTerminalInstance.ts` should describe:
+`useTerminalInstance.ts` and `useCliTerminalInstance.ts` should describe:
 
-- Ghostty WASM init, resize, theme sync, focus, re-render on visibility
+- renderer init, resize, theme sync, focus, and restore behavior for their surface
 
 When shell components start owning runtime behavior, regressions spread faster.
 
@@ -176,10 +182,11 @@ If a change touches real PTY input, focus restore, Electron IPC wiring, or works
 Before shipping a terminal change, ask:
 
 - Is session lifecycle (attach/detach/create/close) still in `useTerminalSessionManager.ts`?
-- Is Ghostty DOM behavior still in `useTerminalInstance.ts`?
+- Is dock Ghostty DOM behavior still in `useTerminalInstance.ts`?
+- Is CLI xterm renderer behavior still in `useCliTerminalInstance.ts`?
 - Did docked terminal and CLI session spacing stay shared?
-- Does a hidden surface avoid creating a NEW session (but keep existing ones alive)?
-- Does visibility restore trigger a forced WebGL re-render?
+- Does a hidden CLI surface avoid creating a new session and restore from the host snapshot instead?
+- Does the dock still use the Ghostty-specific visibility restore path?
 - Does unmount call detach (not close)?
 - Are slot key strings using `buildTerminalSessionSlotKey` (not hardcoded)?
 - Did a store selector widen unnecessarily around the terminal subtree?

@@ -1,6 +1,7 @@
 /**
  * Prefer a system monospace stack for terminal surfaces so provider-specific
- * glyphs like Claude's prompt marker render cleanly in ghostty-web.
+ * glyphs like Claude's prompt marker render cleanly across both xterm and
+ * ghostty-backed surfaces.
  */
 export const LEGACY_TERMINAL_FONT_FAMILY = "JetBrains Mono";
 

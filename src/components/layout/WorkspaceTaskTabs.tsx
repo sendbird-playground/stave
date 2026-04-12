@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState, type DragEvent } from "reac
 import { ModelIcon } from "@/components/ai-elements";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
-import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator } from "@/components/ui";
+import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator, buttonVariants } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { resolveProviderTurnDisplayState } from "@/lib/providers/turn-status";
@@ -25,6 +25,18 @@ const EMPTY_MESSAGES: ChatMessage[] = [];
 const isMacPlatform =
   typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent);
 const shortcutModifierSymbol = isMacPlatform ? "\u2318" : "Ctrl";
+
+function triggerButtonClassName(args: {
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
+  size?: "default" | "xs" | "sm" | "lg" | "icon" | "icon-xs" | "icon-sm" | "icon-lg";
+  className?: string;
+}) {
+  return buttonVariants({
+    variant: args.variant ?? "ghost",
+    size: args.size ?? "sm",
+    className: args.className,
+  });
+}
 
 function TaskHistoryDrawer(args: {
   open: boolean;
@@ -190,27 +202,27 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
       </button>
       <TooltipProvider>
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
-              disabled={isManaged}
-              onClick={() => args.onArchiveTask({ id: args.task.id, title: args.task.title })}
-              aria-label={`archive-task-${args.task.id}`}
-            >
-              <X className="size-3.5" />
-            </Button>
+          <TooltipTrigger
+            className={triggerButtonClassName({
+              className: cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility),
+            })}
+            disabled={isManaged}
+            onClick={() => args.onArchiveTask({ id: args.task.id, title: args.task.title })}
+            aria-label={`archive-task-${args.task.id}`}
+          >
+            <X className="size-3.5" />
           </TooltipTrigger>
           <TooltipContent side="bottom">{isManaged ? "Take over this task before archiving." : "Archive task"}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="ghost" size="sm" className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)} aria-label={`task-menu-${args.task.id}`}>
-            <Ellipsis className="size-4" />
-          </Button>
+        <DropdownMenuTrigger
+          className={triggerButtonClassName({
+            className: cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility),
+          })}
+          aria-label={`task-menu-${args.task.id}`}
+        >
+          <Ellipsis className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem disabled={isManaged} onSelect={() => args.onOpenTaskMenuRename({ id: args.task.id, title: args.task.title })}>
@@ -279,16 +291,13 @@ const WorkspaceCliSessionStripTab = memo(function WorkspaceCliSessionStripTab(ar
         <span className="max-w-56 truncate text-sm font-medium">{args.tab.title}</span>
       </button>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className={cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility)}
-            aria-label={`cli-session-menu-${args.tab.id}`}
-          >
-            <Ellipsis className="size-4" />
-          </Button>
+        <DropdownMenuTrigger
+          className={triggerButtonClassName({
+            className: cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility),
+          })}
+          aria-label={`cli-session-menu-${args.tab.id}`}
+        >
+          <Ellipsis className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem onSelect={() => args.onRenameTab({ id: args.tab.id, title: args.tab.title })}>
@@ -555,11 +564,13 @@ export function WorkspaceTaskTabs() {
           </div>
           <div className="flex shrink-0 items-center gap-1 px-2">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 gap-2 rounded-sm px-2.5 text-muted-foreground">
-                  <SquareTerminal className="size-4" />
-                  New CLI Session
-                </Button>
+              <DropdownMenuTrigger
+                className={triggerButtonClassName({
+                  className: "h-8 gap-2 rounded-sm px-2.5 text-muted-foreground",
+                })}
+              >
+                <SquareTerminal className="size-4" />
+                New CLI Session
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuLabel>Start Here</DropdownMenuLabel>
@@ -605,16 +616,14 @@ export function WorkspaceTaskTabs() {
             </DropdownMenu>
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 gap-2 rounded-sm px-2.5 text-muted-foreground"
-                    onClick={() => createTask({ title: "" })}
-                  >
-                    <Plus className="size-4" />
-                    New Task
-                  </Button>
+                <TooltipTrigger
+                  className={triggerButtonClassName({
+                    className: "h-8 gap-2 rounded-sm px-2.5 text-muted-foreground",
+                  })}
+                  onClick={() => createTask({ title: "" })}
+                >
+                  <Plus className="size-4" />
+                  New Task
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   <span>New Task</span>
@@ -626,10 +635,12 @@ export function WorkspaceTaskTabs() {
               </Tooltip>
             </TooltipProvider>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground">
-                  <Ellipsis className="size-4" />
-                </Button>
+              <DropdownMenuTrigger
+                className={triggerButtonClassName({
+                  className: "h-8 w-8 shrink-0 rounded-sm p-0 text-muted-foreground",
+                })}
+              >
+                <Ellipsis className="size-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem onSelect={() => setTaskHistoryOpen(true)}>
