@@ -879,10 +879,49 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
 
     async function createNewSession() {
       const attachSession = window.api?.terminal?.attachSession;
+      const detachSession = window.api?.terminal?.detachSession;
+      const closeSession = window.api?.terminal?.closeSession;
       const resumeSessionStream = window.api?.terminal?.resumeSessionStream;
       if (!attachSession || !resumeSessionStream) {
         return;
       }
+      const abandonCreatedSession = (args: {
+        sessionId: string;
+        attachmentId?: string;
+        registered?: boolean;
+      }) => {
+        if (
+          args.registered &&
+          sessionIdByTabKeyRef.current[tabKey] === args.sessionId
+        ) {
+          terminalSessionRouterRef.current.clearSession(args.sessionId);
+          delete sessionIdByTabKeyRef.current[tabKey];
+          if (tabKeyBySessionIdRef.current[args.sessionId] === tabKey) {
+            delete tabKeyBySessionIdRef.current[args.sessionId];
+          }
+          delete pendingInputBySessionRef.current[args.sessionId];
+          delete writeInFlightBySessionRef.current[args.sessionId];
+          delete flushScheduledBySessionRef.current[args.sessionId];
+          delete creatingSessionByTabKeyRef.current[tabKey];
+          delete lastResizeByTabKeyRef.current[tabKey];
+          delete hydratedRevisionByTabKeyRef.current[tabKey];
+          delete screenStateByTabKeyRef.current[tabKey];
+          delete attachmentIdByTabKeyRef.current[tabKey];
+          setRuntimeVersion((value) => value + 1);
+        }
+
+        if (closeSession) {
+          void closeSession({ sessionId: args.sessionId });
+          return;
+        }
+
+        if (args.attachmentId && detachSession) {
+          void detachSession({
+            sessionId: args.sessionId,
+            attachmentId: args.attachmentId,
+          });
+        }
+      };
       const created = await args.createSession({
         tab: args.activeTab!,
         cols,
@@ -891,9 +930,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       });
       if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
         if (created.ok && created.sessionId) {
-          void window.api?.terminal?.closeSession?.({
-            sessionId: created.sessionId,
-          });
+          abandonCreatedSession({ sessionId: created.sessionId });
         }
         return;
       }
@@ -915,14 +952,13 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         const message =
           attached.stderr?.trim() || "Failed to attach terminal session.";
         setBridgeErrorForTabKey(tabKey, message);
-        void window.api?.terminal?.closeSession?.({
+        abandonCreatedSession({
           sessionId: created.sessionId,
         });
         return;
       }
       if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
-        const detachSession = window.api?.terminal?.detachSession;
-        void detachSession?.({
+        abandonCreatedSession({
           sessionId: created.sessionId,
           attachmentId: attached.attachmentId,
         });
@@ -946,6 +982,11 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         rows,
       });
       if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
+        abandonCreatedSession({
+          sessionId: created.sessionId,
+          attachmentId: attached.attachmentId,
+          registered: true,
+        });
         return;
       }
       await resumeSessionStream({
