@@ -254,18 +254,14 @@ export function CliSessionPanel() {
         ) : null}
         <div
           key={`${activeTabKey ?? "no-cli-session"}:${rendererRestartToken}`}
+          ref={terminalContainerRef}
           data-terminal-surface
           data-cli-terminal-surface
           className={cn(
-            "h-full w-full px-5 py-4",
+            "h-full w-full outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border/70",
             !activeTab && "opacity-60",
           )}
-        >
-          <div
-            ref={terminalContainerRef}
-            className="h-full w-full outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border/70"
-          />
-        </div>
+        />
       </div>
     </div>
   );

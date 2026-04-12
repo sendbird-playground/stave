@@ -306,6 +306,20 @@
     color: transparent;
     caret-color: transparent;
   }
+
+  /*
+   * CLI terminal padding.
+   *
+   * Padding is applied to the `.xterm` element rather than the mount
+   * container so that xterm.js FitAddon correctly subtracts it when
+   * calculating available rows/cols.  Placing padding on the container
+   * caused FitAddon to over-count rows (border-box height includes
+   * padding) and broke ResizeObserver-driven refits because the
+   * percentage-based inner wrapper didn't always propagate size changes.
+   */
+  [data-cli-terminal-surface] > .xterm {
+    padding: 1rem 1.25rem;
+  }
 }
 
 @layer utilities {
