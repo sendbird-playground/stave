@@ -32,7 +32,6 @@ import {
   getCliSessionProviderLabel,
   getWorkspaceCliSessionTabKey,
 } from "@/lib/terminal/types";
-import { TERMINAL_SURFACE_CLASS_NAME } from "@/components/layout/terminal-surface-styles";
 import {
   TERMINAL_SURFACE_PANEL_CLASS_NAME,
   TERMINAL_SURFACE_VIEWPORT_CLASS_NAME,
@@ -255,14 +254,18 @@ export function CliSessionPanel() {
         ) : null}
         <div
           key={`${activeTabKey ?? "no-cli-session"}:${rendererRestartToken}`}
-          ref={terminalContainerRef}
           data-terminal-surface
           data-cli-terminal-surface
           className={cn(
-            TERMINAL_SURFACE_CLASS_NAME,
+            "h-full w-full px-5 py-4",
             !activeTab && "opacity-60",
           )}
-        />
+        >
+          <div
+            ref={terminalContainerRef}
+            className="h-full w-full outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border/70"
+          />
+        </div>
       </div>
     </div>
   );
@@ -287,7 +290,7 @@ export function CliSessionPanel() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-border/40">
         {/* Header container always at child position 0 so {terminalViewport}
             stays at position 1 and React never unmounts the terminal surface. */}
-        <div className="border-b border-border/70 bg-card/95 px-4 py-3 backdrop-blur-sm">
+        <div className="shrink-0 border-b border-border/70 bg-card/95 px-4 py-3 backdrop-blur-sm">
           {isVisible ? (
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
