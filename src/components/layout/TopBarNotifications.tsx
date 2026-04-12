@@ -165,23 +165,29 @@ export function TopBarNotifications(props: {
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="relative h-8 w-8 shrink-0 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-          style={props.noDragStyle}
-          aria-label="notifications"
-          title="Notifications"
-        >
-          <Bell className="size-4" />
-          {unreadCount > 0 ? (
-            <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-background bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-              {unreadCountLabel}
-            </span>
-          ) : null}
-        </Button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="relative h-8 w-8 shrink-0 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+                style={props.noDragStyle}
+                aria-label="notifications"
+              >
+                <Bell className="size-4" />
+                {unreadCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full border border-background bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                    {unreadCountLabel}
+                  </span>
+                ) : null}
+              </Button>
+            </PopoverTrigger>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Notifications</TooltipContent>
+      </Tooltip>
       <PopoverContent
         align="end"
         sideOffset={10}

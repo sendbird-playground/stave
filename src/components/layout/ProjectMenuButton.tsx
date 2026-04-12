@@ -35,23 +35,29 @@ export const ProjectMenuButton = memo(function ProjectMenuButton({
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <TooltipProvider>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="project-menu"
-            className={cn(
-              "h-9 max-w-44 rounded-md border border-border/70 bg-card px-2.5 text-sm transition-colors md:max-w-60",
-              open && "border-primary/70 bg-secondary/80",
-            )}
-            style={noDragStyle}
-            title={label}
-          >
-            <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate">{label}</span>
-            <ChevronDown className="size-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="project-menu"
+                  className={cn(
+                    "h-9 max-w-44 rounded-md border border-border/70 bg-card px-2.5 text-sm transition-colors md:max-w-60",
+                    open && "border-primary/70 bg-secondary/80",
+                  )}
+                  style={noDragStyle}
+                >
+                  <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{label}</span>
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{label}</TooltipContent>
+        </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent align="start" sideOffset={8} className="w-[22rem]" style={noDragStyle}>
         <DropdownMenuItem

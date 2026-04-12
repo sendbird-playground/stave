@@ -138,6 +138,10 @@ describe("terminal runtime slot lifecycle", () => {
       sessionId: first.sessionId,
     });
     expect(fakePtys).toHaveLength(1);
+    expect(runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" })).toEqual({
+      state: "background",
+      sessionId: first.sessionId,
+    });
   });
 
   test("restores detached terminal backlog when the same slot reattaches", async () => {
@@ -160,21 +164,25 @@ describe("terminal runtime slot lifecycle", () => {
     const slotKey = "terminal:workspace-1:tab-1";
     const fake = fakePtys[0]!;
 
-    expect(runtime.detachSession({ sessionId })).toEqual({ ok: true });
-
     fake.fireData("while detached\r\n");
 
     expect(runtime.getSlotState({ slotKey })).toEqual({
       state: "background",
       sessionId,
     });
-    expect(
-      await runtime.attachSession({ sessionId, deliveryMode: "push" }),
-    ).toEqual({
+    const attached = await runtime.attachSession({ sessionId, deliveryMode: "push" });
+    expect(attached).toEqual({
       ok: true,
+      attachmentId: expect.any(String),
       backlog: "while detached\r\n",
       screenState: "while detached\u001b[1B\u001b[14D",
     });
+    expect(
+      runtime.resumeSessionStream({
+        sessionId,
+        attachmentId: attached.attachmentId!,
+      }),
+    ).toEqual({ ok: true });
     expect(runtime.getSlotState({ slotKey })).toEqual({
       state: "running",
       sessionId,
@@ -200,13 +208,12 @@ describe("terminal runtime slot lifecycle", () => {
     const sessionId = created.sessionId!;
     const fake = fakePtys[0]!;
 
-    expect(runtime.detachSession({ sessionId })).toEqual({ ok: true });
-
     fake.fireData("hello\r\n");
     fake.fireData("\x1b[2J\x1b[H");
 
     expect(await runtime.attachSession({ sessionId, deliveryMode: "push" })).toEqual({
       ok: true,
+      attachmentId: expect.any(String),
       backlog: "hello\r\n\x1b[2J\x1b[H",
       screenState: "",
     });
@@ -231,9 +238,12 @@ describe("terminal runtime slot lifecycle", () => {
     const sessionId = created.sessionId!;
     const fake = fakePtys[0]!;
 
-    expect(runtime.detachSession({ sessionId })).toEqual({ ok: true });
     fake.fireData("\x1b[0c");
-    await runtime.attachSession({ sessionId, deliveryMode: "push" });
+    const attached = await runtime.attachSession({ sessionId, deliveryMode: "push" });
+    runtime.resumeSessionStream({
+      sessionId,
+      attachmentId: attached.attachmentId!,
+    });
 
     expect(fake.writes).toContain("\x1b[?1;2c");
   });
@@ -258,8 +268,6 @@ describe("terminal runtime slot lifecycle", () => {
     const slotKey = "terminal:workspace-1:tab-1";
     const fake = fakePtys[0]!;
 
-    expect(runtime.detachSession({ sessionId })).toEqual({ ok: true });
-
     fake.fireExit({ exitCode: 0 });
 
     expect(runtime.getSlotState({ slotKey })).toEqual({
@@ -282,8 +290,56 @@ describe("terminal runtime slot lifecycle", () => {
     expect(recreated.sessionId).not.toBe(sessionId);
     expect(fakePtys).toHaveLength(2);
     expect(runtime.getSlotState({ slotKey })).toEqual({
-      state: "running",
+      state: "background",
       sessionId: recreated.sessionId,
+    });
+  });
+
+  test("ignores stale detach requests after a replacement attach", async () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    const sessionId = created.sessionId!;
+    const firstAttach = await runtime.attachSession({
+      sessionId,
+      deliveryMode: "push",
+    });
+    const secondAttach = await runtime.attachSession({
+      sessionId,
+      deliveryMode: "push",
+    });
+
+    expect(
+      runtime.detachSession({
+        sessionId,
+        attachmentId: firstAttach.attachmentId!,
+      }),
+    ).toEqual({ ok: true });
+    expect(runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" })).toEqual({
+      state: "running",
+      sessionId,
+    });
+
+    expect(
+      runtime.detachSession({
+        sessionId,
+        attachmentId: secondAttach.attachmentId!,
+      }),
+    ).toEqual({ ok: true });
+    expect(runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" })).toEqual({
+      state: "background",
+      sessionId,
     });
   });
 });

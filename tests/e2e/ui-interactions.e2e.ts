@@ -1,4 +1,428 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+type CliSessionHarnessOptions = {
+  slowResizeMs?: number;
+};
+
+type CliSessionCounts = {
+  create: number;
+  attach: number;
+  resume: number;
+};
+
+async function installCliSessionHarness(
+  page: Page,
+  options: CliSessionHarnessOptions = {},
+) {
+  await page.addInitScript((args: CliSessionHarnessOptions) => {
+    const outputListeners = new Set<
+      (payload: { sessionId: string; output: string }) => void
+    >();
+    const sessions = new Map<
+      string,
+      {
+        screenState: string;
+        backlog: string;
+        activeAttachmentId: string | null;
+        streamReady: boolean;
+      }
+    >();
+    let nextAttachmentId = 1;
+    const testState = {
+      createCliSessionCallCount: 0,
+      attachSessionCallCount: 0,
+      resumeSessionStreamCallCount: 0,
+      resizeSessionCallCount: 0,
+      deliveredOutputLog: [] as string[],
+      resizeCalls: [] as Array<{ cols: number; rows: number }>,
+      getSessionState: (sessionId: string) => {
+        const session = sessions.get(sessionId);
+        return session
+          ? {
+              activeAttachmentId: session.activeAttachmentId,
+              streamReady: session.streamReady,
+              backlog: session.backlog,
+            }
+          : null;
+      },
+      getResizeState: () => ({
+        count: testState.resizeSessionCallCount,
+        lastResize:
+          testState.resizeCalls.length > 0
+            ? testState.resizeCalls[testState.resizeCalls.length - 1]
+            : null,
+      }),
+      emitOutput: (sessionId: string, output: string) => {
+        const session = sessions.get(sessionId);
+        if (!session || !output) {
+          return;
+        }
+        session.screenState += output;
+        if (session.activeAttachmentId && session.streamReady) {
+          for (const listener of outputListeners) {
+            listener({ sessionId, output });
+          }
+          return;
+        }
+        session.backlog += output;
+      },
+    };
+
+    window.localStorage.setItem(
+      "stave:workspace-fallback:v1",
+      JSON.stringify([
+        {
+          id: "ws-main",
+          name: "main",
+          updatedAt: "2026-04-10T01:00:00.000Z",
+          snapshot: {
+            activeTaskId: "task-1",
+            tasks: [
+              {
+                id: "task-1",
+                title: "Task 1",
+                provider: "claude-code",
+                updatedAt: "2026-04-10T01:00:00.000Z",
+                unread: false,
+                archivedAt: null,
+              },
+            ],
+            messagesByTask: { "task-1": [] },
+            cliSessionTabs: [],
+            activeCliSessionTabId: null,
+            activeSurface: { kind: "task", taskId: "task-1" },
+          },
+        },
+        {
+          id: "ws-feature",
+          name: "feature",
+          updatedAt: "2026-04-10T00:30:00.000Z",
+          snapshot: {
+            activeTaskId: "task-2",
+            tasks: [
+              {
+                id: "task-2",
+                title: "Feature Task",
+                provider: "codex",
+                updatedAt: "2026-04-10T00:30:00.000Z",
+                unread: false,
+                archivedAt: null,
+              },
+            ],
+            messagesByTask: { "task-2": [] },
+            cliSessionTabs: [],
+            activeCliSessionTabId: null,
+            activeSurface: { kind: "task", taskId: "task-2" },
+          },
+        },
+      ]),
+    );
+
+    window.localStorage.setItem(
+      "stave-store",
+      JSON.stringify({
+        state: {
+          projectPath: "/tmp/stave-project",
+          projectName: "stave-project",
+          workspaces: [
+            {
+              id: "ws-main",
+              name: "main",
+              updatedAt: "2026-04-10T01:00:00.000Z",
+            },
+            {
+              id: "ws-feature",
+              name: "feature",
+              updatedAt: "2026-04-10T00:30:00.000Z",
+            },
+          ],
+          activeWorkspaceId: "ws-main",
+          workspaceBranchById: {
+            "ws-main": "main",
+            "ws-feature": "feature",
+          },
+          workspacePathById: {
+            "ws-main": "/tmp/stave-project",
+            "ws-feature": "/tmp/stave-project/.stave/workspaces/feature",
+          },
+          workspaceDefaultById: {
+            "ws-main": true,
+            "ws-feature": false,
+          },
+          activeTaskId: "task-1",
+          tasks: [
+            {
+              id: "task-1",
+              title: "Task 1",
+              provider: "claude-code",
+              updatedAt: "2026-04-10T01:00:00.000Z",
+              unread: false,
+              archivedAt: null,
+            },
+          ],
+          messagesByTask: { "task-1": [] },
+          cliSessionTabs: [],
+          activeCliSessionTabId: null,
+          activeSurface: { kind: "task", taskId: "task-1" },
+        },
+        version: 0,
+      }),
+    );
+
+    (window as unknown as { api?: Record<string, unknown> }).api = {
+      provider: {
+        streamTurn: async () => [],
+      },
+      terminal: {
+        createCliSession: async () => {
+          testState.createCliSessionCallCount += 1;
+          const sessionId = "cli-session-1";
+          if (!sessions.has(sessionId)) {
+            sessions.set(sessionId, {
+              screenState: "cli ready\r\n",
+              backlog: "",
+              activeAttachmentId: null,
+              streamReady: false,
+            });
+          }
+          return { ok: true, sessionId };
+        },
+        attachSession: async (attachArgs: { sessionId: string }) => {
+          testState.attachSessionCallCount += 1;
+          const session = sessions.get(attachArgs.sessionId);
+          if (!session) {
+            return { ok: false, stderr: "missing session" };
+          }
+          const attachmentId = `attach-${nextAttachmentId++}`;
+          session.activeAttachmentId = attachmentId;
+          session.streamReady = false;
+          const backlog = session.backlog;
+          session.backlog = "";
+          return {
+            ok: true,
+            attachmentId,
+            screenState: session.screenState,
+            backlog,
+          };
+        },
+        detachSession: async (detachArgs: {
+          sessionId: string;
+          attachmentId?: string;
+        }) => {
+          const session = sessions.get(detachArgs.sessionId);
+          if (!session) {
+            return { ok: false, stderr: "missing session" };
+          }
+          const capturedAttachmentId = session.activeAttachmentId;
+          if (
+            detachArgs.attachmentId &&
+            capturedAttachmentId !== detachArgs.attachmentId
+          ) {
+            return { ok: true };
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 75));
+          if (session.activeAttachmentId === capturedAttachmentId) {
+            session.activeAttachmentId = null;
+            session.streamReady = false;
+          }
+          return { ok: true };
+        },
+        resumeSessionStream: async (resumeArgs: {
+          sessionId: string;
+          attachmentId: string;
+        }) => {
+          testState.resumeSessionStreamCallCount += 1;
+          const session = sessions.get(resumeArgs.sessionId);
+          if (!session) {
+            return { ok: false, stderr: "missing session" };
+          }
+          if (session.activeAttachmentId === resumeArgs.attachmentId) {
+            session.streamReady = true;
+            if (session.backlog) {
+              const output = session.backlog;
+              session.backlog = "";
+              for (const listener of outputListeners) {
+                listener({
+                  sessionId: resumeArgs.sessionId,
+                  output,
+                });
+              }
+            }
+          }
+          return { ok: true };
+        },
+        getSlotState: async (_slotArgs: { slotKey: string }) => {
+          const sessionId = "cli-session-1";
+          const session = sessions.get(sessionId);
+          if (!session) {
+            return { state: "idle" as const };
+          }
+          return {
+            state: session.activeAttachmentId
+              ? ("running" as const)
+              : ("background" as const),
+            sessionId,
+          };
+        },
+        readSession: async (readArgs: { sessionId: string }) => {
+          const session = sessions.get(readArgs.sessionId);
+          if (!session) {
+            return { ok: false, output: "" };
+          }
+          const output = session.backlog;
+          session.backlog = "";
+          return { ok: true, output };
+        },
+        writeSession: async () => ({ ok: true }),
+        resizeSession: async (resizeArgs: { cols: number; rows: number }) => {
+          testState.resizeSessionCallCount += 1;
+          testState.resizeCalls.push({
+            cols: resizeArgs.cols,
+            rows: resizeArgs.rows,
+          });
+          if ((args.slowResizeMs ?? 0) > 0) {
+            await new Promise((resolve) =>
+              window.setTimeout(resolve, args.slowResizeMs),
+            );
+          }
+          return { ok: true };
+        },
+        closeSession: async () => ({ ok: true }),
+        subscribeSessionOutput: (
+          listener: (payload: { sessionId: string; output: string }) => void,
+        ) => {
+          const wrapped = (payload: { sessionId: string; output: string }) => {
+            testState.deliveredOutputLog.push(payload.output);
+            listener(payload);
+          };
+          outputListeners.add(wrapped);
+          return () => {
+            outputListeners.delete(wrapped);
+          };
+        },
+        runCommand: async () => ({ ok: true, code: 0, stdout: "", stderr: "" }),
+      },
+      sourceControl: {
+        getStatus: async () => ({
+          ok: true,
+          branch: "main",
+          items: [],
+          hasConflicts: false,
+          stderr: "",
+        }),
+        getHistory: async () => ({
+          ok: true,
+          items: [],
+          stderr: "",
+        }),
+      },
+    };
+
+    (
+      window as unknown as {
+        __staveTestState?: typeof testState;
+      }
+    ).__staveTestState = testState;
+  }, { slowResizeMs: options.slowResizeMs ?? 0 });
+}
+
+async function openWorkspaceCliSession(page: Page) {
+  await page.getByRole("button", { name: "New CLI Session" }).first().click();
+  await page
+    .getByRole("menuitem")
+    .filter({ hasText: "Claude · Workspace" })
+    .click();
+  await page.getByRole("button", { name: "Claude Workspace", exact: true }).click();
+}
+
+async function expectCliSessionCounts(
+  page: Page,
+  expected: CliSessionCounts,
+) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => ({
+        create:
+          (
+            window as unknown as {
+              __staveTestState?: { createCliSessionCallCount?: number };
+            }
+          ).__staveTestState?.createCliSessionCallCount ?? 0,
+        attach:
+          (
+            window as unknown as {
+              __staveTestState?: { attachSessionCallCount?: number };
+            }
+          ).__staveTestState?.attachSessionCallCount ?? 0,
+        resume:
+          (
+            window as unknown as {
+              __staveTestState?: { resumeSessionStreamCallCount?: number };
+            }
+          ).__staveTestState?.resumeSessionStreamCallCount ?? 0,
+      })))
+    .toEqual(expected);
+}
+
+async function expectCliSessionStreamReady(page: Page) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => (
+        (
+          window as unknown as {
+            __staveTestState?: {
+              getSessionState?: (sessionId: string) => {
+                activeAttachmentId: string | null;
+                streamReady: boolean;
+                backlog: string;
+              } | null;
+            };
+          }
+        ).__staveTestState?.getSessionState?.("cli-session-1")?.streamReady ??
+        false
+      )))
+    .toBe(true);
+}
+
+async function emitCliSessionOutput(page: Page, output: string) {
+  await page.evaluate((nextOutput) => {
+    (
+      window as unknown as {
+        __staveTestState?: {
+          emitOutput: (sessionId: string, output: string) => void;
+        };
+      }
+    ).__staveTestState?.emitOutput("cli-session-1", nextOutput);
+  }, output);
+}
+
+async function expectCliDeliveredOutput(page: Page, fragment: string) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => (
+        (
+          window as unknown as {
+            __staveTestState?: { deliveredOutputLog?: string[] };
+          }
+        ).__staveTestState?.deliveredOutputLog?.join("") ?? ""
+      )))
+    .toContain(fragment);
+}
+
+async function getCliResizeState(page: Page) {
+  return page.evaluate(() => (
+    (
+      window as unknown as {
+        __staveTestState?: {
+          getResizeState?: () => {
+            count: number;
+            lastResize: { cols: number; rows: number } | null;
+          };
+        };
+      }
+    ).__staveTestState?.getResizeState?.() ?? { count: 0, lastResize: null }
+  ));
+}
 
 test("settings modal and workspace modal open", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -148,203 +572,23 @@ test("terminal dock opens with the shared surface inset", async ({ page }) => {
 });
 
 test("cli session keeps the renderer alive and refocuses after switching back", async ({ page }) => {
-  await page.addInitScript(() => {
-    const sessions = new Map<string, { output: string; attached: boolean }>();
-    const testState = { createCliSessionCallCount: 0 };
-
-    window.localStorage.setItem("stave:workspace-fallback:v1", JSON.stringify([
-      {
-        id: "ws-main",
-        name: "main",
-        updatedAt: "2026-04-10T01:00:00.000Z",
-        snapshot: {
-          activeTaskId: "task-1",
-          tasks: [{
-            id: "task-1",
-            title: "Task 1",
-            provider: "claude-code",
-            updatedAt: "2026-04-10T01:00:00.000Z",
-            unread: false,
-            archivedAt: null,
-          }],
-          messagesByTask: { "task-1": [] },
-          cliSessionTabs: [],
-          activeCliSessionTabId: null,
-          activeSurface: { kind: "task", taskId: "task-1" },
-        },
-      },
-      {
-        id: "ws-feature",
-        name: "feature",
-        updatedAt: "2026-04-10T00:30:00.000Z",
-        snapshot: {
-          activeTaskId: "task-2",
-          tasks: [{
-            id: "task-2",
-            title: "Feature Task",
-            provider: "codex",
-            updatedAt: "2026-04-10T00:30:00.000Z",
-            unread: false,
-            archivedAt: null,
-          }],
-          messagesByTask: { "task-2": [] },
-          cliSessionTabs: [],
-          activeCliSessionTabId: null,
-          activeSurface: { kind: "task", taskId: "task-2" },
-        },
-      },
-    ]));
-
-    window.localStorage.setItem("stave-store", JSON.stringify({
-      state: {
-        projectPath: "/tmp/stave-project",
-        projectName: "stave-project",
-        workspaces: [
-          { id: "ws-main", name: "main", updatedAt: "2026-04-10T01:00:00.000Z" },
-          { id: "ws-feature", name: "feature", updatedAt: "2026-04-10T00:30:00.000Z" },
-        ],
-        activeWorkspaceId: "ws-main",
-        workspaceBranchById: { "ws-main": "main", "ws-feature": "feature" },
-        workspacePathById: {
-          "ws-main": "/tmp/stave-project",
-          "ws-feature": "/tmp/stave-project/.stave/workspaces/feature",
-        },
-        workspaceDefaultById: { "ws-main": true, "ws-feature": false },
-        activeTaskId: "task-1",
-        tasks: [{
-          id: "task-1",
-          title: "Task 1",
-          provider: "claude-code",
-          updatedAt: "2026-04-10T01:00:00.000Z",
-          unread: false,
-          archivedAt: null,
-        }],
-        messagesByTask: { "task-1": [] },
-        cliSessionTabs: [],
-        activeCliSessionTabId: null,
-        activeSurface: { kind: "task", taskId: "task-1" },
-      },
-      version: 0,
-    }));
-
-    (window as unknown as { api?: Record<string, unknown> }).api = {
-      provider: {
-        streamTurn: async () => [],
-      },
-      terminal: {
-        createCliSession: async () => {
-          testState.createCliSessionCallCount += 1;
-          const sessionId = "cli-session-1";
-          if (!sessions.has(sessionId)) {
-            sessions.set(sessionId, { output: "cli ready\r\n", attached: true });
-          }
-          return { ok: true, sessionId };
-        },
-        attachSession: async (args: { sessionId: string }) => {
-          const session = sessions.get(args.sessionId);
-          if (!session) {
-            return { ok: false, stderr: "missing session" };
-          }
-          session.attached = true;
-          const screenState = session.output;
-          session.output = "";
-          return { ok: true, screenState };
-        },
-        detachSession: async (args: { sessionId: string }) => {
-          const session = sessions.get(args.sessionId);
-          if (!session) {
-            return { ok: false, stderr: "missing session" };
-          }
-          session.attached = false;
-          return { ok: true };
-        },
-        getSlotState: async (_args: { slotKey: string }) => {
-          const sessionId = "cli-session-1";
-          const session = sessions.get(sessionId);
-          if (!session) {
-            return { state: "idle" as const };
-          }
-          return {
-            state: session.attached ? "running" as const : "background" as const,
-            sessionId,
-          };
-        },
-        readSession: async (args: { sessionId: string }) => {
-          const session = sessions.get(args.sessionId);
-          if (!session) {
-            return { ok: false, output: "" };
-          }
-          const output = session.output;
-          session.output = "";
-          return { ok: true, output };
-        },
-        writeSession: async () => ({ ok: true }),
-        resizeSession: async () => ({ ok: true }),
-        closeSession: async () => ({ ok: true }),
-        runCommand: async () => ({ ok: true, code: 0, stdout: "", stderr: "" }),
-      },
-      sourceControl: {
-        getStatus: async () => ({
-          ok: true,
-          branch: "main",
-          items: [],
-          hasConflicts: false,
-          stderr: "",
-        }),
-        getHistory: async () => ({
-          ok: true,
-          items: [],
-          stderr: "",
-        }),
-      },
-    };
-    (window as unknown as { __staveTestState?: typeof testState }).__staveTestState = testState;
-  });
+  await installCliSessionHarness(page);
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
 
-  await page.getByRole("button", { name: "New CLI Session" }).first().click();
-  await page.getByRole("menuitem").filter({ hasText: "Claude · Workspace" }).click();
-  await page.getByRole("button", { name: "Claude Workspace", exact: true }).click();
+  await openWorkspaceCliSession(page);
   await expect(page.getByTestId("cli-session-panel")).toBeVisible();
   await expect(page.getByTestId("cli-session-panel").locator(".xterm")).toHaveCount(1);
-  await expect
-    .poll(async () => page.evaluate(() => (
-      (window as unknown as { __staveTestState?: { createCliSessionCallCount: number } })
-        .__staveTestState?.createCliSessionCallCount ?? 0
-    )))
-    .toBe(1);
-
-  await page.evaluate(async () => {
-    const { useAppStore } = await import("/src/store/app.store.ts");
-    useAppStore.setState((state) => ({
-      ...state,
-      activeTaskId: "task-1",
-      activeSurface: { kind: "task", taskId: "task-1" },
-    }));
-  });
+  await expectCliSessionCounts(page, { create: 1, attach: 1, resume: 1 });
+  await page.getByRole("button", { name: /Task 1/ }).first().click();
   await expect(page.getByTestId("cli-session-panel")).toBeHidden();
   await expect(page.getByText("Task 1")).toBeVisible();
 
   // Switch back to the CLI session surface.
-  await page.evaluate(async () => {
-    const { useAppStore } = await import("/src/store/app.store.ts");
-    useAppStore.setState((state) => ({
-      ...state,
-      activeSurface: {
-        kind: "cli-session",
-        cliSessionTabId: state.activeCliSessionTabId ?? "",
-      },
-    }));
-  });
+  await page.getByRole("button", { name: "Claude Workspace", exact: true }).click();
   await expect(page.getByTestId("cli-session-panel").locator(".xterm")).toHaveCount(1);
-  await expect
-    .poll(async () => page.evaluate(() => (
-      (window as unknown as { __staveTestState?: { createCliSessionCallCount: number } })
-        .__staveTestState?.createCliSessionCallCount ?? 0
-    )))
-    .toBe(1);
+  await expectCliSessionCounts(page, { create: 1, attach: 2, resume: 2 });
   const terminalSurface = page.getByTestId("cli-session-panel").locator("[data-terminal-surface]").first();
   await expect
     .poll(async () =>
@@ -362,6 +606,42 @@ test("cli session keeps the renderer alive and refocuses after switching back", 
         Boolean(element.querySelector(".xterm-screen")),
       ))
     .toBe(true);
+  await expectCliSessionStreamReady(page);
+  await emitCliSessionOutput(page, "after reattach\r\n");
+  await expectCliDeliveredOutput(page, "after reattach");
+});
+
+test("cli session resumes streaming after a slow reattach resize", async ({ page }) => {
+  await installCliSessionHarness(page, { slowResizeMs: 80 });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+
+  await openWorkspaceCliSession(page);
+  await expect(page.getByTestId("cli-session-panel")).toBeVisible();
+  await expectCliSessionCounts(page, { create: 1, attach: 1, resume: 1 });
+
+  await page.getByRole("button", { name: /Task 1/ }).first().click();
+  await expect(page.getByTestId("cli-session-panel")).toBeHidden();
+
+  await page.getByRole("button", { name: "Claude Workspace", exact: true }).click();
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.setViewportSize({ width: 1360, height: 860 });
+
+  await expect(page.getByTestId("cli-session-panel")).toBeVisible();
+  await expect(page.getByTestId("cli-session-panel").locator(".xterm")).toHaveCount(1);
+  await expectCliSessionCounts(page, { create: 1, attach: 2, resume: 2 });
+  await expect
+    .poll(async () => (await getCliResizeState(page)).count)
+    .toBeGreaterThanOrEqual(2);
+
+  const resizeState = await getCliResizeState(page);
+  expect(resizeState.lastResize?.cols ?? 0).toBeGreaterThan(0);
+  expect(resizeState.lastResize?.rows ?? 0).toBeGreaterThan(0);
+
+  await expectCliSessionStreamReady(page);
+  await emitCliSessionOutput(page, "after slow resize\r\n");
+  await expectCliDeliveredOutput(page, "after slow resize");
 });
 
 test("scripts manager waits for default scope and keeps draft entries dirty", async ({ page }) => {

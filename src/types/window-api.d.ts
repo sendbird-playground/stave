@@ -585,12 +585,18 @@ interface WindowTerminalApi {
     deliveryMode: "poll" | "push";
   }) => Promise<{
     ok: boolean;
+    attachmentId?: string;
     backlog?: string;
     screenState?: string;
     stderr?: string;
   }>;
   detachSession?: (args: {
     sessionId: string;
+    attachmentId?: string;
+  }) => Promise<{ ok: boolean; stderr?: string }>;
+  resumeSessionStream?: (args: {
+    sessionId: string;
+    attachmentId: string;
   }) => Promise<{ ok: boolean; stderr?: string }>;
   getSlotState?: (args: { slotKey: string }) => Promise<{
     state: "idle" | "running" | "background" | "exited";

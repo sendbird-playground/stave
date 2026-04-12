@@ -255,22 +255,28 @@ export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
   if (isDefaultWorkspace) {
     return (
       <DropdownMenu open={branchOpen} onOpenChange={setBranchOpen}>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              "inline-flex max-w-48 items-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary/60",
-              branchOpen && "border-primary/70 bg-secondary/80",
-            )}
-            style={props.noDragStyle}
-            aria-label="switch-branch"
-            title="Switch branch"
-          >
-            <GitBranch className="size-3.5 shrink-0" />
-            <span className="truncate">{currentBranch}</span>
-            <ChevronDown className="size-3 shrink-0" />
-          </button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex max-w-48 items-center gap-1.5 rounded-md border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary/60",
+                    branchOpen && "border-primary/70 bg-secondary/80",
+                  )}
+                  style={props.noDragStyle}
+                  aria-label="switch-branch"
+                >
+                  <GitBranch className="size-3.5 shrink-0" />
+                  <span className="truncate">{currentBranch}</span>
+                  <ChevronDown className="size-3 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Switch branch</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent align="start" sideOffset={8} className="h-[50vh] w-[min(26rem,calc(100vw-2rem))] overflow-y-auto p-2">
           <Input
             className="h-9 rounded-md text-sm"

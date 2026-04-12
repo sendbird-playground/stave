@@ -954,26 +954,34 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         /* Has PR – show status dropdown */
         <div className="flex items-center gap-1.5">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
-                  badgeColorClass,
-                )}
-                style={props.noDragStyle}
-                disabled={isBusy || continuingWorkspace}
-                aria-label="open-pr-status-menu"
-                title={`PR #${prInfo?.pr?.number ?? "?"}: ${visual.label}`}
-              >
-                {isBusy ? (
-                  <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
-                ) : (
-                  <PrStatusIcon status={prStatus} className="size-3.5" />
-                )}
-                {statusLabel ?? visual.label}
-              </button>
-            </DropdownMenuTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                        badgeColorClass,
+                      )}
+                      style={props.noDragStyle}
+                      disabled={isBusy || continuingWorkspace}
+                      aria-label="open-pr-status-menu"
+                    >
+                      {isBusy ? (
+                        <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+                      ) : (
+                        <PrStatusIcon status={prStatus} className="size-3.5" />
+                      )}
+                      {statusLabel ?? visual.label}
+                    </button>
+                  </DropdownMenuTrigger>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                PR #{prInfo?.pr?.number ?? "?"}: {visual.label}
+              </TooltipContent>
+            </Tooltip>
 
             <DropdownMenuContent align="end" className="w-64">
               {/* PR info header */}

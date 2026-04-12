@@ -131,6 +131,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     Record<string, { exitCode: number; signal?: number }>
   >({});
   const lastResizeByTabKeyRef = useRef<Record<string, TerminalResizeState>>({});
+  const attachmentIdByTabKeyRef = useRef<Record<string, string>>({});
   // Monotonic counter per tabKey — incremented every time a session is
   // registered (attach or create).  Used by the detach callback to detect
   // that a fresh attach happened *after* the detach started, even when the
@@ -267,9 +268,18 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   const disposeSessionIds = batchSessionOp(
     () => window.api?.terminal?.closeSession,
   );
-  const detachSessionIds = batchSessionOp(
-    () => window.api?.terminal?.detachSession,
-  );
+  async function detachSessionAttachments(
+    entries: Array<{ sessionId: string; attachmentId?: string }>,
+  ) {
+    if (entries.length === 0) {
+      return;
+    }
+    const detachSession = window.api?.terminal?.detachSession;
+    if (!detachSession) {
+      return;
+    }
+    await Promise.allSettled(entries.map((entry) => detachSession(entry)));
+  }
 
   function enqueueTerminalInput(args: { sessionId: string; input: string }) {
     pendingInputBySessionRef.current[args.sessionId] = appendTerminalInput(
@@ -487,6 +497,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       }
 
       delete screenStateByTabKeyRef.current[tabKey];
+      delete attachmentIdByTabKeyRef.current[tabKey];
       exitedByTabKeyRef.current[tabKey] = { exitCode, signal };
 
       const signalHint = signal ? ` (signal ${signal})` : "";
@@ -544,7 +555,12 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   useEffect(() => {
     return () => {
       resizeSessionDispatcherRef.current.clear();
-      void detachSessionIds(Object.values(sessionIdByTabKeyRef.current));
+      void detachSessionAttachments(
+        Object.entries(sessionIdByTabKeyRef.current).map(([tabKey, sessionId]) => ({
+          sessionId,
+          attachmentId: attachmentIdByTabKeyRef.current[tabKey],
+        })),
+      );
     };
   }, []);
 
@@ -561,9 +577,10 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     if (entriesToDetach.length === 0) {
       return;
     }
-    const sessionIdsToDetach = entriesToDetach.map(
-      ([, sessionId]) => sessionId,
-    );
+    const detachEntries = entriesToDetach.map(([tabKey, sessionId]) => ({
+      sessionId,
+      attachmentId: attachmentIdByTabKeyRef.current[tabKey],
+    }));
     // Capture the attach generation for each tabKey at the moment we START
     // the detach.  If registerSession() runs before the detach settles
     // (reattach-same-session), the generation will have been bumped even
@@ -581,7 +598,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     // After detach settles, always clear refs and bump runtimeVersion so
     // the bootstrap effect re-runs and calls tryReattachExistingSession
     // (which will re-attach if the user already returned to this workspace).
-    void detachSessionIds(sessionIdsToDetach).then(() => {
+    void detachSessionAttachments(detachEntries).then(() => {
       for (const [tabKey, sessionId] of entriesToDetach) {
         // Guard: if the user switched back to this workspace before the
         // detach settled, the bootstrap effect may have already re-attached
@@ -605,6 +622,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         delete flushScheduledBySessionRef.current[sessionId];
         delete creatingSessionByTabKeyRef.current[tabKey];
         delete lastResizeByTabKeyRef.current[tabKey];
+        delete attachmentIdByTabKeyRef.current[tabKey];
       }
       setRuntimeVersion((v) => v + 1);
     });
@@ -637,6 +655,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         delete lastResizeByTabKeyRef.current[tabKey];
         delete hydratedRevisionByTabKeyRef.current[tabKey];
         delete screenStateByTabKeyRef.current[tabKey];
+        delete attachmentIdByTabKeyRef.current[tabKey];
         setBridgeErrorForTabKey(tabKey, "");
       }
       setRuntimeVersion((value) => value + 1);
@@ -733,7 +752,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     const rows = measured.rows || proposed?.rows || 24;
     const deliveryMode = supportsPushTerminalOutput ? "push" : "poll";
 
-    function registerSession(sessionId: string) {
+    function registerSession(sessionId: string, attachmentId?: string) {
       setBridgeErrorForTabKey(tabKey, "");
       sessionIdByTabKeyRef.current[tabKey] = sessionId;
       tabKeyBySessionIdRef.current[sessionId] = tabKey;
@@ -743,6 +762,11 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         (attachGenerationByTabKeyRef.current[tabKey] ?? 0) + 1;
       delete exitedByTabKeyRef.current[tabKey];
       delete lastResizeByTabKeyRef.current[tabKey];
+      if (attachmentId) {
+        attachmentIdByTabKeyRef.current[tabKey] = attachmentId;
+      } else {
+        delete attachmentIdByTabKeyRef.current[tabKey];
+      }
       setSessionExited(null);
       setRuntimeVersion((value) => value + 1);
     }
@@ -770,7 +794,9 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       }
       const getSlotState = window.api?.terminal?.getSlotState;
       const attachSession = window.api?.terminal?.attachSession;
-      if (!getSlotState || !attachSession) {
+      const resumeSessionStream = window.api?.terminal?.resumeSessionStream;
+      const detachSession = window.api?.terminal?.detachSession;
+      if (!getSlotState || !attachSession || !resumeSessionStream || !detachSession) {
         return false;
       }
       const slotKey = args.slotKeyForTab(args.activeTab);
@@ -789,40 +815,52 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
           sessionId: slotState.sessionId,
           deliveryMode,
         });
-        if (attached.ok) {
-          registerSession(slotState.sessionId);
-          if (typeof attached.screenState === "string") {
-            hydrateScreenState(attached.screenState);
-          } else {
-            hydrateBacklog(attached.backlog ?? "");
-          }
-          terminalSessionRouterRef.current.publishSnapshot({
+        if (!attached.ok || !attached.attachmentId) {
+          return false;
+        }
+        if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
+          await detachSession({
             sessionId: slotState.sessionId,
-            screenState: attached.screenState,
-            backlog: attached.backlog,
+            attachmentId: attached.attachmentId,
           });
-
-          // Sync PTY geometry after reattach. While the terminal was hidden,
-          // layout changes (window resize, dock drag) only updated the local
-          // Ghostty renderer. Flush the current measured size so the backend
-          // PTY cols/rows match what the user actually sees.
-          const reattachSize = tabManagerGetSize(tabKey);
-          const reattachCols = reattachSize.cols || cols;
-          const reattachRows = reattachSize.rows || rows;
-          lastResizeByTabKeyRef.current[tabKey] = {
-            sessionId: slotState.sessionId,
-            cols: reattachCols,
-            rows: reattachRows,
-          };
-          await resizeSessionDispatcherRef.current.schedule({
-            tabKey,
-            sessionId: slotState.sessionId,
-            cols: reattachCols,
-            rows: reattachRows,
-          });
-
           return true;
         }
+
+        registerSession(slotState.sessionId, attached.attachmentId);
+        if (typeof attached.screenState === "string") {
+          hydrateScreenState(attached.screenState);
+        } else {
+          hydrateBacklog(attached.backlog ?? "");
+        }
+        terminalSessionRouterRef.current.publishSnapshot({
+          sessionId: slotState.sessionId,
+          screenState: attached.screenState,
+          backlog: attached.backlog,
+        });
+
+        // Sync PTY geometry after reattach. While the terminal was hidden,
+        // layout changes (window resize, dock drag) only updated the local
+        // Ghostty renderer. Flush the current measured size so the backend
+        // PTY cols/rows match what the user actually sees.
+        const reattachSize = tabManagerGetSize(tabKey);
+        const reattachCols = reattachSize.cols || cols;
+        const reattachRows = reattachSize.rows || rows;
+        lastResizeByTabKeyRef.current[tabKey] = {
+          sessionId: slotState.sessionId,
+          cols: reattachCols,
+          rows: reattachRows,
+        };
+        await resizeSessionDispatcherRef.current.schedule({
+          tabKey,
+          sessionId: slotState.sessionId,
+          cols: reattachCols,
+          rows: reattachRows,
+        });
+        await resumeSessionStream({
+          sessionId: slotState.sessionId,
+          attachmentId: attached.attachmentId,
+        });
+        return true;
       }
       if (slotState.state === "exited") {
         exitedByTabKeyRef.current[tabKey] = {
@@ -840,6 +878,11 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     }
 
     async function createNewSession() {
+      const attachSession = window.api?.terminal?.attachSession;
+      const resumeSessionStream = window.api?.terminal?.resumeSessionStream;
+      if (!attachSession || !resumeSessionStream) {
+        return;
+      }
       const created = await args.createSession({
         tab: args.activeTab!,
         cols,
@@ -864,7 +907,37 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         );
         return;
       }
-      registerSession(created.sessionId);
+      const attached = await attachSession({
+        sessionId: created.sessionId,
+        deliveryMode,
+      });
+      if (!attached.ok || !attached.attachmentId) {
+        const message =
+          attached.stderr?.trim() || "Failed to attach terminal session.";
+        setBridgeErrorForTabKey(tabKey, message);
+        return;
+      }
+      registerSession(created.sessionId, attached.attachmentId);
+      if (typeof attached.screenState === "string") {
+        hydrateScreenState(attached.screenState);
+      } else {
+        hydrateBacklog(attached.backlog ?? "");
+      }
+      terminalSessionRouterRef.current.publishSnapshot({
+        sessionId: created.sessionId,
+        screenState: attached.screenState,
+        backlog: attached.backlog,
+      });
+      await resizeSessionDispatcherRef.current.schedule({
+        tabKey,
+        sessionId: created.sessionId,
+        cols,
+        rows,
+      });
+      await resumeSessionStream({
+        sessionId: created.sessionId,
+        attachmentId: attached.attachmentId,
+      });
     }
 
     creatingSessionByTabKeyRef.current[tabKey] = true;
@@ -936,6 +1009,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     }
 
     delete sessionIdByTabKeyRef.current[activeTabKey];
+    delete attachmentIdByTabKeyRef.current[activeTabKey];
     delete creatingSessionByTabKeyRef.current[activeTabKey];
     delete exitedByTabKeyRef.current[activeTabKey];
     delete lastResizeByTabKeyRef.current[activeTabKey];

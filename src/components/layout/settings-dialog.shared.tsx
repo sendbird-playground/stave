@@ -164,18 +164,26 @@ export function SettingsFieldGuide(args: {
 }) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground hover:text-foreground"
-          aria-label={args.tooltip ?? `About ${args.title}`}
-          title={args.tooltip ?? "Show guidance"}
-        >
-          <CircleHelp className="size-3.5" />
-        </Button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={args.tooltip ?? `About ${args.title}`}
+              >
+                <CircleHelp className="size-3.5" />
+              </Button>
+            </PopoverTrigger>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side={args.side ?? "top"}>
+          {args.tooltip ?? "Show guidance"}
+        </TooltipContent>
+      </Tooltip>
       <PopoverContent
         align={args.align ?? "start"}
         side={args.side ?? "top"}

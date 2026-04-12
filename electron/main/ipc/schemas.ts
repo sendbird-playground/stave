@@ -166,6 +166,14 @@ export const TerminalAttachSessionArgsSchema = z
 export const TerminalDetachSessionArgsSchema = z
   .object({
     sessionId: z.string().min(1).max(200),
+    attachmentId: z.string().min(1).max(200).optional(),
+  })
+  .strict();
+
+export const TerminalResumeSessionStreamArgsSchema = z
+  .object({
+    sessionId: z.string().min(1).max(200),
+    attachmentId: z.string().min(1).max(200),
   })
   .strict();
 

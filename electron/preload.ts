@@ -787,8 +787,12 @@ contextBridge.exposeInMainWorld("api", {
       sessionId: string;
       deliveryMode: "poll" | "push";
     }) => ipcRenderer.invoke("terminal:attach-session", args),
-    detachSession: (args: { sessionId: string }) =>
+    detachSession: (args: { sessionId: string; attachmentId?: string }) =>
       ipcRenderer.invoke("terminal:detach-session", args),
+    resumeSessionStream: (args: {
+      sessionId: string;
+      attachmentId: string;
+    }) => ipcRenderer.invoke("terminal:resume-session-stream", args),
     getSlotState: (args: { slotKey: string }) =>
       ipcRenderer.invoke("terminal:get-slot-state", args),
     closeSessionsBySlotPrefix: (args: { prefix: string }) =>
