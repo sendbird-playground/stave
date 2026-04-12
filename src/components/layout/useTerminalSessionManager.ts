@@ -556,10 +556,12 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     return () => {
       resizeSessionDispatcherRef.current.clear();
       void detachSessionAttachments(
-        Object.entries(sessionIdByTabKeyRef.current).map(([tabKey, sessionId]) => ({
-          sessionId,
-          attachmentId: attachmentIdByTabKeyRef.current[tabKey],
-        })),
+        Object.entries(sessionIdByTabKeyRef.current).map(
+          ([tabKey, sessionId]) => ({
+            sessionId,
+            attachmentId: attachmentIdByTabKeyRef.current[tabKey],
+          }),
+        ),
       );
     };
   }, []);
@@ -607,8 +609,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         // what we captured at detach-start.  A generation bump means
         // registerSession() ran after we began detaching — even when the
         // reattached sessionId is the same string value.
-        const currentGen =
-          attachGenerationByTabKeyRef.current[tabKey] ?? 0;
+        const currentGen = attachGenerationByTabKeyRef.current[tabKey] ?? 0;
         if (
           sessionIdByTabKeyRef.current[tabKey] !== sessionId ||
           currentGen !== generationSnapshot[tabKey]
@@ -796,7 +797,12 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       const attachSession = window.api?.terminal?.attachSession;
       const resumeSessionStream = window.api?.terminal?.resumeSessionStream;
       const detachSession = window.api?.terminal?.detachSession;
-      if (!getSlotState || !attachSession || !resumeSessionStream || !detachSession) {
+      if (
+        !getSlotState ||
+        !attachSession ||
+        !resumeSessionStream ||
+        !detachSession
+      ) {
         return false;
       }
       const slotKey = args.slotKeyForTab(args.activeTab);
@@ -907,6 +913,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
           delete hydratedRevisionByTabKeyRef.current[tabKey];
           delete screenStateByTabKeyRef.current[tabKey];
           delete attachmentIdByTabKeyRef.current[tabKey];
+          delete transcriptRef.current[tabKey];
           setRuntimeVersion((value) => value + 1);
         }
 
