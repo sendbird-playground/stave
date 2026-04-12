@@ -312,6 +312,7 @@ const WorkspaceCliSessionTabSchema = z.object({
   title: z.string(),
   provider: z.union([z.literal("claude-code"), z.literal("codex")]),
   contextMode: z.union([z.literal("workspace"), z.literal("active-task")]),
+  nativeSessionId: z.string().optional(),
   linkedTaskId: z.string().nullable(),
   linkedTaskTitle: z.string().nullable(),
   handoffSummary: z.string(),

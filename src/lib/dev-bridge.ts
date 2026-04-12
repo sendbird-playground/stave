@@ -127,6 +127,10 @@ export function installDevApiBridge() {
         path: "/api/terminal/close",
         body: args,
       }),
+      getSessionResumeInfo: async () => ({
+        ok: false,
+        stderr: "CLI native resume metadata is unavailable in the web dev bridge.",
+      }),
     },
     sourceControl: {
       ...existingApi.sourceControl,

@@ -1050,6 +1050,10 @@ interface AppState {
     contextMode: CliSessionContextMode;
   }) => string | null;
   setActiveCliSessionTab: (args: { tabId: string | null }) => void;
+  setCliSessionTabNativeSession: (args: {
+    tabId: string;
+    nativeSessionId?: string;
+  }) => void;
   renameCliSessionTab: (args: { tabId: string; title: string }) => void;
   reorderCliSessionTabs: (args: { fromTabId: string; toTabId: string }) => void;
   closeCliSessionTab: (args: { tabId: string }) => void;
@@ -7193,6 +7197,24 @@ export const useAppStore = create<AppState>()(
             return {
               activeCliSessionTabId: tabId,
               activeSurface: { kind: "cli-session", cliSessionTabId: tabId },
+              workspaceSnapshotVersion:
+                incrementWorkspaceSnapshotVersion(state),
+            };
+          });
+        },
+        setCliSessionTabNativeSession: ({ tabId, nativeSessionId }) => {
+          set((state) => {
+            const tab = findCliSessionTabById(state, tabId);
+            const normalizedNativeSessionId = nativeSessionId?.trim() || undefined;
+            if (!tab || tab.nativeSessionId === normalizedNativeSessionId) {
+              return state;
+            }
+            return {
+              cliSessionTabs: state.cliSessionTabs.map((item) =>
+                item.id === tabId
+                  ? { ...item, nativeSessionId: normalizedNativeSessionId }
+                  : item,
+              ),
               workspaceSnapshotVersion:
                 incrementWorkspaceSnapshotVersion(state),
             };

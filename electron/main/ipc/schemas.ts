@@ -146,6 +146,7 @@ export const CliSessionCreateSessionArgsSchema = z
     cliSessionTabId: z.string().min(1).max(200),
     providerId: z.union([z.literal("claude-code"), z.literal("codex")]),
     contextMode: z.union([z.literal("workspace"), z.literal("active-task")]),
+    nativeSessionId: z.string().max(200).optional(),
     taskId: z.string().min(1).max(200).nullable(),
     taskTitle: z.string().max(500).nullable(),
     cwd: z.string().min(1).max(4096),
@@ -180,6 +181,12 @@ export const TerminalResumeSessionStreamArgsSchema = z
 export const TerminalGetSlotStateArgsSchema = z
   .object({
     slotKey: z.string().min(1).max(600),
+  })
+  .strict();
+
+export const TerminalGetSessionResumeInfoArgsSchema = z
+  .object({
+    sessionId: z.string().min(1).max(200),
   })
   .strict();
 

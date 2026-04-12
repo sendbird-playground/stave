@@ -4,6 +4,7 @@ import {
   TerminalAttachSessionArgsSchema,
   TerminalCreateSessionArgsSchema,
   TerminalDetachSessionArgsSchema,
+  TerminalGetSessionResumeInfoArgsSchema,
   TerminalGetSlotStateArgsSchema,
   TerminalResumeSessionStreamArgsSchema,
 } from "./schemas";
@@ -268,6 +269,18 @@ export function registerTerminalHandlers() {
     }
 
     return invokeHostService("terminal.get-slot-state", parsed.data);
+  });
+
+  ipcMain.handle("terminal:get-session-resume-info", async (_event, args) => {
+    const parsed = TerminalGetSessionResumeInfoArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        stderr: parsed.error.flatten().formErrors.join("\n"),
+      };
+    }
+
+    return invokeHostService("terminal.get-session-resume-info", parsed.data);
   });
 
   ipcMain.handle(

@@ -795,6 +795,8 @@ contextBridge.exposeInMainWorld("api", {
     }) => ipcRenderer.invoke("terminal:resume-session-stream", args),
     getSlotState: (args: { slotKey: string }) =>
       ipcRenderer.invoke("terminal:get-slot-state", args),
+    getSessionResumeInfo: (args: { sessionId: string }) =>
+      ipcRenderer.invoke("terminal:get-session-resume-info", args),
     closeSessionsBySlotPrefix: (args: { prefix: string }) =>
       ipcRenderer.invoke("terminal:close-sessions-by-slot-prefix", args),
   },

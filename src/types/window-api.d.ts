@@ -554,7 +554,12 @@ interface WindowTerminalApi {
   ) => Promise<{ ok: boolean; sessionId?: string }>;
   createCliSession?: (
     args: CliSessionCreateSessionArgs,
-  ) => Promise<{ ok: boolean; sessionId?: string; stderr?: string }>;
+  ) => Promise<{
+    ok: boolean;
+    sessionId?: string;
+    nativeSessionId?: string;
+    stderr?: string;
+  }>;
   writeSession?: (args: {
     sessionId: string;
     input: string;
@@ -603,6 +608,11 @@ interface WindowTerminalApi {
     sessionId?: string;
     exitCode?: number;
     signal?: number;
+  }>;
+  getSessionResumeInfo?: (args: { sessionId: string }) => Promise<{
+    ok: boolean;
+    nativeSessionId?: string;
+    stderr?: string;
   }>;
   closeSessionsBySlotPrefix?: (args: {
     prefix: string;

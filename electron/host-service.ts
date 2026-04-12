@@ -667,6 +667,12 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
     case "terminal.get-slot-state":
       await respond(request.id, terminalRuntime.getSlotState(request.params));
       return;
+    case "terminal.get-session-resume-info":
+      await respond(
+        request.id,
+        terminalRuntime.getSessionResumeInfo(request.params),
+      );
+      return;
     case "terminal.close-sessions-by-slot-prefix":
       await respond(
         request.id,
