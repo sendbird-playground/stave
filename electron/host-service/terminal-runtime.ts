@@ -65,7 +65,8 @@ interface TerminalSessionEntry {
   disposeHeadlessMirror: () => void;
   flushPushOutput: () => void;
   markClosed: () => void;
-  attached: boolean;
+  activeAttachmentId: string | null;
+  streamReadyAttachmentId: string | null;
   backgroundBuffer: string[];
   backgroundBufferBytes: number;
   exitCode: number | null;
@@ -241,6 +242,18 @@ export function createTerminalRuntime(args: {
     );
   }
 
+  function hasActiveAttachment(session: TerminalSessionEntry) {
+    return session.activeAttachmentId !== null;
+  }
+
+  function isPushStreamReady(session: TerminalSessionEntry) {
+    return (
+      session.deliveryMode === "push" &&
+      session.activeAttachmentId !== null &&
+      session.streamReadyAttachmentId === session.activeAttachmentId
+    );
+  }
+
   function drainBackgroundBuffer(session: TerminalSessionEntry): string {
     if (session.backgroundBuffer.length === 0) {
       return "";
@@ -318,7 +331,7 @@ export function createTerminalRuntime(args: {
   function schedulePushFlush(session: TerminalSessionEntry) {
     if (
       session.closing ||
-      session.deliveryMode !== "push" ||
+      !isPushStreamReady(session) ||
       session.pushScheduled ||
       session.pushWriteInFlight ||
       session.pendingPush.length === 0
@@ -338,7 +351,7 @@ export function createTerminalRuntime(args: {
     if (
       session.closing ||
       session.pushWriteInFlight ||
-      session.deliveryMode !== "push" ||
+      !isPushStreamReady(session) ||
       session.pendingPush.length === 0
     ) {
       return session.lastPushWritePromise ?? Promise.resolve();
@@ -350,9 +363,10 @@ export function createTerminalRuntime(args: {
     session.pushWriteInFlight = true;
     const pushPromise = emitEvent("terminal.output", { sessionId, output })
       .catch((error) => {
-        if (session.attached) {
+        if (hasActiveAttachment(session)) {
           appendOutputChunk(session, output);
           session.deliveryMode = "poll";
+          session.streamReadyAttachmentId = null;
         } else {
           appendBackgroundBuffer(session, output);
         }
@@ -385,7 +399,7 @@ export function createTerminalRuntime(args: {
       return { ok: false, stderr: "Terminal session not found." };
     }
     session.deliveryMode = args.deliveryMode;
-    if (args.deliveryMode === "push") {
+    if (args.deliveryMode === "push" && isPushStreamReady(session)) {
       schedulePushFlush(session);
     } else {
       bufferPendingPushOutput(session);
@@ -455,7 +469,8 @@ export function createTerminalRuntime(args: {
       closing: false,
       slotKey: args.slotKey ?? null,
       closed,
-      attached: true,
+      activeAttachmentId: null,
+      streamReadyAttachmentId: null,
       backgroundBuffer: [],
       backgroundBufferBytes: 0,
       exitCode: null,
@@ -533,11 +548,11 @@ export function createTerminalRuntime(args: {
           return;
         }
         void mirrorPtyOutput(session, filtered);
-        if (!session.attached) {
+        if (!hasActiveAttachment(session)) {
           appendBackgroundBuffer(session, filtered);
           return;
         }
-        if (session.deliveryMode === "push") {
+        if (isPushStreamReady(session)) {
           session.pendingPush.push(filtered);
           session.pendingPushBytes += Buffer.byteLength(filtered);
           session.peakPendingPushBytes = Math.max(
@@ -818,6 +833,7 @@ export function createTerminalRuntime(args: {
     deliveryMode: "poll" | "push";
   }): Promise<{
     ok: boolean;
+    attachmentId?: string;
     backlog?: string;
     screenState?: string;
     stderr?: string;
@@ -826,33 +842,45 @@ export function createTerminalRuntime(args: {
     if (!session) {
       return { ok: false, stderr: "Terminal session not found." };
     }
-    session.attached = true;
+    const attachmentId = randomUUID();
+    session.activeAttachmentId = attachmentId;
+    session.streamReadyAttachmentId = null;
     const backlog = drainBackgroundBuffer(session);
     bufferPendingPushOutput(session);
-    const polledOutput = session.outputChunks.join("");
+    session.deliveryMode = args.deliveryMode;
+    await session.lastHeadlessWritePromise;
+    const screenState = serializeScreenState(session);
+
+    // Any output accumulated while attach was capturing is now represented by
+    // screenState. Keep only post-attach output for the later resume flush.
     session.outputChunks.length = 0;
     session.outputChunksBytes = 0;
-    const fullBacklog = polledOutput ? `${polledOutput}${backlog}` : backlog;
-    session.deliveryMode = args.deliveryMode;
-    if (args.deliveryMode === "push") {
-      schedulePushFlush(session);
-    }
-    await session.lastHeadlessWritePromise;
+
     return {
       ok: true,
-      backlog: fullBacklog,
-      screenState: serializeScreenState(session),
+      attachmentId,
+      backlog,
+      screenState,
     };
   }
 
   function detachSession(args: {
     sessionId: string;
+    attachmentId?: string;
   }): HostTerminalMutationResult {
     const session = sessions.get(args.sessionId);
     if (!session) {
       return { ok: false, stderr: "Terminal session not found." };
     }
-    session.attached = false;
+    if (
+      args.attachmentId &&
+      session.activeAttachmentId &&
+      session.activeAttachmentId !== args.attachmentId
+    ) {
+      return { ok: true };
+    }
+    session.activeAttachmentId = null;
+    session.streamReadyAttachmentId = null;
     bufferPendingPushOutput(session);
     for (const chunk of session.outputChunks) {
       appendBackgroundBuffer(session, chunk);
@@ -860,6 +888,35 @@ export function createTerminalRuntime(args: {
     session.outputChunks.length = 0;
     session.outputChunksBytes = 0;
     session.deliveryMode = "poll";
+    return { ok: true };
+  }
+
+  function resumeSessionStream(args: {
+    sessionId: string;
+    attachmentId: string;
+  }): HostTerminalMutationResult {
+    const session = sessions.get(args.sessionId);
+    if (!session) {
+      return { ok: false, stderr: "Terminal session not found." };
+    }
+    if (session.activeAttachmentId !== args.attachmentId) {
+      return { ok: true };
+    }
+    session.streamReadyAttachmentId = args.attachmentId;
+    if (session.deliveryMode === "push" && session.outputChunks.length > 0) {
+      const output = session.outputChunks.join("");
+      session.outputChunks.length = 0;
+      session.outputChunksBytes = 0;
+      session.pendingPush.push(output);
+      session.pendingPushBytes += Buffer.byteLength(output);
+      session.peakPendingPushBytes = Math.max(
+        session.peakPendingPushBytes,
+        session.pendingPushBytes,
+      );
+    }
+    if (isPushStreamReady(session)) {
+      schedulePushFlush(session);
+    }
     return { ok: true };
   }
 
@@ -890,7 +947,7 @@ export function createTerminalRuntime(args: {
         signal: session.exitSignal,
       };
     }
-    if (!session.attached) {
+    if (!hasActiveAttachment(session)) {
       return { state: "background", sessionId };
     }
     return { state: "running", sessionId };
@@ -907,6 +964,7 @@ export function createTerminalRuntime(args: {
     bufferSessionOutput,
     attachSession,
     detachSession,
+    resumeSessionStream,
     getSlotState,
     closeSessionsBySlotPrefix,
     cleanupAll,

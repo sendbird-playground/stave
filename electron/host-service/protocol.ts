@@ -96,6 +96,7 @@ export interface HostTerminalMutationResult {
 
 export interface HostTerminalAttachSessionResult {
   ok: boolean;
+  attachmentId?: string;
   backlog?: string;
   screenState?: string;
   stderr?: string;
@@ -295,6 +296,11 @@ export interface HostServiceRequestMap {
   };
   "terminal.detach-session": {
     sessionId: string;
+    attachmentId?: string;
+  };
+  "terminal.resume-session-stream": {
+    sessionId: string;
+    attachmentId: string;
   };
   "terminal.get-slot-state": {
     slotKey: string;
@@ -473,6 +479,7 @@ export interface HostServiceResponseMap {
   "terminal.buffer-session-output": HostTerminalMutationResult;
   "terminal.attach-session": HostTerminalAttachSessionResult;
   "terminal.detach-session": HostTerminalMutationResult;
+  "terminal.resume-session-stream": HostTerminalMutationResult;
   "terminal.get-slot-state": HostTerminalSlotStateResult;
   "terminal.close-sessions-by-slot-prefix": {
     ok: true;

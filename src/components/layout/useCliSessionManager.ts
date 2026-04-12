@@ -81,6 +81,7 @@ export interface UseCliSessionManagerArgs<TTab extends { id: string }> {
   slotKeyForTab?: (tab: TTab) => string | null;
   terminalController: CliTerminalInstanceController;
   terminalReady: boolean;
+  terminalRevision: number;
 }
 
 export interface UseCliSessionManagerReturn {
@@ -96,19 +97,11 @@ export interface UseCliSessionManagerReturn {
 export function useCliSessionManager<TTab extends { id: string }>(
   args: UseCliSessionManagerArgs<TTab>,
 ): UseCliSessionManagerReturn {
-  const tabsRef = useRef(args.tabs);
-  const createSessionRef = useRef(args.createSession);
-  const slotKeyForTabRef = useRef(args.slotKeyForTab);
   const terminalControllerRef = useRef(args.terminalController);
-  const activeTabRef = useRef(args.activeTab);
 
   useEffect(() => {
-    tabsRef.current = args.tabs;
-    createSessionRef.current = args.createSession;
-    slotKeyForTabRef.current = args.slotKeyForTab;
     terminalControllerRef.current = args.terminalController;
-    activeTabRef.current = args.activeTab;
-  }, [args.createSession, args.slotKeyForTab, args.tabs, args.terminalController]);
+  }, [args.terminalController]);
 
   const sessionIdByTabKeyRef = useRef<Record<string, string>>({});
   const tabKeyBySessionIdRef = useRef<Record<string, string>>({});
@@ -117,8 +110,11 @@ export function useCliSessionManager<TTab extends { id: string }>(
   const flushScheduledBySessionRef = useRef<Record<string, boolean>>({});
   const exitedByTabKeyRef = useRef<Record<string, SessionExitInfo>>({});
   const lastResizeBySessionRef = useRef<Record<string, { cols: number; rows: number }>>({});
+  const attachmentIdByTabKeyRef = useRef<Record<string, string>>({});
   const activeTabKeyRef = useRef<string | null>(null);
   const attachedSessionIdRef = useRef<string | null>(null);
+  const attachedAttachmentIdRef = useRef<string | null>(null);
+  const terminalRevisionRef = useRef(args.terminalRevision);
 
   const [bridgeErrorByTabKey, setBridgeErrorByTabKey] = useState<Record<string, string>>({});
   const [sessionVersion, setSessionVersion] = useState(0);
@@ -140,6 +136,10 @@ export function useCliSessionManager<TTab extends { id: string }>(
   useEffect(() => {
     activeTabKeyRef.current = activeTabKey;
   }, [activeTabKey]);
+
+  useEffect(() => {
+    terminalRevisionRef.current = args.terminalRevision;
+  }, [args.terminalRevision]);
 
   const resizeSessionDispatcherRef = useRef(
     createLatestAsyncDispatcher<TerminalResizeRequest>({
@@ -171,13 +171,22 @@ export function useCliSessionManager<TTab extends { id: string }>(
     setSessionVersion((value) => value + 1);
   }, []);
 
-  const registerSession = useCallback((tabKey: string, sessionId: string) => {
+  const registerSession = useCallback((
+    tabKey: string,
+    sessionId: string,
+    attachmentId?: string,
+  ) => {
     sessionIdByTabKeyRef.current[tabKey] = sessionId;
     tabKeyBySessionIdRef.current[sessionId] = tabKey;
     pendingInputBySessionRef.current[sessionId] = "";
     writeInFlightBySessionRef.current[sessionId] = false;
     delete exitedByTabKeyRef.current[tabKey];
     delete lastResizeBySessionRef.current[sessionId];
+    if (attachmentId) {
+      attachmentIdByTabKeyRef.current[tabKey] = attachmentId;
+    } else {
+      delete attachmentIdByTabKeyRef.current[tabKey];
+    }
     notifySessionChange();
   }, [notifySessionChange]);
 
@@ -192,6 +201,7 @@ export function useCliSessionManager<TTab extends { id: string }>(
     delete writeInFlightBySessionRef.current[sessionId];
     delete flushScheduledBySessionRef.current[sessionId];
     delete lastResizeBySessionRef.current[sessionId];
+    delete attachmentIdByTabKeyRef.current[tabKey];
     notifySessionChange();
   }, [notifySessionChange]);
 
@@ -308,6 +318,10 @@ export function useCliSessionManager<TTab extends { id: string }>(
         return;
       }
 
+      if (attachedSessionIdRef.current === sessionId) {
+        attachedSessionIdRef.current = null;
+        attachedAttachmentIdRef.current = null;
+      }
       exitedByTabKeyRef.current[tabKey] = { exitCode, signal };
       clearSessionRegistration(tabKey, sessionId);
 
@@ -394,7 +408,8 @@ export function useCliSessionManager<TTab extends { id: string }>(
       if (!tabKey.startsWith(previousPrefix)) {
         continue;
       }
-      void detachSession({ sessionId }).catch(() => {
+      const attachmentId = attachmentIdByTabKeyRef.current[tabKey];
+      void detachSession({ sessionId, attachmentId }).catch(() => {
         // Best-effort detach while preserving the session mapping.
       });
     }
@@ -442,12 +457,12 @@ export function useCliSessionManager<TTab extends { id: string }>(
 
     const tabKey = activeTabKey;
     const attachSession = window.api?.terminal?.attachSession;
-    const createSession = createSessionRef.current;
     const getSlotState = window.api?.terminal?.getSlotState;
     const detachSession = window.api?.terminal?.detachSession;
+    const resumeSessionStream = window.api?.terminal?.resumeSessionStream;
     const deliveryMode: "poll" | "push" = supportsPushTerminalOutput ? "push" : "poll";
 
-    if (!attachSession || !detachSession) {
+    if (!attachSession || !detachSession || !resumeSessionStream) {
       setBridgeErrorForTabKey(
         setBridgeErrorByTabKey,
         tabKey,
@@ -457,7 +472,11 @@ export function useCliSessionManager<TTab extends { id: string }>(
     }
 
     let cancelled = false;
-    let attachedSessionId: string | null = null;
+    let activeAttachment:
+      | { sessionId: string; attachmentId: string }
+      | null = null;
+    const activeTab = args.activeTab;
+    const rendererRevision = args.terminalRevision;
 
     const ensureActiveSession = async () => {
       const measured = terminalControllerRef.current.getSize();
@@ -465,24 +484,29 @@ export function useCliSessionManager<TTab extends { id: string }>(
       const rows = measured.rows || 24;
 
       const hydrateAttachedSession = async (sessionId: string) => {
-        registerSession(tabKey, sessionId);
-        attachedSessionId = sessionId;
-
         const attached = await attachSession({
           sessionId,
           deliveryMode,
         });
-        if (!attached.ok) {
-          clearSessionRegistration(tabKey, sessionId);
+        if (!attached.ok || !attached.attachmentId) {
           return false;
         }
 
-        if (cancelled) {
-          await detachSession({ sessionId });
+        if (cancelled || rendererRevision !== terminalRevisionRef.current) {
+          await detachSession({
+            sessionId,
+            attachmentId: attached.attachmentId,
+          });
           return true;
         }
 
+        registerSession(tabKey, sessionId, attached.attachmentId);
+        activeAttachment = {
+          sessionId,
+          attachmentId: attached.attachmentId,
+        };
         attachedSessionIdRef.current = sessionId;
+        attachedAttachmentIdRef.current = attached.attachmentId;
         setBridgeErrorForTabKey(setBridgeErrorByTabKey, tabKey, "");
         terminalControllerRef.current.clear();
         if (typeof attached.screenState === "string") {
@@ -493,6 +517,24 @@ export function useCliSessionManager<TTab extends { id: string }>(
           terminalControllerRef.current.write(attached.backlog);
         }
         await handleTerminalResize(cols, rows);
+        if (cancelled || rendererRevision !== terminalRevisionRef.current) {
+          await detachSession({
+            sessionId,
+            attachmentId: attached.attachmentId,
+          });
+          return true;
+        }
+        const resumed = await resumeSessionStream({
+          sessionId,
+          attachmentId: attached.attachmentId,
+        });
+        if (!resumed.ok) {
+          setBridgeErrorForTabKey(
+            setBridgeErrorByTabKey,
+            tabKey,
+            resumed.stderr?.trim() || "Failed to resume CLI session stream.",
+          );
+        }
         return true;
       };
 
@@ -504,9 +546,7 @@ export function useCliSessionManager<TTab extends { id: string }>(
         }
       }
 
-      const slotKey = activeTabRef.current
-        ? slotKeyForTabRef.current?.(activeTabRef.current)
-        : null;
+      const slotKey = args.slotKeyForTab?.(activeTab) ?? null;
       if (slotKey && getSlotState) {
         const slotState = await getSlotState({ slotKey });
         if (
@@ -529,8 +569,8 @@ export function useCliSessionManager<TTab extends { id: string }>(
         }
       }
 
-      const created = await createSession({
-        tab: activeTabRef.current!,
+      const created = await args.createSession({
+        tab: activeTab,
         cols,
         rows,
         deliveryMode,
@@ -547,36 +587,38 @@ export function useCliSessionManager<TTab extends { id: string }>(
         return;
       }
 
-      registerSession(tabKey, created.sessionId);
-      attachedSessionId = created.sessionId;
       if (cancelled) {
-        await detachSession({ sessionId: created.sessionId });
         return;
       }
-      attachedSessionIdRef.current = created.sessionId;
-      setBridgeErrorForTabKey(setBridgeErrorByTabKey, tabKey, "");
-      setSessionExited(null);
+      const restored = await hydrateAttachedSession(created.sessionId);
+      if (restored) {
+        setSessionExited(null);
+      }
     };
 
     void ensureActiveSession();
 
     return () => {
       cancelled = true;
-      if (!attachedSessionId) {
+      if (!activeAttachment) {
         return;
       }
-      if (attachedSessionIdRef.current === attachedSessionId) {
+      if (attachedSessionIdRef.current === activeAttachment.sessionId) {
         attachedSessionIdRef.current = null;
+        attachedAttachmentIdRef.current = null;
       }
-      void detachSession({ sessionId: attachedSessionId }).catch(() => {
-        // Best-effort detach; host buffers output for later restore.
+      void detachSession(activeAttachment).catch(() => {
+        // Best-effort detach; slot state owns background continuity.
       });
     };
   }, [
+    args.activeTab,
+    args.createSession,
     activeTabKey,
     args.isVisible,
+    args.slotKeyForTab,
     args.terminalReady,
-    clearSessionRegistration,
+    args.terminalRevision,
     handleTerminalResize,
     registerSession,
     restartVersion,
@@ -597,6 +639,7 @@ export function useCliSessionManager<TTab extends { id: string }>(
     if (tabKey && sessionId) {
       if (attachedSessionIdRef.current === sessionId) {
         attachedSessionIdRef.current = null;
+        attachedAttachmentIdRef.current = null;
       }
       void window.api?.terminal?.closeSession?.({ sessionId });
       clearSessionRegistration(tabKey, sessionId);

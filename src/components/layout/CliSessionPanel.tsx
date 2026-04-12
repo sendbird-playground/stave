@@ -6,7 +6,7 @@ import {
   ClipboardPaste,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ModelIcon } from "@/components/ai-elements";
 import { TERMINAL_WRITE_ERROR_THRESHOLD } from "@/components/layout/useTerminalInstance";
@@ -187,9 +187,13 @@ export function CliSessionPanel() {
     slotKeyForTab,
     terminalController: terminalInstance.controller,
     terminalReady: terminalInstance.ready,
+    terminalRevision: terminalInstance.revision,
   });
-  terminalInputHandlerRef.current = handleTerminalInput;
-  terminalResizeHandlerRef.current = handleTerminalResize;
+
+  useLayoutEffect(() => {
+    terminalInputHandlerRef.current = handleTerminalInput;
+    terminalResizeHandlerRef.current = handleTerminalResize;
+  }, [handleTerminalInput, handleTerminalResize]);
 
   async function handleCopyHandoff() {
     if (!handoffSummary) {

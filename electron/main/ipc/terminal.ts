@@ -5,11 +5,15 @@ import {
   TerminalCreateSessionArgsSchema,
   TerminalDetachSessionArgsSchema,
   TerminalGetSlotStateArgsSchema,
+  TerminalResumeSessionStreamArgsSchema,
 } from "./schemas";
 import { invokeHostService, onHostServiceEvent } from "../host-service-client";
 import { runCommand } from "../utils/command";
 
-const terminalOwnerWebContentsIdBySessionId = new Map<string, number>();
+const terminalOwnerBySessionId = new Map<
+  string,
+  { ownerWebContentsId: number; attachmentId: string }
+>();
 let terminalEventBridgeRegistered = false;
 
 function registerTerminalEventBridge() {
@@ -19,16 +23,14 @@ function registerTerminalEventBridge() {
   terminalEventBridgeRegistered = true;
 
   onHostServiceEvent("terminal.output", (payload) => {
-    const ownerWebContentsId = terminalOwnerWebContentsIdBySessionId.get(
-      payload.sessionId,
-    );
-    if (ownerWebContentsId == null) {
+    const ownerRegistration = terminalOwnerBySessionId.get(payload.sessionId);
+    if (!ownerRegistration) {
       return;
     }
 
-    const owner = webContents.fromId(ownerWebContentsId);
+    const owner = webContents.fromId(ownerRegistration.ownerWebContentsId);
     if (!owner || owner.isDestroyed()) {
-      terminalOwnerWebContentsIdBySessionId.delete(payload.sessionId);
+      terminalOwnerBySessionId.delete(payload.sessionId);
       void invokeHostService("terminal.buffer-session-output", {
         sessionId: payload.sessionId,
         output: payload.output,
@@ -52,15 +54,13 @@ function registerTerminalEventBridge() {
   });
 
   onHostServiceEvent("terminal.exit", (payload) => {
-    const ownerWebContentsId = terminalOwnerWebContentsIdBySessionId.get(
-      payload.sessionId,
-    );
-    terminalOwnerWebContentsIdBySessionId.delete(payload.sessionId);
-    if (ownerWebContentsId == null) {
+    const ownerRegistration = terminalOwnerBySessionId.get(payload.sessionId);
+    terminalOwnerBySessionId.delete(payload.sessionId);
+    if (!ownerRegistration) {
       return;
     }
 
-    const owner = webContents.fromId(ownerWebContentsId);
+    const owner = webContents.fromId(ownerRegistration.ownerWebContentsId);
     if (!owner || owner.isDestroyed()) {
       return;
     }
@@ -72,18 +72,23 @@ function syncTerminalSessionOwner(args: {
   sessionId?: string;
   deliveryMode?: "poll" | "push";
   ownerWebContentsId?: number | null;
+  attachmentId?: string;
 }) {
   if (!args.sessionId) {
     return;
   }
-  if (args.deliveryMode === "push" && args.ownerWebContentsId != null) {
-    terminalOwnerWebContentsIdBySessionId.set(
-      args.sessionId,
-      args.ownerWebContentsId,
-    );
+  if (
+    args.deliveryMode === "push" &&
+    args.ownerWebContentsId != null &&
+    args.attachmentId
+  ) {
+    terminalOwnerBySessionId.set(args.sessionId, {
+      ownerWebContentsId: args.ownerWebContentsId,
+      attachmentId: args.attachmentId,
+    });
     return;
   }
-  terminalOwnerWebContentsIdBySessionId.delete(args.sessionId);
+  terminalOwnerBySessionId.delete(args.sessionId);
 }
 
 export function registerTerminalHandlers() {
@@ -95,7 +100,7 @@ export function registerTerminalHandlers() {
       runCommand({ command: args.command, cwd: args.cwd }),
   );
 
-  ipcMain.handle("terminal:create-session", async (event, args) => {
+  ipcMain.handle("terminal:create-session", async (_event, args) => {
     const parsed = TerminalCreateSessionArgsSchema.safeParse(args);
     if (!parsed.success) {
       return {
@@ -108,16 +113,10 @@ export function registerTerminalHandlers() {
       "terminal.create-session",
       parsed.data,
     );
-    syncTerminalSessionOwner({
-      sessionId: result.sessionId,
-      deliveryMode: parsed.data.deliveryMode,
-      ownerWebContentsId:
-        parsed.data.deliveryMode === "push" ? event.sender.id : null,
-    });
     return result;
   });
 
-  ipcMain.handle("terminal:create-cli-session", async (event, args) => {
+  ipcMain.handle("terminal:create-cli-session", async (_event, args) => {
     const parsed = CliSessionCreateSessionArgsSchema.safeParse(args);
     if (!parsed.success) {
       return {
@@ -130,12 +129,6 @@ export function registerTerminalHandlers() {
       "terminal.create-cli-session",
       parsed.data,
     );
-    syncTerminalSessionOwner({
-      sessionId: result.sessionId,
-      deliveryMode: parsed.data.deliveryMode,
-      ownerWebContentsId:
-        parsed.data.deliveryMode === "push" ? event.sender.id : null,
-    });
     return result;
   });
 
@@ -162,11 +155,13 @@ export function registerTerminalHandlers() {
         args,
       );
       if (result.ok) {
+        const currentOwner = terminalOwnerBySessionId.get(args.sessionId);
         syncTerminalSessionOwner({
           sessionId: args.sessionId,
           deliveryMode: args.deliveryMode,
           ownerWebContentsId:
             args.deliveryMode === "push" ? event.sender.id : null,
+          attachmentId: currentOwner?.attachmentId,
         });
       }
       return result;
@@ -182,7 +177,7 @@ export function registerTerminalHandlers() {
   ipcMain.handle(
     "terminal:close-session",
     async (_event, args: { sessionId: string }) => {
-      terminalOwnerWebContentsIdBySessionId.delete(args.sessionId);
+      terminalOwnerBySessionId.delete(args.sessionId);
       return invokeHostService("terminal.close-session", args);
     },
   );
@@ -206,6 +201,7 @@ export function registerTerminalHandlers() {
         deliveryMode: parsed.data.deliveryMode,
         ownerWebContentsId:
           parsed.data.deliveryMode === "push" ? event.sender.id : null,
+        attachmentId: result.attachmentId,
       });
     }
     return result;
@@ -225,9 +221,27 @@ export function registerTerminalHandlers() {
       parsed.data,
     );
     if (result.ok) {
-      terminalOwnerWebContentsIdBySessionId.delete(parsed.data.sessionId);
+      const currentOwner = terminalOwnerBySessionId.get(parsed.data.sessionId);
+      if (
+        !parsed.data.attachmentId ||
+        currentOwner?.attachmentId === parsed.data.attachmentId
+      ) {
+        terminalOwnerBySessionId.delete(parsed.data.sessionId);
+      }
     }
     return result;
+  });
+
+  ipcMain.handle("terminal:resume-session-stream", async (_event, args) => {
+    const parsed = TerminalResumeSessionStreamArgsSchema.safeParse(args);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        stderr: parsed.error.flatten().formErrors.join("\n"),
+      };
+    }
+
+    return invokeHostService("terminal.resume-session-stream", parsed.data);
   });
 
   ipcMain.handle("terminal:get-slot-state", async (_event, args) => {
