@@ -41,6 +41,9 @@ export interface UseCliTerminalInstanceReturn {
 const DEFAULT_TERMINAL_BACKGROUND = "#101615";
 const DEFAULT_TERMINAL_FOREGROUND = "#e8f0ea";
 
+/** Track global WebGL failure — skip on subsequent terminal instances after a GPU crash. */
+let webglLoadFailed = false;
+
 function describeTerminalError(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
@@ -274,6 +277,28 @@ export function useCliTerminalInstance(
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    if (!webglLoadFailed) {
+      import("@xterm/addon-webgl")
+        .then(({ WebglAddon }) => {
+          if (cancelled || terminalRef.current !== terminal) {
+            return;
+          }
+          try {
+            const webgl = new WebglAddon();
+            webgl.onContextLoss(() => {
+              webgl.dispose();
+              webglLoadFailed = true;
+            });
+            terminal.loadAddon(webgl);
+          } catch {
+            webglLoadFailed = true;
+          }
+        })
+        .catch(() => {
+          webglLoadFailed = true;
+        });
+    }
+
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
         ? new ResizeObserver(() => {
@@ -364,6 +389,21 @@ export function useCliTerminalInstance(
   useEffect(() => {
     if (!args.visible || !ready) {
       return;
+    }
+    const fitAddon = fitAddonRef.current;
+    const terminal = terminalRef.current;
+    if (fitAddon && terminal) {
+      fitAddon.fit();
+      const nextSize = { cols: terminal.cols, rows: terminal.rows };
+      if (
+        nextSize.cols > 0 &&
+        nextSize.rows > 0 &&
+        (nextSize.cols !== lastSizeRef.current.cols ||
+          nextSize.rows !== lastSizeRef.current.rows)
+      ) {
+        lastSizeRef.current = nextSize;
+        void onResizeRef.current(nextSize.cols, nextSize.rows);
+      }
     }
     return controller.focus() ?? undefined;
   }, [args.visible, controller, ready]);

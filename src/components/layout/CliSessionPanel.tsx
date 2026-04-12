@@ -86,6 +86,8 @@ export function CliSessionPanel() {
   );
   const activeTabKey = activeTab ? getTabKey(activeTab) : null;
   const [rendererRestartToken, setRendererRestartToken] = useState(0);
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalInputHandlerRef = useRef<(input: string) => void>(() => {});
   const terminalResizeHandlerRef = useRef<
@@ -111,7 +113,7 @@ export function CliSessionPanel() {
       }
 
       const currentLinkedTaskTitle = args.tab.linkedTaskId
-        ? (tasks.find((task) => task.id === args.tab.linkedTaskId)?.title ??
+        ? (tasksRef.current.find((task) => task.id === args.tab.linkedTaskId)?.title ??
           args.tab.linkedTaskTitle)
         : args.tab.linkedTaskTitle;
 
@@ -140,7 +142,6 @@ export function CliSessionPanel() {
       activeWorkspaceId,
       settings.claudeBinaryPath,
       settings.codexBinaryPath,
-      tasks,
       workspacePath,
     ],
   );

@@ -647,10 +647,16 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       );
       return;
     case "terminal.attach-session":
-      await respond(request.id, terminalRuntime.attachSession(request.params));
+      await respond(request.id, await terminalRuntime.attachSession(request.params));
       return;
     case "terminal.detach-session":
       await respond(request.id, terminalRuntime.detachSession(request.params));
+      return;
+    case "terminal.resume-session-stream":
+      await respond(
+        request.id,
+        terminalRuntime.resumeSessionStream(request.params),
+      );
       return;
     case "terminal.get-slot-state":
       await respond(request.id, terminalRuntime.getSlotState(request.params));

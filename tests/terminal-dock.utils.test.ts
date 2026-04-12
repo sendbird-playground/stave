@@ -20,13 +20,13 @@ describe("shouldAutoCreateDockTerminalTab", () => {
     })).toBe(true);
   });
 
-  test("does not auto-create while restoring an already-open dock", () => {
+  test("auto-creates when dock is already open but workspace has zero tabs (workspace switch)", () => {
     expect(shouldAutoCreateDockTerminalTab({
       isTerminalDocked: true,
       wasTerminalDocked: true,
       terminalTabCount: 0,
       workspacePath: "/tmp/stave",
-    })).toBe(false);
+    })).toBe(true);
   });
 
   test("does not auto-create when tabs already exist or the workspace path is missing", () => {

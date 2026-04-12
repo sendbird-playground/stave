@@ -75,6 +75,16 @@ interface TerminalSessionEntry {
 
 function createBufferedDataHandler(onData: (data: string) => void) {
   let buffer = "";
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function flush() {
+    flushTimer = null;
+    if (buffer.length > 0) {
+      onData(buffer);
+      buffer = "";
+    }
+  }
+
   return (data: string) => {
     buffer += data;
     let sendUpTo = buffer.length;
@@ -105,6 +115,17 @@ function createBufferedDataHandler(onData: (data: string) => void) {
     if (sendUpTo > 0) {
       onData(buffer.substring(0, sendUpTo));
       buffer = buffer.substring(sendUpTo);
+    }
+
+    // If incomplete sequence remains, schedule a flush timeout so it doesn't
+    // block spinner/animation frames indefinitely.  xterm.js parsers on both
+    // the headless mirror and the renderer handle partial sequences gracefully.
+    if (flushTimer !== null) {
+      clearTimeout(flushTimer);
+      flushTimer = null;
+    }
+    if (buffer.length > 0) {
+      flushTimer = setTimeout(flush, 32);
     }
   };
 }

@@ -34,6 +34,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 - [Local data roadmap (2026-03-29)](future/local-data-roadmap-2026-03-29.md)
 - [Remote Stave control roadmap (2026-03-31)](future/remote-stave-control-roadmap-2026-03-31.md)
 - [Shared skill management plan (2026-03-13)](future/shared-skill-management-plan-2026-03-13.md)
+- [Cross-provider context sharing plan (2026-04-12)](future/cross-provider-context-sharing-plan-2026-04-12.md)
 - [Workspace PR Status](features/workspace-pr-status.md)
 - [Notifications](features/notifications.md)
 - [Command Palette](features/command-palette.md)

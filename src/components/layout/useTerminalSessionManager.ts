@@ -138,6 +138,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   // reattached sessionId is the same string value (reattach-same-session).
   const attachGenerationByTabKeyRef = useRef<Record<string, number>>({});
   const hydratedRevisionByTabKeyRef = useRef<Record<string, number>>({});
+  const streamReadyByTabKeyRef = useRef<Record<string, boolean>>({});
 
   const [bridgeErrorByTabKey, setBridgeErrorByTabKey] = useState<
     Record<string, string>
@@ -477,7 +478,8 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     }
 
     return subscribeSessionOutput(({ sessionId, output }) => {
-      if (!tabKeyBySessionIdRef.current[sessionId]) {
+      const tabKey = tabKeyBySessionIdRef.current[sessionId];
+      if (!tabKey || !streamReadyByTabKeyRef.current[tabKey]) {
         return;
       }
       applyTerminalOutput({ sessionId, output });
@@ -624,6 +626,8 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         delete creatingSessionByTabKeyRef.current[tabKey];
         delete lastResizeByTabKeyRef.current[tabKey];
         delete attachmentIdByTabKeyRef.current[tabKey];
+        delete hydratedRevisionByTabKeyRef.current[tabKey];
+        delete streamReadyByTabKeyRef.current[tabKey];
       }
       setRuntimeVersion((v) => v + 1);
     });
@@ -817,6 +821,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
           return true;
         }
+        streamReadyByTabKeyRef.current[tabKey] = false;
         const attached = await attachSession({
           sessionId: slotState.sessionId,
           deliveryMode,
@@ -862,10 +867,38 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
           cols: reattachCols,
           rows: reattachRows,
         });
-        await resumeSessionStream({
-          sessionId: slotState.sessionId,
-          attachmentId: attached.attachmentId,
-        });
+        try {
+          const resumed = await resumeSessionStream({
+            sessionId: slotState.sessionId,
+            attachmentId: attached.attachmentId,
+          });
+          if (resumed.ok) {
+            streamReadyByTabKeyRef.current[tabKey] = true;
+          } else {
+            setBridgeErrorForTabKey(
+              tabKey,
+              resumed.stderr?.trim() || "Failed to resume terminal session stream.",
+            );
+          }
+        } catch {
+          // Session is registered but stream failed — detach and let bootstrap
+          // retry on next cycle.
+          terminalSessionRouterRef.current.clearSession(slotState.sessionId);
+          delete sessionIdByTabKeyRef.current[tabKey];
+          if (tabKeyBySessionIdRef.current[slotState.sessionId] === tabKey) {
+            delete tabKeyBySessionIdRef.current[slotState.sessionId];
+          }
+          delete pendingInputBySessionRef.current[slotState.sessionId];
+          delete writeInFlightBySessionRef.current[slotState.sessionId];
+          delete attachmentIdByTabKeyRef.current[tabKey];
+          delete streamReadyByTabKeyRef.current[tabKey];
+          setRuntimeVersion((value) => value + 1);
+          void detachSession({
+            sessionId: slotState.sessionId,
+            attachmentId: attached.attachmentId,
+          });
+          return false;
+        }
         return true;
       }
       if (slotState.state === "exited") {
@@ -913,6 +946,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
           delete hydratedRevisionByTabKeyRef.current[tabKey];
           delete screenStateByTabKeyRef.current[tabKey];
           delete attachmentIdByTabKeyRef.current[tabKey];
+          delete streamReadyByTabKeyRef.current[tabKey];
           delete transcriptRef.current[tabKey];
           setRuntimeVersion((value) => value + 1);
         }
@@ -951,6 +985,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         );
         return;
       }
+      streamReadyByTabKeyRef.current[tabKey] = false;
       const attached = await attachSession({
         sessionId: created.sessionId,
         deliveryMode,
@@ -996,10 +1031,26 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         });
         return;
       }
-      await resumeSessionStream({
-        sessionId: created.sessionId,
-        attachmentId: attached.attachmentId,
-      });
+      try {
+        const resumed = await resumeSessionStream({
+          sessionId: created.sessionId,
+          attachmentId: attached.attachmentId,
+        });
+        if (resumed.ok) {
+          streamReadyByTabKeyRef.current[tabKey] = true;
+        } else {
+          setBridgeErrorForTabKey(
+            tabKey,
+            resumed.stderr?.trim() || "Failed to resume terminal session stream.",
+          );
+        }
+      } catch {
+        abandonCreatedSession({
+          sessionId: created.sessionId,
+          attachmentId: attached.attachmentId,
+          registered: true,
+        });
+      }
     }
 
     creatingSessionByTabKeyRef.current[tabKey] = true;

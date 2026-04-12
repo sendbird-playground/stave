@@ -115,6 +115,7 @@ export function useCliSessionManager<TTab extends { id: string }>(
   const attachedSessionIdRef = useRef<string | null>(null);
   const attachedAttachmentIdRef = useRef<string | null>(null);
   const terminalRevisionRef = useRef(args.terminalRevision);
+  const streamReadyRef = useRef(false);
 
   const [bridgeErrorByTabKey, setBridgeErrorByTabKey] = useState<Record<string, string>>({});
   const [sessionVersion, setSessionVersion] = useState(0);
@@ -180,6 +181,7 @@ export function useCliSessionManager<TTab extends { id: string }>(
     tabKeyBySessionIdRef.current[sessionId] = tabKey;
     pendingInputBySessionRef.current[sessionId] = "";
     writeInFlightBySessionRef.current[sessionId] = false;
+    flushScheduledBySessionRef.current[sessionId] = false;
     delete exitedByTabKeyRef.current[tabKey];
     delete lastResizeBySessionRef.current[sessionId];
     if (attachmentId) {
@@ -352,6 +354,9 @@ export function useCliSessionManager<TTab extends { id: string }>(
       if (!output || sessionId !== attachedSessionIdRef.current) {
         return;
       }
+      if (!streamReadyRef.current) {
+        return;
+      }
       terminalControllerRef.current.write(output);
     });
   }, [supportsPushTerminalOutput]);
@@ -407,6 +412,10 @@ export function useCliSessionManager<TTab extends { id: string }>(
     for (const [tabKey, sessionId] of Object.entries(sessionIdByTabKeyRef.current)) {
       if (!tabKey.startsWith(previousPrefix)) {
         continue;
+      }
+      if (attachedSessionIdRef.current === sessionId) {
+        attachedSessionIdRef.current = null;
+        attachedAttachmentIdRef.current = null;
       }
       const attachmentId = attachmentIdByTabKeyRef.current[tabKey];
       void detachSession({ sessionId, attachmentId }).catch(() => {
@@ -484,6 +493,7 @@ export function useCliSessionManager<TTab extends { id: string }>(
       const rows = measured.rows || 24;
 
       const hydrateAttachedSession = async (sessionId: string) => {
+        streamReadyRef.current = false;
         const attached = await attachSession({
           sessionId,
           deliveryMode,
@@ -518,6 +528,12 @@ export function useCliSessionManager<TTab extends { id: string }>(
         }
         await handleTerminalResize(cols, rows);
         if (cancelled || rendererRevision !== terminalRevisionRef.current) {
+          clearSessionRegistration(tabKey, sessionId);
+          if (attachedSessionIdRef.current === sessionId) {
+            attachedSessionIdRef.current = null;
+            attachedAttachmentIdRef.current = null;
+          }
+          activeAttachment = null;
           await detachSession({
             sessionId,
             attachmentId: attached.attachmentId,
@@ -528,7 +544,9 @@ export function useCliSessionManager<TTab extends { id: string }>(
           sessionId,
           attachmentId: attached.attachmentId,
         });
-        if (!resumed.ok) {
+        if (resumed.ok) {
+          streamReadyRef.current = true;
+        } else {
           setBridgeErrorForTabKey(
             setBridgeErrorByTabKey,
             tabKey,
@@ -549,6 +567,9 @@ export function useCliSessionManager<TTab extends { id: string }>(
       const slotKey = args.slotKeyForTab?.(activeTab) ?? null;
       if (slotKey && getSlotState) {
         const slotState = await getSlotState({ slotKey });
+        if (cancelled) {
+          return;
+        }
         if (
           slotState.sessionId &&
           (slotState.state === "running" || slotState.state === "background")
@@ -567,6 +588,10 @@ export function useCliSessionManager<TTab extends { id: string }>(
             signal: slotState.signal,
           });
         }
+      }
+
+      if (cancelled) {
+        return;
       }
 
       const created = await args.createSession({
@@ -588,6 +613,9 @@ export function useCliSessionManager<TTab extends { id: string }>(
       }
 
       if (cancelled) {
+        void window.api?.terminal?.closeSession?.({
+          sessionId: created.sessionId,
+        });
         return;
       }
       const restored = await hydrateAttachedSession(created.sessionId);
@@ -619,6 +647,7 @@ export function useCliSessionManager<TTab extends { id: string }>(
     args.slotKeyForTab,
     args.terminalReady,
     args.terminalRevision,
+    clearSessionRegistration,
     handleTerminalResize,
     registerSession,
     restartVersion,
