@@ -6,7 +6,14 @@ import {
   ClipboardPaste,
   X,
 } from "lucide-react";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ModelIcon } from "@/components/ai-elements";
 import { TERMINAL_WRITE_ERROR_THRESHOLD } from "@/components/layout/useTerminalInstance";
@@ -39,11 +46,12 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 
-export function CliSessionPanel() {
+export const CliSessionPanel = memo(CliSessionPanelImpl);
+
+function CliSessionPanelImpl() {
   const [
     activeWorkspaceId,
     workspacePath,
-    tasks,
     cliSessionTabs,
     activeCliSessionTabId,
     activeSurface,
@@ -57,7 +65,6 @@ export function CliSessionPanel() {
           state.workspacePathById[state.activeWorkspaceId] ??
             state.projectPath ??
             "",
-          state.tasks,
           state.cliSessionTabs,
           state.activeCliSessionTabId,
           state.activeSurface,
@@ -83,8 +90,6 @@ export function CliSessionPanel() {
   );
   const activeTabKey = activeTab ? getTabKey(activeTab) : null;
   const [rendererRestartToken, setRendererRestartToken] = useState(0);
-  const tasksRef = useRef(tasks);
-  tasksRef.current = tasks;
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalInputHandlerRef = useRef<(input: string) => void>(() => {});
   const terminalResizeHandlerRef = useRef<
@@ -109,9 +114,10 @@ export function CliSessionPanel() {
         };
       }
 
+      const currentTasks = useAppStore.getState().tasks;
       const currentLinkedTaskTitle = args.tab.linkedTaskId
-        ? (tasksRef.current.find((task) => task.id === args.tab.linkedTaskId)?.title ??
-          args.tab.linkedTaskTitle)
+        ? (currentTasks.find((task) => task.id === args.tab.linkedTaskId)
+            ?.title ?? args.tab.linkedTaskTitle)
         : args.tab.linkedTaskTitle;
 
       return createCliSession({
@@ -408,9 +414,15 @@ export function CliSessionPanel() {
                         onClick={() => {
                           if (activeTab) {
                             window.dispatchEvent(
-                              new CustomEvent("stave:request-close-cli-session", {
-                                detail: { id: activeTab.id, title: activeTab.title },
-                              }),
+                              new CustomEvent(
+                                "stave:request-close-cli-session",
+                                {
+                                  detail: {
+                                    id: activeTab.id,
+                                    title: activeTab.title,
+                                  },
+                                },
+                              ),
                             );
                           }
                         }}
@@ -420,9 +432,7 @@ export function CliSessionPanel() {
                         <X className="size-3.5" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Close Session
-                    </TooltipContent>
+                    <TooltipContent side="bottom">Close Session</TooltipContent>
                   </Tooltip>
                 </div>
               </TooltipProvider>
