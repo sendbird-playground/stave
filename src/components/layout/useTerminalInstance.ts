@@ -7,6 +7,12 @@ import {
   type RefObject,
 } from "react";
 import { FitAddon, Terminal, init as initGhosttyWasm } from "ghostty-web";
+import {
+  bindGhosttyRuntimeErrorHandler,
+  clearGhosttyRuntimeErrorHandler,
+  installGhosttyRuntimeGuards,
+  isRecoverableGhosttyRuntimeError,
+} from "@/lib/terminal/ghostty-runtime-guards";
 
 const AUTO_FOCUS_MAX_ATTEMPTS = 60;
 
@@ -133,9 +139,7 @@ export function focusTerminalInstanceSurface(args: {
 }
 
 export function isSwallowableTerminalRuntimeError(error: unknown) {
-  return (
-    error instanceof Error && /memory access out of bounds/i.test(error.message)
-  );
+  return isRecoverableGhosttyRuntimeError(error);
 }
 
 function waitForAnimationFrames(count: number) {
@@ -154,6 +158,7 @@ function waitForAnimationFrames(count: number) {
 let ghosttyWasmReady: Promise<void> | null = null;
 
 function ensureGhosttyWasm() {
+  installGhosttyRuntimeGuards();
   if (!ghosttyWasmReady) {
     ghosttyWasmReady = initGhosttyWasm();
   }
@@ -225,33 +230,52 @@ function describeTerminalError(error: unknown, fallback: string) {
 }
 
 type VisibleTerminalRendererLike = {
+  resize?: (cols: number, rows: number) => void;
   render: (...args: any[]) => void;
 };
 
 type VisibleTerminalLike = {
+  cols?: number;
+  rows?: number;
   resize: (cols: number, rows: number) => void;
   getViewportY: () => number;
   renderer?: VisibleTerminalRendererLike | null;
   wasmTerm?: unknown;
 };
 
-export function restoreVisibleTerminalViewport(args: {
+export async function restoreVisibleTerminalViewport(args: {
   terminal?: VisibleTerminalLike | null;
   proposed?: { cols: number; rows: number };
-  notifyResize?: (cols: number, rows: number) => void;
+  notifyResize?: (cols: number, rows: number) => Promise<void> | void;
 }) {
   const terminal = args.terminal;
   if (!terminal) {
     return;
   }
 
-  if (args.proposed) {
-    // Hidden WebGL surfaces can require a local resize even when the PTY
-    // geometry did not visibly change. Re-emit the measured size as well so
-    // backend/session geometry catches up with any layout changes that happened
-    // while the surface was hidden.
-    terminal.resize(args.proposed.cols, args.proposed.rows);
-    args.notifyResize?.(args.proposed.cols, args.proposed.rows);
+  const currentCols = terminal.cols ?? 0;
+  const currentRows = terminal.rows ?? 0;
+  const proposed = args.proposed;
+  const geometryChanged =
+    proposed != null &&
+    (proposed.cols !== currentCols || proposed.rows !== currentRows);
+
+  if (geometryChanged && proposed) {
+    // Match mux's PTY-first resize contract: if the hidden surface's measured
+    // geometry changed, hand that off to the backend resize path and let the
+    // frontend resize only happen after the PTY has acknowledged it.
+    await args.notifyResize?.(proposed.cols, proposed.rows);
+    return;
+  }
+
+  const rendererCols = proposed?.cols ?? currentCols;
+  const rendererRows = proposed?.rows ?? currentRows;
+  if (
+    terminal.renderer?.resize &&
+    rendererCols > 0 &&
+    rendererRows > 0
+  ) {
+    terminal.renderer.resize(rendererCols, rendererRows);
   }
 
   if (terminal.renderer && terminal.wasmTerm) {
@@ -278,6 +302,11 @@ export interface TerminalInstanceController {
 
 export interface UseTerminalInstanceArgs {
   containerRef: RefObject<HTMLDivElement | null>;
+  diagnosticContext?: {
+    surface: string;
+    tabKey: string;
+    sessionId: string | null;
+  };
   enabled: boolean;
   fontFamily: string;
   fontSize: number;
@@ -285,7 +314,7 @@ export interface UseTerminalInstanceArgs {
   visible: boolean;
   restartToken?: number;
   onData: (data: string) => void;
-  onResize: (cols: number, rows: number) => void;
+  onResize: (cols: number, rows: number) => Promise<void> | void;
 }
 
 export interface UseTerminalInstanceReturn {
@@ -306,6 +335,7 @@ export function useTerminalInstance(
   const themeKeyRef = useRef<string | null>(null);
   const isComposingRef = useRef(false);
   const visibleRef = useRef(args.visible);
+  const diagnosticContextRef = useRef(args.diagnosticContext);
   const onDataRef = useRef(args.onData);
   const onResizeRef = useRef(args.onResize);
 
@@ -317,6 +347,10 @@ export function useTerminalInstance(
   useEffect(() => {
     visibleRef.current = args.visible;
   }, [args.visible]);
+
+  useEffect(() => {
+    diagnosticContextRef.current = args.diagnosticContext;
+  }, [args.diagnosticContext]);
 
   useEffect(() => {
     onDataRef.current = args.onData;
@@ -348,10 +382,70 @@ export function useTerminalInstance(
     setReady(false);
   }, [clearPendingThemeWork]);
 
-  // Track consecutive successes so the degraded banner can auto-clear once
-  // the renderer stabilises (e.g. resize drag ends and writes start
-  // succeeding again).
+  // Track consecutive successful writes so the degraded banner can auto-clear
+  // once the renderer genuinely stabilises. Only count real writes so a null
+  // terminal during teardown/bootstrap does not clear a still-broken surface.
   const consecutiveWriteSuccessRef = useRef(0);
+  const reportRendererIssue = useCallback(
+    (context: string, caughtError: unknown) => {
+      const diagnostics = window.api?.diagnostics;
+      if (!diagnostics?.reportRendererIssue) {
+        return;
+      }
+
+      const message = describeTerminalError(
+        caughtError,
+        "Unknown terminal renderer failure.",
+      );
+      const stack =
+        caughtError instanceof Error && caughtError.stack
+          ? caughtError.stack
+          : undefined;
+      const size = terminalRef.current
+        ? {
+            cols: String(terminalRef.current.cols ?? 0),
+            rows: String(terminalRef.current.rows ?? 0),
+          }
+        : null;
+
+      void diagnostics.reportRendererIssue({
+        scope: "terminal-renderer",
+        context,
+        message,
+        stack,
+        metadata: {
+          surface: diagnosticContextRef.current?.surface ?? "unknown",
+          tabKey: diagnosticContextRef.current?.tabKey ?? "unknown",
+          sessionId: diagnosticContextRef.current?.sessionId ?? "none",
+          visible: String(visibleRef.current),
+          cols: size?.cols ?? "0",
+          rows: size?.rows ?? "0",
+        },
+      });
+    },
+    [],
+  );
+  const handleGhosttyRuntimeError = useCallback(
+    (caughtError: unknown, context: string) => {
+      consecutiveWriteSuccessRef.current = 0;
+      setWriteErrorCount((count) => count + 1);
+      reportRendererIssue(context, caughtError);
+
+      if (isRecoverableGhosttyRuntimeError(caughtError)) {
+        console.warn(`[terminal] ${context} (guarded)`, caughtError);
+        return;
+      }
+
+      console.error(`[terminal] ${context}`, caughtError);
+      setError(
+        describeTerminalError(
+          caughtError,
+          "Terminal renderer failed.",
+        ),
+      );
+    },
+    [reportRendererIssue],
+  );
 
   const executeTerminalOperation = useCallback(
     <T>(
@@ -359,16 +453,15 @@ export function useTerminalInstance(
       operation: () => T,
       options: {
         countWriteError?: boolean;
+        countWriteSuccessWhen?: (result: T) => boolean;
         message?: string;
       } = {},
     ) => {
       try {
         const result = operation();
-        if (options.countWriteError) {
+        const didWrite = options.countWriteSuccessWhen?.(result) ?? true;
+        if (options.countWriteError && didWrite) {
           consecutiveWriteSuccessRef.current += 1;
-          // After a streak of successful writes, reset the error count so the
-          // "terminal degraded" banner auto-clears without requiring a manual
-          // renderer restart.
           if (consecutiveWriteSuccessRef.current >= TERMINAL_WRITE_ERROR_THRESHOLD) {
             consecutiveWriteSuccessRef.current = 0;
             setWriteErrorCount(0);
@@ -588,13 +681,12 @@ export function useTerminalInstance(
       terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
       themeKeyRef.current = null;
+      bindGhosttyRuntimeErrorHandler(terminal, handleGhosttyRuntimeError);
 
       // Gate ResizeObserver through requestAnimationFrame so resize-heavy
-      // interactions (e.g. dragging the information-panel splitter) produce
-      // at most one measure + emit per frame instead of flooding the main
-      // thread with synchronous fitAddon.proposeDimensions() calls that can
-      // destabilise the WebGL backing store and cascade into write errors →
-      // "terminal degraded" banner.
+      // interactions emit at most one measure + resize request per frame.
+      // The local surface still follows the backend-success path, matching
+      // mux's PTY-first contract and avoiding stale WebGL geometry churn.
       let resizeRafPending = false;
       const resizeObserver =
         typeof ResizeObserver !== "undefined"
@@ -681,6 +773,7 @@ export function useTerminalInstance(
         container.removeEventListener("compositionend", onCompositionEnd);
         dataDisposable.dispose();
         resizeObserver?.disconnect();
+        clearGhosttyRuntimeErrorHandler(terminal);
         terminal.dispose();
       };
     };
@@ -789,32 +882,30 @@ export function useTerminalInstance(
         return;
       }
 
-      // Force fitAddon to re-measure the container and update the WebGL
-      // canvas pixel dimensions. After a display:none → display:flex toggle
-      // the canvas backing store is stale (0×0 or previous size).
-      // terminal.resize() alone short-circuits when cols/rows haven't changed,
-      // leaving the canvas at wrong pixel dimensions → garbled rendering.
-      // fitAddon.fit() recalculates everything including the canvas size.
-      executeTerminalOperation(
-        "fit-terminal-on-visibility-restore",
-        () => {
-          fitAddonRef.current?.fit();
-        },
-        { message: "Failed to fit terminal on visibility restore." },
-      );
-
       const proposed = measureProposedDimensions();
-      executeTerminalOperation(
-        "restore-terminal-viewport",
-        () => {
-          restoreVisibleTerminalViewport({
-            terminal: terminalRef.current,
-            proposed,
-            notifyResize: onResizeRef.current,
-          });
-        },
-        { message: "Failed to restore terminal viewport." },
-      );
+      try {
+        await restoreVisibleTerminalViewport({
+          terminal: terminalRef.current,
+          proposed,
+          notifyResize: (cols, rows) => onResizeRef.current(cols, rows),
+        });
+      } catch (caughtError) {
+        reportRendererIssue("restore-terminal-viewport", caughtError);
+        if (isSwallowableTerminalRuntimeError(caughtError)) {
+          console.warn(
+            "[terminal] restore-terminal-viewport (swallowed)",
+            caughtError,
+          );
+          return;
+        }
+        console.error("[terminal] restore-terminal-viewport", caughtError);
+        setError(
+          describeTerminalError(
+            caughtError,
+            "Failed to restore terminal viewport.",
+          ),
+        );
+      }
     })();
 
     return () => {
@@ -825,6 +916,7 @@ export function useTerminalInstance(
     args.visible,
     executeTerminalOperation,
     measureProposedDimensions,
+    reportRendererIssue,
     ready,
   ]);
 
@@ -861,15 +953,17 @@ export function useTerminalInstance(
           "write-terminal-output",
           () => {
             if (!terminalRef.current) {
-              return;
+              return false;
             }
             writePreservingScroll({
               terminal: terminalRef.current,
               data,
             });
+            return true;
           },
           {
             countWriteError: true,
+            countWriteSuccessWhen: Boolean,
             message: "Failed to render terminal output.",
           },
         );
@@ -879,16 +973,18 @@ export function useTerminalInstance(
           "write-terminal-line",
           () => {
             if (!terminalRef.current) {
-              return;
+              return false;
             }
             writePreservingScroll({
               terminal: terminalRef.current,
               data,
               appendNewline: true,
             });
+            return true;
           },
           {
             countWriteError: true,
+            countWriteSuccessWhen: Boolean,
             message: "Failed to render terminal output.",
           },
         );

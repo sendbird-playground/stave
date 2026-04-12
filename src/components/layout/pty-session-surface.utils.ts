@@ -12,9 +12,23 @@ export function createLatestAsyncDispatcher<T>(args: {
 }) {
   let inFlight = false;
   let pending: T | null = null;
+  let idleResolvers: Array<() => void> = [];
+
+  const resolveIdle = () => {
+    if (inFlight || pending !== null || idleResolvers.length === 0) {
+      return;
+    }
+
+    const resolvers = idleResolvers;
+    idleResolvers = [];
+    for (const resolve of resolvers) {
+      resolve();
+    }
+  };
 
   const flush = () => {
     if (inFlight || pending === null) {
+      resolveIdle();
       return;
     }
 
@@ -35,10 +49,15 @@ export function createLatestAsyncDispatcher<T>(args: {
   return {
     schedule(value: T) {
       pending = value;
+      const whenIdle = new Promise<void>((resolve) => {
+        idleResolvers.push(resolve);
+      });
       flush();
+      return whenIdle;
     },
     clear() {
       pending = null;
+      resolveIdle();
     },
   };
 }

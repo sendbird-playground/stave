@@ -7,6 +7,7 @@ import {
   EMPTY_TERMINAL_TAB_INSTANCE_STATUS,
   type UseTerminalTabManagerReturn,
 } from "@/components/layout/useTerminalTabManager";
+import { getTerminalSessionRouter } from "@/lib/terminal/terminal-session-router";
 
 const TERMINAL_POLL_INTERVAL_MS = 120;
 const TERMINAL_TRANSCRIPT_FLUSH_MS = 280;
@@ -87,8 +88,13 @@ export interface UseTerminalSessionManagerReturn {
   activeWriteErrorCount: number;
   bridgeError: string;
   clearActiveTranscript: () => void;
+  getSessionIdForTabKey: (tabKey: string) => string | null;
   handleTerminalInput: (tabKey: string, input: string) => void;
-  handleTerminalResize: (tabKey: string, cols: number, rows: number) => void;
+  handleTerminalResize: (
+    tabKey: string,
+    cols: number,
+    rows: number,
+  ) => Promise<void>;
   restartActiveSession: () => void;
   restartActiveTerminalRenderer: () => void;
   sessionExited: {
@@ -118,6 +124,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   const flushScheduledBySessionRef = useRef<Record<string, boolean>>({});
   const creatingSessionByTabKeyRef = useRef<Record<string, boolean>>({});
   const transcriptRef = useRef<Record<string, string>>({});
+  const screenStateByTabKeyRef = useRef<Record<string, string>>({});
   const transcriptFlushTimerRef = useRef<number | null>(null);
   const transcriptLoadedRef = useRef(false);
   const exitedByTabKeyRef = useRef<
@@ -143,6 +150,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   const supportsPushTerminalOutput =
     typeof window !== "undefined" &&
     Boolean(window.api?.terminal?.subscribeSessionOutput);
+  const terminalSessionRouterRef = useRef(getTerminalSessionRouter());
 
   const activeTabKey = args.activeTab ? args.getTabKey(args.activeTab) : null;
   const activeSessionId = activeTabKey
@@ -341,14 +349,17 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       return;
     }
 
+    delete screenStateByTabKeyRef.current[tabKey];
     transcriptRef.current[tabKey] = appendTerminalText(
       transcriptRef.current[tabKey] ?? "",
       payload.output,
       TERMINAL_TRANSCRIPT_CHAR_LIMIT,
     );
     scheduleTranscriptFlush();
-
-    tabManagerRef.current.write(tabKey, payload.output);
+    terminalSessionRouterRef.current.publishOutput(
+      payload.sessionId,
+      payload.output,
+    );
   }
 
   async function syncTerminalOutput() {
@@ -378,7 +389,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       const sessionId = sessionIdByTabKeyRef.current[tabKey];
       if (!sessionId) {
         tabManagerRef.current.resize(tabKey, cols, rows);
-        return;
+        return Promise.resolve();
       }
 
       const lastResize = lastResizeByTabKeyRef.current[tabKey];
@@ -388,11 +399,11 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         lastResize.cols === cols &&
         lastResize.rows === rows
       ) {
-        return;
+        return Promise.resolve();
       }
 
       lastResizeByTabKeyRef.current[tabKey] = { sessionId, cols, rows };
-      resizeSessionDispatcherRef.current.schedule({
+      return resizeSessionDispatcherRef.current.schedule({
         tabKey,
         sessionId,
         cols,
@@ -475,6 +486,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         return;
       }
 
+      delete screenStateByTabKeyRef.current[tabKey];
       exitedByTabKeyRef.current[tabKey] = { exitCode, signal };
 
       const signalHint = signal ? ` (signal ${signal})` : "";
@@ -489,7 +501,11 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         TERMINAL_TRANSCRIPT_CHAR_LIMIT,
       );
       scheduleTranscriptFlush();
-      tabManagerRef.current.write(tabKey, exitMessage);
+      terminalSessionRouterRef.current.publishOutput(sessionId, exitMessage);
+      terminalSessionRouterRef.current.publishExit(sessionId, {
+        exitCode,
+        signal,
+      });
 
       if (activeTabKeyRef.current === tabKey) {
         setSessionExited({ exitCode, signal });
@@ -610,6 +626,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       removedEntries.map(([, sessionId]) => sessionId),
     ).finally(() => {
       for (const [tabKey, sessionId] of removedEntries) {
+        terminalSessionRouterRef.current.clearSession(sessionId);
         delete sessionIdByTabKeyRef.current[tabKey];
         delete tabKeyBySessionIdRef.current[sessionId];
         delete pendingInputBySessionRef.current[sessionId];
@@ -619,6 +636,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         delete exitedByTabKeyRef.current[tabKey];
         delete lastResizeByTabKeyRef.current[tabKey];
         delete hydratedRevisionByTabKeyRef.current[tabKey];
+        delete screenStateByTabKeyRef.current[tabKey];
         setBridgeErrorForTabKey(tabKey, "");
       }
       setRuntimeVersion((value) => value + 1);
@@ -647,6 +665,18 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
 
       hydratedRevisionByTabKeyRef.current[tabKey] = status.revision;
       tabManagerClear(tabKey);
+
+      if (sessionIdByTabKeyRef.current[tabKey]) {
+        continue;
+      }
+
+      const screenState = screenStateByTabKeyRef.current[tabKey];
+      if (typeof screenState === "string") {
+        if (screenState) {
+          tabManagerWrite(tabKey, screenState);
+        }
+        continue;
+      }
 
       const transcript = transcriptRef.current[tabKey] ?? "";
       if (transcript) {
@@ -721,13 +751,17 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       if (!backlog) {
         return;
       }
+      delete screenStateByTabKeyRef.current[tabKey];
       transcriptRef.current[tabKey] = appendTerminalText(
         transcriptRef.current[tabKey] ?? "",
         backlog,
         TERMINAL_TRANSCRIPT_CHAR_LIMIT,
       );
       scheduleTranscriptFlush();
-      tabManagerRef.current.write(tabKey, backlog);
+    }
+
+    function hydrateScreenState(screenState: string) {
+      screenStateByTabKeyRef.current[tabKey] = screenState;
     }
 
     async function tryReattachExistingSession(): Promise<boolean> {
@@ -757,7 +791,16 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         });
         if (attached.ok) {
           registerSession(slotState.sessionId);
-          hydrateBacklog(attached.backlog ?? "");
+          if (typeof attached.screenState === "string") {
+            hydrateScreenState(attached.screenState);
+          } else {
+            hydrateBacklog(attached.backlog ?? "");
+          }
+          terminalSessionRouterRef.current.publishSnapshot({
+            sessionId: slotState.sessionId,
+            screenState: attached.screenState,
+            backlog: attached.backlog,
+          });
 
           // Sync PTY geometry after reattach. While the terminal was hidden,
           // layout changes (window resize, dock drag) only updated the local
@@ -771,7 +814,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
             cols: reattachCols,
             rows: reattachRows,
           };
-          resizeSessionDispatcherRef.current.schedule({
+          await resizeSessionDispatcherRef.current.schedule({
             tabKey,
             sessionId: slotState.sessionId,
             cols: reattachCols,
@@ -856,7 +899,15 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       return;
     }
     transcriptRef.current[activeTabKey] = "";
+    delete screenStateByTabKeyRef.current[activeTabKey];
     scheduleTranscriptFlush();
+    const sessionId = sessionIdByTabKeyRef.current[activeTabKey];
+    if (sessionId) {
+      terminalSessionRouterRef.current.publishSnapshot({
+        sessionId,
+        screenState: "",
+      });
+    }
     tabManagerRef.current.clear(activeTabKey);
   }
 
@@ -877,6 +928,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     const sessionId = sessionIdByTabKeyRef.current[activeTabKey];
     if (sessionId) {
       void disposeSessionIds([sessionId]);
+      terminalSessionRouterRef.current.clearSession(sessionId);
       delete tabKeyBySessionIdRef.current[sessionId];
       delete pendingInputBySessionRef.current[sessionId];
       delete writeInFlightBySessionRef.current[sessionId];
@@ -888,6 +940,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     delete exitedByTabKeyRef.current[activeTabKey];
     delete lastResizeByTabKeyRef.current[activeTabKey];
     delete hydratedRevisionByTabKeyRef.current[activeTabKey];
+    delete screenStateByTabKeyRef.current[activeTabKey];
     setBridgeErrorForTabKey(activeTabKey, "");
     transcriptRef.current[activeTabKey] = "";
     scheduleTranscriptFlush();
@@ -906,11 +959,17 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     tabManagerRef.current.restart(activeTabKey);
   }
 
+  const getSessionIdForTabKey = useCallback(
+    (tabKey: string) => sessionIdByTabKeyRef.current[tabKey] ?? null,
+    [],
+  );
+
   return {
     activeSessionId,
     activeWriteErrorCount,
     bridgeError,
     clearActiveTranscript,
+    getSessionIdForTabKey,
     handleTerminalInput,
     handleTerminalResize,
     restartActiveSession,

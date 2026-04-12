@@ -16,6 +16,8 @@
         "@openai/codex-sdk": "0.118.0",
         "@radix-ui/react-slot": "^1.2.4",
         "@vscode/ripgrep": "^1.17.1",
+        "@xterm/addon-serialize": "^0.14.0",
+        "@xterm/headless": "^6.0.0",
         "better-sqlite3": "^12.6.2",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -692,6 +694,10 @@
     "@vscode/ripgrep": ["@vscode/ripgrep@1.17.1", "", { "dependencies": { "https-proxy-agent": "^7.0.2", "proxy-from-env": "^1.1.0", "yauzl": "^2.9.2" } }, "sha512-xTs7DGyAO3IsJYOCTBP8LnTvPiYVKEuyv8s0xyJDBXfs8rhBfqnZPvb6xDT+RnwWzcXqW27xLS/aGrkjX7lNWw=="],
 
     "@xmldom/xmldom": ["@xmldom/xmldom@0.8.11", "", {}, "sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw=="],
+
+    "@xterm/addon-serialize": ["@xterm/addon-serialize@0.14.0", "", {}, "sha512-uteyTU1EkrQa2Ux6P/uFl2fzmXI46jy5uoQMKEOM0fKTyiW7cSn0WrFenHm5vO5uEXX/GpwW/FgILvv3r0WbkA=="],
+
+    "@xterm/headless": ["@xterm/headless@6.0.0", "", {}, "sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw=="],
 
     "abbrev": ["abbrev@3.0.1", "", {}, "sha512-AO2ac6pjRB3SJmGJo+v5/aK6Omggp6fsLrs6wN9bd35ulu4cCwaAU9+7ZhXjeqHVkaHThLuzH0nZr0YpCDhygg=="],
 

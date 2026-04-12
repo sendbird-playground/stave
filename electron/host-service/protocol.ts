@@ -97,6 +97,7 @@ export interface HostTerminalMutationResult {
 export interface HostTerminalAttachSessionResult {
   ok: boolean;
   backlog?: string;
+  screenState?: string;
   stderr?: string;
 }
 

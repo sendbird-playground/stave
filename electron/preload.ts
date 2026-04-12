@@ -739,6 +739,15 @@ contextBridge.exposeInMainWorld("api", {
     fix: (args: { rootPath: string; filePath: string; text: string }) =>
       ipcRenderer.invoke("eslint:fix", args),
   },
+  diagnostics: {
+    reportRendererIssue: (args: {
+      scope: string;
+      context: string;
+      message: string;
+      stack?: string;
+      metadata?: Record<string, string>;
+    }) => ipcRenderer.invoke("diagnostics:report-renderer-issue", args),
+  },
   terminal: {
     runCommand: (args: TerminalRunArgs) =>
       ipcRenderer.invoke("terminal:run-command", args),
