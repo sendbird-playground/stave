@@ -1,5 +1,6 @@
 import { FolderOpen, Layers } from "lucide-react";
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -30,7 +31,9 @@ import { useShallow } from "zustand/react/shallow";
 
 const EMPTY_MESSAGES: readonly unknown[] = [];
 
-export function ChatArea() {
+export const ChatArea = memo(ChatAreaImpl);
+
+function ChatAreaImpl() {
   const chatInputDockRef = useRef<HTMLDivElement | null>(null);
   const [chatInputDockHeight, setChatInputDockHeight] = useState(0);
   const sessionAreaRef = useRef<HTMLDivElement>(null);
