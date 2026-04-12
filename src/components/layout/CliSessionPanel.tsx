@@ -48,7 +48,6 @@ export function CliSessionPanel() {
     cliSessionTabs,
     activeCliSessionTabId,
     activeSurface,
-    closeCliSessionTab,
     settings,
     isDarkMode,
   ] = useAppStore(
@@ -63,7 +62,6 @@ export function CliSessionPanel() {
           state.cliSessionTabs,
           state.activeCliSessionTabId,
           state.activeSurface,
-          state.closeCliSessionTab,
           state.settings,
           state.isDarkMode,
         ] as const,
@@ -410,7 +408,11 @@ export function CliSessionPanel() {
                         className="h-8 w-8 rounded-md p-0 text-muted-foreground"
                         onClick={() => {
                           if (activeTab) {
-                            closeCliSessionTab({ tabId: activeTab.id });
+                            window.dispatchEvent(
+                              new CustomEvent("stave:request-close-cli-session", {
+                                detail: { id: activeTab.id, title: activeTab.title },
+                              }),
+                            );
                           }
                         }}
                         disabled={!activeTab}

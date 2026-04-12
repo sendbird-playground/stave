@@ -251,7 +251,7 @@ const WorkspaceCliSessionStripTab = memo(function WorkspaceCliSessionStripTab(ar
   dropTargetTabId: string | null;
   onSelectTab: (tabId: string) => void;
   onRenameTab: (tab: { id: string; title: string }) => void;
-  onCloseTab: (tabId: string) => void;
+  onRequestCloseTab: (tab: { id: string; title: string }) => void;
   onDragStart: (event: DragEvent<HTMLDivElement>, tabId: string) => void;
   onDragEnd: () => void;
   onDragOver: (event: DragEvent<HTMLDivElement>, tabId: string) => void;
@@ -290,6 +290,20 @@ const WorkspaceCliSessionStripTab = memo(function WorkspaceCliSessionStripTab(ar
         </span>
         <span className="max-w-56 truncate text-sm font-medium">{args.tab.title}</span>
       </button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            className={triggerButtonClassName({
+              className: cn("h-7 w-7 rounded-md p-0 text-muted-foreground", buttonVisibility),
+            })}
+            onClick={() => args.onRequestCloseTab({ id: args.tab.id, title: args.tab.title })}
+            aria-label={`close-cli-session-${args.tab.id}`}
+          >
+            <X className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Close session</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DropdownMenu>
         <DropdownMenuTrigger
           className={triggerButtonClassName({
@@ -305,7 +319,7 @@ const WorkspaceCliSessionStripTab = memo(function WorkspaceCliSessionStripTab(ar
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
-            onSelect={() => args.onCloseTab(args.tab.id)}
+            onSelect={() => args.onRequestCloseTab({ id: args.tab.id, title: args.tab.title })}
           >
             Close
           </DropdownMenuItem>
@@ -328,6 +342,7 @@ const CLI_SESSION_CHOICES = [
 export function WorkspaceTaskTabs() {
   const [taskHistoryOpen, setTaskHistoryOpen] = useState(false);
   const [taskToArchive, setTaskToArchive] = useState<{ id: string; title: string } | null>(null);
+  const [cliSessionToClose, setCliSessionToClose] = useState<{ id: string; title: string } | null>(null);
   const [taskToRename, setTaskToRename] = useState<{ id: string; title: string } | null>(null);
   const [cliSessionToRename, setCliSessionToRename] = useState<{ id: string; title: string } | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -392,6 +407,17 @@ export function WorkspaceTaskTabs() {
   const sessionRows = useMemo(() => listProviderSessions({
     sessions: viewedSessionState,
   }), [viewedSessionState]);
+
+  useEffect(() => {
+    function handleRequestCloseCliSession(event: Event) {
+      const detail = (event as CustomEvent<{ id: string; title: string }>).detail;
+      if (detail?.id) {
+        setCliSessionToClose(detail);
+      }
+    }
+    window.addEventListener("stave:request-close-cli-session", handleRequestCloseCliSession);
+    return () => window.removeEventListener("stave:request-close-cli-session", handleRequestCloseCliSession);
+  }, []);
 
   useEffect(() => {
     if (!taskToRename) {
@@ -541,7 +567,7 @@ export function WorkspaceTaskTabs() {
                   dropTargetTabId={dropTargetCliSessionTabId}
                   onSelectTab={(tabId) => setActiveCliSessionTab({ tabId })}
                   onRenameTab={setCliSessionToRename}
-                  onCloseTab={(tabId) => closeCliSessionTab({ tabId })}
+                  onRequestCloseTab={setCliSessionToClose}
                   onDragStart={(event, tabId) => {
                     event.dataTransfer.effectAllowed = "move";
                     event.dataTransfer.setData("text/plain", tabId);
@@ -676,6 +702,20 @@ export function WorkspaceTaskTabs() {
           }
           archiveTask({ taskId: taskToArchive.id });
           setTaskToArchive(null);
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(cliSessionToClose)}
+        title="Close CLI Session"
+        description={cliSessionToClose ? `Close CLI session "${cliSessionToClose.title}"? The underlying process will be terminated.` : ""}
+        confirmLabel="Close"
+        onCancel={() => setCliSessionToClose(null)}
+        onConfirm={() => {
+          if (!cliSessionToClose) {
+            return;
+          }
+          closeCliSessionTab({ tabId: cliSessionToClose.id });
+          setCliSessionToClose(null);
         }}
       />
       {taskToRename ? (

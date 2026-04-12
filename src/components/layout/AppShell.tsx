@@ -371,7 +371,14 @@ export function AppShell() {
       }
 
       if (activeSurface.kind === "cli-session" && activeCliSessionTabId) {
-        store.closeCliSessionTab({ tabId: activeCliSessionTabId });
+        const tab = store.cliSessionTabs.find((t) => t.id === activeCliSessionTabId);
+        if (tab) {
+          window.dispatchEvent(
+            new CustomEvent("stave:request-close-cli-session", {
+              detail: { id: tab.id, title: tab.title },
+            }),
+          );
+        }
         return;
       }
 
