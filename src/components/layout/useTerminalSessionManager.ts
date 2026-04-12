@@ -915,6 +915,17 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         const message =
           attached.stderr?.trim() || "Failed to attach terminal session.";
         setBridgeErrorForTabKey(tabKey, message);
+        void window.api?.terminal?.closeSession?.({
+          sessionId: created.sessionId,
+        });
+        return;
+      }
+      if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
+        const detachSession = window.api?.terminal?.detachSession;
+        void detachSession?.({
+          sessionId: created.sessionId,
+          attachmentId: attached.attachmentId,
+        });
         return;
       }
       registerSession(created.sessionId, attached.attachmentId);
@@ -934,6 +945,9 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
         cols,
         rows,
       });
+      if (!tabsRef.current.some((tab) => args.getTabKey(tab) === tabKey)) {
+        return;
+      }
       await resumeSessionStream({
         sessionId: created.sessionId,
         attachmentId: attached.attachmentId,
