@@ -103,7 +103,10 @@ function describeOutboundMessage(message: HostServiceOutboundMessage) {
   return `event:${message.event}`;
 }
 
+const isDevBuild = !!process.env.STAVE_DEV;
+
 function logHostServiceQueue(message: string) {
+  if (!isDevBuild) return;
   process.stderr.write(`[host-service:backpressure] ${message}\n`);
 }
 
@@ -647,7 +650,10 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       );
       return;
     case "terminal.attach-session":
-      await respond(request.id, await terminalRuntime.attachSession(request.params));
+      await respond(
+        request.id,
+        await terminalRuntime.attachSession(request.params),
+      );
       return;
     case "terminal.detach-session":
       await respond(request.id, terminalRuntime.detachSession(request.params));

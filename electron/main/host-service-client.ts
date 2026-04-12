@@ -124,12 +124,16 @@ class HostServiceClient {
     });
 
     child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk: string) => {
-      const text = chunk.trim();
-      if (text) {
-        console.error(`[host-service] ${text}`);
-      }
-    });
+    if (process.env.STAVE_DEV) {
+      child.stderr.on("data", (chunk: string) => {
+        const text = chunk.trim();
+        if (text) {
+          console.error(`[host-service] ${text}`);
+        }
+      });
+    } else {
+      child.stderr.resume();
+    }
 
     child.on("exit", (code, signal) => {
       const error = new Error(
@@ -177,7 +181,11 @@ class HostServiceClient {
     params: HostServiceRequestMap[TMethod],
   ): Promise<HostServiceResponseMap[TMethod]> {
     await this.ensureStarted();
-    if (!this.child || this.child.exitCode !== null || !this.child.stdin.writable) {
+    if (
+      !this.child ||
+      this.child.exitCode !== null ||
+      !this.child.stdin.writable
+    ) {
       throw new Error("[host-service] child process is not available");
     }
 
@@ -216,9 +224,7 @@ class HostServiceClient {
     return resultPromise;
   }
 
-  onEvent(
-    listener: (event: AnyHostServiceEventEnvelope) => void,
-  ) {
+  onEvent(listener: (event: AnyHostServiceEventEnvelope) => void) {
     this.eventListeners.add(listener);
     return () => {
       this.eventListeners.delete(listener);

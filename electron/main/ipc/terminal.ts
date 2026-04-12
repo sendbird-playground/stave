@@ -10,6 +10,10 @@ import {
 import { invokeHostService, onHostServiceEvent } from "../host-service-client";
 import { runCommand } from "../utils/command";
 
+const logDev = process.env.STAVE_DEV
+  ? (...args: unknown[]) => console.error(...args)
+  : (..._args: unknown[]) => {};
+
 const terminalOwnerBySessionId = new Map<
   string,
   { ownerWebContentsId: number; attachmentId: string }
@@ -42,10 +46,7 @@ function registerTerminalEventBridge() {
           }),
         )
         .catch((error) => {
-          console.error(
-            "[terminal] failed to fall back to poll delivery",
-            error,
-          );
+          logDev("[terminal] failed to fall back to poll delivery", error);
         });
       return;
     }
@@ -103,7 +104,10 @@ export function registerTerminalHandlers() {
   ipcMain.handle("terminal:create-session", async (_event, args) => {
     const parsed = TerminalCreateSessionArgsSchema.safeParse(args);
     if (!parsed.success) {
-      console.error("[terminal:create-session] schema validation failed:", parsed.error.flatten().formErrors);
+      logDev(
+        "[terminal:create-session] schema validation failed:",
+        parsed.error.flatten().formErrors,
+      );
       return {
         ok: false,
         stderr: parsed.error.flatten().formErrors.join("\n"),
@@ -120,7 +124,10 @@ export function registerTerminalHandlers() {
   ipcMain.handle("terminal:create-cli-session", async (_event, args) => {
     const parsed = CliSessionCreateSessionArgsSchema.safeParse(args);
     if (!parsed.success) {
-      console.error("[terminal:create-cli-session] schema validation failed:", parsed.error.flatten().formErrors);
+      logDev(
+        "[terminal:create-cli-session] schema validation failed:",
+        parsed.error.flatten().formErrors,
+      );
       return {
         ok: false,
         stderr: parsed.error.flatten().formErrors.join("\n"),
@@ -187,7 +194,7 @@ export function registerTerminalHandlers() {
   ipcMain.handle("terminal:attach-session", async (event, args) => {
     const parsed = TerminalAttachSessionArgsSchema.safeParse(args);
     if (!parsed.success) {
-      console.error("[terminal:attach-session] schema validation failed");
+      logDev("[terminal:attach-session] schema validation failed");
       return {
         ok: false,
         stderr: parsed.error.flatten().formErrors.join("\n"),
@@ -238,14 +245,17 @@ export function registerTerminalHandlers() {
   ipcMain.handle("terminal:resume-session-stream", async (_event, args) => {
     const parsed = TerminalResumeSessionStreamArgsSchema.safeParse(args);
     if (!parsed.success) {
-      console.error("[terminal:resume-session-stream] schema validation failed");
+      logDev("[terminal:resume-session-stream] schema validation failed");
       return {
         ok: false,
         stderr: parsed.error.flatten().formErrors.join("\n"),
       };
     }
 
-    const result = await invokeHostService("terminal.resume-session-stream", parsed.data);
+    const result = await invokeHostService(
+      "terminal.resume-session-stream",
+      parsed.data,
+    );
     return result;
   });
 

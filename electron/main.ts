@@ -3,11 +3,18 @@ import { registerHandlers } from "./main/ipc";
 import { startHostService, stopHostService } from "./main/host-service-client";
 import { configurePersistenceUserDataPath } from "./main/runtime-profile";
 import { resetMainProcessState } from "./main/state";
-import { startStaveMcpServer, stopStaveMcpServer } from "./main/stave-mcp-server";
+import {
+  startStaveMcpServer,
+  stopStaveMcpServer,
+} from "./main/stave-mcp-server";
 import { createMainWindow } from "./main/window";
 
 const persistenceRuntime = configurePersistenceUserDataPath(app);
 process.env.STAVE_USER_DATA_PATH = persistenceRuntime.userDataPath;
+
+if (!app.isPackaged) {
+  process.env.STAVE_DEV = "1";
+}
 
 let quittingAfterCleanup = false;
 let beforeQuitCleanupPromise: Promise<void> | null = null;
