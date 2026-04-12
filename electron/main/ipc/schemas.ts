@@ -175,6 +175,16 @@ export const TerminalGetSlotStateArgsSchema = z
   })
   .strict();
 
+export const RendererIssueReportArgsSchema = z
+  .object({
+    scope: z.string().min(1).max(100),
+    context: z.string().min(1).max(100),
+    message: z.string().min(1).max(4000),
+    stack: z.string().max(20_000).optional(),
+    metadata: z.record(z.string(), z.string()).optional(),
+  })
+  .strict();
+
 export const GetPrStatusByUrlArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),

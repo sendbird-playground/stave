@@ -268,6 +268,7 @@ export function TerminalDock() {
     activeWriteErrorCount,
     bridgeError,
     clearActiveTranscript,
+    getSessionIdForTabKey,
     handleTerminalInput,
     handleTerminalResize,
     restartActiveTerminalRenderer,
@@ -526,6 +527,8 @@ export function TerminalDock() {
                     <TerminalTabSurface
                       key={tabKey}
                       tabKey={tabKey}
+                      sessionId={getSessionIdForTabKey(tabKey)}
+                      surface="terminal-dock"
                       isActive={tab.id === activeTerminalTabId}
                       isVisible={terminalDocked}
                       fontFamily={terminalFontFamily}

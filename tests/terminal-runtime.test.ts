@@ -13,6 +13,7 @@ class FakeDisposable {
 class FakePty {
   destroyed = false;
   killed = false;
+  writes: string[] = [];
   dataListeners: Array<{ listener: (data: string) => void; disposable: FakeDisposable }> = [];
   exitListeners: Array<{ listener: (event: ExitPayload) => void; disposable: FakeDisposable }> = [];
 
@@ -28,7 +29,9 @@ class FakePty {
     return disposable;
   }
 
-  write(_input: string) {}
+  write(input: string) {
+    this.writes.push(input);
+  }
 
   resize(_cols: number, _rows: number) {}
 
@@ -137,7 +140,7 @@ describe("terminal runtime slot lifecycle", () => {
     expect(fakePtys).toHaveLength(1);
   });
 
-  test("restores detached terminal backlog when the same slot reattaches", () => {
+  test("restores detached terminal backlog when the same slot reattaches", async () => {
     const runtime = createTerminalRuntime({
       emitEvent: async () => {},
     });
@@ -166,15 +169,73 @@ describe("terminal runtime slot lifecycle", () => {
       sessionId,
     });
     expect(
-      runtime.attachSession({ sessionId, deliveryMode: "push" }),
+      await runtime.attachSession({ sessionId, deliveryMode: "push" }),
     ).toEqual({
       ok: true,
       backlog: "while detached\r\n",
+      screenState: "while detached\u001b[1B\u001b[14D",
     });
     expect(runtime.getSlotState({ slotKey })).toEqual({
       state: "running",
       sessionId,
     });
+  });
+
+  test("returns canonical screen state even when raw backlog contains stale screen history", async () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    expect(created.ok).toBe(true);
+    const sessionId = created.sessionId!;
+    const fake = fakePtys[0]!;
+
+    expect(runtime.detachSession({ sessionId })).toEqual({ ok: true });
+
+    fake.fireData("hello\r\n");
+    fake.fireData("\x1b[2J\x1b[H");
+
+    expect(await runtime.attachSession({ sessionId, deliveryMode: "push" })).toEqual({
+      ok: true,
+      backlog: "hello\r\n\x1b[2J\x1b[H",
+      screenState: "",
+    });
+  });
+
+  test("answers device queries from the backend mirror while the renderer is detached", async () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    expect(created.ok).toBe(true);
+    const sessionId = created.sessionId!;
+    const fake = fakePtys[0]!;
+
+    expect(runtime.detachSession({ sessionId })).toEqual({ ok: true });
+    fake.fireData("\x1b[0c");
+    await runtime.attachSession({ sessionId, deliveryMode: "push" });
+
+    expect(fake.writes).toContain("\x1b[?1;2c");
   });
 
   test("preserves exited slot state for background sessions until the slot is recreated", () => {

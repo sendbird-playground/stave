@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  isInvalidCodePointError,
+  isRecoverableGhosttyRuntimeError,
+} from "../src/lib/terminal/ghostty-runtime-guards";
+import {
   focusTerminalInstanceSurface,
   isSwallowableTerminalRuntimeError,
   restoreVisibleTerminalViewport,
@@ -109,18 +113,45 @@ describe("isSwallowableTerminalRuntimeError", () => {
     )).toBe(true);
   });
 
+  test("matches invalid code point runtime failures", () => {
+    expect(isSwallowableTerminalRuntimeError(
+      new RangeError("Invalid code point 1776410"),
+    )).toBe(true);
+  });
+
   test("ignores unrelated failures", () => {
     expect(isSwallowableTerminalRuntimeError(new Error("boom"))).toBe(false);
     expect(isSwallowableTerminalRuntimeError("memory access out of bounds")).toBe(false);
   });
 });
 
+describe("ghostty runtime guards", () => {
+  test("identifies invalid code point failures", () => {
+    expect(isInvalidCodePointError(
+      new RangeError("Invalid code point 1776410"),
+    )).toBe(true);
+    expect(isInvalidCodePointError(new Error("Invalid code point 1776410"))).toBe(false);
+  });
+
+  test("treats invalid code point and WASM faults as recoverable", () => {
+    expect(isRecoverableGhosttyRuntimeError(
+      new RangeError("Invalid code point 1776410"),
+    )).toBe(true);
+    expect(isRecoverableGhosttyRuntimeError(
+      new Error("RuntimeError: memory access out of bounds"),
+    )).toBe(true);
+    expect(isRecoverableGhosttyRuntimeError(new Error("boom"))).toBe(false);
+  });
+});
+
 describe("restoreVisibleTerminalViewport", () => {
-  test("forces a local resize and repaint when the terminal becomes visible again", () => {
+  test("re-emits backend resize when hidden layout changes changed terminal geometry", async () => {
     const resizeCalls: Array<{ cols: number; rows: number }> = [];
     const backendResizeCalls: Array<{ cols: number; rows: number }> = [];
     const renderCalls: Array<{ viewportY: number }> = [];
     const terminal = {
+      cols: 80,
+      rows: 24,
       resize(cols: number, rows: number) {
         resizeCalls.push({ cols, rows });
       },
@@ -142,7 +173,7 @@ describe("restoreVisibleTerminalViewport", () => {
       wasmTerm: { id: "wasm-term" },
     };
 
-    restoreVisibleTerminalViewport({
+    await restoreVisibleTerminalViewport({
       terminal,
       proposed: { cols: 120, rows: 40 },
       notifyResize: (cols, rows) => {
@@ -150,14 +181,55 @@ describe("restoreVisibleTerminalViewport", () => {
       },
     });
 
-    expect(resizeCalls).toEqual([{ cols: 120, rows: 40 }]);
+    expect(resizeCalls).toEqual([]);
     expect(backendResizeCalls).toEqual([{ cols: 120, rows: 40 }]);
+    expect(renderCalls).toEqual([]);
+  });
+
+  test("refreshes the canvas backing store when geometry is unchanged", async () => {
+    const rendererResizeCalls: Array<{ cols: number; rows: number }> = [];
+    const renderCalls: Array<{ viewportY: number }> = [];
+    const terminal = {
+      cols: 120,
+      rows: 40,
+      resize() {
+        throw new Error("geometry should not be resized locally");
+      },
+      getViewportY() {
+        return 18;
+      },
+      renderer: {
+        resize(cols: number, rows: number) {
+          rendererResizeCalls.push({ cols, rows });
+        },
+        render(
+          _wasmTerm: unknown,
+          force: boolean,
+          viewportY: number,
+          receiver: unknown,
+        ) {
+          expect(force).toBe(true);
+          expect(receiver).toBe(terminal);
+          renderCalls.push({ viewportY });
+        },
+      },
+      wasmTerm: { id: "wasm-term" },
+    };
+
+    await restoreVisibleTerminalViewport({
+      terminal,
+      proposed: { cols: 120, rows: 40 },
+    });
+
+    expect(rendererResizeCalls).toEqual([{ cols: 120, rows: 40 }]);
     expect(renderCalls).toEqual([{ viewportY: 18 }]);
   });
 
-  test("still repaints when a resize measurement is unavailable", () => {
+  test("still repaints when a resize measurement is unavailable", async () => {
     let rendered = false;
     const terminal = {
+      cols: 0,
+      rows: 0,
       resize() {
         throw new Error("resize should not run without measured dimensions");
       },
@@ -172,7 +244,7 @@ describe("restoreVisibleTerminalViewport", () => {
       wasmTerm: { id: "wasm-term" },
     };
 
-    restoreVisibleTerminalViewport({ terminal });
+    await restoreVisibleTerminalViewport({ terminal });
 
     expect(rendered).toBe(true);
   });

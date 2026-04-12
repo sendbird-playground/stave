@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as pty from "node-pty";
+import { SerializeAddon } from "@xterm/addon-serialize";
+import { Terminal as HeadlessTerminal } from "@xterm/headless";
 import {
   buildTerminalSessionSlotKey,
   type CliSessionCreateSessionArgs,
@@ -40,6 +42,10 @@ interface TerminalSessionEntry {
   pty: pty.IPty;
   dataSubscription: pty.IDisposable | null;
   exitSubscription: pty.IDisposable | null;
+  headlessTerminal: HeadlessTerminal;
+  serializeAddon: SerializeAddon;
+  headlessDataSubscription: { dispose: () => void } | null;
+  lastHeadlessWritePromise: Promise<void>;
   outputChunks: string[];
   outputChunksBytes: number;
   pendingPush: string[];
@@ -56,6 +62,7 @@ interface TerminalSessionEntry {
   closed: Promise<void>;
   close: () => void;
   disposePtyListeners: () => void;
+  disposeHeadlessMirror: () => void;
   flushPushOutput: () => void;
   markClosed: () => void;
   attached: boolean;
@@ -244,6 +251,15 @@ export function createTerminalRuntime(args: {
     return backlog;
   }
 
+  function serializeScreenState(session: TerminalSessionEntry): string {
+    try {
+      return session.serializeAddon.serialize();
+    } catch (error) {
+      console.warn("[terminal] failed to serialize screen state", error);
+      return "";
+    }
+  }
+
   function maybeLogTerminalBackpressure(args: {
     session: TerminalSessionEntry;
     sessionId: string;
@@ -282,6 +298,21 @@ export function createTerminalRuntime(args: {
     logTerminalPushBackpressure(
       `reason=drained session=${args.sessionId} slot=${args.session.slotKey ?? "none"} peakPendingBytes=${args.session.peakPendingPushBytes}`,
     );
+  }
+
+  function mirrorPtyOutput(session: TerminalSessionEntry, data: string) {
+    session.lastHeadlessWritePromise = session.lastHeadlessWritePromise.then(
+      () =>
+        new Promise<void>((resolve) => {
+          try {
+            session.headlessTerminal.write(data, resolve);
+          } catch (error) {
+            console.warn("[terminal] failed to mirror PTY output", error);
+            resolve();
+          }
+        }),
+    );
+    return session.lastHeadlessWritePromise;
   }
 
   function schedulePushFlush(session: TerminalSessionEntry) {
@@ -382,6 +413,14 @@ export function createTerminalRuntime(args: {
     });
 
     const sessionId = randomUUID();
+    const headlessTerminal = new HeadlessTerminal({
+      cols: Math.max(1, args.cols ?? 80),
+      rows: Math.max(1, args.rows ?? 24),
+      allowProposedApi: true,
+    });
+    const serializeAddon = new SerializeAddon();
+    headlessTerminal.loadAddon(serializeAddon);
+    let headlessMirrorDisposed = false;
     let closeResolved = false;
     let resolveClosed = () => {};
     const closed = new Promise<void>((resolve) => {
@@ -398,6 +437,10 @@ export function createTerminalRuntime(args: {
       pty: ptyProcess,
       dataSubscription: null,
       exitSubscription: null,
+      headlessTerminal,
+      serializeAddon,
+      headlessDataSubscription: null,
+      lastHeadlessWritePromise: Promise.resolve(),
       outputChunks: [],
       outputChunksBytes: 0,
       pendingPush: [],
@@ -423,6 +466,7 @@ export function createTerminalRuntime(args: {
         }
         session.closing = true;
         session.disposePtyListeners();
+        session.disposeHeadlessMirror();
         session.markClosed();
         const closablePty = ptyProcess as pty.IPty & { destroy?: () => void };
         if (typeof closablePty.destroy === "function") {
@@ -436,6 +480,15 @@ export function createTerminalRuntime(args: {
         session.exitSubscription?.dispose();
         session.dataSubscription = null;
         session.exitSubscription = null;
+      },
+      disposeHeadlessMirror: () => {
+        if (headlessMirrorDisposed) {
+          return;
+        }
+        headlessMirrorDisposed = true;
+        session.headlessDataSubscription?.dispose();
+        session.headlessDataSubscription = null;
+        session.headlessTerminal.dispose();
       },
       flushPushOutput: () => {
         void flushPushOutputNow({ session, sessionId });
@@ -463,6 +516,13 @@ export function createTerminalRuntime(args: {
       background: args.themeColors?.background ?? DEFAULT_TERMINAL_BACKGROUND,
     });
 
+    session.headlessDataSubscription = headlessTerminal.onData((data) => {
+      if (!data || session.closing) {
+        return;
+      }
+      ptyProcess.write(data);
+    });
+
     session.dataSubscription = ptyProcess.onData(
       createBufferedDataHandler((data) => {
         if (session.closing) {
@@ -472,6 +532,7 @@ export function createTerminalRuntime(args: {
         if (!filtered) {
           return;
         }
+        void mirrorPtyOutput(session, filtered);
         if (!session.attached) {
           appendBackgroundBuffer(session, filtered);
           return;
@@ -501,6 +562,7 @@ export function createTerminalRuntime(args: {
       session.exitCode = exitCode ?? -1;
       session.exitSignal = signal;
       session.disposePtyListeners();
+      session.disposeHeadlessMirror();
       session.markClosed();
       deleteSession(sessionId);
       void (async () => {
@@ -675,7 +737,10 @@ export function createTerminalRuntime(args: {
     if (!session) {
       return { ok: false, stderr: "Terminal session not found." };
     }
-    session.pty.resize(Math.max(1, args.cols), Math.max(1, args.rows));
+    const cols = Math.max(1, args.cols);
+    const rows = Math.max(1, args.rows);
+    session.pty.resize(cols, rows);
+    session.headlessTerminal.resize(cols, rows);
     return { ok: true };
   }
 
@@ -687,6 +752,7 @@ export function createTerminalRuntime(args: {
       return { ok: false, stderr: "Terminal session not found." };
     }
     session.close();
+    session.disposeHeadlessMirror();
     deleteSession(args.sessionId);
     return { ok: true };
   }
@@ -747,10 +813,15 @@ export function createTerminalRuntime(args: {
     );
   }
 
-  function attachSession(args: {
+  async function attachSession(args: {
     sessionId: string;
     deliveryMode: "poll" | "push";
-  }): { ok: boolean; backlog?: string; stderr?: string } {
+  }): Promise<{
+    ok: boolean;
+    backlog?: string;
+    screenState?: string;
+    stderr?: string;
+  }> {
     const session = sessions.get(args.sessionId);
     if (!session) {
       return { ok: false, stderr: "Terminal session not found." };
@@ -766,7 +837,12 @@ export function createTerminalRuntime(args: {
     if (args.deliveryMode === "push") {
       schedulePushFlush(session);
     }
-    return { ok: true, backlog: fullBacklog };
+    await session.lastHeadlessWritePromise;
+    return {
+      ok: true,
+      backlog: fullBacklog,
+      screenState: serializeScreenState(session),
+    };
   }
 
   function detachSession(args: {

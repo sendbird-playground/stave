@@ -514,6 +514,16 @@ interface WindowEslintApi {
   fix?: (args: EslintRequestArgs) => Promise<EslintResult>;
 }
 
+interface WindowDiagnosticsApi {
+  reportRendererIssue?: (args: {
+    scope: string;
+    context: string;
+    message: string;
+    stack?: string;
+    metadata?: Record<string, string>;
+  }) => Promise<{ ok: boolean; stderr?: string }>;
+}
+
 interface TerminalRunArgs {
   command: string;
   cwd?: string;
@@ -573,7 +583,12 @@ interface WindowTerminalApi {
   attachSession?: (args: {
     sessionId: string;
     deliveryMode: "poll" | "push";
-  }) => Promise<{ ok: boolean; backlog?: string; stderr?: string }>;
+  }) => Promise<{
+    ok: boolean;
+    backlog?: string;
+    screenState?: string;
+    stderr?: string;
+  }>;
   detachSession?: (args: {
     sessionId: string;
   }) => Promise<{ ok: boolean; stderr?: string }>;
@@ -1280,6 +1295,7 @@ interface WindowApi {
   localMcp?: WindowLocalMcpApi;
   lsp?: WindowLspApi;
   eslint?: WindowEslintApi;
+  diagnostics?: WindowDiagnosticsApi;
   terminal?: WindowTerminalApi;
   tooling?: WindowToolingApi;
   scripts?: WindowScriptsApi;

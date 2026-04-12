@@ -162,6 +162,7 @@ export function CliSessionPanel() {
     activeSessionId,
     activeWriteErrorCount,
     bridgeError,
+    getSessionIdForTabKey,
     handleTerminalInput,
     handleTerminalResize,
     restartActiveSession,
@@ -246,6 +247,8 @@ export function CliSessionPanel() {
             <TerminalTabSurface
               key={tabKey}
               tabKey={tabKey}
+              sessionId={getSessionIdForTabKey(tabKey)}
+              surface="cli-session"
               isActive={tab.id === activeCliSessionTabId}
               isVisible={activeSurface.kind === "cli-session"}
               fontFamily={
