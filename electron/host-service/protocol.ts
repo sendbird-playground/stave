@@ -80,6 +80,7 @@ export type HostWorkspaceScriptRunHookResult = {
 export interface HostTerminalCreateSessionResult {
   ok: boolean;
   sessionId?: string;
+  nativeSessionId?: string;
   stderr?: string;
 }
 
@@ -107,6 +108,12 @@ export interface HostTerminalSlotStateResult {
   sessionId?: string;
   exitCode?: number;
   signal?: number;
+}
+
+export interface HostTerminalSessionResumeInfoResult {
+  ok: boolean;
+  nativeSessionId?: string;
+  stderr?: string;
 }
 
 export interface HostProviderStartStreamResult {
@@ -305,6 +312,9 @@ export interface HostServiceRequestMap {
   "terminal.get-slot-state": {
     slotKey: string;
   };
+  "terminal.get-session-resume-info": {
+    sessionId: string;
+  };
   "terminal.close-sessions-by-slot-prefix": {
     prefix: string;
   };
@@ -481,6 +491,7 @@ export interface HostServiceResponseMap {
   "terminal.detach-session": HostTerminalMutationResult;
   "terminal.resume-session-stream": HostTerminalMutationResult;
   "terminal.get-slot-state": HostTerminalSlotStateResult;
+  "terminal.get-session-resume-info": HostTerminalSessionResumeInfoResult;
   "terminal.close-sessions-by-slot-prefix": {
     ok: true;
     closedCount: number;

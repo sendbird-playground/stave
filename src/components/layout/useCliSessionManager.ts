@@ -15,6 +15,7 @@ const TERMINAL_INPUT_BUFFER_CHAR_LIMIT = 200_000;
 type CreateSessionResult = {
   ok: boolean;
   sessionId?: string;
+  nativeSessionId?: string;
   stderr?: string;
 };
 
@@ -65,7 +66,9 @@ function setBridgeErrorForTabKey(
   });
 }
 
-export interface UseCliSessionManagerArgs<TTab extends { id: string }> {
+export interface UseCliSessionManagerArgs<
+  TTab extends { id: string; nativeSessionId?: string },
+> {
   activeTab: TTab | null;
   activeTabId: string | null;
   tabs: readonly TTab[];
@@ -78,6 +81,10 @@ export interface UseCliSessionManagerArgs<TTab extends { id: string }> {
     rows: number;
     deliveryMode: "poll" | "push";
   }) => Promise<CreateSessionResult>;
+  setTabNativeSession: (args: {
+    tabId: string;
+    nativeSessionId?: string;
+  }) => void;
   slotKeyForTab?: (tab: TTab) => string | null;
   terminalController: CliTerminalInstanceController;
   terminalReady: boolean;
@@ -94,7 +101,9 @@ export interface UseCliSessionManagerReturn {
   writeToActiveSession: (input: string) => boolean;
 }
 
-export function useCliSessionManager<TTab extends { id: string }>(
+export function useCliSessionManager<
+  TTab extends { id: string; nativeSessionId?: string },
+>(
   args: UseCliSessionManagerArgs<TTab>,
 ): UseCliSessionManagerReturn {
   const terminalControllerRef = useRef(args.terminalController);
@@ -133,6 +142,20 @@ export function useCliSessionManager<TTab extends { id: string }>(
   const bridgeError = activeTabKey
     ? (bridgeErrorByTabKey[activeTabKey] ?? "")
     : "";
+
+  const rememberNativeSessionId = useCallback((payload: {
+    tabId: string;
+    nativeSessionId?: string;
+  }) => {
+    const nativeSessionId = payload.nativeSessionId?.trim();
+    if (!nativeSessionId) {
+      return;
+    }
+    args.setTabNativeSession({
+      tabId: payload.tabId,
+      nativeSessionId,
+    });
+  }, [args.setTabNativeSession]);
 
   useEffect(() => {
     activeTabKeyRef.current = activeTabKey;
@@ -460,6 +483,64 @@ export function useCliSessionManager<TTab extends { id: string }>(
   }, [activeTabKey, sessionVersion]);
 
   useEffect(() => {
+    const activeTab = args.activeTab;
+    const knownNativeSessionId = activeTab?.nativeSessionId?.trim();
+    const getSessionResumeInfo = window.api?.terminal?.getSessionResumeInfo;
+    if (!activeTab || !activeSessionId || knownNativeSessionId || !getSessionResumeInfo) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: number | null = null;
+    let attempts = 0;
+
+    const poll = async () => {
+      let result:
+        | { ok: boolean; nativeSessionId?: string; stderr?: string }
+        | null = null;
+      try {
+        result = await getSessionResumeInfo({ sessionId: activeSessionId });
+      } catch {
+        return;
+      }
+      if (cancelled) {
+        return;
+      }
+
+      const nativeSessionId =
+        result?.ok ? result.nativeSessionId?.trim() : "";
+      if (nativeSessionId) {
+        rememberNativeSessionId({
+          tabId: activeTab.id,
+          nativeSessionId,
+        });
+        return;
+      }
+
+      attempts += 1;
+      if (attempts >= 60) {
+        return;
+      }
+
+      timer = window.setTimeout(() => {
+        void poll();
+      }, 500);
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [
+    activeSessionId,
+    args.activeTab,
+    rememberNativeSessionId,
+  ]);
+
+  useEffect(() => {
     if (!args.activeTab || !activeTabKey || !args.isVisible || !args.terminalReady) {
       return;
     }
@@ -612,6 +693,11 @@ export function useCliSessionManager<TTab extends { id: string }>(
         return;
       }
 
+      rememberNativeSessionId({
+        tabId: activeTab.id,
+        nativeSessionId: created.nativeSessionId,
+      });
+
       if (cancelled) {
         void window.api?.terminal?.closeSession?.({
           sessionId: created.sessionId,
@@ -650,11 +736,13 @@ export function useCliSessionManager<TTab extends { id: string }>(
     clearSessionRegistration,
     handleTerminalResize,
     registerSession,
+    rememberNativeSessionId,
     restartVersion,
     supportsPushTerminalOutput,
   ]);
 
   const restartActiveSession = useCallback(() => {
+    const activeTab = args.activeTab;
     const tabKey = activeTabKeyRef.current;
     const sessionId = tabKey
       ? (sessionIdByTabKeyRef.current[tabKey] ?? null)
@@ -674,8 +762,15 @@ export function useCliSessionManager<TTab extends { id: string }>(
       clearSessionRegistration(tabKey, sessionId);
     }
 
+    if (activeTab) {
+      args.setTabNativeSession({
+        tabId: activeTab.id,
+        nativeSessionId: undefined,
+      });
+    }
+
     setRestartVersion((value) => value + 1);
-  }, [clearSessionRegistration]);
+  }, [args.activeTab, args.setTabNativeSession, clearSessionRegistration]);
 
   return {
     activeSessionId,

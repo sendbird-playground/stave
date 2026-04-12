@@ -61,19 +61,45 @@ class FakePty {
 }
 
 const fakePtys: FakePty[] = [];
+const fakeSpawnCalls: Array<{
+  command: string;
+  args: string[];
+  options: {
+    name?: string;
+    cols?: number;
+    rows?: number;
+    cwd?: string;
+    env?: Record<string, string>;
+  };
+}> = [];
 
 mock.module("node-pty", () => ({
-  spawn: () => {
+  spawn: (command: string, args: string[], options: {
+    name?: string;
+    cols?: number;
+    rows?: number;
+    cwd?: string;
+    env?: Record<string, string>;
+  }) => {
     const fake = new FakePty();
     fakePtys.push(fake);
+    fakeSpawnCalls.push({ command, args, options });
     return fake;
   },
+}));
+
+mock.module("../electron/providers/cli-path-env", () => ({
+  resolveClaudeCliExecutablePath: () => "/tmp/fake-claude",
+  resolveCodexCliExecutablePath: () => "/tmp/fake-codex",
+  buildClaudeCliEnv: () => ({ PATH: process.env.PATH ?? "" }),
+  buildCodexCliEnv: () => ({ PATH: process.env.PATH ?? "" }),
 }));
 
 const { createTerminalRuntime } = await import("../electron/host-service/terminal-runtime");
 
 afterEach(() => {
   fakePtys.length = 0;
+  fakeSpawnCalls.length = 0;
 });
 
 describe("terminal runtime PTY cleanup", () => {
@@ -340,6 +366,109 @@ describe("terminal runtime slot lifecycle", () => {
     expect(runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" })).toEqual({
       state: "background",
       sessionId,
+    });
+  });
+
+  test("creates Claude CLI sessions with a reusable native session id", () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createCliSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      cliSessionTabId: "cli-1",
+      providerId: "claude-code",
+      contextMode: "workspace",
+      taskId: null,
+      taskTitle: null,
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    expect(created.ok).toBe(true);
+    expect(created.sessionId).toBeTruthy();
+    expect(created.nativeSessionId).toBeTruthy();
+    expect(fakeSpawnCalls.at(-1)).toEqual({
+      command: "/tmp/fake-claude",
+      args: ["--permission-mode", "auto", "--session-id", created.nativeSessionId!],
+      options: expect.objectContaining({
+        cwd: "/tmp/workspace",
+      }),
+    });
+    expect(
+      runtime.getSessionResumeInfo({ sessionId: created.sessionId! }),
+    ).toEqual({
+      ok: true,
+      nativeSessionId: created.nativeSessionId,
+    });
+  });
+
+  test("uses the configured Claude permission mode for CLI sessions", () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createCliSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      cliSessionTabId: "cli-1",
+      providerId: "claude-code",
+      contextMode: "workspace",
+      taskId: null,
+      taskTitle: null,
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+      runtimeOptions: {
+        claudePermissionMode: "acceptEdits",
+      },
+    });
+
+    expect(created.ok).toBe(true);
+    expect(fakeSpawnCalls.at(-1)).toEqual({
+      command: "/tmp/fake-claude",
+      args: ["--permission-mode", "acceptEdits", "--session-id", created.nativeSessionId!],
+      options: expect.objectContaining({
+        cwd: "/tmp/workspace",
+      }),
+    });
+  });
+
+  test("resumes Codex CLI sessions from a stored native session id", () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createCliSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      cliSessionTabId: "cli-1",
+      providerId: "codex",
+      contextMode: "workspace",
+      nativeSessionId: "codex-session-1",
+      taskId: null,
+      taskTitle: null,
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    expect(created).toEqual({
+      ok: true,
+      sessionId: expect.any(String),
+      nativeSessionId: "codex-session-1",
+    });
+    expect(fakeSpawnCalls.at(-1)).toEqual({
+      command: "/tmp/fake-codex",
+      args: ["resume", "codex-session-1"],
+      options: expect.objectContaining({
+        cwd: "/tmp/workspace",
+      }),
+    });
+    expect(
+      runtime.getSessionResumeInfo({ sessionId: created.sessionId! }),
+    ).toEqual({
+      ok: true,
+      nativeSessionId: "codex-session-1",
     });
   });
 });

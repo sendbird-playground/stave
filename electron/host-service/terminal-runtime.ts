@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import path from "node:path";
 import * as pty from "node-pty";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Terminal as HeadlessTerminal } from "@xterm/headless";
@@ -37,6 +40,10 @@ const TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS = 2_000;
 
 const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
 const TERMINAL_OUTPUT_CHUNKS_MAX_BYTES = 8 * 1024 * 1024;
+const CODEX_SESSION_DISCOVERY_POLL_MS = 500;
+const CODEX_SESSION_DISCOVERY_MAX_ATTEMPTS = 60;
+const CODEX_SESSION_DISCOVERY_LOOKBACK_MS = 15_000;
+const CODEX_SESSION_DISCOVERY_MATCH_WINDOW_MS = 60_000;
 
 interface TerminalSessionEntry {
   pty: pty.IPty;
@@ -71,6 +78,8 @@ interface TerminalSessionEntry {
   backgroundBufferBytes: number;
   exitCode: number | null;
   exitSignal: number | undefined;
+  nativeSessionId: string | null;
+  disposeNativeSessionDiscovery: (() => void) | null;
 }
 
 function createBufferedDataHandler(onData: (data: string) => void) {
@@ -172,9 +181,219 @@ export function createTerminalRuntime(args: {
     string,
     { exitCode: number; signal?: number }
   >();
+  const codexSessionFileClaimByPath = new Map<string, string>();
+  const codexSessionIdClaimByNativeId = new Map<string, string>();
+
+  function normalizeSessionCwd(cwd: string) {
+    return resolveCommandCwd({ cwd });
+  }
+
+  function releaseNativeSessionClaims(sessionId: string) {
+    for (const [filePath, ownerSessionId] of codexSessionFileClaimByPath) {
+      if (ownerSessionId === sessionId) {
+        codexSessionFileClaimByPath.delete(filePath);
+      }
+    }
+    for (const [nativeSessionId, ownerSessionId] of codexSessionIdClaimByNativeId) {
+      if (ownerSessionId === sessionId) {
+        codexSessionIdClaimByNativeId.delete(nativeSessionId);
+      }
+    }
+  }
+
+  function readCodexSessionMeta(args: { filePath: string }) {
+    try {
+      const firstLine = readFileSync(args.filePath, "utf8")
+        .split("\n", 1)[0]
+        ?.trim();
+      if (!firstLine) {
+        return null;
+      }
+      const parsed = JSON.parse(firstLine) as {
+        type?: string;
+        payload?: { id?: string; cwd?: string; timestamp?: string };
+      };
+      if (parsed.type !== "session_meta") {
+        return null;
+      }
+      const nativeSessionId = parsed.payload?.id?.trim();
+      const cwd = parsed.payload?.cwd?.trim();
+      const timestamp = parsed.payload?.timestamp?.trim();
+      if (!nativeSessionId || !cwd || !timestamp) {
+        return null;
+      }
+      const timestampMs = Date.parse(timestamp);
+      if (!Number.isFinite(timestampMs)) {
+        return null;
+      }
+      return {
+        nativeSessionId,
+        cwd: normalizeSessionCwd(cwd),
+        timestampMs,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function collectRecentCodexSessionFiles(args: {
+    rootPath: string;
+    earliestMtimeMs: number;
+  }) {
+    const recentFiles: string[] = [];
+    const stack = [args.rootPath];
+
+    while (stack.length > 0) {
+      const currentDir = stack.pop();
+      if (!currentDir) {
+        continue;
+      }
+      let entries;
+      try {
+        entries = readdirSync(currentDir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          stack.push(fullPath);
+          continue;
+        }
+        if (!entry.isFile() || !entry.name.endsWith(".jsonl")) {
+          continue;
+        }
+        let stats;
+        try {
+          stats = statSync(fullPath);
+        } catch {
+          continue;
+        }
+        if (stats.mtimeMs >= args.earliestMtimeMs) {
+          recentFiles.push(fullPath);
+        }
+      }
+    }
+
+    recentFiles.sort((left, right) => {
+      try {
+        return statSync(right).mtimeMs - statSync(left).mtimeMs;
+      } catch {
+        return 0;
+      }
+    });
+
+    return recentFiles;
+  }
+
+  function startCodexNativeSessionDiscovery(args: {
+    sessionId: string;
+    cwd: string;
+    startedAtMs: number;
+  }) {
+    const session = sessions.get(args.sessionId);
+    if (!session || session.nativeSessionId) {
+      return;
+    }
+
+    const sessionsRoot = path.join(homedir(), ".agents", "codex", "sessions");
+    if (!existsSync(sessionsRoot)) {
+      return;
+    }
+
+    const targetCwd = normalizeSessionCwd(args.cwd);
+    let disposed = false;
+    let attempts = 0;
+
+    const stop = () => {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
+      clearInterval(intervalId);
+      const currentSession = sessions.get(args.sessionId);
+      if (currentSession?.disposeNativeSessionDiscovery === stop) {
+        currentSession.disposeNativeSessionDiscovery = null;
+      }
+    };
+
+    const scan = () => {
+      const currentSession = sessions.get(args.sessionId);
+      if (!currentSession || currentSession.closing || currentSession.nativeSessionId) {
+        stop();
+        return;
+      }
+
+      const candidates = collectRecentCodexSessionFiles({
+        rootPath: sessionsRoot,
+        earliestMtimeMs: args.startedAtMs - CODEX_SESSION_DISCOVERY_LOOKBACK_MS,
+      });
+
+      let bestMatch:
+        | { filePath: string; nativeSessionId: string; deltaMs: number }
+        | null = null;
+
+      for (const filePath of candidates) {
+        const claimedBy = codexSessionFileClaimByPath.get(filePath);
+        if (claimedBy && claimedBy !== args.sessionId) {
+          continue;
+        }
+        const meta = readCodexSessionMeta({ filePath });
+        if (!meta || meta.cwd !== targetCwd) {
+          continue;
+        }
+        if (
+          Math.abs(meta.timestampMs - args.startedAtMs) >
+          CODEX_SESSION_DISCOVERY_MATCH_WINDOW_MS
+        ) {
+          continue;
+        }
+        const claimedNativeSessionId = codexSessionIdClaimByNativeId.get(
+          meta.nativeSessionId,
+        );
+        if (claimedNativeSessionId && claimedNativeSessionId !== args.sessionId) {
+          continue;
+        }
+        const deltaMs = Math.abs(meta.timestampMs - args.startedAtMs);
+        if (!bestMatch || deltaMs < bestMatch.deltaMs) {
+          bestMatch = {
+            filePath,
+            nativeSessionId: meta.nativeSessionId,
+            deltaMs,
+          };
+        }
+      }
+
+      if (bestMatch) {
+        currentSession.nativeSessionId = bestMatch.nativeSessionId;
+        codexSessionFileClaimByPath.set(bestMatch.filePath, args.sessionId);
+        codexSessionIdClaimByNativeId.set(
+          bestMatch.nativeSessionId,
+          args.sessionId,
+        );
+        stop();
+        return;
+      }
+
+      attempts += 1;
+      if (attempts >= CODEX_SESSION_DISCOVERY_MAX_ATTEMPTS) {
+        stop();
+      }
+    };
+
+    const intervalId = setInterval(
+      scan,
+      CODEX_SESSION_DISCOVERY_POLL_MS,
+    );
+    session.disposeNativeSessionDiscovery = stop;
+    scan();
+  }
 
   function deleteSession(sessionId: string) {
     const session = sessions.get(sessionId);
+    session?.disposeNativeSessionDiscovery?.();
+    releaseNativeSessionClaims(sessionId);
     if (session?.slotKey != null) {
       exitedSlotInfo.set(session.slotKey, {
         exitCode: session.exitCode ?? -1,
@@ -438,6 +657,7 @@ export function createTerminalRuntime(args: {
     deliveryMode?: "poll" | "push";
     themeColors?: { foreground?: string; background?: string };
     slotKey?: string;
+    nativeSessionId?: string;
   }) {
     const ptyProcess = pty.spawn(args.command, args.commandArgs ?? [], {
       name: "xterm-256color",
@@ -496,11 +716,14 @@ export function createTerminalRuntime(args: {
       backgroundBufferBytes: 0,
       exitCode: null,
       exitSignal: undefined,
+      nativeSessionId: args.nativeSessionId?.trim() || null,
+      disposeNativeSessionDiscovery: null,
       close: () => {
         if (session.closing) {
           return;
         }
         session.closing = true;
+        session.disposeNativeSessionDiscovery?.();
         session.disposePtyListeners();
         session.disposeHeadlessMirror();
         session.markClosed();
@@ -522,6 +745,8 @@ export function createTerminalRuntime(args: {
           return;
         }
         headlessMirrorDisposed = true;
+        session.disposeNativeSessionDiscovery?.();
+        session.disposeNativeSessionDiscovery = null;
         session.headlessDataSubscription?.dispose();
         session.headlessDataSubscription = null;
         session.headlessTerminal.dispose();
@@ -666,8 +891,15 @@ export function createTerminalRuntime(args: {
         sessionId: existing.sessionId,
         deliveryMode: args.deliveryMode ?? existing.session.deliveryMode,
       });
-      return { ok: true, sessionId: existing.sessionId };
+      return {
+        ok: true,
+        sessionId: existing.sessionId,
+        nativeSessionId: existing.session.nativeSessionId ?? undefined,
+      };
     }
+
+    const requestedNativeSessionId = args.nativeSessionId?.trim() || "";
+    const sessionCwd = args.cwd || args.workspacePath;
 
     if (args.providerId === "claude-code") {
       const executablePath = resolveClaudeCliExecutablePath({
@@ -680,16 +912,26 @@ export function createTerminalRuntime(args: {
             "Claude executable not found. Check Claude CLI installation and auth.",
         };
       }
+      const nativeSessionId = requestedNativeSessionId || randomUUID();
+      const claudePermissionMode = args.runtimeOptions?.claudePermissionMode ?? "auto";
       const env = buildClaudeCliEnv({ executablePath });
       return {
         ok: true,
         sessionId: createPtySession({
           command: executablePath,
-          cwd: args.cwd || args.workspacePath,
+          commandArgs: [
+            "--permission-mode",
+            claudePermissionMode,
+            ...(requestedNativeSessionId
+              ? ["--resume", nativeSessionId]
+              : ["--session-id", nativeSessionId]),
+          ],
+          cwd: sessionCwd,
           cols: args.cols,
           rows: args.rows,
           deliveryMode: args.deliveryMode,
           slotKey,
+          nativeSessionId,
           env: {
             ...env,
             STAVE_WORKSPACE_PATH: args.workspacePath,
@@ -697,6 +939,7 @@ export function createTerminalRuntime(args: {
             STAVE_TASK_TITLE: args.taskTitle ?? "",
           },
         }),
+        nativeSessionId,
       };
     }
 
@@ -711,22 +954,36 @@ export function createTerminalRuntime(args: {
       };
     }
     const env = buildCodexCliEnv({ executablePath });
+    const startedAtMs = Date.now();
+    const sessionId = createPtySession({
+      command: executablePath,
+      commandArgs: requestedNativeSessionId
+        ? ["resume", requestedNativeSessionId]
+        : undefined,
+      cwd: sessionCwd,
+      cols: args.cols,
+      rows: args.rows,
+      deliveryMode: args.deliveryMode,
+      slotKey,
+      nativeSessionId: requestedNativeSessionId || undefined,
+      env: {
+        ...env,
+        STAVE_WORKSPACE_PATH: args.workspacePath,
+        STAVE_TASK_ID: args.taskId ?? "",
+        STAVE_TASK_TITLE: args.taskTitle ?? "",
+      },
+    });
+    if (!requestedNativeSessionId) {
+      startCodexNativeSessionDiscovery({
+        sessionId,
+        cwd: sessionCwd,
+        startedAtMs,
+      });
+    }
     return {
       ok: true,
-      sessionId: createPtySession({
-        command: executablePath,
-        cwd: args.cwd || args.workspacePath,
-        cols: args.cols,
-        rows: args.rows,
-        deliveryMode: args.deliveryMode,
-        slotKey,
-        env: {
-          ...env,
-          STAVE_WORKSPACE_PATH: args.workspacePath,
-          STAVE_TASK_ID: args.taskId ?? "",
-          STAVE_TASK_TITLE: args.taskTitle ?? "",
-        },
-      }),
+      sessionId,
+      nativeSessionId: requestedNativeSessionId || undefined,
     };
   }
 
@@ -974,6 +1231,21 @@ export function createTerminalRuntime(args: {
     return { state: "running", sessionId };
   }
 
+  function getSessionResumeInfo(args: { sessionId: string }) {
+    const session = sessions.get(args.sessionId);
+    if (!session) {
+      return {
+        ok: false,
+        stderr: "Terminal session not found.",
+      };
+    }
+
+    return {
+      ok: true,
+      nativeSessionId: session.nativeSessionId ?? undefined,
+    };
+  }
+
   return {
     createSession,
     createCliSession,
@@ -987,6 +1259,7 @@ export function createTerminalRuntime(args: {
     detachSession,
     resumeSessionStream,
     getSlotState,
+    getSessionResumeInfo,
     closeSessionsBySlotPrefix,
     cleanupAll,
   };

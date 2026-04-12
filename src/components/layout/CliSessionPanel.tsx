@@ -49,6 +49,7 @@ export function CliSessionPanel() {
     activeSurface,
     settings,
     isDarkMode,
+    setCliSessionTabNativeSession,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -63,6 +64,7 @@ export function CliSessionPanel() {
           state.activeSurface,
           state.settings,
           state.isDarkMode,
+          state.setCliSessionTabNativeSession,
         ] as const,
     ),
   );
@@ -120,6 +122,7 @@ export function CliSessionPanel() {
         cliSessionTabId: args.tab.id,
         providerId: args.tab.provider,
         contextMode: args.tab.contextMode,
+        nativeSessionId: args.tab.nativeSessionId,
         taskId: args.tab.linkedTaskId,
         taskTitle: currentLinkedTaskTitle,
         cwd: args.tab.cwd,
@@ -127,9 +130,13 @@ export function CliSessionPanel() {
         rows: args.rows,
         deliveryMode: args.deliveryMode,
         runtimeOptions:
-          args.tab.provider === "claude-code" &&
-          settings.claudeBinaryPath.trim()
-            ? { claudeBinaryPath: settings.claudeBinaryPath.trim() }
+          args.tab.provider === "claude-code"
+            ? {
+                ...(settings.claudeBinaryPath.trim()
+                  ? { claudeBinaryPath: settings.claudeBinaryPath.trim() }
+                  : {}),
+                claudePermissionMode: settings.claudePermissionMode,
+              }
             : args.tab.provider === "codex" && settings.codexBinaryPath.trim()
               ? { codexBinaryPath: settings.codexBinaryPath.trim() }
               : undefined,
@@ -138,6 +145,7 @@ export function CliSessionPanel() {
     [
       activeWorkspaceId,
       settings.claudeBinaryPath,
+      settings.claudePermissionMode,
       settings.codexBinaryPath,
       workspacePath,
     ],
@@ -183,6 +191,7 @@ export function CliSessionPanel() {
     getTabKey,
     createSession,
     slotKeyForTab,
+    setTabNativeSession: setCliSessionTabNativeSession,
     terminalController: terminalInstance.controller,
     terminalReady: terminalInstance.ready,
     terminalRevision: terminalInstance.revision,

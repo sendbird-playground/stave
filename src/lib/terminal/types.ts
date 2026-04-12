@@ -28,6 +28,7 @@ export interface WorkspaceCliSessionTab {
   title: string;
   provider: Exclude<ProviderId, "stave">;
   contextMode: CliSessionContextMode;
+  nativeSessionId?: string;
   linkedTaskId: string | null;
   linkedTaskTitle: string | null;
   handoffSummary: string;
@@ -60,6 +61,7 @@ export interface CliSessionCreateSessionArgs {
   cliSessionTabId: string;
   providerId: Exclude<ProviderId, "stave">;
   contextMode: CliSessionContextMode;
+  nativeSessionId?: string;
   taskId: string | null;
   taskTitle: string | null;
   cwd: string;
