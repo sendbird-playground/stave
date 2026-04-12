@@ -1292,14 +1292,22 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       return;
     }
     const targetPath = workspaceCwd ?? null;
-    if (skillCatalog.status === "loading" && skillCatalog.workspacePath === targetPath) {
-      return;
-    }
-    if (skillCatalog.status === "ready" && skillCatalog.workspacePath === targetPath) {
-      const CATALOG_TTL_MS = 5 * 60 * 1000;
-      const fetchedAtMs = skillCatalog.fetchedAt ? Date.parse(skillCatalog.fetchedAt) : 0;
-      if (Date.now() - fetchedAtMs < CATALOG_TTL_MS) {
+    if (skillCatalog.workspacePath === targetPath) {
+      if (skillCatalog.status === "loading") {
         return;
+      }
+      const fetchedAtMs = skillCatalog.fetchedAt ? Date.parse(skillCatalog.fetchedAt) : 0;
+      if (skillCatalog.status === "ready") {
+        const CATALOG_TTL_MS = 5 * 60 * 1000;
+        if (Date.now() - fetchedAtMs < CATALOG_TTL_MS) {
+          return;
+        }
+      }
+      if (skillCatalog.status === "error") {
+        const ERROR_RETRY_TTL_MS = 30 * 1000;
+        if (Date.now() - fetchedAtMs < ERROR_RETRY_TTL_MS) {
+          return;
+        }
       }
     }
     void refreshSkillCatalog({ workspacePath: targetPath });

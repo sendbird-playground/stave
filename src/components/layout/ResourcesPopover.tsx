@@ -160,28 +160,20 @@ export function MemoryUsagePopover({ collapsed }: { collapsed?: boolean }) {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
-                collapsed ? "h-10 w-10" : "h-9 w-9",
-              )}
-              aria-label="memory-usage"
-            >
-              <Activity className="size-4" />
-            </Button>
-          </PopoverTrigger>
-        </TooltipTrigger>
-        {!open && (
-          <TooltipContent side={collapsed ? "right" : "bottom"}>
-            Memory Usage
-          </TooltipContent>
-        )}
-      </Tooltip>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
+            collapsed ? "h-10 w-10" : "h-9 w-9",
+          )}
+          aria-label="memory-usage"
+          title="Memory Usage"
+        >
+          <Activity className="size-4" />
+        </Button>
+      </PopoverTrigger>
 
       <PopoverContent
         side="right"

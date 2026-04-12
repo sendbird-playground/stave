@@ -169,37 +169,31 @@ export function TopBarUpdate(props: {
   return (
     <>
       <Popover open={open} onOpenChange={setOpen}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  "relative h-8 w-8 shrink-0 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
-                  hasUpdate && "text-primary",
-                )}
-                style={props.noDragStyle}
-                aria-label="app-update"
-              >
-                {loading ? (
-                  <LoaderCircle className="size-4 animate-spin" />
-                ) : (
-                  <ArrowUpCircle className="size-4" />
-                )}
-                {hasUpdate ? (
-                  <span className="absolute -right-0.5 -top-0.5 inline-flex size-2.5 rounded-full bg-primary" />
-                ) : null}
-                {!hasUpdate && hasIssue ? (
-                  <span className="absolute -right-0.5 -top-0.5 inline-flex size-2.5 rounded-full bg-warning" />
-                ) : null}
-              </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            App Update
-          </TooltipContent>
-        </Tooltip>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "relative h-8 w-8 shrink-0 rounded-md p-0 text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
+              hasUpdate && "text-primary",
+            )}
+            style={props.noDragStyle}
+            aria-label="app-update"
+            title="App Update"
+          >
+            {loading ? (
+              <LoaderCircle className="size-4 animate-spin" />
+            ) : (
+              <ArrowUpCircle className="size-4" />
+            )}
+            {hasUpdate ? (
+              <span className="absolute -right-0.5 -top-0.5 inline-flex size-2.5 rounded-full bg-primary" />
+            ) : null}
+            {!hasUpdate && hasIssue ? (
+              <span className="absolute -right-0.5 -top-0.5 inline-flex size-2.5 rounded-full bg-warning" />
+            ) : null}
+          </Button>
+        </PopoverTrigger>
         <PopoverContent
           align="end"
           sideOffset={10}
