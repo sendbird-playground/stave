@@ -383,7 +383,8 @@ export function useTerminalInstance(
   }, [clearPendingThemeWork]);
 
   // Track consecutive successful writes so the degraded banner can auto-clear
-  // once the renderer genuinely stabilises.
+  // once the renderer genuinely stabilises. Only count real writes so a null
+  // terminal during teardown/bootstrap does not clear a still-broken surface.
   const consecutiveWriteSuccessRef = useRef(0);
   const reportRendererIssue = useCallback(
     (context: string, caughtError: unknown) => {
@@ -682,10 +683,10 @@ export function useTerminalInstance(
       themeKeyRef.current = null;
       bindGhosttyRuntimeErrorHandler(terminal, handleGhosttyRuntimeError);
 
-      // Gate ResizeObserver through requestAnimationFrame so splitter drags
-      // emit at most one resize request per frame. The actual frontend
-      // terminal resize still happens only after the backend resize succeeds
-      // (via useTerminalSessionManager), matching mux's PTY-first contract.
+      // Gate ResizeObserver through requestAnimationFrame so resize-heavy
+      // interactions emit at most one measure + resize request per frame.
+      // The local surface still follows the backend-success path, matching
+      // mux's PTY-first contract and avoiding stale WebGL geometry churn.
       let resizeRafPending = false;
       const resizeObserver =
         typeof ResizeObserver !== "undefined"
