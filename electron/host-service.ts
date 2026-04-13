@@ -1,4 +1,3 @@
-import { createInterface } from "node:readline";
 import { randomUUID } from "node:crypto";
 import {
   generateFallbackPullRequestDraft,
@@ -69,6 +68,7 @@ import { isDoneEvent, toEventType } from "./main/utils/provider-events";
 import { quotePath, runCommand } from "./main/utils/command";
 import type { StreamTurnArgs } from "./providers/types";
 import { truncateUtf8Middle } from "./shared/bounded-text";
+import { Utf8LineBuffer } from "./shared/utf8-line-buffer";
 
 type HostServiceOutboundMessage =
   | AnyHostServiceResponseEnvelope
@@ -83,10 +83,13 @@ type HostServiceOutboundMessage =
 
 const HOST_SERVICE_QUEUE_WARN_DEPTH = 24;
 const HOST_SERVICE_QUEUE_WARN_BYTES = 256 * 1024;
+const HOST_SERVICE_QUEUE_MAX_BYTES = 2 * 1024 * 1024;
 const HOST_SERVICE_QUEUE_SLOW_WRITE_MS = 48;
 const HOST_SERVICE_QUEUE_LOG_INTERVAL_MS = 2_000;
 const HOST_PROVIDER_EVENT_STRING_MAX_BYTES = 128 * 1024;
 const HOST_PROVIDER_EVENT_LIST_MAX_ITEMS = 32;
+const HOST_SERVICE_STDIN_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
+const HOST_SERVICE_STDIN_LINE_MAX_BYTES = 1 * 1024 * 1024;
 
 let messageWriteChain = Promise.resolve();
 let pendingMessageCount = 0;
@@ -95,6 +98,8 @@ let peakPendingMessageCount = 0;
 let peakPendingMessageBytes = 0;
 let lastBackpressureLogAt = 0;
 let backpressureWarningActive = false;
+let fatalHostServiceError: Error | null = null;
+let shutdownTriggered = false;
 
 function describeOutboundMessage(message: HostServiceOutboundMessage) {
   if (message.type === "ready") {
@@ -151,6 +156,27 @@ function maybeLogQueueRecovery() {
   logHostServiceQueue(
     `drained peakMessages=${peakPendingMessageCount} peakBytes=${peakPendingMessageBytes}`,
   );
+}
+
+function triggerFatalHostServiceError(error: Error) {
+  if (fatalHostServiceError) {
+    return;
+  }
+  fatalHostServiceError = error;
+  process.stderr.write(`[host-service] ${error.message}\n`);
+  if (shutdownTriggered) {
+    return;
+  }
+  shutdownTriggered = true;
+  void shutdown()
+    .catch((shutdownError) => {
+      process.stderr.write(
+        `[host-service] shutdown error: ${String(shutdownError)}\n`,
+      );
+    })
+    .finally(() => {
+      process.exit(1);
+    });
 }
 
 function shrinkProviderEventString(value: string, label: string) {
@@ -292,6 +318,19 @@ function writeMessage(message: HostServiceOutboundMessage) {
   const label = describeOutboundMessage(message);
   const serializedMessage = `${JSON.stringify(message)}\n`;
   const messageBytes = Buffer.byteLength(serializedMessage);
+  if (fatalHostServiceError) {
+    return Promise.reject(fatalHostServiceError);
+  }
+  if (pendingMessageBytes + messageBytes > HOST_SERVICE_QUEUE_MAX_BYTES) {
+    const error = new Error(
+      `protocol overflow: outbound queue exceeded ${HOST_SERVICE_QUEUE_MAX_BYTES} bytes`,
+    );
+    maybeLogQueueBackpressure({
+      reason: "rejected",
+      label,
+    });
+    return Promise.reject(error);
+  }
   pendingMessageCount += 1;
   pendingMessageBytes += messageBytes;
   peakPendingMessageCount = Math.max(
@@ -310,11 +349,18 @@ function writeMessage(message: HostServiceOutboundMessage) {
     () => writeMessageNow(serializedMessage, label),
     () => writeMessageNow(serializedMessage, label),
   );
-  const trackedWrite = nextWrite.finally(() => {
-    pendingMessageCount = Math.max(0, pendingMessageCount - 1);
-    pendingMessageBytes = Math.max(0, pendingMessageBytes - messageBytes);
-    maybeLogQueueRecovery();
-  });
+  const trackedWrite = nextWrite
+    .catch((error) => {
+      triggerFatalHostServiceError(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      throw error;
+    })
+    .finally(() => {
+      pendingMessageCount = Math.max(0, pendingMessageCount - 1);
+      pendingMessageBytes = Math.max(0, pendingMessageBytes - messageBytes);
+      maybeLogQueueRecovery();
+    });
   messageWriteChain = trackedWrite.catch(() => {});
   return trackedWrite;
 }
@@ -1012,35 +1058,18 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
 async function main() {
   prewarmClaudeSdk();
   await writeMessage({ type: "ready" });
-  const rl = createInterface({
-    input: process.stdin,
-    crlfDelay: Infinity,
+  const stdinLineBuffer = new Utf8LineBuffer({
+    label: "host-service stdin",
+    maxBufferBytes: HOST_SERVICE_STDIN_BUFFER_MAX_BYTES,
+    maxLineBytes: HOST_SERVICE_STDIN_LINE_MAX_BYTES,
   });
-
-  rl.on("line", (line) => {
-    const trimmed = line.trim();
-    if (!trimmed) {
+  let stdinClosed = false;
+  const handleStdinClosed = () => {
+    if (stdinClosed || shutdownTriggered) {
       return;
     }
-    void (async () => {
-      let request: AnyHostServiceRequestEnvelope;
-      try {
-        request = JSON.parse(trimmed) as AnyHostServiceRequestEnvelope;
-      } catch {
-        return;
-      }
-      if (request.type !== "request") {
-        return;
-      }
-      try {
-        await handleRequest(request);
-      } catch (error) {
-        await respondError(request.id, error);
-      }
-    })();
-  });
-
-  rl.on("close", () => {
+    stdinClosed = true;
+    shutdownTriggered = true;
     void shutdown()
       .catch((error) => {
         process.stderr.write(
@@ -1050,7 +1079,45 @@ async function main() {
       .finally(() => {
         process.exit(0);
       });
+  };
+
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (chunk: string) => {
+    let lines: string[];
+    try {
+      lines = stdinLineBuffer.append(chunk);
+    } catch (error) {
+      triggerFatalHostServiceError(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      return;
+    }
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+      void (async () => {
+        let request: AnyHostServiceRequestEnvelope;
+        try {
+          request = JSON.parse(trimmed) as AnyHostServiceRequestEnvelope;
+        } catch {
+          return;
+        }
+        if (request.type !== "request") {
+          return;
+        }
+        try {
+          await handleRequest(request);
+        } catch (error) {
+          await respondError(request.id, error).catch(() => {});
+        }
+      })();
+    }
   });
+
+  process.stdin.on("end", handleStdinClosed);
+  process.stdin.on("close", handleStdinClosed);
 }
 
 void main().catch((error) => {

@@ -29,8 +29,9 @@ import {
   probeExecutableVersion,
 } from "./runtime-shared";
 import {
-  appendBoundedBridgeEvent,
   appendBoundedText,
+  createBoundedBridgeEventCollector,
+  measureBridgeEventBytes,
   truncateBufferedText,
 } from "./provider-buffering";
 import { byteLengthUtf8 } from "../shared/bounded-text";
@@ -73,6 +74,20 @@ const CODEX_APP_SERVER_PARTIAL_TOOL_OUTPUT_MAX_BYTES = 128 * 1024;
 const CODEX_APP_SERVER_FINAL_TOOL_OUTPUT_MAX_BYTES = 256 * 1024;
 const CODEX_APP_SERVER_PLAN_EVENT_MAX_BYTES = 64 * 1024;
 const CODEX_APP_SERVER_PARTIAL_EMIT_THROTTLE_MS = 200;
+const CODEX_APP_SERVER_OVERFLOW_TAIL_EVENTS: BridgeEvent[] = [
+  {
+    type: "error",
+    message:
+      "Codex App Server turn output was truncated in non-stream replay because the retained snapshot limit was exceeded.",
+    recoverable: true,
+  },
+  { type: "done", stop_reason: "output_overflow" },
+];
+const CODEX_APP_SERVER_OVERFLOW_TAIL_BYTES =
+  CODEX_APP_SERVER_OVERFLOW_TAIL_EVENTS.reduce(
+    (total, event) => total + measureBridgeEventBytes(event),
+    0,
+  );
 
 type JsonRpcId = string | number;
 type JsonRpcMessage = {
@@ -1549,20 +1564,36 @@ export async function streamCodexWithAppServer(
     runtimeOptions: args.runtimeOptions,
   });
 
-  const events: BridgeEvent[] = [];
-  let retainedEventBytes = 0;
+  const eventCollector = createBoundedBridgeEventCollector({
+    maxBytes: CODEX_APP_SERVER_COLLECTED_EVENTS_MAX_BYTES,
+    reserveTailBytes: CODEX_APP_SERVER_OVERFLOW_TAIL_BYTES,
+  });
+  const events: BridgeEvent[] = eventCollector.events;
+  let hasEmittedDone = false;
   const emitBridgeEvent = (event: BridgeEvent) => {
-    const result = appendBoundedBridgeEvent({
-      events,
-      next: event,
-      retainedBytes: retainedEventBytes,
-      maxBytes: CODEX_APP_SERVER_COLLECTED_EVENTS_MAX_BYTES,
-    });
-    retainedEventBytes = result.retainedBytes;
+    if (event.type === "done") {
+      hasEmittedDone = true;
+    }
+    eventCollector.append(event);
     args.onEvent?.(event);
   };
   const emitBridgeEvents = (nextEvents: BridgeEvent[]) => {
     nextEvents.forEach(emitBridgeEvent);
+  };
+  const finalizeCollectedEvents = () => {
+    if (eventCollector.overflowed) {
+      for (const overflowEvent of CODEX_APP_SERVER_OVERFLOW_TAIL_EVENTS) {
+        eventCollector.appendTail(overflowEvent);
+      }
+      if (!hasEmittedDone) {
+        args.onEvent?.({ type: "done" });
+      }
+    } else if (!hasEmittedDone && events[events.length - 1]?.type !== "done") {
+      const doneEvent: BridgeEvent = { type: "done" };
+      eventCollector.appendTail(doneEvent);
+      args.onEvent?.(doneEvent);
+    }
+    return events;
   };
 
   emitBridgeEvents(buildCodexThreadStartedEvents({ threadId }));
@@ -2505,7 +2536,7 @@ export async function streamCodexWithAppServer(
             .catch(() => {});
         })
         .catch(() => {});
-      return events;
+      return finalizeCollectedEvents();
     }
 
     appServerTurnId = turnResponse.turn.id;
@@ -2542,7 +2573,7 @@ export async function streamCodexWithAppServer(
 
     await waitForTurnCompletion;
 
-    return events;
+    return finalizeCollectedEvents();
   } catch (error) {
     // Distinguish abort from real failures (symmetric with claude-sdk-runtime).
     const isAbort =
@@ -2568,7 +2599,7 @@ export async function streamCodexWithAppServer(
     };
     emitBridgeEvent(errorEvent);
     emitBridgeEvent({ type: "done" });
-    return events;
+    return finalizeCollectedEvents();
   } finally {
     clearInterruptFallback();
     unsubscribeProcessExit();

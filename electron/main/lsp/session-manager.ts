@@ -288,7 +288,15 @@ async function createSession(args: {
   updateSessionStatus(session, "starting", session.detail);
 
   child.stdout.on("data", (chunk) => {
-    const messages = session.buffer.append(chunk);
+    let messages: unknown[];
+    try {
+      messages = session.buffer.append(chunk);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      updateSessionStatus(session, "error", detail);
+      child.kill();
+      return;
+    }
     for (const message of messages) {
       handleIncomingMessage(session, message);
     }

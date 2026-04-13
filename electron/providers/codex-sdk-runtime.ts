@@ -49,6 +49,10 @@ import {
   buildCodexDeveloperInstructions,
   buildCodexInstructionProfileKey,
 } from "./codex-runtime-config";
+import {
+  createBoundedBridgeEventCollector,
+  measureBridgeEventBytes,
+} from "./provider-buffering";
 
 const threadByTask = new Map<string, Thread>();
 const threadIdByTask = new Map<string, string>();
@@ -71,6 +75,20 @@ const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
   "SLACK_OAUTH_TOKEN",
   "STAVE_LOCAL_MCP_TOKEN",
 ] as const;
+const CODEX_EVENT_RETAINED_BYTES_MAX = 2 * 1024 * 1024;
+const CODEX_OVERFLOW_TAIL_EVENTS: BridgeEvent[] = [
+  {
+    type: "error",
+    message:
+      "Codex turn output was truncated in non-stream replay because the retained snapshot limit was exceeded.",
+    recoverable: true,
+  },
+  { type: "done", stop_reason: "output_overflow" },
+];
+const CODEX_OVERFLOW_TAIL_BYTES = CODEX_OVERFLOW_TAIL_EVENTS.reduce(
+  (total, event) => total + measureBridgeEventBytes(event),
+  0,
+);
 
 interface CodexMcpServerListEntry {
   name: string;
@@ -1189,17 +1207,25 @@ export async function streamCodexWithSdk(
     const codexDebug =
       args.runtimeOptions?.debug ?? process.env.STAVE_CODEX_DEBUG === "1";
     const codexPlanMode = args.runtimeOptions?.codexPlanMode === true;
-    const events: BridgeEvent[] = [];
+    const eventCollector = createBoundedBridgeEventCollector({
+      maxBytes: CODEX_EVENT_RETAINED_BYTES_MAX,
+      reserveTailBytes: CODEX_OVERFLOW_TAIL_BYTES,
+    });
+    const events = eventCollector.events;
     let sawExperimentalPlanTodo = false;
     let latestTodoPlanText: string | null = null;
     let retainedFinalPlanText: string | null = null;
     let pendingPlanMessageText: string | null = null;
     let hasEmittedPlanReady = false;
+    let hasEmittedDone = false;
     const emitBridgeEvent = (event: BridgeEvent) => {
       if (event.type === "plan_ready") {
         hasEmittedPlanReady = true;
       }
-      events.push(event);
+      if (event.type === "done") {
+        hasEmittedDone = true;
+      }
+      eventCollector.append(event);
       args.onEvent?.(event);
     };
     const emitBridgeEvents = (nextEvents: BridgeEvent[]) => {
@@ -1408,6 +1434,13 @@ export async function streamCodexWithSdk(
       }
     }
 
+    if (events.length === 0 && eventCollector.overflowed) {
+      for (const overflowEvent of CODEX_OVERFLOW_TAIL_EVENTS) {
+        eventCollector.appendTail(overflowEvent);
+      }
+      return events;
+    }
+
     if (events.length === 0) {
       const emptyEvents: BridgeEvent[] = [
         { type: "text", text: "No events returned from Codex SDK." },
@@ -1417,9 +1450,17 @@ export async function streamCodexWithSdk(
       return emptyEvents;
     }
 
-    if (events[events.length - 1]?.type !== "done") {
-      events.push({ type: "done" });
-      args.onEvent?.(events[events.length - 1]!);
+    if (eventCollector.overflowed) {
+      for (const overflowEvent of CODEX_OVERFLOW_TAIL_EVENTS) {
+        eventCollector.appendTail(overflowEvent);
+      }
+      if (!hasEmittedDone) {
+        args.onEvent?.({ type: "done" });
+      }
+    } else if (!hasEmittedDone && events[events.length - 1]?.type !== "done") {
+      const doneEvent: BridgeEvent = { type: "done" };
+      eventCollector.appendTail(doneEvent);
+      args.onEvent?.(doneEvent);
     }
 
     return events;

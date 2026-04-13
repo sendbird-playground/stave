@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { byteLengthUtf8 } from "../shared/bounded-text";
+import { Utf8LineBuffer } from "../shared/utf8-line-buffer";
 import type {
   AnyHostServiceEventEnvelope,
   AnyHostServiceMessage,
@@ -50,8 +50,6 @@ class HostServiceClient {
 
   private startupReject: ((reason?: unknown) => void) | null = null;
 
-  private stdoutBuffer = "";
-
   private nextRequestId = 1;
 
   private pending = new Map<number, PendingRequest>();
@@ -80,7 +78,6 @@ class HostServiceClient {
 
     const activeChild = args.child ?? this.child;
     this.child = null;
-    this.stdoutBuffer = "";
     this.startupReject?.(args.error);
     this.resetStartupState();
     for (const pending of this.pending.values()) {
@@ -136,38 +133,27 @@ class HostServiceClient {
   }
 
   private attachChild(child: ChildProcessWithoutNullStreams) {
+    const stdoutLineBuffer = new Utf8LineBuffer({
+      label: "host-service stdout",
+      maxBufferBytes: HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES,
+      maxLineBytes: HOST_SERVICE_STDOUT_LINE_MAX_BYTES,
+    });
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
-      this.stdoutBuffer += chunk;
-      if (byteLengthUtf8(this.stdoutBuffer) > HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES) {
+      let lines: string[];
+      try {
+        lines = stdoutLineBuffer.append(chunk);
+      } catch (error) {
         this.failChild({
           child,
-          error: new Error(
-            `[host-service] protocol overflow: stdout buffer exceeded ${HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES} bytes`,
-          ),
+          error: error instanceof Error ? error : new Error(String(error)),
         });
         return;
       }
-      let newlineIndex = this.stdoutBuffer.indexOf("\n");
-      while (newlineIndex >= 0) {
-        const rawLine = this.stdoutBuffer.slice(0, newlineIndex);
-        this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
-        const line = rawLine.endsWith("\r")
-          ? rawLine.slice(0, -1)
-          : rawLine;
-        if (byteLengthUtf8(line) > HOST_SERVICE_STDOUT_LINE_MAX_BYTES) {
-          this.failChild({
-            child,
-            error: new Error(
-              `[host-service] protocol overflow: line exceeded ${HOST_SERVICE_STDOUT_LINE_MAX_BYTES} bytes`,
-            ),
-          });
-          return;
-        }
+      for (const line of lines) {
         if (line.length > 0) {
           this.handleMessage(line);
         }
-        newlineIndex = this.stdoutBuffer.indexOf("\n");
       }
     });
 

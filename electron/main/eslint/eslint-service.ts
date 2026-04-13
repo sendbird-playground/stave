@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { writeFileSync } from "node:fs";
 import { app } from "electron";
+import { Utf8LineBuffer } from "../../shared/utf8-line-buffer";
 
 export interface EslintDiagnostic {
   ruleId: string | null;
@@ -21,6 +22,11 @@ export interface EslintResult {
   detail?: string;
 }
 
+const ESLINT_WORKER_STDIN_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
+const ESLINT_WORKER_STDIN_LINE_MAX_BYTES = 1 * 1024 * 1024;
+const ESLINT_WORKER_STDOUT_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
+const ESLINT_WORKER_STDOUT_LINE_MAX_BYTES = 1 * 1024 * 1024;
+
 // ---------- Worker script (inlined to survive bundling + asar) ----------
 
 const WORKER_CODE = `
@@ -28,6 +34,12 @@ const WORKER_CODE = `
 const path = require("path");
 const lintInstances = new Map();
 const fixInstances = new Map();
+const MAX_STDIN_BUFFER_BYTES = ${ESLINT_WORKER_STDIN_BUFFER_MAX_BYTES};
+const MAX_STDIN_LINE_BYTES = ${ESLINT_WORKER_STDIN_LINE_MAX_BYTES};
+
+function byteLengthUtf8(value) {
+  return Buffer.byteLength(value, "utf8");
+}
 
 function getEslint(rootPath, fix) {
   const cache = fix ? fixInstances : lintInstances;
@@ -71,10 +83,20 @@ let buffer = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", function(chunk) {
   buffer += chunk;
+  if (byteLengthUtf8(buffer) > MAX_STDIN_BUFFER_BYTES) {
+    process.stderr.write("[stave-eslint-worker] stdin buffer overflow\\n");
+    process.exit(1);
+    return;
+  }
   let i;
   while ((i = buffer.indexOf("\\n")) !== -1) {
     const line = buffer.slice(0, i);
     buffer = buffer.slice(i + 1);
+    if (byteLengthUtf8(line) > MAX_STDIN_LINE_BYTES) {
+      process.stderr.write("[stave-eslint-worker] stdin line overflow\\n");
+      process.exit(1);
+      return;
+    }
     if (!line.trim()) continue;
     try {
       const req = JSON.parse(line);
@@ -109,7 +131,8 @@ interface WorkerState {
   child: ChildProcess;
   pending: Map<number, PendingRequest>;
   nextId: number;
-  buffer: string;
+  lineBuffer: Utf8LineBuffer;
+  exitDetail: string | null;
 }
 
 const workers = new Map<string, WorkerState>();
@@ -139,16 +162,30 @@ function getOrSpawnWorker(rootPath: string): WorkerState {
     child,
     pending: new Map(),
     nextId: 1,
-    buffer: "",
+    lineBuffer: new Utf8LineBuffer({
+      label: "eslint-worker stdout",
+      maxBufferBytes: ESLINT_WORKER_STDOUT_BUFFER_MAX_BYTES,
+      maxLineBytes: ESLINT_WORKER_STDOUT_LINE_MAX_BYTES,
+    }),
+    exitDetail: null,
   };
 
   child.stdout!.setEncoding("utf8");
   child.stdout!.on("data", (chunk: string) => {
-    state.buffer += chunk;
-    let idx: number;
-    while ((idx = state.buffer.indexOf("\n")) !== -1) {
-      const line = state.buffer.slice(0, idx);
-      state.buffer = state.buffer.slice(idx + 1);
+    let lines: string[];
+    try {
+      lines = state.lineBuffer.append(chunk);
+    } catch (error) {
+      state.exitDetail = error instanceof Error ? error.message : String(error);
+      for (const req of state.pending.values()) {
+        clearTimeout(req.timer);
+        req.resolve({ ok: false, detail: state.exitDetail });
+      }
+      state.pending.clear();
+      child.kill();
+      return;
+    }
+    for (const line of lines) {
       if (!line.trim()) continue;
       try {
         const msg = JSON.parse(line);
@@ -171,9 +208,10 @@ function getOrSpawnWorker(rootPath: string): WorkerState {
   });
 
   child.on("exit", () => {
+    const detail = state.exitDetail ?? "Worker exited unexpectedly";
     for (const req of state.pending.values()) {
       clearTimeout(req.timer);
-      req.resolve({ ok: false, detail: "Worker exited unexpectedly" });
+      req.resolve({ ok: false, detail });
     }
     state.pending.clear();
     workers.delete(rootPath);

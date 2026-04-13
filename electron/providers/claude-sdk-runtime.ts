@@ -53,6 +53,10 @@ import {
   probeExecutableVersion,
   summarizePathHead,
 } from "./runtime-shared";
+import {
+  createBoundedBridgeEventCollector,
+  measureBridgeEventBytes,
+} from "./provider-buffering";
 
 /** SDK-level permission modes accepted by the claude-agent-sdk query() API. */
 type ClaudePermissionMode =
@@ -111,6 +115,20 @@ const CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES = new Set([
   "stave_set_workspace_custom_field",
   "stave_remove_workspace_custom_field",
 ]);
+const CLAUDE_EVENT_RETAINED_BYTES_MAX = 2 * 1024 * 1024;
+const CLAUDE_OVERFLOW_TAIL_EVENTS: BridgeEvent[] = [
+  {
+    type: "error",
+    message:
+      "Claude turn output was truncated in non-stream replay because the retained snapshot limit was exceeded.",
+    recoverable: true,
+  },
+  { type: "done", stop_reason: "output_overflow" },
+];
+const CLAUDE_OVERFLOW_TAIL_BYTES = CLAUDE_OVERFLOW_TAIL_EVENTS.reduce(
+  (total, event) => total + measureBridgeEventBytes(event),
+  0,
+);
 const CLAUDE_MUTATING_BASH_PATTERNS = [
   /(^|[;&|]\s*)(mkdir|mktemp|rm|rmdir|mv|cp|install|touch|chmod|chown|ln|truncate)\b/i,
   /(^|[;&|]\s*)git\s+(add|am|apply|checkout|cherry-pick|clean|commit|merge|rebase|reset|restore|revert|rm|stash)\b/i,
@@ -1743,7 +1761,11 @@ export async function streamClaudeWithSdk(
       taskId: args.taskId,
       cwd: runtimeCwd,
     });
-    const events: BridgeEvent[] = [];
+    const eventCollector = createBoundedBridgeEventCollector({
+      maxBytes: CLAUDE_EVENT_RETAINED_BYTES_MAX,
+      reserveTailBytes: CLAUDE_OVERFLOW_TAIL_BYTES,
+    });
+    const events = eventCollector.events;
     const diffTracker = await createTurnDiffTracker({ cwd: runtimeCwd });
     args.registerApprovalResponder?.(({ requestId, approved }) => {
       const resolver = pendingApprovalResolvers.get(requestId);
@@ -1853,7 +1875,7 @@ export async function streamClaudeWithSdk(
               requestId,
               questions,
             };
-            events.push(userInputEvent);
+            eventCollector.append(userInputEvent);
             args.onEvent?.(userInputEvent);
 
             const response = await waitForClaudeToolDecision({
@@ -1896,7 +1918,7 @@ export async function streamClaudeWithSdk(
               blockedPath: options.blockedPath,
             }),
           };
-          events.push(approvalEvent);
+          eventCollector.append(approvalEvent);
           args.onEvent?.(approvalEvent);
 
           const approved = await waitForClaudeToolDecision({
@@ -1964,7 +1986,7 @@ export async function streamClaudeWithSdk(
           })),
         });
         const persistedEvents = [...diffEvents, ...fallbackEvents];
-        events.push(...persistedEvents);
+        eventCollector.appendMany(persistedEvents);
         persistedEvents.forEach((event) => args.onEvent?.(event));
         continue;
       }
@@ -1989,7 +2011,7 @@ export async function streamClaudeWithSdk(
             toolUseId,
             content: summary,
           };
-          events.push(progressEvent);
+          eventCollector.append(progressEvent);
           args.onEvent?.(progressEvent);
         }
         continue;
@@ -2050,21 +2072,26 @@ export async function streamClaudeWithSdk(
       for (const event of normalizedEvents) {
         subagentTracker.trackEvent(event);
       }
-      events.push(...normalizedEvents);
+      eventCollector.appendMany(normalizedEvents);
       for (const event of normalizedEvents) {
         args.onEvent?.(event);
       }
     }
 
-    if (events[events.length - 1]?.type !== "done") {
       const done: BridgeEvent = finalStopReason
         ? { type: "done", stop_reason: finalStopReason }
         : { type: "done" };
-      events.push(done);
-      args.onEvent?.(done);
-    }
+      if (eventCollector.overflowed) {
+        for (const overflowEvent of CLAUDE_OVERFLOW_TAIL_EVENTS) {
+          eventCollector.appendTail(overflowEvent);
+        }
+        args.onEvent?.(done);
+      } else if (events[events.length - 1]?.type !== "done") {
+        eventCollector.appendTail(done);
+        args.onEvent?.(done);
+      }
 
-    return events;
+      return events;
   } catch (error) {
     // Distinguish abort (user-initiated cancel / stream.close()) from real failures.
     const isAbort =

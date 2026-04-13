@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   appendBoundedBridgeEvent,
   appendBoundedText,
+  createBoundedBridgeEventCollector,
   dropBufferedBridgeEvents,
   measureBridgeEventBytes,
 } from "../electron/providers/provider-buffering";
@@ -144,5 +145,71 @@ describe("dropBufferedBridgeEvents", () => {
 
     expect(events).toEqual([second]);
     expect(nextRetainedBytes).toBe(measureBridgeEventBytes(second));
+  });
+});
+
+describe("createBoundedBridgeEventCollector", () => {
+  test("preserves event order and marks overflow instead of dropping earlier events", () => {
+    const firstEvent: BridgeEvent = { type: "text", text: "alpha" };
+    const largeEvent: BridgeEvent = { type: "text", text: "gamma".repeat(32) };
+    const collector = createBoundedBridgeEventCollector({
+      maxBytes: measureBridgeEventBytes(firstEvent) + measureBridgeEventBytes({
+        type: "error",
+        message: "overflow",
+        recoverable: true,
+      }) + measureBridgeEventBytes({ type: "done" }),
+      reserveTailBytes:
+        measureBridgeEventBytes({
+          type: "error",
+          message: "overflow",
+          recoverable: true,
+        }) + measureBridgeEventBytes({ type: "done" }),
+    });
+
+    collector.append(firstEvent);
+    collector.append(largeEvent);
+    collector.appendTail({
+      type: "error",
+      message: "overflow",
+      recoverable: true,
+    });
+    collector.appendTail({ type: "done" });
+
+    expect(collector.events[0]).toEqual(firstEvent);
+    expect(collector.events.at(-2)).toEqual({
+      type: "error",
+      message: "overflow",
+      recoverable: true,
+    });
+    expect(collector.events.at(-1)).toEqual({ type: "done" });
+    expect(collector.overflowed).toBe(true);
+    expect(collector.retainedBytes).toBeLessThanOrEqual(
+      measureBridgeEventBytes(firstEvent) +
+        measureBridgeEventBytes({
+          type: "error",
+          message: "overflow",
+          recoverable: true,
+        }) +
+        measureBridgeEventBytes({ type: "done" }),
+    );
+  });
+
+  test("truncates oversized events to preserve event boundaries", () => {
+    const collector = createBoundedBridgeEventCollector({
+      maxBytes: 256,
+    });
+
+    collector.append({
+      type: "text",
+      text: "alpha ".repeat(64),
+    });
+
+    expect(collector.overflowed).toBe(false);
+    expect(collector.events).toHaveLength(1);
+    expect(collector.events[0]?.type).toBe("text");
+    expect((collector.events[0] as Extract<BridgeEvent, { type: "text" }>).text).toContain(
+      "<truncated>",
+    );
+    expect(collector.retainedBytes).toBeLessThanOrEqual(256);
   });
 });

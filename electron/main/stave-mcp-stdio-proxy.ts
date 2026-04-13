@@ -18,10 +18,10 @@
  *   stderr → diagnostic messages (never part of the MCP stream)
  */
 
-import { createInterface } from "node:readline";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { Utf8LineBuffer } from "../shared/utf8-line-buffer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,6 +39,8 @@ interface StaveManifest {
 const MANIFEST_CANDIDATES = [
   path.join(homedir(), ".stave", "local-mcp.json"),
 ];
+const MCP_PROXY_STDIN_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
+const MCP_PROXY_STDIN_LINE_MAX_BYTES = 1 * 1024 * 1024;
 
 function writeLine(stream: NodeJS.WriteStream, line: string) {
   return new Promise<void>((resolve, reject) => {
@@ -141,48 +143,65 @@ async function main() {
   const { url, token } = manifest;
   process.stderr.write(`[stave-mcp-stdio-proxy] connected → ${url}\n`);
 
-  const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
-
-  rl.on("line", (line) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-
-    void (async () => {
-      let body: Record<string, unknown>;
-      try {
-        body = JSON.parse(trimmed) as Record<string, unknown>;
-      } catch {
-        // Silently drop unparseable lines — not valid JSON-RPC
-        return;
-      }
-
-      pendingRequests += 1;
-      try {
-        const result = await postToMcp(url, token, body);
-        if (result !== null) {
-          await writeLine(process.stdout, JSON.stringify(result));
-        }
-      } catch (error) {
-        // Only emit an error response for requests (messages that carry an id).
-        // Notifications (no id) must not receive a response per JSON-RPC spec.
-        if ("id" in body) {
-          const errorResponse = {
-            jsonrpc: "2.0",
-            error: { code: -32603, message: String(error) },
-            id: body.id ?? null,
-          };
-          await writeLine(process.stdout, JSON.stringify(errorResponse));
-        } else {
-          process.stderr.write(`[stave-mcp-stdio-proxy] notification error: ${String(error)}\n`);
-        }
-      } finally {
-        pendingRequests -= 1;
-        maybeExit();
-      }
-    })();
+  const stdinLineBuffer = new Utf8LineBuffer({
+    label: "stave-mcp-stdio-proxy stdin",
+    maxBufferBytes: MCP_PROXY_STDIN_BUFFER_MAX_BYTES,
+    maxLineBytes: MCP_PROXY_STDIN_LINE_MAX_BYTES,
   });
 
-  rl.on("close", () => {
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (chunk: string) => {
+    let lines: string[];
+    try {
+      lines = stdinLineBuffer.append(chunk);
+    } catch (error) {
+      process.stderr.write(`[stave-mcp-stdio-proxy] ${String(error)}\n`);
+      process.exit(1);
+      return;
+    }
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      void (async () => {
+        let body: Record<string, unknown>;
+        try {
+          body = JSON.parse(trimmed) as Record<string, unknown>;
+        } catch {
+          // Silently drop unparseable lines — not valid JSON-RPC
+          return;
+        }
+
+        pendingRequests += 1;
+        try {
+          const result = await postToMcp(url, token, body);
+          if (result !== null) {
+            await writeLine(process.stdout, JSON.stringify(result));
+          }
+        } catch (error) {
+          // Only emit an error response for requests (messages that carry an id).
+          // Notifications (no id) must not receive a response per JSON-RPC spec.
+          if ("id" in body) {
+            const errorResponse = {
+              jsonrpc: "2.0",
+              error: { code: -32603, message: String(error) },
+              id: body.id ?? null,
+            };
+            await writeLine(process.stdout, JSON.stringify(errorResponse));
+          } else {
+            process.stderr.write(`[stave-mcp-stdio-proxy] notification error: ${String(error)}\n`);
+          }
+        } finally {
+          pendingRequests -= 1;
+          maybeExit();
+        }
+      })();
+    }
+  });
+
+  process.stdin.on("close", () => {
     stdinClosed = true;
     maybeExit();
   });

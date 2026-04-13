@@ -16,6 +16,7 @@ import {
 } from "./codex-app-server-runtime";
 import {
   appendBoundedBridgeEvent,
+  createBoundedBridgeEventCollector,
   dropBufferedBridgeEvents,
 } from "./provider-buffering";
 import { getProviderConnectedToolStatus } from "./connected-tool-status";
@@ -44,6 +45,7 @@ const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000)
 const ACTIVE_STREAM_TTL_MS = 15 * 60 * 1000;
 const COMPLETED_STREAM_TTL_MS = 60 * 1000;
 const ACTIVE_STREAM_RETAINED_BYTES_MAX = 512 * 1024;
+const BATCH_TURN_RETAINED_BYTES_MAX = 2 * 1024 * 1024;
 const DEFAULT_PROVIDER_TASK_KEY = "default";
 type ActiveRuntimeSession = {
   turnId: string;
@@ -412,9 +414,16 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     // Injected into the Pre-processor so it can call any provider without a
     // circular module dependency.
     const runTurnBatch = async (batchArgs: StreamTurnArgs): Promise<BridgeEvent[]> => {
-      const collected: BridgeEvent[] = [];
-      await runProviderTurn({ ...batchArgs, onEvent: (e) => collected.push(e) });
-      return collected;
+      const collected = createBoundedBridgeEventCollector({
+        maxBytes: BATCH_TURN_RETAINED_BYTES_MAX,
+      });
+      await runProviderTurn({ ...batchArgs, onEvent: (event) => collected.append(event) });
+      if (collected.overflowed) {
+        throw new Error(
+          `Provider batch output exceeded ${BATCH_TURN_RETAINED_BYTES_MAX} bytes`,
+        );
+      }
+      return collected.events.slice();
     };
 
     const plan = await runPreprocessor({
