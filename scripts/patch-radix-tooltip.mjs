@@ -25,11 +25,11 @@ if (!fs.existsSync(tooltipBundlePath) || !fs.existsSync(tooltipPackageJsonPath))
   process.exit(0);
 }
 
-const tooltipPackage = JSON.parse(fs.readFileSync(tooltipPackageJsonPath, "utf8")) as {
-  version?: string;
-};
+const tooltipPackage = JSON.parse(fs.readFileSync(tooltipPackageJsonPath, "utf8"));
 const source = fs.readFileSync(tooltipBundlePath, "utf8");
-const installedVersion = tooltipPackage.version ?? "unknown";
+const installedVersion = typeof tooltipPackage?.version === "string"
+  ? tooltipPackage.version
+  : "unknown";
 
 if (
   source.includes("const triggerRef = React.useRef(null);")
