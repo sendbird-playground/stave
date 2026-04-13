@@ -212,4 +212,47 @@ describe("createBoundedBridgeEventCollector", () => {
     );
     expect(collector.retainedBytes).toBeLessThanOrEqual(256);
   });
+
+  test("truncates multi-field user input events without forcing overflow", () => {
+    const collector = createBoundedBridgeEventCollector({
+      maxBytes: 512,
+    });
+
+    collector.append({
+      type: "user_input",
+      toolName: "AskUserQuestion",
+      requestId: "request-1",
+      questions: [
+        {
+          header: "Question Header ".repeat(8),
+          question: "Question body ".repeat(16),
+          options: [
+            {
+              label: "Option A ".repeat(10),
+              description: "Option description ".repeat(12),
+            },
+            {
+              label: "Option B ".repeat(10),
+              description: "Option description ".repeat(12),
+            },
+          ],
+        },
+        {
+          header: "Second Header ".repeat(8),
+          question: "Second question body ".repeat(16),
+          options: [
+            {
+              label: "Option C ".repeat(10),
+              description: "Option description ".repeat(12),
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(collector.overflowed).toBe(false);
+    expect(collector.events).toHaveLength(1);
+    expect(collector.events[0]?.type).toBe("user_input");
+    expect(collector.retainedBytes).toBeLessThanOrEqual(512);
+  });
 });

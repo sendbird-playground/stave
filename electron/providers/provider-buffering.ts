@@ -351,13 +351,8 @@ function truncateBridgeEventToFit(args: {
     return null;
   }
 
-  const maxIterations = accessors.length * 2 + 4;
-  let iterations = 0;
-  while (measureBridgeEventBytes(candidate) > args.maxBytes) {
-    if (++iterations > maxIterations) {
-      return null;
-    }
-
+  let previousBytes = measureBridgeEventBytes(candidate);
+  while (previousBytes > args.maxBytes) {
     const nextAccessor = accessors
       .map((accessor) => ({
         accessor,
@@ -378,10 +373,15 @@ function truncateBridgeEventToFit(args: {
 
     if (nextValue === nextAccessor.accessor.get()) {
       nextAccessor.accessor.set("");
-      continue;
+    } else {
+      nextAccessor.accessor.set(nextValue);
     }
 
-    nextAccessor.accessor.set(nextValue);
+    const nextBytes = measureBridgeEventBytes(candidate);
+    if (nextBytes >= previousBytes) {
+      return null;
+    }
+    previousBytes = nextBytes;
   }
 
   return candidate;

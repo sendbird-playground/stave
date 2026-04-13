@@ -45,6 +45,7 @@ const TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS = 2_000;
 
 const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
 const TERMINAL_OUTPUT_CHUNKS_MAX_BYTES = 2 * 1024 * 1024;
+const TERMINAL_PENDING_PUSH_MAX_BYTES = 2 * 1024 * 1024;
 const TERMINAL_PUSH_FLUSH_MAX_BYTES = 128 * 1024;
 const TERMINAL_SCREEN_STATE_MAX_BYTES = 256 * 1024;
 const TERMINAL_SCREEN_STATE_SCROLLBACK_CANDIDATES = [
@@ -446,13 +447,10 @@ export function createTerminalRuntime(args: {
   }
 
   function bufferPendingPushOutput(session: TerminalSessionEntry) {
-    if (session.pendingPush.length === 0) {
-      return;
-    }
-    appendOutputChunk(session, session.pendingPush.join(""));
-    session.pendingPush.length = 0;
-    session.pendingPushBytes = 0;
-    session.pushScheduled = false;
+    drainPendingPush({
+      session,
+      append: (chunk) => appendOutputChunk(session, chunk),
+    });
   }
 
   function appendBounded(
@@ -510,6 +508,41 @@ export function createTerminalRuntime(args: {
       data,
       TERMINAL_OUTPUT_CHUNKS_MAX_BYTES,
     );
+  }
+
+  function appendPendingPush(session: TerminalSessionEntry, data: string) {
+    appendBounded(
+      session.pendingPush,
+      {
+        get bytes() {
+          return session.pendingPushBytes;
+        },
+        set bytes(v) {
+          session.pendingPushBytes = v;
+        },
+      },
+      data,
+      TERMINAL_PENDING_PUSH_MAX_BYTES,
+    );
+  }
+
+  function drainPendingPush(args: {
+    session: TerminalSessionEntry;
+    append: (chunk: string) => void;
+  }) {
+    const { session } = args;
+    while (session.pendingPush.length > 0) {
+      const nextChunk = session.pendingPush.shift();
+      if (!nextChunk) {
+        continue;
+      }
+      session.pendingPushBytes = Math.max(
+        0,
+        session.pendingPushBytes - byteLengthUtf8(nextChunk),
+      );
+      args.append(nextChunk);
+    }
+    session.pushScheduled = false;
   }
 
   function shiftBoundedOutput(args: { chunks: string[]; maxBytes: number }) {
@@ -879,8 +912,7 @@ export function createTerminalRuntime(args: {
           return;
         }
         if (isPushStreamReady(session)) {
-          session.pendingPush.push(filtered);
-          session.pendingPushBytes += Buffer.byteLength(filtered);
+          appendPendingPush(session, filtered);
           session.peakPendingPushBytes = Math.max(
             session.peakPendingPushBytes,
             session.pendingPushBytes,
@@ -1271,8 +1303,7 @@ export function createTerminalRuntime(args: {
         if (!output) {
           break;
         }
-        session.pendingPush.push(output);
-        session.pendingPushBytes += bytes;
+        appendPendingPush(session, output);
         session.outputChunksBytes = Math.max(
           0,
           session.outputChunksBytes - bytes,
