@@ -946,7 +946,7 @@ function AddButton(props: { onClick: () => void; label?: string }) {
 
 function EmptyHint(props: { children: ReactNode }) {
   return (
-    <p className="px-1.5 py-1.5 text-[13px] text-muted-foreground/50">
+    <p className="px-2 py-1.5 text-[13px] text-muted-foreground/50">
       {props.children}
     </p>
   );
