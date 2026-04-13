@@ -14,8 +14,14 @@ class FakePty {
   destroyed = false;
   killed = false;
   writes: string[] = [];
-  dataListeners: Array<{ listener: (data: string) => void; disposable: FakeDisposable }> = [];
-  exitListeners: Array<{ listener: (event: ExitPayload) => void; disposable: FakeDisposable }> = [];
+  dataListeners: Array<{
+    listener: (data: string) => void;
+    disposable: FakeDisposable;
+  }> = [];
+  exitListeners: Array<{
+    listener: (event: ExitPayload) => void;
+    disposable: FakeDisposable;
+  }> = [];
 
   onData(listener: (data: string) => void) {
     const disposable = new FakeDisposable();
@@ -74,13 +80,17 @@ const fakeSpawnCalls: Array<{
 }> = [];
 
 mock.module("node-pty", () => ({
-  spawn: (command: string, args: string[], options: {
-    name?: string;
-    cols?: number;
-    rows?: number;
-    cwd?: string;
-    env?: Record<string, string>;
-  }) => {
+  spawn: (
+    command: string,
+    args: string[],
+    options: {
+      name?: string;
+      cols?: number;
+      rows?: number;
+      cwd?: string;
+      env?: Record<string, string>;
+    },
+  ) => {
     const fake = new FakePty();
     fakePtys.push(fake);
     fakeSpawnCalls.push({ command, args, options });
@@ -95,10 +105,11 @@ mock.module("../electron/providers/cli-path-env", () => ({
   buildCodexCliEnv: () => ({ PATH: process.env.PATH ?? "" }),
 }));
 
-const { createTerminalRuntime } = await import("../electron/host-service/terminal-runtime");
+const { createTerminalRuntime } =
+  await import("../electron/host-service/terminal-runtime");
 
 const TERMINAL_PUSH_FLUSH_MAX_BYTES = 128 * 1024;
-const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 512 * 1024;
+const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
 
 afterEach(() => {
   fakePtys.length = 0;
@@ -133,8 +144,12 @@ describe("terminal runtime PTY cleanup", () => {
     const result = runtime.closeSession({ sessionId: created.sessionId! });
     expect(result).toEqual({ ok: true });
     expect(fake.destroyed).toBe(true);
-    expect(fake.dataListeners.every((entry) => entry.disposable.disposed)).toBe(true);
-    expect(fake.exitListeners.every((entry) => entry.disposable.disposed)).toBe(true);
+    expect(fake.dataListeners.every((entry) => entry.disposable.disposed)).toBe(
+      true,
+    );
+    expect(fake.exitListeners.every((entry) => entry.disposable.disposed)).toBe(
+      true,
+    );
 
     fake.fireData("late output");
     fake.fireExit({ exitCode: 0 });
@@ -167,7 +182,9 @@ describe("terminal runtime slot lifecycle", () => {
       sessionId: first.sessionId,
     });
     expect(fakePtys).toHaveLength(1);
-    expect(runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" })).toEqual({
+    expect(
+      runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" }),
+    ).toEqual({
       state: "background",
       sessionId: first.sessionId,
     });
@@ -199,7 +216,10 @@ describe("terminal runtime slot lifecycle", () => {
       state: "background",
       sessionId,
     });
-    const attached = await runtime.attachSession({ sessionId, deliveryMode: "push" });
+    const attached = await runtime.attachSession({
+      sessionId,
+      deliveryMode: "push",
+    });
     expect(attached).toEqual({
       ok: true,
       attachmentId: expect.any(String),
@@ -240,7 +260,9 @@ describe("terminal runtime slot lifecycle", () => {
     fake.fireData("hello\r\n");
     fake.fireData("\x1b[2J\x1b[H");
 
-    expect(await runtime.attachSession({ sessionId, deliveryMode: "push" })).toEqual({
+    expect(
+      await runtime.attachSession({ sessionId, deliveryMode: "push" }),
+    ).toEqual({
       ok: true,
       attachmentId: expect.any(String),
       backlog: "hello\r\n\x1b[2J\x1b[H",
@@ -268,7 +290,10 @@ describe("terminal runtime slot lifecycle", () => {
     const fake = fakePtys[0]!;
 
     fake.fireData("\x1b[0c");
-    const attached = await runtime.attachSession({ sessionId, deliveryMode: "push" });
+    const attached = await runtime.attachSession({
+      sessionId,
+      deliveryMode: "push",
+    });
     runtime.resumeSessionStream({
       sessionId,
       attachmentId: attached.attachmentId!,
@@ -337,16 +362,18 @@ describe("terminal runtime slot lifecycle", () => {
     });
 
     const sessionId = created.sessionId!;
-    fakePtys[0]!.fireData("x".repeat(TERMINAL_BACKGROUND_BUFFER_MAX_BYTES + 4096));
+    fakePtys[0]!.fireData(
+      "x".repeat(TERMINAL_BACKGROUND_BUFFER_MAX_BYTES + 4096),
+    );
 
     const attached = await runtime.attachSession({
       sessionId,
       deliveryMode: "push",
     });
 
-    expect(Buffer.byteLength(attached.backlog ?? "", "utf8")).toBeLessThanOrEqual(
-      TERMINAL_BACKGROUND_BUFFER_MAX_BYTES,
-    );
+    expect(
+      Buffer.byteLength(attached.backlog ?? "", "utf8"),
+    ).toBeLessThanOrEqual(TERMINAL_BACKGROUND_BUFFER_MAX_BYTES);
   });
 
   test("preserves exited slot state for background sessions until the slot is recreated", () => {
@@ -427,7 +454,9 @@ describe("terminal runtime slot lifecycle", () => {
         attachmentId: firstAttach.attachmentId!,
       }),
     ).toEqual({ ok: true });
-    expect(runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" })).toEqual({
+    expect(
+      runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" }),
+    ).toEqual({
       state: "running",
       sessionId,
     });
@@ -438,7 +467,9 @@ describe("terminal runtime slot lifecycle", () => {
         attachmentId: secondAttach.attachmentId!,
       }),
     ).toEqual({ ok: true });
-    expect(runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" })).toEqual({
+    expect(
+      runtime.getSlotState({ slotKey: "terminal:workspace-1:tab-1" }),
+    ).toEqual({
       state: "background",
       sessionId,
     });
@@ -466,7 +497,12 @@ describe("terminal runtime slot lifecycle", () => {
     expect(created.nativeSessionId).toBeTruthy();
     expect(fakeSpawnCalls.at(-1)).toEqual({
       command: "/tmp/fake-claude",
-      args: ["--permission-mode", "auto", "--session-id", created.nativeSessionId!],
+      args: [
+        "--permission-mode",
+        "auto",
+        "--session-id",
+        created.nativeSessionId!,
+      ],
       options: expect.objectContaining({
         cwd: "/tmp/workspace",
       }),
@@ -502,7 +538,12 @@ describe("terminal runtime slot lifecycle", () => {
     expect(created.ok).toBe(true);
     expect(fakeSpawnCalls.at(-1)).toEqual({
       command: "/tmp/fake-claude",
-      args: ["--permission-mode", "acceptEdits", "--session-id", created.nativeSessionId!],
+      args: [
+        "--permission-mode",
+        "acceptEdits",
+        "--session-id",
+        created.nativeSessionId!,
+      ],
       options: expect.objectContaining({
         cwd: "/tmp/workspace",
       }),

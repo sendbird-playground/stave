@@ -73,7 +73,8 @@ const CODEX_APP_SERVER_TOOL_OUTPUT_BUFFER_MAX_BYTES = 256 * 1024;
 const CODEX_APP_SERVER_PARTIAL_TOOL_OUTPUT_MAX_BYTES = 128 * 1024;
 const CODEX_APP_SERVER_FINAL_TOOL_OUTPUT_MAX_BYTES = 256 * 1024;
 const CODEX_APP_SERVER_PLAN_EVENT_MAX_BYTES = 64 * 1024;
-const CODEX_APP_SERVER_PARTIAL_EMIT_THROTTLE_MS = 200;
+const CODEX_APP_SERVER_PARTIAL_PLAN_EMIT_THROTTLE_MS = 80;
+const CODEX_APP_SERVER_PARTIAL_TOOL_EMIT_THROTTLE_MS = 200;
 const CODEX_APP_SERVER_OVERFLOW_TAIL_EVENTS: BridgeEvent[] = [
   {
     type: "error",
@@ -252,10 +253,7 @@ function appendBoundedCodexBuffer(args: {
   });
 }
 
-function truncateCodexSnapshot(args: {
-  value: string;
-  maxBytes: number;
-}) {
+function truncateCodexSnapshot(args: { value: string; maxBytes: number }) {
   return truncateBufferedText({
     value: args.value,
     maxBytes: args.maxBytes,
@@ -558,12 +556,19 @@ export function createCodexAppServerElicitationPauseController(args: {
     return next;
   };
 
-  const logFailure = (phase: "pause" | "resume", requestId: string, error: unknown) => {
-    console.warn(`[provider-runtime] Codex app-server elicitation ${phase} failed`, {
-      threadId: args.threadId,
-      requestId,
-      error: toErrorMessage(error),
-    });
+  const logFailure = (
+    phase: "pause" | "resume",
+    requestId: string,
+    error: unknown,
+  ) => {
+    console.warn(
+      `[provider-runtime] Codex app-server elicitation ${phase} failed`,
+      {
+        threadId: args.threadId,
+        requestId,
+        error: toErrorMessage(error),
+      },
+    );
   };
 
   const logState = (
@@ -684,7 +689,8 @@ export function summarizeCodexAppServerDebugMessage(message: JsonRpcMessage) {
       ? message.id
       : undefined,
     method: typeof message.method === "string" ? message.method : undefined,
-    threadId: typeof params?.threadId === "string" ? params.threadId : undefined,
+    threadId:
+      typeof params?.threadId === "string" ? params.threadId : undefined,
     turnId:
       typeof params?.turnId === "string"
         ? params.turnId
@@ -1215,7 +1221,9 @@ class CodexAppServerClient {
         return;
       }
       stdoutBuffer += chunk;
-      if (byteLengthUtf8(stdoutBuffer) > CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES) {
+      if (
+        byteLengthUtf8(stdoutBuffer) > CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES
+      ) {
         this.teardownProcess(
           `Codex App Server protocol overflow: stdout buffer exceeded ${CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES} bytes.`,
         );
@@ -1225,9 +1233,7 @@ class CodexAppServerClient {
       while (newlineIndex >= 0) {
         const rawLine = stdoutBuffer.slice(0, newlineIndex);
         stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
-        const line = rawLine.endsWith("\r")
-          ? rawLine.slice(0, -1)
-          : rawLine;
+        const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
         if (byteLengthUtf8(line) > CODEX_APP_SERVER_STDOUT_LINE_MAX_BYTES) {
           this.teardownProcess(
             `Codex App Server protocol overflow: line exceeded ${CODEX_APP_SERVER_STDOUT_LINE_MAX_BYTES} bytes.`,
@@ -2027,7 +2033,10 @@ export async function streamCodexWithAppServer(
         planBuffers.set(itemId, next);
         const now = Date.now();
         const lastEmitAt = planLastEmitAt.get(itemId) ?? 0;
-        if (now - lastEmitAt >= CODEX_APP_SERVER_PARTIAL_EMIT_THROTTLE_MS) {
+        if (
+          now - lastEmitAt >=
+          CODEX_APP_SERVER_PARTIAL_PLAN_EMIT_THROTTLE_MS
+        ) {
           planLastEmitAt.set(itemId, now);
           emitBridgeEvent({
             type: "plan_ready",
@@ -2055,7 +2064,10 @@ export async function streamCodexWithAppServer(
         toolOutputBuffers.set(itemId, next);
         const now = Date.now();
         const lastEmitAt = toolOutputLastEmitAt.get(itemId) ?? 0;
-        if (now - lastEmitAt >= CODEX_APP_SERVER_PARTIAL_EMIT_THROTTLE_MS) {
+        if (
+          now - lastEmitAt >=
+          CODEX_APP_SERVER_PARTIAL_TOOL_EMIT_THROTTLE_MS
+        ) {
           toolOutputLastEmitAt.set(itemId, now);
           emitBridgeEvent({
             type: "tool_result",
@@ -2189,9 +2201,9 @@ export async function streamCodexWithAppServer(
             if (!streamedReasoningIds.has(itemId)) {
               const text = truncateCodexSnapshot({
                 value: [
-                ...(reasoningItem.summary ?? []),
-                ...(reasoningItem.content ?? []),
-              ].join("\n"),
+                  ...(reasoningItem.summary ?? []),
+                  ...(reasoningItem.content ?? []),
+                ].join("\n"),
                 maxBytes: CODEX_APP_SERVER_MESSAGE_BUFFER_MAX_BYTES,
               });
               if (text.trim().length > 0) {

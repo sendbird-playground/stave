@@ -43,11 +43,13 @@ const TERMINAL_SESSION_CLOSE_TIMEOUT_MS = 5_000;
 const TERMINAL_PUSH_BACKLOG_WARN_BYTES = 128 * 1024;
 const TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS = 2_000;
 
-const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 512 * 1024;
-const TERMINAL_OUTPUT_CHUNKS_MAX_BYTES = 512 * 1024;
+const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
+const TERMINAL_OUTPUT_CHUNKS_MAX_BYTES = 2 * 1024 * 1024;
 const TERMINAL_PUSH_FLUSH_MAX_BYTES = 128 * 1024;
 const TERMINAL_SCREEN_STATE_MAX_BYTES = 256 * 1024;
-const TERMINAL_SCREEN_STATE_SCROLLBACK_CANDIDATES = [512, 256, 128, 64, 32, 0] as const;
+const TERMINAL_SCREEN_STATE_SCROLLBACK_CANDIDATES = [
+  512, 256, 128, 64, 32, 0,
+] as const;
 const CODEX_SESSION_DISCOVERY_POLL_MS = 500;
 const CODEX_SESSION_DISCOVERY_MAX_ATTEMPTS = 60;
 const CODEX_SESSION_DISCOVERY_LOOKBACK_MS = 15_000;
@@ -202,7 +204,10 @@ export function createTerminalRuntime(args: {
         codexSessionFileClaimByPath.delete(filePath);
       }
     }
-    for (const [nativeSessionId, ownerSessionId] of codexSessionIdClaimByNativeId) {
+    for (const [
+      nativeSessionId,
+      ownerSessionId,
+    ] of codexSessionIdClaimByNativeId) {
       if (ownerSessionId === sessionId) {
         codexSessionIdClaimByNativeId.delete(nativeSessionId);
       }
@@ -328,7 +333,11 @@ export function createTerminalRuntime(args: {
 
     const scan = () => {
       const currentSession = sessions.get(args.sessionId);
-      if (!currentSession || currentSession.closing || currentSession.nativeSessionId) {
+      if (
+        !currentSession ||
+        currentSession.closing ||
+        currentSession.nativeSessionId
+      ) {
         stop();
         return;
       }
@@ -338,9 +347,11 @@ export function createTerminalRuntime(args: {
         earliestMtimeMs: args.startedAtMs - CODEX_SESSION_DISCOVERY_LOOKBACK_MS,
       });
 
-      let bestMatch:
-        | { filePath: string; nativeSessionId: string; deltaMs: number }
-        | null = null;
+      let bestMatch: {
+        filePath: string;
+        nativeSessionId: string;
+        deltaMs: number;
+      } | null = null;
 
       for (const filePath of candidates) {
         const claimedBy = codexSessionFileClaimByPath.get(filePath);
@@ -360,7 +371,10 @@ export function createTerminalRuntime(args: {
         const claimedNativeSessionId = codexSessionIdClaimByNativeId.get(
           meta.nativeSessionId,
         );
-        if (claimedNativeSessionId && claimedNativeSessionId !== args.sessionId) {
+        if (
+          claimedNativeSessionId &&
+          claimedNativeSessionId !== args.sessionId
+        ) {
           continue;
         }
         const deltaMs = Math.abs(meta.timestampMs - args.startedAtMs);
@@ -390,10 +404,7 @@ export function createTerminalRuntime(args: {
       }
     };
 
-    const intervalId = setInterval(
-      scan,
-      CODEX_SESSION_DISCOVERY_POLL_MS,
-    );
+    const intervalId = setInterval(scan, CODEX_SESSION_DISCOVERY_POLL_MS);
     session.disposeNativeSessionDiscovery = stop;
     scan();
   }
@@ -501,10 +512,7 @@ export function createTerminalRuntime(args: {
     );
   }
 
-  function shiftBoundedOutput(args: {
-    chunks: string[];
-    maxBytes: number;
-  }) {
+  function shiftBoundedOutput(args: { chunks: string[]; maxBytes: number }) {
     if (args.maxBytes <= 0 || args.chunks.length === 0) {
       return { output: "", bytes: 0 };
     }
@@ -668,7 +676,10 @@ export function createTerminalRuntime(args: {
     if (!output) {
       return session.lastPushWritePromise ?? Promise.resolve();
     }
-    session.pendingPushBytes = Math.max(0, session.pendingPushBytes - outputBytes);
+    session.pendingPushBytes = Math.max(
+      0,
+      session.pendingPushBytes - outputBytes,
+    );
     session.pushWriteInFlight = true;
     const pushPromise = emitEvent("terminal.output", { sessionId, output })
       .catch((error) => {
@@ -982,7 +993,8 @@ export function createTerminalRuntime(args: {
         };
       }
       const nativeSessionId = requestedNativeSessionId || randomUUID();
-      const claudePermissionMode = args.runtimeOptions?.claudePermissionMode ?? "auto";
+      const claudePermissionMode =
+        args.runtimeOptions?.claudePermissionMode ?? "auto";
       const env = buildClaudeCliEnv({ executablePath });
       return {
         ok: true,
@@ -1261,7 +1273,10 @@ export function createTerminalRuntime(args: {
         }
         session.pendingPush.push(output);
         session.pendingPushBytes += bytes;
-        session.outputChunksBytes = Math.max(0, session.outputChunksBytes - bytes);
+        session.outputChunksBytes = Math.max(
+          0,
+          session.outputChunksBytes - bytes,
+        );
       }
       session.peakPendingPushBytes = Math.max(
         session.peakPendingPushBytes,

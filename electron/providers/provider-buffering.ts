@@ -52,11 +52,11 @@ export function shouldReplaceBufferedBridgeEvent(args: {
     return false;
   }
   if (
-    next.type === "tool_result"
-    && next.isPartial
-    && previous.type === "tool_result"
-    && previous.isPartial
-    && previous.tool_use_id === next.tool_use_id
+    next.type === "tool_result" &&
+    next.isPartial &&
+    previous.type === "tool_result" &&
+    previous.isPartial &&
+    previous.tool_use_id === next.tool_use_id
   ) {
     return true;
   }
@@ -217,28 +217,34 @@ function getBridgeEventStringAccessors(event: BridgeEvent) {
               },
             },
           ];
-          const optionAccessors = (question.options ?? []).flatMap((_, optionIndex) => [
-            {
-              get: () =>
-                event.questions[questionIndex]?.options[optionIndex]?.label ?? "",
-              set: (value: string) => {
-                const option = event.questions[questionIndex]?.options[optionIndex];
-                if (option) {
-                  option.label = value;
-                }
+          const optionAccessors = (question.options ?? []).flatMap(
+            (_, optionIndex) => [
+              {
+                get: () =>
+                  event.questions[questionIndex]?.options[optionIndex]?.label ??
+                  "",
+                set: (value: string) => {
+                  const option =
+                    event.questions[questionIndex]?.options[optionIndex];
+                  if (option) {
+                    option.label = value;
+                  }
+                },
               },
-            },
-            {
-              get: () =>
-                event.questions[questionIndex]?.options[optionIndex]?.description ?? "",
-              set: (value: string) => {
-                const option = event.questions[questionIndex]?.options[optionIndex];
-                if (option) {
-                  option.description = value;
-                }
+              {
+                get: () =>
+                  event.questions[questionIndex]?.options[optionIndex]
+                    ?.description ?? "",
+                set: (value: string) => {
+                  const option =
+                    event.questions[questionIndex]?.options[optionIndex];
+                  if (option) {
+                    option.description = value;
+                  }
+                },
               },
-            },
-          ]);
+            ],
+          );
           return [...questionAccessors, ...optionAccessors];
         }),
       ];
@@ -345,7 +351,13 @@ function truncateBridgeEventToFit(args: {
     return null;
   }
 
+  const maxIterations = accessors.length * 2 + 4;
+  let iterations = 0;
   while (measureBridgeEventBytes(candidate) > args.maxBytes) {
+    if (++iterations > maxIterations) {
+      return null;
+    }
+
     const nextAccessor = accessors
       .map((accessor) => ({
         accessor,
