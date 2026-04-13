@@ -25,6 +25,11 @@ import {
   unbindTerminalSessionSlotBySlotKey,
 } from "../main/terminal-session-slot-registry";
 import { resolveCommandCwd } from "../main/utils/command";
+import {
+  byteLengthUtf8,
+  takeUtf8PrefixByBytes,
+  takeUtf8SuffixByBytes,
+} from "../shared/bounded-text";
 import type {
   HostServiceEventMap,
   HostTerminalCreateSessionResult,
@@ -38,8 +43,11 @@ const TERMINAL_SESSION_CLOSE_TIMEOUT_MS = 5_000;
 const TERMINAL_PUSH_BACKLOG_WARN_BYTES = 128 * 1024;
 const TERMINAL_PUSH_BACKLOG_LOG_INTERVAL_MS = 2_000;
 
-const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
-const TERMINAL_OUTPUT_CHUNKS_MAX_BYTES = 8 * 1024 * 1024;
+const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 512 * 1024;
+const TERMINAL_OUTPUT_CHUNKS_MAX_BYTES = 512 * 1024;
+const TERMINAL_PUSH_FLUSH_MAX_BYTES = 128 * 1024;
+const TERMINAL_SCREEN_STATE_MAX_BYTES = 256 * 1024;
+const TERMINAL_SCREEN_STATE_SCROLLBACK_CANDIDATES = [512, 256, 128, 64, 32, 0] as const;
 const CODEX_SESSION_DISCOVERY_POLL_MS = 500;
 const CODEX_SESSION_DISCOVERY_MAX_ATTEMPTS = 60;
 const CODEX_SESSION_DISCOVERY_LOOKBACK_MS = 15_000;
@@ -442,11 +450,22 @@ export function createTerminalRuntime(args: {
     data: string,
     maxBytes: number,
   ) {
-    buffer.push(data);
-    tracker.bytes += Buffer.byteLength(data);
-    while (tracker.bytes > maxBytes && buffer.length > 1) {
+    let nextData = data;
+    const nextDataBytes = byteLengthUtf8(nextData);
+    if (nextDataBytes > maxBytes) {
+      nextData = takeUtf8SuffixByBytes({
+        value: nextData,
+        maxBytes,
+      }).suffix;
+      buffer.length = 0;
+      tracker.bytes = 0;
+    }
+
+    buffer.push(nextData);
+    tracker.bytes += byteLengthUtf8(nextData);
+    while (tracker.bytes > maxBytes && buffer.length > 0) {
       const removed = buffer.shift()!;
-      tracker.bytes -= Buffer.byteLength(removed);
+      tracker.bytes -= byteLengthUtf8(removed);
     }
   }
 
@@ -482,6 +501,45 @@ export function createTerminalRuntime(args: {
     );
   }
 
+  function shiftBoundedOutput(args: {
+    chunks: string[];
+    maxBytes: number;
+  }) {
+    if (args.maxBytes <= 0 || args.chunks.length === 0) {
+      return { output: "", bytes: 0 };
+    }
+
+    let remainingBytes = args.maxBytes;
+    let output = "";
+
+    while (args.chunks.length > 0 && remainingBytes > 0) {
+      const nextChunk = args.chunks[0] ?? "";
+      const nextChunkBytes = byteLengthUtf8(nextChunk);
+      if (nextChunkBytes <= remainingBytes) {
+        output += args.chunks.shift()!;
+        remainingBytes -= nextChunkBytes;
+        continue;
+      }
+
+      const { prefix, rest } = takeUtf8PrefixByBytes({
+        value: nextChunk,
+        maxBytes: remainingBytes,
+      });
+      if (!prefix) {
+        break;
+      }
+      output += prefix;
+      args.chunks[0] = rest;
+      remainingBytes -= byteLengthUtf8(prefix);
+      break;
+    }
+
+    return {
+      output,
+      bytes: args.maxBytes - remainingBytes,
+    };
+  }
+
   function hasActiveAttachment(session: TerminalSessionEntry) {
     return session.activeAttachmentId !== null;
   }
@@ -505,12 +563,19 @@ export function createTerminalRuntime(args: {
   }
 
   function serializeScreenState(session: TerminalSessionEntry): string {
-    try {
-      return session.serializeAddon.serialize();
-    } catch (error) {
-      console.warn("[terminal] failed to serialize screen state", error);
-      return "";
+    for (const scrollback of TERMINAL_SCREEN_STATE_SCROLLBACK_CANDIDATES) {
+      try {
+        const serialized = session.serializeAddon.serialize({ scrollback });
+        if (byteLengthUtf8(serialized) <= TERMINAL_SCREEN_STATE_MAX_BYTES) {
+          return serialized;
+        }
+      } catch (error) {
+        console.warn("[terminal] failed to serialize screen state", error);
+        return "";
+      }
     }
+
+    return "";
   }
 
   function maybeLogTerminalBackpressure(args: {
@@ -596,10 +661,14 @@ export function createTerminalRuntime(args: {
     ) {
       return session.lastPushWritePromise ?? Promise.resolve();
     }
-    const output = session.pendingPush.join("");
-    const outputBytes = session.pendingPushBytes;
-    session.pendingPush.length = 0;
-    session.pendingPushBytes = 0;
+    const { output, bytes: outputBytes } = shiftBoundedOutput({
+      chunks: session.pendingPush,
+      maxBytes: TERMINAL_PUSH_FLUSH_MAX_BYTES,
+    });
+    if (!output) {
+      return session.lastPushWritePromise ?? Promise.resolve();
+    }
+    session.pendingPushBytes = Math.max(0, session.pendingPushBytes - outputBytes);
     session.pushWriteInFlight = true;
     const pushPromise = emitEvent("terminal.output", { sessionId, output })
       .catch((error) => {
@@ -1182,11 +1251,18 @@ export function createTerminalRuntime(args: {
     }
     session.streamReadyAttachmentId = args.attachmentId;
     if (session.deliveryMode === "push" && session.outputChunks.length > 0) {
-      const output = session.outputChunks.join("");
-      session.outputChunks.length = 0;
-      session.outputChunksBytes = 0;
-      session.pendingPush.push(output);
-      session.pendingPushBytes += Buffer.byteLength(output);
+      while (session.outputChunks.length > 0) {
+        const { output, bytes } = shiftBoundedOutput({
+          chunks: session.outputChunks,
+          maxBytes: TERMINAL_PUSH_FLUSH_MAX_BYTES,
+        });
+        if (!output) {
+          break;
+        }
+        session.pendingPush.push(output);
+        session.pendingPushBytes += bytes;
+        session.outputChunksBytes = Math.max(0, session.outputChunksBytes - bytes);
+      }
       session.peakPendingPushBytes = Math.max(
         session.peakPendingPushBytes,
         session.pendingPushBytes,

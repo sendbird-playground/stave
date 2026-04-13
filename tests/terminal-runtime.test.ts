@@ -97,6 +97,9 @@ mock.module("../electron/providers/cli-path-env", () => ({
 
 const { createTerminalRuntime } = await import("../electron/host-service/terminal-runtime");
 
+const TERMINAL_PUSH_FLUSH_MAX_BYTES = 128 * 1024;
+const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 512 * 1024;
+
 afterEach(() => {
   fakePtys.length = 0;
   fakeSpawnCalls.length = 0;
@@ -272,6 +275,78 @@ describe("terminal runtime slot lifecycle", () => {
     });
 
     expect(fake.writes).toContain("\x1b[?1;2c");
+  });
+
+  test("chunks push delivery output to transport-safe sizes", async () => {
+    const emitted: Array<{ event: string; payload: unknown }> = [];
+    const runtime = createTerminalRuntime({
+      emitEvent: async (event, payload) => {
+        emitted.push({ event, payload });
+      },
+    });
+
+    const created = runtime.createSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    const sessionId = created.sessionId!;
+    const attached = await runtime.attachSession({
+      sessionId,
+      deliveryMode: "push",
+    });
+    runtime.resumeSessionStream({
+      sessionId,
+      attachmentId: attached.attachmentId!,
+    });
+
+    fakePtys[0]!.fireData("x".repeat(TERMINAL_PUSH_FLUSH_MAX_BYTES + 123));
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(emitted).toHaveLength(2);
+    const firstPayload = emitted[0]!.payload as { output: string };
+    const secondPayload = emitted[1]!.payload as { output: string };
+    expect(firstPayload.output.length + secondPayload.output.length).toBe(
+      TERMINAL_PUSH_FLUSH_MAX_BYTES + 123,
+    );
+    expect(Buffer.byteLength(firstPayload.output, "utf8")).toBe(
+      TERMINAL_PUSH_FLUSH_MAX_BYTES,
+    );
+    expect(Buffer.byteLength(secondPayload.output, "utf8")).toBe(123);
+  });
+
+  test("caps detached backlog to a bounded size before reattach", async () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      taskId: null,
+      taskTitle: null,
+      terminalTabId: "tab-1",
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    const sessionId = created.sessionId!;
+    fakePtys[0]!.fireData("x".repeat(TERMINAL_BACKGROUND_BUFFER_MAX_BYTES + 4096));
+
+    const attached = await runtime.attachSession({
+      sessionId,
+      deliveryMode: "push",
+    });
+
+    expect(Buffer.byteLength(attached.backlog ?? "", "utf8")).toBeLessThanOrEqual(
+      TERMINAL_BACKGROUND_BUFFER_MAX_BYTES,
+    );
   });
 
   test("preserves exited slot state for background sessions until the slot is recreated", () => {

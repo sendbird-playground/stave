@@ -68,6 +68,7 @@ import {
 import { isDoneEvent, toEventType } from "./main/utils/provider-events";
 import { quotePath, runCommand } from "./main/utils/command";
 import type { StreamTurnArgs } from "./providers/types";
+import { truncateUtf8Middle } from "./shared/bounded-text";
 
 type HostServiceOutboundMessage =
   | AnyHostServiceResponseEnvelope
@@ -84,6 +85,8 @@ const HOST_SERVICE_QUEUE_WARN_DEPTH = 24;
 const HOST_SERVICE_QUEUE_WARN_BYTES = 256 * 1024;
 const HOST_SERVICE_QUEUE_SLOW_WRITE_MS = 48;
 const HOST_SERVICE_QUEUE_LOG_INTERVAL_MS = 2_000;
+const HOST_PROVIDER_EVENT_STRING_MAX_BYTES = 128 * 1024;
+const HOST_PROVIDER_EVENT_LIST_MAX_ITEMS = 32;
 
 let messageWriteChain = Promise.resolve();
 let pendingMessageCount = 0;
@@ -150,6 +153,123 @@ function maybeLogQueueRecovery() {
   );
 }
 
+function shrinkProviderEventString(value: string, label: string) {
+  return truncateUtf8Middle({
+    value,
+    maxBytes: HOST_PROVIDER_EVENT_STRING_MAX_BYTES,
+    marker: `\n…<${label} truncated for transport>…\n`,
+  });
+}
+
+function shrinkProviderStreamEventPayload(
+  payload: HostServiceEventMap["provider.stream-event"],
+): HostServiceEventMap["provider.stream-event"] {
+  const event = payload.event;
+  switch (event.type) {
+    case "thinking":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          text: shrinkProviderEventString(event.text, "thinking"),
+        },
+      };
+    case "text":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          text: shrinkProviderEventString(event.text, "text"),
+        },
+      };
+    case "tool":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          input: shrinkProviderEventString(event.input, "tool-input"),
+          output: event.output
+            ? shrinkProviderEventString(event.output, "tool-output")
+            : event.output,
+        },
+      };
+    case "tool_result":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          output: shrinkProviderEventString(event.output, "tool-result"),
+        },
+      };
+    case "diff":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          oldContent: shrinkProviderEventString(event.oldContent, "diff-old"),
+          newContent: shrinkProviderEventString(event.newContent, "diff-new"),
+        },
+      };
+    case "approval":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          description: shrinkProviderEventString(
+            event.description,
+            "approval-description",
+          ),
+        },
+      };
+    case "plan_ready":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          planText: shrinkProviderEventString(event.planText, "plan"),
+        },
+      };
+    case "system":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          content: shrinkProviderEventString(event.content, "system"),
+        },
+      };
+    case "subagent_progress":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          content: shrinkProviderEventString(event.content, "subagent-progress"),
+        },
+      };
+    case "error":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          message: shrinkProviderEventString(event.message, "error"),
+        },
+      };
+    case "prompt_suggestions":
+      return {
+        ...payload,
+        event: {
+          ...event,
+          suggestions: event.suggestions
+            .slice(0, HOST_PROVIDER_EVENT_LIST_MAX_ITEMS)
+            .map((suggestion) =>
+              shrinkProviderEventString(suggestion, "prompt-suggestion")
+            ),
+        },
+      };
+    default:
+      return payload;
+  }
+}
+
 function writeMessageNow(serializedMessage: string, label: string) {
   return new Promise<void>((resolve, reject) => {
     const startedAt = Date.now();
@@ -203,10 +323,15 @@ function emitEvent<TEvent extends HostServiceEventName>(
   event: TEvent,
   payload: HostServiceEventMap[TEvent],
 ) {
+  const normalizedPayload = event === "provider.stream-event"
+    ? shrinkProviderStreamEventPayload(
+        payload as HostServiceEventMap["provider.stream-event"],
+      )
+    : payload;
   const writePromise = writeMessage({
     type: "event",
     event,
-    payload,
+    payload: normalizedPayload as HostServiceEventMap[TEvent],
   });
   void writePromise.catch((error) => {
     process.stderr.write(

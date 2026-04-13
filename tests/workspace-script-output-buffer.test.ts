@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createScriptOutputBuffer } from "../electron/main/workspace-scripts/output-buffer";
 
+const MAX_SCRIPT_OUTPUT_CHUNK_BYTES = 64 * 1024;
+
 function waitForImmediate() {
   return new Promise<void>((resolve) => {
     setImmediate(resolve);
@@ -45,5 +47,19 @@ describe("createScriptOutputBuffer", () => {
     await waitForImmediate();
 
     expect(flushed).toEqual(["partial"]);
+  });
+
+  test("splits oversized output into bounded transport chunks", async () => {
+    const flushed: string[] = [];
+    const buffer = createScriptOutputBuffer((output) => flushed.push(output));
+    const hugeChunk = "x".repeat(MAX_SCRIPT_OUTPUT_CHUNK_BYTES + 123);
+
+    buffer.push(hugeChunk);
+    await waitForImmediate();
+
+    expect(flushed).toHaveLength(2);
+    expect(flushed.join("")).toBe(hugeChunk);
+    expect(Buffer.byteLength(flushed[0]!, "utf8")).toBe(MAX_SCRIPT_OUTPUT_CHUNK_BYTES);
+    expect(Buffer.byteLength(flushed[1]!, "utf8")).toBe(123);
   });
 });

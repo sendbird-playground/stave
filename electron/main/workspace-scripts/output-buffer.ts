@@ -1,7 +1,11 @@
+import { takeUtf8PrefixByBytes } from "../../shared/bounded-text";
+
 export interface ScriptOutputBuffer {
   push(chunk: string): void;
   flush(): void;
 }
+
+const MAX_SCRIPT_OUTPUT_CHUNK_BYTES = 64 * 1024;
 
 export function createScriptOutputBuffer(
   onFlush: (output: string) => void,
@@ -11,12 +15,17 @@ export function createScriptOutputBuffer(
 
   const flush = () => {
     scheduled = false;
-    if (!pending) {
-      return;
+    while (pending) {
+      const { prefix, rest } = takeUtf8PrefixByBytes({
+        value: pending,
+        maxBytes: MAX_SCRIPT_OUTPUT_CHUNK_BYTES,
+      });
+      if (!prefix) {
+        break;
+      }
+      pending = rest;
+      onFlush(prefix);
     }
-    const output = pending;
-    pending = "";
-    onFlush(output);
   };
 
   return {

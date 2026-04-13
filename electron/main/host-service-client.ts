@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { byteLengthUtf8 } from "../shared/bounded-text";
 import type {
   AnyHostServiceEventEnvelope,
   AnyHostServiceMessage,
@@ -18,6 +19,9 @@ interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason?: unknown) => void;
 }
+
+const HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
+const HOST_SERVICE_STDOUT_LINE_MAX_BYTES = 1 * 1024 * 1024;
 
 export function resolveHostServiceScriptPath(args: {
   moduleUrl: string;
@@ -66,6 +70,29 @@ class HostServiceClient {
     this.startupReject = null;
   }
 
+  private failChild(args: {
+    child: ChildProcessWithoutNullStreams | null;
+    error: Error;
+  }) {
+    if (args.child && this.child && this.child !== args.child) {
+      return;
+    }
+
+    const activeChild = args.child ?? this.child;
+    this.child = null;
+    this.stdoutBuffer = "";
+    this.startupReject?.(args.error);
+    this.resetStartupState();
+    for (const pending of this.pending.values()) {
+      pending.reject(args.error);
+    }
+    this.pending.clear();
+
+    if (activeChild && activeChild.exitCode === null) {
+      activeChild.kill();
+    }
+  }
+
   private handleResponse(message: AnyHostServiceResponseEnvelope) {
     const pending = this.pending.get(message.id);
     if (!pending) {
@@ -112,11 +139,32 @@ class HostServiceClient {
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       this.stdoutBuffer += chunk;
+      if (byteLengthUtf8(this.stdoutBuffer) > HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES) {
+        this.failChild({
+          child,
+          error: new Error(
+            `[host-service] protocol overflow: stdout buffer exceeded ${HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES} bytes`,
+          ),
+        });
+        return;
+      }
       let newlineIndex = this.stdoutBuffer.indexOf("\n");
       while (newlineIndex >= 0) {
-        const line = this.stdoutBuffer.slice(0, newlineIndex).trim();
+        const rawLine = this.stdoutBuffer.slice(0, newlineIndex);
         this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
-        if (line) {
+        const line = rawLine.endsWith("\r")
+          ? rawLine.slice(0, -1)
+          : rawLine;
+        if (byteLengthUtf8(line) > HOST_SERVICE_STDOUT_LINE_MAX_BYTES) {
+          this.failChild({
+            child,
+            error: new Error(
+              `[host-service] protocol overflow: line exceeded ${HOST_SERVICE_STDOUT_LINE_MAX_BYTES} bytes`,
+            ),
+          });
+          return;
+        }
+        if (line.length > 0) {
           this.handleMessage(line);
         }
         newlineIndex = this.stdoutBuffer.indexOf("\n");
@@ -136,17 +184,12 @@ class HostServiceClient {
     }
 
     child.on("exit", (code, signal) => {
-      const error = new Error(
-        `[host-service] exited unexpectedly (code=${code ?? "null"}, signal=${signal ?? "null"})`,
-      );
-      this.child = null;
-      this.stdoutBuffer = "";
-      this.startupReject?.(error);
-      this.resetStartupState();
-      for (const pending of this.pending.values()) {
-        pending.reject(error);
-      }
-      this.pending.clear();
+      this.failChild({
+        child,
+        error: new Error(
+          `[host-service] exited unexpectedly (code=${code ?? "null"}, signal=${signal ?? "null"})`,
+        ),
+      });
     });
   }
 
