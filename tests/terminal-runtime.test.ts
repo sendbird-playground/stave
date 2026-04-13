@@ -78,6 +78,7 @@ const fakeSpawnCalls: Array<{
     env?: Record<string, string>;
   };
 }> = [];
+let fakeClaudeAutoModeSupported = true;
 
 mock.module("node-pty", () => ({
   spawn: (
@@ -100,6 +101,7 @@ mock.module("node-pty", () => ({
 
 mock.module("../electron/providers/cli-path-env", () => ({
   resolveClaudeCliExecutablePath: () => "/tmp/fake-claude",
+  resolveClaudeCliAutoModeSupport: () => fakeClaudeAutoModeSupported,
   resolveCodexCliExecutablePath: () => "/tmp/fake-codex",
   buildClaudeCliEnv: () => ({ PATH: process.env.PATH ?? "" }),
   buildCodexCliEnv: () => ({ PATH: process.env.PATH ?? "" }),
@@ -114,6 +116,7 @@ const TERMINAL_BACKGROUND_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
 afterEach(() => {
   fakePtys.length = 0;
   fakeSpawnCalls.length = 0;
+  fakeClaudeAutoModeSupported = true;
 });
 
 describe("terminal runtime PTY cleanup", () => {
@@ -498,6 +501,7 @@ describe("terminal runtime slot lifecycle", () => {
     expect(fakeSpawnCalls.at(-1)).toEqual({
       command: "/tmp/fake-claude",
       args: [
+        "--enable-auto-mode",
         "--permission-mode",
         "auto",
         "--session-id",
@@ -515,7 +519,77 @@ describe("terminal runtime slot lifecycle", () => {
     });
   });
 
+  test("falls back to default mode for older Claude CLI sessions", () => {
+    fakeClaudeAutoModeSupported = false;
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createCliSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      cliSessionTabId: "cli-1",
+      providerId: "claude-code",
+      contextMode: "workspace",
+      taskId: null,
+      taskTitle: null,
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+    });
+
+    expect(created.ok).toBe(true);
+    expect(fakeSpawnCalls.at(-1)).toEqual({
+      command: "/tmp/fake-claude",
+      args: [
+        "--permission-mode",
+        "default",
+        "--session-id",
+        created.nativeSessionId!,
+      ],
+      options: expect.objectContaining({
+        cwd: "/tmp/workspace",
+      }),
+    });
+  });
+
   test("uses the configured Claude permission mode for CLI sessions", () => {
+    const runtime = createTerminalRuntime({
+      emitEvent: async () => {},
+    });
+
+    const created = runtime.createCliSession({
+      workspaceId: "workspace-1",
+      workspacePath: "/tmp/workspace",
+      cliSessionTabId: "cli-1",
+      providerId: "claude-code",
+      contextMode: "workspace",
+      taskId: null,
+      taskTitle: null,
+      cwd: "/tmp/workspace",
+      deliveryMode: "push",
+      runtimeOptions: {
+        claudePermissionMode: "acceptEdits",
+      },
+    });
+
+    expect(created.ok).toBe(true);
+    expect(fakeSpawnCalls.at(-1)).toEqual({
+      command: "/tmp/fake-claude",
+      args: [
+        "--enable-auto-mode",
+        "--permission-mode",
+        "acceptEdits",
+        "--session-id",
+        created.nativeSessionId!,
+      ],
+      options: expect.objectContaining({
+        cwd: "/tmp/workspace",
+      }),
+    });
+  });
+
+  test("keeps explicit Claude permission modes on older CLI sessions", () => {
+    fakeClaudeAutoModeSupported = false;
     const runtime = createTerminalRuntime({
       emitEvent: async () => {},
     });

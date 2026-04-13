@@ -110,7 +110,8 @@ const CLAUDE_PERMISSION_MODE_HELP = [
   {
     value: "auto",
     label: "auto",
-    description: "Let Claude choose the most appropriate permission behavior for the turn.",
+    description:
+      "Let Claude choose the most appropriate permission behavior for the turn. Claude CLI sessions require Claude Code 2.1.71+ for this mode; older CLI builds fall back to `default`.",
     example: "Good when your workload shifts between analysis, coding, and light automation throughout the day.",
   },
 ] as const satisfies readonly ExplainedSelectOption<NonNullable<ProviderRuntimeOptions["claudePermissionMode"]>>[];

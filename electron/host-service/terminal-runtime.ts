@@ -13,6 +13,7 @@ import {
 import {
   buildClaudeCliEnv,
   buildCodexCliEnv,
+  resolveClaudeCliAutoModeSupport,
   resolveClaudeCliExecutablePath,
   resolveCodexCliExecutablePath,
 } from "../providers/cli-path-env";
@@ -1025,20 +1026,29 @@ export function createTerminalRuntime(args: {
         };
       }
       const nativeSessionId = requestedNativeSessionId || randomUUID();
-      const claudePermissionMode =
+      const requestedClaudePermissionMode =
         args.runtimeOptions?.claudePermissionMode ?? "auto";
+      const claudeAutoModeSupported = resolveClaudeCliAutoModeSupport({
+        executablePath,
+      });
+      const claudePermissionMode =
+        requestedClaudePermissionMode === "auto" && !claudeAutoModeSupported
+          ? "default"
+          : requestedClaudePermissionMode;
+      const claudeCommandArgs = [
+        ...(claudeAutoModeSupported ? ["--enable-auto-mode"] : []),
+        "--permission-mode",
+        claudePermissionMode,
+        ...(requestedNativeSessionId
+          ? ["--resume", nativeSessionId]
+          : ["--session-id", nativeSessionId]),
+      ];
       const env = buildClaudeCliEnv({ executablePath });
       return {
         ok: true,
         sessionId: createPtySession({
           command: executablePath,
-          commandArgs: [
-            "--permission-mode",
-            claudePermissionMode,
-            ...(requestedNativeSessionId
-              ? ["--resume", nativeSessionId]
-              : ["--session-id", nativeSessionId]),
-          ],
+          commandArgs: claudeCommandArgs,
           cwd: sessionCwd,
           cols: args.cols,
           rows: args.rows,

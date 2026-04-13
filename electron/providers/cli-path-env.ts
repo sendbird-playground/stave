@@ -13,6 +13,7 @@ import {
   parseSemverVersion,
   probeExecutableVersion,
 } from "./runtime-shared";
+import { isClaudeCliAutoModeSupportedVersion } from "./claude-cli-compat";
 import { readPrimaryStaveLocalMcpManifestSync } from "../main/stave-local-mcp-manifest";
 import { CODEX_STAVE_MCP_TOKEN_ENV_VAR } from "../main/codex-mcp";
 
@@ -44,6 +45,11 @@ function probeClaudeExecutable(args: { path: string }) {
     path: args.path,
     version: parseSemverVersion({ value: result.text }),
   };
+}
+
+export function resolveClaudeCliAutoModeSupport(args: { executablePath: string }) {
+  const version = probeClaudeExecutable({ path: args.executablePath })?.version ?? null;
+  return isClaudeCliAutoModeSupportedVersion({ version });
 }
 
 function parseVersionFromStdout(args: { stdout: string }) {
