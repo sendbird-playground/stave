@@ -88,6 +88,8 @@ const PROMPT_SURFACE_FOCUS_VISIBLE_RESET =
   "focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0";
 const PROMPT_SURFACE_PRIMARY_FOCUS =
   `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} focus-visible:border-transparent`;
+const PROMPT_FLOATING_SURFACE =
+  "border border-border/60 bg-background/90 text-foreground hover:bg-background/95";
 const PROMPT_TOOLBAR_BUTTON =
   `${PROMPT_SURFACE_FOCUS_VISIBLE_RESET} h-9 rounded-md border border-transparent bg-transparent px-2.5 text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground`;
 const PROMPT_TOOLBAR_ICON_BUTTON =
@@ -624,7 +626,7 @@ export function PromptInput(args: PromptInputProps) {
 
   if (pendingUserInput && onUserInputSubmit && onUserInputDeny) {
     return (
-      <div className="space-y-3 rounded-xl border border-primary/40 bg-card p-4">
+      <div className="space-y-3 rounded-xl border border-primary/40 bg-background/95 p-4">
         <UserInputCard
           toolName={pendingUserInput.part.toolName}
           questions={pendingUserInput.part.questions}
@@ -649,7 +651,7 @@ export function PromptInput(args: PromptInputProps) {
         "relative space-y-3 transition-[border-color,box-shadow,background-color]",
         minimal
           ? "space-y-2 border-0 border-t border-border/60 bg-transparent p-0 pt-3 focus-within:border-border/60"
-          : "rounded-xl border border-border/70 bg-card/95 p-4 focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10",
+          : "rounded-xl border border-border/70 bg-background/95 p-4 focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/10",
       )}
     >
       {!minimal && promptSuggestions && promptSuggestions.length > 0 ? (
@@ -685,7 +687,7 @@ export function PromptInput(args: PromptInputProps) {
             ) : null}
           </div>
           {queuedPromptPreview ? (
-            <p className="mt-2 max-h-28 overflow-auto rounded-md border border-border/60 bg-background/85 px-2.5 py-2 text-xs leading-5 text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            <p className="mt-2 max-h-28 overflow-auto rounded-md border border-border/60 bg-background/80 px-2.5 py-2 text-xs leading-5 text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
               {queuedPromptPreview}
             </p>
           ) : (
@@ -697,7 +699,33 @@ export function PromptInput(args: PromptInputProps) {
           )}
         </div>
       ) : null}
-      {!minimal && !isPromptInputFocused && !interactionsDisabled ? (
+      {!minimal && !isPromptInputFocused && !interactionsDisabled && queuedNextTurn ? (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={focusComposer}
+            className={cn(
+              PROMPT_TOOLBAR_BUTTON,
+              PROMPT_FLOATING_SURFACE,
+              "h-8 gap-2",
+            )}
+          >
+            <span>Focus</span>
+            <KbdGroup>
+              <Kbd>{modifierLabel}</Kbd>
+              <Kbd>L</Kbd>
+            </KbdGroup>
+            <span className="text-xs text-muted-foreground">or</span>
+            <KbdGroup>
+              <Kbd>{modifierLabel}</Kbd>
+              <Kbd>J</Kbd>
+            </KbdGroup>
+          </Button>
+        </div>
+      ) : null}
+      {!minimal && !isPromptInputFocused && !interactionsDisabled && !queuedNextTurn ? (
         <Button
           type="button"
           variant="ghost"
@@ -705,7 +733,8 @@ export function PromptInput(args: PromptInputProps) {
           onClick={focusComposer}
           className={cn(
             PROMPT_TOOLBAR_BUTTON,
-            "absolute right-4 top-4 h-8 gap-2 border border-border/60 bg-background text-foreground hover:bg-background",
+            PROMPT_FLOATING_SURFACE,
+            "absolute right-4 top-4 h-8 gap-2",
           )}
         >
           <span>Focus</span>
@@ -939,7 +968,7 @@ export function PromptInput(args: PromptInputProps) {
                       )}
                     rows={minimal ? 1 : undefined}
                     className={cn(
-                      "resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0 shadow-none",
+                      "resize-none overflow-y-auto rounded-none border-0 bg-transparent px-0 py-0 shadow-none dark:bg-transparent",
                       minimal
                         ? "min-h-[32px] max-h-[168px] font-mono text-[15px] leading-7 tracking-[-0.01em] caret-primary md:text-[15px]"
                         : "min-h-[104px] max-h-[240px] text-lg leading-8 md:text-lg",
@@ -1304,7 +1333,7 @@ export function PromptInput(args: PromptInputProps) {
                     <span>Runtime</span>
                   </Button>
                 </DrawerTrigger>
-                <DrawerContent className="border-border/80 bg-card/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
+                <DrawerContent className="border-border/80 bg-background/95 shadow-2xl supports-backdrop-filter:backdrop-blur-xl data-[vaul-drawer-direction=bottom]:max-h-[78vh]">
                   <DrawerHeader className="gap-2 border-b border-border/70 px-5 pb-5 pt-5 text-left md:px-6">
                     <DrawerTitle className="text-lg font-semibold">Current Runtime</DrawerTitle>
                     <DrawerDescription>

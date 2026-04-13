@@ -152,20 +152,22 @@ function SkillInstructionsDialog(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[76vh] flex flex-col gap-4 overflow-hidden p-7 sm:p-8">
         <DialogHeader>
-          <DialogTitle>{skill.name}</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-xl leading-tight sm:text-2xl">
+            {skill.name}
+          </DialogTitle>
+          <DialogDescription className="text-base leading-relaxed">
             {skill.description || "No description"}
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-auto">
           {skill.instructions ? (
-            <pre className="overflow-auto rounded-md border border-border/50 bg-neutral-950 px-4 py-3 font-mono text-xs leading-[1.7] text-neutral-300 whitespace-pre-wrap dark:border-neutral-800 dark:bg-neutral-950/80">
+            <pre className="overflow-auto rounded-md border border-border/50 bg-neutral-950 px-5 py-4 font-mono text-sm leading-7 text-neutral-300 whitespace-pre-wrap dark:border-neutral-800 dark:bg-neutral-950/80">
               {skill.instructions}
             </pre>
           ) : (
-            <p className="py-4 text-center text-sm text-muted-foreground">
+            <p className="py-4 text-center text-base text-muted-foreground">
               No instructions available.
             </p>
           )}

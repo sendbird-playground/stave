@@ -434,7 +434,7 @@ function SectionHeader(props: {
           </div>
         ) : null}
       </div>
-      <AccordionContent className="pb-3 pt-0">
+      <AccordionContent className="-mx-1 pb-3 pt-0">
         {props.children}
       </AccordionContent>
     </AccordionItem>
@@ -481,7 +481,7 @@ function InlineLinkRow(props: {
   actions?: ReactNode;
 }) {
   return (
-    <div className="group/link-row flex items-center gap-2.5 rounded-md px-2 py-2">
+    <div className="group/link-row flex items-center gap-2.5 rounded-md px-1.5 py-2">
       <span className="flex size-6 shrink-0 items-center justify-center">
         {props.icon}
       </span>
@@ -537,7 +537,7 @@ function InlineUrlInput(props: {
   icon: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5">
+    <div className="flex items-center gap-2 px-1.5 py-1.5">
       <span className="flex size-6 shrink-0 items-center justify-center text-muted-foreground/50">
         {props.icon}
       </span>
@@ -611,7 +611,7 @@ function GitHubPrRow(props: {
   const visual = PR_STATUS_VISUAL[props.status];
 
   return (
-    <div className="group/pr-row flex items-start gap-2.5 rounded-md px-2 py-2.5 transition-colors hover:bg-muted/50">
+    <div className="group/pr-row flex items-start gap-2.5 rounded-md px-1.5 py-2.5 transition-colors hover:bg-muted/50">
       <GitHubPrStatusIcon
         status={props.status}
         className="mt-0.5 size-4"
@@ -946,7 +946,7 @@ function AddButton(props: { onClick: () => void; label?: string }) {
 
 function EmptyHint(props: { children: ReactNode }) {
   return (
-    <p className="px-2 py-1.5 text-[13px] text-muted-foreground/50">
+    <p className="px-1.5 py-1.5 text-[13px] text-muted-foreground/50">
       {props.children}
     </p>
   );
@@ -1203,14 +1203,14 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-3 space-y-0.5">
+            <div className="-mx-2 space-y-0.5">
               {workspaceInformation.todos.length === 0 ? (
                 <EmptyHint>No todos yet</EmptyHint>
               ) : null}
               {workspaceInformation.todos.map((todo) => (
                 <div
                   key={todo.id}
-                  className="group/todo flex items-center gap-2 rounded-md px-3 py-1 transition-colors hover:bg-muted/50"
+                  className="group/todo flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/50"
                 >
                   <button
                     type="button"
@@ -1349,7 +1349,7 @@ export function WorkspaceInformationPanel() {
               </div>
             }
           >
-            <div className="-mx-3 space-y-0.5">
+            <div className="-mx-2 space-y-0.5">
               {/* Current branch PR */}
               {!isDefaultWorkspace && currentBranchPr && currentBranchPrStatus ? (
                 <GitHubPrRow
@@ -1481,7 +1481,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-3 space-y-0.5">
+            <div className="-mx-2 space-y-0.5">
               {workspaceInformation.jiraIssues.length === 0 ? (
                 <EmptyHint>No linked Jira issues</EmptyHint>
               ) : null}
@@ -1584,7 +1584,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-3 space-y-0.5">
+            <div className="-mx-2 space-y-0.5">
               {(workspaceInformation.confluencePages ?? []).length === 0 ? (
                 <EmptyHint>No linked Confluence pages</EmptyHint>
               ) : null}
@@ -1688,7 +1688,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-3 space-y-0.5">
+            <div className="-mx-2 space-y-0.5">
               {workspaceInformation.figmaResources.length === 0 ? (
                 <EmptyHint>No linked Figma resources</EmptyHint>
               ) : null}
@@ -1788,7 +1788,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-3 space-y-0.5">
+            <div className="-mx-2 space-y-0.5">
               {(workspaceInformation.slackThreads?.length ?? 0) === 0 ? (
                 <EmptyHint>No linked Slack threads</EmptyHint>
               ) : null}
@@ -1873,14 +1873,14 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-3 space-y-3">
+            <div className="-mx-2 space-y-3">
               {workspaceInformation.customFields.length === 0 ? (
                 <EmptyHint>No custom fields</EmptyHint>
               ) : null}
               {workspaceInformation.customFields.map((field) => (
                 <div
                   key={field.id}
-                  className="group/field space-y-1.5 px-2"
+                  className="group/field space-y-1.5 px-1.5"
                 >
                   <div className="flex items-center gap-1.5">
                     <Input

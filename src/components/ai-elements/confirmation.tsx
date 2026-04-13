@@ -39,7 +39,7 @@ export function ConfirmationCompact(args: ConfirmationCompactProps) {
   const decisionText = getApprovalDecisionText(state);
 
   return (
-    <div className="rounded-lg border bg-card/80 p-2.5 text-[0.8125rem]">
+    <div className="rounded-lg border border-border/70 bg-background/80 p-2.5 text-[0.8125rem]">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="font-medium text-foreground">{toolName}</p>

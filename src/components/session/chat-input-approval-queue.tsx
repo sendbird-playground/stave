@@ -114,7 +114,7 @@ export function ChatInputApprovalQueue(args: ChatInputApprovalQueueProps) {
     <section
       aria-label="Approval queue"
       className={cn(
-        "mb-3 rounded-xl border border-warning/30 bg-card/90 shadow-sm supports-backdrop-filter:backdrop-blur-xs",
+        "mb-3 rounded-xl border border-warning/30 bg-background/90 shadow-sm supports-backdrop-filter:backdrop-blur-xs",
         compact ? "p-2" : "p-2.5",
       )}
     >
@@ -138,7 +138,7 @@ export function ChatInputApprovalQueue(args: ChatInputApprovalQueueProps) {
               ref={guidanceTextareaRef}
               value={guidanceText}
               rows={2}
-              className="min-h-0 resize-none text-xs"
+              className="min-h-0 resize-none bg-background/80 text-xs dark:bg-background/80"
               onChange={(event) => setGuidanceText(event.target.value)}
               placeholder={`Instead of ${current.part.toolName}, do this…`}
             />

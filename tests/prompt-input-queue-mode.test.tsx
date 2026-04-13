@@ -72,6 +72,9 @@ describe("PromptInput queue mode", () => {
     expect(html).toContain("Update queued");
     expect(html).toContain("Clear");
     expect(html).toContain("aria-label=\"Abort\"");
+    expect(html).toContain("Focus");
+    expect(html).toContain("dark:bg-transparent");
+    expect(html).not.toContain("absolute right-4 top-4");
     expect(html).not.toContain("Sends automatically when the current response finishes.");
   });
 });
