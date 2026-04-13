@@ -34,6 +34,7 @@
 * **chat:** clear submitted drafts before async send ([#374](https://github.com/sendbird-playground/stave/issues/374)) ([5a7412d](https://github.com/sendbird-playground/stave/commit/5a7412d581e21e86825552993ca6d540f24a581e))
 * **ChatInput:** clear prompt input on queue entry ([#363](https://github.com/sendbird-playground/stave/issues/363)) ([692ba54](https://github.com/sendbird-playground/stave/commit/692ba54ad18a2e4e7516b522059a24c2e68f70cb))
 * **ChatInput:** restore draft when message submission is blocked ([#379](https://github.com/sendbird-playground/stave/issues/379)) ([f326d4f](https://github.com/sendbird-playground/stave/commit/f326d4f124540cabb7c9a67fc5a6f16d9d9d0578))
+* **build:** remove invalid syntax from radix patch script so installs and release packaging succeed on CI ([2f699a4](https://github.com/sendbird-playground/stave/commit/2f699a48fc24322f90493d9874f117fcfbc55b76))
 * claude auth ([#365](https://github.com/sendbird-playground/stave/issues/365)) ([90b6c7a](https://github.com/sendbird-playground/stave/commit/90b6c7a9e00b19c5d1c62193bae9baccee0faf79))
 * claude todo ([#367](https://github.com/sendbird-playground/stave/issues/367)) ([3a725cb](https://github.com/sendbird-playground/stave/commit/3a725cbed76d4b50c025f56d7bcd5e3c4aaf6af1))
 * cli session 0410 ([#388](https://github.com/sendbird-playground/stave/issues/388)) ([1ca4771](https://github.com/sendbird-playground/stave/commit/1ca47718a367f4e673ed977807264400fedc44a2))
