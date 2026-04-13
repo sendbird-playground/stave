@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm install --no-package-lock
+        run: npm install --no-package-lock --legacy-peer-deps
 
       - name: Rebuild native modules for Electron
         run: npm run rebuild:electron-deps
