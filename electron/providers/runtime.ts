@@ -14,6 +14,10 @@ import {
   cleanupCodexAppServerTask,
   streamCodexWithAppServer,
 } from "./codex-app-server-runtime";
+import {
+  appendBoundedBridgeEvent,
+  dropBufferedBridgeEvents,
+} from "./provider-buffering";
 import { getProviderConnectedToolStatus } from "./connected-tool-status";
 import {
   buildStaveResolvedArgs,
@@ -39,6 +43,7 @@ import { buildRuntimeProcessEnv, probeExecutableVersion } from "./runtime-shared
 const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000);
 const ACTIVE_STREAM_TTL_MS = 15 * 60 * 1000;
 const COMPLETED_STREAM_TTL_MS = 60 * 1000;
+const ACTIVE_STREAM_RETAINED_BYTES_MAX = 512 * 1024;
 const DEFAULT_PROVIDER_TASK_KEY = "default";
 type ActiveRuntimeSession = {
   turnId: string;
@@ -60,6 +65,7 @@ type ActiveStreamSession = {
   done: boolean;
   updatedAt: number;
   baseCursor: number;
+  retainedBytes: number;
 };
 
 const activeStreams = new Map<string, ActiveStreamSession>();
@@ -152,10 +158,25 @@ function compactStreamToCursor(session: ActiveStreamSession, cursor: number) {
   );
   const dropCount = nextCursor - session.baseCursor;
   if (dropCount > 0) {
-    session.events.splice(0, dropCount);
+    session.retainedBytes = dropBufferedBridgeEvents({
+      events: session.events,
+      retainedBytes: session.retainedBytes,
+      dropCount,
+    });
     session.baseCursor = nextCursor;
   }
   return nextCursor;
+}
+
+function appendStreamEvent(session: ActiveStreamSession, event: BridgeEvent) {
+  const result = appendBoundedBridgeEvent({
+    events: session.events,
+    next: event,
+    retainedBytes: session.retainedBytes,
+    maxBytes: ACTIVE_STREAM_RETAINED_BYTES_MAX,
+  });
+  session.retainedBytes = result.retainedBytes;
+  session.baseCursor += result.droppedCount;
 }
 
 function cleanupProviderTaskState(taskId: string) {
@@ -614,6 +635,7 @@ export const providerRuntime: ProviderRuntime = {
       done: false,
       updatedAt: Date.now(),
       baseCursor: 0,
+      retainedBytes: 0,
     };
     activeStreams.set(streamId, session);
     upsertActiveSession({
@@ -628,7 +650,7 @@ export const providerRuntime: ProviderRuntime = {
         turnId,
         onEvent: (event) => {
           if (shouldBufferForPolling) {
-            session.events.push(event);
+            appendStreamEvent(session, event);
           }
           session.updatedAt = Date.now();
           options?.onEvent?.(event);
@@ -640,10 +662,14 @@ export const providerRuntime: ProviderRuntime = {
             message: `Provider stream failed: ${String(error)}`,
             recoverable: true,
           };
-          session.events.push(errorEvent);
+          if (shouldBufferForPolling) {
+            appendStreamEvent(session, errorEvent);
+          }
           options?.onEvent?.(errorEvent);
           const doneEvent: BridgeEvent = { type: "done" };
-          session.events.push(doneEvent);
+          if (shouldBufferForPolling) {
+            appendStreamEvent(session, doneEvent);
+          }
           options?.onEvent?.(doneEvent);
         })
         .finally(() => {

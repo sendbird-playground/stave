@@ -40,7 +40,34 @@ mock.module("../electron/providers/codex-app-server-runtime", () => ({
     detail: "",
     tools: [],
   }),
-  streamCodexWithAppServer: async (args: { onEvent?: (event: { type: string }) => void }) => {
+  streamCodexWithAppServer: async (args: {
+    prompt?: string;
+    onEvent?: (event: { type: string }) => void;
+  }) => {
+    if (args.prompt === "tool-partials") {
+      args.onEvent?.({
+        type: "tool_result",
+        tool_use_id: "tool-1",
+        output: "running 1",
+        isPartial: true,
+      });
+      args.onEvent?.({
+        type: "tool_result",
+        tool_use_id: "tool-1",
+        output: "running 2",
+        isPartial: true,
+      });
+      args.onEvent?.({ type: "done" });
+      return [
+        {
+          type: "tool_result",
+          tool_use_id: "tool-1",
+          output: "running 2",
+          isPartial: true,
+        },
+        { type: "done" },
+      ];
+    }
     args.onEvent?.({ type: "text", text: "progress" });
     args.onEvent?.({ type: "done" });
     return [{ type: "text", text: "progress" }, { type: "done" }];
@@ -196,6 +223,48 @@ describe("providerRuntime.startTurnStream", () => {
     ).toEqual({
       ok: true,
       events: [{ type: "done" }],
+      cursor: 2,
+      done: true,
+    });
+  });
+
+  test("replaces unread superseded partial tool snapshots in the replay window", async () => {
+    let resolveDone = () => undefined;
+    const donePromise = new Promise<void>((resolve) => {
+      resolveDone = resolve;
+    });
+
+    const started = providerRuntime.startTurnStream(
+      {
+        providerId: "codex",
+        prompt: "tool-partials",
+      },
+      {
+        bufferEvents: true,
+        onDone: () => {
+          resolveDone();
+        },
+      },
+    );
+
+    await donePromise;
+
+    expect(
+      providerRuntime.readTurnStream({
+        streamId: started.streamId,
+        cursor: 0,
+      }),
+    ).toEqual({
+      ok: true,
+      events: [
+        {
+          type: "tool_result",
+          tool_use_id: "tool-1",
+          output: "running 2",
+          isPartial: true,
+        },
+        { type: "done" },
+      ],
       cursor: 2,
       done: true,
     });

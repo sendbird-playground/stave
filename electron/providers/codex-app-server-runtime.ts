@@ -23,12 +23,17 @@ import { homedir } from "node:os";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline";
 import {
   buildRuntimeProcessEnv,
   parseBooleanEnv,
   probeExecutableVersion,
 } from "./runtime-shared";
+import {
+  appendBoundedBridgeEvent,
+  appendBoundedText,
+  truncateBufferedText,
+} from "./provider-buffering";
+import { byteLengthUtf8 } from "../shared/bounded-text";
 import {
   getConnectedToolLabel,
   normalizeConnectedToolIds,
@@ -58,6 +63,16 @@ const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
   "STAVE_LOCAL_MCP_TOKEN",
 ] as const;
 const APP_SERVER_INTERRUPT_GRACE_MS = 10_000;
+const CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
+const CODEX_APP_SERVER_STDOUT_LINE_MAX_BYTES = 1 * 1024 * 1024;
+const CODEX_APP_SERVER_COLLECTED_EVENTS_MAX_BYTES = 512 * 1024;
+const CODEX_APP_SERVER_MESSAGE_BUFFER_MAX_BYTES = 256 * 1024;
+const CODEX_APP_SERVER_PLAN_BUFFER_MAX_BYTES = 128 * 1024;
+const CODEX_APP_SERVER_TOOL_OUTPUT_BUFFER_MAX_BYTES = 256 * 1024;
+const CODEX_APP_SERVER_PARTIAL_TOOL_OUTPUT_MAX_BYTES = 128 * 1024;
+const CODEX_APP_SERVER_FINAL_TOOL_OUTPUT_MAX_BYTES = 256 * 1024;
+const CODEX_APP_SERVER_PLAN_EVENT_MAX_BYTES = 64 * 1024;
+const CODEX_APP_SERVER_PARTIAL_EMIT_THROTTLE_MS = 200;
 
 type JsonRpcId = string | number;
 type JsonRpcMessage = {
@@ -206,6 +221,30 @@ function toCodexUserFacingErrorMessage(args: { message: string }) {
     return "Codex network/model endpoint is unreachable. Check internet/proxy/firewall and retry.";
   }
   return args.message;
+}
+
+function appendBoundedCodexBuffer(args: {
+  current: string;
+  chunk: string;
+  keep: "prefix" | "suffix";
+  maxBytes: number;
+}) {
+  return appendBoundedText({
+    current: args.current,
+    chunk: args.chunk,
+    keep: args.keep,
+    maxBytes: args.maxBytes,
+  });
+}
+
+function truncateCodexSnapshot(args: {
+  value: string;
+  maxBytes: number;
+}) {
+  return truncateBufferedText({
+    value: args.value,
+    maxBytes: args.maxBytes,
+  });
 }
 
 function buildCodexConfigOverrides(args: {
@@ -1154,10 +1193,37 @@ class CodexAppServerClient {
     );
     this.process = child;
     this.initialized = false;
-
-    const stdout = createInterface({ input: child.stdout });
-    stdout.on("line", (line) => {
-      this.handleMessage(line);
+    let stdoutBuffer = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      if (child !== this.process) {
+        return;
+      }
+      stdoutBuffer += chunk;
+      if (byteLengthUtf8(stdoutBuffer) > CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES) {
+        this.teardownProcess(
+          `Codex App Server protocol overflow: stdout buffer exceeded ${CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES} bytes.`,
+        );
+        return;
+      }
+      let newlineIndex = stdoutBuffer.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const rawLine = stdoutBuffer.slice(0, newlineIndex);
+        stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
+        const line = rawLine.endsWith("\r")
+          ? rawLine.slice(0, -1)
+          : rawLine;
+        if (byteLengthUtf8(line) > CODEX_APP_SERVER_STDOUT_LINE_MAX_BYTES) {
+          this.teardownProcess(
+            `Codex App Server protocol overflow: line exceeded ${CODEX_APP_SERVER_STDOUT_LINE_MAX_BYTES} bytes.`,
+          );
+          return;
+        }
+        if (line.length > 0) {
+          this.handleMessage(line);
+        }
+        newlineIndex = stdoutBuffer.indexOf("\n");
+      }
     });
 
     child.stderr.on("data", (chunk) => {
@@ -1484,8 +1550,15 @@ export async function streamCodexWithAppServer(
   });
 
   const events: BridgeEvent[] = [];
+  let retainedEventBytes = 0;
   const emitBridgeEvent = (event: BridgeEvent) => {
-    events.push(event);
+    const result = appendBoundedBridgeEvent({
+      events,
+      next: event,
+      retainedBytes: retainedEventBytes,
+      maxBytes: CODEX_APP_SERVER_COLLECTED_EVENTS_MAX_BYTES,
+    });
+    retainedEventBytes = result.retainedBytes;
     args.onEvent?.(event);
   };
   const emitBridgeEvents = (nextEvents: BridgeEvent[]) => {
@@ -1510,10 +1583,12 @@ export async function streamCodexWithAppServer(
   });
 
   const toolOutputBuffers = new Map<string, string>();
+  const toolOutputLastEmitAt = new Map<string, number>();
   const agentMessageBuffers = new Map<string, string>();
   const streamedAgentMessageIds = new Set<string>();
   const streamedReasoningIds = new Set<string>();
   const planBuffers = new Map<string, string>();
+  const planLastEmitAt = new Map<string, number>();
   const pendingApprovalRequests = new Map<string, PendingApprovalRequest>();
   const pendingUserInputRequests = new Map<string, PendingUserInputRequest>();
   let latestUsage: {
@@ -1861,7 +1936,12 @@ export async function streamCodexWithAppServer(
         if (itemId) {
           agentMessageBuffers.set(
             itemId,
-            `${agentMessageBuffers.get(itemId) ?? ""}${delta}`,
+            appendBoundedCodexBuffer({
+              current: agentMessageBuffers.get(itemId) ?? "",
+              chunk: delta,
+              keep: "prefix",
+              maxBytes: CODEX_APP_SERVER_MESSAGE_BUFFER_MAX_BYTES,
+            }),
           );
           lastAgentMessageSegmentId = itemId;
         }
@@ -1907,13 +1987,26 @@ export async function streamCodexWithAppServer(
           return;
         }
         sawNativePlan = true;
-        const next = `${planBuffers.get(itemId) ?? ""}${delta}`;
-        planBuffers.set(itemId, next);
-        emitBridgeEvent({
-          type: "plan_ready",
-          planText: next,
-          ...(itemId ? { sourceSegmentId: itemId } : {}),
+        const next = appendBoundedCodexBuffer({
+          current: planBuffers.get(itemId) ?? "",
+          chunk: delta,
+          keep: "prefix",
+          maxBytes: CODEX_APP_SERVER_PLAN_BUFFER_MAX_BYTES,
         });
+        planBuffers.set(itemId, next);
+        const now = Date.now();
+        const lastEmitAt = planLastEmitAt.get(itemId) ?? 0;
+        if (now - lastEmitAt >= CODEX_APP_SERVER_PARTIAL_EMIT_THROTTLE_MS) {
+          planLastEmitAt.set(itemId, now);
+          emitBridgeEvent({
+            type: "plan_ready",
+            planText: truncateCodexSnapshot({
+              value: next,
+              maxBytes: CODEX_APP_SERVER_PLAN_EVENT_MAX_BYTES,
+            }),
+            ...(itemId ? { sourceSegmentId: itemId } : {}),
+          });
+        }
         return;
       }
       case "item/commandExecution/outputDelta": {
@@ -1922,14 +2015,27 @@ export async function streamCodexWithAppServer(
         if (!itemId || !delta) {
           return;
         }
-        const next = `${toolOutputBuffers.get(itemId) ?? ""}${delta}`;
-        toolOutputBuffers.set(itemId, next);
-        emitBridgeEvent({
-          type: "tool_result",
-          tool_use_id: itemId,
-          output: next,
-          isPartial: true,
+        const next = appendBoundedCodexBuffer({
+          current: toolOutputBuffers.get(itemId) ?? "",
+          chunk: delta,
+          keep: "suffix",
+          maxBytes: CODEX_APP_SERVER_TOOL_OUTPUT_BUFFER_MAX_BYTES,
         });
+        toolOutputBuffers.set(itemId, next);
+        const now = Date.now();
+        const lastEmitAt = toolOutputLastEmitAt.get(itemId) ?? 0;
+        if (now - lastEmitAt >= CODEX_APP_SERVER_PARTIAL_EMIT_THROTTLE_MS) {
+          toolOutputLastEmitAt.set(itemId, now);
+          emitBridgeEvent({
+            type: "tool_result",
+            tool_use_id: itemId,
+            output: truncateCodexSnapshot({
+              value: next,
+              maxBytes: CODEX_APP_SERVER_PARTIAL_TOOL_OUTPUT_MAX_BYTES,
+            }),
+            isPartial: true,
+          });
+        }
         return;
       }
       case "item/mcpToolCall/progress": {
@@ -1994,13 +2100,22 @@ export async function streamCodexWithAppServer(
                 ? String((item as { text?: unknown }).text)
                 : "";
             if (itemId && text) {
-              agentMessageBuffers.set(itemId, text);
+              agentMessageBuffers.set(
+                itemId,
+                truncateCodexSnapshot({
+                  value: text,
+                  maxBytes: CODEX_APP_SERVER_MESSAGE_BUFFER_MAX_BYTES,
+                }),
+              );
               lastAgentMessageSegmentId = itemId;
             }
             if (!streamedAgentMessageIds.has(itemId) && text) {
               emitBridgeEvent({
                 type: "text",
-                text,
+                text: truncateCodexSnapshot({
+                  value: text,
+                  maxBytes: CODEX_APP_SERVER_MESSAGE_BUFFER_MAX_BYTES,
+                }),
                 ...(itemId ? { segmentId: itemId } : {}),
               });
             }
@@ -2011,7 +2126,16 @@ export async function streamCodexWithAppServer(
               typeof (item as { text?: unknown }).text === "string"
                 ? String((item as { text?: unknown }).text)
                 : "";
-            const planText = text || planBuffers.get(itemId) || "";
+            if (itemId) {
+              planLastEmitAt.delete(itemId);
+            }
+            const planText = truncateCodexSnapshot({
+              value: text || planBuffers.get(itemId) || "",
+              maxBytes: CODEX_APP_SERVER_PLAN_EVENT_MAX_BYTES,
+            });
+            if (itemId) {
+              planBuffers.delete(itemId);
+            }
             if (planText.trim().length > 0) {
               sawNativePlan = true;
               emitBridgeEvent({
@@ -2032,10 +2156,13 @@ export async function streamCodexWithAppServer(
               summary?: string[];
             };
             if (!streamedReasoningIds.has(itemId)) {
-              const text = [
+              const text = truncateCodexSnapshot({
+                value: [
                 ...(reasoningItem.summary ?? []),
                 ...(reasoningItem.content ?? []),
-              ].join("\n");
+              ].join("\n"),
+                maxBytes: CODEX_APP_SERVER_MESSAGE_BUFFER_MAX_BYTES,
+              });
               if (text.trim().length > 0) {
                 emitBridgeEvent({
                   type: "thinking",
@@ -2059,10 +2186,19 @@ export async function streamCodexWithAppServer(
               aggregatedOutput?: string | null;
               status?: string;
             };
-            const output =
-              typeof commandItem.aggregatedOutput === "string"
-                ? commandItem.aggregatedOutput
-                : (toolOutputBuffers.get(itemId) ?? "");
+            if (itemId) {
+              toolOutputLastEmitAt.delete(itemId);
+            }
+            const output = truncateCodexSnapshot({
+              value:
+                typeof commandItem.aggregatedOutput === "string"
+                  ? commandItem.aggregatedOutput
+                  : (toolOutputBuffers.get(itemId) ?? ""),
+              maxBytes: CODEX_APP_SERVER_FINAL_TOOL_OUTPUT_MAX_BYTES,
+            });
+            if (itemId) {
+              toolOutputBuffers.delete(itemId);
+            }
             emitBridgeEvents([
               {
                 type: "tool",
@@ -2186,9 +2322,12 @@ export async function streamCodexWithAppServer(
           | undefined;
         if (args.runtimeOptions?.codexPlanMode && !sawNativePlan) {
           const fallbackSegmentId = lastAgentMessageSegmentId.trim();
-          const fallbackPlanText = fallbackSegmentId
-            ? (agentMessageBuffers.get(fallbackSegmentId) ?? "")
-            : "";
+          const fallbackPlanText = truncateCodexSnapshot({
+            value: fallbackSegmentId
+              ? (agentMessageBuffers.get(fallbackSegmentId) ?? "")
+              : "",
+            maxBytes: CODEX_APP_SERVER_PLAN_EVENT_MAX_BYTES,
+          });
           if (fallbackPlanText.trim().length > 0) {
             emitBridgeEvent({
               type: "plan_ready",
