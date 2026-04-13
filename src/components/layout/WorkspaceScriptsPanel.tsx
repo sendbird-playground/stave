@@ -502,7 +502,7 @@ export function WorkspaceScriptsPanel(props: {
   }
 
   return (
-    <div className="h-full overflow-auto px-2 py-2">
+    <div className="h-full overflow-auto px-3 py-2">
       <div className="space-y-4">
         {/* ── Header bar ── */}
         <div className="flex items-center justify-between gap-2">

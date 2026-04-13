@@ -465,7 +465,7 @@ export function WorkspaceExplorerPanel(props: {
   const [showSearch, setShowSearch] = useState(false);
 
   return (
-    <div className="flex min-h-0 h-full flex-col p-2">
+    <div className="flex min-h-0 h-full flex-col px-3 py-2">
       <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
         <p className="truncate text-sm text-muted-foreground">{props.projectName}</p>
         <div className="flex items-center gap-1">

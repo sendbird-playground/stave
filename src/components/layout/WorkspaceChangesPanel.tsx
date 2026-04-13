@@ -245,7 +245,7 @@ export function WorkspaceChangesPanel(props: {
 
   return (
     <Tabs value={view} onValueChange={(nextValue) => setView(nextValue as SourceControlPanelView)} className="flex h-full min-h-0 flex-col gap-0">
-      <div className="border-b border-border/80 px-2 py-2">
+      <div className="border-b border-border/80 px-3 py-2">
         <TabsList className="h-auto w-full justify-start rounded-xl border border-border/70 bg-muted/30 p-1">
           <TabsTrigger value="changes" className="h-8 flex-none gap-2 rounded-lg px-3 text-xs font-medium">
             <span>Changes</span>
@@ -260,7 +260,7 @@ export function WorkspaceChangesPanel(props: {
       </div>
 
       <TabsContent value="changes" className="min-h-0 flex-1 overflow-auto">
-        <div className="space-y-4 p-2">
+        <div className="space-y-4 px-3 py-2">
           <section className="space-y-3 px-1">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -389,7 +389,7 @@ export function WorkspaceChangesPanel(props: {
       </TabsContent>
 
       <TabsContent value="history" className="min-h-0 flex-1 overflow-auto">
-        <div className="space-y-3 p-2">
+        <div className="space-y-3 px-3 py-2">
           <div className="flex items-center justify-between gap-3 px-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Badge variant="outline" className="h-6 max-w-full justify-start gap-1 rounded-md border-border/70 bg-background/80 px-2 font-normal">

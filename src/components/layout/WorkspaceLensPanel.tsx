@@ -492,7 +492,7 @@ export function WorkspaceLensPanel(args: { occluded?: boolean }) {
   return (
     <TooltipProvider delayDuration={120}>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar/20">
-        <div className="flex shrink-0 flex-col gap-2 border-b border-border/60 px-2 py-2">
+        <div className="flex shrink-0 flex-col gap-2 border-b border-border/60 px-3 py-2">
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -655,7 +655,7 @@ export function WorkspaceLensPanel(args: { occluded?: boolean }) {
           ) : null}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 px-2 py-1.5">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 px-3 py-1.5">
           <div className="min-w-0 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1 truncate">
               {isLoading ? <Loader2 className="size-3 animate-spin" /> : null}

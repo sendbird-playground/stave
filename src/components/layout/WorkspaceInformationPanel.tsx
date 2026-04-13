@@ -1124,7 +1124,7 @@ export function WorkspaceInformationPanel() {
       className="flex h-full min-h-0 flex-col overflow-auto origin-top-left"
       style={infoPanelScale !== 1 ? { zoom: infoPanelScale } : undefined}
     >
-      <div className="px-2 py-2">
+      <div className="px-3 py-2">
         <Accordion
           type="multiple"
           value={openSections}
@@ -1203,7 +1203,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-2 space-y-0.5">
+            <div className="-mx-3 space-y-0.5">
               {workspaceInformation.todos.length === 0 ? (
                 <EmptyHint>No todos yet</EmptyHint>
               ) : null}
@@ -1349,7 +1349,7 @@ export function WorkspaceInformationPanel() {
               </div>
             }
           >
-            <div className="-mx-2 space-y-0.5">
+            <div className="-mx-3 space-y-0.5">
               {/* Current branch PR */}
               {!isDefaultWorkspace && currentBranchPr && currentBranchPrStatus ? (
                 <GitHubPrRow
@@ -1481,7 +1481,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-2 space-y-0.5">
+            <div className="-mx-3 space-y-0.5">
               {workspaceInformation.jiraIssues.length === 0 ? (
                 <EmptyHint>No linked Jira issues</EmptyHint>
               ) : null}
@@ -1584,7 +1584,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-2 space-y-0.5">
+            <div className="-mx-3 space-y-0.5">
               {(workspaceInformation.confluencePages ?? []).length === 0 ? (
                 <EmptyHint>No linked Confluence pages</EmptyHint>
               ) : null}
@@ -1688,7 +1688,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-2 space-y-0.5">
+            <div className="-mx-3 space-y-0.5">
               {workspaceInformation.figmaResources.length === 0 ? (
                 <EmptyHint>No linked Figma resources</EmptyHint>
               ) : null}
@@ -1788,7 +1788,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-2 space-y-0.5">
+            <div className="-mx-3 space-y-0.5">
               {(workspaceInformation.slackThreads?.length ?? 0) === 0 ? (
                 <EmptyHint>No linked Slack threads</EmptyHint>
               ) : null}
@@ -1873,7 +1873,7 @@ export function WorkspaceInformationPanel() {
               />
             }
           >
-            <div className="-mx-2 space-y-3">
+            <div className="-mx-3 space-y-3">
               {workspaceInformation.customFields.length === 0 ? (
                 <EmptyHint>No custom fields</EmptyHint>
               ) : null}

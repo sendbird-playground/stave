@@ -438,7 +438,7 @@ export function WorkspaceSkillsPanel(props: {
   return (
     <div className="flex h-full flex-col">
       {/* Header bar */}
-      <div className="flex shrink-0 items-center justify-between gap-2 px-2 pt-2 pb-1">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-2 pb-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-foreground">
             {skillCatalog.status === "loading"
@@ -474,7 +474,7 @@ export function WorkspaceSkillsPanel(props: {
       </div>
 
       {/* Search */}
-      <div className="relative shrink-0 px-2 pb-1.5">
+      <div className="relative shrink-0 px-3 pb-1.5">
         <Search className="absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={searchQuery}
@@ -494,7 +494,7 @@ export function WorkspaceSkillsPanel(props: {
       </div>
 
       {/* Skill list */}
-      <div className="min-h-0 flex-1 overflow-auto px-2 pb-2">
+      <div className="min-h-0 flex-1 overflow-auto px-3 pb-2">
         {skillCatalog.status === "loading" && skillCatalog.skills.length === 0 ? (
           <div className="px-1 py-4 text-xs text-muted-foreground">Discovering skills...</div>
         ) : filteredSkills.length === 0 ? (
