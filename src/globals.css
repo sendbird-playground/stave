@@ -119,8 +119,8 @@
   --editor-muted: oklch(0.24 0 0);
   --editor-tab: oklch(0.205 0 0);
   --editor-tab-active: oklch(0.269 0 0);
-  --terminal: oklch(0.17 0.012 180);
-  --terminal-foreground: oklch(0.92 0.008 165);
+  --terminal: oklch(0.145 0 0);
+  --terminal-foreground: oklch(0.92 0 0);
   --diff-added: oklch(0.34 0.07 154);
   --diff-added-foreground: oklch(0.86 0.06 154);
   --diff-removed: oklch(0.33 0.07 25);
