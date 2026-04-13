@@ -321,6 +321,7 @@ export function useCliTerminalInstance(
     });
 
     resizeFrame = window.requestAnimationFrame(() => {
+      resizeFrame = 0;
       if (cancelled) {
         return;
       }

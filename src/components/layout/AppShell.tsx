@@ -466,14 +466,17 @@ export function AppShell() {
         return;
       }
 
-      if (isEditableShortcutTarget(event.target)) {
+      // When focus is inside a terminal surface (xterm creates an internal
+      // <textarea> that matches the editable selector), skip the editable-
+      // target guard so Cmd-based app shortcuts still work. Only block
+      // Ctrl+<key> combos that belong to the shell (Ctrl+C, Ctrl+A, etc.).
+      const inTerminalSurface = isTerminalSurfaceTarget(event.target);
+
+      if (isEditableShortcutTarget(event.target) && !inTerminalSurface) {
         return;
       }
 
-      // When focus is inside a terminal surface, only allow Cmd-based
-      // shortcuts through (macOS). Ctrl+<key> combos belong to the shell
-      // (Ctrl+C, Ctrl+E, Ctrl+A, etc.) and must not be intercepted.
-      if (isTerminalSurfaceTarget(event.target) && event.ctrlKey && !event.metaKey) {
+      if (inTerminalSurface && event.ctrlKey && !event.metaKey) {
         return;
       }
 
