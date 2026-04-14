@@ -1,3 +1,11 @@
+## [0.2.2](https://github.com/sendbird-playground/stave/compare/v0.2.1...v0.2.2) (2026-04-14)
+
+### Bug Fixes
+
+* compact oversized provider turn requests before they hit the host-service stdin protocol limit, so chat turns keep starting instead of crashing the provider runtime
+* preserve task-critical context while trimming lower-priority repo-map and bulk context payloads during transport compaction
+* retry provider turn startup once with a smaller transport payload when the first request still overflows the host-service boundary
+
 ## [0.2.1](https://github.com/sendbird-playground/stave/compare/v0.2.0...v0.2.1) (2026-04-14)
 
 ### Bug Fixes

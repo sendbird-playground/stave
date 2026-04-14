@@ -68,6 +68,7 @@ import { isDoneEvent, toEventType } from "./main/utils/provider-events";
 import { quotePath, runCommand } from "./main/utils/command";
 import type { StreamTurnArgs } from "./providers/types";
 import { truncateUtf8Middle } from "./shared/bounded-text";
+import { HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES } from "./shared/host-service-transport";
 import { Utf8LineBuffer } from "./shared/utf8-line-buffer";
 
 type HostServiceOutboundMessage =
@@ -89,7 +90,7 @@ const HOST_SERVICE_QUEUE_LOG_INTERVAL_MS = 2_000;
 const HOST_PROVIDER_EVENT_STRING_MAX_BYTES = 128 * 1024;
 const HOST_PROVIDER_EVENT_LIST_MAX_ITEMS = 32;
 const HOST_SERVICE_STDIN_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
-const HOST_SERVICE_STDIN_LINE_MAX_BYTES = 1 * 1024 * 1024;
+const HOST_SERVICE_STDIN_LINE_MAX_BYTES = HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES;
 
 let messageWriteChain = Promise.resolve();
 let pendingMessageCount = 0;

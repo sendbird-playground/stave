@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES } from "../shared/host-service-transport";
 import { Utf8LineBuffer } from "../shared/utf8-line-buffer";
 import type {
   AnyHostServiceEventEnvelope,
@@ -21,7 +22,7 @@ interface PendingRequest {
 }
 
 const HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
-const HOST_SERVICE_STDOUT_LINE_MAX_BYTES = 1 * 1024 * 1024;
+const HOST_SERVICE_STDOUT_LINE_MAX_BYTES = HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES;
 
 export function resolveHostServiceScriptPath(args: {
   moduleUrl: string;
@@ -39,6 +40,18 @@ export function resolveHostServiceScriptPath(args: {
     return path.normalize(parentCandidate);
   }
   return siblingCandidate;
+}
+
+export function measureSerializedHostServiceRequestBytes(args: {
+  method: HostServiceMethod;
+  params: HostServiceRequestMap[HostServiceMethod];
+}) {
+  return Buffer.byteLength(JSON.stringify({
+    type: "request",
+    id: 1,
+    method: args.method,
+    params: args.params,
+  }), "utf8") + 1;
 }
 
 class HostServiceClient {
@@ -227,6 +240,13 @@ class HostServiceClient {
       method,
       params,
     };
+    const serializedRequest = `${JSON.stringify(request)}\n`;
+    const serializedRequestBytes = Buffer.byteLength(serializedRequest, "utf8");
+    if (serializedRequestBytes > HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES) {
+      throw new Error(
+        `[host-service] ${method} request exceeded protocol line limit (${serializedRequestBytes} bytes > ${HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES})`,
+      );
+    }
 
     const resultPromise = new Promise<HostServiceResponseMap[TMethod]>(
       (resolve, reject) => {
@@ -238,7 +258,7 @@ class HostServiceClient {
       },
     );
 
-    this.child.stdin.write(`${JSON.stringify(request)}\n`, (error) => {
+    this.child.stdin.write(serializedRequest, (error) => {
       if (!error) {
         return;
       }
