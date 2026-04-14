@@ -28,7 +28,6 @@ interface ChatInputRuntimeArgs {
   claudeEffort: AppSettings["claudeEffort"];
   claudeThinkingMode: AppSettings["claudeThinkingMode"];
   claudeAgentProgressSummaries: boolean;
-  claudeFastMode: boolean;
   claudeBinaryPath: string;
   codexFileAccess: AppSettings["codexFileAccess"];
   codexNetworkAccess: boolean;
@@ -140,12 +139,6 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
         id: "progress-summaries",
         label: "Progress Summaries",
         value: args.claudeAgentProgressSummaries ? "On" : "Off",
-      },
-      {
-        id: "fast-mode",
-        label: "Fast Mode",
-        value: args.claudeFastMode ? "On" : "Off",
-        tone: args.claudeFastMode ? "warning" : "default",
       },
       ...(args.claudeBinaryPath.trim()
         ? [{

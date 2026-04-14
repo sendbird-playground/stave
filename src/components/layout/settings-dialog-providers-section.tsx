@@ -891,7 +891,6 @@ export function ProvidersSection() {
     claudeEffort,
     claudeThinkingMode,
     claudeAgentProgressSummaries,
-    claudeFastMode,
     codexFileAccess,
     codexNetworkAccess,
     codexApprovalPolicy,
@@ -912,7 +911,6 @@ export function ProvidersSection() {
       state.settings.claudeEffort,
       state.settings.claudeThinkingMode,
       state.settings.claudeAgentProgressSummaries,
-      state.settings.claudeFastMode,
       state.settings.codexFileAccess,
       state.settings.codexNetworkAccess,
       state.settings.codexApprovalPolicy,
@@ -1140,12 +1138,6 @@ export function ProvidersSection() {
             description="Enables Claude SDK `task_progress.summary` updates for running subagents."
             checked={claudeAgentProgressSummaries}
             onCheckedChange={(checked) => updateSettings({ patch: { claudeAgentProgressSummaries: checked } })}
-          />
-          <SwitchField
-            title="Fast Mode"
-            description="Enables Claude's /fast mode, which uses Haiku for faster responses on simpler tasks."
-            checked={claudeFastMode}
-            onCheckedChange={(checked) => updateSettings({ patch: { claudeFastMode: checked } })}
           />
             </SettingsCard>
             <ClaudeBinaryPathCard />
