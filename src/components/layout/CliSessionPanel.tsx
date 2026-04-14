@@ -29,6 +29,7 @@ import {
   toast,
 } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { buildCliSessionRuntimeOptions } from "@/lib/terminal/cli-session-runtime-options";
 import {
   DEFAULT_TERMINAL_FONT_FAMILY,
   DEFAULT_TERMINAL_FONT_SIZE,
@@ -137,23 +138,16 @@ function CliSessionPanelImpl() {
         cols: args.cols,
         rows: args.rows,
         deliveryMode: args.deliveryMode,
-        runtimeOptions:
-          args.tab.provider === "claude-code"
-            ? {
-                ...(settings.claudeBinaryPath.trim()
-                  ? { claudeBinaryPath: settings.claudeBinaryPath.trim() }
-                  : {}),
-                claudePermissionMode: settings.claudePermissionMode,
-              }
-            : args.tab.provider === "codex" && settings.codexBinaryPath.trim()
-              ? { codexBinaryPath: settings.codexBinaryPath.trim() }
-              : undefined,
+        runtimeOptions: buildCliSessionRuntimeOptions({
+          providerId: args.tab.provider,
+          claudeBinaryPath: settings.claudeBinaryPath,
+          codexBinaryPath: settings.codexBinaryPath,
+        }),
       });
     },
     [
       activeWorkspaceId,
       settings.claudeBinaryPath,
-      settings.claudePermissionMode,
       settings.codexBinaryPath,
       workspacePath,
     ],

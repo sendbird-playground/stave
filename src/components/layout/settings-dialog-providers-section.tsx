@@ -997,7 +997,7 @@ export function ProvidersSection() {
           </LabeledField>
           <LabeledField
             title="Permission Mode"
-            description="Controls how aggressively Claude asks for permission during a turn."
+            description="Controls how aggressively Claude asks for permission during a chat turn. Claude CLI sessions always launch in `auto`."
             guide={(
               <SettingsFieldGuide
                 title="Claude Permission Mode"
