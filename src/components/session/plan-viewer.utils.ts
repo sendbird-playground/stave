@@ -86,6 +86,18 @@ export function resolvePlanViewerAutoViewState(args: {
   return args.viewState;
 }
 
+export function buildPlanViewerContextKey(args: {
+  activeWorkspaceId: string;
+  activeTaskId: string;
+  latestPlanMessageId?: string | null;
+}) {
+  return [
+    args.activeWorkspaceId,
+    args.activeTaskId,
+    args.latestPlanMessageId ?? "pending",
+  ].join(":");
+}
+
 export function resolvePlanViewerInsets(args: {
   isExpanded: boolean;
   inputDockHeight: number;
