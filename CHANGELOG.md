@@ -1,3 +1,9 @@
+## [0.2.1](https://github.com/sendbird-playground/stave/compare/v0.2.0...v0.2.1) (2026-04-14)
+
+### Bug Fixes
+
+* **claude-cli:** gate auto mode by cli version ([c2f76e0](https://github.com/sendbird-playground/stave/commit/c2f76e0bd6b5e987b2a8b7f1843130cc0295713e))
+* **ui:** align dark-mode terminal background with background token ([9157045](https://github.com/sendbird-playground/stave/commit/9157045cdc8ee1f6c43df4ff13231900bd2af2ea))
 ## [0.2.0](https://github.com/sendbird-playground/stave/compare/v0.1.2...v0.2.0) (2026-04-14)
 
 ### Highlights
