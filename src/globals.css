@@ -217,6 +217,23 @@
   --font-heading: "Inter Variable", sans-serif;
 }
 
+/*
+ * xterm.css ships its viewport background as an unlayered rule:
+ * `.xterm .xterm-viewport { background-color: #000; }`
+ *
+ * Keep the CLI-session overrides unlayered as well so they win in the
+ * cascade and the terminal padding / outer edge follows the current theme
+ * token instead of leaking xterm's hard-coded black.
+ */
+[data-cli-terminal-surface] > .xterm {
+  padding: 1rem 1.25rem;
+  background-color: var(--color-terminal);
+}
+
+[data-cli-terminal-surface] > .xterm > .xterm-viewport {
+  background-color: var(--color-terminal);
+}
+
 @layer base {
   *,
   *::before,
@@ -307,27 +324,6 @@
     caret-color: transparent;
   }
 
-  /*
-   * CLI terminal padding.
-   *
-   * Padding is applied to the `.xterm` element rather than the mount
-   * container so that xterm.js FitAddon correctly subtracts it when
-   * calculating available rows/cols.  Placing padding on the container
-   * caused FitAddon to over-count rows (border-box height includes
-   * padding) and broke ResizeObserver-driven refits because the
-   * percentage-based inner wrapper didn't always propagate size changes.
-   */
-  [data-cli-terminal-surface] > .xterm {
-    padding: 1rem 1.25rem;
-  }
-
-  /* xterm.css hard-codes .xterm-viewport { background-color: #000 }.
-   * The viewport is position:absolute inset:0, so it covers the .xterm
-   * padding area with black.  Override to match our terminal theme colour
-   * so the padding zone blends seamlessly with the terminal surface. */
-  [data-cli-terminal-surface] > .xterm > .xterm-viewport {
-    background-color: var(--color-terminal);
-  }
 }
 
 @layer utilities {
