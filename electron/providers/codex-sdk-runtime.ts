@@ -11,10 +11,8 @@ import type {
   ConnectedToolStatusEntry,
   ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
-import {
-  resolveExecutablePath,
-  resolveLoginShellEnvVarValue,
-} from "./executable-path";
+import { resolveExecutablePath } from "./executable-path";
+import { buildCodexCliEnv } from "./cli-path-env";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -30,7 +28,6 @@ import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
 import path from "node:path";
 import {
-  buildRuntimeProcessEnv,
   parseBooleanEnv,
   parseSemverVersion,
   probeExecutableVersion,
@@ -70,10 +67,6 @@ const CODEX_LOOKUP_PATHS = [
 const CODEX_SHARED_RUNTIME_DIRECTORIES = [
   `${homedir()}/.codex`,
   `${homedir()}/.stave`,
-] as const;
-const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
-  "SLACK_OAUTH_TOKEN",
-  "STAVE_LOCAL_MCP_TOKEN",
 ] as const;
 const CODEX_EVENT_RETAINED_BYTES_MAX = 2 * 1024 * 1024;
 const CODEX_OVERFLOW_TAIL_EVENTS: BridgeEvent[] = [
@@ -172,28 +165,7 @@ function toCodexUserFacingErrorMessage(args: { message: string }) {
 }
 
 export function buildCodexEnv(args: { executablePath?: string } = {}) {
-  const env = buildRuntimeProcessEnv({
-    executablePath: args.executablePath,
-    extraPaths: CODEX_LOOKUP_PATHS,
-  });
-  const localMcpManifest = readPrimaryStaveLocalMcpManifestSync();
-  if (localMcpManifest?.token?.trim()) {
-    env[CODEX_STAVE_MCP_TOKEN_ENV_VAR] = localMcpManifest.token;
-  }
-  for (const key of CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS) {
-    if (env[key]?.trim()) {
-      continue;
-    }
-    const fallbackValue = resolveLoginShellEnvVarValue({ key });
-    if (fallbackValue) {
-      env[key] = fallbackValue;
-    }
-  }
-  return Object.fromEntries(
-    Object.entries(env).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
+  return buildCodexCliEnv({ executablePath: args.executablePath });
 }
 
 async function hasConnectedStaveLocalMcpForCodex() {

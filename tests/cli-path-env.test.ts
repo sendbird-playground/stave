@@ -3,6 +3,7 @@ import {
   CLAUDE_CLI_AUTO_MODE_MIN_VERSION,
   isClaudeCliAutoModeSupportedVersion,
 } from "../electron/providers/claude-cli-compat";
+import { applyLoginShellEnvOverrides } from "../electron/providers/cli-path-env";
 
 describe("Claude CLI auto mode support", () => {
   test("requires Claude Code 2.1.71 or newer", () => {
@@ -34,5 +35,44 @@ describe("Claude CLI auto mode support", () => {
         version: null,
       }),
     ).toBe(false);
+  });
+});
+
+describe("applyLoginShellEnvOverrides", () => {
+  test("prefers login-shell values over inherited env for preferred keys", () => {
+    const env: Record<string, string | undefined> = {
+      CLAUDE_CONFIG_DIR: "/stale/config",
+    };
+
+    applyLoginShellEnvOverrides({
+      env,
+      preferredKeys: ["CLAUDE_CONFIG_DIR"],
+      resolver: ({ key }) => key === "CLAUDE_CONFIG_DIR" ? "/fresh/config" : null,
+    });
+
+    expect(env.CLAUDE_CONFIG_DIR).toBe("/fresh/config");
+  });
+
+  test("fills fallback keys only when the env value is missing", () => {
+    const env: Record<string, string | undefined> = {
+      SLACK_OAUTH_TOKEN: "existing-token",
+    };
+
+    applyLoginShellEnvOverrides({
+      env,
+      fallbackKeys: ["SLACK_OAUTH_TOKEN", "CODEX_HOME"],
+      resolver: ({ key }) => {
+        if (key === "SLACK_OAUTH_TOKEN") {
+          return "shell-token";
+        }
+        if (key === "CODEX_HOME") {
+          return "/shell/codex";
+        }
+        return null;
+      },
+    });
+
+    expect(env.SLACK_OAUTH_TOKEN).toBe("existing-token");
+    expect(env.CODEX_HOME).toBe("/shell/codex");
   });
 });

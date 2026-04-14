@@ -5,6 +5,7 @@ import {
   resolveClaudeExecutablePath,
   streamClaudeWithSdk,
 } from "./claude-sdk-runtime";
+import { buildCodexCliEnv } from "./cli-path-env";
 import {
   cleanupCodexTask,
   resolveCodexExecutablePath,
@@ -38,8 +39,7 @@ import {
   resolveStaveProviderForModel,
 } from "../../src/lib/providers/stave-auto-profile";
 import { randomUUID } from "node:crypto";
-import { homedir } from "node:os";
-import { buildRuntimeProcessEnv, probeExecutableVersion } from "./runtime-shared";
+import { probeExecutableVersion } from "./runtime-shared";
 
 const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000);
 const ACTIVE_STREAM_TTL_MS = 15 * 60 * 1000;
@@ -78,10 +78,6 @@ const activeStreams = new Map<string, ActiveStreamSession>();
  * SQLite being closed → "database connection is not open".
  */
 const activeTurnPromises = new Map<string, Promise<void>>();
-const CODEX_LOOKUP_PATHS = [
-  `${homedir()}/.bun/bin`,
-  `${homedir()}/.local/bin`,
-] as const;
 const CODEX_RUNTIME_SELECTOR = process.env.STAVE_CODEX_RUNTIME?.trim().toLowerCase();
 
 function shouldUseLegacyCodexRuntime() {
@@ -239,10 +235,7 @@ function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runt
 
   const versionProbe = probeExecutableVersion({
     executablePath,
-    env: buildRuntimeProcessEnv({
-      executablePath,
-      extraPaths: CODEX_LOOKUP_PATHS,
-    }),
+    env: buildCodexCliEnv({ executablePath }),
   });
   const available = versionProbe.status === 0;
   const detail = available

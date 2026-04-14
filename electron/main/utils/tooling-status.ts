@@ -4,6 +4,7 @@ import {
   resolveClaudeExecutablePath,
 } from "../../providers/claude-sdk-runtime";
 import { resolveCodexExecutablePath } from "../../providers/codex-app-server-runtime";
+import { buildCodexCliEnv } from "../../providers/cli-path-env";
 import {
   canExecutePath,
   resolveExecutablePath,
@@ -585,7 +586,7 @@ async function inspectCodexStatus(args: { codexBinaryPath?: string }) {
     });
   }
 
-  const env = buildRuntimeProcessEnv({ executablePath });
+  const env = buildCodexCliEnv({ executablePath });
   const [versionResult, authResult] = await Promise.all([
     runCommandArgs({
       command: executablePath,
@@ -643,7 +644,7 @@ export async function getCodexMcpStatus(args: {
     };
   }
 
-  const env = buildRuntimeProcessEnv({ executablePath });
+  const env = buildCodexCliEnv({ executablePath });
   const result = await runCommandArgs({
     command: executablePath,
     commandArgs: ["mcp", "list", "--json"],
