@@ -6,6 +6,7 @@ import { UserInputCard } from "./user-input-card";
 import type { CommandPaletteItem, CommandPaletteProviderNote } from "@/lib/commands";
 import type { ProviderModePresetDefinition, ProviderModePresetId } from "@/lib/providers/provider-mode-presets";
 import { filterCommandPaletteItems, getActiveSlashCommandTokenMatch, replaceSlashCommandToken } from "@/lib/commands";
+import { useDismissibleLayer } from "@/lib/dismissible-layer";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { getActiveSkillTokenMatch, replaceSkillToken } from "@/lib/skills/catalog";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
@@ -189,6 +190,10 @@ export function PromptInput(args: PromptInputProps) {
     [attachments],
   );
   const [imagePreviewSrc, setImagePreviewSrc] = useState<{ dataUrl: string; label: string } | null>(null);
+  const { containerRef: imagePreviewRef, handleKeyDown: handleImagePreviewKeyDown } = useDismissibleLayer<HTMLDivElement>({
+    enabled: Boolean(imagePreviewSrc),
+    onDismiss: () => setImagePreviewSrc(null),
+  });
   const [dismissedCommandToken, setDismissedCommandToken] = useState<string | null>(null);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(NO_COMMAND_SELECTION);
   const [dismissedSkillToken, setDismissedSkillToken] = useState<string | null>(null);
@@ -1424,10 +1429,13 @@ export function PromptInput(args: PromptInputProps) {
     </form>
     {imagePreviewSrc ? (
       <div
+        ref={imagePreviewRef}
         className={cn(UI_LAYER_CLASS.lightbox, "fixed inset-0 flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]")}
         role="dialog"
         aria-modal="true"
         aria-label="Image full screen preview"
+        tabIndex={-1}
+        onKeyDown={handleImagePreviewKeyDown}
         onClick={() => setImagePreviewSrc(null)}
       >
         <button

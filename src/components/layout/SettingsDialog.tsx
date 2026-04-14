@@ -19,6 +19,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from "@/components/ui/sidebar";
+import { useDismissibleLayer } from "@/lib/dismissible-layer";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { settingsSectionGroups, settingsSections, type SectionId } from "./settings-dialog.schema";
@@ -37,6 +38,10 @@ const sectionsById = Object.fromEntries(settingsSections.map((section) => [secti
 export function SettingsDialog(args: SettingsDialogProps) {
   const { initialProjectPath, initialSection, open, onOpenChange } = args;
   const [activeSection, setActiveSection] = useState<SectionId>("general");
+  const { containerRef, handleKeyDown } = useDismissibleLayer<HTMLDivElement>({
+    enabled: open,
+    onDismiss: () => onOpenChange({ open: false }),
+  });
 
   useEffect(() => {
     if (!open) {
@@ -53,7 +58,13 @@ export function SettingsDialog(args: SettingsDialogProps) {
 
   return (
     <div
+      ref={containerRef}
       className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+      tabIndex={-1}
+      onKeyDown={handleKeyDown}
       onMouseDown={(event) => {
         if (!shouldCloseSettingsDialogFromMouseDown({
           target: event.target,

@@ -18,6 +18,7 @@ import {
   formatWorkspaceFilePathForDisplay,
   resolveWorkspaceRelativeFilePath,
 } from "@/lib/workspace-file-path";
+import { useDismissibleLayer } from "@/lib/dismissible-layer";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -433,6 +434,10 @@ export function ReferencedFilesBlock(args: { parts: FileContextPart[] }) {
 
 export function ImageAttachmentBlock(args: { parts: ImageContextPart[] }) {
   const [previewSrc, setPreviewSrc] = useState<{ dataUrl: string; label: string } | null>(null);
+  const { containerRef, handleKeyDown } = useDismissibleLayer<HTMLDivElement>({
+    enabled: Boolean(previewSrc),
+    onDismiss: () => setPreviewSrc(null),
+  });
 
   return (
     <>
@@ -452,10 +457,13 @@ export function ImageAttachmentBlock(args: { parts: ImageContextPart[] }) {
       </div>
       {previewSrc ? (
         <div
+          ref={containerRef}
           className={cn(UI_LAYER_CLASS.lightbox, "fixed inset-0 flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]")}
           role="dialog"
           aria-modal="true"
           aria-label="Image full screen preview"
+          tabIndex={-1}
+          onKeyDown={handleKeyDown}
           onClick={() => setPreviewSrc(null)}
         >
           <button

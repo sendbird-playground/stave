@@ -1,3 +1,4 @@
+import { useDismissibleLayer } from "@/lib/dismissible-layer";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 
@@ -7,16 +8,24 @@ export function EditorImagePreviewOverlay(args: {
   alt: string;
   onClose: () => void;
 }) {
+  const { containerRef, handleKeyDown } = useDismissibleLayer<HTMLDivElement>({
+    enabled: args.open,
+    onDismiss: args.onClose,
+  });
+
   if (!args.open) {
     return null;
   }
 
   return (
     <div
+      ref={containerRef}
       className={cn(UI_LAYER_CLASS.lightbox, "fixed inset-0 flex items-center justify-center bg-overlay p-6 backdrop-blur-[2px]")}
       role="dialog"
       aria-modal="true"
       aria-label="Image full screen preview"
+      tabIndex={-1}
+      onKeyDown={handleKeyDown}
       onClick={args.onClose}
     >
       <button
