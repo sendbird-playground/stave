@@ -301,7 +301,7 @@ function CliSessionPanelImpl() {
         isVisible ? "flex" : "hidden",
       )}
     >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-border/40">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header container always at child position 0 so {terminalViewport}
             stays at position 1 and React never unmounts the terminal surface. */}
         <div className="shrink-0 border-b border-border/70 bg-card/95 px-4 py-3 backdrop-blur-sm">
