@@ -11,6 +11,7 @@ import {
   resolvePromptDraftRuntimeState,
 } from "@/store/prompt-draft-runtime";
 import {
+  buildPlanViewerContextKey,
   resolvePlanViewerAutoViewState,
   resolvePlanViewerLayout,
   resolvePlanViewerState,
@@ -51,8 +52,9 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
 
-  const [activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexPlanMode, sendUserMessage, createTask, updatePromptDraft, clearTaskProviderSession] = useAppStore(
+  const [activeWorkspaceId, activeTaskId, activeTask, draftProvider, promptDraft, claudePermissionMode, claudePermissionModeBeforePlan, codexPlanMode, sendUserMessage, createTask, updatePromptDraft, clearTaskProviderSession] = useAppStore(
     useShallow((state) => [
+      state.activeWorkspaceId,
       state.activeTaskId,
       state.tasks.find((task) => task.id === state.activeTaskId && !isTaskArchived(task)) ?? null,
       state.draftProvider,
@@ -115,14 +117,33 @@ export function PlanViewer({ inputDockHeight = 0 }: PlanViewerProps) {
     ? `Wait for ${providerLabel} to finish the current turn before replying to the plan.`
     : null;
   const replyNotice = managedNotice ?? planReplyNotice;
+  const planViewerContextKey = buildPlanViewerContextKey({
+    activeWorkspaceId,
+    activeTaskId,
+    latestPlanMessageId: latestPlanMessage?.id ?? null,
+  });
+
+  // Workspace and task switches keep this component mounted, so local floating
+  // state must reset off the visible plan context instead of the pending
+  // boolean alone.
+  useEffect(() => {
+    dragRef.current = null;
+    setViewState("normal");
+    setRevising(false);
+    setRevisionText("");
+    setCopied(false);
+    setDragPos(null);
+  }, [planViewerContextKey]);
 
   // Reset view state when a new plan arrives so it opens fully.
   useEffect(() => {
     if (isPlanPending) {
+      dragRef.current = null;
       setViewState("normal");
       setRevising(false);
       setRevisionText("");
       setCopied(false);
+      setDragPos(null);
     }
   }, [isPlanPending]);
 

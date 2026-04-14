@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildPlanViewerContextKey,
   resolvePlanViewerAutoViewState,
   resolvePlanViewerInsets,
   resolvePlanViewerLayout,
@@ -379,6 +380,32 @@ describe("resolvePlanViewerAutoViewState", () => {
       isPlanPreparing: true,
       planText: "",
     })).toBe("expanded");
+  });
+});
+
+describe("buildPlanViewerContextKey", () => {
+  test("changes when switching to another workspace task with a visible plan viewer", () => {
+    expect(buildPlanViewerContextKey({
+      activeWorkspaceId: "workspace-alpha",
+      activeTaskId: "task-alpha",
+      latestPlanMessageId: "plan-alpha",
+    })).not.toBe(buildPlanViewerContextKey({
+      activeWorkspaceId: "workspace-beta",
+      activeTaskId: "task-beta",
+      latestPlanMessageId: "plan-beta",
+    }));
+  });
+
+  test("changes when a new plan response replaces the current one in the same task", () => {
+    expect(buildPlanViewerContextKey({
+      activeWorkspaceId: "workspace-alpha",
+      activeTaskId: "task-alpha",
+      latestPlanMessageId: "plan-1",
+    })).not.toBe(buildPlanViewerContextKey({
+      activeWorkspaceId: "workspace-alpha",
+      activeTaskId: "task-alpha",
+      latestPlanMessageId: "plan-2",
+    }));
   });
 });
 
