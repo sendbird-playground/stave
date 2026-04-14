@@ -546,7 +546,7 @@ describe("provider request sanitization", () => {
           streamTurn: async (args: Record<string, unknown>) => {
             calls.push(args);
             if (calls.length === 1) {
-              throw new Error("[host-service] provider.stream-turn request exceeded protocol line limit (1048577 bytes > 1048576)");
+              throw new Error("[host-service] provider.stream-turn request exceeded protocol message limit (1048577 bytes > 1048576)");
             }
             return [
               { type: "text", text: "retried" },

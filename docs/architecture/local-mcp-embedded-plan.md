@@ -96,7 +96,6 @@ Initial tool set:
 - `stave_create_workspace`
 - `stave_run_task`
 - `stave_get_task`
-- `stave_list_turn_events`
 - `stave_respond_approval`
 - `stave_respond_user_input`
 

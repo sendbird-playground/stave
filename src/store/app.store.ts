@@ -16,8 +16,11 @@ import { workspaceFsAdapter } from "@/lib/fs";
 import { formatWithEslint } from "@/components/layout/editor-language-intelligence";
 import {
   listWorkspaceSummaries,
+  loadWorkspaceEditorTabBodies,
   loadTaskMessagesPage,
   loadWorkspaceShell,
+  loadWorkspaceShellForRestore,
+  loadWorkspaceShellSummary,
   loadWorkspaceSnapshot,
   closeWorkspacePersistence,
   loadProjectRegistrySnapshot,
@@ -26,6 +29,7 @@ import {
   type WorkspaceShell,
   type WorkspaceSummary,
 } from "@/lib/db/workspaces.db";
+import type { PersistenceBootstrapPhase } from "@/lib/persistence/bootstrap-status";
 import type {
   CanonicalRetrievedContextPart,
   ClaudeSettingSource,
@@ -246,6 +250,10 @@ import {
   type WorkspaceSessionState,
 } from "@/store/workspace-session-state";
 import {
+  TASK_MESSAGES_PAGE_SIZE,
+  resolveInitialLatestTaskMessagesPageSize,
+} from "@/store/task-message-loading";
+import {
   normalizeComparablePath,
   parseGitWorktrees,
 } from "@/lib/source-control-worktrees";
@@ -399,7 +407,6 @@ const EMPTY_PROMPT_DRAFT: PromptDraft = {
   attachedFilePaths: [],
   attachments: [],
 };
-const TASK_MESSAGES_PAGE_SIZE = 120;
 const workspaceSwitchMetricsByWorkspaceId = new Map<
   string,
   WorkspaceSwitchMetric
@@ -936,6 +943,8 @@ interface AppState {
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
   taskWorkspaceIdById: Record<string, string>;
   staveMuse: StaveMuseState;
+  persistenceBootstrapPhase: PersistenceBootstrapPhase;
+  persistenceBootstrapMessage: string;
   hydrateProjectRegistry: () => Promise<void>;
   flushProjectRegistry: () => Promise<void>;
   hydrateWorkspaces: () => Promise<void>;
@@ -1000,6 +1009,10 @@ interface AppState {
   };
   removeCustomTheme: (args: { themeId: string }) => void;
   updateSettings: (args: { patch: Partial<AppSettings> }) => void;
+  setPersistenceBootstrapStatus: (args: {
+    phase: PersistenceBootstrapPhase;
+    message?: string;
+  }) => void;
   refreshProviderCommandCatalog: () => void;
   notifyWorkspacePlansChanged: () => void;
   selectTask: (args: { taskId: string }) => void;
@@ -1177,6 +1190,34 @@ function getCachedWorkspaceFiles(args: {
     return [];
   }
   return args.workspaceFileCacheByPath[args.workspacePath] ?? [];
+}
+
+function resolveInitialWorkspaceFiles(args: {
+  workspacePath?: string | null;
+  activeProjectPath?: string | null;
+  activeProjectFiles: string[];
+  workspaceFileCacheByPath: Record<string, string[]>;
+}) {
+  const workspacePath = args.workspacePath?.trim();
+  if (!workspacePath) {
+    return [];
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(
+      args.workspaceFileCacheByPath,
+      workspacePath,
+    )
+  ) {
+    return args.workspaceFileCacheByPath[workspacePath] ?? [];
+  }
+  if (
+    args.activeProjectPath &&
+    normalizeComparablePath(args.activeProjectPath) ===
+      normalizeComparablePath(workspacePath)
+  ) {
+    return args.activeProjectFiles;
+  }
+  return [];
 }
 
 function rememberCachedWorkspaceFiles(args: {
@@ -1884,15 +1925,21 @@ function mergeRecentProjectsByPath(args: {
 }
 
 function summarizeWorkspaceShell(
-  snapshot: Awaited<ReturnType<typeof loadWorkspaceShell>>,
+  snapshot:
+    | Awaited<ReturnType<typeof loadWorkspaceShell>>
+    | Awaited<ReturnType<typeof loadWorkspaceShellSummary>>,
 ) {
   if (!snapshot) {
     return 0;
   }
   return (
     snapshot.tasks.length +
-    (snapshot.terminalTabs?.length ?? 0) +
-    (snapshot.cliSessionTabs?.length ?? 0) +
+    ("terminalTabCount" in snapshot
+      ? snapshot.terminalTabCount
+      : (snapshot.terminalTabs?.length ?? 0)) +
+    ("cliSessionTabCount" in snapshot
+      ? snapshot.cliSessionTabCount
+      : (snapshot.cliSessionTabs?.length ?? 0)) +
     Object.values(snapshot.messageCountByTask).reduce(
       (sum, count) => sum + count,
       0,
@@ -3011,7 +3058,7 @@ export const useAppStore = create<AppState>()(
         // When localStorage is cleared (e.g. dev-mode port change or origin switch),
         // the project won't appear in recentProjects even though the DB still holds
         // its tasks and messages.  Loading the existing snapshot prevents data loss.
-        const existingShell = await loadWorkspaceShell({
+        const existingShellSummary = await loadWorkspaceShellSummary({
           workspaceId: defaultWorkspaceId,
         });
 
@@ -3020,10 +3067,11 @@ export const useAppStore = create<AppState>()(
         >;
         let deferredWorkspaceMessageHydration: {
           workspaceId: string;
+          activeTaskIdForLatestHydration: string | null;
           taskIds: string[];
           latestTurns: PersistedTurnSummary[];
         } | null = null;
-        if (existingShell) {
+        if (existingShellSummary) {
           const loadedWorkspaceShellState =
             await loadWorkspaceShellStateFromPersistence({
               workspaceId: defaultWorkspaceId,
@@ -3031,6 +3079,8 @@ export const useAppStore = create<AppState>()(
           workspaceState = loadedWorkspaceShellState.workspaceState;
           deferredWorkspaceMessageHydration = {
             workspaceId: defaultWorkspaceId,
+            activeTaskIdForLatestHydration:
+              loadedWorkspaceShellState.activeTaskIdForLatestHydration,
             taskIds: loadedWorkspaceShellState.initialTaskIds,
             latestTurns: loadedWorkspaceShellState.latestTurns,
           };
@@ -3131,6 +3181,14 @@ export const useAppStore = create<AppState>()(
             tasks: workspaceState.tasks,
           }),
         }));
+        if (deferredWorkspaceMessageHydration?.activeTaskIdForLatestHydration) {
+          void loadTaskMessagesIntoSession({
+            workspaceId: defaultWorkspaceId,
+            taskId:
+              deferredWorkspaceMessageHydration.activeTaskIdForLatestHydration,
+            mode: "latest",
+          });
+        }
         if (deferredWorkspaceMessageHydration) {
           hydrateWorkspaceMessagesInBackground(
             deferredWorkspaceMessageHydration,
@@ -3248,7 +3306,7 @@ export const useAppStore = create<AppState>()(
         appendInterruptedNotices?: boolean;
       }) => {
         const [shell, latestTurns] = await Promise.all([
-          loadWorkspaceShell({ workspaceId: args.workspaceId }),
+          loadWorkspaceShellForRestore({ workspaceId: args.workspaceId }),
           listActiveWorkspaceTurns({ workspaceId: args.workspaceId }),
         ]);
         const initialTaskIds = new Set<string>();
@@ -3293,7 +3351,7 @@ export const useAppStore = create<AppState>()(
         workspaceId: string;
       }) => {
         const [shell, latestTurns] = await Promise.all([
-          loadWorkspaceShell({ workspaceId: args.workspaceId }),
+          loadWorkspaceShellForRestore({ workspaceId: args.workspaceId }),
           listActiveWorkspaceTurns({ workspaceId: args.workspaceId }),
         ]);
         const interruptedTaskIds = new Set(
@@ -3301,14 +3359,13 @@ export const useAppStore = create<AppState>()(
             .filter((turn) => !turn.completedAt)
             .map((turn) => turn.taskId),
         );
-        const initialTaskIds = new Set<string>();
-        if (
+        const activeTaskId =
           shell?.activeTaskId &&
           ((shell.messageCountByTask[shell.activeTaskId] ?? 0) > 0 ||
             interruptedTaskIds.has(shell.activeTaskId))
-        ) {
-          initialTaskIds.add(shell.activeTaskId);
-        }
+            ? shell.activeTaskId
+            : null;
+        const initialTaskIds = new Set<string>();
         for (const taskId of interruptedTaskIds) {
           initialTaskIds.add(taskId);
         }
@@ -3318,6 +3375,7 @@ export const useAppStore = create<AppState>()(
         });
         return {
           shell,
+          activeTaskIdForLatestHydration: activeTaskId,
           latestTurns,
           initialTaskIds: [...initialTaskIds],
           workspaceState:
@@ -3328,6 +3386,113 @@ export const useAppStore = create<AppState>()(
                 }
               : workspaceState,
         };
+      };
+
+      const hydrateDeferredEditorTab = async (args: {
+        workspaceId: string;
+        tabId: string;
+      }) => {
+        let filePath = "";
+        let shouldHydrate = false;
+
+        set((state) => {
+          if (state.activeWorkspaceId !== args.workspaceId) {
+            return {};
+          }
+          const targetTab = state.editorTabs.find((tab) => tab.id === args.tabId);
+          if (!targetTab || targetTab.contentState === "ready" || targetTab.contentState === "loading") {
+            return {};
+          }
+          filePath = targetTab.filePath;
+          shouldHydrate = true;
+          return {
+            editorTabs: state.editorTabs.map((tab) =>
+              tab.id === args.tabId
+                ? {
+                    ...tab,
+                    contentState: "loading",
+                  }
+                : tab
+            ),
+          };
+        });
+
+        if (!shouldHydrate) {
+          return;
+        }
+
+        let body = null as Awaited<
+          ReturnType<typeof loadWorkspaceEditorTabBodies>
+        >[number] | null;
+        try {
+          body = (await loadWorkspaceEditorTabBodies({
+            workspaceId: args.workspaceId,
+            tabIds: [args.tabId],
+          }))[0] ?? null;
+        } catch {
+          body = null;
+        }
+
+        if (!body && filePath) {
+          const state = get();
+          const workspaceRootPath =
+            state.workspacePathById[args.workspaceId] ||
+            state.projectPath;
+          let fileData = await workspaceFsAdapter.readFile({
+            filePath,
+          });
+          if (!fileData && workspaceRootPath) {
+            await workspaceFsAdapter.setRoot?.({
+              rootPath: workspaceRootPath,
+              rootName: state.projectName ?? "project",
+            });
+            fileData = await workspaceFsAdapter.readFile({
+              filePath,
+            });
+          }
+          if (fileData) {
+            body = {
+              id: args.tabId,
+              content: fileData.content,
+              originalContent: fileData.content,
+              savedContent: fileData.content,
+            };
+          }
+        }
+
+        set((state) => {
+          if (state.activeWorkspaceId !== args.workspaceId) {
+            return {};
+          }
+          const targetTab = state.editorTabs.find((tab) => tab.id === args.tabId);
+          if (!targetTab || targetTab.contentState !== "loading") {
+            return {};
+          }
+          return {
+            editorTabs: state.editorTabs.map((tab) => {
+              if (tab.id !== args.tabId) {
+                return tab;
+              }
+              if (!body) {
+                return {
+                  ...tab,
+                  contentState: "deferred",
+                };
+              }
+              return {
+                ...tab,
+                content: body.content,
+                contentState: "ready",
+                ...(body.originalContent !== undefined
+                  ? { originalContent: body.originalContent }
+                  : {}),
+                ...(body.savedContent !== undefined
+                  ? { savedContent: body.savedContent }
+                  : {}),
+              };
+            }),
+          };
+        });
       };
 
       const loadTaskMessagesIntoSession = async (args: {
@@ -3379,7 +3544,10 @@ export const useAppStore = create<AppState>()(
           const page = await loadTaskMessagesPage({
             workspaceId: args.workspaceId,
             taskId: args.taskId,
-            limit: TASK_MESSAGES_PAGE_SIZE,
+            limit:
+              args.mode === "latest"
+                ? resolveInitialLatestTaskMessagesPageSize()
+                : TASK_MESSAGES_PAGE_SIZE,
             offset: args.mode === "older" ? currentMessages.length : 0,
           });
           set((state) => {
@@ -3734,6 +3902,8 @@ export const useAppStore = create<AppState>()(
         staveMuse: createEmptyStaveMuseState({
           defaultTarget: defaultSettings.museDefaultTarget,
         }),
+        persistenceBootstrapPhase: "idle",
+        persistenceBootstrapMessage: "",
         hydrateProjectRegistry: async () => {
           const rawPersistedProjects =
             (await loadProjectRegistrySnapshot()) as RecentProjectState[];
@@ -3918,7 +4088,7 @@ export const useAppStore = create<AppState>()(
                     row.id === defaultWorkspaceId
                       ? Number.MAX_SAFE_INTEGER
                       : summarizeWorkspaceShell(
-                          await loadWorkspaceShell({ workspaceId: row.id }),
+                          await loadWorkspaceShellSummary({ workspaceId: row.id }),
                         );
                   return {
                     row,
@@ -4061,7 +4231,7 @@ export const useAppStore = create<AppState>()(
                       candidateRows.map(async (row) => ({
                         row,
                         score: summarizeWorkspaceShell(
-                          await loadWorkspaceShell({ workspaceId: row.id }),
+                          await loadWorkspaceShellSummary({ workspaceId: row.id }),
                         ),
                       })),
                     );
@@ -4165,7 +4335,12 @@ export const useAppStore = create<AppState>()(
           });
 
           const preferredWorkspacePath = pathById[preferredWorkspaceId] ?? null;
-          let projectFiles = stateBeforeHydrate.projectFiles;
+          const projectFiles = resolveInitialWorkspaceFiles({
+            workspacePath: preferredWorkspacePath,
+            activeProjectPath: stateBeforeHydrate.projectPath,
+            activeProjectFiles: stateBeforeHydrate.projectFiles,
+            workspaceFileCacheByPath: stateBeforeHydrate.workspaceFileCacheByPath,
+          });
           if (preferredWorkspacePath) {
             await workspaceFsAdapter.setRoot?.({
               rootPath: preferredWorkspacePath,
@@ -4175,8 +4350,8 @@ export const useAppStore = create<AppState>()(
                     projectName: stateBeforeHydrate.projectName,
                   })
                 : "project",
+              files: projectFiles,
             });
-            projectFiles = await workspaceFsAdapter.listFiles();
           }
 
           set((state) => {
@@ -4290,10 +4465,23 @@ export const useAppStore = create<AppState>()(
             loadedWorkspaceShellState &&
             (preferLoadedWorkspaceState || !cachedWorkspaceState)
           ) {
+            if (loadedWorkspaceShellState.activeTaskIdForLatestHydration) {
+              void loadTaskMessagesIntoSession({
+                workspaceId: preferredWorkspaceId,
+                taskId: loadedWorkspaceShellState.activeTaskIdForLatestHydration,
+                mode: "latest",
+              });
+            }
             hydrateWorkspaceMessagesInBackground({
               workspaceId: preferredWorkspaceId,
               taskIds: loadedWorkspaceShellState.initialTaskIds,
               latestTurns: loadedWorkspaceShellState.latestTurns,
+            });
+          }
+          if (preferredWorkspaceId && preferredWorkspacePath) {
+            refreshWorkspaceFilesInBackground({
+              workspaceId: preferredWorkspaceId,
+              workspacePath: preferredWorkspacePath,
             });
           }
         },
@@ -4775,22 +4963,21 @@ export const useAppStore = create<AppState>()(
           const projectName =
             rememberedProject?.projectName ||
             resolveProjectNameFromPath({ projectPath: normalizedProjectPath });
-          let files =
-            rememberedProject?.projectPath === state.projectPath
-              ? state.projectFiles
-              : [];
+          const files = resolveInitialWorkspaceFiles({
+            workspacePath: normalizedProjectPath,
+            activeProjectPath: state.projectPath,
+            activeProjectFiles:
+              rememberedProject?.projectPath === state.projectPath
+                ? state.projectFiles
+                : [],
+            workspaceFileCacheByPath: state.workspaceFileCacheByPath,
+          });
 
           await workspaceFsAdapter.setRoot?.({
             rootPath: normalizedProjectPath,
             rootName: projectName,
             files,
           });
-
-          try {
-            files = await workspaceFsAdapter.listFiles();
-          } catch {
-            files = workspaceFsAdapter.getKnownFiles();
-          }
 
           await activateProject({
             projectRootPath: normalizedProjectPath,
@@ -4799,6 +4986,34 @@ export const useAppStore = create<AppState>()(
             defaultBranch:
               rememberedProject?.defaultBranch || state.defaultBranch || "main",
           });
+
+          const nextState = get();
+          const nextWorkspacePath = resolveWorkspacePathForId({
+            activeWorkspaceId: nextState.activeWorkspaceId,
+            workspacePathById: nextState.workspacePathById,
+            workspaceDefaultById: nextState.workspaceDefaultById,
+            projectPath: nextState.projectPath,
+          });
+          if (nextState.activeWorkspaceId && nextWorkspacePath) {
+            const nextCachedFiles = resolveInitialWorkspaceFiles({
+              workspacePath: nextWorkspacePath,
+              activeProjectPath: nextState.projectPath,
+              activeProjectFiles: nextState.projectFiles,
+              workspaceFileCacheByPath: nextState.workspaceFileCacheByPath,
+            });
+            void Promise.resolve(
+              workspaceFsAdapter.setRoot?.({
+                rootPath: nextWorkspacePath,
+                rootName: nextState.projectName ?? projectName,
+                files: nextCachedFiles,
+              }),
+            ).then(() => {
+              refreshWorkspaceFilesInBackground({
+                workspaceId: nextState.activeWorkspaceId,
+                workspacePath: nextWorkspacePath,
+              });
+            });
+          }
         },
         removeProjectFromList: async ({ projectPath }) => {
           const normalizedProjectPath = projectPath.trim();
@@ -5721,6 +5936,17 @@ export const useAppStore = create<AppState>()(
             switchMetricToken,
           });
           if (resolvedWorkspaceShellState) {
+            if (
+              preferLoadedWorkspaceState &&
+              resolvedWorkspaceShellState.activeTaskIdForLatestHydration
+            ) {
+              void loadTaskMessagesIntoSession({
+                workspaceId,
+                taskId:
+                  resolvedWorkspaceShellState.activeTaskIdForLatestHydration,
+                mode: "latest",
+              });
+            }
             hydrateWorkspaceMessagesInBackground({
               workspaceId,
               taskIds: resolvedWorkspaceShellState.initialTaskIds,
@@ -6197,6 +6423,12 @@ export const useAppStore = create<AppState>()(
               messageKoreanFontFamily: s.messageKoreanFontFamily,
             });
           }
+        },
+        setPersistenceBootstrapStatus: ({ phase, message }) => {
+          set(() => ({
+            persistenceBootstrapPhase: phase,
+            persistenceBootstrapMessage: message ?? "",
+          }));
         },
         refreshProviderCommandCatalog: () => {
           set((state) => ({
@@ -10257,11 +10489,12 @@ export const useAppStore = create<AppState>()(
                 editorTabs: shouldRefreshExisting
                   ? state.editorTabs.map((tab) =>
                       tab.id === existing.id
-                        ? {
+                          ? {
                             ...tab,
                             filePath,
                             language: nextLanguage,
                             content: newContent,
+                            contentState: "ready",
                             originalContent: oldContent,
                             savedContent: newContent,
                             hasConflict: false,
@@ -10290,6 +10523,7 @@ export const useAppStore = create<AppState>()(
               kind: "text",
               language: nextLanguage,
               content: newContent,
+              contentState: "ready",
               originalContent: oldContent,
               savedContent: newContent,
               baseRevision: null,
@@ -10375,10 +10609,14 @@ export const useAppStore = create<AppState>()(
             }
           }
 
+          let existingDeferredTabId: string | null = null;
           set((state) => {
             const tabId = `file:${normalizedFilePath}`;
             const existing = state.editorTabs.find((tab) => tab.id === tabId);
             if (existing) {
+              existingDeferredTabId = existing.contentState === "deferred"
+                ? existing.id
+                : null;
               return {
                 activeEditorTabId: existing.id,
                 layout: {
@@ -10406,6 +10644,7 @@ export const useAppStore = create<AppState>()(
               kind: isImageFile ? "image" : "text",
               language: resolveLanguage({ filePath: normalizedFilePath }),
               content: fileContent,
+              contentState: "ready",
               originalContent: isImageFile ? undefined : fileContent,
               savedContent: isImageFile ? undefined : fileContent,
               baseRevision,
@@ -10426,8 +10665,16 @@ export const useAppStore = create<AppState>()(
                 incrementWorkspaceSnapshotVersion(state),
             };
           });
+          if (existingDeferredTabId) {
+            void hydrateDeferredEditorTab({
+              workspaceId: state.activeWorkspaceId,
+              tabId: existingDeferredTabId,
+            });
+          }
         },
-        setActiveEditorTab: ({ tabId }) =>
+        setActiveEditorTab: ({ tabId }) => {
+          let workspaceId = "";
+          let shouldHydrate = false;
           set((state) => {
             if (state.activeEditorTabId === tabId) {
               return {};
@@ -10438,6 +10685,8 @@ export const useAppStore = create<AppState>()(
             if (!selectedTab) {
               return {};
             }
+            workspaceId = state.activeWorkspaceId;
+            shouldHydrate = selectedTab.contentState === "deferred";
             const isDiffTab = isDiffEditorTab(selectedTab);
             return {
               activeEditorTabId: tabId,
@@ -10448,7 +10697,14 @@ export const useAppStore = create<AppState>()(
               workspaceSnapshotVersion:
                 incrementWorkspaceSnapshotVersion(state),
             };
-          }),
+          });
+          if (shouldHydrate && workspaceId) {
+            void hydrateDeferredEditorTab({
+              workspaceId,
+              tabId,
+            });
+          }
+        },
         reorderEditorTabs: ({ fromTabId, toTabId }) =>
           set((state) => {
             const fromIndex = state.editorTabs.findIndex(
@@ -10577,6 +10833,9 @@ export const useAppStore = create<AppState>()(
           if (!activeTab) {
             return { ok: false };
           }
+          if (activeTab.contentState && activeTab.contentState !== "ready") {
+            return { ok: false };
+          }
           if (activeTab.kind === "image") {
             return { ok: false };
           }
@@ -10656,6 +10915,7 @@ export const useAppStore = create<AppState>()(
               tab.id === activeTab.id
                 ? {
                     ...tab,
+                    contentState: "ready",
                     originalContent: tab.id.startsWith("file:")
                       ? tab.content
                       : tab.originalContent,
@@ -10742,12 +11002,13 @@ export const useAppStore = create<AppState>()(
                 };
               }
 
-              return {
-                ...tab,
-                content: update.fromDisk,
-                originalContent:
-                  update.kind === "image"
-                    ? tab.originalContent
+                return {
+                  ...tab,
+                  content: update.fromDisk,
+                  contentState: "ready",
+                  originalContent:
+                    update.kind === "image"
+                      ? tab.originalContent
                     : tab.id.startsWith("file:")
                       ? update.fromDisk
                       : tab.originalContent,
@@ -10774,7 +11035,8 @@ export const useAppStore = create<AppState>()(
                 taskId && state.activeTurnIdsByTask[taskId],
               ),
             }) ||
-            !activeTab
+            !activeTab ||
+            (activeTab.contentState && activeTab.contentState !== "ready")
           ) {
             return;
           }

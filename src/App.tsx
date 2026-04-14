@@ -6,7 +6,20 @@ import { useAppStore } from "@/store/app.store";
 export default function App() {
   useEffect(() => {
     let cancelled = false;
+    const setBootstrapStatus = useAppStore.getState().setPersistenceBootstrapStatus;
+    const unsubscribeBootstrapStatus =
+      window.api?.persistence?.subscribeBootstrapStatus?.((payload) => {
+        setBootstrapStatus(payload);
+      });
     void (async () => {
+      const initialBootstrapStatus =
+        await window.api?.persistence?.getBootstrapStatus?.();
+      if (cancelled) {
+        return;
+      }
+      if (initialBootstrapStatus) {
+        setBootstrapStatus(initialBootstrapStatus);
+      }
       await useAppStore.getState().hydrateProjectRegistry();
       if (cancelled) {
         return;
@@ -33,6 +46,7 @@ export default function App() {
     }, 30000);
     return () => {
       cancelled = true;
+      unsubscribeBootstrapStatus?.();
       window.clearInterval(providerTimer);
       window.clearInterval(workspaceTimer);
     };

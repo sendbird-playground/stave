@@ -53,7 +53,9 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function isHostServiceProtocolOverflowError(error: unknown) {
   const message = getErrorMessage(error, "");
-  return message.includes("protocol line limit") || message.includes("protocol overflow");
+  return message.includes("protocol message limit")
+    || message.includes("protocol line limit")
+    || message.includes("protocol overflow");
 }
 
 async function invokeProviderRequestWithTransportFallback<TResult>(args: {

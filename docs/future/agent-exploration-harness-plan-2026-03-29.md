@@ -74,7 +74,7 @@ Do not hand-maintain:
 
 - add symbol and dependency search to the quick-open path
 - add contract groups and symbol summaries to the generated repo-map
-- surface repo-map freshness and summaries in Session Replay or another diagnostics surface
+- surface repo-map freshness and summaries in a future task-history or diagnostics surface
 
 ### Phase 3
 

@@ -2,8 +2,14 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES } from "../shared/host-service-transport";
-import { Utf8LineBuffer } from "../shared/utf8-line-buffer";
+import {
+  HOST_SERVICE_PROTOCOL_BUFFER_MAX_BYTES,
+  HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES,
+} from "../shared/host-service-transport";
+import {
+  JsonMessageFrameDecoder,
+  serializeJsonFramedMessage,
+} from "../shared/json-message-framing";
 import type {
   AnyHostServiceEventEnvelope,
   AnyHostServiceMessage,
@@ -21,8 +27,8 @@ interface PendingRequest {
   reject: (reason?: unknown) => void;
 }
 
-const HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
-const HOST_SERVICE_STDOUT_LINE_MAX_BYTES = HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES;
+const HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES = HOST_SERVICE_PROTOCOL_BUFFER_MAX_BYTES;
+const HOST_SERVICE_STDOUT_MESSAGE_MAX_BYTES = HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES;
 
 export function resolveHostServiceScriptPath(args: {
   moduleUrl: string;
@@ -46,12 +52,12 @@ export function measureSerializedHostServiceRequestBytes(args: {
   method: HostServiceMethod;
   params: HostServiceRequestMap[HostServiceMethod];
 }) {
-  return Buffer.byteLength(JSON.stringify({
+  return serializeJsonFramedMessage({
     type: "request",
     id: 1,
     method: args.method,
     params: args.params,
-  }), "utf8") + 1;
+  }).serializedBytes;
 }
 
 class HostServiceClient {
@@ -146,16 +152,15 @@ class HostServiceClient {
   }
 
   private attachChild(child: ChildProcessWithoutNullStreams) {
-    const stdoutLineBuffer = new Utf8LineBuffer({
+    const stdoutFrameDecoder = new JsonMessageFrameDecoder({
       label: "host-service stdout",
       maxBufferBytes: HOST_SERVICE_STDOUT_BUFFER_MAX_BYTES,
-      maxLineBytes: HOST_SERVICE_STDOUT_LINE_MAX_BYTES,
+      maxMessageBytes: HOST_SERVICE_STDOUT_MESSAGE_MAX_BYTES,
     });
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      let lines: string[];
+    child.stdout.on("data", (chunk: Buffer) => {
+      let messages: string[];
       try {
-        lines = stdoutLineBuffer.append(chunk);
+        messages = stdoutFrameDecoder.append(chunk);
       } catch (error) {
         this.failChild({
           child,
@@ -163,9 +168,9 @@ class HostServiceClient {
         });
         return;
       }
-      for (const line of lines) {
-        if (line.length > 0) {
-          this.handleMessage(line);
+      for (const message of messages) {
+        if (message.length > 0) {
+          this.handleMessage(message);
         }
       }
     });
@@ -240,11 +245,12 @@ class HostServiceClient {
       method,
       params,
     };
-    const serializedRequest = `${JSON.stringify(request)}\n`;
-    const serializedRequestBytes = Buffer.byteLength(serializedRequest, "utf8");
-    if (serializedRequestBytes > HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES) {
+    const serializedRequest = serializeJsonFramedMessage(request);
+    if (
+      serializedRequest.messageBytes > HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES
+    ) {
       throw new Error(
-        `[host-service] ${method} request exceeded protocol line limit (${serializedRequestBytes} bytes > ${HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES})`,
+        `[host-service] ${method} request exceeded protocol message limit (${serializedRequest.messageBytes} bytes > ${HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES})`,
       );
     }
 
@@ -258,7 +264,7 @@ class HostServiceClient {
       },
     );
 
-    this.child.stdin.write(serializedRequest, (error) => {
+    this.child.stdin.write(serializedRequest.serialized, (error) => {
       if (!error) {
         return;
       }

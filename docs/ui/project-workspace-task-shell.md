@@ -53,6 +53,9 @@ Replace the legacy workspace/task shell with a three-part layout:
 - Tasks are mapped back to their owning workspace through `taskWorkspaceIdById`.
 - Provider stream events are replayed into either the active workspace state or the cached inactive workspace session, depending on task ownership.
 - When an inactive workspace stream completes, its session snapshot is persisted.
+- Persistence now keeps three workspace read shapes on purpose: full shell for editor/session restore, lite shell for hot merge and existence checks, and summary for sidebar hover/list reads.
+- The full shell now externalizes large clean `file:` editor tab bodies into workspace artifacts while keeping dirty and synthetic diff tabs inline, so restore semantics stay intact without forcing every persistence write through one giant JSON blob.
+- Workspace restore now prefers an active-tab-first path: the selected editor tab is hydrated immediately, while other clean file tabs can stay metadata-only until the user activates them, avoiding whole-workspace blocking during project or workspace switches.
 
 ### Workspace Integrity Warning
 
@@ -79,7 +82,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - keeps workspace hover and selected states slightly stronger than the glass baseline so interaction state stays readable without losing the subdued mood
   - shows project folder icons on project rows and keeps workspace identity icons visible on workspace rows, with gray for the default workspace and deterministic blue tones for named worktrees
   - assigns `Cmd/Ctrl+1..9` to the first nine visible workspaces in sidebar order and shows those shortcuts in the expanded list plus collapsed-rail tooltips
-  - adds compact workspace-summary tooltips that prioritize recent task titles over raw message text, while lazily loading uncached workspace shells on first hover
+  - adds compact workspace-summary tooltips that prioritize recent task titles over raw message text, while lazily loading a lightweight workspace shell summary on first hover instead of the full shell payload
 - `SettingsDialog`
   - includes a `Projects` section with a dedicated project menu and a single detail panel for the selected project
   - keeps repository workspace defaults, git metadata, scripts config editing, close action, and project removal inside that selected-project panel instead of the main sidebar row
@@ -117,6 +120,8 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
 - `switchWorkspace()` no longer interrupts live turns.
 - The current active workspace is cached before switching away.
 - Re-opening a workspace restores the cached runtime session first, then falls back to persisted snapshot data.
+- Hot persistence and project-open guards now read the persisted lite shell instead of replaying full editor tab bodies when they only need task/provider merge state.
+- Workspace restore uses a dedicated restore shell read instead of the full shell path, so switching projects or workspaces does not eagerly hydrate every clean editor body before the UI becomes interactive.
 - Workspace hydration automatically imports branch-backed git worktrees that exist on disk but are missing from Stave's workspace DB.
 - `removeProjectFromList()` only removes the project from Stave's recent list and clears associated cached runtime state.
 - `moveProjectInList()` and `moveWorkspaceInProjectList()` allow explicit sidebar ordering without auto-reordering on selection.

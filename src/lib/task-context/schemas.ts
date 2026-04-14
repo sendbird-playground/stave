@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { WorkspaceShell, WorkspaceSnapshot } from "@/lib/db/workspaces.db";
+import type {
+  WorkspaceShell,
+  WorkspaceShellLite,
+  WorkspaceSnapshot,
+} from "@/lib/db/workspaces.db";
 const TextPartSchema = z.object({
   type: z.literal("text"),
   text: z.string(),
@@ -279,7 +283,15 @@ const EditorTabSchema = z.object({
   filePath: z.string(),
   kind: z.union([z.literal("text"), z.literal("image")]).optional(),
   language: z.string(),
-  content: z.string(),
+  content: z.string().optional().default(""),
+  contentState: z
+    .union([
+      z.literal("ready"),
+      z.literal("deferred"),
+      z.literal("loading"),
+    ])
+    .optional()
+    .default("ready"),
   originalContent: z.string().optional(),
   savedContent: z.string().optional(),
   baseRevision: z.string().nullable().optional(),
@@ -528,6 +540,14 @@ export const WorkspaceShellSchema = WorkspaceSnapshotSchema.omit({
     .default({}),
 });
 
+export const WorkspaceShellLiteSchema = WorkspaceShellSchema.pick({
+  activeTaskId: true,
+  tasks: true,
+  promptDraftByTask: true,
+  providerSessionByTask: true,
+  messageCountByTask: true,
+});
+
 export function parseWorkspaceSnapshot(args: {
   payload: unknown;
 }): WorkspaceSnapshot | null {
@@ -554,4 +574,18 @@ export function parseWorkspaceShell(args: {
     return null;
   }
   return parsed.data as WorkspaceShell;
+}
+
+export function parseWorkspaceShellLite(args: {
+  payload: unknown;
+}): WorkspaceShellLite | null {
+  const parsed = WorkspaceShellLiteSchema.safeParse(args.payload);
+  if (!parsed.success) {
+    console.error(
+      "[task-context] invalid workspace shell lite payload",
+      parsed.error.flatten(),
+    );
+    return null;
+  }
+  return parsed.data as WorkspaceShellLite;
 }

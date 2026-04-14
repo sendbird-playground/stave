@@ -65,12 +65,18 @@ import {
   getToolingStatusSnapshot,
   syncWorkspaceWithOriginMain,
 } from "./main/utils/tooling-status";
-import { isDoneEvent, toEventType } from "./main/utils/provider-events";
+import { isDoneEvent } from "./main/utils/provider-events";
 import { quotePath, runCommand } from "./main/utils/command";
 import type { StreamTurnArgs } from "./providers/types";
 import { truncateUtf8Middle } from "./shared/bounded-text";
-import { HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES } from "./shared/host-service-transport";
-import { Utf8LineBuffer } from "./shared/utf8-line-buffer";
+import {
+  HOST_SERVICE_PROTOCOL_BUFFER_MAX_BYTES,
+  HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES,
+} from "./shared/host-service-transport";
+import {
+  JsonMessageFrameDecoder,
+  serializeJsonFramedMessage,
+} from "./shared/json-message-framing";
 
 type HostServiceOutboundMessage =
   | AnyHostServiceResponseEnvelope
@@ -90,8 +96,8 @@ const HOST_SERVICE_QUEUE_SLOW_WRITE_MS = 48;
 const HOST_SERVICE_QUEUE_LOG_INTERVAL_MS = 2_000;
 const HOST_PROVIDER_EVENT_STRING_MAX_BYTES = 128 * 1024;
 const HOST_PROVIDER_EVENT_LIST_MAX_ITEMS = 32;
-const HOST_SERVICE_STDIN_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
-const HOST_SERVICE_STDIN_LINE_MAX_BYTES = HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES;
+const HOST_SERVICE_STDIN_BUFFER_MAX_BYTES = HOST_SERVICE_PROTOCOL_BUFFER_MAX_BYTES;
+const HOST_SERVICE_STDIN_MESSAGE_MAX_BYTES = HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES;
 
 let messageWriteChain = Promise.resolve();
 let pendingMessageCount = 0;
@@ -318,8 +324,8 @@ function writeMessageNow(serializedMessage: string, label: string) {
 
 function writeMessage(message: HostServiceOutboundMessage) {
   const label = describeOutboundMessage(message);
-  const serializedMessage = `${JSON.stringify(message)}\n`;
-  const messageBytes = Buffer.byteLength(serializedMessage);
+  const serializedMessage = serializeJsonFramedMessage(message);
+  const messageBytes = serializedMessage.serializedBytes;
   if (fatalHostServiceError) {
     return Promise.reject(fatalHostServiceError);
   }
@@ -348,8 +354,8 @@ function writeMessage(message: HostServiceOutboundMessage) {
     label,
   });
   const nextWrite = messageWriteChain.then(
-    () => writeMessageNow(serializedMessage, label),
-    () => writeMessageNow(serializedMessage, label),
+    () => writeMessageNow(serializedMessage.serialized, label),
+    () => writeMessageNow(serializedMessage.serialized, label),
   );
   const trackedWrite = nextWrite
     .catch((error) => {
@@ -418,10 +424,6 @@ async function invokeLocalMcpAction(action: HostLocalMcpAction, args: unknown) {
     case "get-task-status":
       return localMcpRuntime.getTaskStatus(
         args as Parameters<typeof localMcpRuntime.getTaskStatus>[0],
-      );
-    case "list-turn-events":
-      return localMcpRuntime.listTurnEvents(
-        args as Parameters<typeof localMcpRuntime.listTurnEvents>[0],
       );
     case "respond-approval":
       return localMcpRuntime.respondApproval(
@@ -528,29 +530,6 @@ function startPushProviderTurn(args: StreamTurnArgs) {
       });
     }
 
-    try {
-      store.appendTurnEvent({
-        id: randomUUID(),
-        turnId,
-        sequence: 0,
-        eventType: "request_snapshot",
-        payload: {
-          type: "request_snapshot",
-          prompt: args.prompt,
-          conversation: args.conversation ?? null,
-        },
-      });
-    } catch (error) {
-      console.warn(
-        "[provider:persistence] failed to append request snapshot",
-        error,
-        {
-          turnId,
-          providerId: args.providerId,
-          taskId: args.taskId,
-        },
-      );
-    }
   }
 
   const started = providerRuntime.startTurnStream(
@@ -562,30 +541,6 @@ function startPushProviderTurn(args: StreamTurnArgs) {
       bufferEvents: true,
       onEvent: (turnEvent) => {
         sequence += 1;
-
-        if (args.taskId && store) {
-          try {
-            store.appendTurnEvent({
-              id: randomUUID(),
-              turnId,
-              sequence,
-              eventType: toEventType({ event: turnEvent }),
-              payload: turnEvent,
-            });
-          } catch (error) {
-            console.warn(
-              "[provider:persistence] failed to append turn event",
-              error,
-              {
-                turnId,
-                sequence,
-                providerId: args.providerId,
-                taskId: args.taskId,
-                eventType: toEventType({ event: turnEvent }),
-              },
-            );
-          }
-        }
 
         emitEvent("provider.stream-event", {
           streamId: started.streamId,
@@ -1074,10 +1029,10 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
 async function main() {
   prewarmClaudeSdk();
   await writeMessage({ type: "ready" });
-  const stdinLineBuffer = new Utf8LineBuffer({
+  const stdinFrameDecoder = new JsonMessageFrameDecoder({
     label: "host-service stdin",
     maxBufferBytes: HOST_SERVICE_STDIN_BUFFER_MAX_BYTES,
-    maxLineBytes: HOST_SERVICE_STDIN_LINE_MAX_BYTES,
+    maxMessageBytes: HOST_SERVICE_STDIN_MESSAGE_MAX_BYTES,
   });
   let stdinClosed = false;
   const handleStdinClosed = () => {
@@ -1097,26 +1052,24 @@ async function main() {
       });
   };
 
-  process.stdin.setEncoding("utf8");
-  process.stdin.on("data", (chunk: string) => {
-    let lines: string[];
+  process.stdin.on("data", (chunk: Buffer) => {
+    let messages: string[];
     try {
-      lines = stdinLineBuffer.append(chunk);
+      messages = stdinFrameDecoder.append(chunk);
     } catch (error) {
       triggerFatalHostServiceError(
         error instanceof Error ? error : new Error(String(error)),
       );
       return;
     }
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
+    for (const message of messages) {
+      if (!message.trim()) {
         continue;
       }
       void (async () => {
         let request: AnyHostServiceRequestEnvelope;
         try {
-          request = JSON.parse(trimmed) as AnyHostServiceRequestEnvelope;
+          request = JSON.parse(message) as AnyHostServiceRequestEnvelope;
         } catch {
           return;
         }

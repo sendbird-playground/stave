@@ -1211,6 +1211,13 @@ export const LoadTaskMessagesArgsSchema = z
   })
   .strict();
 
+export const LoadWorkspaceEditorTabBodiesArgsSchema = z
+  .object({
+    workspaceId: z.string().min(1).max(200),
+    tabIds: z.array(z.string().min(1).max(4096)).min(1).max(200),
+  })
+  .strict();
+
 const NotificationActionSchema = z.discriminatedUnion("type", [
   z
     .object({
@@ -1295,14 +1302,6 @@ export const PersistenceUpsertArgsSchema = z
 export const SaveProjectRegistryArgsSchema = z
   .object({
     projects: z.array(z.record(z.string(), z.unknown())).max(100),
-  })
-  .strict();
-
-export const ListTurnEventsArgsSchema = z
-  .object({
-    turnId: z.string().min(1).max(200),
-    afterSequence: z.number().int().min(0).optional(),
-    limit: z.number().int().min(1).max(5000).optional(),
   })
   .strict();
 

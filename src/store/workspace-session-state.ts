@@ -3,7 +3,7 @@ import {
   type TaskProviderSessionState,
   type WorkspaceShell,
   type WorkspaceSnapshot,
-  loadWorkspaceShell,
+  loadWorkspaceShellLite,
   upsertWorkspace,
 } from "@/lib/db/workspaces.db";
 import type {
@@ -557,7 +557,7 @@ export async function persistWorkspaceSnapshot(args: {
   activeSurface: WorkspaceActiveSurface;
   providerSessionByTask: Record<string, TaskProviderSessionState>;
 }) {
-  const persistedShell = await loadWorkspaceShell({ workspaceId: args.workspaceId });
+  const persistedShell = await loadWorkspaceShellLite({ workspaceId: args.workspaceId });
   const nextTaskIds = new Set(args.tasks.map((task) => task.id));
   const preservedTasks = (persistedShell?.tasks ?? []).filter((task) => !nextTaskIds.has(task.id));
   const mergedTasks = preservedTasks.length > 0

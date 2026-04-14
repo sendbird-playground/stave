@@ -250,7 +250,6 @@ export type HostLocalMcpAction =
   | "create-workspace"
   | "run-task"
   | "get-task-status"
-  | "list-turn-events"
   | "respond-approval"
   | "respond-user-input"
   | "get-workspace-information"

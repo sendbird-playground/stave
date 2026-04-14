@@ -84,7 +84,7 @@ Read in this order:
 
 ## Stave-Specific Search Tips
 
-- `rg "runtimeOptions|provider event|NormalizedProviderEvent|request_snapshot" src electron tests`
+- `rg "runtimeOptions|provider event|NormalizedProviderEvent" src electron tests`
 - `rg "projectFiles|listFiles|TopBarFileSearch|file-search" src electron tests`
 - `rg "skillCatalog|refreshSkillCatalog|getActiveSkillTokenMatch" src electron tests`
 - `rg "subagent_progress|task_progress|hook_started|agent_id" src electron tests`

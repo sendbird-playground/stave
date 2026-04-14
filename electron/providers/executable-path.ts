@@ -15,6 +15,7 @@ interface ResolveExecutablePathArgs {
 
 const LOGIN_SHELL_PATH_MARKER = "__STAVE_LOGIN_SHELL_PATH__";
 const LOGIN_SHELL_ENV_MARKER_PREFIX = "__STAVE_LOGIN_SHELL_ENV__";
+const LOGIN_SHELL_PROBE_TIMEOUT_MS = 750;
 let cachedLoginShellPath: string | null | undefined;
 const cachedLoginShellEnvVarValues = new Map<string, string | null>();
 
@@ -96,23 +97,27 @@ function getLoginShellCandidates() {
     .filter((candidate) => canExecutePath({ path: candidate }));
 }
 
-function resolveLoginShellPath() {
-  if (cachedLoginShellPath !== undefined) {
+function resolveLoginShellPath(args: { baseEnv?: NodeJS.ProcessEnv } = {}) {
+  const useCache = !args.baseEnv || args.baseEnv === process.env;
+  if (useCache && cachedLoginShellPath !== undefined) {
     return cachedLoginShellPath;
   }
   if (process.platform === "win32") {
-    cachedLoginShellPath = null;
-    return cachedLoginShellPath;
+    if (useCache) {
+      cachedLoginShellPath = null;
+      return cachedLoginShellPath;
+    }
+    return null;
   }
 
   for (const shell of getLoginShellCandidates()) {
     const result = spawnSync(shell, ["-ilc", `printf '${LOGIN_SHELL_PATH_MARKER}%s${LOGIN_SHELL_PATH_MARKER}' "$PATH"`], {
       encoding: "utf8",
       env: {
-        ...process.env,
-        TERM: process.env.TERM || "dumb",
+        ...(args.baseEnv ?? process.env),
+        TERM: args.baseEnv?.TERM || process.env.TERM || "dumb",
       },
-      timeout: 4_000,
+      timeout: LOGIN_SHELL_PROBE_TIMEOUT_MS,
       maxBuffer: 1024 * 1024,
     });
     const parsed = parseMarkedValue({
@@ -120,13 +125,19 @@ function resolveLoginShellPath() {
       marker: LOGIN_SHELL_PATH_MARKER,
     });
     if (parsed) {
-      cachedLoginShellPath = parsed;
-      return cachedLoginShellPath;
+      if (useCache) {
+        cachedLoginShellPath = parsed;
+        return cachedLoginShellPath;
+      }
+      return parsed;
     }
   }
 
-  cachedLoginShellPath = null;
-  return cachedLoginShellPath;
+  if (useCache) {
+    cachedLoginShellPath = null;
+    return cachedLoginShellPath;
+  }
+  return null;
 }
 
 export function resolveLoginShellEnvVarValue(args: { key: string }) {
@@ -153,7 +164,7 @@ export function resolveLoginShellEnvVarValue(args: { key: string }) {
           ...process.env,
           TERM: process.env.TERM || "dumb",
         },
-        timeout: 4_000,
+        timeout: LOGIN_SHELL_PROBE_TIMEOUT_MS,
         maxBuffer: 1024 * 1024,
       },
     );
@@ -174,8 +185,12 @@ export function resolveLoginShellEnvVarValue(args: { key: string }) {
 export function resolveExecutableLookupPath(args: {
   basePath?: string;
   extraPaths?: string[];
+  baseEnv?: NodeJS.ProcessEnv;
 } = {}) {
-  const home = homedir();
+  const home = args.baseEnv?.HOME?.trim() || process.env.HOME?.trim() || homedir();
+  const loginShellPath = args.baseEnv && args.baseEnv !== process.env
+    ? null
+    : resolveLoginShellPath({ baseEnv: args.baseEnv });
   const commonUnixPaths = process.platform === "win32"
     ? []
     : [
@@ -194,7 +209,8 @@ export function resolveExecutableLookupPath(args: {
   return mergePathEntries([
     ...(args.extraPaths ?? []),
     args.basePath,
-    resolveLoginShellPath() ?? "",
+    loginShellPath ?? "",
+    args.baseEnv?.PATH,
     process.env.PATH,
     ...commonUnixPaths,
   ]);
@@ -208,6 +224,7 @@ export function buildExecutableLookupEnv(args: {
   const nextPath = resolveExecutableLookupPath({
     basePath: env.PATH,
     extraPaths: args.extraPaths,
+    baseEnv: env,
   });
   if (nextPath) {
     env.PATH = nextPath;

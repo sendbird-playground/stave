@@ -68,7 +68,7 @@ import {
   TooltipTrigger,
   WaveIndicator,
 } from "@/components/ui";
-import { loadWorkspaceShell, type WorkspaceShell } from "@/lib/db/workspaces.db";
+import { loadWorkspaceShellSummary, type WorkspaceShellSummary } from "@/lib/db/workspaces.db";
 import { getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { resolveProviderTurnDisplayState, type ProviderTurnActivitySnapshot } from "@/lib/providers/turn-status";
 import { getRespondingProviderId, getRespondingTasks } from "@/lib/tasks";
@@ -235,7 +235,7 @@ function WorkspaceHoverPreviewTooltip(args: {
     activeTurnIdsByTask,
     hasRuntimeState,
   } = useWorkspaceHoverPreviewState(args.workspaceId);
-  const [loadedShell, setLoadedShell] = useState<WorkspaceShell | null | undefined>(undefined);
+  const [loadedShell, setLoadedShell] = useState<WorkspaceShellSummary | null | undefined>(undefined);
   const [isShellLoading, setIsShellLoading] = useState(false);
   const [didShellLoadFail, setDidShellLoadFail] = useState(false);
 
@@ -270,7 +270,7 @@ function WorkspaceHoverPreviewTooltip(args: {
 
       setIsShellLoading(true);
       setDidShellLoadFail(false);
-      void loadWorkspaceShell({ workspaceId: args.workspaceId })
+      void loadWorkspaceShellSummary({ workspaceId: args.workspaceId })
         .then((shell) => {
           setLoadedShell(shell);
         })

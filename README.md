@@ -37,7 +37,6 @@ The installer prefers the current writable app location when possible and otherw
 - task-oriented chat with approvals, guidance drafting, user-input, tools, diffs, and plans
 - task-local prompt history navigation in the composer via `ArrowUp` / `ArrowDown`
 - global command palette on `Cmd/Ctrl+Shift+P` for IDE actions, separate from chat slash commands
-- Session Replay drawer for recent-turn inspection and request snapshots
 - `$skill-name` composer selector that resolves installed Claude and Codex skills across global, user, and workspace scopes
 - file and image attachments in the composer, including screenshot capture and clipboard image paste with inline preview
 - Monaco editor with workspace-backed TypeScript IntelliSense, optional LSP-backed TypeScript/JavaScript and Python support, docked terminal, and source-control actions

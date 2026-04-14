@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createBridgeProviderSource } from "@/lib/providers/bridge.source";
 import {
+  loadWorkspaceEditorTabBodies,
+  loadWorkspaceShellLite,
+  loadWorkspaceShellForRestore,
   listWorkspaceSummaries,
+  loadWorkspaceShellSummary,
   loadWorkspaceSnapshot,
   upsertWorkspace,
 } from "@/lib/db/workspaces.db";
@@ -11,6 +15,8 @@ import {
   createWorkspaceSnapshot,
   flushPendingSnapshotPersists,
 } from "@/store/workspace-session-state";
+import { buildProjectDefaultWorkspaceId } from "@/store/project.utils";
+import { resolveInitialLatestTaskMessagesPageSize } from "@/store/task-message-loading";
 import {
   createNotification,
   listNotifications,
@@ -43,9 +49,13 @@ function setWindowApi(api: unknown) {
 function setWindowContext(args: {
   api?: unknown;
   localStorage?: ReturnType<typeof createMemoryStorage>;
+  innerHeight?: number;
 }) {
   (globalThis as { window: unknown }).window = {
     api: args.api,
+    ...(typeof args.innerHeight === "number"
+      ? { innerHeight: args.innerHeight }
+      : {}),
     ...(args.localStorage ? { localStorage: args.localStorage } : {}),
   } as unknown;
 }
@@ -168,6 +178,256 @@ describe("workspace persistence fallback", () => {
     expect(loaded?.tasks).toHaveLength(1);
     expect(loaded?.promptDraftByTask).toEqual({});
     expect(loaded?.providerSessionByTask).toEqual({});
+  });
+
+  test("supports workspace shell summaries without electron persistence bridge", async () => {
+    setWindowApi({});
+
+    await upsertWorkspace({
+      id: "ws-dev",
+      name: "Dev Workspace",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [
+          {
+            id: "task-1",
+            title: "Task 1",
+            provider: "claude-code",
+            updatedAt: "2026-03-06T00:00:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-1": [
+            {
+              id: "m-1",
+              role: "user",
+              model: "user",
+              providerId: "user",
+              content: "hello",
+              isStreaming: false,
+              parts: [{ type: "text", text: "hello" }],
+            },
+          ],
+        },
+        terminalTabs: [{
+          id: "terminal-1",
+          title: "project",
+          linkedTaskId: null,
+          backend: "ghostty",
+          cwd: "/tmp/project",
+          createdAt: 1,
+        }],
+        cliSessionTabs: [{
+          id: "cli-1",
+          title: "Claude Workspace",
+          provider: "claude-code",
+          contextMode: "workspace",
+          linkedTaskId: null,
+          linkedTaskTitle: null,
+          handoffSummary: "",
+          cwd: "/tmp/project",
+          createdAt: 2,
+        }],
+      },
+    });
+
+    const summary = await loadWorkspaceShellSummary({ workspaceId: "ws-dev" });
+
+    expect(summary).toMatchObject({
+      activeTaskId: "task-1",
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task 1",
+          provider: "claude-code",
+          updatedAt: "2026-03-06T00:00:00.000Z",
+          unread: false,
+        },
+      ],
+      messageCountByTask: { "task-1": 1 },
+      terminalTabCount: 1,
+      cliSessionTabCount: 1,
+    });
+  });
+
+  test("supports workspace shell lite payloads without electron persistence bridge", async () => {
+    setWindowApi({});
+
+    await upsertWorkspace({
+      id: "ws-lite",
+      name: "Lite Workspace",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [
+          {
+            id: "task-1",
+            title: "Task 1",
+            provider: "claude-code",
+            updatedAt: "2026-03-06T00:00:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-1": [
+            {
+              id: "m-1",
+              role: "user",
+              model: "user",
+              providerId: "user",
+              content: "hello",
+              isStreaming: false,
+              parts: [{ type: "text", text: "hello" }],
+            },
+          ],
+        },
+        promptDraftByTask: {
+          "task-1": {
+            text: "draft",
+            attachedFilePaths: [],
+            attachments: [],
+          },
+        },
+        providerSessionByTask: {
+          "task-1": {
+            "claude-code": "session-claude",
+          },
+        },
+        editorTabs: [{
+          id: "editor-1",
+          filePath: "/tmp/project/src/app.ts",
+          language: "typescript",
+          content: "x".repeat(20_000),
+          hasConflict: false,
+          isDirty: true,
+        }],
+      },
+    });
+
+    const shellLite = await loadWorkspaceShellLite({ workspaceId: "ws-lite" });
+
+    expect(shellLite).toMatchObject({
+      activeTaskId: "task-1",
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task 1",
+          provider: "claude-code",
+          updatedAt: "2026-03-06T00:00:00.000Z",
+          unread: false,
+        },
+      ],
+      promptDraftByTask: {
+        "task-1": {
+          text: "draft",
+          attachedFilePaths: [],
+          attachments: [],
+        },
+      },
+      providerSessionByTask: {
+        "task-1": {
+          "claude-code": "session-claude",
+        },
+      },
+      messageCountByTask: {
+        "task-1": 1,
+      },
+    });
+  });
+
+  test("loads restore shells without a persistence bridge and marks tabs ready", async () => {
+    setWindowApi({});
+
+    await upsertWorkspace({
+      id: "ws-restore",
+      name: "Restore Workspace",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [
+          {
+            id: "task-1",
+            title: "Task 1",
+            provider: "claude-code",
+            updatedAt: "2026-03-06T00:00:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-1": [],
+        },
+        promptDraftByTask: {},
+        providerSessionByTask: {},
+        editorTabs: [{
+          id: "file:/tmp/project/src/app.ts",
+          filePath: "/tmp/project/src/app.ts",
+          language: "typescript",
+          content: "export const answer = 42;\n",
+          hasConflict: false,
+          isDirty: false,
+        }],
+        activeEditorTabId: "file:/tmp/project/src/app.ts",
+      },
+    });
+
+    const shell = await loadWorkspaceShellForRestore({ workspaceId: "ws-restore" });
+
+    expect(shell?.editorTabs).toEqual([{
+      id: "file:/tmp/project/src/app.ts",
+      filePath: "/tmp/project/src/app.ts",
+      language: "typescript",
+      content: "export const answer = 42;\n",
+      contentState: "ready",
+      hasConflict: false,
+      isDirty: false,
+    }]);
+  });
+
+  test("loads editor tab bodies without a persistence bridge", async () => {
+    setWindowApi({});
+
+    await upsertWorkspace({
+      id: "ws-bodies",
+      name: "Bodies Workspace",
+      snapshot: {
+        activeTaskId: "task-1",
+        tasks: [
+          {
+            id: "task-1",
+            title: "Task 1",
+            provider: "claude-code",
+            updatedAt: "2026-03-06T00:00:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-1": [],
+        },
+        promptDraftByTask: {},
+        providerSessionByTask: {},
+        editorTabs: [{
+          id: "file:/tmp/project/src/app.ts",
+          filePath: "/tmp/project/src/app.ts",
+          language: "typescript",
+          content: "export const answer = 42;\n",
+          originalContent: "export const answer = 42;\n",
+          savedContent: "export const answer = 42;\n",
+          hasConflict: false,
+          isDirty: false,
+        }],
+      },
+    });
+
+    const bodies = await loadWorkspaceEditorTabBodies({
+      workspaceId: "ws-bodies",
+      tabIds: ["file:/tmp/project/src/app.ts"],
+    });
+
+    expect(bodies).toEqual([{
+      id: "file:/tmp/project/src/app.ts",
+      content: "export const answer = 42;\n",
+      originalContent: "export const answer = 42;\n",
+      savedContent: "export const answer = 42;\n",
+    }]);
   });
 
   test("supports notification history without electron persistence bridge", async () => {
@@ -621,6 +881,200 @@ describe("workspace persistence fallback", () => {
       kind: "cli-session",
       cliSessionTabId: cachedCliTab.id,
     });
+  });
+
+  test("openProject resolves before background file refresh completes", async () => {
+    const localStorage = createMemoryStorage();
+    let resolveListFiles:
+      | ((value: { ok: boolean; files: string[] }) => void)
+      | null = null;
+    const listFilesPromise = new Promise<{ ok: boolean; files: string[] }>(
+      (resolve) => {
+        resolveListFiles = resolve;
+      },
+    );
+
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          pickRoot: async () => ({ ok: false }),
+          listFiles: async () => listFilesPromise,
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+        persistence: {
+          listWorkspaces: async () => ({ ok: true, rows: [] }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          upsertWorkspace: async () => ({ ok: true }),
+          loadProjectRegistry: async () => ({ ok: true, projects: [] }),
+          saveProjectRegistry: async () => ({ ok: true }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: false,
+      projectFiles: [],
+    });
+
+    let openProjectResolved = false;
+    const openProjectPromise = useAppStore
+      .getState()
+      .openProject({
+        projectPath: "/tmp/stave-project-open-fast",
+      })
+      .then(() => {
+        openProjectResolved = true;
+      });
+
+    await Bun.sleep(0);
+
+    expect(openProjectResolved).toBe(true);
+    expect(useAppStore.getState().projectPath).toBe(
+      "/tmp/stave-project-open-fast",
+    );
+    expect(useAppStore.getState().projectFiles).toEqual([]);
+
+    resolveListFiles?.({
+      ok: true,
+      files: ["package.json", "src/open-fast.ts"],
+    });
+    await openProjectPromise;
+    await Bun.sleep(0);
+
+    expect(useAppStore.getState().projectFiles).toEqual([
+      "package.json",
+      "src/open-fast.ts",
+    ]);
+  });
+
+  test("openProject eagerly restores latest messages for the active task", async () => {
+    const localStorage = createMemoryStorage();
+    const targetProjectPath = "/tmp/stave-project-latest";
+    const targetWorkspaceId = buildProjectDefaultWorkspaceId({
+      projectPath: targetProjectPath,
+    });
+    const viewportHeightPx = 900;
+    const initialLatestCount = resolveInitialLatestTaskMessagesPageSize({
+      viewportHeightPx,
+    });
+    const allMessages = Array.from({ length: 80 }, (_, index) => ({
+      id: `m-${index + 1}`,
+      role: (index % 2 === 0 ? "user" : "assistant") as const,
+      model: index % 2 === 0 ? "user" : "codex",
+      providerId: index % 2 === 0 ? "user" : "codex",
+      content: `message ${index + 1}`,
+      isStreaming: false,
+      parts: [{ type: "text", text: `message ${index + 1}` }],
+    }));
+
+    setWindowContext({
+      innerHeight: viewportHeightPx,
+      localStorage,
+      api: {
+        fs: {
+          pickRoot: async () => ({ ok: false }),
+          listFiles: async () => ({ ok: true, files: ["package.json", "src/app.ts"] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+      },
+    });
+
+    await upsertWorkspace({
+      id: targetWorkspaceId,
+      name: "Default Workspace",
+      snapshot: {
+        activeTaskId: "task-latest",
+        tasks: [
+          {
+            id: "task-latest",
+            title: "Latest Task",
+            provider: "codex",
+            updatedAt: "2026-04-14T00:00:00.000Z",
+            unread: false,
+          },
+        ],
+        messagesByTask: {
+          "task-latest": allMessages,
+        },
+        promptDraftByTask: {},
+        providerSessionByTask: {},
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      projectPath: "/tmp/stave-current",
+      projectName: "current",
+      defaultBranch: "main",
+      workspaces: [
+        {
+          id: "ws-current",
+          name: "Default Workspace",
+          updatedAt: "2026-04-14T00:00:00.000Z",
+        },
+      ],
+      activeWorkspaceId: "ws-current",
+      workspaceBranchById: {
+        "ws-current": "main",
+        [targetWorkspaceId]: "main",
+      },
+      workspacePathById: {
+        "ws-current": "/tmp/stave-current",
+        [targetWorkspaceId]: targetProjectPath,
+      },
+      workspaceDefaultById: {
+        "ws-current": true,
+        [targetWorkspaceId]: true,
+      },
+      projectFiles: ["package.json"],
+      recentProjects: [
+        {
+          projectPath: targetProjectPath,
+          projectName: "latest-project",
+          lastOpenedAt: "2026-04-14T00:00:00.000Z",
+          defaultBranch: "main",
+          workspaces: [
+            {
+              id: targetWorkspaceId,
+              name: "Default Workspace",
+              updatedAt: "2026-04-14T00:00:00.000Z",
+            },
+          ],
+          activeWorkspaceId: targetWorkspaceId,
+          workspaceBranchById: { [targetWorkspaceId]: "main" },
+          workspacePathById: { [targetWorkspaceId]: targetProjectPath },
+          workspaceDefaultById: { [targetWorkspaceId]: true },
+        },
+      ],
+    });
+
+    await useAppStore
+      .getState()
+      .openProject({ projectPath: targetProjectPath });
+    await Bun.sleep(0);
+
+    const nextState = useAppStore.getState();
+    expect(nextState.activeWorkspaceId).toBe(targetWorkspaceId);
+    expect(nextState.activeTaskId).toBe("task-latest");
+    expect(nextState.messageCountByTask["task-latest"]).toBe(80);
+    expect(nextState.messagesByTask["task-latest"]?.length).toBe(
+      initialLatestCount,
+    );
+    expect(nextState.messagesByTask["task-latest"]?.[0]?.id).toBe(
+      `m-${allMessages.length - initialLatestCount + 1}`,
+    );
+    expect(
+      nextState.messagesByTask["task-latest"]?.at(-1)?.id,
+    ).toBe(`m-${allMessages.length}`);
   });
 
   test("preserves manual workspace order when switching workspaces", async () => {
@@ -1382,7 +1836,7 @@ describe("workspace store hydration ordering", () => {
     ]);
   });
 
-  test("hydrateWorkspaces restores projectFiles for the explorer on boot", async () => {
+  test("hydrateWorkspaces eventually restores projectFiles for the explorer on boot", async () => {
     const localStorage = createMemoryStorage();
     const listedFiles = ["package.json", "src/App.tsx"];
     setWindowContext({
@@ -1450,8 +1904,111 @@ describe("workspace store hydration ordering", () => {
     });
 
     await useAppStore.getState().hydrateWorkspaces();
+    await Bun.sleep(0);
 
     expect(useAppStore.getState().projectFiles).toEqual(listedFiles);
+  });
+
+  test("hydrateWorkspaces does not wait for file refresh on boot", async () => {
+    const localStorage = createMemoryStorage();
+    let resolveListFiles:
+      | ((value: { ok: boolean; files: string[] }) => void)
+      | null = null;
+    const listFilesPromise = new Promise<{ ok: boolean; files: string[] }>(
+      (resolve) => {
+        resolveListFiles = resolve;
+      },
+    );
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          pickRoot: async () => ({ ok: false }),
+          listFiles: async () => listFilesPromise,
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+        persistence: {
+          listWorkspaces: async () => ({
+            ok: true,
+            rows: [
+              {
+                id: "ws-main-fast-hydrate",
+                name: "default",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+              },
+            ],
+          }),
+          loadWorkspace: async () => ({ ok: true, snapshot: null }),
+          listLatestWorkspaceTurns: async () => ({ ok: true, turns: [] }),
+        },
+      },
+    });
+
+    const [{ workspaceFsAdapter }, { useAppStore }] = await Promise.all([
+      import("../src/lib/fs"),
+      import("../src/store/app.store"),
+    ]);
+    await (
+      workspaceFsAdapter as {
+        setRoot?: (args: {
+          rootPath: string;
+          rootName: string;
+          files?: string[];
+        }) => Promise<void>;
+      }
+    ).setRoot?.({
+      rootPath: "/tmp/stave-project-fast-hydrate",
+      rootName: "fixture",
+      files: [],
+    });
+
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      workspaces: [
+        {
+          id: "ws-main-fast-hydrate",
+          name: "default",
+          updatedAt: "2026-03-09T00:00:00.000Z",
+        },
+      ],
+      activeWorkspaceId: "ws-main-fast-hydrate",
+      projectPath: "/tmp/stave-project-fast-hydrate",
+      projectName: "fixture",
+      workspacePathById: {
+        "ws-main-fast-hydrate": "/tmp/stave-project-fast-hydrate",
+      },
+      workspaceBranchById: { "ws-main-fast-hydrate": "main" },
+      workspaceDefaultById: { "ws-main-fast-hydrate": true },
+      projectFiles: [],
+      hasHydratedWorkspaces: false,
+    });
+
+    let hydrated = false;
+    const hydratePromise = useAppStore
+      .getState()
+      .hydrateWorkspaces()
+      .then(() => {
+        hydrated = true;
+      });
+
+    await Bun.sleep(0);
+
+    expect(hydrated).toBe(true);
+    expect(useAppStore.getState().projectFiles).toEqual([]);
+
+    resolveListFiles?.({
+      ok: true,
+      files: ["package.json", "src/boot-fast.ts"],
+    });
+    await hydratePromise;
+    await Bun.sleep(0);
+
+    expect(useAppStore.getState().projectFiles).toEqual([
+      "package.json",
+      "src/boot-fast.ts",
+    ]);
   });
 
   test("hydrateWorkspaces resolves after shell hydrate and backfills task messages asynchronously", async () => {

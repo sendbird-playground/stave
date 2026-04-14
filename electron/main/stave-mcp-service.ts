@@ -277,14 +277,6 @@ export async function getTaskStatus(args: {
   );
 }
 
-export async function listTurnEvents(args: {
-  turnId: string;
-  afterSequence?: number;
-  limit?: number;
-}) {
-  return invokeLocalMcp<unknown[]>("list-turn-events", args);
-}
-
 export async function respondApproval(args: {
   workspaceId: string;
   taskId: string;
