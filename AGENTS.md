@@ -332,6 +332,28 @@ Use `the-ipc-schema-sync` for this work. If the task changes a payload, event, r
 - When upgrading `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, or the Codex/Claude CLI expectations, verify new option names and object shapes against the installed package types/docs in `node_modules` before wiring them into Stave. Do not assume flag names from memory.
 - If a change is intentionally provider-specific, note that explicitly in code or the final handoff. Otherwise, review the sibling provider adapter for symmetry.
 
+### Provider CLI Environment Parity
+
+Treat provider child-process environment assembly as a shared runtime contract, not as adapter-local glue code.
+
+These rules apply when editing executable lookup, runtime env construction, CLI session launch env, or tooling status probes for Claude/Codex or other provider-backed CLIs.
+
+- Required check files:
+  - `electron/providers/executable-path.ts`
+  - `electron/providers/cli-path-env.ts`
+  - `electron/providers/claude-sdk-runtime.ts`
+  - `electron/providers/codex-sdk-runtime.ts`
+  - `electron/providers/codex-app-server-runtime.ts`
+  - `electron/providers/runtime.ts`
+  - `electron/main/utils/tooling-status.ts`
+- Do not let cloned env objects silently drop login-shell `PATH` entries. GUI-launched Stave must resolve the same CLI executables that work in a fresh login shell.
+- Claude runtime, Codex runtime, app-server runtime, CLI sessions, and tooling-status probes must share the same env-builder path for `PATH`, config-home, and auth-related variables. Do not fork these rules in one adapter without updating the others.
+- `claude auth status` or `codex --version` style probes are not sufficient verification on their own. Any env-related change must verify both:
+  1. status/probe path
+  2. actual runtime execution path (`start turn`, `start push turn`, or CLI session launch)
+- If a change prefers login-shell values such as `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, or shell-managed `PATH`, ensure the same precedence rules apply to both runtime execution and tooling/status inspection.
+- Treat regressions like `env: node: No such file or directory`, `Not logged in` only inside Stave, or probe-success/runtime-failure mismatches as env parity bugs first.
+
 ### NormalizedProviderEvent ↔ Zod Schema Sync
 
 `NormalizedProviderEvent` (TypeScript union in `src/lib/providers/provider.types.ts`) and `NormalizedProviderEventSchema` (Zod discriminated union in `src/lib/providers/schemas.ts`) **must always be kept in sync**.
