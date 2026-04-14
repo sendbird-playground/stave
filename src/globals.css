@@ -320,6 +320,14 @@
   [data-cli-terminal-surface] > .xterm {
     padding: 1rem 1.25rem;
   }
+
+  /* xterm.css hard-codes .xterm-viewport { background-color: #000 }.
+   * The viewport is position:absolute inset:0, so it covers the .xterm
+   * padding area with black.  Override to match our terminal theme colour
+   * so the padding zone blends seamlessly with the terminal surface. */
+  [data-cli-terminal-surface] > .xterm > .xterm-viewport {
+    background-color: var(--color-terminal);
+  }
 }
 
 @layer utilities {
