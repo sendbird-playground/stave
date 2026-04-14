@@ -1,3 +1,16 @@
+## [0.2.3](https://github.com/sendbird-playground/stave/compare/v0.2.2...v0.2.3) (2026-04-14)
+
+### Features
+
+* **dialog:** add reusable Escape-key dismissal plus ARIA and focus support across Settings, image previews, and task dialogs ([#423](https://github.com/sendbird-playground/stave/issues/423)) ([f9a593a](https://github.com/sendbird-playground/stave/commit/f9a593a010bf6611052c701dc9f412b239e45089))
+* **prompt-input:** show clearer queued follow-up summaries and preserve attachment-only queued turns for auto-dispatch after the active response finishes ([#425](https://github.com/sendbird-playground/stave/issues/425)) ([42d5a53](https://github.com/sendbird-playground/stave/commit/42d5a532c18553d5e566b59f6952d202f89e4a7e))
+* **pr:** resolve pull request diffs against the correct remote tracking base branch when local base refs are stale ([#426](https://github.com/sendbird-playground/stave/issues/426)) ([5363abf](https://github.com/sendbird-playground/stave/commit/5363abf22db005bd2382de54a6e96c84c8dd7a74))
+
+### Bug Fixes
+
+* **cli-session:** always launch Claude CLI sessions in native auto mode and cover the runtime-option path with regression tests ([#422](https://github.com/sendbird-playground/stave/issues/422)) ([7642889](https://github.com/sendbird-playground/stave/commit/7642889bc8f35c890d877724b8ec27a39d87c3c2))
+* **cli-session:** remove the stray light-theme panel border and align the xterm viewport background with the terminal theme token ([#421](https://github.com/sendbird-playground/stave/issues/421)) ([fda4e3e](https://github.com/sendbird-playground/stave/commit/fda4e3e4d8e73b03fb48240bb5ea6d2dc045456f))
+* **terminal:** persist dock open state so workspace restores stop auto-opening unwanted terminal tabs ([#424](https://github.com/sendbird-playground/stave/issues/424)) ([96ef660](https://github.com/sendbird-playground/stave/commit/96ef6608c0eccfd6f8efea8ce9a884ae3d23e7ff))
 ## [0.2.2](https://github.com/sendbird-playground/stave/compare/v0.2.1...v0.2.2) (2026-04-14)
 
 ### Bug Fixes
