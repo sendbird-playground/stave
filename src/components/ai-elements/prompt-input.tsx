@@ -730,32 +730,6 @@ export function PromptInput(args: PromptInputProps) {
           ) : null}
         </div>
       ) : null}
-      {shouldShowFocusHint ? (
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={focusComposer}
-            className={cn(
-              PROMPT_TOOLBAR_BUTTON,
-              PROMPT_FLOATING_SURFACE,
-              "h-8 gap-2",
-            )}
-          >
-            <span>Focus</span>
-            <KbdGroup>
-              <Kbd>{modifierLabel}</Kbd>
-              <Kbd>L</Kbd>
-            </KbdGroup>
-            <span className="text-xs text-muted-foreground">or</span>
-            <KbdGroup>
-              <Kbd>{modifierLabel}</Kbd>
-              <Kbd>J</Kbd>
-            </KbdGroup>
-          </Button>
-        </div>
-      ) : null}
       <Popover open={activePalette !== null} modal={false}>
         <PopoverAnchor asChild>
           <div className={cn("space-y-2", minimal && "space-y-3")}>
@@ -773,6 +747,32 @@ export function PromptInput(args: PromptInputProps) {
                   </span>
                 ) : null}
                 <div className="relative min-w-0 flex-1">
+                  {shouldShowFocusHint ? (
+                    <div className={cn("pointer-events-none absolute right-0 top-0", UI_LAYER_CLASS.floatingChrome)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={focusComposer}
+                        className={cn(
+                          PROMPT_TOOLBAR_BUTTON,
+                          PROMPT_FLOATING_SURFACE,
+                          "pointer-events-auto h-8 gap-2 shadow-sm supports-backdrop-filter:backdrop-blur-md",
+                        )}
+                      >
+                        <span>Focus</span>
+                        <KbdGroup>
+                          <Kbd>{modifierLabel}</Kbd>
+                          <Kbd>L</Kbd>
+                        </KbdGroup>
+                        <span className="text-xs text-muted-foreground">or</span>
+                        <KbdGroup>
+                          <Kbd>{modifierLabel}</Kbd>
+                          <Kbd>J</Kbd>
+                        </KbdGroup>
+                      </Button>
+                    </div>
+                  ) : null}
                   <Textarea
                     ref={textareaRef}
                     value={value}
