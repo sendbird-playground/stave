@@ -100,9 +100,7 @@ const INACTIVE_CLAUDE_SETTINGS = [
   "medium",
   "adaptive",
   false,
-  false,
   "",
-  true,
 ] as const;
 const INACTIVE_CODEX_SETTINGS = [
   "workspace-write",
@@ -839,9 +837,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     claudeEffort,
     claudeThinkingMode,
     claudeAgentProgressSummaries,
-    claudeFastMode,
     claudeBinaryPath,
-    claudeFastModeVisible,
   ] = useAppStore(useShallow((state) => (
     activeProvider === "claude-code" || activeProvider === "stave"
       ? [
@@ -855,9 +851,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           state.settings.claudeEffort,
           state.settings.claudeThinkingMode,
           state.settings.claudeAgentProgressSummaries,
-          state.settings.claudeFastMode,
           state.settings.claudeBinaryPath,
-          state.settings.claudeFastModeVisible,
         ] as const
       : INACTIVE_CLAUDE_SETTINGS
   )));
@@ -1007,7 +1001,6 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       claudeEffort,
       claudeThinkingMode,
       claudeAgentProgressSummaries,
-      claudeFastMode,
       claudeBinaryPath,
       codexFileAccess,
       codexNetworkAccess,
@@ -1033,7 +1026,6 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     claudeAgentProgressSummaries,
     claudeAllowUnsandboxedCommands,
     claudeEffort,
-    claudeFastMode,
     claudeBinaryPath,
     claudeSandboxEnabled,
     claudeSettingSources,
@@ -1376,15 +1368,11 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           },
         });
       }}
-      fastMode={activeProvider === "codex" ? codexFastMode : activeProvider === "claude-code" ? claudeFastMode : undefined}
+      fastMode={activeProvider === "codex" ? codexFastMode : undefined}
       onFastModeChange={
-        (activeProvider === "codex" ? codexFastModeVisible : activeProvider === "claude-code" ? claudeFastModeVisible : false)
+        (activeProvider === "codex" && codexFastModeVisible)
           ? (enabled) => {
-              if (activeProvider === "codex") {
-                updateSettings({ patch: { codexFastMode: enabled } });
-              } else {
-                updateSettings({ patch: { claudeFastMode: enabled } });
-              }
+              updateSettings({ patch: { codexFastMode: enabled } });
             }
           : undefined
       }

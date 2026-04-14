@@ -1598,7 +1598,7 @@ function RulesSection() {
 }
 
 function ChatSection() {
-  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningExpansionMode, showInterimMessages, thinkingPhraseAnimationStyle, claudeFastModeVisible, codexFastModeVisible] = useAppStore(
+  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningExpansionMode, showInterimMessages, thinkingPhraseAnimationStyle, codexFastModeVisible] = useAppStore(
     useShallow((state) => [
       state.settings.smartSuggestions,
       state.settings.chatSendPreview,
@@ -1612,7 +1612,6 @@ function ChatSection() {
       state.settings.reasoningExpansionMode,
       state.settings.showInterimMessages,
       state.settings.thinkingPhraseAnimationStyle,
-      state.settings.claudeFastModeVisible,
       state.settings.codexFastModeVisible,
     ] as const),
   );
@@ -1759,12 +1758,6 @@ function ChatSection() {
               </SelectContent>
             </Select>
           </LabeledField>
-          <SwitchField
-            title="Show Fast Mode Toggle (Claude)"
-            description="Show the Fast mode toggle button when Claude is the active provider."
-            checked={claudeFastModeVisible}
-            onCheckedChange={(checked) => updateSettings({ patch: { claudeFastModeVisible: checked } })}
-          />
           <SwitchField
             title="Show Fast Mode Toggle (Codex)"
             description="Show the Fast mode toggle button when Codex is the active provider."
