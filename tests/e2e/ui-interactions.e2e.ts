@@ -409,6 +409,26 @@ async function expectCliDeliveredOutput(page: Page, fragment: string) {
     .toContain(fragment);
 }
 
+async function cliViewportMatchesTerminalToken(page: Page) {
+  return page.evaluate(() => {
+    const viewport = document.querySelector(
+      '[data-testid="cli-session-panel"] .xterm-viewport',
+    );
+    if (!(viewport instanceof HTMLElement)) {
+      return false;
+    }
+
+    const probe = document.createElement("div");
+    probe.style.display = "none";
+    probe.style.backgroundColor = "var(--color-terminal)";
+    document.documentElement.appendChild(probe);
+    const expected = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+
+    return getComputedStyle(viewport).backgroundColor === expected;
+  });
+}
+
 async function getCliResizeState(page: Page) {
   return page.evaluate(() => (
     (
@@ -609,6 +629,29 @@ test("cli session keeps the renderer alive and refocuses after switching back", 
   await expectCliSessionStreamReady(page);
   await emitCliSessionOutput(page, "after reattach\r\n");
   await expectCliDeliveredOutput(page, "after reattach");
+});
+
+test("cli session viewport background follows the active terminal theme token", async ({ page }) => {
+  await installCliSessionHarness(page);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+
+  await openWorkspaceCliSession(page);
+  await expect(page.getByTestId("cli-session-panel")).toBeVisible();
+  await expect(page.getByTestId("cli-session-panel").locator(".xterm-viewport")).toHaveCount(1);
+
+  await expect.poll(async () => cliViewportMatchesTerminalToken(page)).toBe(true);
+
+  await page.evaluate(() => {
+    document.documentElement.classList.add("dark");
+  });
+  await expect.poll(async () => cliViewportMatchesTerminalToken(page)).toBe(true);
+
+  await page.evaluate(() => {
+    document.documentElement.classList.remove("dark");
+  });
+  await expect.poll(async () => cliViewportMatchesTerminalToken(page)).toBe(true);
 });
 
 test("cli session resumes streaming after a slow reattach resize", async ({ page }) => {
