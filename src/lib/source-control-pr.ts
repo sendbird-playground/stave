@@ -42,6 +42,33 @@ function pushWorkspaceContextSection(lines: string[], title: string, bodyLines: 
   lines.push("", `${title}:`, ...content);
 }
 
+export function resolvePullRequestComparisonBaseRef(args: {
+  baseBranch?: string;
+  remoteBranches?: string[];
+}) {
+  const normalizedBaseBranch = args.baseBranch?.trim() || "main";
+  if (!normalizedBaseBranch) {
+    return "main";
+  }
+
+  if (normalizedBaseBranch.includes("/")) {
+    return normalizedBaseBranch;
+  }
+
+  const remoteBranches = (args.remoteBranches ?? [])
+    .map((branch) => branch.trim())
+    .filter(Boolean);
+  const preferredOriginRef = `origin/${normalizedBaseBranch}`;
+  if (remoteBranches.includes(preferredOriginRef)) {
+    return preferredOriginRef;
+  }
+
+  const matchingRemoteRef = remoteBranches.find((branch) =>
+    branch.endsWith(`/${normalizedBaseBranch}`)
+  );
+  return matchingRemoteRef ?? normalizedBaseBranch;
+}
+
 function parseConventionalPullRequestTitle(title?: string) {
   const normalized = title?.trim();
   if (!normalized) {

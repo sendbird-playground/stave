@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   generateFallbackPullRequestDraft,
   mergePullRequestDraft,
+  resolvePullRequestComparisonBaseRef,
   resolvePullRequestTitle,
 } from "../src/lib/source-control-pr";
 import {
@@ -648,9 +649,23 @@ async function suggestProviderPRDescription(args: {
   workspaceContext?: string;
 }) {
   const cwd = args.cwd;
-  const baseBranch = args.baseBranch || "main";
-  const safeBaseBranch = quotePath({ value: baseBranch });
+  const baseBranch = args.baseBranch?.trim() || "main";
   const expectedBranch = args.headBranch?.trim() || undefined;
+
+  const remoteBranchesResult = await runCommand({
+    command: "git branch -r --format='%(refname:short)'",
+    cwd,
+  });
+  const comparisonBaseRef = resolvePullRequestComparisonBaseRef({
+    baseBranch,
+    remoteBranches: remoteBranchesResult.ok
+      ? remoteBranchesResult.stdout
+          .split("\n")
+          .map((branch) => branch.trim())
+          .filter(Boolean)
+      : [],
+  });
+  const safeComparisonBaseRef = quotePath({ value: comparisonBaseRef });
 
   const [
     diffResult,
@@ -662,13 +677,13 @@ async function suggestProviderPRDescription(args: {
     agentsResult,
     branchResult,
   ] = await Promise.all([
-    runCommand({ command: `git diff "${safeBaseBranch}"...HEAD`, cwd }),
+    runCommand({ command: `git diff "${safeComparisonBaseRef}"...HEAD`, cwd }),
     runCommand({ command: "git diff HEAD", cwd }),
     runCommand({
-      command: `git log "${safeBaseBranch}"..HEAD --pretty=format:"%h %s" --no-merges`,
+      command: `git log "${safeComparisonBaseRef}"..HEAD --pretty=format:"%h %s" --no-merges`,
       cwd,
     }),
-    runCommand({ command: `git diff "${safeBaseBranch}"...HEAD --stat`, cwd }),
+    runCommand({ command: `git diff "${safeComparisonBaseRef}"...HEAD --stat`, cwd }),
     runCommand({ command: "git status --porcelain", cwd }),
     runCommand({
       command: "cat .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null || true",
