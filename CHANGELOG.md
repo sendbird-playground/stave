@@ -1,3 +1,22 @@
+## [0.3.0](https://github.com/sendbird-playground/stave/compare/v0.2.3...v0.3.0) (2026-04-14)
+
+### Highlights
+
+* Simplified workspace restore so active tasks reopen faster, latest task messages load first, and non-critical refresh work moves into the background.
+* Slimmed desktop persistence around workspace shell summaries and artifact-backed editor bodies while removing stale raw turn diagnostics from the app path.
+* Hardened provider and host-service runtime flows with framed internal transport plus recoverable Codex App Server overflow handling for long conversations.
+* Polished core session UI with safer dialog dismissal, cleaner plan and todo layering, and removal of the unsupported Claude fast mode toggle from the product surface.
+
+### Features
+
+* **workspace:** simplify restore state and harden runtime flows ([#432](https://github.com/sendbird-playground/stave/issues/432)) ([0c23b50](https://github.com/sendbird-playground/stave/commit/0c23b50c45dde35609ce9ad5249508dfd3e25841))
+
+### Bug Fixes
+
+* **dialog:** close settings dialog on escape ([#430](https://github.com/sendbird-playground/stave/issues/430)) ([d8b980b](https://github.com/sendbird-playground/stave/commit/d8b980b97cfc4dc7d4fed991c4f3bf0e0206d901))
+* focus overlap ([#431](https://github.com/sendbird-playground/stave/issues/431)) ([fa0339c](https://github.com/sendbird-playground/stave/commit/fa0339c5c507d9985d03a75f65c6ee138055e37c))
+* **session:** keep plan viewer above todo floater ([#429](https://github.com/sendbird-playground/stave/issues/429)) ([d2714f8](https://github.com/sendbird-playground/stave/commit/d2714f8a8a5443a6fd5cce78139216fb14e1e546))
+* **ui:** hide Claude fast mode toggle ([#428](https://github.com/sendbird-playground/stave/issues/428)) ([4c7cafd](https://github.com/sendbird-playground/stave/commit/4c7cafdf7f93ef253482563f1bee6c16d3c747e5))
 ## [0.2.3](https://github.com/sendbird-playground/stave/compare/v0.2.2...v0.2.3) (2026-04-14)
 
 ### Features
