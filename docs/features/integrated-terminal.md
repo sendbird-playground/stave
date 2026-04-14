@@ -19,7 +19,7 @@
 
 - Open a project or workspace in Stave first.
 - The integrated terminal uses the workspace path as its shell root.
-- Claude CLI sessions use Claude auto mode only on Claude Code `2.1.71+`. Older Claude CLI builds fall back to `default` permission mode because they reject `--enable-auto-mode` and `--permission-mode auto`.
+- Claude CLI sessions always start in Claude auto mode. Claude Code `2.1.71+` supports this natively; older CLI builds fall back to `default` permission mode because they reject `--enable-auto-mode` and `--permission-mode auto`.
 
 ## Quick Start
 
