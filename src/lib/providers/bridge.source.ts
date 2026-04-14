@@ -1,4 +1,8 @@
 import type { ProviderEventSource, ProviderId, ProviderTurnRequest } from "@/lib/providers/provider.types";
+import {
+  compactProviderTurnRequestForTransport,
+  HOST_SERVICE_PROVIDER_REQUEST_RETRY_MAX_BYTES,
+} from "@/lib/providers/transport-bounds";
 
 type PushStreamPayload = {
   streamId: string;
@@ -35,6 +39,52 @@ async function* emitStartFailure(args: { message?: string }) {
   yield {
     type: "done",
   };
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+  return fallback;
+}
+
+function isHostServiceProtocolOverflowError(error: unknown) {
+  const message = getErrorMessage(error, "");
+  return message.includes("protocol line limit") || message.includes("protocol overflow");
+}
+
+async function invokeProviderRequestWithTransportFallback<TResult>(args: {
+  method: "provider.stream-turn" | "provider.start-stream-turn" | "provider.start-push-turn";
+  request: ProviderTurnRequest & { providerId: ProviderId };
+  invoke: (request: ProviderTurnRequest & { providerId: ProviderId }) => TResult | Promise<TResult>;
+}) {
+  const primaryRequest = compactProviderTurnRequestForTransport({
+    method: args.method,
+    request: args.request,
+  });
+
+  try {
+    return await args.invoke(primaryRequest);
+  } catch (error) {
+    if (!isHostServiceProtocolOverflowError(error)) {
+      throw error;
+    }
+
+    const fallbackRequest = compactProviderTurnRequestForTransport({
+      method: args.method,
+      request: args.request,
+      maxBytes: HOST_SERVICE_PROVIDER_REQUEST_RETRY_MAX_BYTES,
+    });
+
+    if (JSON.stringify(fallbackRequest) === JSON.stringify(primaryRequest)) {
+      throw error;
+    }
+
+    return args.invoke(fallbackRequest);
+  }
 }
 
 function resolveWindowTimerApi() {
@@ -105,16 +155,19 @@ async function* fromPolledStream(args: {
     return;
   }
 
-  const started = await startStreamTurn({
-    turnId: args.turnId,
-    providerId: args.providerId,
-    prompt: args.prompt,
-    conversation: args.conversation,
-    taskId: args.taskId,
-    workspaceId: args.workspaceId,
-    cwd: args.cwd,
-    runtimeOptions: args.runtimeOptions,
-  });
+  let started;
+  try {
+    started = await invokeProviderRequestWithTransportFallback({
+      method: "provider.start-stream-turn",
+      request: args,
+      invoke: (request) => startStreamTurn(request),
+    });
+  } catch (error) {
+    yield* emitStartFailure({
+      message: getErrorMessage(error, "Provider request could not start."),
+    });
+    return;
+  }
   if (!started.ok || !started.streamId) {
     yield* emitStartFailure({ message: started.message });
     return;
@@ -292,16 +345,19 @@ async function* fromPushStream(args: {
   });
 
   try {
-    const started = await startPushTurn({
-      turnId: args.turnId,
-      providerId: args.providerId,
-      prompt: args.prompt,
-      conversation: args.conversation,
-      taskId: args.taskId,
-      workspaceId: args.workspaceId,
-      cwd: args.cwd,
-      runtimeOptions: args.runtimeOptions,
-    });
+    let started;
+    try {
+      started = await invokeProviderRequestWithTransportFallback({
+        method: "provider.start-push-turn",
+        request: args,
+        invoke: (request) => startPushTurn(request),
+      });
+    } catch (error) {
+      yield* emitStartFailure({
+        message: getErrorMessage(error, "Provider request could not start."),
+      });
+      return;
+    }
     if (!started.ok || !started.streamId) {
       yield* emitStartFailure({ message: started.message });
       return;
@@ -387,19 +443,26 @@ async function resolveBridgeStream(args: {
     if (!streamTurn) {
       return null;
     }
-    const result = await streamTurn({
-      turnId: args.turnId,
-      providerId: args.providerId,
-      prompt: args.prompt,
-      conversation: args.conversation,
-      taskId: args.taskId,
-      workspaceId: args.workspaceId,
-      cwd: args.cwd,
-      runtimeOptions: args.runtimeOptions,
-    });
+    try {
+      const result = await invokeProviderRequestWithTransportFallback({
+        method: "provider.stream-turn",
+        request: args,
+        invoke: (request) => streamTurn(request),
+      });
 
-    if (Array.isArray(result) || hasAsyncIterable(result)) {
-      return result;
+      if (Array.isArray(result) || hasAsyncIterable(result)) {
+        return result;
+      }
+    } catch (error) {
+      return [
+        {
+          type: "system",
+          content: getErrorMessage(error, "Provider request could not start."),
+        },
+        {
+          type: "done",
+        },
+      ];
     }
 
     return null;
@@ -440,16 +503,24 @@ async function resolveBridgeStream(args: {
     return null;
   }
 
-  const result = await streamTurn({
-    turnId: args.turnId,
-    providerId: args.providerId,
-    prompt: args.prompt,
-    conversation: args.conversation,
-    taskId: args.taskId,
-    workspaceId: args.workspaceId,
-    cwd: args.cwd,
-    runtimeOptions: args.runtimeOptions,
-  });
+  let result;
+  try {
+    result = await invokeProviderRequestWithTransportFallback({
+      method: "provider.stream-turn",
+      request: args,
+      invoke: (request) => streamTurn({ ...request }),
+    });
+  } catch (error) {
+    return [
+      {
+        type: "system",
+        content: getErrorMessage(error, "Provider request could not start."),
+      },
+      {
+        type: "done",
+      },
+    ];
+  }
 
   if (Array.isArray(result)) {
     return result;
