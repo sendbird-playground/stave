@@ -51,6 +51,13 @@ function describeTerminalError(error: unknown, fallback: string) {
   return fallback;
 }
 
+/** Parse an rgb/rgba string and return the channel values, or null. */
+function parseRgb(rgb: string): [number, number, number] | null {
+  const m = rgb.match(/(\d+)/g);
+  if (!m || m.length < 3) return null;
+  return [Number(m[0]), Number(m[1]), Number(m[2])];
+}
+
 function resolveTerminalTheme() {
   if (typeof document === "undefined") {
     return {
@@ -72,7 +79,22 @@ function resolveTerminalTheme() {
   const foreground = computed.color || DEFAULT_TERMINAL_FOREGROUND;
   probe.remove();
 
-  return { background, foreground };
+  // Derive a visible selection colour from the foreground so selected text
+  // stands out regardless of the terminal palette.
+  const fg = parseRgb(foreground);
+  const selectionBackground = fg
+    ? `rgba(${fg[0]}, ${fg[1]}, ${fg[2]}, 0.35)`
+    : undefined;
+  const selectionInactiveBackground = fg
+    ? `rgba(${fg[0]}, ${fg[1]}, ${fg[2]}, 0.2)`
+    : undefined;
+
+  return {
+    background,
+    foreground,
+    selectionBackground,
+    selectionInactiveBackground,
+  };
 }
 
 function focusCliTerminalSurface(args: {
@@ -157,47 +179,50 @@ export function useCliTerminalInstance(
     }
   }, []);
 
-  const controller = useMemo<CliTerminalInstanceController>(() => ({
-    clear: () => {
-      const terminal = terminalRef.current;
-      if (!terminal) {
-        return;
-      }
-      writeToTerminal(() => {
-        terminal.clear();
-      });
-    },
-    write: (data: string) => {
-      const terminal = terminalRef.current;
-      if (!terminal || !data) {
-        return;
-      }
-      writeToTerminal(() => {
-        terminal.write(data);
-      });
-    },
-    writeln: (data: string) => {
-      const terminal = terminalRef.current;
-      if (!terminal) {
-        return;
-      }
-      writeToTerminal(() => {
-        terminal.writeln(data);
-      });
-    },
-    getSize: () => {
-      const terminal = terminalRef.current;
-      return {
-        cols: terminal?.cols ?? 0,
-        rows: terminal?.rows ?? 0,
-      };
-    },
-    focus: () =>
-      focusCliTerminalSurface({
-        terminal: terminalRef.current,
-        container: args.containerRef.current,
-      }),
-  }), [args.containerRef, writeToTerminal]);
+  const controller = useMemo<CliTerminalInstanceController>(
+    () => ({
+      clear: () => {
+        const terminal = terminalRef.current;
+        if (!terminal) {
+          return;
+        }
+        writeToTerminal(() => {
+          terminal.clear();
+        });
+      },
+      write: (data: string) => {
+        const terminal = terminalRef.current;
+        if (!terminal || !data) {
+          return;
+        }
+        writeToTerminal(() => {
+          terminal.write(data);
+        });
+      },
+      writeln: (data: string) => {
+        const terminal = terminalRef.current;
+        if (!terminal) {
+          return;
+        }
+        writeToTerminal(() => {
+          terminal.writeln(data);
+        });
+      },
+      getSize: () => {
+        const terminal = terminalRef.current;
+        return {
+          cols: terminal?.cols ?? 0,
+          rows: terminal?.rows ?? 0,
+        };
+      },
+      focus: () =>
+        focusCliTerminalSurface({
+          terminal: terminalRef.current,
+          container: args.containerRef.current,
+        }),
+    }),
+    [args.containerRef, writeToTerminal],
+  );
 
   useEffect(() => {
     if (!args.enabled) {
