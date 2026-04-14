@@ -2513,6 +2513,153 @@ describe("workspace store hydration ordering", () => {
     ).toEqual(["user", "assistant", "user", "assistant"]);
   });
 
+  test("auto-dispatches an attachment-only queued next turn after completion", async () => {
+    const localStorage = createMemoryStorage();
+    const startedPrompts: string[] = [];
+    const readFileCalls: string[] = [];
+    let streamListener:
+      | ((payload: { streamId: string; event: unknown; done: boolean }) => void)
+      | null = null;
+
+    (globalThis as { window: unknown }).window = {
+      localStorage,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        provider: {
+          startPushTurn: async (args: { prompt?: string }) => {
+            const sequence = startedPrompts.length + 1;
+            startedPrompts.push(args.prompt ?? "");
+            return {
+              ok: true,
+              streamId: `stream-attachment-${sequence}`,
+              turnId: `turn-attachment-${sequence}`,
+            };
+          },
+          subscribeStreamEvents: (listener: typeof streamListener) => {
+            streamListener = listener;
+            return () => {
+              if (streamListener === listener) {
+                streamListener = null;
+              }
+            };
+          },
+          abortTurn: async () => ({ ok: true, message: "aborted" }),
+          cleanupTask: async () => ({ ok: true }),
+        },
+        fs: {
+          readFile: async (args: { filePath?: string }) => {
+            readFileCalls.push(args.filePath ?? "");
+            return {
+              ok: true,
+              content: "# README",
+              revision: "rev-readme",
+            };
+          },
+        },
+      },
+    } as unknown;
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    useAppStore.setState({
+      ...initialState,
+      hasHydratedWorkspaces: true,
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-04-09T00:00:00.000Z" },
+      ],
+      activeWorkspaceId: "ws-main",
+      activeTaskId: "task-main",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-main": "/tmp/stave-project",
+      },
+      workspaceBranchById: {
+        "ws-main": "main",
+      },
+      workspaceDefaultById: {
+        "ws-main": true,
+      },
+      draftProvider: "codex",
+      tasks: [
+        {
+          id: "task-main",
+          title: "Main Task",
+          provider: "codex",
+          updatedAt: "2026-04-09T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
+      messagesByTask: { "task-main": [] },
+      activeTurnIdsByTask: {},
+      promptDraftByTask: {},
+      nativeSessionReadyByTask: {},
+      providerSessionByTask: {},
+    });
+
+    const started = await useAppStore.getState().sendUserMessage({
+      taskId: "task-main",
+      content: "First prompt",
+    });
+
+    expect(started).toMatchObject({
+      status: "started",
+      taskId: "task-main",
+      workspaceId: "ws-main",
+    });
+
+    useAppStore.getState().updatePromptDraft({
+      taskId: "task-main",
+      patch: {
+        attachedFilePaths: ["README.md"],
+      },
+    });
+
+    const queued = await useAppStore.getState().sendUserMessage({
+      taskId: "task-main",
+      content: "",
+    });
+
+    expect(queued).toEqual({
+      status: "queued",
+      taskId: "task-main",
+      workspaceId: "ws-main",
+    });
+    expect(
+      useAppStore.getState().promptDraftByTask["task-main"]?.queuedNextTurn,
+    ).toMatchObject({
+      sourceTurnId: started.turnId,
+      content: "",
+    });
+
+    streamListener?.({
+      streamId: "stream-attachment-1",
+      event: { type: "text", text: "First response" },
+      done: false,
+    });
+    streamListener?.({
+      streamId: "stream-attachment-1",
+      event: { type: "done" },
+      done: true,
+    });
+
+    await Bun.sleep(25);
+
+    const autoDispatchedState = useAppStore.getState();
+    expect(startedPrompts).toEqual(["First prompt", ""]);
+    expect(readFileCalls).toEqual(["README.md"]);
+    expect(typeof autoDispatchedState.activeTurnIdsByTask["task-main"]).toBe(
+      "string",
+    );
+    expect(autoDispatchedState.activeTurnIdsByTask["task-main"]).not.toBe(
+      started.turnId,
+    );
+    expect(
+      autoDispatchedState.promptDraftByTask["task-main"]?.queuedNextTurn,
+    ).toBeUndefined();
+  });
+
   test("clears the submitted prompt draft before async context loading so workspace switches do not revive it", async () => {
     const localStorage = createMemoryStorage();
     let resolveReadFile:
