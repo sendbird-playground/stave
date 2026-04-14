@@ -32,6 +32,7 @@ import { toText } from "./utils";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
+import path from "node:path";
 import { z } from "zod";
 import {
   canExecutePath,
