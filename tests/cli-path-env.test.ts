@@ -3,7 +3,10 @@ import {
   CLAUDE_CLI_AUTO_MODE_MIN_VERSION,
   isClaudeCliAutoModeSupportedVersion,
 } from "../electron/providers/claude-cli-compat";
-import { applyLoginShellEnvOverrides } from "../electron/providers/cli-path-env";
+import {
+  applyLoginShellEnvOverrides,
+  buildClaudeCliEnv,
+} from "../electron/providers/cli-path-env";
 
 describe("Claude CLI auto mode support", () => {
   test("requires Claude Code 2.1.71 or newer", () => {
@@ -74,5 +77,27 @@ describe("applyLoginShellEnvOverrides", () => {
 
     expect(env.SLACK_OAUTH_TOKEN).toBe("existing-token");
     expect(env.CODEX_HOME).toBe("/shell/codex");
+  });
+});
+
+describe("buildClaudeCliEnv", () => {
+  test("does not force a default Claude config dir when none is exported", () => {
+    const originalConfigDir = process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+
+    try {
+      const env = buildClaudeCliEnv({
+        executablePath: "/tmp/claude",
+        resolver: () => null,
+      });
+
+      expect(env.CLAUDE_CONFIG_DIR).toBeUndefined();
+    } finally {
+      if (typeof originalConfigDir === "string") {
+        process.env.CLAUDE_CONFIG_DIR = originalConfigDir;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
   });
 });

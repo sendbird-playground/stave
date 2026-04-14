@@ -1,7 +1,5 @@
-import { existsSync } from "node:fs";
 import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
-import path from "node:path";
 import {
   canExecutePath,
   resolveExecutablePath,
@@ -170,7 +168,10 @@ export function resolveClaudeCliExecutablePath(args: {
   return available[0]?.path ?? "";
 }
 
-export function buildClaudeCliEnv(args: { executablePath: string }) {
+export function buildClaudeCliEnv(args: {
+  executablePath: string;
+  resolver?: (args: { key: string }) => string | null;
+}) {
   const env = buildRuntimeProcessEnv({
     executablePath: args.executablePath,
     extraPaths: CLAUDE_LOOKUP_PATHS,
@@ -180,13 +181,8 @@ export function buildClaudeCliEnv(args: { executablePath: string }) {
   applyLoginShellEnvOverrides({
     env,
     preferredKeys: CLAUDE_LOGIN_SHELL_ENV_PREFERRED_KEYS,
+    resolver: args.resolver,
   });
-  if (!env.CLAUDE_CONFIG_DIR) {
-    const defaultConfigDir = path.join(homedir(), ".claude");
-    if (existsSync(defaultConfigDir)) {
-      env.CLAUDE_CONFIG_DIR = defaultConfigDir;
-    }
-  }
 
   return env;
 }
