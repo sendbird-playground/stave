@@ -38,8 +38,8 @@ export interface UseCliTerminalInstanceReturn {
   writeErrorCount: number;
 }
 
-const DEFAULT_TERMINAL_BACKGROUND = "#101615";
-const DEFAULT_TERMINAL_FOREGROUND = "#e8f0ea";
+const DEFAULT_TERMINAL_BACKGROUND = "#1f1f1f";
+const DEFAULT_TERMINAL_FOREGROUND = "#eaeaea";
 
 /** Track global WebGL failure — skip on subsequent terminal instances after a GPU crash. */
 let webglLoadFailed = false;
@@ -59,15 +59,20 @@ function resolveTerminalTheme() {
     };
   }
 
-  const styles = getComputedStyle(document.documentElement);
-  return {
-    background:
-      styles.getPropertyValue("--color-terminal").trim() ||
-      DEFAULT_TERMINAL_BACKGROUND,
-    foreground:
-      styles.getPropertyValue("--color-terminal-foreground").trim() ||
-      DEFAULT_TERMINAL_FOREGROUND,
-  };
+  // xterm.js (and its WebGL addon) cannot parse oklch() color strings.
+  // Resolve CSS custom properties through a probe element so the browser
+  // converts oklch/etc. to an rgb() string that xterm can consume.
+  const probe = document.createElement("div");
+  probe.style.display = "none";
+  probe.style.backgroundColor = "var(--color-terminal)";
+  probe.style.color = "var(--color-terminal-foreground)";
+  document.documentElement.appendChild(probe);
+  const computed = getComputedStyle(probe);
+  const background = computed.backgroundColor || DEFAULT_TERMINAL_BACKGROUND;
+  const foreground = computed.color || DEFAULT_TERMINAL_FOREGROUND;
+  probe.remove();
+
+  return { background, foreground };
 }
 
 function focusCliTerminalSurface(args: {
