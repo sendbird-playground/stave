@@ -41,7 +41,7 @@ const MODEL_OPTION: ModelSelectorOption = {
 };
 
 describe("PromptInput queue mode", () => {
-  test("renders the focus hint in flow layout for an empty draft", async () => {
+  test("renders the focus hint as an overlay for an empty draft", async () => {
     setWindowContext();
     const [{ PromptInput }, { TooltipProvider }] = await Promise.all([
       import("@/components/ai-elements/prompt-input"),
@@ -59,9 +59,9 @@ describe("PromptInput queue mode", () => {
     })));
 
     expect(html).toContain("Focus");
-    expect(html).toContain("flex justify-end");
-    expect(html).toContain("h-8 gap-2");
-    expect(html).not.toContain("absolute right-4 top-4");
+    expect(html).toContain("pointer-events-none absolute right-0 top-0");
+    expect(html).toContain("pointer-events-auto h-8 gap-2 shadow-sm");
+    expect(html).toContain("z-40");
   });
 
   test("hides the focus hint when the draft already has text", async () => {
@@ -82,7 +82,7 @@ describe("PromptInput queue mode", () => {
     })));
 
     expect(html).not.toContain("Focus");
-    expect(html).not.toContain("flex justify-end");
+    expect(html).not.toContain("pointer-events-none absolute right-0 top-0");
   });
 
   test("renders queued-next-turn preview and queue action during an active turn", async () => {
