@@ -15,6 +15,41 @@ export function shouldDismissLayerFromEscape(args: {
   return args.key === "Escape" && !args.defaultPrevented;
 }
 
+function isDismissibleLayerTargetWithinContainer(args: {
+  container: DismissibleLayerContainer | null | undefined;
+  target: EventTarget | null;
+}) {
+  const container = args.container;
+  if (!container || typeof container.contains !== "function" || !args.target) {
+    return false;
+  }
+
+  try {
+    return container.contains(args.target as Node | null);
+  } catch {
+    return false;
+  }
+}
+
+export function shouldDismissLayerFromDocumentKeydown(args: {
+  key: string;
+  defaultPrevented?: boolean;
+  target: EventTarget | null;
+  container: DismissibleLayerContainer | null | undefined;
+}) {
+  if (!shouldDismissLayerFromEscape({
+    key: args.key,
+    defaultPrevented: args.defaultPrevented,
+  })) {
+    return false;
+  }
+
+  return !isDismissibleLayerTargetWithinContainer({
+    container: args.container,
+    target: args.target,
+  });
+}
+
 export function focusDismissibleLayer(args: {
   container: DismissibleLayerContainer | null | undefined;
 }) {
@@ -44,6 +79,36 @@ export function useDismissibleLayer<T extends HTMLElement = HTMLElement>(args: {
     }
     focusDismissibleLayer({ container: containerRef.current });
   }, [args.enabled]);
+
+  useEffect(() => {
+    if (!args.enabled) {
+      return;
+    }
+
+    const ownerDocument = containerRef.current?.ownerDocument ?? globalThis?.document;
+    if (!ownerDocument) {
+      return;
+    }
+
+    // Keep Escape dismissal working even when another overlay closes and focus
+    // returns outside the layer before the user presses the key.
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      if (!shouldDismissLayerFromDocumentKeydown({
+        key: event.key,
+        defaultPrevented: event.defaultPrevented,
+        target: event.target,
+        container: containerRef.current,
+      })) {
+        return;
+      }
+
+      event.preventDefault();
+      args.onDismiss();
+    };
+
+    ownerDocument.addEventListener("keydown", handleDocumentKeyDown);
+    return () => ownerDocument.removeEventListener("keydown", handleDocumentKeyDown);
+  }, [args.enabled, args.onDismiss]);
 
   function handleKeyDown(event: ReactKeyboardEvent<T>) {
     if (!shouldDismissLayerFromEscape({

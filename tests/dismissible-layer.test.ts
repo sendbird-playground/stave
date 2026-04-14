@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   focusDismissibleLayer,
+  shouldDismissLayerFromDocumentKeydown,
   shouldDismissLayerFromEscape,
 } from "../src/lib/dismissible-layer";
 
@@ -68,5 +69,44 @@ describe("focusDismissibleLayer", () => {
 
   test("returns false when the layer cannot be focused", () => {
     expect(focusDismissibleLayer({ container: {} })).toBe(false);
+  });
+});
+
+describe("shouldDismissLayerFromDocumentKeydown", () => {
+  test("dismisses when Escape bubbles from outside the layer", () => {
+    const target = { id: "outside" };
+    const container = {
+      contains: (candidate: unknown) => candidate === container,
+    };
+
+    expect(shouldDismissLayerFromDocumentKeydown({
+      key: "Escape",
+      defaultPrevented: false,
+      target,
+      container,
+    })).toBe(true);
+  });
+
+  test("does not dismiss when Escape originated inside the layer", () => {
+    const target = { id: "inside" };
+    const container = {
+      contains: (candidate: unknown) => candidate === target,
+    };
+
+    expect(shouldDismissLayerFromDocumentKeydown({
+      key: "Escape",
+      defaultPrevented: false,
+      target,
+      container,
+    })).toBe(false);
+  });
+
+  test("respects prior default prevention from nested overlays", () => {
+    expect(shouldDismissLayerFromDocumentKeydown({
+      key: "Escape",
+      defaultPrevented: true,
+      target: { id: "outside" },
+      container: null,
+    })).toBe(false);
   });
 });
