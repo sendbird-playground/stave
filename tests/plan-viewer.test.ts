@@ -388,7 +388,7 @@ describe("resolvePlanViewerLayout", () => {
       viewState: "normal",
       inputDockHeight: 76,
     })).toEqual({
-      wrapperClassName: "pointer-events-none absolute z-20",
+      wrapperClassName: "pointer-events-none absolute z-[25]",
       wrapperStyle: {
         right: 16,
         bottom: 84,
@@ -404,7 +404,7 @@ describe("resolvePlanViewerLayout", () => {
       viewState: "expanded",
       inputDockHeight: 76,
     })).toEqual({
-      wrapperClassName: "pointer-events-none absolute z-20",
+      wrapperClassName: "pointer-events-none absolute z-[25]",
       wrapperStyle: {
         right: 16,
         bottom: 84,
@@ -424,7 +424,7 @@ describe("resolvePlanViewerLayout", () => {
         y: 48,
       },
     })).toEqual({
-      wrapperClassName: "pointer-events-none absolute z-20",
+      wrapperClassName: "pointer-events-none absolute z-[25]",
       wrapperStyle: {
         top: 48,
         left: 120,
