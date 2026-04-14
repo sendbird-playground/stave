@@ -6,6 +6,7 @@ const PLAN_VIEWER_COLLAPSED_GAP_PX = 8;
 const PLAN_VIEWER_EXPANDED_TOP_PX = 12;
 const PLAN_VIEWER_SIDE_GAP_PX = 16;
 const PLAN_VIEWER_NORMAL_MAX_WIDTH_PX = 672;
+export const SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME = "pointer-events-none absolute z-[25]";
 
 export type PlanViewerViewState = "normal" | "minimized" | "expanded";
 
@@ -116,7 +117,9 @@ export function resolvePlanViewerLayout(args: {
 
   if (isMinimized && args.dragPos) {
     return {
-      wrapperClassName: "pointer-events-none absolute z-20",
+      // Keep plan review above transient todo progress while staying below the
+      // chat input dock (`z-30` in ChatArea).
+      wrapperClassName: SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME,
       wrapperStyle: {
         top: args.dragPos.y,
         left: args.dragPos.x,
@@ -148,7 +151,7 @@ export function resolvePlanViewerLayout(args: {
         };
 
   return {
-    wrapperClassName: "pointer-events-none absolute z-20",
+    wrapperClassName: SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME,
     wrapperStyle,
     cardClassName: [
       "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
