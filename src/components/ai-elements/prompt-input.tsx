@@ -185,10 +185,13 @@ export function PromptInput(args: PromptInputProps) {
     onAbort,
   } = args;
   const queuedPromptPreview = queuedNextTurn?.content?.trim() ?? "";
+  const queuedPromptSummary = queuedPromptPreview.replace(/\s+/g, " ").trim();
   const imageAttachments = useMemo(
     () => (attachments ?? []).filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image"),
     [attachments],
   );
+  const queuedFileCount = queuedNextTurn ? attachedFilePaths.length : 0;
+  const queuedImageCount = queuedNextTurn ? imageAttachments.length : 0;
   const [imagePreviewSrc, setImagePreviewSrc] = useState<{ dataUrl: string; label: string } | null>(null);
   const { containerRef: imagePreviewRef, handleKeyDown: handleImagePreviewKeyDown } = useDismissibleLayer<HTMLDivElement>({
     enabled: Boolean(imagePreviewSrc),
@@ -305,6 +308,12 @@ export function PromptInput(args: PromptInputProps) {
     return "";
   }, [activePalette, selectedSkillIndex, selectedCommandIndex, filteredSkillItems, filteredCommandItems]);
   const hasRuntimeDrawerContent = Boolean((runtimeStatusItems?.length ?? 0) > 0);
+  const shouldShowFocusHint =
+    !minimal
+    && !isPromptInputFocused
+    && !interactionsDisabled
+    && !hasDraftPayload
+    && !queuedNextTurn;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -674,37 +683,54 @@ export function PromptInput(args: PromptInputProps) {
         </Suggestions>
       ) : null}
       {queuedNextTurn ? (
-        <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2">
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
-              Queued next turn
-            </Badge>
-            {onClearQueuedNextTurn ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onClearQueuedNextTurn()}
-                className="ml-auto h-7 px-2 text-xs"
-              >
-                Clear
-              </Button>
-            ) : null}
+        <div className="flex flex-wrap items-start gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+          <Badge variant="secondary" className="mt-0.5 h-5 px-1.5 text-[10px] uppercase tracking-wide">
+            Queued next
+          </Badge>
+          <div className="min-w-0 flex-1 space-y-1">
+            {queuedPromptSummary ? (
+              <p className="truncate text-sm font-medium text-foreground" title={queuedPromptPreview}>
+                {queuedPromptSummary}
+              </p>
+            ) : (
+              <p className="text-sm font-medium text-foreground">
+                {queuedFileCount > 0 || queuedImageCount > 0
+                  ? "Queued follow-up with attached context."
+                  : "Next-turn draft is staged."}
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <span>
+                {isTurnActive
+                  ? "Sends automatically when the current response finishes."
+                  : "Queued follow-up is ready to send."}
+              </span>
+              {queuedFileCount > 0 ? (
+                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                  {queuedFileCount} {queuedFileCount === 1 ? "file" : "files"}
+                </Badge>
+              ) : null}
+              {queuedImageCount > 0 ? (
+                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                  {queuedImageCount} {queuedImageCount === 1 ? "image" : "images"}
+                </Badge>
+              ) : null}
+            </div>
           </div>
-          {queuedPromptPreview ? (
-            <p className="mt-2 max-h-28 overflow-auto rounded-md border border-border/60 bg-background/80 px-2.5 py-2 text-xs leading-5 text-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-              {queuedPromptPreview}
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isTurnActive
-                ? "Sends automatically when the current response finishes."
-                : "Next-turn draft is staged."}
-            </p>
-          )}
+          {onClearQueuedNextTurn ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onClearQueuedNextTurn()}
+              className="ml-auto h-7 px-2 text-xs"
+            >
+              Clear
+            </Button>
+          ) : null}
         </div>
       ) : null}
-      {!minimal && !isPromptInputFocused && !interactionsDisabled && queuedNextTurn ? (
+      {shouldShowFocusHint ? (
         <div className="flex justify-end">
           <Button
             type="button"
@@ -729,30 +755,6 @@ export function PromptInput(args: PromptInputProps) {
             </KbdGroup>
           </Button>
         </div>
-      ) : null}
-      {!minimal && !isPromptInputFocused && !interactionsDisabled && !queuedNextTurn ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={focusComposer}
-          className={cn(
-            PROMPT_TOOLBAR_BUTTON,
-            PROMPT_FLOATING_SURFACE,
-            "absolute right-4 top-4 h-8 gap-2",
-          )}
-        >
-          <span>Focus</span>
-          <KbdGroup>
-            <Kbd>{modifierLabel}</Kbd>
-            <Kbd>L</Kbd>
-          </KbdGroup>
-          <span className="text-xs text-muted-foreground">or</span>
-          <KbdGroup>
-            <Kbd>{modifierLabel}</Kbd>
-            <Kbd>J</Kbd>
-          </KbdGroup>
-        </Button>
       ) : null}
       <Popover open={activePalette !== null} modal={false}>
         <PopoverAnchor asChild>
@@ -1149,7 +1151,7 @@ export function PromptInput(args: PromptInputProps) {
           </Command>
         </PopoverContent>
       </Popover>
-      {attachedFilePaths.length > 0 || imageAttachments.length > 0 ? (
+      {!queuedNextTurn && (attachedFilePaths.length > 0 || imageAttachments.length > 0) ? (
         <div className="flex flex-wrap gap-1.5">
           {attachedFilePaths.map((filePath) => (
             <div

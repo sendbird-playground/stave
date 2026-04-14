@@ -41,6 +41,50 @@ const MODEL_OPTION: ModelSelectorOption = {
 };
 
 describe("PromptInput queue mode", () => {
+  test("renders the focus hint in flow layout for an empty draft", async () => {
+    setWindowContext();
+    const [{ PromptInput }, { TooltipProvider }] = await Promise.all([
+      import("@/components/ai-elements/prompt-input"),
+      import("@/components/ui"),
+    ]);
+    const html = renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PromptInput, {
+      value: "",
+      selectedModel: MODEL_OPTION,
+      modelOptions: [MODEL_OPTION],
+      attachedFilePaths: [],
+      onValueChange: () => {},
+      onModelSelect: () => {},
+      onAttachFilesChange: () => {},
+      onSubmit: () => {},
+    })));
+
+    expect(html).toContain("Focus");
+    expect(html).toContain("flex justify-end");
+    expect(html).toContain("h-8 gap-2");
+    expect(html).not.toContain("absolute right-4 top-4");
+  });
+
+  test("hides the focus hint when the draft already has text", async () => {
+    setWindowContext();
+    const [{ PromptInput }, { TooltipProvider }] = await Promise.all([
+      import("@/components/ai-elements/prompt-input"),
+      import("@/components/ui"),
+    ]);
+    const html = renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PromptInput, {
+      value: "Draft plan request",
+      selectedModel: MODEL_OPTION,
+      modelOptions: [MODEL_OPTION],
+      attachedFilePaths: [],
+      onValueChange: () => {},
+      onModelSelect: () => {},
+      onAttachFilesChange: () => {},
+      onSubmit: () => {},
+    })));
+
+    expect(html).not.toContain("Focus");
+    expect(html).not.toContain("flex justify-end");
+  });
+
   test("renders queued-next-turn preview and queue action during an active turn", async () => {
     setWindowContext();
     const [{ PromptInput }, { TooltipProvider }] = await Promise.all([
@@ -58,7 +102,13 @@ describe("PromptInput queue mode", () => {
       },
       selectedModel: MODEL_OPTION,
       modelOptions: [MODEL_OPTION],
-      attachedFilePaths: [],
+      attachedFilePaths: ["README.md"],
+      attachments: [{
+        kind: "image" as const,
+        id: "image-1",
+        dataUrl: "data:image/png;base64,abc",
+        label: "diagram.png",
+      }],
       onValueChange: () => {},
       onModelSelect: () => {},
       onAttachFilesChange: () => {},
@@ -67,14 +117,17 @@ describe("PromptInput queue mode", () => {
       onAbort: () => {},
     })));
 
-    expect(html).toContain("Queued next turn");
+    expect(html).toContain("Queued next");
     expect(html).toContain("Follow up after this finishes");
+    expect(html).toContain("Sends automatically when the current response finishes.");
+    expect(html).toContain("1 file");
+    expect(html).toContain("1 image");
     expect(html).toContain("Update queued");
     expect(html).toContain("Clear");
     expect(html).toContain("aria-label=\"Abort\"");
-    expect(html).toContain("Focus");
     expect(html).toContain("dark:bg-transparent");
     expect(html).not.toContain("absolute right-4 top-4");
-    expect(html).not.toContain("Sends automatically when the current response finishes.");
+    expect(html).not.toContain("README.md");
+    expect(html).not.toContain("Focus");
   });
 });

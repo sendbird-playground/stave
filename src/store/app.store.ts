@@ -9515,16 +9515,28 @@ export const useAppStore = create<AppState>()(
                       const queuedContent =
                         queuedPromptDraft.queuedNextTurn.content ??
                         queuedPromptDraft.text;
-                      // Clear queuedNextTurn immediately so the inline badge
-                      // disappears even if sendUserMessage is blocked.
+                      const autoDispatchDraft = normalizePromptDraftForStorage({
+                        ...queuedPromptDraft,
+                        text: queuedContent,
+                        queuedNextTurn: undefined,
+                      });
+                      // Restore the queued payload as a normal draft before
+                      // dispatch so attachment-only follow-ups and blocked
+                      // auto-sends do not lose the staged content.
                       get().updatePromptDraft({
                         taskId: resolvedTaskId,
-                        patch: { queuedNextTurn: undefined },
+                        patch: {
+                          text: autoDispatchDraft.text,
+                          attachedFilePaths:
+                            autoDispatchDraft.attachedFilePaths,
+                          attachments: autoDispatchDraft.attachments,
+                          queuedNextTurn: undefined,
+                        },
                       });
-                      if (queuedContent.trim()) {
+                      if (hasPromptDraftPayload(autoDispatchDraft)) {
                         void get().sendUserMessage({
                           taskId: resolvedTaskId,
-                          content: queuedContent,
+                          content: autoDispatchDraft.text,
                         });
                       } else {
                         get().clearPromptDraft({ taskId: resolvedTaskId });
