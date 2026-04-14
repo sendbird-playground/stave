@@ -2,21 +2,29 @@ import { ipcMain } from "electron";
 import type { PersistenceWorkspaceSnapshot } from "../../persistence/types";
 import {
   CreateNotificationArgsSchema,
+  LoadWorkspaceEditorTabBodiesArgsSchema,
   ListActiveWorkspaceTurnsArgsSchema,
   LoadTaskMessagesArgsSchema,
   ListLatestWorkspaceTurnsArgsSchema,
   ListNotificationsArgsSchema,
   ListTaskTurnsArgsSchema,
-  ListTurnEventsArgsSchema,
   MarkAllNotificationsReadArgsSchema,
   MarkNotificationReadArgsSchema,
   PersistenceUpsertArgsSchema,
   SaveProjectRegistryArgsSchema,
   WorkspaceIdArgsSchema,
 } from "./schemas";
-import { ensurePersistenceReady, ensurePersistenceReadySync } from "../state";
+import {
+  ensurePersistenceReady,
+  ensurePersistenceReadySync,
+  getPersistenceBootstrapStatus,
+} from "../state";
 
 export function registerPersistenceHandlers() {
+  ipcMain.handle("persistence:get-bootstrap-status", async () => {
+    return getPersistenceBootstrapStatus();
+  });
+
   ipcMain.handle("persistence:list-workspaces", async () => {
     const store = await ensurePersistenceReady();
     const rows = store.listWorkspaceSummaries();
@@ -43,6 +51,42 @@ export function registerPersistenceHandlers() {
     return { ok: true, shell };
   });
 
+  ipcMain.handle("persistence:load-workspace-shell-for-restore", async (_event, args: unknown) => {
+    const parsedArgs = WorkspaceIdArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, shell: null };
+    }
+    const store = await ensurePersistenceReady();
+    const shell = store.loadWorkspaceShellForRestore({
+      workspaceId: parsedArgs.data.workspaceId,
+    });
+    return { ok: true, shell };
+  });
+
+  ipcMain.handle("persistence:load-workspace-shell-lite", async (_event, args: unknown) => {
+    const parsedArgs = WorkspaceIdArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, shellLite: null };
+    }
+    const store = await ensurePersistenceReady();
+    const shellLite = store.loadWorkspaceShellLite({
+      workspaceId: parsedArgs.data.workspaceId,
+    });
+    return { ok: true, shellLite };
+  });
+
+  ipcMain.handle("persistence:load-workspace-shell-summary", async (_event, args: unknown) => {
+    const parsedArgs = WorkspaceIdArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, summary: null };
+    }
+    const store = await ensurePersistenceReady();
+    const summary = store.loadWorkspaceShellSummary({
+      workspaceId: parsedArgs.data.workspaceId,
+    });
+    return { ok: true, summary };
+  });
+
   ipcMain.handle("persistence:load-task-messages", async (_event, args: unknown) => {
     const parsedArgs = LoadTaskMessagesArgsSchema.safeParse(args);
     if (!parsedArgs.success) {
@@ -51,6 +95,16 @@ export function registerPersistenceHandlers() {
     const store = await ensurePersistenceReady();
     const page = store.loadTaskMessagesPage(parsedArgs.data);
     return { ok: true, page };
+  });
+
+  ipcMain.handle("persistence:load-workspace-editor-tab-bodies", async (_event, args: unknown) => {
+    const parsedArgs = LoadWorkspaceEditorTabBodiesArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return { ok: false, bodies: [] };
+    }
+    const store = await ensurePersistenceReady();
+    const bodies = store.loadWorkspaceEditorTabBodies(parsedArgs.data);
+    return { ok: true, bodies };
   });
 
   ipcMain.handle("persistence:load-project-registry", async () => {
@@ -159,20 +213,6 @@ export function registerPersistenceHandlers() {
     const store = await ensurePersistenceReady();
     const count = store.markAllNotificationsRead(parsedArgs.data);
     return { ok: true, count };
-  });
-
-  ipcMain.handle("persistence:list-turn-events", async (_event, args: unknown) => {
-    const parsedArgs = ListTurnEventsArgsSchema.safeParse(args);
-    if (!parsedArgs.success) {
-      return { ok: false, events: [] };
-    }
-    const store = await ensurePersistenceReady();
-    const events = store.listTurnEvents({
-      turnId: parsedArgs.data.turnId,
-      afterSequence: parsedArgs.data.afterSequence,
-      limit: parsedArgs.data.limit,
-    });
-    return { ok: true, events };
   });
 
   ipcMain.handle("persistence:list-task-turns", async (_event, args: unknown) => {

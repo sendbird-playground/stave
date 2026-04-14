@@ -30,7 +30,7 @@ Why it is deferred:
 
 Likely implementation shape:
 
-- expose branching via a "fork from here" action in Session Replay, backed by `forkSession` + a local DB record
+- expose branching via a future task-history inspector action such as "fork from here", backed by `forkSession` + a local DB record
 - use `tagSession` for user-facing session labels (starred, categorized)
 - `getSessionInfo` is useful for quick metadata lookups in session list without full scan
 
@@ -135,7 +135,7 @@ Why it is deferred:
 Likely implementation shape:
 
 - capture hook metadata in the Claude runtime and persist it into turn events
-- attach stable subagent identities to Session Replay rows
+- attach stable subagent identities to rows in a future task-history or diagnostics surface
 - use `agent_type` for user-facing labels and `agent_id` for correlation/debug views
 
 ## Other minor additions (0.2.75–0.2.76)

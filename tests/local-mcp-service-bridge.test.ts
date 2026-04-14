@@ -7,6 +7,9 @@ let workspaceInformationListener:
   | null = null;
 
 mock.module("electron", () => ({
+  app: {
+    getPath: () => "/tmp/stave-test-user-data",
+  },
   webContents: {
     getAllWebContents: () => [{
       isDestroyed: () => false,
@@ -41,6 +44,10 @@ mock.module("../electron/main/host-service-client", () => ({
     }
     return siblingCandidate;
   },
+  measureSerializedHostServiceRequestBytes: (args: {
+    method: string;
+    params: unknown;
+  }) => Buffer.byteLength(JSON.stringify(args), "utf8"),
   onHostServiceEvent: (
     event: string,
     listener: (payload: { workspaceId: string; workspaceInformation: unknown }) => void,
@@ -59,6 +66,7 @@ const localMcpService = await import("../electron/main/stave-mcp-service");
 afterEach(() => {
   sentMessages.length = 0;
   invokeCalls.length = 0;
+  mock.restore();
 });
 
 describe("local MCP service bridge", () => {

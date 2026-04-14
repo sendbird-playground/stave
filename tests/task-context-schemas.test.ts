@@ -125,4 +125,30 @@ describe("task-context workspace schemas", () => {
       },
     });
   });
+
+  test("defaults editor tab content state to ready", () => {
+    const parsed = parseWorkspaceShell({
+      payload: {
+        ...createWorkspaceBase(),
+        messageCountByTask: {},
+        editorTabs: [{
+          id: "file:/tmp/project/src/app.ts",
+          filePath: "/tmp/project/src/app.ts",
+          language: "typescript",
+          hasConflict: false,
+          isDirty: false,
+        }],
+      },
+    });
+
+    expect(parsed?.editorTabs).toEqual([{
+      id: "file:/tmp/project/src/app.ts",
+      filePath: "/tmp/project/src/app.ts",
+      language: "typescript",
+      content: "",
+      contentState: "ready",
+      hasConflict: false,
+      isDirty: false,
+    }]);
+  });
 });

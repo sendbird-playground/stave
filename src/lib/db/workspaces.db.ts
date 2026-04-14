@@ -1,6 +1,10 @@
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 import { normalizeMessagesForSnapshot } from "@/lib/task-context/message-normalization";
-import { parseWorkspaceShell, parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
+import {
+  parseWorkspaceShell,
+  parseWorkspaceShellLite,
+  parseWorkspaceSnapshot,
+} from "@/lib/task-context/schemas";
 import type {
   WorkspaceActiveSurface,
   WorkspaceCliSessionTab,
@@ -55,6 +59,29 @@ export interface WorkspaceShell {
   messageCountByTask: Record<string, number>;
 }
 
+export interface WorkspaceEditorTabBody {
+  id: string;
+  content: string;
+  originalContent?: string;
+  savedContent?: string;
+}
+
+export interface WorkspaceShellLite {
+  activeTaskId: string;
+  tasks: Task[];
+  promptDraftByTask: Record<string, PromptDraft>;
+  providerSessionByTask: Record<string, TaskProviderSessionState>;
+  messageCountByTask: Record<string, number>;
+}
+
+export interface WorkspaceShellSummary {
+  activeTaskId: string;
+  tasks: Task[];
+  messageCountByTask: Record<string, number>;
+  terminalTabCount: number;
+  cliSessionTabCount: number;
+}
+
 export interface TaskMessagesPage {
   messages: ChatMessage[];
   totalCount: number;
@@ -72,6 +99,18 @@ interface RequiredPersistenceApi {
     ok: boolean;
     shell: WorkspaceShell | null;
   }>;
+  loadWorkspaceShellForRestore?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    shell: WorkspaceShell | null;
+  }>;
+  loadWorkspaceShellLite?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    shellLite: WorkspaceShellLite | null;
+  }>;
+  loadWorkspaceShellSummary?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    summary: WorkspaceShellSummary | null;
+  }>;
   loadWorkspace: (args: { workspaceId: string }) => Promise<{
     ok: boolean;
     snapshot: WorkspaceSnapshot | null;
@@ -84,6 +123,13 @@ interface RequiredPersistenceApi {
   }) => Promise<{
     ok: boolean;
     page: TaskMessagesPage | null;
+  }>;
+  loadWorkspaceEditorTabBodies?: (args: {
+    workspaceId: string;
+    tabIds: string[];
+  }) => Promise<{
+    ok: boolean;
+    bodies: WorkspaceEditorTabBody[];
   }>;
   upsertWorkspace: (args: {
     id: string;
@@ -163,6 +209,32 @@ function buildShellFromSnapshot(snapshot: WorkspaceSnapshot): WorkspaceShell {
       Object.entries(snapshot.messagesByTask).map(([taskId, messages]) => [taskId, messages.length] as const)
     ),
   };
+}
+
+function buildShellSummaryFromSnapshot(snapshot: WorkspaceSnapshot): WorkspaceShellSummary {
+  return {
+    activeTaskId: snapshot.activeTaskId,
+    tasks: snapshot.tasks,
+    messageCountByTask: Object.fromEntries(
+      Object.entries(snapshot.messagesByTask).map(([taskId, messages]) => [taskId, messages.length] as const)
+    ),
+    terminalTabCount: snapshot.terminalTabs?.length ?? 0,
+    cliSessionTabCount: snapshot.cliSessionTabs?.length ?? 0,
+  };
+}
+
+function buildShellLiteFromShell(shell: WorkspaceShell): WorkspaceShellLite {
+  return {
+    activeTaskId: shell.activeTaskId,
+    tasks: shell.tasks,
+    promptDraftByTask: shell.promptDraftByTask,
+    providerSessionByTask: shell.providerSessionByTask,
+    messageCountByTask: shell.messageCountByTask,
+  };
+}
+
+function buildShellLiteFromSnapshot(snapshot: WorkspaceSnapshot): WorkspaceShellLite {
+  return buildShellLiteFromShell(buildShellFromSnapshot(snapshot));
 }
 
 export async function listWorkspaceSummaries(): Promise<WorkspaceSummary[]> {
@@ -245,6 +317,117 @@ export async function loadWorkspaceShell(args: { workspaceId: string }): Promise
   return parsed;
 }
 
+export async function loadWorkspaceShellForRestore(args: {
+  workspaceId: string;
+}): Promise<WorkspaceShell | null> {
+  const persistence = getPersistenceApi();
+  if (!persistence) {
+    const shell = await loadWorkspaceShell(args);
+    return shell
+      ? {
+          ...shell,
+          editorTabs: shell.editorTabs?.map((tab) => ({
+            ...tab,
+            contentState: "ready",
+          })),
+        }
+      : null;
+  }
+
+  if (!persistence.loadWorkspaceShellForRestore) {
+    const shell = await loadWorkspaceShell(args);
+    return shell
+      ? {
+          ...shell,
+          editorTabs: shell.editorTabs?.map((tab) => ({
+            ...tab,
+            contentState: "ready",
+          })),
+        }
+      : null;
+  }
+
+  const response = await persistence.loadWorkspaceShellForRestore({
+    workspaceId: args.workspaceId,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load workspace shell for restore: ${args.workspaceId}`);
+  }
+  if (!response.shell) {
+    return null;
+  }
+  return parseWorkspaceShell({ payload: response.shell });
+}
+
+export async function loadWorkspaceShellLite(args: {
+  workspaceId: string;
+}): Promise<WorkspaceShellLite | null> {
+  const persistence = getPersistenceApi();
+  if (!persistence) {
+    const row = loadFallbackRows().find((item) => item.id === args.workspaceId);
+    const parsed = row?.snapshot ? parseWorkspaceSnapshot({ payload: row.snapshot }) : null;
+    return parsed ? buildShellLiteFromSnapshot(parsed) : null;
+  }
+
+  if (!persistence.loadWorkspaceShellLite) {
+    const shell = await loadWorkspaceShell(args);
+    return shell ? buildShellLiteFromShell(shell) : null;
+  }
+
+  const response = await persistence.loadWorkspaceShellLite({
+    workspaceId: args.workspaceId,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load workspace shell lite: ${args.workspaceId}`);
+  }
+
+  return response.shellLite
+    ? parseWorkspaceShellLite({ payload: response.shellLite })
+    : null;
+}
+
+export async function loadWorkspaceShellSummary(args: {
+  workspaceId: string;
+}): Promise<WorkspaceShellSummary | null> {
+  const persistence = getPersistenceApi();
+  if (!persistence) {
+    const row = loadFallbackRows().find((item) => item.id === args.workspaceId);
+    const snapshot = row?.snapshot ? parseWorkspaceSnapshot({ payload: row.snapshot }) : null;
+    return snapshot ? buildShellSummaryFromSnapshot(snapshot) : null;
+  }
+
+  if (!persistence.loadWorkspaceShellSummary) {
+    const shell = await loadWorkspaceShell(args);
+    if (!shell) {
+      return null;
+    }
+    return {
+      activeTaskId: shell.activeTaskId,
+      tasks: shell.tasks,
+      messageCountByTask: shell.messageCountByTask,
+      terminalTabCount: shell.terminalTabs?.length ?? 0,
+      cliSessionTabCount: shell.cliSessionTabs?.length ?? 0,
+    };
+  }
+
+  const response = await persistence.loadWorkspaceShellSummary({
+    workspaceId: args.workspaceId,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load workspace shell summary: ${args.workspaceId}`);
+  }
+
+  return response.summary
+    ? {
+        activeTaskId: response.summary.activeTaskId,
+        tasks: response.summary.tasks,
+        messageCountByTask: response.summary.messageCountByTask ?? {},
+        terminalTabCount: response.summary.terminalTabCount ?? 0,
+        cliSessionTabCount: response.summary.cliSessionTabCount ?? 0,
+      }
+    : null;
+}
+
 export async function loadTaskMessagesPage(args: {
   workspaceId: string;
   taskId: string;
@@ -305,6 +488,59 @@ export async function loadTaskMessagesPage(args: {
     offset: response.page.offset,
     hasMoreOlder: response.page.hasMoreOlder,
   };
+}
+
+export async function loadWorkspaceEditorTabBodies(args: {
+  workspaceId: string;
+  tabIds: string[];
+}): Promise<WorkspaceEditorTabBody[]> {
+  if (args.tabIds.length === 0) {
+    return [];
+  }
+
+  const persistence = getPersistenceApi();
+  if (!persistence) {
+    const snapshot = await loadWorkspaceSnapshot({ workspaceId: args.workspaceId });
+    const requestedIds = new Set(args.tabIds);
+    return (snapshot?.editorTabs ?? [])
+      .filter((tab) => requestedIds.has(tab.id))
+      .map((tab) => ({
+        id: tab.id,
+        content: tab.content ?? "",
+        ...(tab.originalContent !== undefined
+          ? { originalContent: tab.originalContent }
+          : {}),
+        ...(tab.savedContent !== undefined
+          ? { savedContent: tab.savedContent }
+          : {}),
+      }));
+  }
+
+  if (!persistence.loadWorkspaceEditorTabBodies) {
+    const shell = await loadWorkspaceShell({ workspaceId: args.workspaceId });
+    const requestedIds = new Set(args.tabIds);
+    return (shell?.editorTabs ?? [])
+      .filter((tab) => requestedIds.has(tab.id))
+      .map((tab) => ({
+        id: tab.id,
+        content: tab.content ?? "",
+        ...(tab.originalContent !== undefined
+          ? { originalContent: tab.originalContent }
+          : {}),
+        ...(tab.savedContent !== undefined
+          ? { savedContent: tab.savedContent }
+          : {}),
+      }));
+  }
+
+  const response = await persistence.loadWorkspaceEditorTabBodies({
+    workspaceId: args.workspaceId,
+    tabIds: args.tabIds,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load workspace editor tab bodies: ${args.workspaceId}`);
+  }
+  return response.bodies;
 }
 
 export async function closeWorkspacePersistence(args: { workspaceId: string }): Promise<void> {

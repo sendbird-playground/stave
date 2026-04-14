@@ -73,7 +73,6 @@ import { createKeyedAsyncQueue } from "./keyed-async-queue";
 import { providerRuntime } from "../providers/runtime";
 import type { BridgeEvent } from "../providers/types";
 import { runCommand } from "../main/utils/command";
-import { toEventType } from "../main/utils/provider-events";
 
 export interface RegisteredWorkspaceInfo {
   id: string;
@@ -1608,17 +1607,6 @@ export async function runTask(args: {
     taskId: task.id,
     providerId: provider,
   });
-  store.appendTurnEvent({
-    id: randomUUID(),
-    turnId,
-    sequence: 0,
-    eventType: "request_snapshot",
-    payload: {
-      type: "request_snapshot",
-      prompt: args.prompt,
-      conversation,
-    },
-  });
 
   const started = providerRuntime.startTurnStream({
     turnId,
@@ -1635,23 +1623,6 @@ export async function runTask(args: {
   }, {
     onEvent: (event) => {
       sequence += 1;
-      try {
-        store.appendTurnEvent({
-          id: randomUUID(),
-          turnId,
-          sequence,
-          eventType: toEventType({ event }),
-          payload: event,
-        });
-      } catch (error) {
-        console.warn("[stave-mcp] failed to append turn event", error, {
-          turnId,
-          sequence,
-          workspaceId: args.workspaceId,
-          taskId: task.id,
-        });
-      }
-
       void workspaceProviderEventQueue.enqueue(
         args.workspaceId,
         () => handleProviderEvent({
@@ -1724,15 +1695,6 @@ export async function getTaskStatus(args: {
     pendingApprovals: findPendingApprovals(messages),
     pendingUserInputs: findPendingUserInputs(messages),
   } satisfies TaskStatusResult;
-}
-
-export async function listTurnEvents(args: {
-  turnId: string;
-  afterSequence?: number;
-  limit?: number;
-}) {
-  const store = ensureHostServicePersistenceReady();
-  return store.listTurnEvents(args);
 }
 
 function findApprovalMessage(args: {

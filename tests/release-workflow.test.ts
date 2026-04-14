@@ -11,7 +11,7 @@ describe("release packaging workflow", () => {
 
     expect(workflow).toContain("Package unpacked macOS app bundle");
     expect(workflow).toContain("Prepare internal macOS release bundle");
-    expect(workflow).toContain("bunx --bun electron-builder --config electron-builder.yml --dir");
+    expect(workflow).toContain("./node_modules/.bin/electron-builder --config electron-builder.yml --dir");
     expect(workflow).toContain("node scripts/prepare-macos-release-bundle.mjs");
     expect(workflow).toContain("files: release/Stave-macOS.zip");
     expect(bundlePrep).toContain("Install Stave.command");

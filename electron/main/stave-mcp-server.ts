@@ -35,7 +35,6 @@ import {
   getWorkspaceInformation,
   getTaskStatus,
   listKnownProjects,
-  listTurnEvents,
   removeWorkspaceCustomField,
   removeWorkspaceResource,
   removeWorkspaceTodo,
@@ -586,22 +585,6 @@ function createToolServer() {
       note,
     }),
   ));
-
-  server.registerTool("stave_list_turn_events", {
-    description: "List persisted turn events for a Stave task run.",
-    inputSchema: {
-      turnId: z.string().min(1).describe("Turn id."),
-      afterSequence: z.number().int().nonnegative().optional().describe("Optional lower sequence bound."),
-      limit: z.number().int().positive().max(5000).optional().describe("Max number of events to return."),
-    },
-  }, async ({ turnId, afterSequence, limit }) => toStructuredResult({
-    turnId,
-    events: await listTurnEvents({
-      turnId,
-      afterSequence,
-      limit,
-    }),
-  }));
 
   server.registerTool("stave_respond_approval", {
     description: "Respond to a pending approval request emitted by a running task.",

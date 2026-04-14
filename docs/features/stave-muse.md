@@ -108,4 +108,3 @@
 
 - [Command Palette](command-palette.md)
 - [Workspace Scripts](workspace-scripts.md)
-- [Session Replay](session-replay.md)

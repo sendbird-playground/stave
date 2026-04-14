@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
+import Database from "better-sqlite3";
 import type { PersistenceWorkspaceSnapshot } from "../electron/persistence/types";
 
 const canRunNativeSqlite = typeof Bun === "undefined";
@@ -90,7 +91,7 @@ describe("SqliteStore", () => {
     rmSync(rootDir, { recursive: true, force: true });
   });
 
-  nativeSqliteTest("recovers workspace snapshot and turn journal across restart", async () => {
+  nativeSqliteTest("recovers workspace snapshot and turn summaries across restart", async () => {
     const SqliteStore = await loadSqliteStore();
     const snapshot = createSnapshot();
     const turnId = "turn-restart-1";
@@ -109,22 +110,6 @@ describe("SqliteStore", () => {
         providerId: "codex",
         createdAt: "2026-03-06T01:00:00.000Z",
       });
-      store.appendTurnEvent({
-        id: "event-1",
-        turnId,
-        sequence: 1,
-        eventType: "text",
-        payload: { text: "start" },
-        createdAt: "2026-03-06T01:00:01.000Z",
-      });
-      store.appendTurnEvent({
-        id: "event-2",
-        turnId,
-        sequence: 2,
-        eventType: "done",
-        payload: {},
-        createdAt: "2026-03-06T01:00:02.000Z",
-      });
       store.completeTurn({ id: turnId, completedAt: "2026-03-06T01:00:03.000Z" });
       store.close();
     }
@@ -132,49 +117,88 @@ describe("SqliteStore", () => {
     const reopened = new SqliteStore({ dbPath });
     const summaries = reopened.listWorkspaceSummaries();
     const loaded = reopened.loadWorkspaceSnapshot({ workspaceId: "ws-1" });
-    const replay = reopened.listTurnEvents({ turnId });
-    const replayFromTwo = reopened.listTurnEvents({ turnId, afterSequence: 2 });
     reopened.close();
 
     expect(summaries).toHaveLength(1);
     expect(summaries[0]?.id).toBe("ws-1");
     expect(loaded).toEqual(snapshot);
-    expect(replay.map((item) => item.sequence)).toEqual([1, 2]);
-    expect(replayFromTwo.map((item) => item.sequence)).toEqual([2]);
-    expect(replay.at(-1)?.eventType).toBe("done");
     expect(reopened.listTurns({ workspaceId: "ws-1", taskId: "task-1" })[0]).toMatchObject({
       id: turnId,
-      eventCount: 2,
     });
   });
 
-  nativeSqliteTest("enforces unique (turn_id, sequence) idempotency constraint", async () => {
+  nativeSqliteTest("purges legacy turn journals and turn payload artifacts on boot", async () => {
     const SqliteStore = await loadSqliteStore();
     const store = new SqliteStore({ dbPath });
     store.beginTurn({
-      id: "turn-dup",
+      id: "turn-legacy",
       workspaceId: "ws-1",
       taskId: "task-1",
-      providerId: "claude-code",
+      providerId: "codex",
+      createdAt: "2026-03-06T01:00:00.000Z",
     });
-    store.appendTurnEvent({
-      id: "event-a",
-      turnId: "turn-dup",
-      sequence: 1,
-      eventType: "system",
-      payload: { ok: true },
-    });
-
-    expect(() =>
-      store.appendTurnEvent({
-        id: "event-b",
-        turnId: "turn-dup",
-        sequence: 1,
-        eventType: "system",
-        payload: { ok: false },
-      })
-    ).toThrow();
     store.close();
+
+    const artifactDir = path.join(rootDir, "artifacts", "turn-events");
+    mkdirSync(artifactDir, { recursive: true });
+    writeFileSync(
+      path.join(artifactDir, "legacy-turn-payload.json"),
+      JSON.stringify({ type: "text", text: "legacy" }),
+      "utf8",
+    );
+
+    const db = new Database(dbPath);
+    db.prepare(`
+      INSERT INTO artifacts (id, kind, relative_path, byte_size, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      "artifact-legacy",
+      "turn_event_payload",
+      "turn-events/legacy-turn-payload.json",
+      24,
+      "2026-03-06T01:00:01.000Z",
+    );
+    db.prepare(`
+      INSERT INTO turn_events (id, turn_id, sequence, event_type, payload_json, payload_artifact_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "event-legacy",
+      "turn-legacy",
+      1,
+      "text",
+      JSON.stringify({ type: "text", text: "legacy" }),
+      "artifact-legacy",
+      "2026-03-06T01:00:01.000Z",
+    );
+    db.close();
+
+    const reopened = new SqliteStore({ dbPath });
+    reopened.close();
+
+    const verifyDb = new Database(dbPath, { readonly: true });
+    const turnEventCount = (
+      verifyDb.prepare("SELECT COUNT(*) AS count FROM turn_events").get() as {
+        count: number;
+      }
+    ).count;
+    const legacyArtifactCount = (
+      verifyDb
+        .prepare("SELECT COUNT(*) AS count FROM artifacts WHERE kind = ?")
+        .get("turn_event_payload") as { count: number }
+    ).count;
+    const purgeMarker = verifyDb
+      .prepare("SELECT value_json FROM app_state WHERE key = ?")
+      .get("legacy_turn_journal_purged_v1") as
+      | { value_json: string }
+      | undefined;
+    verifyDb.close();
+
+    expect(turnEventCount).toBe(0);
+    expect(legacyArtifactCount).toBe(0);
+    expect(purgeMarker).toBeTruthy();
+    expect(existsSync(path.join(artifactDir, "legacy-turn-payload.json"))).toBe(
+      false,
+    );
   });
 
   nativeSqliteTest("lists the latest turn for each task in a workspace", async () => {
@@ -195,14 +219,6 @@ describe("SqliteStore", () => {
       providerId: "codex",
       createdAt: "2026-03-06T01:00:02.000Z",
     });
-    store.appendTurnEvent({
-      id: "event-task-1-new",
-      turnId: "turn-task-1-new",
-      sequence: 1,
-      eventType: "text",
-      payload: { type: "text", text: "newest" },
-      createdAt: "2026-03-06T01:00:03.000Z",
-    });
     store.beginTurn({
       id: "turn-task-2",
       workspaceId: "ws-1",
@@ -217,7 +233,6 @@ describe("SqliteStore", () => {
       "turn-task-1-new",
       "turn-task-2",
     ]);
-    expect(turns[0]?.eventCount).toBe(1);
 
     store.close();
   });
@@ -397,6 +412,215 @@ describe("SqliteStore", () => {
     store.close();
   });
 
+  nativeSqliteTest("loads a thin workspace shell summary without replaying full shell payloads", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+
+    store.upsertWorkspace({
+      id: "ws-1",
+      name: "Workspace One",
+      snapshot: {
+        ...createSnapshot(),
+        editorTabs: [{
+          id: "editor-1",
+          filePath: "/tmp/project/src/app.ts",
+          language: "typescript",
+          content: "x".repeat(20_000),
+          hasConflict: false,
+          isDirty: true,
+        }],
+      },
+    });
+    store.close();
+
+    const reopened = new SqliteStore({ dbPath });
+    const summary = reopened.loadWorkspaceShellSummary({ workspaceId: "ws-1" });
+    reopened.close();
+
+    expect(summary).toEqual({
+      activeTaskId: "task-1",
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task One",
+          provider: "claude-code",
+          updatedAt: "2026-03-06T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+        {
+          id: "task-2",
+          title: "Task Two",
+          provider: "codex",
+          updatedAt: "2026-03-06T00:10:00.000Z",
+          unread: false,
+          archivedAt: "2026-03-06T00:11:00.000Z",
+        },
+      ],
+      messageCountByTask: {
+        "task-1": 1,
+        "task-2": 0,
+      },
+      terminalTabCount: 1,
+      cliSessionTabCount: 1,
+    });
+  });
+
+  nativeSqliteTest("loads a workspace shell lite payload without replaying editor bodies", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+
+    store.upsertWorkspace({
+      id: "ws-1",
+      name: "Workspace One",
+      snapshot: {
+        ...createSnapshot(),
+        promptDraftByTask: {
+          "task-1": {
+            text: "draft",
+            attachedFilePaths: [],
+            attachments: [],
+          },
+        },
+        providerSessionByTask: {
+          "task-1": {
+            "claude-code": "session-claude",
+          },
+        },
+        editorTabs: [{
+          id: "editor-1",
+          filePath: "/tmp/project/src/app.ts",
+          language: "typescript",
+          content: "x".repeat(20_000),
+          hasConflict: false,
+          isDirty: true,
+        }],
+      },
+    });
+    store.close();
+
+    const reopened = new SqliteStore({ dbPath });
+    const shellLite = reopened.loadWorkspaceShellLite({ workspaceId: "ws-1" });
+    reopened.close();
+
+    expect(shellLite).toEqual({
+      activeTaskId: "task-1",
+      tasks: [
+        {
+          id: "task-1",
+          title: "Task One",
+          provider: "claude-code",
+          updatedAt: "2026-03-06T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+        {
+          id: "task-2",
+          title: "Task Two",
+          provider: "codex",
+          updatedAt: "2026-03-06T00:10:00.000Z",
+          unread: false,
+          archivedAt: "2026-03-06T00:11:00.000Z",
+        },
+      ],
+      promptDraftByTask: {
+        "task-1": {
+          text: "draft",
+          attachedFilePaths: [],
+          attachments: [],
+        },
+      },
+      providerSessionByTask: {
+        "task-1": {
+          "claude-code": "session-claude",
+        },
+      },
+      messageCountByTask: {
+        "task-1": 1,
+        "task-2": 0,
+      },
+    });
+  });
+
+  nativeSqliteTest("loads restore shells with only the active clean file tab hydrated", async () => {
+    const SqliteStore = await loadSqliteStore();
+    const store = new SqliteStore({ dbPath });
+    const largeBody = "x".repeat(96_000);
+
+    store.upsertWorkspace({
+      id: "ws-restore",
+      name: "Restore Workspace",
+      snapshot: {
+        ...createSnapshot(),
+        editorTabs: [
+          {
+            id: "file:/tmp/project/src/active.ts",
+            filePath: "/tmp/project/src/active.ts",
+            language: "typescript",
+            content: largeBody,
+            originalContent: largeBody,
+            savedContent: largeBody,
+            hasConflict: false,
+            isDirty: false,
+          },
+          {
+            id: "file:/tmp/project/src/other.ts",
+            filePath: "/tmp/project/src/other.ts",
+            language: "typescript",
+            content: `${largeBody}-other`,
+            originalContent: `${largeBody}-other`,
+            savedContent: `${largeBody}-other`,
+            hasConflict: false,
+            isDirty: false,
+          },
+        ],
+        activeEditorTabId: "file:/tmp/project/src/active.ts",
+      },
+    });
+    store.close();
+
+    const reopened = new SqliteStore({ dbPath });
+    const shell = reopened.loadWorkspaceShellForRestore({
+      workspaceId: "ws-restore",
+    });
+    const bodies = reopened.loadWorkspaceEditorTabBodies({
+      workspaceId: "ws-restore",
+      tabIds: ["file:/tmp/project/src/other.ts"],
+    });
+    reopened.close();
+
+    expect(shell?.editorTabs).toEqual([
+      {
+        id: "file:/tmp/project/src/active.ts",
+        filePath: "/tmp/project/src/active.ts",
+        language: "typescript",
+        content: largeBody,
+        contentState: "ready",
+        originalContent: largeBody,
+        savedContent: largeBody,
+        hasConflict: false,
+        isDirty: false,
+      },
+      {
+        id: "file:/tmp/project/src/other.ts",
+        filePath: "/tmp/project/src/other.ts",
+        language: "typescript",
+        content: "",
+        contentState: "deferred",
+        hasConflict: false,
+        isDirty: false,
+      },
+    ]);
+    expect(bodies).toEqual([
+      {
+        id: "file:/tmp/project/src/other.ts",
+        content: `${largeBody}-other`,
+        originalContent: `${largeBody}-other`,
+        savedContent: `${largeBody}-other`,
+      },
+    ]);
+  });
+
   nativeSqliteTest("keeps tasks and messages when a later snapshot omits existing tasks", async () => {
     const SqliteStore = await loadSqliteStore();
     const store = new SqliteStore({ dbPath });
@@ -547,6 +771,13 @@ describe("SqliteStore", () => {
         },
       },
     });
+    store.beginTurn({
+      id: "turn-task-2",
+      workspaceId: "ws-1",
+      taskId: "task-2",
+      providerId: "codex",
+      createdAt: "2026-03-06T00:12:00.000Z",
+    });
 
     store.removeTaskFromWorkspace({ workspaceId: "ws-1", taskId: "task-2" });
 
@@ -559,69 +790,14 @@ describe("SqliteStore", () => {
       offset: 0,
     });
     const snapshot = store.loadWorkspaceSnapshot({ workspaceId: "ws-1" });
+    const turns = store.listTurns({ workspaceId: "ws-1", taskId: "task-2" });
 
     expect(persistedTasks.map((task) => task.id)).toEqual(["task-1"]);
     expect(shell?.tasks.map((task) => task.id)).toEqual(["task-1"]);
     expect(taskTwoMessages?.messages).toEqual([]);
     expect(snapshot?.tasks.map((task) => task.id)).toEqual(["task-1"]);
     expect(snapshot?.messagesByTask["task-2"]).toBeUndefined();
-
-    store.close();
-  });
-
-  nativeSqliteTest("keeps request snapshots in the journal without inflating visible event counts", async () => {
-    const SqliteStore = await loadSqliteStore();
-    const store = new SqliteStore({ dbPath });
-
-    store.beginTurn({
-      id: "turn-request-snapshot",
-      workspaceId: "ws-1",
-      taskId: "task-1",
-      providerId: "codex",
-      createdAt: "2026-03-06T01:00:00.000Z",
-    });
-    store.appendTurnEvent({
-      id: "event-request-snapshot",
-      turnId: "turn-request-snapshot",
-      sequence: 0,
-      eventType: "request_snapshot",
-      payload: {
-        type: "request_snapshot",
-        prompt: "fallback prompt",
-        conversation: {
-          target: {
-            providerId: "codex",
-            model: "gpt-5.4",
-          },
-          mode: "chat",
-          history: [],
-          input: {
-            role: "user",
-            providerId: "user",
-            model: "user",
-            content: "hello",
-            parts: [{ type: "text", text: "hello" }],
-          },
-          contextParts: [],
-        },
-      },
-      createdAt: "2026-03-06T01:00:00.500Z",
-    });
-    store.appendTurnEvent({
-      id: "event-visible",
-      turnId: "turn-request-snapshot",
-      sequence: 1,
-      eventType: "text",
-      payload: { type: "text", text: "hello" },
-      createdAt: "2026-03-06T01:00:01.000Z",
-    });
-
-    const replay = store.listTurnEvents({ turnId: "turn-request-snapshot" });
-    const summaries = store.listTurns({ workspaceId: "ws-1", taskId: "task-1" });
-
-    expect(replay.map((event) => event.sequence)).toEqual([0, 1]);
-    expect(replay[0]?.eventType).toBe("request_snapshot");
-    expect(summaries[0]?.eventCount).toBe(1);
+    expect(turns).toEqual([]);
 
     store.close();
   });

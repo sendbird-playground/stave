@@ -105,7 +105,7 @@ If `Codex` auto-registration is enabled, Stave also keeps the current loopback U
    - `stave_register_project`
    - `stave_create_workspace`
    - `stave_run_task`
-   - `stave_get_task` or `stave_list_turn_events`
+   - `stave_get_task`
    - `stave_respond_approval` or `stave_respond_user_input` when needed
 
 For workspace Information panel management, also use:
@@ -158,7 +158,6 @@ This keeps one clear control owner at a time and avoids mixed local/external edi
 If the running task asks for confirmation or structured answers:
 
 - poll task state with `stave_get_task`
-- inspect turn events with `stave_list_turn_events`
 - answer using `stave_respond_approval` or `stave_respond_user_input`
 - Stave shows these requests for visibility, but managed tasks expect the originating client to answer them
 

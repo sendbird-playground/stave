@@ -34,6 +34,7 @@ afterEach(() => {
   for (const directory of tempDirs.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
+  mock.restore();
 });
 
 describe("stave local MCP config", () => {

@@ -49,6 +49,7 @@ import type {
   BrowserConsoleEventPayload,
   BrowserNavigationEventPayload,
 } from "../src/lib/lens/lens.types";
+import type { PersistenceBootstrapStatus } from "../src/lib/persistence/bootstrap-status";
 import { WORKSPACE_SCRIPTS_IPC } from "../src/lib/workspace-scripts/constants";
 
 interface ProviderSlashCommand {
@@ -159,6 +160,18 @@ ipcRenderer.on(
   "local-mcp:workspace-information-updated",
   (_event, payload: WorkspaceInformationUpdatePayload) => {
     for (const subscriber of workspaceInformationUpdateSubscribers) {
+      subscriber(payload);
+    }
+  },
+);
+
+const persistenceBootstrapStatusSubscribers = new Set<
+  (payload: PersistenceBootstrapStatus) => void
+>();
+ipcRenderer.on(
+  "persistence:bootstrap-status",
+  (_event, payload: PersistenceBootstrapStatus) => {
+    for (const subscriber of persistenceBootstrapStatusSubscribers) {
       subscriber(payload);
     }
   },
@@ -475,9 +488,27 @@ contextBridge.exposeInMainWorld("api", {
       }>,
   },
   persistence: {
+    getBootstrapStatus: () =>
+      ipcRenderer.invoke(
+        "persistence:get-bootstrap-status",
+      ) as Promise<PersistenceBootstrapStatus>,
+    subscribeBootstrapStatus: (
+      listener: (payload: PersistenceBootstrapStatus) => void,
+    ) => {
+      persistenceBootstrapStatusSubscribers.add(listener);
+      return () => {
+        persistenceBootstrapStatusSubscribers.delete(listener);
+      };
+    },
     listWorkspaces: () => ipcRenderer.invoke("persistence:list-workspaces"),
     loadWorkspaceShell: (args: { workspaceId: string }) =>
       ipcRenderer.invoke("persistence:load-workspace-shell", args),
+    loadWorkspaceShellForRestore: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("persistence:load-workspace-shell-for-restore", args),
+    loadWorkspaceShellLite: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("persistence:load-workspace-shell-lite", args),
+    loadWorkspaceShellSummary: (args: { workspaceId: string }) =>
+      ipcRenderer.invoke("persistence:load-workspace-shell-summary", args),
     loadWorkspace: (args: { workspaceId: string }) =>
       ipcRenderer.invoke("persistence:load-workspace", args),
     loadTaskMessages: (args: {
@@ -486,6 +517,10 @@ contextBridge.exposeInMainWorld("api", {
       limit?: number;
       offset?: number;
     }) => ipcRenderer.invoke("persistence:load-task-messages", args),
+    loadWorkspaceEditorTabBodies: (args: {
+      workspaceId: string;
+      tabIds: string[];
+    }) => ipcRenderer.invoke("persistence:load-workspace-editor-tab-bodies", args),
     loadProjectRegistry: () =>
       ipcRenderer.invoke("persistence:load-project-registry"),
     upsertWorkspace: (args: { id: string; name: string; snapshot: unknown }) =>
@@ -532,11 +567,6 @@ contextBridge.exposeInMainWorld("api", {
       ipcRenderer.invoke("persistence:list-active-workspace-turns", args),
     listLatestWorkspaceTurns: (args: { workspaceId: string; limit?: number }) =>
       ipcRenderer.invoke("persistence:list-latest-workspace-turns", args),
-    listTurnEvents: (args: {
-      turnId: string;
-      afterSequence?: number;
-      limit?: number;
-    }) => ipcRenderer.invoke("persistence:list-turn-events", args),
   },
   fs: {
     pickRoot: () => ipcRenderer.invoke("fs:pick-root"),

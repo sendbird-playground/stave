@@ -49,6 +49,7 @@ import type {
   WorkspaceScriptHookRunSummary,
   WorkspaceScriptStatusEntry,
 } from "@/lib/workspace-scripts/types";
+import type { PersistenceBootstrapStatus } from "@/lib/persistence/bootstrap-status";
 
 interface ProviderStreamTurnArgs {
   turnId?: string;
@@ -801,6 +802,10 @@ interface WindowSourceControlApi {
 }
 
 interface WindowPersistenceApi {
+  getBootstrapStatus?: () => Promise<PersistenceBootstrapStatus>;
+  subscribeBootstrapStatus?: (
+    listener: (payload: PersistenceBootstrapStatus) => void,
+  ) => () => void;
   listWorkspaces?: () => Promise<{
     ok: boolean;
     rows: Array<{ id: string; name: string; updatedAt: string }>;
@@ -833,7 +838,8 @@ interface WindowPersistenceApi {
         filePath: string;
         kind?: "text" | "image";
         language: string;
-        content: string;
+        content?: string;
+        contentState?: "ready" | "deferred" | "loading";
         originalContent?: string;
         savedContent?: string;
         baseRevision?: string | null;
@@ -849,6 +855,98 @@ interface WindowPersistenceApi {
       activeSurface?: WorkspaceActiveSurface;
       workspaceInformation?: WorkspaceInformationState;
       messageCountByTask?: Record<string, number>;
+    } | null;
+  }>;
+  loadWorkspaceShellForRestore?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    shell: {
+      activeTaskId: string;
+      tasks: Array<{
+        id: string;
+        title: string;
+        provider: "claude-code" | "codex" | "stave";
+        updatedAt: string;
+        unread: boolean;
+        archivedAt?: string | null;
+        controlMode?: "interactive" | "managed";
+        controlOwner?: "stave" | "external";
+      }>;
+      promptDraftByTask?: Record<string, PromptDraft>;
+      providerSessionByTask?: Record<
+        string,
+        {
+          "claude-code"?: string;
+          codex?: string;
+          stave?: string;
+        }
+      >;
+      editorTabs?: Array<{
+        id: string;
+        filePath: string;
+        kind?: "text" | "image";
+        language: string;
+        content?: string;
+        contentState?: "ready" | "deferred" | "loading";
+        originalContent?: string;
+        savedContent?: string;
+        baseRevision?: string | null;
+        hasConflict: boolean;
+        isDirty: boolean;
+      }>;
+      activeEditorTabId?: string | null;
+      terminalTabs?: WorkspaceTerminalTab[];
+      activeTerminalTabId?: string | null;
+      terminalDocked?: boolean;
+      cliSessionTabs?: WorkspaceCliSessionTab[];
+      activeCliSessionTabId?: string | null;
+      activeSurface?: WorkspaceActiveSurface;
+      workspaceInformation?: WorkspaceInformationState;
+      messageCountByTask?: Record<string, number>;
+    } | null;
+  }>;
+  loadWorkspaceShellLite?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    shellLite: {
+      activeTaskId: string;
+      tasks: Array<{
+        id: string;
+        title: string;
+        provider: "claude-code" | "codex" | "stave";
+        updatedAt: string;
+        unread: boolean;
+        archivedAt?: string | null;
+        controlMode?: "interactive" | "managed";
+        controlOwner?: "stave" | "external";
+      }>;
+      promptDraftByTask?: Record<string, PromptDraft>;
+      providerSessionByTask?: Record<
+        string,
+        {
+          "claude-code"?: string;
+          codex?: string;
+          stave?: string;
+        }
+      >;
+      messageCountByTask?: Record<string, number>;
+    } | null;
+  }>;
+  loadWorkspaceShellSummary?: (args: { workspaceId: string }) => Promise<{
+    ok: boolean;
+    summary: {
+      activeTaskId: string;
+      tasks: Array<{
+        id: string;
+        title: string;
+        provider: "claude-code" | "codex" | "stave";
+        updatedAt: string;
+        unread: boolean;
+        archivedAt?: string | null;
+        controlMode?: "interactive" | "managed";
+        controlOwner?: "stave" | "external";
+      }>;
+      messageCountByTask?: Record<string, number>;
+      terminalTabCount?: number;
+      cliSessionTabCount?: number;
     } | null;
   }>;
   loadWorkspace?: (args: { workspaceId: string }) => Promise<{
@@ -898,6 +996,7 @@ interface WindowPersistenceApi {
         kind?: "text" | "image";
         language: string;
         content: string;
+        contentState?: "ready" | "deferred" | "loading";
         originalContent?: string;
         savedContent?: string;
         baseRevision?: string | null;
@@ -946,6 +1045,18 @@ interface WindowPersistenceApi {
       offset: number;
       hasMoreOlder: boolean;
     } | null;
+  }>;
+  loadWorkspaceEditorTabBodies?: (args: {
+    workspaceId: string;
+    tabIds: string[];
+  }) => Promise<{
+    ok: boolean;
+    bodies: Array<{
+      id: string;
+      content: string;
+      originalContent?: string;
+      savedContent?: string;
+    }>;
   }>;
   loadProjectRegistry?: () => Promise<{
     ok: boolean;
@@ -999,6 +1110,7 @@ interface WindowPersistenceApi {
         kind?: "text" | "image";
         language: string;
         content: string;
+        contentState?: "ready" | "deferred" | "loading";
         originalContent?: string;
         savedContent?: string;
         baseRevision?: string | null;
@@ -1054,7 +1166,6 @@ interface WindowPersistenceApi {
       providerId: "claude-code" | "codex" | "stave";
       createdAt: string;
       completedAt: string | null;
-      eventCount: number;
     }>;
   }>;
   listActiveWorkspaceTurns?: (args: {
@@ -1069,7 +1180,6 @@ interface WindowPersistenceApi {
       providerId: "claude-code" | "codex" | "stave";
       createdAt: string;
       completedAt: string | null;
-      eventCount: number;
     }>;
   }>;
   listLatestWorkspaceTurns?: (args: {
@@ -1084,7 +1194,6 @@ interface WindowPersistenceApi {
       providerId: "claude-code" | "codex" | "stave";
       createdAt: string;
       completedAt: string | null;
-      eventCount: number;
     }>;
   }>;
   upsertWorkspaceSync?: (args: {
@@ -1148,21 +1257,6 @@ interface WindowPersistenceApi {
       workspaceInformation?: WorkspaceInformationState;
     };
   }) => { ok: boolean };
-  listTurnEvents?: (args: {
-    turnId: string;
-    afterSequence?: number;
-    limit?: number;
-  }) => Promise<{
-    ok: boolean;
-    events: Array<{
-      id: string;
-      turnId: string;
-      sequence: number;
-      eventType: string;
-      payload: unknown;
-      createdAt: string;
-    }>;
-  }>;
 }
 
 interface AppMetricsResult {

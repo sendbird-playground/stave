@@ -50,7 +50,8 @@ export interface PersistenceWorkspaceSnapshot {
     filePath: string;
     kind?: "text" | "image";
     language: string;
-    content: string;
+    content?: string;
+    contentState?: "ready" | "deferred" | "loading";
     originalContent?: string;
     savedContent?: string;
     baseRevision?: string | null;
@@ -81,7 +82,8 @@ export interface PersistenceWorkspaceShell {
     filePath: string;
     kind?: "text" | "image";
     language: string;
-    content: string;
+    content?: string;
+    contentState?: "ready" | "deferred" | "loading";
     originalContent?: string;
     savedContent?: string;
     baseRevision?: string | null;
@@ -97,6 +99,26 @@ export interface PersistenceWorkspaceShell {
   activeSurface?: WorkspaceActiveSurface;
   workspaceInformation?: WorkspaceInformationState;
   messageCountByTask?: Record<string, number>;
+}
+
+export interface PersistenceWorkspaceShellLite {
+  activeTaskId: string;
+  tasks: PersistenceTaskRow[];
+  promptDraftByTask?: Record<string, PromptDraft>;
+  providerSessionByTask?: Record<string, {
+    "claude-code"?: string;
+    codex?: string;
+    stave?: string;
+  }>;
+  messageCountByTask?: Record<string, number>;
+}
+
+export interface PersistenceWorkspaceShellSummary {
+  activeTaskId: string;
+  tasks: PersistenceTaskRow[];
+  messageCountByTask?: Record<string, number>;
+  terminalTabCount?: number;
+  cliSessionTabCount?: number;
 }
 
 export interface PersistenceWorkspaceSummary {
@@ -132,15 +154,6 @@ export interface PersistenceProjectRegistryEntry {
   newWorkspaceUseRootNodeModulesSymlink?: boolean;
 }
 
-export interface PersistenceTurnEvent {
-  id: string;
-  turnId: string;
-  sequence: number;
-  eventType: string;
-  payload: unknown;
-  createdAt: string;
-}
-
 export interface PersistenceTurnSummary {
   id: string;
   workspaceId: string;
@@ -148,7 +161,6 @@ export interface PersistenceTurnSummary {
   providerId: "claude-code" | "codex";
   createdAt: string;
   completedAt: string | null;
-  eventCount: number;
 }
 
 export interface PersistenceLocalMcpRequestLog {

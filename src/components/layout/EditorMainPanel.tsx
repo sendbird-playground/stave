@@ -1,6 +1,6 @@
 import MonacoEditor, { DiffEditor, type Monaco } from "@monaco-editor/react";
 import type { editor as MonacoEditorApi, IPosition, IRange } from "monaco-editor";
-import { FileCode2 } from "lucide-react";
+import { FileCode2, LoaderCircle } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useAppStore } from "@/store/app.store";
@@ -144,6 +144,9 @@ export function EditorMainPanel() {
   };
 
   const activeTab = editorTabs.find((tab) => tab.id === activeEditorTabId) ?? null;
+  const activeTabContentPending = Boolean(
+    activeTab && activeTab.contentState && activeTab.contentState !== "ready",
+  );
   const isImageTab = (tab: { kind?: "text" | "image"; language: string } | null) =>
     Boolean(tab && (tab.kind === "image" || tab.language === "image"));
   const activeTabIsImage = isImageTab(activeTab);
@@ -155,7 +158,7 @@ export function EditorMainPanel() {
     taskId: activeTaskId,
     hasActiveEditorTab: Boolean(activeTab),
     isTaskResponding: activeTaskIsResponding,
-  });
+  }) || activeTabContentPending;
   const shouldLoadWorkspaceSupport = Boolean(
     workspaceRootPath
     && activeTab
@@ -500,7 +503,26 @@ export function EditorMainPanel() {
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {activeTab ? (
-            activeTabIsImage ? (
+            activeTabContentPending ? (
+              <div className="flex h-full items-center justify-center bg-editor p-6">
+                <Empty className="border-none bg-transparent p-0">
+                  <EmptyHeader className="gap-3">
+                    <EmptyMedia
+                      variant="icon"
+                      className="size-14 rounded-2xl bg-primary/10 text-primary [&_svg:not([class*='size-'])]:size-7"
+                    >
+                      <LoaderCircle className="size-7 animate-spin" strokeWidth={1.6} />
+                    </EmptyMedia>
+                    <div className="flex flex-col gap-1">
+                      <EmptyTitle className="text-xl font-semibold">Loading tab…</EmptyTitle>
+                      <EmptyDescription className="max-w-md text-sm">
+                        Restoring this editor tab without blocking the rest of the workspace.
+                      </EmptyDescription>
+                    </div>
+                  </EmptyHeader>
+                </Empty>
+              </div>
+            ) : activeTabIsImage ? (
               <div className="flex h-full items-center justify-center overflow-auto bg-editor p-4">
                 {activeTab.content ? (
                   <img

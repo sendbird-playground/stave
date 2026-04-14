@@ -28,3 +28,22 @@ export function resolveChatAreaViewMode(args: {
   }
   return args.activeTaskMessageCount === 0 ? "empty_task" : "conversation";
 }
+
+export function resolveHydratingProjectCopy(args: {
+  persistenceBootstrapPhase: "idle" | "purging-legacy-turn-journal";
+  persistenceBootstrapMessage: string;
+}) {
+  if (args.persistenceBootstrapPhase === "purging-legacy-turn-journal") {
+    return {
+      title: "Preparing local data",
+      description:
+        args.persistenceBootstrapMessage ||
+        "Cleaning up legacy workspace data from a previous version. This only runs once.",
+    };
+  }
+
+  return {
+    title: "Opening workspace",
+    description: "Loading tasks and recent conversation state for this project.",
+  };
+}

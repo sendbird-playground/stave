@@ -30,10 +30,13 @@ export function runCommand(args: {
   env?: NodeJS.ProcessEnv;
 }): Promise<CommandResult> {
   return new Promise<CommandResult>((resolve) => {
+    const env = buildExecutableLookupEnv({
+      baseEnv: args.env,
+    });
     const child = spawn(args.command, {
       shell: true,
       cwd: resolveCommandCwd({ cwd: args.cwd }),
-      env: args.env ?? buildExecutableLookupEnv(),
+      env,
     });
 
     let stdout = "";
@@ -70,10 +73,13 @@ export function runCommandArgs(args: {
   env?: NodeJS.ProcessEnv;
 }): Promise<CommandResult> {
   return new Promise<CommandResult>((resolve) => {
+    const env = buildExecutableLookupEnv({
+      baseEnv: args.env,
+    });
     const child = spawn(args.command, args.commandArgs ?? [], {
       shell: false,
       cwd: resolveCommandCwd({ cwd: args.cwd }),
-      env: args.env ?? buildExecutableLookupEnv(),
+      env,
     });
 
     let stdout = "";

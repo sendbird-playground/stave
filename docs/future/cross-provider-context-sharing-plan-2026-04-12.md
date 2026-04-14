@@ -221,7 +221,7 @@ Persistence targets:
 - `messagesByTask`
 - `providerSessionByTask`
 - `workspaceInformation`
-- `request_snapshot` turn persistence
+- `turns` summary persistence
 
 ## Request Construction Changes
 

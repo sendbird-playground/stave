@@ -3,7 +3,7 @@ import {
   measureSerializedHostServiceRequestBytes,
   resolveHostServiceScriptPath,
 } from "../electron/main/host-service-client";
-import { HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES } from "../electron/shared/host-service-transport";
+import { HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES } from "../electron/shared/host-service-transport";
 
 describe("resolveHostServiceScriptPath", () => {
   test("uses the sibling file when the bundled main entry owns the client", () => {
@@ -45,7 +45,7 @@ describe("resolveHostServiceScriptPath", () => {
         method: "provider.start-push-turn",
         params: {
           providerId: "codex",
-          prompt: "x".repeat(HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES),
+          prompt: "x".repeat(HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES),
           conversation: undefined,
           taskId: "task-1",
           workspaceId: "ws-1",
@@ -54,6 +54,6 @@ describe("resolveHostServiceScriptPath", () => {
           turnId: "turn-1",
         },
       }),
-    ).toBeGreaterThan(HOST_SERVICE_PROTOCOL_LINE_MAX_BYTES);
+    ).toBeGreaterThan(HOST_SERVICE_PROTOCOL_MESSAGE_MAX_BYTES);
   });
 });

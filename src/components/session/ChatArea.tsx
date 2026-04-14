@@ -10,7 +10,10 @@ import {
 } from "react";
 import { ChatInput } from "@/components/session/ChatInput";
 import { ChatPanel } from "@/components/session/ChatPanel";
-import { resolveChatAreaViewMode } from "@/components/session/chat-area.utils";
+import {
+  resolveChatAreaViewMode,
+  resolveHydratingProjectCopy,
+} from "@/components/session/chat-area.utils";
 import { EmptySplash } from "@/components/session/EmptySplash";
 import { PlanViewer } from "@/components/session/PlanViewer";
 import { TodoFloater } from "@/components/session/TodoFloater";
@@ -46,6 +49,8 @@ function ChatAreaImpl() {
     activeTaskMessageCount,
     activeTask,
     activeTurnId,
+    persistenceBootstrapPhase,
+    persistenceBootstrapMessage,
     refreshActiveManagedTask,
     createProject,
     createTask,
@@ -68,6 +73,8 @@ function ChatAreaImpl() {
             (task) => task.id === state.activeTaskId && !isTaskArchived(task),
           ) ?? null,
           state.activeTurnIdsByTask[state.activeTaskId],
+          state.persistenceBootstrapPhase,
+          state.persistenceBootstrapMessage,
           state.refreshActiveManagedTask,
           state.createProject,
           state.createTask,
@@ -81,6 +88,10 @@ function ChatAreaImpl() {
     hasSelectedWorkspace,
     hasSelectedTask,
     activeTaskMessageCount,
+  });
+  const hydratingProjectCopy = resolveHydratingProjectCopy({
+    persistenceBootstrapPhase,
+    persistenceBootstrapMessage,
   });
   const isEmpty = activeTaskMessageCount === 0;
   const shouldPollManagedTask =
@@ -186,8 +197,8 @@ function ChatAreaImpl() {
       <div {...sessionAreaProps}>
         <SessionLoadingState
           testId="session-loading-state"
-          title="Opening workspace"
-          description="Loading tasks and recent conversation state for this project."
+          title={hydratingProjectCopy.title}
+          description={hydratingProjectCopy.description}
         />
       </div>
     );

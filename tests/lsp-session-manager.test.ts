@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { EventEmitter } from "node:events";
 
+const actualChildProcess = await import("node:child_process");
+
 class FakeStream extends EventEmitter {}
 
 class FakeChild extends EventEmitter {
@@ -34,6 +36,7 @@ class FakeChild extends EventEmitter {
 const fakeChildren: FakeChild[] = [];
 
 mock.module("node:child_process", () => ({
+  ...actualChildProcess,
   spawn: () => {
     const child = new FakeChild();
     fakeChildren.push(child);
@@ -77,6 +80,7 @@ class FakeSender extends EventEmitter {
 afterEach(async () => {
   await stopLspSessions({});
   fakeChildren.length = 0;
+  mock.restore();
 });
 
 describe("lsp session manager subscriptions", () => {

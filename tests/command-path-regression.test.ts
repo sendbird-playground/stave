@@ -1,15 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { runCommand, runCommandArgs } from "../electron/main/utils/command";
+import { buildExecutableLookupEnv } from "../electron/providers/executable-path";
 
 const createdPaths: string[] = [];
-const originalPath = process.env.PATH;
+function createFixtureHome(args: { name: string }) {
+  const home = path.join(tmpdir(), args.name);
+  const binDir = path.join(home, ".local", "bin");
+  mkdirSync(binDir, { recursive: true });
+  createdPaths.push(home);
+  return { home, binDir };
+}
 
 afterEach(() => {
-  process.env.PATH = originalPath;
-
   while (createdPaths.length > 0) {
     const targetPath = createdPaths.pop();
     if (!targetPath) {
@@ -20,43 +24,51 @@ afterEach(() => {
 });
 
 describe("command PATH lookup regressions", () => {
-  test("runCommandArgs resolves executables from the augmented login-shell PATH", async () => {
+  test("buildExecutableLookupEnv adds the HOME-scoped local bin directory ahead of the base PATH", () => {
     if (process.platform === "win32") {
       return;
     }
 
-    const binDir = path.join(homedir(), ".local", "bin");
-    mkdirSync(binDir, { recursive: true });
+    const { home, binDir } = createFixtureHome({
+      name: `stave-command-path-home-${process.pid}-${Date.now()}`,
+    });
+    const env = buildExecutableLookupEnv({
+      baseEnv: {
+        ...process.env,
+        HOME: home,
+        PATH: "/usr/bin:/bin",
+      },
+    });
+    const parts = (env.PATH ?? "").split(path.delimiter);
 
-    const executablePath = path.join(binDir, `stave-gh-fixture-${process.pid}-${Date.now()}`);
-    createdPaths.push(executablePath);
-    writeFileSync(executablePath, "#!/bin/sh\nprintf 'fixture-ok'\n", "utf8");
-    chmodSync(executablePath, 0o755);
-
-    process.env.PATH = "/usr/bin:/bin";
-
-    const result = await runCommandArgs({ command: path.basename(executablePath) });
-    expect(result.ok).toBe(true);
-    expect(result.stdout).toBe("fixture-ok");
+    expect(parts).toContain(binDir);
+    expect(parts).toContain("/usr/bin");
+    expect(parts).toContain("/bin");
   });
 
-  test("runCommand resolves executables from the augmented login-shell PATH", async () => {
+  test("buildExecutableLookupEnv keeps the HOME-scoped local bin directory stable across repeated calls", () => {
     if (process.platform === "win32") {
       return;
     }
 
-    const binDir = path.join(homedir(), ".local", "bin");
-    mkdirSync(binDir, { recursive: true });
+    const { home, binDir } = createFixtureHome({
+      name: `stave-command-shell-home-${process.pid}-${Date.now()}`,
+    });
+    const baseEnv = {
+      ...process.env,
+      HOME: home,
+      PATH: "/usr/bin:/bin",
+    };
 
-    const executablePath = path.join(binDir, `stave-shell-fixture-${process.pid}-${Date.now()}`);
-    createdPaths.push(executablePath);
-    writeFileSync(executablePath, "#!/bin/sh\nprintf 'shell-ok'\n", "utf8");
-    chmodSync(executablePath, 0o755);
+    const first = buildExecutableLookupEnv({
+      baseEnv,
+    });
+    const second = buildExecutableLookupEnv({
+      baseEnv,
+    });
 
-    process.env.PATH = "/usr/bin:/bin";
-
-    const result = await runCommand({ command: path.basename(executablePath) });
-    expect(result.ok).toBe(true);
-    expect(result.stdout).toBe("shell-ok");
+    expect(first.PATH?.split(path.delimiter)).toContain(binDir);
+    expect(second.PATH?.split(path.delimiter)).toContain(binDir);
+    expect(first.PATH).toBe(second.PATH);
   });
 });

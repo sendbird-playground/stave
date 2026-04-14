@@ -203,6 +203,8 @@ export interface ChatMessage {
   parts: MessagePart[];
 }
 
+export type EditorTabContentState = "ready" | "deferred" | "loading";
+
 export type TaskControlMode = "interactive" | "managed";
 export type TaskControlOwner = "stave" | "external";
 
@@ -225,6 +227,7 @@ export interface EditorTab {
   kind?: "text" | "image";
   language: string;
   content: string;
+  contentState?: EditorTabContentState;
   originalContent?: string;
   savedContent?: string;
   baseRevision?: string | null;

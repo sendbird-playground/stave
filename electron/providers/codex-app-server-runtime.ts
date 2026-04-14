@@ -35,6 +35,7 @@ import {
   truncateBufferedText,
 } from "./provider-buffering";
 import { byteLengthUtf8 } from "../shared/bounded-text";
+import { Utf8LineBuffer } from "../shared/utf8-line-buffer";
 import {
   getConnectedToolLabel,
   normalizeConnectedToolIds,
@@ -64,8 +65,9 @@ const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
   "STAVE_LOCAL_MCP_TOKEN",
 ] as const;
 const APP_SERVER_INTERRUPT_GRACE_MS = 10_000;
-const CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES = 2 * 1024 * 1024;
-const CODEX_APP_SERVER_STDOUT_LINE_MAX_BYTES = 1 * 1024 * 1024;
+const CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
+const CODEX_APP_SERVER_STDOUT_SOFT_LINE_MAX_BYTES = 1 * 1024 * 1024;
+const CODEX_APP_SERVER_STDOUT_HARD_LINE_MAX_BYTES = 8 * 1024 * 1024;
 const CODEX_APP_SERVER_COLLECTED_EVENTS_MAX_BYTES = 512 * 1024;
 const CODEX_APP_SERVER_MESSAGE_BUFFER_MAX_BYTES = 256 * 1024;
 const CODEX_APP_SERVER_PLAN_BUFFER_MAX_BYTES = 128 * 1024;
@@ -1214,36 +1216,32 @@ class CodexAppServerClient {
     );
     this.process = child;
     this.initialized = false;
-    let stdoutBuffer = "";
+    const stdoutLineBuffer = new Utf8LineBuffer({
+      label: "codex-app-server stdout",
+      maxBufferBytes: CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES,
+      maxLineBytes: CODEX_APP_SERVER_STDOUT_HARD_LINE_MAX_BYTES,
+    });
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       if (child !== this.process) {
         return;
       }
-      stdoutBuffer += chunk;
-      if (
-        byteLengthUtf8(stdoutBuffer) > CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES
-      ) {
+      let lines: string[];
+      try {
+        lines = stdoutLineBuffer.append(chunk);
+      } catch (error) {
         this.teardownProcess(
-          `Codex App Server protocol overflow: stdout buffer exceeded ${CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES} bytes.`,
+          error instanceof Error ? error.message : String(error),
         );
         return;
       }
-      let newlineIndex = stdoutBuffer.indexOf("\n");
-      while (newlineIndex >= 0) {
-        const rawLine = stdoutBuffer.slice(0, newlineIndex);
-        stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1);
-        const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
-        if (byteLengthUtf8(line) > CODEX_APP_SERVER_STDOUT_LINE_MAX_BYTES) {
-          this.teardownProcess(
-            `Codex App Server protocol overflow: line exceeded ${CODEX_APP_SERVER_STDOUT_LINE_MAX_BYTES} bytes.`,
-          );
+      for (const line of lines) {
+        if (line.length === 0) {
+          continue;
+        }
+        if (!this.handleProtocolLine(line)) {
           return;
         }
-        if (line.length > 0) {
-          this.handleMessage(line);
-        }
-        newlineIndex = stdoutBuffer.indexOf("\n");
       }
     });
 
@@ -1305,13 +1303,39 @@ class CodexAppServerClient {
   }
 
   private handleMessage(line: string) {
-    let message: JsonRpcMessage;
-    try {
-      message = JSON.parse(line) as JsonRpcMessage;
-    } catch {
+    const message = this.parseMessage(line);
+    if (!message) {
       return;
     }
+    this.dispatchMessage(message);
+  }
 
+  private parseMessage(line: string) {
+    try {
+      return JSON.parse(line) as JsonRpcMessage;
+    } catch {
+      return null;
+    }
+  }
+
+  private handleProtocolLine(line: string) {
+    const lineBytes = byteLengthUtf8(line);
+    if (lineBytes > CODEX_APP_SERVER_STDOUT_SOFT_LINE_MAX_BYTES) {
+      const message = this.parseMessage(line);
+      if (!message) {
+        this.teardownProcess(
+          `Codex App Server protocol overflow: oversized line (${lineBytes} bytes) was not valid JSON-RPC.`,
+        );
+        return false;
+      }
+      this.dispatchMessage(message);
+      return true;
+    }
+    this.handleMessage(line);
+    return true;
+  }
+
+  private dispatchMessage(message: JsonRpcMessage) {
     const hasResponseId =
       Object.prototype.hasOwnProperty.call(message, "id") &&
       (Object.prototype.hasOwnProperty.call(message, "result") ||
