@@ -17,3 +17,5 @@ tracking/
 claude-progress.txt
 .superset/
 execution/
+/work-handoff.md
+/handoff-*.md
