@@ -18,6 +18,7 @@ function createWorkspaceBase() {
       createdAt: 1,
     }],
     activeTerminalTabId: "terminal-1",
+    terminalDocked: true,
     cliSessionTabs: [],
     activeCliSessionTabId: null,
     activeSurface: {
@@ -55,6 +56,7 @@ describe("task-context workspace schemas", () => {
       cwd: "/tmp/workspace",
       createdAt: 1,
     }]);
+    expect(parsed?.terminalDocked).toBe(true);
   });
 
   test("normalizes legacy xterm terminal tabs in workspace snapshot payloads", () => {
@@ -67,6 +69,7 @@ describe("task-context workspace schemas", () => {
 
     expect(parsed).not.toBeNull();
     expect(parsed?.terminalTabs?.[0]?.backend).toBe("ghostty");
+    expect(parsed?.terminalDocked).toBe(true);
   });
 
   test("parses prompt draft runtime overrides and queued-next-turn content from snapshots", () => {

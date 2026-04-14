@@ -60,6 +60,7 @@ export interface PersistenceWorkspaceSnapshot {
   activeEditorTabId?: string | null;
   terminalTabs?: WorkspaceTerminalTab[];
   activeTerminalTabId?: string | null;
+  terminalDocked?: boolean;
   cliSessionTabs?: WorkspaceCliSessionTab[];
   activeCliSessionTabId?: string | null;
   activeSurface?: WorkspaceActiveSurface;
@@ -90,6 +91,7 @@ export interface PersistenceWorkspaceShell {
   activeEditorTabId?: string | null;
   terminalTabs?: WorkspaceTerminalTab[];
   activeTerminalTabId?: string | null;
+  terminalDocked?: boolean;
   cliSessionTabs?: WorkspaceCliSessionTab[];
   activeCliSessionTabId?: string | null;
   activeSurface?: WorkspaceActiveSurface;

@@ -31,6 +31,7 @@ export interface WorkspaceSnapshot {
   activeEditorTabId?: string | null;
   terminalTabs?: WorkspaceTerminalTab[];
   activeTerminalTabId?: string | null;
+  terminalDocked?: boolean;
   cliSessionTabs?: WorkspaceCliSessionTab[];
   activeCliSessionTabId?: string | null;
   activeSurface?: WorkspaceActiveSurface;
@@ -46,6 +47,7 @@ export interface WorkspaceShell {
   activeEditorTabId?: string | null;
   terminalTabs?: WorkspaceTerminalTab[];
   activeTerminalTabId?: string | null;
+  terminalDocked?: boolean;
   cliSessionTabs?: WorkspaceCliSessionTab[];
   activeCliSessionTabId?: string | null;
   activeSurface?: WorkspaceActiveSurface;
@@ -152,6 +154,7 @@ function buildShellFromSnapshot(snapshot: WorkspaceSnapshot): WorkspaceShell {
     activeEditorTabId: snapshot.activeEditorTabId,
     terminalTabs: snapshot.terminalTabs,
     activeTerminalTabId: snapshot.activeTerminalTabId,
+    terminalDocked: snapshot.terminalDocked,
     cliSessionTabs: snapshot.cliSessionTabs,
     activeCliSessionTabId: snapshot.activeCliSessionTabId,
     activeSurface: snapshot.activeSurface,
