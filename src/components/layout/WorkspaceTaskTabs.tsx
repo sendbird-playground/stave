@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
 import { PANEL_BAR_HEIGHT_CLASS } from "@/components/layout/panel-bar.constants";
 import { Badge, Button, Card, Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, Input, Kbd, KbdGroup, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, WaveIndicator, buttonVariants } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { useDismissibleLayer } from "@/lib/dismissible-layer";
 import { getProviderLabel, getProviderWaveToneClass } from "@/lib/providers/model-catalog";
 import { resolveProviderTurnDisplayState } from "@/lib/providers/turn-status";
 import { getProviderSessionLabel, listProviderSessions } from "@/lib/providers/provider-sessions";
@@ -353,6 +354,10 @@ export function WorkspaceTaskTabs() {
   const [dropTargetTaskId, setDropTargetTaskId] = useState<string | null>(null);
   const [draggingCliSessionTabId, setDraggingCliSessionTabId] = useState<string | null>(null);
   const [dropTargetCliSessionTabId, setDropTargetCliSessionTabId] = useState<string | null>(null);
+  const { containerRef: sessionIdsDialogRef, handleKeyDown: handleSessionIdsDialogKeyDown } = useDismissibleLayer<HTMLDivElement>({
+    enabled: Boolean(taskToViewSession),
+    onDismiss: () => setTaskToViewSession(null),
+  });
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const cliSessionRenameInputRef = useRef<HTMLInputElement | null>(null);
   const [
@@ -775,7 +780,16 @@ export function WorkspaceTaskTabs() {
         </div>
       ) : null}
       {taskToViewSession ? (
-        <div className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")} onMouseDown={() => setTaskToViewSession(null)}>
+        <div
+          ref={sessionIdsDialogRef}
+          className={cn(UI_LAYER_CLASS.dialog, "fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]")}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Session IDs"
+          tabIndex={-1}
+          onKeyDown={handleSessionIdsDialogKeyDown}
+          onMouseDown={() => setTaskToViewSession(null)}
+        >
           <Card className="w-full max-w-lg rounded-lg border-border/80 bg-card p-4 shadow-xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
