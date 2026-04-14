@@ -1,3 +1,18 @@
+## [0.3.2](https://github.com/sendbird-playground/stave/compare/v0.3.0...v0.3.2) (2026-04-14)
+
+### Bug Fixes
+
+* restore login-shell PATH inheritance and config-home parity so app-launched Claude, Codex, and tooling status checks resolve the same executables and auth state as an interactive shell
+* reset Plan Viewer floating state when the visible workspace, task, or latest plan changes so stale drag position no longer leaks across context switches
+* keep CLI session padding and the xterm viewport background aligned with the active terminal theme token across light and dark mode
+* restore the missing `node:path` import in the Claude SDK runtime and add regression coverage for relative `cwd` fallback when loading native commands
+
+### References
+
+* [#434](https://github.com/sendbird-playground/stave/pull/434)
+* [#436](https://github.com/sendbird-playground/stave/pull/436)
+* [#437](https://github.com/sendbird-playground/stave/pull/437)
+* [#438](https://github.com/sendbird-playground/stave/pull/438)
 ## [0.3.1](https://github.com/sendbird-playground/stave/compare/v0.3.0...v0.3.1) (2026-04-14)
 
 ### Bug Fixes
