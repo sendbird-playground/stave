@@ -469,6 +469,7 @@ function resolveTaskRuntimeTarget(args: {
     | "activeEditorTabId"
     | "terminalTabs"
     | "activeTerminalTabId"
+    | "layout"
     | "cliSessionTabs"
     | "activeCliSessionTabId"
     | "activeSurface"
@@ -537,6 +538,7 @@ function getWorkspaceSessionForState(args: {
     | "activeEditorTabId"
     | "terminalTabs"
     | "activeTerminalTabId"
+    | "layout"
     | "cliSessionTabs"
     | "activeCliSessionTabId"
     | "activeSurface"
@@ -2563,6 +2565,7 @@ export const useAppStore = create<AppState>()(
           activeEditorTabId: args.session.activeEditorTabId,
           terminalTabs: args.session.terminalTabs,
           activeTerminalTabId: args.session.activeTerminalTabId,
+          terminalDocked: args.session.terminalDocked,
           cliSessionTabs: args.session.cliSessionTabs,
           activeCliSessionTabId: args.session.activeCliSessionTabId,
           activeSurface: args.session.activeSurface,
@@ -2988,9 +2991,7 @@ export const useAppStore = create<AppState>()(
             ...initialWorkspaceState,
             layout: {
               ...stateBeforeSwitch.layout,
-              terminalDocked: initialWorkspaceState.activeTerminalTabId
-                ? true
-                : stateBeforeSwitch.layout.terminalDocked,
+              terminalDocked: initialWorkspaceState.terminalDocked,
               editorDiffMode: resolveEditorDiffMode({
                 editorTabs: initialWorkspaceState.editorTabs,
                 activeEditorTabId: initialWorkspaceState.activeEditorTabId,
@@ -3046,6 +3047,7 @@ export const useAppStore = create<AppState>()(
             activeEditorTabId: empty.activeEditorTabId,
             terminalTabs: empty.terminalTabs,
             activeTerminalTabId: empty.activeTerminalTabId,
+            terminalDocked: empty.terminalDocked,
             cliSessionTabs: empty.cliSessionTabs,
             activeCliSessionTabId: empty.activeCliSessionTabId,
             activeSurface: empty.activeSurface,
@@ -3061,6 +3063,7 @@ export const useAppStore = create<AppState>()(
               activeEditorTabId: empty.activeEditorTabId,
               terminalTabs: empty.terminalTabs,
               activeTerminalTabId: empty.activeTerminalTabId,
+              terminalDocked: empty.terminalDocked,
               cliSessionTabs: empty.cliSessionTabs,
               activeCliSessionTabId: empty.activeCliSessionTabId,
               activeSurface: empty.activeSurface,
@@ -3109,7 +3112,7 @@ export const useAppStore = create<AppState>()(
           ...workspaceState,
           layout: {
             ...get().layout,
-            terminalDocked: Boolean(workspaceState.activeTerminalTabId),
+            terminalDocked: workspaceState.terminalDocked,
             editorDiffMode: resolveEditorDiffMode({
               editorTabs: workspaceState.editorTabs,
               activeEditorTabId: workspaceState.activeEditorTabId,
@@ -3380,10 +3383,10 @@ export const useAppStore = create<AppState>()(
             offset: args.mode === "older" ? currentMessages.length : 0,
           });
           set((state) => {
-            const targetSession =
-              args.workspaceId === state.activeWorkspaceId
-                ? state
-                : state.workspaceRuntimeCacheById[args.workspaceId];
+            const targetSession = getWorkspaceSessionForState({
+              state,
+              workspaceId: args.workspaceId,
+            });
             if (!targetSession) {
               return {
                 taskMessagesLoadingByTask: {
@@ -3502,10 +3505,10 @@ export const useAppStore = create<AppState>()(
                 nextTaskMessagesLoadingByTask[taskId] = false;
               }
 
-              const targetSession =
-                args.workspaceId === state.activeWorkspaceId
-                  ? state
-                  : state.workspaceRuntimeCacheById[args.workspaceId];
+              const targetSession = getWorkspaceSessionForState({
+                state,
+                workspaceId: args.workspaceId,
+              });
               if (!targetSession) {
                 return {
                   taskMessagesLoadingByTask: nextTaskMessagesLoadingByTask,
@@ -3842,6 +3845,7 @@ export const useAppStore = create<AppState>()(
               activeEditorTabId: null,
               terminalTabs: [],
               activeTerminalTabId: null,
+              terminalDocked: false,
               cliSessionTabs: [],
               activeCliSessionTabId: null,
               activeSurface: { kind: "task", taskId: "" },
@@ -4093,6 +4097,7 @@ export const useAppStore = create<AppState>()(
                     activeEditorTabId: null,
                     terminalTabs: [],
                     activeTerminalTabId: null,
+                    terminalDocked: false,
                     cliSessionTabs: [],
                     activeCliSessionTabId: null,
                     activeSurface: { kind: "task", taskId: "" },
@@ -4273,9 +4278,7 @@ export const useAppStore = create<AppState>()(
               ...workspaceState,
               layout: {
                 ...state.layout,
-                terminalDocked: workspaceState.activeTerminalTabId
-                  ? true
-                  : state.layout.terminalDocked,
+                terminalDocked: workspaceState.terminalDocked,
                 editorDiffMode: resolveEditorDiffMode({
                   editorTabs: workspaceState.editorTabs,
                   activeEditorTabId: workspaceState.activeEditorTabId,
@@ -4391,6 +4394,7 @@ export const useAppStore = create<AppState>()(
                 activeEditorTabId: null,
                 terminalTabs: [],
                 activeTerminalTabId: null,
+                terminalDocked: false,
                 cliSessionTabs: [],
                 activeCliSessionTabId: null,
                 activeSurface: { kind: "task", taskId: "" },
@@ -4572,6 +4576,7 @@ export const useAppStore = create<AppState>()(
             activeEditorTabId: state.activeEditorTabId,
             terminalTabs: state.terminalTabs,
             activeTerminalTabId: state.activeTerminalTabId,
+            terminalDocked: state.layout.terminalDocked,
             cliSessionTabs: state.cliSessionTabs,
             activeCliSessionTabId: state.activeCliSessionTabId,
             activeSurface: state.activeSurface,
@@ -4602,6 +4607,7 @@ export const useAppStore = create<AppState>()(
             activeEditorTabId: state.activeEditorTabId,
             terminalTabs: state.terminalTabs,
             activeTerminalTabId: state.activeTerminalTabId,
+            terminalDocked: state.layout.terminalDocked,
             cliSessionTabs: state.cliSessionTabs,
             activeCliSessionTabId: state.activeCliSessionTabId,
             activeSurface: state.activeSurface,
@@ -5034,6 +5040,7 @@ export const useAppStore = create<AppState>()(
             activeEditorTabId: empty.activeEditorTabId,
             terminalTabs: empty.terminalTabs,
             activeTerminalTabId: empty.activeTerminalTabId,
+            terminalDocked: empty.terminalDocked,
             cliSessionTabs: empty.cliSessionTabs,
             activeCliSessionTabId: empty.activeCliSessionTabId,
             activeSurface: { kind: "task", taskId: seededTask.id },
@@ -5052,6 +5059,7 @@ export const useAppStore = create<AppState>()(
             activeEditorTabId: snapshot.activeEditorTabId ?? null,
             terminalTabs: snapshot.terminalTabs ?? [],
             activeTerminalTabId: snapshot.activeTerminalTabId ?? null,
+            terminalDocked: snapshot.terminalDocked ?? false,
             cliSessionTabs: snapshot.cliSessionTabs ?? [],
             activeCliSessionTabId: snapshot.activeCliSessionTabId ?? null,
             activeSurface: snapshot.activeSurface ?? {
@@ -5537,9 +5545,7 @@ export const useAppStore = create<AppState>()(
                 ...workspaceState,
                 layout: {
                   ...nextState.layout,
-                  terminalDocked: workspaceState.activeTerminalTabId
-                    ? true
-                    : nextState.layout.terminalDocked,
+                  terminalDocked: workspaceState.terminalDocked,
                   editorDiffMode: resolveEditorDiffMode({
                     editorTabs: workspaceState.editorTabs,
                     activeEditorTabId: workspaceState.activeEditorTabId,
@@ -5680,9 +5686,7 @@ export const useAppStore = create<AppState>()(
               ...workspaceState,
               layout: {
                 ...state.layout,
-                terminalDocked: workspaceState.activeTerminalTabId
-                  ? true
-                  : state.layout.terminalDocked,
+                terminalDocked: workspaceState.terminalDocked,
                 editorDiffMode: resolveEditorDiffMode({
                   editorTabs: workspaceState.editorTabs,
                   activeEditorTabId: workspaceState.activeEditorTabId,
@@ -7479,7 +7483,18 @@ export const useAppStore = create<AppState>()(
               layout: state.layout,
               patch,
             });
-            return nextLayout ? { layout: nextLayout } : state;
+            if (!nextLayout) {
+              return state;
+            }
+            return {
+              layout: nextLayout,
+              ...(nextLayout.terminalDocked !== state.layout.terminalDocked
+                ? {
+                    workspaceSnapshotVersion:
+                      incrementWorkspaceSnapshotVersion(state),
+                  }
+                : {}),
+            };
           }),
         toggleEditorDiffMode: () =>
           set((state) => ({
@@ -9317,6 +9332,7 @@ export const useAppStore = create<AppState>()(
                   terminalTabs: inactiveWorkspaceSession.terminalTabs,
                   activeTerminalTabId:
                     inactiveWorkspaceSession.activeTerminalTabId,
+                  terminalDocked: inactiveWorkspaceSession.terminalDocked,
                   cliSessionTabs: inactiveWorkspaceSession.cliSessionTabs,
                   activeCliSessionTabId:
                     inactiveWorkspaceSession.activeCliSessionTabId,
@@ -9440,6 +9456,9 @@ export const useAppStore = create<AppState>()(
                       activeTerminalTabId:
                         persistedInactiveWorkspaceSession.session
                           .activeTerminalTabId,
+                      terminalDocked:
+                        persistedInactiveWorkspaceSession.session
+                          .terminalDocked,
                       cliSessionTabs:
                         persistedInactiveWorkspaceSession.session
                           .cliSessionTabs,

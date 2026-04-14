@@ -39,6 +39,7 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
   activeEditorTabId: string | null;
   terminalTabs: WorkspaceTerminalTab[];
   activeTerminalTabId: string | null;
+  terminalDocked: boolean;
   cliSessionTabs: WorkspaceCliSessionTab[];
   activeCliSessionTabId: string | null;
   activeSurface: WorkspaceActiveSurface;
@@ -94,6 +95,7 @@ export async function interruptWorkspaceTurnsBeforeTransition(args: {
     activeEditorTabId: args.activeEditorTabId,
     terminalTabs: args.terminalTabs,
     activeTerminalTabId: args.activeTerminalTabId,
+    terminalDocked: args.terminalDocked,
     cliSessionTabs: args.cliSessionTabs,
     activeCliSessionTabId: args.activeCliSessionTabId,
     activeSurface: args.activeSurface,

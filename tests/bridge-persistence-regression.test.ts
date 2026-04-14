@@ -510,6 +510,7 @@ describe("workspace persistence fallback", () => {
         activeEditorTabId: null,
         terminalTabs: [],
         activeTerminalTabId: null,
+        terminalDocked: false,
         cliSessionTabs: [cachedCliTab],
         activeCliSessionTabId: cachedCliTab.id,
         activeSurface: {
@@ -3256,6 +3257,153 @@ describe("workspace store hydration ordering", () => {
       kind: "cli-session",
       cliSessionTabId: cliTab.id,
     });
+  });
+
+  test("switchWorkspace preserves a hidden terminal dock for the returning workspace", async () => {
+    const localStorage = createMemoryStorage();
+    localStorage.setItem(
+      "stave:workspace-fallback:v1",
+      JSON.stringify([
+        {
+          id: "ws-alpha",
+          name: "alpha",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          snapshot: {
+            activeTaskId: "alpha-task-1",
+            tasks: [
+              {
+                id: "alpha-task-1",
+                title: "Alpha Task",
+                provider: "claude-code",
+                updatedAt: "2026-03-10T00:00:00.000Z",
+                unread: false,
+              },
+            ],
+            messagesByTask: { "alpha-task-1": [] },
+            terminalTabs: [
+              {
+                id: "terminal-alpha",
+                title: "Workspace",
+                linkedTaskId: null,
+                backend: "ghostty",
+                cwd: "/tmp/stave-project",
+                createdAt: 1,
+              },
+            ],
+            activeTerminalTabId: "terminal-alpha",
+            terminalDocked: false,
+          },
+        },
+        {
+          id: "ws-beta",
+          name: "beta",
+          updatedAt: "2026-03-10T00:01:00.000Z",
+          snapshot: {
+            activeTaskId: "beta-task-1",
+            tasks: [
+              {
+                id: "beta-task-1",
+                title: "Beta Task",
+                provider: "codex",
+                updatedAt: "2026-03-10T00:01:00.000Z",
+                unread: false,
+              },
+            ],
+            messagesByTask: { "beta-task-1": [] },
+          },
+        },
+      ]),
+    );
+
+    setWindowContext({
+      localStorage,
+      api: {
+        fs: {
+          listFiles: async () => ({ ok: true, files: ["package.json"] }),
+          readFile: async () => ({ ok: false }),
+          writeFile: async () => ({ ok: false }),
+        },
+      },
+    });
+
+    const { useAppStore } = await import("../src/store/app.store");
+    const initialState = useAppStore.getInitialState();
+    const terminalTab = {
+      id: "terminal-alpha",
+      title: "Workspace",
+      linkedTaskId: null,
+      backend: "ghostty" as const,
+      cwd: "/tmp/stave-project",
+      createdAt: 1,
+    };
+
+    useAppStore.setState({
+      ...initialState,
+      workspaces: [
+        {
+          id: "ws-alpha",
+          name: "alpha",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+        },
+        {
+          id: "ws-beta",
+          name: "beta",
+          updatedAt: "2026-03-10T00:01:00.000Z",
+        },
+      ],
+      activeWorkspaceId: "ws-alpha",
+      projectPath: "/tmp/stave-project",
+      workspacePathById: {
+        "ws-alpha": "/tmp/stave-project",
+        "ws-beta": "/tmp/stave-project/.stave/workspaces/beta",
+      },
+      workspaceBranchById: {
+        "ws-alpha": "main",
+        "ws-beta": "beta",
+      },
+      workspaceDefaultById: {
+        "ws-alpha": true,
+        "ws-beta": false,
+      },
+      hasHydratedWorkspaces: false,
+    });
+
+    await useAppStore.getState().hydrateWorkspaces();
+
+    useAppStore.setState((state) => ({
+      ...state,
+      activeTaskId: "alpha-task-1",
+      tasks: [
+        {
+          id: "alpha-task-1",
+          title: "Alpha Task",
+          provider: "claude-code",
+          updatedAt: "2026-03-10T00:00:00.000Z",
+          unread: false,
+        },
+      ],
+      messagesByTask: { "alpha-task-1": [] },
+      workspaceInformation: createEmptyWorkspaceInformation(),
+      terminalTabs: [terminalTab],
+      activeTerminalTabId: terminalTab.id,
+      layout: {
+        ...state.layout,
+        terminalDocked: false,
+      },
+    }));
+
+    await useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta" });
+
+    expect(
+      useAppStore.getState().workspaceRuntimeCacheById["ws-alpha"]?.terminalDocked,
+    ).toBe(false);
+
+    await useAppStore.getState().switchWorkspace({ workspaceId: "ws-alpha" });
+
+    const nextState = useAppStore.getState();
+    expect(nextState.layout.terminalDocked).toBe(false);
+    expect(nextState.terminalTabs).toEqual([terminalTab]);
+    expect(nextState.activeTerminalTabId).toBe(terminalTab.id);
   });
 
   test("switchWorkspace does not wait for file refresh when the target workspace is cached", async () => {

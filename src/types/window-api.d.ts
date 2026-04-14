@@ -843,6 +843,7 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
       terminalTabs?: WorkspaceTerminalTab[];
       activeTerminalTabId?: string | null;
+      terminalDocked?: boolean;
       cliSessionTabs?: WorkspaceCliSessionTab[];
       activeCliSessionTabId?: string | null;
       activeSurface?: WorkspaceActiveSurface;
@@ -906,6 +907,7 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
       terminalTabs?: WorkspaceTerminalTab[];
       activeTerminalTabId?: string | null;
+      terminalDocked?: boolean;
       cliSessionTabs?: WorkspaceCliSessionTab[];
       activeCliSessionTabId?: string | null;
       activeSurface?: WorkspaceActiveSurface;
@@ -1006,6 +1008,7 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
       terminalTabs?: WorkspaceTerminalTab[];
       activeTerminalTabId?: string | null;
+      terminalDocked?: boolean;
       cliSessionTabs?: WorkspaceCliSessionTab[];
       activeCliSessionTabId?: string | null;
       activeSurface?: WorkspaceActiveSurface;
@@ -1141,6 +1144,7 @@ interface WindowPersistenceApi {
       activeEditorTabId?: string | null;
       terminalTabs?: WorkspaceTerminalTab[];
       activeTerminalTabId?: string | null;
+      terminalDocked?: boolean;
       workspaceInformation?: WorkspaceInformationState;
     };
   }) => { ok: boolean };

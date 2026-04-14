@@ -82,6 +82,12 @@ describe("interruptWorkspaceTurnsBeforeTransition", () => {
       promptDraftByTask: {},
       editorTabs: [],
       activeEditorTabId: null,
+      terminalTabs: [],
+      activeTerminalTabId: null,
+      terminalDocked: false,
+      cliSessionTabs: [],
+      activeCliSessionTabId: null,
+      activeSurface: { kind: "task", taskId: "task-a" },
       activeTurnIdsByTask: {
         "task-a": "turn-a",
         "task-b": "turn-b",

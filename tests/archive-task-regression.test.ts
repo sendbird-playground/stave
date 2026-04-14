@@ -199,6 +199,7 @@ describe("archive task regression", () => {
         activeEditorTabId: null,
         terminalTabs: [],
         activeTerminalTabId: null,
+        terminalDocked: false,
         cliSessionTabs: [],
         activeCliSessionTabId: null,
         activeSurface: { kind: "task", taskId: "task-archived" },

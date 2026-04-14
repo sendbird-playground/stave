@@ -197,6 +197,7 @@ function createEmptyWorkspaceSnapshot() {
     activeEditorTabId: empty.activeEditorTabId,
     terminalTabs: empty.terminalTabs,
     activeTerminalTabId: empty.activeTerminalTabId,
+    terminalDocked: empty.terminalDocked,
     providerSessionByTask: empty.providerSessionByTask,
   });
 }
@@ -231,6 +232,7 @@ async function persistWorkspaceSession(args: {
       activeEditorTabId: args.session.activeEditorTabId,
       terminalTabs: args.session.terminalTabs,
       activeTerminalTabId: args.session.activeTerminalTabId,
+      terminalDocked: args.session.terminalDocked,
       providerSessionByTask: args.session.providerSessionByTask,
     }) as never,
   });

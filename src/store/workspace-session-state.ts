@@ -33,6 +33,7 @@ export interface WorkspaceSessionState {
   activeEditorTabId: string | null;
   terminalTabs: WorkspaceTerminalTab[];
   activeTerminalTabId: string | null;
+  terminalDocked: boolean;
   cliSessionTabs: WorkspaceCliSessionTab[];
   activeCliSessionTabId: string | null;
   activeSurface: WorkspaceActiveSurface;
@@ -53,6 +54,7 @@ export function createEmptyWorkspaceState() {
     activeEditorTabId: null as string | null,
     terminalTabs: [] as WorkspaceTerminalTab[],
     activeTerminalTabId: null as string | null,
+    terminalDocked: false,
     cliSessionTabs: [] as WorkspaceCliSessionTab[],
     activeCliSessionTabId: null as string | null,
     activeSurface: { kind: "task", taskId: "" } as WorkspaceActiveSurface,
@@ -410,6 +412,7 @@ export function buildWorkspaceSessionState(args: {
     activeEditorTabId,
     terminalTabs: normalizedTerminalState.terminalTabs,
     activeTerminalTabId: normalizedTerminalState.activeTerminalTabId,
+    terminalDocked: args.snapshot?.terminalDocked ?? false,
     cliSessionTabs: normalizedCliSessionState.cliSessionTabs,
     activeCliSessionTabId: normalizedCliSessionState.activeCliSessionTabId,
     activeSurface,
@@ -489,6 +492,7 @@ export function buildWorkspaceSessionStateFromShell(args: {
     activeEditorTabId,
     terminalTabs: normalizedTerminalState.terminalTabs,
     activeTerminalTabId: normalizedTerminalState.activeTerminalTabId,
+    terminalDocked: args.shell?.terminalDocked ?? false,
     cliSessionTabs: normalizedCliSessionState.cliSessionTabs,
     activeCliSessionTabId: normalizedCliSessionState.activeCliSessionTabId,
     activeSurface,
@@ -511,6 +515,7 @@ export function createWorkspaceSnapshot(args: {
   activeEditorTabId: string | null;
   terminalTabs: WorkspaceTerminalTab[];
   activeTerminalTabId: string | null;
+  terminalDocked: boolean;
   cliSessionTabs: WorkspaceCliSessionTab[];
   activeCliSessionTabId: string | null;
   activeSurface: WorkspaceActiveSurface;
@@ -526,6 +531,7 @@ export function createWorkspaceSnapshot(args: {
     activeEditorTabId: args.activeEditorTabId,
     terminalTabs: args.terminalTabs,
     activeTerminalTabId: args.activeTerminalTabId,
+    terminalDocked: args.terminalDocked,
     cliSessionTabs: args.cliSessionTabs,
     activeCliSessionTabId: args.activeCliSessionTabId,
     activeSurface: args.activeSurface,
@@ -545,6 +551,7 @@ export async function persistWorkspaceSnapshot(args: {
   activeEditorTabId: string | null;
   terminalTabs: WorkspaceTerminalTab[];
   activeTerminalTabId: string | null;
+  terminalDocked: boolean;
   cliSessionTabs: WorkspaceCliSessionTab[];
   activeCliSessionTabId: string | null;
   activeSurface: WorkspaceActiveSurface;
@@ -593,6 +600,7 @@ export async function persistWorkspaceSnapshot(args: {
       activeEditorTabId: args.activeEditorTabId,
       terminalTabs: args.terminalTabs,
       activeTerminalTabId: args.activeTerminalTabId,
+      terminalDocked: args.terminalDocked,
       cliSessionTabs: args.cliSessionTabs,
       activeCliSessionTabId: args.activeCliSessionTabId,
       activeSurface: args.activeSurface,

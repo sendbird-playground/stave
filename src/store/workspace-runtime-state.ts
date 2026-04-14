@@ -6,6 +6,7 @@ import type {
 } from "@/lib/terminal/types";
 import type { NormalizedProviderEvent, ProviderId } from "@/lib/providers/provider.types";
 import type { WorkspaceInformationState } from "@/lib/workspace-information";
+import type { LayoutState } from "@/store/layout.utils";
 import type { ChatMessage, EditorTab, PromptDraft, Task } from "@/types/chat";
 import { applyProviderEventsToWorkspaceSession } from "@/store/workspace-turn-replay";
 import type { WorkspaceSessionState } from "@/store/workspace-session-state";
@@ -33,6 +34,7 @@ type ActiveWorkspaceProjectionState = {
 
 type WorkspaceRuntimeCacheState = ActiveWorkspaceProjectionState & {
   activeWorkspaceId: string;
+  layout: Pick<LayoutState, "terminalDocked">;
   workspaceRuntimeCacheById: Record<string, WorkspaceSessionState>;
   workspaceSnapshotVersion: number;
 };
@@ -63,7 +65,9 @@ export type WorkspaceRuntimeStatePatch = Partial<ActiveWorkspaceStatePatch> & {
 };
 
 export function createWorkspaceSessionStateFromAppState(
-  state: ActiveWorkspaceProjectionState,
+  state: ActiveWorkspaceProjectionState & {
+    layout: Pick<LayoutState, "terminalDocked">;
+  },
 ): WorkspaceSessionState {
   return {
     activeTaskId: state.activeTaskId,
@@ -76,6 +80,7 @@ export function createWorkspaceSessionStateFromAppState(
     activeEditorTabId: state.activeEditorTabId,
     terminalTabs: state.terminalTabs,
     activeTerminalTabId: state.activeTerminalTabId,
+    terminalDocked: state.layout.terminalDocked,
     cliSessionTabs: state.cliSessionTabs,
     activeCliSessionTabId: state.activeCliSessionTabId,
     activeSurface: state.activeSurface,
@@ -133,6 +138,7 @@ export function saveActiveWorkspaceRuntimeCache(args: {
     WorkspaceRuntimeCacheState,
     | "activeWorkspaceId"
     | "workspaceRuntimeCacheById"
+    | "layout"
     | "activeTaskId"
     | "tasks"
     | "messagesByTask"

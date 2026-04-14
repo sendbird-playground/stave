@@ -500,6 +500,7 @@ export const WorkspaceSnapshotSchema = z.object({
   activeEditorTabId: z.string().nullable().optional().default(null),
   terminalTabs: z.array(WorkspaceTerminalTabSchema).optional().default([]),
   activeTerminalTabId: z.string().nullable().optional().default(null),
+  terminalDocked: z.boolean().optional().default(false),
   cliSessionTabs: z.array(WorkspaceCliSessionTabSchema).optional().default([]),
   activeCliSessionTabId: z.string().nullable().optional().default(null),
   activeSurface: WorkspaceActiveSurfaceSchema.optional().default({

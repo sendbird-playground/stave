@@ -16,9 +16,6 @@ export function shouldAutoCreateDockTerminalTab(args: {
   if (args.wasTerminalDocked === null) {
     return false;
   }
-  // Create a tab when:
-  //  • Dock just opened (closed → open transition), OR
-  //  • Dock was already open but the workspace has no tabs
-  //    (e.g. switched to a workspace that never had terminals).
-  return true;
+  // Only create a tab when the user explicitly opened the dock.
+  return args.wasTerminalDocked === false;
 }
