@@ -1,3 +1,10 @@
+## [0.3.1](https://github.com/sendbird-playground/stave/compare/v0.3.0...v0.3.1) (2026-04-14)
+
+### Bug Fixes
+
+* restore login-shell PATH inheritance for app-launched Claude and Codex runtimes so provider tools can resolve `node` consistently after GUI launch
+* align Claude, Codex, and tooling status env construction so auth checks and runtime execution use the same config-home and PATH rules
+* add regression coverage for cloned runtime env PATH preservation and login-shell override precedence
 ## [0.3.0](https://github.com/sendbird-playground/stave/compare/v0.2.3...v0.3.0) (2026-04-14)
 
 ### Highlights
