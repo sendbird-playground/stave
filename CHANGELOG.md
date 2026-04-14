@@ -5,6 +5,7 @@
 * compact oversized provider turn requests before they hit the host-service stdin protocol limit, so chat turns keep starting instead of crashing the provider runtime
 * preserve task-critical context while trimming lower-priority repo-map and bulk context payloads during transport compaction
 * retry provider turn startup once with a smaller transport payload when the first request still overflows the host-service boundary
+* resolve terminal theme tokens through computed rgb values so dock and CLI terminals keep rendering correctly when theme colors are defined with oklch
 
 ## [0.2.1](https://github.com/sendbird-playground/stave/compare/v0.2.0...v0.2.1) (2026-04-14)
 

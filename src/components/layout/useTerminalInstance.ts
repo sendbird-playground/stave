@@ -166,13 +166,21 @@ function ensureGhosttyWasm() {
 }
 
 function resolveTerminalTheme() {
-  const styles = getComputedStyle(document.documentElement);
+  // Resolve through a probe element so the browser converts oklch/etc.
+  // to rgb() strings that the terminal renderer can consume.
+  const probe = document.createElement("div");
+  probe.style.display = "none";
+  probe.style.backgroundColor = "var(--color-terminal)";
+  probe.style.color = "var(--color-terminal-foreground)";
+  probe.style.caretColor = "var(--color-primary)";
+  document.documentElement.appendChild(probe);
+  const computed = getComputedStyle(probe);
+  const background = computed.backgroundColor;
+  const foreground = computed.color;
+  const cursor = computed.caretColor;
+  probe.remove();
 
-  return {
-    background: styles.getPropertyValue("--terminal").trim(),
-    foreground: styles.getPropertyValue("--terminal-foreground").trim(),
-    cursor: styles.getPropertyValue("--primary").trim(),
-  };
+  return { background, foreground, cursor };
 }
 
 type ResolvedTerminalTheme = ReturnType<typeof resolveTerminalTheme>;
