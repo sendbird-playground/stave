@@ -5,6 +5,7 @@ import {
   isReasonablePullRequestTitle,
   mergePullRequestDraft,
   parsePullRequestSuggestionResponse,
+  resolvePullRequestComparisonBaseRef,
   resolvePullRequestTitle,
 } from "../src/lib/source-control-pr";
 
@@ -64,6 +65,29 @@ describe("buildPullRequestWorkspaceContext", () => {
     expect(context).toContain("Workspace notes:");
     expect(context).toContain("Open todos:");
     expect(context).toContain("Do not carry over previous workspace or earlier PR summaries");
+  });
+});
+
+describe("resolvePullRequestComparisonBaseRef", () => {
+  test("prefers the origin tracking branch over a stale local base branch", () => {
+    expect(resolvePullRequestComparisonBaseRef({
+      baseBranch: "main",
+      remoteBranches: ["origin/main", "origin/release"],
+    })).toBe("origin/main");
+  });
+
+  test("falls back to another matching remote when origin is unavailable", () => {
+    expect(resolvePullRequestComparisonBaseRef({
+      baseBranch: "release",
+      remoteBranches: ["upstream/release", "upstream/main"],
+    })).toBe("upstream/release");
+  });
+
+  test("keeps an explicit remote ref unchanged", () => {
+    expect(resolvePullRequestComparisonBaseRef({
+      baseBranch: "origin/main",
+      remoteBranches: ["origin/main"],
+    })).toBe("origin/main");
   });
 });
 
