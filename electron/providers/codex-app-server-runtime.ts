@@ -4,10 +4,8 @@ import type {
   ConnectedToolStatusEntry,
   ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
-import {
-  resolveExecutablePath,
-  resolveLoginShellEnvVarValue,
-} from "./executable-path";
+import { resolveExecutablePath } from "./executable-path";
+import { buildCodexCliEnv } from "./cli-path-env";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -24,7 +22,6 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import path from "node:path";
 import {
-  buildRuntimeProcessEnv,
   parseBooleanEnv,
   probeExecutableVersion,
 } from "./runtime-shared";
@@ -59,10 +56,6 @@ const CODEX_SHARED_RUNTIME_DIRECTORIES = [
   `${homedir()}/.agents`,
   `${homedir()}/.codex`,
   `${homedir()}/.stave`,
-] as const;
-const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
-  "SLACK_OAUTH_TOKEN",
-  "STAVE_LOCAL_MCP_TOKEN",
 ] as const;
 const APP_SERVER_INTERRUPT_GRACE_MS = 10_000;
 const CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
@@ -180,24 +173,7 @@ function resolveApprovalPolicy(args: {
 }
 
 function buildCodexEnv(args: { executablePath?: string } = {}) {
-  const env = buildRuntimeProcessEnv({
-    executablePath: args.executablePath,
-    extraPaths: CODEX_LOOKUP_PATHS,
-  });
-  for (const key of CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS) {
-    if (env[key]?.trim()) {
-      continue;
-    }
-    const fallbackValue = resolveLoginShellEnvVarValue({ key });
-    if (fallbackValue) {
-      env[key] = fallbackValue;
-    }
-  }
-  return Object.fromEntries(
-    Object.entries(env).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
+  return buildCodexCliEnv({ executablePath: args.executablePath });
 }
 
 async function hasConnectedStaveLocalMcpForCodex() {

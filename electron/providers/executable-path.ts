@@ -186,11 +186,12 @@ export function resolveExecutableLookupPath(args: {
   basePath?: string;
   extraPaths?: string[];
   baseEnv?: NodeJS.ProcessEnv;
+  loginShellPath?: string | null;
 } = {}) {
   const home = args.baseEnv?.HOME?.trim() || process.env.HOME?.trim() || homedir();
-  const loginShellPath = args.baseEnv && args.baseEnv !== process.env
-    ? null
-    : resolveLoginShellPath({ baseEnv: args.baseEnv });
+  const loginShellPath = args.loginShellPath === undefined
+    ? resolveLoginShellPath()
+    : args.loginShellPath;
   const commonUnixPaths = process.platform === "win32"
     ? []
     : [
@@ -219,12 +220,14 @@ export function resolveExecutableLookupPath(args: {
 export function buildExecutableLookupEnv(args: {
   baseEnv?: NodeJS.ProcessEnv;
   extraPaths?: string[];
+  loginShellPath?: string | null;
 } = {}) {
   const env = { ...(args.baseEnv ?? process.env) };
   const nextPath = resolveExecutableLookupPath({
     basePath: env.PATH,
     extraPaths: args.extraPaths,
     baseEnv: env,
+    loginShellPath: args.loginShellPath,
   });
   if (nextPath) {
     env.PATH = nextPath;

@@ -31,22 +31,19 @@ import type {
 import { toText } from "./utils";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import path from "node:path";
 import { z } from "zod";
 import {
   canExecutePath,
   resolveExecutablePath,
-  resolveLoginShellEnvVarValue,
 } from "./executable-path";
+import { buildClaudeCliEnv } from "./cli-path-env";
 import {
   readPrimaryStaveLocalMcpManifest,
   STAVE_LOCAL_MCP_SERVER_NAME,
   toClaudeSdkMcpServerConfig,
 } from "../main/stave-local-mcp-manifest";
 import {
-  buildRuntimeProcessEnv,
   compareSemverVersions,
   parseBooleanEnv,
   parseSemverVersion,
@@ -208,10 +205,7 @@ function resolveClaudePermissionMode(args: {
 }
 
 function probeClaudeExecutable(args: { path: string }) {
-  const env = buildRuntimeProcessEnv({
-    executablePath: args.path,
-    extraPaths: CLAUDE_LOOKUP_PATHS,
-  });
+  const env = buildClaudeCliEnv({ executablePath: args.path });
   const result = probeExecutableVersion({
     executablePath: args.path,
     env,
@@ -283,27 +277,7 @@ export function resolveClaudeExecutablePath(
 }
 
 export function buildClaudeEnv(args: { executablePath: string }) {
-  const env = buildRuntimeProcessEnv({
-    executablePath: args.executablePath,
-    extraPaths: CLAUDE_LOOKUP_PATHS,
-    unsetEnvKeys: ["CLAUDECODE"],
-  });
-
-  if (!env.CLAUDE_CONFIG_DIR) {
-    const loginShellConfigDir = resolveLoginShellEnvVarValue({
-      key: "CLAUDE_CONFIG_DIR",
-    })?.trim();
-    if (loginShellConfigDir) {
-      env.CLAUDE_CONFIG_DIR = loginShellConfigDir;
-    } else {
-      const defaultConfigDir = path.join(homedir(), ".claude");
-      if (existsSync(defaultConfigDir)) {
-        env.CLAUDE_CONFIG_DIR = defaultConfigDir;
-      }
-    }
-  }
-
-  return env;
+  return buildClaudeCliEnv({ executablePath: args.executablePath });
 }
 
 function buildClaudeDiagnostics(args: {

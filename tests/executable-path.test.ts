@@ -50,10 +50,12 @@ describe("buildExecutableLookupEnv", () => {
     const env = buildExecutableLookupEnv({
       baseEnv: { PATH: "/usr/bin:/bin" },
       extraPaths: ["/opt/demo/bin", "/usr/bin"],
+      loginShellPath: "/opt/shell/bin:/usr/local/bin",
     });
 
     const parts = (env.PATH ?? "").split(path.delimiter);
     expect(parts[0]).toBe("/opt/demo/bin");
+    expect(parts).toContain("/opt/shell/bin");
     expect(parts.filter((entry) => entry === "/usr/bin")).toHaveLength(1);
   });
 });

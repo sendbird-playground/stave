@@ -33,6 +33,41 @@ const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
   "STAVE_LOCAL_MCP_TOKEN",
 ] as const;
 
+const CLAUDE_LOGIN_SHELL_ENV_PREFERRED_KEYS = [
+  "CLAUDE_CONFIG_DIR",
+] as const;
+
+const CODEX_LOGIN_SHELL_ENV_PREFERRED_KEYS = [
+  "CODEX_HOME",
+] as const;
+
+export function applyLoginShellEnvOverrides(args: {
+  env: Record<string, string | undefined>;
+  preferredKeys?: readonly string[];
+  fallbackKeys?: readonly string[];
+  resolver?: (args: { key: string }) => string | null;
+}) {
+  const resolveValue =
+    args.resolver ?? ((input: { key: string }) => resolveLoginShellEnvVarValue(input));
+
+  for (const key of args.preferredKeys ?? []) {
+    const preferredValue = resolveValue({ key })?.trim();
+    if (preferredValue) {
+      args.env[key] = preferredValue;
+    }
+  }
+
+  for (const key of args.fallbackKeys ?? []) {
+    if (args.env[key]?.trim()) {
+      continue;
+    }
+    const fallbackValue = resolveValue({ key })?.trim();
+    if (fallbackValue) {
+      args.env[key] = fallbackValue;
+    }
+  }
+}
+
 function probeClaudeExecutable(args: { path: string }) {
   const result = probeExecutableVersion({
     executablePath: args.path,
@@ -142,17 +177,14 @@ export function buildClaudeCliEnv(args: { executablePath: string }) {
     unsetEnvKeys: ["CLAUDECODE"],
   });
 
+  applyLoginShellEnvOverrides({
+    env,
+    preferredKeys: CLAUDE_LOGIN_SHELL_ENV_PREFERRED_KEYS,
+  });
   if (!env.CLAUDE_CONFIG_DIR) {
-    const loginShellConfigDir = resolveLoginShellEnvVarValue({
-      key: "CLAUDE_CONFIG_DIR",
-    })?.trim();
-    if (loginShellConfigDir) {
-      env.CLAUDE_CONFIG_DIR = loginShellConfigDir;
-    } else {
-      const defaultConfigDir = path.join(homedir(), ".claude");
-      if (existsSync(defaultConfigDir)) {
-        env.CLAUDE_CONFIG_DIR = defaultConfigDir;
-      }
+    const defaultConfigDir = path.join(homedir(), ".claude");
+    if (existsSync(defaultConfigDir)) {
+      env.CLAUDE_CONFIG_DIR = defaultConfigDir;
     }
   }
 
@@ -168,15 +200,11 @@ export function buildCodexCliEnv(args: { executablePath?: string } = {}) {
   if (localMcpManifest?.token?.trim()) {
     env[CODEX_STAVE_MCP_TOKEN_ENV_VAR] = localMcpManifest.token;
   }
-  for (const key of CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS) {
-    if (env[key]?.trim()) {
-      continue;
-    }
-    const fallbackValue = resolveLoginShellEnvVarValue({ key });
-    if (fallbackValue) {
-      env[key] = fallbackValue;
-    }
-  }
+  applyLoginShellEnvOverrides({
+    env,
+    preferredKeys: CODEX_LOGIN_SHELL_ENV_PREFERRED_KEYS,
+    fallbackKeys: CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS,
+  });
   return Object.fromEntries(
     Object.entries(env).filter(
       (entry): entry is [string, string] => typeof entry[1] === "string",

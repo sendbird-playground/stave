@@ -71,4 +71,24 @@ describe("command PATH lookup regressions", () => {
     expect(second.PATH?.split(path.delimiter)).toContain(binDir);
     expect(first.PATH).toBe(second.PATH);
   });
+
+  test("buildExecutableLookupEnv preserves login-shell PATH even when baseEnv is a clone", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const baseEnv = {
+      ...process.env,
+      PATH: "/usr/bin:/bin",
+    };
+
+    const env = buildExecutableLookupEnv({
+      baseEnv,
+      loginShellPath: "/opt/nvm/current/bin:/usr/local/bin",
+    });
+
+    const parts = env.PATH?.split(path.delimiter) ?? [];
+    expect(parts).toContain("/opt/nvm/current/bin");
+    expect(parts).toContain("/usr/local/bin");
+  });
 });
