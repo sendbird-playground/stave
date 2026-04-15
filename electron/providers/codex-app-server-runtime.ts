@@ -4,8 +4,10 @@ import type {
   ConnectedToolStatusEntry,
   ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
-import { resolveExecutablePath } from "./executable-path";
-import { buildCodexCliEnv } from "./cli-path-env";
+import {
+  buildCodexCliEnv,
+  resolveCodexCliExecutablePath,
+} from "./cli-path-env";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -21,10 +23,7 @@ import { homedir } from "node:os";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import path from "node:path";
-import {
-  parseBooleanEnv,
-  probeExecutableVersion,
-} from "./runtime-shared";
+import { parseBooleanEnv, probeExecutableVersion } from "./runtime-shared";
 import {
   appendBoundedText,
   createBoundedBridgeEventCollector,
@@ -48,14 +47,11 @@ import {
 const threadIdByTask = new Map<string, string>();
 const clientByExecutablePath = new Map<string, CodexAppServerClient>();
 
-const CODEX_LOOKUP_PATHS = [
-  `${homedir()}/.bun/bin`,
-  `${homedir()}/.local/bin`,
-] as const;
+const CODEX_HOME_DIRECTORY = process.env.HOME?.trim() || homedir();
 const CODEX_SHARED_RUNTIME_DIRECTORIES = [
-  `${homedir()}/.agents`,
-  `${homedir()}/.codex`,
-  `${homedir()}/.stave`,
+  `${CODEX_HOME_DIRECTORY}/.agents`,
+  `${CODEX_HOME_DIRECTORY}/.codex`,
+  `${CODEX_HOME_DIRECTORY}/.stave`,
 ] as const;
 const APP_SERVER_INTERRUPT_GRACE_MS = 10_000;
 const CODEX_APP_SERVER_STDOUT_BUFFER_MAX_BYTES = 32 * 1024 * 1024;
@@ -336,15 +332,6 @@ function buildCodexThreadStartedEvents(args: {
   ];
 }
 
-function isExecutableFile(args: { path: string }) {
-  try {
-    accessSync(args.path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function isReadableDirectory(args: { path: string }) {
   try {
     accessSync(args.path, constants.R_OK);
@@ -357,42 +344,9 @@ function isReadableDirectory(args: { path: string }) {
 export function resolveCodexExecutablePath(
   args: { explicitPath?: string } = {},
 ) {
-  if (args.explicitPath?.trim()) {
-    return args.explicitPath.trim();
-  }
-
-  const baseResolved =
-    resolveExecutablePath({
-      absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
-      commandEnvVar: "STAVE_CODEX_CMD",
-      defaultCommand: "codex",
-      extraPaths: [...CODEX_LOOKUP_PATHS],
-    }) ?? "";
-
-  const candidates = [
-    process.env.STAVE_CODEX_CLI_PATH?.trim() || "",
-    `${homedir()}/.bun/bin/codex`,
-    `${homedir()}/.local/bin/codex`,
-    baseResolved,
-  ].filter(
-    (value, index, arr) => value.length > 0 && arr.indexOf(value) === index,
-  );
-
-  for (const candidate of candidates) {
-    if (!isExecutableFile({ path: candidate })) {
-      continue;
-    }
-    const env = buildCodexEnv({ executablePath: candidate });
-    const versionProbe = probeExecutableVersion({
-      executablePath: candidate,
-      env,
-    });
-    if (versionProbe.status === 0) {
-      return candidate;
-    }
-  }
-
-  return baseResolved;
+  return resolveCodexCliExecutablePath({
+    explicitPath: args.explicitPath,
+  });
 }
 
 function resolveCodexAdditionalDirectories(args: {

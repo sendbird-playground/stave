@@ -2,6 +2,7 @@ import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import {
   canExecutePath,
+  normalizeExecutablePathValue,
   resolveExecutablePath,
   resolveLoginShellEnvVarValue,
 } from "./executable-path";
@@ -31,13 +32,32 @@ const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
   "STAVE_LOCAL_MCP_TOKEN",
 ] as const;
 
-const CLAUDE_LOGIN_SHELL_ENV_PREFERRED_KEYS = [
-  "CLAUDE_CONFIG_DIR",
-] as const;
+const CLAUDE_LOGIN_SHELL_ENV_PREFERRED_KEYS = ["CLAUDE_CONFIG_DIR"] as const;
 
-const CODEX_LOGIN_SHELL_ENV_PREFERRED_KEYS = [
-  "CODEX_HOME",
-] as const;
+const CODEX_LOGIN_SHELL_ENV_PREFERRED_KEYS = ["CODEX_HOME"] as const;
+
+function resolveConfiguredClaudeCliExecutablePath() {
+  return (
+    resolveExecutablePath({
+      absolutePathEnvVar: "STAVE_CLAUDE_CLI_PATH",
+      absolutePathEnvVars: ["CLAUDE_CODE_PATH"],
+      commandEnvVar: "STAVE_CLAUDE_CMD",
+      defaultCommand: "",
+      extraPaths: [...CLAUDE_LOOKUP_PATHS],
+    }) ?? ""
+  );
+}
+
+function resolveConfiguredCodexCliExecutablePath() {
+  return (
+    resolveExecutablePath({
+      absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
+      commandEnvVar: "STAVE_CODEX_CMD",
+      defaultCommand: "",
+      extraPaths: [...CODEX_LOOKUP_PATHS],
+    }) ?? ""
+  );
+}
 
 export function applyLoginShellEnvOverrides(args: {
   env: Record<string, string | undefined>;
@@ -46,7 +66,8 @@ export function applyLoginShellEnvOverrides(args: {
   resolver?: (args: { key: string }) => string | null;
 }) {
   const resolveValue =
-    args.resolver ?? ((input: { key: string }) => resolveLoginShellEnvVarValue(input));
+    args.resolver ??
+    ((input: { key: string }) => resolveLoginShellEnvVarValue(input));
 
   for (const key of args.preferredKeys ?? []) {
     const preferredValue = resolveValue({ key })?.trim();
@@ -80,8 +101,11 @@ function probeClaudeExecutable(args: { path: string }) {
   };
 }
 
-export function resolveClaudeCliAutoModeSupport(args: { executablePath: string }) {
-  const version = probeClaudeExecutable({ path: args.executablePath })?.version ?? null;
+export function resolveClaudeCliAutoModeSupport(args: {
+  executablePath: string;
+}) {
+  const version =
+    probeClaudeExecutable({ path: args.executablePath })?.version ?? null;
   return isClaudeCliAutoModeSupportedVersion({ version });
 }
 
@@ -113,11 +137,21 @@ function isExecutableFile(args: { path: string }) {
   }
 }
 
-export function resolveClaudeCliExecutablePath(args: {
-  explicitPath?: string;
-} = {}) {
-  if (args.explicitPath?.trim()) {
-    return args.explicitPath.trim();
+export function resolveClaudeCliExecutablePath(
+  args: {
+    explicitPath?: string;
+  } = {},
+) {
+  const explicitPath = normalizeExecutablePathValue({
+    value: args.explicitPath,
+  });
+  if (explicitPath) {
+    return explicitPath;
+  }
+
+  const configuredResolved = resolveConfiguredClaudeCliExecutablePath();
+  if (configuredResolved) {
+    return configuredResolved;
   }
 
   const baseResolved =
@@ -208,9 +242,19 @@ export function buildCodexCliEnv(args: { executablePath?: string } = {}) {
   );
 }
 
-export function resolveCodexCliExecutablePath(args: { explicitPath?: string } = {}) {
-  if (args.explicitPath?.trim()) {
-    return args.explicitPath.trim();
+export function resolveCodexCliExecutablePath(
+  args: { explicitPath?: string } = {},
+) {
+  const explicitPath = normalizeExecutablePathValue({
+    value: args.explicitPath,
+  });
+  if (explicitPath) {
+    return explicitPath;
+  }
+
+  const configuredResolved = resolveConfiguredCodexCliExecutablePath();
+  if (configuredResolved) {
+    return configuredResolved;
   }
 
   const baseResolved =
@@ -227,7 +271,8 @@ export function resolveCodexCliExecutablePath(args: { explicitPath?: string } = 
     `${homedir()}/.local/bin/codex`,
     baseResolved,
   ].filter(
-    (value, index, entries) => value.length > 0 && entries.indexOf(value) === index,
+    (value, index, entries) =>
+      value.length > 0 && entries.indexOf(value) === index,
   );
 
   let selectedPath = baseResolved;
