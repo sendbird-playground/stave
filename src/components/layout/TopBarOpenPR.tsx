@@ -63,6 +63,28 @@ import { isTaskArchived } from "@/lib/tasks";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const PRE_COMMIT_HOOK_PATTERNS = [
+  /pre-commit/i,
+  /husky/i,
+  /lint-staged/i,
+  /hook failed/i,
+  /eslint.*error/i,
+  /prettier.*error/i,
+];
+
+/**
+ * Heuristic: does the stderr from a failed `git commit` look like a
+ * pre-commit hook (husky, lint-staged, eslint, prettier) rejection?
+ */
+function looksLikePreCommitHookFailure(stderr: string | undefined): boolean {
+  if (!stderr) return false;
+  return PRE_COMMIT_HOOK_PATTERNS.some((re) => re.test(stderr));
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -593,7 +615,32 @@ export function TopBarOpenPR(props: { noDragStyle: CSSProperties }) {
         title: "Creating commit",
         description: message,
       });
-      const commitResult = await commit({ message, cwd: workspaceCwd });
+      let commitResult = await commit({ message, cwd: workspaceCwd });
+
+      // When a pre-commit hook (husky/lint-staged/eslint) fails, try to
+      // auto-fix lint errors and retry the commit once before giving up.
+      if (!commitResult.ok && looksLikePreCommitHookFailure(commitResult.stderr)) {
+        const tryAutoFixLint = window.api?.sourceControl?.tryAutoFixLint;
+        if (tryAutoFixLint) {
+          setInlineNotice({
+            tone: "info",
+            title: "Pre-commit hook failed — attempting auto-fix",
+            description: "Running eslint --fix and prettier --write on staged files…",
+          });
+          const fixResult = await tryAutoFixLint({ cwd: workspaceCwd });
+          if (fixResult.fixAttempted) {
+            // Re-stage and retry the commit
+            await stageAll({ cwd: workspaceCwd });
+            setInlineNotice({
+              tone: "info",
+              title: "Retrying commit after auto-fix",
+              description: message,
+            });
+            commitResult = await commit({ message, cwd: workspaceCwd });
+          }
+        }
+      }
+
       if (!commitResult.ok) {
         setInlineNotice({
           tone: "error",
