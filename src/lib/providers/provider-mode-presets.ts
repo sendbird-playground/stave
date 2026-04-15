@@ -72,20 +72,20 @@ export const CODEX_PROVIDER_MODE_PRESETS = [
 
 const CLAUDE_PROVIDER_MODE_PATCHES: Record<ProviderModePresetId, ClaudeProviderModeSettings> = {
   manual: {
-    claudePermissionMode: "acceptEdits",
+    claudePermissionMode: "default",
     claudeAllowDangerouslySkipPermissions: false,
     claudeSandboxEnabled: true,
     claudeAllowUnsandboxedCommands: false,
   },
   guided: {
-    claudePermissionMode: "auto",
+    claudePermissionMode: "acceptEdits",
     claudeAllowDangerouslySkipPermissions: false,
     claudeSandboxEnabled: false,
     claudeAllowUnsandboxedCommands: true,
   },
   auto: {
-    claudePermissionMode: "bypassPermissions",
-    claudeAllowDangerouslySkipPermissions: true,
+    claudePermissionMode: "auto",
+    claudeAllowDangerouslySkipPermissions: false,
     claudeSandboxEnabled: false,
     claudeAllowUnsandboxedCommands: true,
   },
