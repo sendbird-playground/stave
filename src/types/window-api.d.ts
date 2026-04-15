@@ -721,6 +721,13 @@ interface WindowSourceControlApi {
     message: string;
     cwd?: string;
   }) => Promise<SourceControlCommandResult>;
+  tryAutoFixLint?: (args: { cwd?: string }) => Promise<{
+    ok: boolean;
+    fixAttempted: boolean;
+    eslintOk?: boolean;
+    prettierOk?: boolean;
+    stderr: string;
+  }>;
   stageFile?: (args: {
     path: string;
     cwd?: string;

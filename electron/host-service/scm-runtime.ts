@@ -246,6 +246,60 @@ export function stageAllSourceControl(args: { cwd?: string }) {
   return runCommand({ command: "git add -A", cwd: args.cwd });
 }
 
+/**
+ * Attempt to auto-fix lint errors on staged files.
+ * Runs `eslint --fix` and `prettier --write` on lintable staged files,
+ * then re-stages the results. Returns whether a fix was attempted and
+ * whether any remaining errors persist.
+ */
+export async function tryAutoFixLintErrors(args: { cwd?: string }) {
+  const stagedResult = await runCommand({
+    command: "git diff --cached --name-only --diff-filter=ACMR",
+    cwd: args.cwd,
+  });
+  if (!stagedResult.ok || !stagedResult.stdout.trim()) {
+    return { ok: false, fixAttempted: false, stderr: "No staged files to fix." };
+  }
+
+  const files = stagedResult.stdout.trim().split("\n").filter(Boolean);
+  const lintableFiles = files.filter((f) =>
+    /\.(js|jsx|ts|tsx|mjs|cjs|vue|svelte)$/.test(f),
+  );
+  if (lintableFiles.length === 0) {
+    return { ok: false, fixAttempted: false, stderr: "No lintable staged files." };
+  }
+
+  const fileArgs = lintableFiles
+    .map((f) => `"${quotePath({ value: f })}"`)
+    .join(" ");
+
+  // Try eslint --fix (best-effort; ignore exit code since unfixable errors remain)
+  const eslintResult = await runCommand({
+    command: `npx eslint --fix ${fileArgs}`,
+    cwd: args.cwd,
+  });
+
+  // Try prettier --write (best-effort)
+  const prettierResult = await runCommand({
+    command: `npx prettier --write ${fileArgs}`,
+    cwd: args.cwd,
+  });
+
+  // Re-stage the auto-fixed files
+  await runCommand({ command: "git add -A", cwd: args.cwd });
+
+  return {
+    ok: true,
+    fixAttempted: true,
+    eslintOk: eslintResult.ok,
+    prettierOk: prettierResult.ok,
+    stderr: [eslintResult.stderr, prettierResult.stderr]
+      .filter(Boolean)
+      .join("\n")
+      .trim(),
+  };
+}
+
 export function unstageAllSourceControl(args: { cwd?: string }) {
   return runCommand({ command: "git restore --staged .", cwd: args.cwd });
 }

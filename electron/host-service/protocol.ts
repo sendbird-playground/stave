@@ -400,6 +400,9 @@ export interface HostServiceRequestMap {
     message: string;
     cwd?: string;
   };
+  "scm.try-auto-fix-lint": {
+    cwd?: string;
+  };
   "scm.stage-file": {
     path: string;
     cwd?: string;
@@ -540,6 +543,13 @@ export interface HostServiceResponseMap {
   "scm.stage-all": CommandResult;
   "scm.unstage-all": CommandResult;
   "scm.commit": CommandResult;
+  "scm.try-auto-fix-lint": {
+    ok: boolean;
+    fixAttempted: boolean;
+    eslintOk?: boolean;
+    prettierOk?: boolean;
+    stderr: string;
+  };
   "scm.stage-file": CommandResult;
   "scm.unstage-file": CommandResult;
   "scm.discard-file": CommandResult;
