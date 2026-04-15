@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   createCodexAppServerElicitationPauseController,
+  mapCodexElicitationToApproval,
   mapCodexElicitationToUserInput,
   summarizeCodexAppServerDebugMessage,
 } from "../electron/providers/codex-app-server-runtime";
@@ -102,8 +103,8 @@ describe("mapCodexElicitationToUserInput", () => {
     });
   });
 
-  test("maps empty-form elicitation into a submit-or-decline prompt", () => {
-    const mapped = mapCodexElicitationToUserInput({
+  test("maps MCP tool-call elicitation into an approval card", () => {
+    const mapped = mapCodexElicitationToApproval({
       mode: "form",
       message: 'Allow the stave-local MCP server to run tool "stave_list_projects"?',
       requestedSchema: {
@@ -117,11 +118,27 @@ describe("mapCodexElicitationToUserInput", () => {
     });
 
     expect(mapped).toEqual({
+      toolName: "stave_list_projects",
+      description: "List projects already registered in the local Stave desktop app.",
+    });
+  });
+
+  test("keeps generic empty-form elicitation as submit-or-decline user input", () => {
+    const mapped = mapCodexElicitationToUserInput({
+      mode: "form",
+      message: "Confirm the action.",
+      requestedSchema: {
+        type: "object",
+        properties: {},
+      },
+    });
+
+    expect(mapped).toEqual({
       mode: "form",
       questions: [{
         key: "__elicitation_accept__",
-        header: 'Allow the stave-local MCP server to run tool "stave_list_projects"?',
-        question: "List projects already registered in the local Stave desktop app.",
+        header: "Confirm the action.",
+        question: "Submit to allow this MCP request, or decline to cancel it.",
         inputType: "text",
         options: [],
         allowCustom: false,

@@ -104,7 +104,12 @@ type ServerRequestMethod =
 
 interface PendingApprovalRequest {
   serverRequestId: JsonRpcId;
-  responseKind: "review" | "commandExecution" | "fileChange" | "permissions";
+  responseKind:
+    | "review"
+    | "commandExecution"
+    | "fileChange"
+    | "permissions"
+    | "elicitation";
   permissions?: {
     network?: unknown;
     fileSystem?: unknown;
@@ -974,6 +979,61 @@ export function mapCodexElicitationToUserInput(
   };
 }
 
+function inferCodexMcpToolName(args: {
+  message: string;
+  meta: Record<string, unknown> | null;
+}) {
+  const metaToolName =
+    toTrimmedString(args.meta?.tool_name) ??
+    toTrimmedString(args.meta?.toolName);
+  if (metaToolName) {
+    return metaToolName;
+  }
+
+  const quotedToolName = args.message.match(/tool\s+["'“”]([^"'“”]+)["'“”]/i)?.[1]?.trim();
+  return quotedToolName && quotedToolName.length > 0
+    ? quotedToolName
+    : "MCP tool";
+}
+
+export function mapCodexElicitationToApproval(
+  params: Record<string, unknown>,
+) {
+  if ((params.mode === "url" ? "url" : "form") !== "form") {
+    return null;
+  }
+
+  const message =
+    toTrimmedString(params.message) ??
+    "Additional input is required to continue.";
+  const meta = isRecord(params._meta) ? params._meta : null;
+  const approvalKind = toTrimmedString(meta?.codex_approval_kind);
+  if (approvalKind !== "mcp_tool_call") {
+    return null;
+  }
+
+  const requestedSchema = isRecord(params.requestedSchema)
+    ? params.requestedSchema
+    : null;
+  const properties =
+    requestedSchema && isRecord(requestedSchema.properties)
+      ? requestedSchema.properties
+      : null;
+  if (!properties || Object.keys(properties).length !== 0) {
+    return null;
+  }
+
+  const toolDescription =
+    typeof meta?.tool_description === "string"
+      ? meta.tool_description.trim()
+      : "";
+
+  return {
+    toolName: inferCodexMcpToolName({ message, meta }),
+    description: toolDescription || message,
+  };
+}
+
 function coerceElicitationAnswer(args: {
   rawValue: string;
   field: ElicitationFieldDescriptor;
@@ -1700,6 +1760,9 @@ export async function streamCodexWithAppServer(
                 }
               : { permissions: {}, scope: "turn" };
           }
+          if (pending.responseKind === "elicitation") {
+            return { action: approved ? "accept" : "decline" };
+          }
           return { decision: approved ? "approved" : "denied" };
         })(),
       )
@@ -1887,6 +1950,21 @@ export async function streamCodexWithAppServer(
         }
         case "mcpServer/elicitation/request": {
           const params = (message.params ?? {}) as Record<string, unknown>;
+          const approval = mapCodexElicitationToApproval(params);
+          if (approval) {
+            pendingApprovalRequests.set(requestId, {
+              serverRequestId: message.id as JsonRpcId,
+              responseKind: "elicitation",
+            });
+            void elicitationPauseController.begin(requestId);
+            emitBridgeEvent({
+              type: "approval",
+              toolName: approval.toolName,
+              requestId,
+              description: approval.description,
+            });
+            return;
+          }
           const elicitation = mapCodexElicitationToUserInput(params);
           if (!elicitation) {
             emitBridgeEvent({
@@ -2596,8 +2674,12 @@ export async function streamCodexWithAppServer(
     // Reject any pending approval/input requests so the Codex app-server
     // doesn't hang waiting for a response that will never arrive.
     for (const [id, pending] of pendingApprovalRequests) {
+      const declinePayload =
+        pending.responseKind === "elicitation"
+          ? { action: "decline" as const }
+          : { decision: "decline" as const };
       void client
-        .respond(pending.serverRequestId, { decision: "decline" })
+        .respond(pending.serverRequestId, declinePayload)
         .catch(() => {});
       pendingApprovalRequests.delete(id);
     }
