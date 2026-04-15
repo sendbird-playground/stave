@@ -228,6 +228,70 @@ describe("codex provider bridge normalization", () => {
     });
   });
 
+  test("rebases stale polling cursors instead of surfacing a replay-window error", async () => {
+    const readCalls: Array<{ streamId: string; cursor: number }> = [];
+
+    setWindowApi({
+      provider: {
+        startStreamTurn: async () => ({
+          ok: true,
+          streamId: "codex-stream-5",
+        }),
+        readStreamTurn: async (args: { streamId: string; cursor: number }) => {
+          readCalls.push(args);
+          if (args.cursor === 0) {
+            return {
+              ok: true,
+              events: [{ type: "text", text: "alpha" }],
+              cursor: 1,
+              done: false,
+            };
+          }
+          if (args.cursor === 1) {
+            return {
+              ok: false,
+              events: [],
+              cursor: 2,
+              done: false,
+              message: "Stream cursor is older than the retained replay window.",
+            };
+          }
+          if (args.cursor === 2) {
+            return {
+              ok: true,
+              events: [{ type: "text", text: "omega" }, { type: "done" }],
+              cursor: 4,
+              done: true,
+            };
+          }
+          return {
+            ok: true,
+            events: [],
+            cursor: args.cursor,
+            done: true,
+          };
+        },
+      },
+    });
+
+    const adapter = getProviderAdapter({ providerId: "codex" });
+    const events: Array<{ type: string; text?: string; content?: string }> = [];
+    for await (const event of adapter.runTurn({ prompt: "hello" })) {
+      events.push(event as { type: string; text?: string; content?: string });
+    }
+
+    expect(events).toEqual([
+      { type: "text", text: "alpha" },
+      { type: "text", text: "omega" },
+      { type: "done" },
+    ]);
+    expect(readCalls).toEqual([
+      { streamId: "codex-stream-5", cursor: 0 },
+      { streamId: "codex-stream-5", cursor: 1 },
+      { streamId: "codex-stream-5", cursor: 2 },
+    ]);
+  });
+
   test("acknowledges consumed push events so host replay can be trimmed", async () => {
     let listener: ((payload: {
       streamId: string;
