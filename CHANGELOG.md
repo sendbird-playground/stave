@@ -1,3 +1,14 @@
+## [0.3.5](https://github.com/sendbird-playground/stave/compare/v0.3.4...v0.3.5) (2026-04-15)
+
+### Bug Fixes
+
+* normalize executable lookup results so alias-style shell output and quoted paths resolve to runnable Claude and Codex CLI executables
+* apply the same path normalization to explicit overrides and fallback candidates in provider runtime resolution so both runtimes keep symmetric launch behavior
+* add regression coverage for executable normalization, CLI env resolution, and provider executable lookup
+
+### References
+
+* [#449](https://github.com/sendbird-playground/stave/pull/449)
 ## [0.3.4](https://github.com/sendbird-playground/stave/compare/v0.3.3...v0.3.4) (2026-04-15)
 
 ### Highlights
