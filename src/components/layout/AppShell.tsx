@@ -27,6 +27,13 @@ import {
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
 import { RightRail } from "@/components/layout/RightRail";
 import {
+  MIN_CHAT_PANEL_WIDTH,
+  MIN_EXPLORER_PANEL_WIDTH,
+  PANEL_SEPARATOR_WIDTH,
+  clampPanelWidth,
+  resolveDesktopRightPanelWidths,
+} from "@/components/layout/app-shell-layout";
+import {
   isEditableShortcutTarget,
   isTerminalSurfaceTarget,
   resolveShortcutChord,
@@ -61,13 +68,6 @@ type ResizableLayoutKey =
   | "terminalDockHeight";
 
 const WORKSPACE_SIDEBAR_MAX_WIDTH = 340;
-const MIN_CHAT_PANEL_WIDTH = 420;
-const MIN_EXPLORER_PANEL_WIDTH = 200;
-const PANEL_SEPARATOR_WIDTH = 1;
-
-function clampPanelWidth(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
 
 export function AppShell() {
   const [
@@ -700,44 +700,16 @@ export function AppShell() {
   let desktopSidebarWidth = explorerPanelWidth;
 
   if (hasMeasuredContentRowWidth) {
-    if (showDesktopEditor && showDesktopSidebar) {
-      desktopSidebarWidth = clampPanelWidth(
-        explorerPanelWidth,
-        MIN_EXPLORER_PANEL_WIDTH,
-        Math.max(
-          MIN_EXPLORER_PANEL_WIDTH,
-          contentRowWidth - MIN_CHAT_PANEL_WIDTH - Math.max(editorPanelWidth, MIN_EDITOR_PANEL_WIDTH) - (PANEL_SEPARATOR_WIDTH * 2),
-        ),
-      );
-      desktopEditorWidth = clampPanelWidth(
-        editorPanelWidth,
-        MIN_EDITOR_PANEL_WIDTH,
-        Math.max(
-          MIN_EDITOR_PANEL_WIDTH,
-          contentRowWidth - MIN_CHAT_PANEL_WIDTH - desktopSidebarWidth - (PANEL_SEPARATOR_WIDTH * 2),
-        ),
-      );
-      desktopSidebarWidth = clampPanelWidth(
-        desktopSidebarWidth,
-        MIN_EXPLORER_PANEL_WIDTH,
-        Math.max(
-          MIN_EXPLORER_PANEL_WIDTH,
-          contentRowWidth - MIN_CHAT_PANEL_WIDTH - desktopEditorWidth - (PANEL_SEPARATOR_WIDTH * 2),
-        ),
-      );
-    } else if (showDesktopEditor) {
-      desktopEditorWidth = clampPanelWidth(
-        editorPanelWidth,
-        MIN_EDITOR_PANEL_WIDTH,
-        Math.max(MIN_EDITOR_PANEL_WIDTH, contentRowWidth - MIN_CHAT_PANEL_WIDTH - PANEL_SEPARATOR_WIDTH),
-      );
-    } else if (showDesktopSidebar) {
-      desktopSidebarWidth = clampPanelWidth(
-        explorerPanelWidth,
-        MIN_EXPLORER_PANEL_WIDTH,
-        Math.max(MIN_EXPLORER_PANEL_WIDTH, contentRowWidth - MIN_CHAT_PANEL_WIDTH - PANEL_SEPARATOR_WIDTH),
-      );
-    }
+    ({
+      desktopEditorWidth,
+      desktopSidebarWidth,
+    } = resolveDesktopRightPanelWidths({
+      contentRowWidth,
+      preferredEditorWidth: editorPanelWidth,
+      preferredSidebarWidth: explorerPanelWidth,
+      showDesktopEditor,
+      showDesktopSidebar,
+    }));
   }
 
   if (zenMode) {
