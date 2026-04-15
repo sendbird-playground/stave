@@ -167,6 +167,12 @@ const WorkspaceTaskTab = memo(function WorkspaceTaskTab(args: {
       onDragEnd={args.onDragEnd}
       onDragOver={(event) => args.onDragOver(event, args.task.id, isManaged)}
       onDrop={(event) => args.onDrop(event, args.task.id, isManaged)}
+      onAuxClick={(event) => {
+        if (event.button === 1 && !isManaged) {
+          event.preventDefault();
+          args.onArchiveTask({ id: args.task.id, title: args.task.title });
+        }
+      }}
       className={cn(
         "group flex items-center gap-1 border-b-[2.5px] px-3 transition-colors",
         isManaged ? "cursor-default" : "cursor-grab",
@@ -269,6 +275,12 @@ const WorkspaceCliSessionStripTab = memo(function WorkspaceCliSessionStripTab(ar
       onDragEnd={args.onDragEnd}
       onDragOver={(event) => args.onDragOver(event, args.tab.id)}
       onDrop={(event) => args.onDrop(event, args.tab.id)}
+      onAuxClick={(event) => {
+        if (event.button === 1) {
+          event.preventDefault();
+          args.onRequestCloseTab({ id: args.tab.id, title: args.tab.title });
+        }
+      }}
       className={cn(
         "group flex items-center gap-1 border-b-[2.5px] px-3 transition-colors",
         "cursor-grab",

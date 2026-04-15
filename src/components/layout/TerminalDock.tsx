@@ -77,6 +77,12 @@ const DockTerminalTab = memo(function DockTerminalTab(args: {
       onDragEnd={args.onDragEnd}
       onDragOver={(event) => args.onDragOver(event, args.tab.id)}
       onDrop={(event) => args.onDrop(event, args.tab.id)}
+      onAuxClick={(event) => {
+        if (event.button === 1) {
+          event.preventDefault();
+          args.onCloseTab(args.tab.id);
+        }
+      }}
       className={cn(
         "group flex h-full items-center gap-1 border-b-[2.5px] px-3 transition-colors",
         "cursor-grab",

@@ -68,6 +68,12 @@ export function EditorMainTabStrip(args: {
                   }
                 }}
                 onDrop={(event) => args.onTabDrop(event, tab.id)}
+                onAuxClick={(event) => {
+                  if (event.button === 1) {
+                    event.preventDefault();
+                    args.onRequestCloseTab(tab.id);
+                  }
+                }}
                 className={cn(
                   "group relative flex h-8 shrink-0 items-stretch overflow-hidden px-2 transition-[background-color,color,opacity] duration-150",
                   isActive
