@@ -466,6 +466,13 @@ export function AppShell() {
         return;
       }
 
+      if (hasMod && !event.altKey && !event.shiftKey && event.key === ",") {
+        event.preventDefault();
+        event.stopPropagation();
+        handleOpenSettings();
+        return;
+      }
+
       // When focus is inside a terminal surface (xterm creates an internal
       // <textarea> that matches the editable selector), skip the editable-
       // target guard so Cmd-based app shortcuts still work. Only block
