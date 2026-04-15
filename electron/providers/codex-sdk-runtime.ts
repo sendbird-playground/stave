@@ -11,7 +11,10 @@ import type {
   ConnectedToolStatusEntry,
   ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
-import { resolveExecutablePath } from "./executable-path";
+import {
+  normalizeExecutableCandidate,
+  resolveExecutablePath,
+} from "./executable-path";
 import { buildCodexCliEnv } from "./cli-path-env";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
@@ -376,7 +379,10 @@ export function resolveCodexExecutablePath(
   args: { explicitPath?: string } = {},
 ) {
   if (args.explicitPath?.trim()) {
-    return args.explicitPath.trim();
+    return (
+      normalizeExecutableCandidate({ value: args.explicitPath }) ??
+      args.explicitPath.trim()
+    );
   }
 
   const baseResolved =
@@ -388,7 +394,11 @@ export function resolveCodexExecutablePath(
     }) ?? "";
 
   const candidates = [
-    process.env.STAVE_CODEX_CLI_PATH?.trim() || "",
+    normalizeExecutableCandidate({
+      value: process.env.STAVE_CODEX_CLI_PATH,
+    })?.trim() ||
+      process.env.STAVE_CODEX_CLI_PATH?.trim() ||
+      "",
     `${homedir()}/.bun/bin/codex`,
     `${homedir()}/.local/bin/codex`,
     baseResolved,

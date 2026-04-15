@@ -36,6 +36,7 @@ import path from "node:path";
 import { z } from "zod";
 import {
   canExecutePath,
+  normalizeExecutableCandidate,
   resolveExecutablePath,
 } from "./executable-path";
 import { buildClaudeCliEnv } from "./cli-path-env";
@@ -226,7 +227,10 @@ export function resolveClaudeExecutablePath(
   args: { explicitPath?: string } = {},
 ) {
   if (args.explicitPath?.trim()) {
-    return args.explicitPath.trim();
+    return (
+      normalizeExecutableCandidate({ value: args.explicitPath }) ??
+      args.explicitPath.trim()
+    );
   }
 
   const baseResolved =
@@ -246,7 +250,7 @@ export function resolveClaudeExecutablePath(
     `${homedir()}/.local/bin/claude`,
     baseResolved,
   ]
-    .map((value) => value?.trim())
+    .map((value) => normalizeExecutableCandidate({ value }) ?? value?.trim())
     .filter(
       (value, index, entries): value is string =>
         Boolean(value) && entries.indexOf(value) === index,
@@ -2053,20 +2057,20 @@ export async function streamClaudeWithSdk(
       }
     }
 
-      const done: BridgeEvent = finalStopReason
-        ? { type: "done", stop_reason: finalStopReason }
-        : { type: "done" };
-      if (eventCollector.overflowed) {
-        for (const overflowEvent of CLAUDE_OVERFLOW_TAIL_EVENTS) {
-          eventCollector.appendTail(overflowEvent);
-        }
-        args.onEvent?.(done);
-      } else if (events[events.length - 1]?.type !== "done") {
-        eventCollector.appendTail(done);
-        args.onEvent?.(done);
+    const done: BridgeEvent = finalStopReason
+      ? { type: "done", stop_reason: finalStopReason }
+      : { type: "done" };
+    if (eventCollector.overflowed) {
+      for (const overflowEvent of CLAUDE_OVERFLOW_TAIL_EVENTS) {
+        eventCollector.appendTail(overflowEvent);
       }
+      args.onEvent?.(done);
+    } else if (events[events.length - 1]?.type !== "done") {
+      eventCollector.appendTail(done);
+      args.onEvent?.(done);
+    }
 
-      return events;
+    return events;
   } catch (error) {
     // Distinguish abort (user-initiated cancel / stream.close()) from real failures.
     const isAbort =

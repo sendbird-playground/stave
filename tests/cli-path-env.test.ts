@@ -50,7 +50,8 @@ describe("applyLoginShellEnvOverrides", () => {
     applyLoginShellEnvOverrides({
       env,
       preferredKeys: ["CLAUDE_CONFIG_DIR"],
-      resolver: ({ key }) => key === "CLAUDE_CONFIG_DIR" ? "/fresh/config" : null,
+      resolver: ({ key }) =>
+        key === "CLAUDE_CONFIG_DIR" ? "/fresh/config" : null,
     });
 
     expect(env.CLAUDE_CONFIG_DIR).toBe("/fresh/config");
