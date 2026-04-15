@@ -1,3 +1,21 @@
+## [0.3.4](https://github.com/sendbird-playground/stave/compare/v0.3.3...v0.3.4) (2026-04-15)
+
+### Highlights
+
+* detect pre-commit hook failures during automatic PR commits, run `eslint --fix` and `prettier --write` on staged lintable files, re-stage the result, and retry the commit once before failing
+* add `Cmd/Ctrl+,` as a global shortcut for Settings and expose the shortcut in both the command palette and the in-app keyboard shortcut guide
+* let users close editor tabs, task tabs, CLI session tabs, and docked terminal tabs with middle-click while keeping managed tasks protected from accidental archive
+* recover Codex provider streams when polling hits a stale retained replay window cursor so direct polling and push-to-poll fallback continue without surfacing a user-visible stream failure
+* map empty-form Codex MCP elicitation requests into a submit-or-decline prompt so binary approval flows can use tool metadata instead of dropping the request
+
+### References
+
+* [#442](https://github.com/sendbird-playground/stave/pull/442)
+* [#443](https://github.com/sendbird-playground/stave/pull/443)
+* [#444](https://github.com/sendbird-playground/stave/pull/444)
+* [#445](https://github.com/sendbird-playground/stave/pull/445)
+* [ed1169f](https://github.com/sendbird-playground/stave/commit/ed1169f923dc5a84e0c15d325be7d2d866595db8)
+
 ## [0.3.3](https://github.com/sendbird-playground/stave/compare/v0.3.2...v0.3.3) (2026-04-15)
 
 ### Bug Fixes

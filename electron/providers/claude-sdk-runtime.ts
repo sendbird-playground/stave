@@ -31,22 +31,22 @@ import type {
 import { toText } from "./utils";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { execFileSync } from "node:child_process";
-import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import {
   canExecutePath,
-  normalizeExecutableCandidate,
-  resolveExecutablePath,
+  normalizeExecutablePathValue,
 } from "./executable-path";
-import { buildClaudeCliEnv } from "./cli-path-env";
+import {
+  buildClaudeCliEnv,
+  resolveClaudeCliExecutablePath,
+} from "./cli-path-env";
 import {
   readPrimaryStaveLocalMcpManifest,
   STAVE_LOCAL_MCP_SERVER_NAME,
   toClaudeSdkMcpServerConfig,
 } from "../main/stave-local-mcp-manifest";
 import {
-  compareSemverVersions,
   parseBooleanEnv,
   parseSemverVersion,
   probeExecutableVersion,
@@ -80,11 +80,6 @@ const ClaudePermissionResultSchema = z.union([
 ]);
 
 type ClaudePermissionResult = z.infer<typeof ClaudePermissionResultSchema>;
-const CLAUDE_LOOKUP_PATHS = [
-  `${homedir()}/.claude/local`,
-  `${homedir()}/.bun/bin`,
-  `${homedir()}/.local/bin`,
-] as const;
 const CLAUDE_PLAN_MODE_DISALLOWED_TOOLS = [
   "Edit",
   "MultiEdit",
@@ -167,7 +162,9 @@ function getPrewarmedExecutablePath(): string {
 function resolveClaudeRuntimeExecutablePath(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
 }) {
-  const explicitPath = args.runtimeOptions?.claudeBinaryPath?.trim();
+  const explicitPath = normalizeExecutablePathValue({
+    value: args.runtimeOptions?.claudeBinaryPath,
+  });
   if (explicitPath) {
     return explicitPath;
   }
@@ -206,79 +203,12 @@ function resolveClaudePermissionMode(args: {
   return args.fallback;
 }
 
-function probeClaudeExecutable(args: { path: string }) {
-  const env = buildClaudeCliEnv({ executablePath: args.path });
-  const result = probeExecutableVersion({
-    executablePath: args.path,
-    env,
-  });
-  if (result.status !== 0) {
-    return null;
-  }
-  const version = parseSemverVersion({ value: result.text });
-  return {
-    path: args.path,
-    version,
-    raw: result.text,
-  };
-}
-
 export function resolveClaudeExecutablePath(
   args: { explicitPath?: string } = {},
 ) {
-  if (args.explicitPath?.trim()) {
-    return (
-      normalizeExecutableCandidate({ value: args.explicitPath }) ??
-      args.explicitPath.trim()
-    );
-  }
-
-  const baseResolved =
-    resolveExecutablePath({
-      absolutePathEnvVar: "STAVE_CLAUDE_CLI_PATH",
-      absolutePathEnvVars: ["CLAUDE_CODE_PATH"],
-      commandEnvVar: "STAVE_CLAUDE_CMD",
-      defaultCommand: "claude",
-      extraPaths: [...CLAUDE_LOOKUP_PATHS],
-    }) ?? "";
-
-  const candidates = [
-    process.env.STAVE_CLAUDE_CLI_PATH,
-    process.env.CLAUDE_CODE_PATH,
-    `${homedir()}/.claude/local/claude`,
-    `${homedir()}/.bun/bin/claude`,
-    `${homedir()}/.local/bin/claude`,
-    baseResolved,
-  ]
-    .map((value) => normalizeExecutableCandidate({ value }) ?? value?.trim())
-    .filter(
-      (value, index, entries): value is string =>
-        Boolean(value) && entries.indexOf(value) === index,
-    );
-
-  const available = candidates
-    .filter((candidate) => canExecutePath({ path: candidate }))
-    .map((candidate) => probeClaudeExecutable({ path: candidate }))
-    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-
-  if (available.length === 0) {
-    return "";
-  }
-
-  available.sort((left, right) => {
-    if (left.version && right.version) {
-      return compareSemverVersions(right.version, left.version);
-    }
-    if (left.version) {
-      return -1;
-    }
-    if (right.version) {
-      return 1;
-    }
-    return 0;
+  return resolveClaudeCliExecutablePath({
+    explicitPath: args.explicitPath,
   });
-
-  return available[0]?.path ?? "";
 }
 
 export function buildClaudeEnv(args: { executablePath: string }) {

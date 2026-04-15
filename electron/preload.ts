@@ -859,6 +859,14 @@ contextBridge.exposeInMainWorld("api", {
     unstageAll: (args: { cwd?: string }) =>
       ipcRenderer.invoke("scm:unstage-all", args),
     commit: (args: ScmCommitArgs) => ipcRenderer.invoke("scm:commit", args),
+    tryAutoFixLint: (args: { cwd?: string }) =>
+      ipcRenderer.invoke("scm:try-auto-fix-lint", args) as Promise<{
+        ok: boolean;
+        fixAttempted: boolean;
+        eslintOk?: boolean;
+        prettierOk?: boolean;
+        stderr: string;
+      }>,
     stageFile: (args: { path: string; cwd?: string }) =>
       ipcRenderer.invoke("scm:stage-file", args),
     unstageFile: (args: { path: string; cwd?: string }) =>

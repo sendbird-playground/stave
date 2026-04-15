@@ -93,6 +93,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - uses one shared leading slot for responding wave or model icon
   - keeps docked terminal tabs out of the top strip so the dock stays operationally separate from the task / CLI surface switcher
   - supports drag-and-drop reordering directly in the tab strip for tasks and CLI sessions
+  - lets users middle-click task and CLI session tabs to close them through the existing archive / close flows, while leaving managed tasks protected
   - exposes the archive action with confirmation, per-task overflow menu, and workspace-level `Task History`
   - exposes a direct `New CLI Session` launcher with the four provider/context combinations instead of a multi-step dialog
   - keeps notification deep-links explicit for archived tasks by routing to the owning workspace first, then requiring an explicit restore before the task reopens
@@ -114,6 +115,7 @@ See `docs/architecture/workspace-integrity.md` before changing the shell, hydrat
   - presents source control as a tabbed `Changes` / `History` surface with a condensed flat summary header instead of stacking commit history under the working-tree list
   - renders commit history rows in a git-log-inspired timeline layout so per-commit diff drill-in can be added later without redesigning the list
   - renders open file tabs with a stronger two-line filename and directory hierarchy plus diff/conflict state chips, so the strip feels aligned with task tabs without reusing the exact same visual treatment
+  - lets users middle-click editor tabs to trigger the existing close flow without adding a separate close affordance
 
 ### Store Behavior
 

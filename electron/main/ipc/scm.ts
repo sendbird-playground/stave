@@ -15,6 +15,9 @@ export function registerScmHandlers() {
   ipcMain.handle("scm:commit", (_event, args: { message: string; cwd?: string }) =>
     invokeHostService("scm.commit", args));
 
+  ipcMain.handle("scm:try-auto-fix-lint", (_event, args: { cwd?: string }) =>
+    invokeHostService("scm.try-auto-fix-lint", args));
+
   ipcMain.handle("scm:stage-file", (_event, args: { path: string; cwd?: string }) =>
     invokeHostService("scm.stage-file", args));
 

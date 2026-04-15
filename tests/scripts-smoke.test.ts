@@ -34,4 +34,9 @@ describe("package scripts", () => {
     const config = readFileSync(path.join(import.meta.dirname, "..", "electron-builder.yml"), "utf8");
     expect(config.includes("npmRebuild: false")).toBe(true);
   });
+
+  test("electron-builder unpacks the bundled portless CLI for Orbit", () => {
+    const config = readFileSync(path.join(import.meta.dirname, "..", "electron-builder.yml"), "utf8");
+    expect(config.includes("- node_modules/portless/dist/**")).toBe(true);
+  });
 });

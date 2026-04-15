@@ -36,6 +36,7 @@ import {
   setScmPrReady,
   stageAllSourceControl,
   stageSourceControlFile,
+  tryAutoFixLintErrors,
   unstageAllSourceControl,
   unstageSourceControlFile,
   updateScmPrBranch,
@@ -957,6 +958,9 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
       return;
     case "scm.commit":
       await respond(request.id, await commitSourceControl(request.params));
+      return;
+    case "scm.try-auto-fix-lint":
+      await respond(request.id, await tryAutoFixLintErrors(request.params));
       return;
     case "scm.stage-file":
       await respond(request.id, await stageSourceControlFile(request.params));

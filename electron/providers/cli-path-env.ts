@@ -2,7 +2,7 @@ import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import {
   canExecutePath,
-  normalizeExecutableCandidate,
+  normalizeExecutablePathValue,
   resolveExecutablePath,
   resolveLoginShellEnvVarValue,
 } from "./executable-path";
@@ -35,6 +35,29 @@ const CODEX_LOGIN_SHELL_ENV_FALLBACK_KEYS = [
 const CLAUDE_LOGIN_SHELL_ENV_PREFERRED_KEYS = ["CLAUDE_CONFIG_DIR"] as const;
 
 const CODEX_LOGIN_SHELL_ENV_PREFERRED_KEYS = ["CODEX_HOME"] as const;
+
+function resolveConfiguredClaudeCliExecutablePath() {
+  return (
+    resolveExecutablePath({
+      absolutePathEnvVar: "STAVE_CLAUDE_CLI_PATH",
+      absolutePathEnvVars: ["CLAUDE_CODE_PATH"],
+      commandEnvVar: "STAVE_CLAUDE_CMD",
+      defaultCommand: "",
+      extraPaths: [...CLAUDE_LOOKUP_PATHS],
+    }) ?? ""
+  );
+}
+
+function resolveConfiguredCodexCliExecutablePath() {
+  return (
+    resolveExecutablePath({
+      absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
+      commandEnvVar: "STAVE_CODEX_CMD",
+      defaultCommand: "",
+      extraPaths: [...CODEX_LOOKUP_PATHS],
+    }) ?? ""
+  );
+}
 
 export function applyLoginShellEnvOverrides(args: {
   env: Record<string, string | undefined>;
@@ -119,11 +142,16 @@ export function resolveClaudeCliExecutablePath(
     explicitPath?: string;
   } = {},
 ) {
-  if (args.explicitPath?.trim()) {
-    return (
-      normalizeExecutableCandidate({ value: args.explicitPath }) ??
-      args.explicitPath.trim()
-    );
+  const explicitPath = normalizeExecutablePathValue({
+    value: args.explicitPath,
+  });
+  if (explicitPath) {
+    return explicitPath;
+  }
+
+  const configuredResolved = resolveConfiguredClaudeCliExecutablePath();
+  if (configuredResolved) {
+    return configuredResolved;
   }
 
   const baseResolved =
@@ -143,7 +171,7 @@ export function resolveClaudeCliExecutablePath(
     `${homedir()}/.local/bin/claude`,
     baseResolved,
   ]
-    .map((value) => normalizeExecutableCandidate({ value }) ?? value?.trim())
+    .map((value) => normalizeExecutablePathValue({ value }) ?? value?.trim())
     .filter(
       (value, index, entries): value is string =>
         Boolean(value) && entries.indexOf(value) === index,
@@ -217,11 +245,16 @@ export function buildCodexCliEnv(args: { executablePath?: string } = {}) {
 export function resolveCodexCliExecutablePath(
   args: { explicitPath?: string } = {},
 ) {
-  if (args.explicitPath?.trim()) {
-    return (
-      normalizeExecutableCandidate({ value: args.explicitPath }) ??
-      args.explicitPath.trim()
-    );
+  const explicitPath = normalizeExecutablePathValue({
+    value: args.explicitPath,
+  });
+  if (explicitPath) {
+    return explicitPath;
+  }
+
+  const configuredResolved = resolveConfiguredCodexCliExecutablePath();
+  if (configuredResolved) {
+    return configuredResolved;
   }
 
   const baseResolved =
@@ -233,18 +266,20 @@ export function resolveCodexCliExecutablePath(
     }) ?? "";
 
   const candidates = [
-    normalizeExecutableCandidate({
+    normalizeExecutablePathValue({
       value: process.env.STAVE_CODEX_CLI_PATH,
-    })?.trim() ||
-      process.env.STAVE_CODEX_CLI_PATH?.trim() ||
+    }) ??
+      process.env.STAVE_CODEX_CLI_PATH?.trim() ??
       "",
     `${homedir()}/.bun/bin/codex`,
     `${homedir()}/.local/bin/codex`,
     baseResolved,
-  ].filter(
-    (value, index, entries) =>
-      value.length > 0 && entries.indexOf(value) === index,
-  );
+  ]
+    .map((value) => normalizeExecutablePathValue({ value }) ?? value?.trim())
+    .filter(
+      (value, index, entries): value is string =>
+        Boolean(value) && entries.indexOf(value) === index,
+    );
 
   let selectedPath = baseResolved;
   let selectedVersion: readonly number[] | null = null;

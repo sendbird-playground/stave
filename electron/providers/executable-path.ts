@@ -51,19 +51,17 @@ function getLookupCommand() {
   return process.platform === "win32" ? "where" : "which";
 }
 
-function expandHomePrefix(value: string) {
-  if (!value.startsWith("~")) {
-    return value;
-  }
+function getConfiguredHomeDirectory() {
+  return process.env.HOME?.trim() || homedir();
+}
 
-  const home = process.env.HOME?.trim() || homedir();
-  if (value === "~") {
-    return home;
-  }
-  if (value.startsWith("~/") || value.startsWith(`~${path.sep}`)) {
-    return path.join(home, value.slice(2));
-  }
-  return value;
+function looksLikePathValue(value: string) {
+  return (
+    value.startsWith(".") ||
+    value.startsWith("~") ||
+    value.includes("/") ||
+    value.includes("\\")
+  );
 }
 
 function stripMatchingQuotes(value: string) {
@@ -85,51 +83,28 @@ function extractExecutableCandidateFromShellLine(value: string) {
 
   const aliasMatch = trimmed.match(/^[^:\n]+:\s+aliased to\s+(.+)$/i);
   if (aliasMatch?.[1]) {
-    return aliasMatch[1].trim();
+    return stripMatchingQuotes(aliasMatch[1]);
   }
 
-  const aliasDeclarationMatch = trimmed.match(/^alias\s+[^=]+=(.+)$/i);
+  const aliasDeclarationMatch = trimmed.match(/^alias\s+[^=\s]+=(.+)$/i);
   if (aliasDeclarationMatch?.[1]) {
-    return aliasDeclarationMatch[1].trim();
+    return stripMatchingQuotes(aliasDeclarationMatch[1]);
   }
 
   const typeAliasMatch = trimmed.match(/^[^\s]+\s+is an alias for\s+(.+)$/i);
   if (typeAliasMatch?.[1]) {
-    return typeAliasMatch[1].trim();
+    return stripMatchingQuotes(typeAliasMatch[1]);
   }
 
   const pathMatch = trimmed.match(
-    /^[^\s]+\s+is\s+((?:~|\/|\.\/|\.\.\/|[A-Za-z]:[\\/]).+)$/,
+    /^[^\s]+\s+is\s+((?:~|\/|\.{1,2}[\\/]|[A-Za-z]:[\\/]).+)$/,
   );
   if (pathMatch?.[1]) {
-    return pathMatch[1].trim();
+    return stripMatchingQuotes(pathMatch[1]);
   }
 
-  return trimmed;
-}
-
-export function normalizeExecutableCandidate(args: {
-  value: string | undefined;
-}) {
-  const lines = (args.value ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  for (const line of lines) {
-    const extracted = extractExecutableCandidateFromShellLine(line);
-    if (!extracted) {
-      continue;
-    }
-
-    const normalized = expandHomePrefix(stripMatchingQuotes(extracted));
-    if (
-      sanitizeCommandName({ value: normalized }) ||
-      normalized.includes("/") ||
-      normalized.includes("\\")
-    ) {
-      return normalized;
-    }
+  if (looksLikePathValue(trimmed)) {
+    return stripMatchingQuotes(trimmed);
   }
 
   return null;
@@ -137,7 +112,10 @@ export function normalizeExecutableCandidate(args: {
 
 export function canExecutePath(args: { path: string }) {
   const normalizedPath =
-    normalizeExecutableCandidate({ value: args.path }) ?? args.path;
+    normalizeExecutablePathValue({ value: args.path }) ?? args.path.trim();
+  if (!normalizedPath) {
+    return false;
+  }
   try {
     accessSync(
       normalizedPath,
@@ -161,6 +139,17 @@ function parseMarkedValue(args: { value: string; marker: string }) {
   }
   const extracted = args.value.slice(valueStart, end).trim();
   return extracted.length > 0 ? extracted : null;
+}
+
+export function parseMarkedProbeOutput(args: {
+  stdout: string | null | undefined;
+  stderr?: string | null | undefined;
+  marker: string;
+}) {
+  return parseMarkedValue({
+    value: args.stdout ?? "",
+    marker: args.marker,
+  });
 }
 
 function sanitizeEnvVarName(args: { value: string }) {
@@ -216,8 +205,9 @@ function resolveLoginShellPath(args: { baseEnv?: NodeJS.ProcessEnv } = {}) {
         maxBuffer: 1024 * 1024,
       },
     );
-    const parsed = parseMarkedValue({
-      value: `${result.stdout ?? ""}\n${result.stderr ?? ""}`,
+    const parsed = parseMarkedProbeOutput({
+      stdout: result.stdout,
+      stderr: result.stderr,
       marker: LOGIN_SHELL_PATH_MARKER,
     });
     if (parsed) {
@@ -264,8 +254,9 @@ export function resolveLoginShellEnvVarValue(args: { key: string }) {
         maxBuffer: 1024 * 1024,
       },
     );
-    const parsed = parseMarkedValue({
-      value: `${result.stdout ?? ""}\n${result.stderr ?? ""}`,
+    const parsed = parseMarkedProbeOutput({
+      stdout: result.stdout,
+      stderr: result.stderr,
       marker,
     });
     if (parsed) {
@@ -338,8 +329,52 @@ export function buildExecutableLookupEnv(
   return env;
 }
 
+export function normalizeExecutablePathValue(args: {
+  value: string | undefined | null;
+}) {
+  const lines = (args.value ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return null;
+  }
+
+  let candidate: string | null = null;
+  for (const line of lines) {
+    candidate = extractExecutableCandidateFromShellLine(line);
+    if (candidate) {
+      break;
+    }
+  }
+
+  if (!candidate && lines.length === 1) {
+    const singleLine = stripMatchingQuotes(lines[0]);
+    candidate = sanitizeCommandName({ value: singleLine });
+  }
+  if (!candidate) {
+    return null;
+  }
+
+  const homeDirectory = getConfiguredHomeDirectory();
+  let normalized = candidate;
+  if (candidate === "~") {
+    normalized = homeDirectory;
+  } else if (candidate.startsWith("~/") || candidate.startsWith("~\\")) {
+    normalized = path.join(homeDirectory, candidate.slice(2));
+  }
+
+  if (path.isAbsolute(normalized)) {
+    return path.normalize(toAsarUnpackedPath(normalized));
+  }
+
+  return normalized;
+}
+
 function resolveFromCommand(args: { command: string; env: NodeJS.ProcessEnv }) {
-  const safeCommand = sanitizeCommandName({ value: args.command });
+  const normalizedCommand =
+    normalizeExecutablePathValue({ value: args.command }) ?? args.command;
+  const safeCommand = sanitizeCommandName({ value: normalizedCommand });
   if (!safeCommand) {
     return null;
   }
@@ -353,7 +388,7 @@ function resolveFromCommand(args: { command: string; env: NodeJS.ProcessEnv }) {
     return null;
   }
 
-  const resolved = normalizeExecutableCandidate({ value: result.stdout });
+  const resolved = normalizeExecutablePathValue({ value: result.stdout });
   if (!resolved) {
     return null;
   }
@@ -374,12 +409,12 @@ export function resolveExecutablePath(args: ResolveExecutablePathArgs) {
     ...(args.absolutePathEnvVars ?? []).map(
       (envVar) => process.env[envVar]?.trim() ?? "",
     ),
-  ];
+  ].map(
+    (candidate) => normalizeExecutablePathValue({ value: candidate }) ?? "",
+  );
   for (const candidate of explicitPaths) {
-    const normalizedCandidate =
-      normalizeExecutableCandidate({ value: candidate }) ?? candidate;
-    if (normalizedCandidate && canExecutePath({ path: normalizedCandidate })) {
-      return normalizedCandidate;
+    if (candidate && canExecutePath({ path: candidate })) {
+      return candidate;
     }
   }
 
@@ -393,8 +428,20 @@ export function resolveExecutablePath(args: ResolveExecutablePathArgs) {
     if (!commandFromEnv) {
       continue;
     }
+    const normalizedCommand = normalizeExecutablePathValue({
+      value: commandFromEnv,
+    });
+    if (!normalizedCommand) {
+      continue;
+    }
+    if (looksLikePathValue(commandFromEnv)) {
+      if (canExecutePath({ path: normalizedCommand })) {
+        return normalizedCommand;
+      }
+      continue;
+    }
     const fromConfiguredCommand = resolveFromCommand({
-      command: commandFromEnv,
+      command: normalizedCommand,
       env,
     });
     if (fromConfiguredCommand) {

@@ -19,6 +19,9 @@ asarUnpack:
   # The stdio proxy must be accessible on the real filesystem so that
   # external processes can execute it with `node`.
   - out/main/stave-mcp-stdio-proxy.mjs
+  # Orbit resolves the bundled portless CLI under app.asar.unpacked before
+  # falling back to a globally installed `portless`.
+  - node_modules/portless/dist/**
   - node_modules/@anthropic-ai/claude-agent-sdk/vendor/**
   - node_modules/@vscode/ripgrep/bin/**
 npmRebuild: false

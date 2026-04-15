@@ -12,10 +12,9 @@ import type {
   ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
 import {
-  normalizeExecutableCandidate,
-  resolveExecutablePath,
-} from "./executable-path";
-import { buildCodexCliEnv } from "./cli-path-env";
+  buildCodexCliEnv,
+  resolveCodexCliExecutablePath,
+} from "./cli-path-env";
 import { createTurnDiffTracker } from "./turn-diff-tracker";
 import { toText } from "./utils";
 import {
@@ -30,11 +29,7 @@ import {
 import { homedir } from "node:os";
 import { accessSync, constants } from "node:fs";
 import path from "node:path";
-import {
-  parseBooleanEnv,
-  parseSemverVersion,
-  probeExecutableVersion,
-} from "./runtime-shared";
+import { parseBooleanEnv, probeExecutableVersion } from "./runtime-shared";
 import { runCommandArgs } from "../main/utils/command";
 import {
   getConnectedToolLabel,
@@ -63,13 +58,10 @@ const MAX_CACHED_THREADS = 24;
 
 const SUPPORTED_CODEX_SDK_VERSION = "0.118.0";
 const SUPPORTED_CODEX_CLI_VERSION = "0.118.0";
-const CODEX_LOOKUP_PATHS = [
-  `${homedir()}/.bun/bin`,
-  `${homedir()}/.local/bin`,
-] as const;
+const CODEX_HOME_DIRECTORY = process.env.HOME?.trim() || homedir();
 const CODEX_SHARED_RUNTIME_DIRECTORIES = [
-  `${homedir()}/.codex`,
-  `${homedir()}/.stave`,
+  `${CODEX_HOME_DIRECTORY}/.codex`,
+  `${CODEX_HOME_DIRECTORY}/.stave`,
 ] as const;
 const CODEX_EVENT_RETAINED_BYTES_MAX = 2 * 1024 * 1024;
 const CODEX_OVERFLOW_TAIL_EVENTS: BridgeEvent[] = [
@@ -317,34 +309,6 @@ export function buildCodexThreadStartedEvents(args: {
   ];
 }
 
-function parseVersionFromStdout(args: { stdout: string }) {
-  const parsed = parseSemverVersion({ value: args.stdout });
-  if (!parsed) {
-    return null;
-  }
-  return [parsed.major, parsed.minor, parsed.patch] as const;
-}
-
-function compareVersion(a: readonly number[], b: readonly number[]) {
-  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-    const aPart = a[index] ?? 0;
-    const bPart = b[index] ?? 0;
-    if (aPart !== bPart) {
-      return aPart - bPart;
-    }
-  }
-  return 0;
-}
-
-function isExecutableFile(args: { path: string }) {
-  try {
-    accessSync(args.path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function isReadableDirectory(args: { path: string }) {
   try {
     accessSync(args.path, constants.R_OK);
@@ -378,63 +342,9 @@ export function resolveCodexAdditionalDirectories(args: {
 export function resolveCodexExecutablePath(
   args: { explicitPath?: string } = {},
 ) {
-  if (args.explicitPath?.trim()) {
-    return (
-      normalizeExecutableCandidate({ value: args.explicitPath }) ??
-      args.explicitPath.trim()
-    );
-  }
-
-  const baseResolved =
-    resolveExecutablePath({
-      absolutePathEnvVar: "STAVE_CODEX_CLI_PATH",
-      commandEnvVar: "STAVE_CODEX_CMD",
-      defaultCommand: "codex",
-      extraPaths: [...CODEX_LOOKUP_PATHS],
-    }) ?? "";
-
-  const candidates = [
-    normalizeExecutableCandidate({
-      value: process.env.STAVE_CODEX_CLI_PATH,
-    })?.trim() ||
-      process.env.STAVE_CODEX_CLI_PATH?.trim() ||
-      "",
-    `${homedir()}/.bun/bin/codex`,
-    `${homedir()}/.local/bin/codex`,
-    baseResolved,
-  ].filter(
-    (value, index, arr) => value.length > 0 && arr.indexOf(value) === index,
-  );
-
-  let selectedPath = baseResolved;
-  let selectedVersion: readonly number[] | null = null;
-
-  for (const candidate of candidates) {
-    if (!isExecutableFile({ path: candidate })) {
-      continue;
-    }
-    const env = buildCodexEnv({ executablePath: candidate });
-    const versionProbe = probeExecutableVersion({
-      executablePath: candidate,
-      env,
-    });
-    if (versionProbe.status !== 0) {
-      continue;
-    }
-    const parsed = parseVersionFromStdout({ stdout: versionProbe.stdout });
-    if (!parsed) {
-      if (!selectedPath) {
-        selectedPath = candidate;
-      }
-      continue;
-    }
-    if (!selectedVersion || compareVersion(parsed, selectedVersion) > 0) {
-      selectedPath = candidate;
-      selectedVersion = parsed;
-    }
-  }
-
-  return selectedPath;
+  return resolveCodexCliExecutablePath({
+    explicitPath: args.explicitPath,
+  });
 }
 
 export function parseCodexMcpServerListJson(args: { stdout: string }) {
