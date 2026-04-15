@@ -210,25 +210,29 @@ describe("workspace persistence fallback", () => {
             },
           ],
         },
-        terminalTabs: [{
-          id: "terminal-1",
-          title: "project",
-          linkedTaskId: null,
-          backend: "ghostty",
-          cwd: "/tmp/project",
-          createdAt: 1,
-        }],
-        cliSessionTabs: [{
-          id: "cli-1",
-          title: "Claude Workspace",
-          provider: "claude-code",
-          contextMode: "workspace",
-          linkedTaskId: null,
-          linkedTaskTitle: null,
-          handoffSummary: "",
-          cwd: "/tmp/project",
-          createdAt: 2,
-        }],
+        terminalTabs: [
+          {
+            id: "terminal-1",
+            title: "project",
+            linkedTaskId: null,
+            backend: "ghostty",
+            cwd: "/tmp/project",
+            createdAt: 1,
+          },
+        ],
+        cliSessionTabs: [
+          {
+            id: "cli-1",
+            title: "Claude Workspace",
+            provider: "claude-code",
+            contextMode: "workspace",
+            linkedTaskId: null,
+            linkedTaskTitle: null,
+            handoffSummary: "",
+            cwd: "/tmp/project",
+            createdAt: 2,
+          },
+        ],
       },
     });
 
@@ -293,14 +297,16 @@ describe("workspace persistence fallback", () => {
             "claude-code": "session-claude",
           },
         },
-        editorTabs: [{
-          id: "editor-1",
-          filePath: "/tmp/project/src/app.ts",
-          language: "typescript",
-          content: "x".repeat(20_000),
-          hasConflict: false,
-          isDirty: true,
-        }],
+        editorTabs: [
+          {
+            id: "editor-1",
+            filePath: "/tmp/project/src/app.ts",
+            language: "typescript",
+            content: "x".repeat(20_000),
+            hasConflict: false,
+            isDirty: true,
+          },
+        ],
       },
     });
 
@@ -357,29 +363,35 @@ describe("workspace persistence fallback", () => {
         },
         promptDraftByTask: {},
         providerSessionByTask: {},
-        editorTabs: [{
-          id: "file:/tmp/project/src/app.ts",
-          filePath: "/tmp/project/src/app.ts",
-          language: "typescript",
-          content: "export const answer = 42;\n",
-          hasConflict: false,
-          isDirty: false,
-        }],
+        editorTabs: [
+          {
+            id: "file:/tmp/project/src/app.ts",
+            filePath: "/tmp/project/src/app.ts",
+            language: "typescript",
+            content: "export const answer = 42;\n",
+            hasConflict: false,
+            isDirty: false,
+          },
+        ],
         activeEditorTabId: "file:/tmp/project/src/app.ts",
       },
     });
 
-    const shell = await loadWorkspaceShellForRestore({ workspaceId: "ws-restore" });
+    const shell = await loadWorkspaceShellForRestore({
+      workspaceId: "ws-restore",
+    });
 
-    expect(shell?.editorTabs).toEqual([{
-      id: "file:/tmp/project/src/app.ts",
-      filePath: "/tmp/project/src/app.ts",
-      language: "typescript",
-      content: "export const answer = 42;\n",
-      contentState: "ready",
-      hasConflict: false,
-      isDirty: false,
-    }]);
+    expect(shell?.editorTabs).toEqual([
+      {
+        id: "file:/tmp/project/src/app.ts",
+        filePath: "/tmp/project/src/app.ts",
+        language: "typescript",
+        content: "export const answer = 42;\n",
+        contentState: "ready",
+        hasConflict: false,
+        isDirty: false,
+      },
+    ]);
   });
 
   test("loads editor tab bodies without a persistence bridge", async () => {
@@ -404,16 +416,18 @@ describe("workspace persistence fallback", () => {
         },
         promptDraftByTask: {},
         providerSessionByTask: {},
-        editorTabs: [{
-          id: "file:/tmp/project/src/app.ts",
-          filePath: "/tmp/project/src/app.ts",
-          language: "typescript",
-          content: "export const answer = 42;\n",
-          originalContent: "export const answer = 42;\n",
-          savedContent: "export const answer = 42;\n",
-          hasConflict: false,
-          isDirty: false,
-        }],
+        editorTabs: [
+          {
+            id: "file:/tmp/project/src/app.ts",
+            filePath: "/tmp/project/src/app.ts",
+            language: "typescript",
+            content: "export const answer = 42;\n",
+            originalContent: "export const answer = 42;\n",
+            savedContent: "export const answer = 42;\n",
+            hasConflict: false,
+            isDirty: false,
+          },
+        ],
       },
     });
 
@@ -422,12 +436,14 @@ describe("workspace persistence fallback", () => {
       tabIds: ["file:/tmp/project/src/app.ts"],
     });
 
-    expect(bodies).toEqual([{
-      id: "file:/tmp/project/src/app.ts",
-      content: "export const answer = 42;\n",
-      originalContent: "export const answer = 42;\n",
-      savedContent: "export const answer = 42;\n",
-    }]);
+    expect(bodies).toEqual([
+      {
+        id: "file:/tmp/project/src/app.ts",
+        content: "export const answer = 42;\n",
+        originalContent: "export const answer = 42;\n",
+        savedContent: "export const answer = 42;\n",
+      },
+    ]);
   });
 
   test("supports notification history without electron persistence bridge", async () => {
@@ -697,12 +713,10 @@ describe("workspace persistence fallback", () => {
       ],
     });
 
-    useAppStore
-      .getState()
-      .moveProjectInList({
-        projectPath: "/tmp/stave-project-b",
-        direction: "up",
-      });
+    useAppStore.getState().moveProjectInList({
+      projectPath: "/tmp/stave-project-b",
+      direction: "up",
+    });
     expect(
       useAppStore
         .getState()
@@ -978,7 +992,10 @@ describe("workspace persistence fallback", () => {
       api: {
         fs: {
           pickRoot: async () => ({ ok: false }),
-          listFiles: async () => ({ ok: true, files: ["package.json", "src/app.ts"] }),
+          listFiles: async () => ({
+            ok: true,
+            files: ["package.json", "src/app.ts"],
+          }),
           readFile: async () => ({ ok: false }),
           writeFile: async () => ({ ok: false }),
         },
@@ -1072,9 +1089,9 @@ describe("workspace persistence fallback", () => {
     expect(nextState.messagesByTask["task-latest"]?.[0]?.id).toBe(
       `m-${allMessages.length - initialLatestCount + 1}`,
     );
-    expect(
-      nextState.messagesByTask["task-latest"]?.at(-1)?.id,
-    ).toBe(`m-${allMessages.length}`);
+    expect(nextState.messagesByTask["task-latest"]?.at(-1)?.id).toBe(
+      `m-${allMessages.length}`,
+    );
   });
 
   test("preserves manual workspace order when switching workspaces", async () => {
@@ -3944,7 +3961,9 @@ describe("workspace store hydration ordering", () => {
     expect(
       nextState.workspaceRuntimeCacheById["ws-alpha"]?.activeCliSessionTabId,
     ).toBe(cliTab.id);
-    expect(nextState.workspaceRuntimeCacheById["ws-alpha"]?.activeSurface).toEqual({
+    expect(
+      nextState.workspaceRuntimeCacheById["ws-alpha"]?.activeSurface,
+    ).toEqual({
       kind: "cli-session",
       cliSessionTabId: cliTab.id,
     });
@@ -4099,7 +4118,8 @@ describe("workspace store hydration ordering", () => {
     await useAppStore.getState().switchWorkspace({ workspaceId: "ws-beta" });
 
     expect(
-      useAppStore.getState().workspaceRuntimeCacheById["ws-alpha"]?.terminalDocked,
+      useAppStore.getState().workspaceRuntimeCacheById["ws-alpha"]
+        ?.terminalDocked,
     ).toBe(false);
 
     await useAppStore.getState().switchWorkspace({ workspaceId: "ws-alpha" });
@@ -4913,6 +4933,33 @@ describe("workspace store hydration ordering", () => {
         },
       ],
       messagesByTask: { "task-main": [] },
+      notifications: [
+        {
+          id: "notification-approval-alt-1",
+          kind: "task.approval_requested",
+          title: "Task Alt",
+          body: "Approval requested",
+          projectPath: "/tmp/stave-project",
+          projectName: "stave-project",
+          workspaceId: "ws-alt",
+          workspaceName: "Alt Workspace",
+          taskId: "task-alt",
+          taskTitle: "Task Alt",
+          turnId: "turn-alt-1",
+          providerId: "codex",
+          action: {
+            type: "approval",
+            requestId: "approval-alt-1",
+            messageId: "task-alt-m-1",
+          },
+          payload: {
+            toolName: "bash",
+            description: "Run npm test in alt workspace",
+          },
+          createdAt: "2026-04-07T00:00:00.000Z",
+          readAt: null,
+        },
+      ],
       activeTurnIdsByTask: {},
       promptDraftByTask: {},
       nativeSessionReadyByTask: {},
@@ -5003,6 +5050,7 @@ describe("workspace store hydration ordering", () => {
       requestId: "approval-alt-1",
       state: "approval-responded",
     });
+    expect(useAppStore.getState().notifications[0]?.readAt).toBeString();
     expect(useAppStore.getState().messagesByTask["task-main"]).toEqual([]);
   });
 

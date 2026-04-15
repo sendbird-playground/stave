@@ -1309,6 +1309,28 @@ function markNotificationReadInList(args: {
   });
 }
 
+function findUnreadApprovalNotificationIds(args: {
+  notifications: AppNotification[];
+  taskId: string;
+  requestId: string;
+}) {
+  return args.notifications.flatMap((notification) => {
+    if (
+      !isNotificationUnread(notification) ||
+      notification.taskId !== args.taskId
+    ) {
+      return [];
+    }
+
+    const action = notification.action;
+    if (action?.type !== "approval" || action.requestId !== args.requestId) {
+      return [];
+    }
+
+    return [notification.id];
+  });
+}
+
 function markAllNotificationsReadInList(args: {
   notifications: AppNotification[];
   readAt: string;
@@ -2541,8 +2563,8 @@ export const useAppStore = create<AppState>()(
           get().providerTurnActivityByTask[args.taskId]?.providerId;
         const delayMs = Math.max(
           0,
-          resolveProviderTurnStallThresholdMs({ providerId })
-            - (Date.now() - args.lastEventAt),
+          resolveProviderTurnStallThresholdMs({ providerId }) -
+            (Date.now() - args.lastEventAt),
         );
         const handle = globalThis.setTimeout(() => {
           providerTurnStallTimerByTask.delete(args.taskId);
@@ -3399,8 +3421,14 @@ export const useAppStore = create<AppState>()(
           if (state.activeWorkspaceId !== args.workspaceId) {
             return {};
           }
-          const targetTab = state.editorTabs.find((tab) => tab.id === args.tabId);
-          if (!targetTab || targetTab.contentState === "ready" || targetTab.contentState === "loading") {
+          const targetTab = state.editorTabs.find(
+            (tab) => tab.id === args.tabId,
+          );
+          if (
+            !targetTab ||
+            targetTab.contentState === "ready" ||
+            targetTab.contentState === "loading"
+          ) {
             return {};
           }
           filePath = targetTab.filePath;
@@ -3412,7 +3440,7 @@ export const useAppStore = create<AppState>()(
                     ...tab,
                     contentState: "loading",
                   }
-                : tab
+                : tab,
             ),
           };
         });
@@ -3421,14 +3449,17 @@ export const useAppStore = create<AppState>()(
           return;
         }
 
-        let body = null as Awaited<
-          ReturnType<typeof loadWorkspaceEditorTabBodies>
-        >[number] | null;
+        let body = null as
+          | Awaited<ReturnType<typeof loadWorkspaceEditorTabBodies>>[number]
+          | null;
         try {
-          body = (await loadWorkspaceEditorTabBodies({
-            workspaceId: args.workspaceId,
-            tabIds: [args.tabId],
-          }))[0] ?? null;
+          body =
+            (
+              await loadWorkspaceEditorTabBodies({
+                workspaceId: args.workspaceId,
+                tabIds: [args.tabId],
+              })
+            )[0] ?? null;
         } catch {
           body = null;
         }
@@ -3436,8 +3467,7 @@ export const useAppStore = create<AppState>()(
         if (!body && filePath) {
           const state = get();
           const workspaceRootPath =
-            state.workspacePathById[args.workspaceId] ||
-            state.projectPath;
+            state.workspacePathById[args.workspaceId] || state.projectPath;
           let fileData = await workspaceFsAdapter.readFile({
             filePath,
           });
@@ -3464,7 +3494,9 @@ export const useAppStore = create<AppState>()(
           if (state.activeWorkspaceId !== args.workspaceId) {
             return {};
           }
-          const targetTab = state.editorTabs.find((tab) => tab.id === args.tabId);
+          const targetTab = state.editorTabs.find(
+            (tab) => tab.id === args.tabId,
+          );
           if (!targetTab || targetTab.contentState !== "loading") {
             return {};
           }
@@ -4088,7 +4120,9 @@ export const useAppStore = create<AppState>()(
                     row.id === defaultWorkspaceId
                       ? Number.MAX_SAFE_INTEGER
                       : summarizeWorkspaceShell(
-                          await loadWorkspaceShellSummary({ workspaceId: row.id }),
+                          await loadWorkspaceShellSummary({
+                            workspaceId: row.id,
+                          }),
                         );
                   return {
                     row,
@@ -4231,7 +4265,9 @@ export const useAppStore = create<AppState>()(
                       candidateRows.map(async (row) => ({
                         row,
                         score: summarizeWorkspaceShell(
-                          await loadWorkspaceShellSummary({ workspaceId: row.id }),
+                          await loadWorkspaceShellSummary({
+                            workspaceId: row.id,
+                          }),
                         ),
                       })),
                     );
@@ -4339,7 +4375,8 @@ export const useAppStore = create<AppState>()(
             workspacePath: preferredWorkspacePath,
             activeProjectPath: stateBeforeHydrate.projectPath,
             activeProjectFiles: stateBeforeHydrate.projectFiles,
-            workspaceFileCacheByPath: stateBeforeHydrate.workspaceFileCacheByPath,
+            workspaceFileCacheByPath:
+              stateBeforeHydrate.workspaceFileCacheByPath,
           });
           if (preferredWorkspacePath) {
             await workspaceFsAdapter.setRoot?.({
@@ -4468,7 +4505,8 @@ export const useAppStore = create<AppState>()(
             if (loadedWorkspaceShellState.activeTaskIdForLatestHydration) {
               void loadTaskMessagesIntoSession({
                 workspaceId: preferredWorkspaceId,
-                taskId: loadedWorkspaceShellState.activeTaskIdForLatestHydration,
+                taskId:
+                  loadedWorkspaceShellState.activeTaskIdForLatestHydration,
                 mode: "latest",
               });
             }
@@ -7442,7 +7480,8 @@ export const useAppStore = create<AppState>()(
         setCliSessionTabNativeSession: ({ tabId, nativeSessionId }) => {
           set((state) => {
             const tab = findCliSessionTabById(state, tabId);
-            const normalizedNativeSessionId = nativeSessionId?.trim() || undefined;
+            const normalizedNativeSessionId =
+              nativeSessionId?.trim() || undefined;
             if (!tab || tab.nativeSessionId === normalizedNativeSessionId) {
               return state;
             }
@@ -7994,6 +8033,9 @@ export const useAppStore = create<AppState>()(
           });
 
           if (isManagedTaskReadOnly({ state: latestState, taskId })) {
+            if (isNotificationUnread(notification)) {
+              await latestState.markNotificationRead({ id: notification.id });
+            }
             return;
           }
 
@@ -10102,6 +10144,19 @@ export const useAppStore = create<AppState>()(
                 lastEventAt: resolvedAt,
               });
             }
+            const latestState = get();
+            const unreadNotificationIds = findUnreadApprovalNotificationIds({
+              notifications: latestState.notifications,
+              taskId,
+              requestId,
+            });
+            if (unreadNotificationIds.length > 0) {
+              void Promise.all(
+                unreadNotificationIds.map((notificationId) =>
+                  latestState.markNotificationRead({ id: notificationId }),
+                ),
+              );
+            }
           };
 
           if (activeTurnId && approvalPart) {
@@ -10489,7 +10544,7 @@ export const useAppStore = create<AppState>()(
                 editorTabs: shouldRefreshExisting
                   ? state.editorTabs.map((tab) =>
                       tab.id === existing.id
-                          ? {
+                        ? {
                             ...tab,
                             filePath,
                             language: nextLanguage,
@@ -10614,9 +10669,8 @@ export const useAppStore = create<AppState>()(
             const tabId = `file:${normalizedFilePath}`;
             const existing = state.editorTabs.find((tab) => tab.id === tabId);
             if (existing) {
-              existingDeferredTabId = existing.contentState === "deferred"
-                ? existing.id
-                : null;
+              existingDeferredTabId =
+                existing.contentState === "deferred" ? existing.id : null;
               return {
                 activeEditorTabId: existing.id,
                 layout: {
@@ -11002,13 +11056,13 @@ export const useAppStore = create<AppState>()(
                 };
               }
 
-                return {
-                  ...tab,
-                  content: update.fromDisk,
-                  contentState: "ready",
-                  originalContent:
-                    update.kind === "image"
-                      ? tab.originalContent
+              return {
+                ...tab,
+                content: update.fromDisk,
+                contentState: "ready",
+                originalContent:
+                  update.kind === "image"
+                    ? tab.originalContent
                     : tab.id.startsWith("file:")
                       ? update.fromDisk
                       : tab.originalContent,
