@@ -101,6 +101,35 @@ describe("mapCodexElicitationToUserInput", () => {
       fields: [],
     });
   });
+
+  test("maps empty-form elicitation into a submit-or-decline prompt", () => {
+    const mapped = mapCodexElicitationToUserInput({
+      mode: "form",
+      message: 'Allow the stave-local MCP server to run tool "stave_list_projects"?',
+      requestedSchema: {
+        type: "object",
+        properties: {},
+      },
+      _meta: {
+        codex_approval_kind: "mcp_tool_call",
+        tool_description: "List projects already registered in the local Stave desktop app.",
+      },
+    });
+
+    expect(mapped).toEqual({
+      mode: "form",
+      questions: [{
+        key: "__elicitation_accept__",
+        header: 'Allow the stave-local MCP server to run tool "stave_list_projects"?',
+        question: "List projects already registered in the local Stave desktop app.",
+        inputType: "text",
+        options: [],
+        allowCustom: false,
+        required: false,
+      }],
+      fields: [],
+    });
+  });
 });
 
 describe("summarizeCodexAppServerDebugMessage", () => {

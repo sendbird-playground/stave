@@ -964,6 +964,30 @@ export function mapCodexElicitationToUserInput(
   if (!properties) {
     return null;
   }
+  if (Object.keys(properties).length === 0) {
+    const meta = isRecord(params._meta) ? params._meta : null;
+    const toolDescription =
+      meta && typeof meta.tool_description === "string"
+        ? meta.tool_description.trim()
+        : "";
+    return {
+      mode,
+      questions: [
+        {
+          key: "__elicitation_accept__",
+          header: message,
+          question:
+            toolDescription ||
+            "Submit to allow this MCP request, or decline to cancel it.",
+          inputType: "text" as const,
+          options: [],
+          allowCustom: false,
+          required: false,
+        },
+      ],
+      fields: [] as ElicitationFieldDescriptor[],
+    };
+  }
   const requiredKeys = new Set(
     Array.isArray(requestedSchema.required)
       ? requestedSchema.required.filter(
