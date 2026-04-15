@@ -64,10 +64,61 @@ function looksLikePathValue(value: string) {
   );
 }
 
+function stripMatchingQuotes(value: string) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function extractExecutableCandidateFromShellLine(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const aliasMatch = trimmed.match(/^[^:\n]+:\s+aliased to\s+(.+)$/i);
+  if (aliasMatch?.[1]) {
+    return stripMatchingQuotes(aliasMatch[1]);
+  }
+
+  const aliasDeclarationMatch = trimmed.match(/^alias\s+[^=\s]+=(.+)$/i);
+  if (aliasDeclarationMatch?.[1]) {
+    return stripMatchingQuotes(aliasDeclarationMatch[1]);
+  }
+
+  const typeAliasMatch = trimmed.match(/^[^\s]+\s+is an alias for\s+(.+)$/i);
+  if (typeAliasMatch?.[1]) {
+    return stripMatchingQuotes(typeAliasMatch[1]);
+  }
+
+  const pathMatch = trimmed.match(
+    /^[^\s]+\s+is\s+((?:~|\/|\.{1,2}[\\/]|[A-Za-z]:[\\/]).+)$/,
+  );
+  if (pathMatch?.[1]) {
+    return stripMatchingQuotes(pathMatch[1]);
+  }
+
+  if (looksLikePathValue(trimmed)) {
+    return stripMatchingQuotes(trimmed);
+  }
+
+  return null;
+}
+
 export function canExecutePath(args: { path: string }) {
+  const normalizedPath =
+    normalizeExecutablePathValue({ value: args.path }) ?? args.path.trim();
+  if (!normalizedPath) {
+    return false;
+  }
   try {
     accessSync(
-      args.path,
+      normalizedPath,
       process.platform === "win32" ? constants.F_OK : constants.X_OK,
     );
     return true;
@@ -281,17 +332,36 @@ export function buildExecutableLookupEnv(
 export function normalizeExecutablePathValue(args: {
   value: string | undefined | null;
 }) {
-  const trimmed = args.value?.trim();
-  if (!trimmed) {
+  const lines = (args.value ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return null;
+  }
+
+  let candidate: string | null = null;
+  for (const line of lines) {
+    candidate = extractExecutableCandidateFromShellLine(line);
+    if (candidate) {
+      break;
+    }
+  }
+
+  if (!candidate && lines.length === 1) {
+    const singleLine = stripMatchingQuotes(lines[0]);
+    candidate = sanitizeCommandName({ value: singleLine });
+  }
+  if (!candidate) {
     return null;
   }
 
   const homeDirectory = getConfiguredHomeDirectory();
-  let normalized = trimmed;
-  if (trimmed === "~") {
+  let normalized = candidate;
+  if (candidate === "~") {
     normalized = homeDirectory;
-  } else if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
-    normalized = path.join(homeDirectory, trimmed.slice(2));
+  } else if (candidate.startsWith("~/") || candidate.startsWith("~\\")) {
+    normalized = path.join(homeDirectory, candidate.slice(2));
   }
 
   if (path.isAbsolute(normalized)) {
@@ -302,7 +372,9 @@ export function normalizeExecutablePathValue(args: {
 }
 
 function resolveFromCommand(args: { command: string; env: NodeJS.ProcessEnv }) {
-  const safeCommand = sanitizeCommandName({ value: args.command });
+  const normalizedCommand =
+    normalizeExecutablePathValue({ value: args.command }) ?? args.command;
+  const safeCommand = sanitizeCommandName({ value: normalizedCommand });
   if (!safeCommand) {
     return null;
   }
@@ -316,7 +388,7 @@ function resolveFromCommand(args: { command: string; env: NodeJS.ProcessEnv }) {
     return null;
   }
 
-  const resolved = result.stdout.trim().split("\n")[0]?.trim();
+  const resolved = normalizeExecutablePathValue({ value: result.stdout });
   if (!resolved) {
     return null;
   }

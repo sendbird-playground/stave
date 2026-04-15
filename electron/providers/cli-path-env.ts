@@ -171,7 +171,7 @@ export function resolveClaudeCliExecutablePath(
     `${homedir()}/.local/bin/claude`,
     baseResolved,
   ]
-    .map((value) => value?.trim())
+    .map((value) => normalizeExecutablePathValue({ value }) ?? value?.trim())
     .filter(
       (value, index, entries): value is string =>
         Boolean(value) && entries.indexOf(value) === index,
@@ -266,14 +266,20 @@ export function resolveCodexCliExecutablePath(
     }) ?? "";
 
   const candidates = [
-    process.env.STAVE_CODEX_CLI_PATH?.trim() || "",
+    normalizeExecutablePathValue({
+      value: process.env.STAVE_CODEX_CLI_PATH,
+    }) ??
+      process.env.STAVE_CODEX_CLI_PATH?.trim() ??
+      "",
     `${homedir()}/.bun/bin/codex`,
     `${homedir()}/.local/bin/codex`,
     baseResolved,
-  ].filter(
-    (value, index, entries) =>
-      value.length > 0 && entries.indexOf(value) === index,
-  );
+  ]
+    .map((value) => normalizeExecutablePathValue({ value }) ?? value?.trim())
+    .filter(
+      (value, index, entries): value is string =>
+        Boolean(value) && entries.indexOf(value) === index,
+    );
 
   let selectedPath = baseResolved;
   let selectedVersion: readonly number[] | null = null;

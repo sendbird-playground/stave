@@ -36,6 +36,7 @@ function createHomeExecutable(args: { prefix: string; commandName: string }) {
   return {
     executablePath,
     tildePath: `~/${path.relative(homeDirectory, executablePath)}`,
+    aliasPath: `${args.commandName}: aliased to ${executablePath}`,
   };
 }
 
@@ -88,6 +89,27 @@ describe("provider executable resolution", () => {
     ).toBe(fixture.executablePath);
   });
 
+  test("normalizes alias-shaped Claude binary overrides for tooling and runtime resolvers", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const fixture = createHomeExecutable({
+      prefix: ".stave-claude-alias-bin-",
+      commandName: "claude",
+    });
+    if (!fixture) {
+      return;
+    }
+
+    expect(
+      resolveClaudeCliExecutablePath({ explicitPath: fixture.aliasPath }),
+    ).toBe(fixture.executablePath);
+    expect(
+      resolveClaudeExecutablePath({ explicitPath: fixture.aliasPath }),
+    ).toBe(fixture.executablePath);
+  });
+
   test("uses the same normalized Claude env override path for tooling and runtime resolvers", () => {
     if (process.platform === "win32") {
       return;
@@ -104,6 +126,31 @@ describe("provider executable resolution", () => {
     withTemporaryEnv(
       {
         STAVE_CLAUDE_CLI_PATH: fixture.tildePath,
+        CLAUDE_CODE_PATH: undefined,
+      },
+      () => {
+        expect(resolveClaudeCliExecutablePath()).toBe(fixture.executablePath);
+        expect(resolveClaudeExecutablePath()).toBe(fixture.executablePath);
+      },
+    );
+  });
+
+  test("uses the same alias-shaped Claude env override path for tooling and runtime resolvers", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const fixture = createHomeExecutable({
+      prefix: ".stave-claude-env-alias-bin-",
+      commandName: "claude",
+    });
+    if (!fixture) {
+      return;
+    }
+
+    withTemporaryEnv(
+      {
+        STAVE_CLAUDE_CLI_PATH: fixture.aliasPath,
         CLAUDE_CODE_PATH: undefined,
       },
       () => {
@@ -137,6 +184,30 @@ describe("provider executable resolution", () => {
     ).toBe(fixture.executablePath);
   });
 
+  test("normalizes alias-shaped Codex binary overrides for tooling and both runtime backends", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const fixture = createHomeExecutable({
+      prefix: ".stave-codex-alias-bin-",
+      commandName: "codex",
+    });
+    if (!fixture) {
+      return;
+    }
+
+    expect(
+      resolveCodexCliExecutablePath({ explicitPath: fixture.aliasPath }),
+    ).toBe(fixture.executablePath);
+    expect(
+      resolveCodexSdkExecutablePath({ explicitPath: fixture.aliasPath }),
+    ).toBe(fixture.executablePath);
+    expect(
+      resolveCodexAppServerExecutablePath({ explicitPath: fixture.aliasPath }),
+    ).toBe(fixture.executablePath);
+  });
+
   test("uses the same normalized Codex env override path for tooling and both runtime backends", () => {
     if (process.platform === "win32") {
       return;
@@ -153,6 +224,33 @@ describe("provider executable resolution", () => {
     withTemporaryEnv(
       {
         STAVE_CODEX_CLI_PATH: fixture.tildePath,
+      },
+      () => {
+        expect(resolveCodexCliExecutablePath()).toBe(fixture.executablePath);
+        expect(resolveCodexSdkExecutablePath()).toBe(fixture.executablePath);
+        expect(resolveCodexAppServerExecutablePath()).toBe(
+          fixture.executablePath,
+        );
+      },
+    );
+  });
+
+  test("uses the same alias-shaped Codex env override path for tooling and both runtime backends", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const fixture = createHomeExecutable({
+      prefix: ".stave-codex-env-alias-bin-",
+      commandName: "codex",
+    });
+    if (!fixture) {
+      return;
+    }
+
+    withTemporaryEnv(
+      {
+        STAVE_CODEX_CLI_PATH: fixture.aliasPath,
       },
       () => {
         expect(resolveCodexCliExecutablePath()).toBe(fixture.executablePath);

@@ -62,6 +62,21 @@ describe("resolveExecutablePath", () => {
     expect(resolved).toBe(executablePath);
   });
 
+  test("normalizes alias-shaped explicit path candidates before validating them", () => {
+    const { executablePath } = createExecutableFixture({
+      prefix: "stave-exec-alias-",
+    });
+
+    const resolved = resolveExecutablePath({
+      absolutePathEnvVar: "STAVE_TEST_ABSOLUTE_PATH",
+      commandEnvVar: "STAVE_TEST_COMMAND",
+      defaultCommand: "stave-command-that-does-not-exist",
+      explicitPaths: [`demo: aliased to ${executablePath}`],
+    });
+
+    expect(resolved).toBe(executablePath);
+  });
+
   test("expands tilde-prefixed absolute-path overrides before probing executables", () => {
     if (process.platform === "win32" || !process.env.HOME?.trim()) {
       return;
@@ -173,6 +188,30 @@ describe("normalizeExecutablePathValue", () => {
         "Applications/Stave.app/Contents/Resources/app.asar.unpacked/node_modules/@openai/codex/vendor/bin/codex",
       ),
     );
+  });
+
+  test("extracts a path from zsh alias output", () => {
+    expect(
+      normalizeExecutablePathValue({
+        value: "claude: aliased to /tmp/claude",
+      }),
+    ).toBe("/tmp/claude");
+  });
+
+  test("extracts a path from alias declaration output", () => {
+    expect(
+      normalizeExecutablePathValue({
+        value: "alias claude=/tmp/claude",
+      }),
+    ).toBe("/tmp/claude");
+  });
+
+  test("skips warning lines and keeps the first executable candidate", () => {
+    expect(
+      normalizeExecutablePathValue({
+        value: "WARNING: stale shell cache\nclaude is /tmp/claude",
+      }),
+    ).toBe("/tmp/claude");
   });
 });
 
