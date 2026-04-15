@@ -15,6 +15,15 @@ const POLLED_STREAM_ACTIVE_DELAY_MS = 80;
 const POLLED_STREAM_IDLE_DELAY_MS = 1000;
 const PUSH_STREAM_FALLBACK_SILENCE_MS = 15_000;
 const PUSH_STREAM_ACK_DELAY_MS = 250;
+const STALE_STREAM_CURSOR_MESSAGE = "retained replay window";
+
+type StreamReadResult = {
+  ok: boolean;
+  events: unknown[];
+  cursor: number;
+  done: boolean;
+  message?: string;
+};
 
 function hasAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   if (!value || typeof value !== "object") {
@@ -104,6 +113,34 @@ async function sleep(ms: number) {
   await new Promise((resolve) => timers.setTimeout(resolve, ms));
 }
 
+function isStaleStreamCursorResult(args: {
+  page: StreamReadResult;
+  cursor: number;
+}) {
+  return !args.page.ok
+    && args.page.cursor > args.cursor
+    && (args.page.message?.includes(STALE_STREAM_CURSOR_MESSAGE) ?? false);
+}
+
+async function readStreamTurnWithCursorRecovery(args: {
+  streamId: string;
+  cursor: number;
+  readStreamTurn: (args: {
+    streamId: string;
+    cursor: number;
+  }) => Promise<StreamReadResult>;
+}) {
+  let cursor = args.cursor;
+  for (let attempts = 0; attempts < 3; attempts += 1) {
+    const page = await args.readStreamTurn({ streamId: args.streamId, cursor });
+    if (!isStaleStreamCursorResult({ page, cursor })) {
+      return page;
+    }
+    cursor = page.cursor;
+  }
+  return args.readStreamTurn({ streamId: args.streamId, cursor });
+}
+
 async function* continueFromPolledStream(args: {
   streamId: string;
   cursor: number;
@@ -120,7 +157,11 @@ async function* continueFromPolledStream(args: {
 }) {
   let cursor = args.cursor;
   for (;;) {
-    const page = await args.readStreamTurn({ streamId: args.streamId, cursor });
+    const page = await readStreamTurnWithCursorRecovery({
+      streamId: args.streamId,
+      cursor,
+      readStreamTurn: args.readStreamTurn,
+    });
     if (!page.ok) {
       yield {
         type: "error",
@@ -177,7 +218,11 @@ async function* fromPolledStream(args: {
 
   let cursor = 0;
   for (;;) {
-    const page = await readStreamTurn({ streamId: started.streamId, cursor });
+    const page = await readStreamTurnWithCursorRecovery({
+      streamId: started.streamId,
+      cursor,
+      readStreamTurn,
+    });
     if (!page.ok) {
       yield* emitStartFailure({ message: page.message });
       return;
