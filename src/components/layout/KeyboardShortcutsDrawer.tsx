@@ -180,6 +180,11 @@ export function KeyboardShortcutsDrawer({ open, onOpenChange }: KeyboardShortcut
         description: "Surface the guide itself when you need it.",
         shortcuts: [
           {
+            label: "Open settings",
+            description: "Open the main Stave settings dialog.",
+            sequences: [[modifierLabel, ","]],
+          },
+          {
             label: "Open shortcut guide",
             description: "Show this panel from anywhere outside text inputs.",
             sequences: [[modifierLabel, "/"]],

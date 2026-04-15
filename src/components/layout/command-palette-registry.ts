@@ -649,6 +649,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
     group: "settings",
     icon: Settings,
     keywords: ["settings", "preferences"],
+    shortcut: (modifierLabel) => `${modifierLabel}+,`,
     build: (args) => ({
       id: "settings.open",
       title: "Open Settings",
@@ -656,6 +657,7 @@ const coreCommandDefinitions: CommandPaletteCoreCommandDefinition[] = [
       group: "settings",
       icon: Settings,
       keywords: ["settings", "preferences"],
+      shortcut: `${args.modifierLabel}+,`,
       run: () => args.commands.openSettings(),
       source: "core",
     }),
