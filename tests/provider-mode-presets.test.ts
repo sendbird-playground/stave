@@ -9,7 +9,7 @@ import {
 } from "@/lib/providers/provider-mode-presets";
 
 describe("provider mode presets", () => {
-  test("detects Claude guided preset from the current default-style combination", () => {
+  test("detects Claude auto preset from the current default-style combination", () => {
     expect(detectClaudeProviderModePreset({
       settings: {
         claudePermissionMode: "auto",
@@ -17,10 +17,10 @@ describe("provider mode presets", () => {
         claudeSandboxEnabled: false,
         claudeAllowUnsandboxedCommands: true,
       },
-    })).toBe("guided");
+    })).toBe("auto");
   });
 
-  test("treats mixed Claude values as custom", () => {
+  test("detects Claude guided preset from acceptEdits combination", () => {
     expect(detectClaudeProviderModePreset({
       settings: {
         claudePermissionMode: "acceptEdits",
@@ -28,7 +28,7 @@ describe("provider mode presets", () => {
         claudeSandboxEnabled: false,
         claudeAllowUnsandboxedCommands: true,
       },
-    })).toBeNull();
+    })).toBe("guided");
   });
 
   test("builds Codex auto preset patch", () => {
