@@ -49,6 +49,7 @@
 - Selecting a task tab changes the chat context.
 - Selecting a CLI session tab replaces the main chat panel with that live CLI surface without changing the stored active task.
 - The dock header manages docked terminal tabs, clear, hide, and close actions.
+- Middle-click closes docked terminal tabs and CLI session tabs using the same close flow as the explicit close actions.
 - The CLI session header exposes provider/context metadata plus `Copy Handoff`, `Paste Handoff`, `Restart Session`, and `Close Session`.
 
 ## Common Workflows

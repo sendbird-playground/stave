@@ -73,6 +73,7 @@ Contributors can inject additional commands without coupling to the dialog UI. C
 
 ## Related Shortcuts
 
+- `Cmd/Ctrl+,` opens the main Settings dialog.
 - `Cmd/Ctrl+B` toggles the left workspace sidebar.
 - `Cmd/Ctrl+Shift+B` toggles the source control panel.
 - `Cmd/Ctrl+E` opens the explorer panel.
