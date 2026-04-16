@@ -329,7 +329,7 @@ Use `the-ipc-schema-sync` for this work. If the task changes a payload, event, r
 - For any related change, verify the full path explicitly:
   renderer producer → shared TS type → preload/window API → `electron/main/ipc/schemas.ts` strict Zod schema → main IPC handler → provider runtime/replay consumer.
 - After touching provider option schemas or IPC contracts, run `bun run typecheck` before finishing. If provider runtime code changed, also do a smoke check that both Claude and Codex can still start a turn or load their runtime entry path.
-- When upgrading `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, or the Codex/Claude CLI expectations, verify new option names and object shapes against the installed package types/docs in `node_modules` before wiring them into Stave. Do not assume flag names from memory.
+- When upgrading `@anthropic-ai/claude-agent-sdk`, `@openai/codex-sdk`, or the Codex/Claude CLI expectations, verify new option names and object shapes against the installed package types/docs in `node_modules` before wiring them into Stave. Do not assume flag names from memory. For Codex upgrades, also review `docs/providers/codex-upgrade-checklist.md`, including whether official Guardian reviewer support became available and should be wired in the same change.
 - If a change is intentionally provider-specific, note that explicitly in code or the final handoff. Otherwise, review the sibling provider adapter for symmetry.
 
 ### Provider CLI Environment Parity
