@@ -91,15 +91,22 @@ mock.module("node:child_process", () => ({
   },
 }));
 
-const { getCodexConnectedToolStatus } = await import(
-  "../electron/providers/codex-app-server-runtime"
-);
-
 afterEach(() => {
   fakeChildren.length = 0;
   nextScenario = "oversized-valid-response";
   mock.restore();
 });
+
+async function getCodexConnectedToolStatus(
+  args: Parameters<
+    typeof import("../electron/providers/codex-app-server-runtime").getCodexConnectedToolStatus
+  >[0],
+) {
+  const runtime = await import(
+    `../electron/providers/codex-app-server-runtime?overflow-test=${Date.now()}-${Math.random()}`
+  );
+  return runtime.getCodexConnectedToolStatus(args);
+}
 
 describe("codex app server stdout overflow handling", () => {
   test("accepts valid oversized JSON-RPC responses without tearing down the process", async () => {

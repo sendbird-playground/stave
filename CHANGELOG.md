@@ -1,3 +1,26 @@
+## [0.3.6](https://github.com/sendbird-playground/stave/compare/v0.3.5...v0.3.6) (2026-04-16)
+
+### Highlights
+
+* upgrade the Claude SDK integration, add a richer Codex model catalog and selector flow, and keep provider runtime contracts aligned across renderer, IPC, and runtime layers
+* harden approval and permission handling by updating provider mode defaults, mapping Codex MCP elicitations into explicit approvals, and fixing Claude auto-approval conflicts and notification approval state
+* improve desktop runtime safety with Cmd+Q confirmation, inactive terminal output buffering, preserved branch-case worktree naming, and a refactored workspace-scripts state flow backed by new tests
+* polish input and settings UX across prompt follow-up flows, provider settings, project settings, Codex option layout, and Claude advisor copy so review and configuration surfaces behave more predictably
+* refresh repository-facing docs with focused onboarding and contributor guidance, a Codex guardian upgrade checklist, and a lean cross-provider context-sharing plan
+
+### References
+
+* [#453](https://github.com/sendbird-playground/stave/pull/453)
+* [#450](https://github.com/sendbird-playground/stave/pull/450)
+* [#455](https://github.com/sendbird-playground/stave/pull/455)
+* [#459](https://github.com/sendbird-playground/stave/pull/459)
+* [#460](https://github.com/sendbird-playground/stave/pull/460)
+* [#463](https://github.com/sendbird-playground/stave/pull/463)
+* [#464](https://github.com/sendbird-playground/stave/pull/464)
+* [#465](https://github.com/sendbird-playground/stave/pull/465)
+* [#466](https://github.com/sendbird-playground/stave/pull/466)
+* [#471](https://github.com/sendbird-playground/stave/pull/471)
+* [9221a8c](https://github.com/sendbird-playground/stave/commit/9221a8c3611264116a03e2581bd32910aa3dfc71)
 ## [0.3.5](https://github.com/sendbird-playground/stave/compare/v0.3.4...v0.3.5) (2026-04-15)
 
 ### Bug Fixes
