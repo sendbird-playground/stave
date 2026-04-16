@@ -87,7 +87,7 @@ const ClaudePermissionResultSchema = z.union([
 ]);
 
 type ClaudePermissionResult = z.infer<typeof ClaudePermissionResultSchema>;
-const CLAUDE_PLAN_MODE_DISALLOWED_TOOLS = [
+const CLAUDE_MUTATING_FILE_TOOL_NAMES = [
   "Edit",
   "MultiEdit",
   "Write",
@@ -95,7 +95,7 @@ const CLAUDE_PLAN_MODE_DISALLOWED_TOOLS = [
   "TodoWrite",
 ] as const;
 const CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES = new Set(
-  CLAUDE_PLAN_MODE_DISALLOWED_TOOLS.map((toolName) => toolName.toLowerCase()),
+  CLAUDE_MUTATING_FILE_TOOL_NAMES.map((toolName) => toolName.toLowerCase()),
 );
 const CLAUDE_AUTO_ALLOWED_TOOL_NAMES = new Set(["exitplanmode"]);
 const CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES = new Set([
@@ -427,7 +427,7 @@ export function resolveClaudeDisallowedTools(args: {
     });
   }
   if (args.permissionMode === "plan") {
-    CLAUDE_PLAN_MODE_DISALLOWED_TOOLS.forEach((toolName) => {
+    CLAUDE_MUTATING_FILE_TOOL_NAMES.forEach((toolName) => {
       merged.add(toolName);
     });
   }
@@ -449,14 +449,42 @@ export function shouldDenyClaudeToolInPlanMode(args: {
   return typeof command === "string" && isMutatingClaudeBashCommand(command);
 }
 
-export function shouldAutoAllowClaudeTool(args: { toolName: string }) {
+export function resolveClaudePermissionModeDecision(args: {
+  permissionMode: ClaudePermissionMode;
+  toolName: string;
+}) {
   const normalizedToolName = args.toolName.trim().toLowerCase();
   if (CLAUDE_AUTO_ALLOWED_TOOL_NAMES.has(normalizedToolName)) {
-    return true;
+    return "allow" as const;
   }
   const leafToolName =
     normalizedToolName.split("__").at(-1) ?? normalizedToolName;
-  return CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES.has(leafToolName);
+  if (CLAUDE_AUTO_ALLOWED_MCP_TOOL_NAMES.has(leafToolName)) {
+    return "allow" as const;
+  }
+  if (args.permissionMode === "bypassPermissions") {
+    return "allow" as const;
+  }
+  if (
+    (args.permissionMode === "acceptEdits" || args.permissionMode === "auto") &&
+    CLAUDE_PLAN_MODE_MUTATING_TOOL_NAMES.has(normalizedToolName)
+  ) {
+    return "allow" as const;
+  }
+  if (args.permissionMode === "dontAsk") {
+    return "deny" as const;
+  }
+  return "prompt" as const;
+}
+
+export function shouldAutoAllowClaudeTool(args: {
+  toolName: string;
+  permissionMode?: ClaudePermissionMode;
+}) {
+  return resolveClaudePermissionModeDecision({
+    permissionMode: args.permissionMode ?? "default",
+    toolName: args.toolName,
+  }) === "allow";
 }
 
 async function resolveEmbeddedStaveLocalMcpServers(): Promise<
@@ -2002,7 +2030,12 @@ export async function streamClaudeWithSdk(
             });
           }
 
-          if (shouldAutoAllowClaudeTool({ toolName })) {
+          const permissionModeDecision = resolveClaudePermissionModeDecision({
+            permissionMode: claudePermissionMode,
+            toolName,
+          });
+
+          if (permissionModeDecision === "allow") {
             return buildClaudeApprovalPermissionResult({
               approved: true,
               normalizedInput,
@@ -2057,6 +2090,13 @@ export async function streamClaudeWithSdk(
             return buildClaudeDenyPermissionResult({
               message: buildClaudePlanModeDenyMessage({ toolName }),
               context: "approval:plan-mode-hard-deny",
+            });
+          }
+
+          if (permissionModeDecision === "deny") {
+            return buildClaudeDenyPermissionResult({
+              message: `Claude permission mode ${claudePermissionMode} denied ${toolName} without prompting.`,
+              context: "approval:permission-mode-deny",
             });
           }
 

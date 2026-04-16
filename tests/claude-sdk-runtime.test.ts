@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildClaudeApprovalPermissionResult,
   resolveClaudeAgentProgressSummaries,
+  resolveClaudePermissionModeDecision,
   buildClaudeSystemPrompt,
   buildClaudeUserInputPermissionResult,
   extractClaudeRequestedSkillSlug,
@@ -344,22 +345,67 @@ describe("Claude internal tool auto-allow", () => {
   test("auto-allows ExitPlanMode without surfacing an approval wait", () => {
     expect(shouldAutoAllowClaudeTool({
       toolName: "ExitPlanMode",
+      permissionMode: "default",
     })).toBe(true);
   });
 
   test("auto-allows managed Stave workspace-information MCP tools", () => {
     expect(shouldAutoAllowClaudeTool({
       toolName: "stave_replace_workspace_notes",
+      permissionMode: "default",
     })).toBe(true);
     expect(shouldAutoAllowClaudeTool({
       toolName: "mcp__stave-local-mcp__stave_add_workspace_todo",
+      permissionMode: "default",
     })).toBe(true);
+  });
+
+  test("auto-allows mutating file tools in Claude auto mode", () => {
+    expect(shouldAutoAllowClaudeTool({
+      toolName: "Edit",
+      permissionMode: "auto",
+    })).toBe(true);
+    expect(shouldAutoAllowClaudeTool({
+      toolName: "Write",
+      permissionMode: "auto",
+    })).toBe(true);
+  });
+
+  test("auto-allows mutating file tools in Claude acceptEdits mode", () => {
+    expect(shouldAutoAllowClaudeTool({
+      toolName: "Edit",
+      permissionMode: "acceptEdits",
+    })).toBe(true);
+  });
+
+  test("does not auto-allow Bash in Claude auto mode", () => {
+    expect(shouldAutoAllowClaudeTool({
+      toolName: "Bash",
+      permissionMode: "auto",
+    })).toBe(false);
   });
 
   test("does not auto-allow ordinary tools", () => {
     expect(shouldAutoAllowClaudeTool({
       toolName: "Bash",
+      permissionMode: "default",
     })).toBe(false);
+  });
+});
+
+describe("Claude permission mode decisions", () => {
+  test("denies unapproved tools without prompting in dontAsk mode", () => {
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "dontAsk",
+      toolName: "Bash",
+    })).toBe("deny");
+  });
+
+  test("auto-allows all tools in bypassPermissions mode", () => {
+    expect(resolveClaudePermissionModeDecision({
+      permissionMode: "bypassPermissions",
+      toolName: "Bash",
+    })).toBe("allow");
   });
 });
 
