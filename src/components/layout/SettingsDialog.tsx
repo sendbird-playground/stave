@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Folder, X } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { Button, Card } from "@/components/ui";
 import {
   Breadcrumb,
@@ -22,8 +23,10 @@ import {
 import { useDismissibleLayer } from "@/lib/dismissible-layer";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/store/app.store";
+import { captureCurrentProjectState } from "@/store/project.utils";
 import { settingsSectionGroups, settingsSections, type SectionId } from "./settings-dialog.schema";
-import { shouldCloseSettingsDialogFromMouseDown } from "./settings-dialog.utils";
+import { resolveSettingsProjectSelection, shouldCloseSettingsDialogFromMouseDown } from "./settings-dialog.utils";
 import { SettingsDialogSectionContent } from "./settings-dialog-sections";
 
 interface SettingsDialogProps {
@@ -38,17 +41,96 @@ const sectionsById = Object.fromEntries(settingsSections.map((section) => [secti
 export function SettingsDialog(args: SettingsDialogProps) {
   const { initialProjectPath, initialSection, open, onOpenChange } = args;
   const [activeSection, setActiveSection] = useState<SectionId>("general");
+  const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
+  const allowHighlightedOverrideRef = useRef(true);
+  const lastHighlightedProjectPathRef = useRef<string | null>(null);
+  const [
+    projectPath,
+    projectName,
+    recentProjects,
+    defaultBranch,
+    workspaces,
+    activeWorkspaceId,
+    workspaceBranchById,
+    workspacePathById,
+    workspaceDefaultById,
+  ] = useAppStore(
+    useShallow((state) => [
+      state.projectPath,
+      state.projectName,
+      state.recentProjects,
+      state.defaultBranch,
+      state.workspaces,
+      state.activeWorkspaceId,
+      state.workspaceBranchById,
+      state.workspacePathById,
+      state.workspaceDefaultById,
+    ] as const),
+  );
   const { containerRef, handleKeyDown } = useDismissibleLayer<HTMLDivElement>({
     enabled: open,
     onDismiss: () => onOpenChange({ open: false }),
   });
+  const projects = useMemo(
+    () =>
+      captureCurrentProjectState({
+        recentProjects,
+        projectPath,
+        projectName,
+        defaultBranch,
+        workspaces,
+        activeWorkspaceId,
+        workspaceBranchById,
+        workspacePathById,
+        workspaceDefaultById,
+      }),
+    [
+      activeWorkspaceId,
+      defaultBranch,
+      projectName,
+      projectPath,
+      recentProjects,
+      workspaceBranchById,
+      workspaceDefaultById,
+      workspacePathById,
+      workspaces,
+    ],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      allowHighlightedOverrideRef.current = true;
+      lastHighlightedProjectPathRef.current = null;
+      setSelectedProjectPath(null);
+      return;
+    }
+    setActiveSection(initialSection ?? "general");
+  }, [initialSection, open]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
-    setActiveSection(initialSection ?? "general");
-  }, [initialSection, open]);
+
+    const highlightedProjectPath = initialProjectPath?.trim() || null;
+    if (highlightedProjectPath !== lastHighlightedProjectPathRef.current) {
+      lastHighlightedProjectPathRef.current = highlightedProjectPath;
+      allowHighlightedOverrideRef.current = true;
+    }
+
+    const nextSelectedProjectPath = resolveSettingsProjectSelection({
+      projects,
+      selectedProjectPath,
+      highlightedProjectPath,
+      currentProjectPath: projectPath,
+      allowHighlightedOverride: allowHighlightedOverrideRef.current,
+    });
+    if (nextSelectedProjectPath === selectedProjectPath) {
+      return;
+    }
+
+    setSelectedProjectPath(nextSelectedProjectPath);
+  }, [initialProjectPath, open, projectPath, projects, selectedProjectPath]);
 
   if (!open) {
     return null;
@@ -93,6 +175,65 @@ export function SettingsDialog(args: SettingsDialogProps) {
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {group.ids.map((sectionId) => {
+                        if (sectionId === "projects") {
+                          return projects.length === 0 ? (
+                            <SidebarMenuItem key="projects-empty">
+                              <SidebarMenuButton
+                                size="sm"
+                                isActive={activeSection === "projects"}
+                                onClick={() => setActiveSection("projects")}
+                                className="text-sidebar-foreground/65"
+                              >
+                                <Folder />
+                                <span>No projects yet</span>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ) : (
+                            projects.map((project) => {
+                              const current = project.projectPath === projectPath;
+                              const active = activeSection === "projects" && selectedProjectPath === project.projectPath;
+
+                              return (
+                                <SidebarMenuItem key={project.projectPath}>
+                                  <SidebarMenuButton
+                                    size="sm"
+                                    isActive={active}
+                                    title={project.projectPath}
+                                    onClick={() => {
+                                      allowHighlightedOverrideRef.current = false;
+                                      setSelectedProjectPath(project.projectPath);
+                                      setActiveSection("projects");
+                                    }}
+                                    className={cn(
+                                      "gap-2",
+                                      active
+                                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
+                                        : "text-sidebar-foreground/78",
+                                    )}
+                                  >
+                                    <Folder />
+                                    <span className="min-w-0 flex-1 truncate">
+                                      {project.projectName}
+                                    </span>
+                                    {current ? (
+                                      <span
+                                        className={cn(
+                                          "rounded-md border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em]",
+                                          active
+                                            ? "border-sidebar-primary-foreground/25 bg-sidebar-primary-foreground/12 text-sidebar-primary-foreground"
+                                            : "border-sidebar-border/80 text-sidebar-foreground/60",
+                                        )}
+                                      >
+                                        current
+                                      </span>
+                                    ) : null}
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              );
+                            })
+                          );
+                        }
+
                         const section = sectionsById[sectionId];
                         const Icon = section.icon;
                         const active = activeSection === section.id;
@@ -151,7 +292,9 @@ export function SettingsDialog(args: SettingsDialogProps) {
               <div className="mx-auto max-w-4xl">
                 <SettingsDialogSectionContent
                   sectionId={activeSection}
-                  highlightedProjectPath={activeSection === "projects" ? initialProjectPath : null}
+                  currentProjectPath={projectPath}
+                  projects={projects}
+                  selectedProjectPath={selectedProjectPath}
                 />
               </div>
             </div>

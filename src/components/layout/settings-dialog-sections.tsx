@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
-import { Check, ChevronDown, ChevronRight, Contrast, FileAudio, Folder, Globe, Monitor, Moon, RefreshCcw, Sun, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Contrast, FileAudio, Globe, Monitor, Moon, RefreshCcw, Sun, Trash2, Upload, X } from "lucide-react";
 import {
   buildModelSelectorOptions,
   buildModelSelectorValue,
@@ -11,7 +11,7 @@ import {
   COMMAND_PALETTE_GROUP_LABELS,
   getCommandPaletteCoreCommands,
 } from "@/components/layout/command-palette-registry";
-import { settingsSectionGroups, settingsSections, type SectionId } from "@/components/layout/settings-dialog.schema";
+import { type SectionId } from "@/components/layout/settings-dialog.schema";
 import { formatTaskUpdatedAt } from "@/lib/tasks";
 import { useShallow } from "zustand/react/shallow";
 import { Badge, Button, Slider, Textarea } from "@/components/ui";
@@ -51,13 +51,11 @@ import {
   useAppStore,
 } from "@/store/app.store";
 import {
-  captureCurrentProjectState,
   normalizeProjectBasePrompt,
   normalizeProjectWorkspaceInitCommand,
   normalizeProjectWorkspaceRootNodeModulesSymlinkPreference,
   type RecentProjectState,
 } from "@/store/project.utils";
-import { resolveSettingsProjectSelection } from "@/components/layout/settings-dialog.utils";
 import {
   DEFAULT_PROMPT_RESPONSE_STYLE,
   DEFAULT_PROMPT_PR_DESCRIPTION,
@@ -183,7 +181,6 @@ const DraftTextarea = memo(function DraftTextarea(args: DraftTextareaProps) {
 function ProjectSettingsPanel(args: {
   project: RecentProjectState;
   isCurrent: boolean;
-  highlighted: boolean;
   onRequestRemove: (args: { projectPath: string; projectName: string }) => void;
 }) {
   const setProjectBasePrompt = useAppStore(
@@ -320,12 +317,9 @@ function ProjectSettingsPanel(args: {
   }, [args.project.projectPath, repositoryRefreshNonce]);
 
   return (
-    <div className={cn("space-y-4", args.highlighted && "scroll-mt-6")}>
+    <div className="space-y-4">
       <div
-        className={cn(
-          "flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/80 bg-card/95 px-4 py-3 shadow-xs",
-          args.highlighted && "border-primary/35 ring-1 ring-primary/20",
-        )}
+        className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/80 bg-card/95 px-4 py-3 shadow-xs"
       >
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -373,7 +367,6 @@ function ProjectSettingsPanel(args: {
       <SettingsCard
         title="Repository Settings"
         description="Repository-specific defaults, git metadata, and list management for this project."
-        className={cn(args.highlighted && "ring-1 ring-primary/20")}
       >
         <LabeledField
           title="Project Instructions"
@@ -530,114 +523,25 @@ function ProjectSettingsPanel(args: {
   );
 }
 
-function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
-  const [
-    projectPath,
-    projectName,
-    recentProjects,
-    defaultBranch,
-    workspaces,
-    activeWorkspaceId,
-    workspaceBranchById,
-    workspacePathById,
-    workspaceDefaultById,
-  ] = useAppStore(
-    useShallow((state) => [
-      state.projectPath,
-      state.projectName,
-      state.recentProjects,
-      state.defaultBranch,
-      state.workspaces,
-      state.activeWorkspaceId,
-      state.workspaceBranchById,
-      state.workspacePathById,
-      state.workspaceDefaultById,
-    ] as const),
-  );
+function ProjectsSection(args: {
+  currentProjectPath?: string | null;
+  projects: RecentProjectState[];
+  selectedProjectPath?: string | null;
+}) {
   const removeProjectFromList = useAppStore((state) => state.removeProjectFromList);
-  const projectMenuRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const allowHighlightedOverrideRef = useRef(true);
-  const lastHighlightedProjectPathRef = useRef<string | null>(null);
   const [projectToRemove, setProjectToRemove] = useState<{
     projectPath: string;
     projectName: string;
   } | null>(null);
-  const [selectedProjectPath, setSelectedProjectPath] = useState<string | null>(null);
-  const projects = useMemo(
-    () =>
-      captureCurrentProjectState({
-        recentProjects,
-        projectPath,
-        projectName,
-        defaultBranch,
-        workspaces,
-        activeWorkspaceId,
-        workspaceBranchById,
-        workspacePathById,
-        workspaceDefaultById,
-      }),
-    [
-      activeWorkspaceId,
-      defaultBranch,
-      projectName,
-      projectPath,
-      recentProjects,
-      workspaceBranchById,
-      workspaceDefaultById,
-      workspacePathById,
-      workspaces,
-    ],
-  );
-
-  useEffect(() => {
-    const highlightedProjectPath = args.highlightedProjectPath?.trim();
-    const normalizedHighlightedProjectPath = highlightedProjectPath || null;
-    if (normalizedHighlightedProjectPath !== lastHighlightedProjectPathRef.current) {
-      lastHighlightedProjectPathRef.current = normalizedHighlightedProjectPath;
-      allowHighlightedOverrideRef.current = true;
-    }
-
-    const nextSelectedProjectPath = resolveSettingsProjectSelection({
-      projects,
-      selectedProjectPath,
-      highlightedProjectPath: normalizedHighlightedProjectPath,
-      currentProjectPath: projectPath,
-      allowHighlightedOverride: allowHighlightedOverrideRef.current,
-    });
-    if (nextSelectedProjectPath === selectedProjectPath) {
-      return;
-    }
-
-    setSelectedProjectPath(nextSelectedProjectPath);
-  }, [args.highlightedProjectPath, projectPath, projects, selectedProjectPath]);
-
-  useEffect(() => {
-    const activeProjectPath = selectedProjectPath ?? args.highlightedProjectPath?.trim() ?? null;
-    if (!activeProjectPath) {
-      return;
-    }
-
-    const node = projectMenuRefs.current[activeProjectPath];
-    if (!node) {
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      node.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [args.highlightedProjectPath, projects.length, selectedProjectPath]);
-
-  const selectedProject = projects.find((project) => project.projectPath === selectedProjectPath) ?? null;
+  const selectedProject = args.projects.find((project) => project.projectPath === args.selectedProjectPath) ?? null;
 
   return (
     <>
       <SectionHeading
         title="Projects"
-        description="Choose a registered project from the menu, then review repository-specific workspace defaults, git metadata, scripts config, and removal actions."
+        description="Review repository-specific workspace defaults, git metadata, scripts config, and removal actions for the selected project."
       />
-      {projects.length === 0 ? (
+      {args.projects.length === 0 ? (
         <SettingsCard
           title="No Projects Yet"
           description="Open a project from the sidebar to register it here."
@@ -648,84 +552,24 @@ function ProjectsSection(args: { highlightedProjectPath?: string | null }) {
           </p>
         </SettingsCard>
       ) : (
-        <section className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <div className="rounded-2xl border border-border/80 bg-card/70 p-2 shadow-xs">
-            <div className="flex items-center justify-between px-2 pb-2 pt-1">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Project Menu
+        <div className="min-w-0">
+          {selectedProject ? (
+            <ProjectSettingsPanel
+              project={selectedProject}
+              isCurrent={selectedProject.projectPath === args.currentProjectPath}
+              onRequestRemove={setProjectToRemove}
+            />
+          ) : (
+            <SettingsCard
+              title="Project Details"
+              description="Choose a project from the Settings sidebar to open its settings panel."
+            >
+              <p className="text-sm text-muted-foreground">
+                Pick a project from the sidebar to inspect its workspace defaults and repository metadata.
               </p>
-              <Badge variant="secondary" className="h-6 px-2">
-                {projects.length}
-              </Badge>
-            </div>
-            <div className="flex flex-col gap-1">
-              {projects.map((project) => {
-                const selected = selectedProjectPath === project.projectPath;
-                const current = project.projectPath === projectPath;
-
-                return (
-                  <button
-                    key={project.projectPath}
-                    ref={(node) => {
-                      projectMenuRefs.current[project.projectPath] = node;
-                    }}
-                    type="button"
-                    onClick={() => {
-                      allowHighlightedOverrideRef.current = false;
-                      setSelectedProjectPath(project.projectPath);
-                    }}
-                    className={cn(
-                      "flex w-full flex-col items-start gap-1 rounded-xl border px-3 py-3 text-left transition-colors",
-                      selected
-                        ? "border-primary/35 bg-primary/5 shadow-xs"
-                        : "border-transparent bg-transparent hover:border-border/80 hover:bg-muted/50",
-                    )}
-                    aria-current={selected ? "true" : undefined}
-                  >
-                    <div className="flex w-full items-center gap-2">
-                      <Folder className={cn("size-4 shrink-0", selected ? "text-primary" : "text-muted-foreground")} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {project.projectName}
-                      </span>
-                      {current ? (
-                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
-                          current
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <p className="w-full truncate pl-6 text-xs text-muted-foreground">
-                      {project.projectPath}
-                    </p>
-                    <div className="flex items-center gap-2 pl-6 text-[11px] text-muted-foreground">
-                      <span>{project.workspaces.length} ws</span>
-                      <span>default: {project.defaultBranch}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="min-w-0">
-            {selectedProject ? (
-              <ProjectSettingsPanel
-                project={selectedProject}
-                isCurrent={selectedProject.projectPath === projectPath}
-                highlighted={args.highlightedProjectPath === selectedProject.projectPath}
-                onRequestRemove={setProjectToRemove}
-              />
-            ) : (
-              <SettingsCard
-                title="Project Details"
-                description="Select a project from the menu to open its settings panel."
-              >
-                <p className="text-sm text-muted-foreground">
-                  Pick a project from the menu to inspect its workspace defaults and repository metadata.
-                </p>
-              </SettingsCard>
-            )}
-          </div>
-        </section>
+            </SettingsCard>
+          )}
+        </div>
       )}
       <ConfirmDialog
         open={Boolean(projectToRemove)}
@@ -2333,14 +2177,20 @@ function EditorSection() {
 
 export function SettingsDialogSectionContent(args: {
   sectionId: SectionId;
-  highlightedProjectPath?: string | null;
+  currentProjectPath?: string | null;
+  projects: RecentProjectState[];
+  selectedProjectPath?: string | null;
 }) {
   switch (args.sectionId) {
     case "general":
       return <GeneralSection />;
     case "projects":
       return (
-        <ProjectsSection highlightedProjectPath={args.highlightedProjectPath} />
+        <ProjectsSection
+          currentProjectPath={args.currentProjectPath}
+          projects={args.projects}
+          selectedProjectPath={args.selectedProjectPath}
+        />
       );
     case "theme":
       return <ThemeSection />;
