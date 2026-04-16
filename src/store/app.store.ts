@@ -305,6 +305,7 @@ import {
   summarizeWorkspaceInitCommand,
   buildWorkspaceRootNodeModulesSymlinkCommand,
   buildWorkspaceCreationNotice,
+  isDefaultWorkspaceName,
   registerTaskWorkspaceOwnership,
   retainTaskWorkspaceOwnership,
   resolveWorkspaceName,
@@ -5725,8 +5726,7 @@ export const useAppStore = create<AppState>()(
           const isProtectedDefault =
             state.workspaceDefaultById[workspaceId] ||
             workspaceId === starterWorkspaceId ||
-            workspace?.name.toLowerCase() ===
-              defaultWorkspaceName.toLowerCase();
+            isDefaultWorkspaceName(workspace?.name);
           if (isProtectedDefault) {
             return;
           }

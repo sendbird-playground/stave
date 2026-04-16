@@ -2,6 +2,9 @@ import type { WorkspaceSummary } from "@/lib/db/workspaces.db";
 import type { Task } from "@/types/chat";
 import { defaultWorkspaceName, starterWorkspaceId, type WorkspaceSessionState } from "@/store/workspace-session-state";
 import { normalizeComparablePath } from "@/lib/source-control-worktrees";
+import { resolvePathBaseName } from "@/lib/path-utils";
+
+export { resolvePathBaseName } from "@/lib/path-utils";
 
 const MAX_RECENT_PROJECTS = 12;
 
@@ -36,15 +39,73 @@ export function normalizeProjectWorkspaceRootNodeModulesSymlinkPreference(args: 
   return args.value === true;
 }
 
-export function resolveProjectWorkspaceInitCommand(args: {
+export function formatWorkspacePathLabel(args: {
+  workspacePath?: string;
+  projectPath?: string | null;
+}) {
+  const workspacePath = args.workspacePath?.trim();
+  if (!workspacePath) {
+    return "";
+  }
+
+  const projectPath = args.projectPath?.trim();
+  if (projectPath && workspacePath.startsWith(`${projectPath}/`)) {
+    return workspacePath.slice(projectPath.length + 1);
+  }
+
+  return workspacePath;
+}
+
+export function isDefaultWorkspaceName(value?: string | null) {
+  return value?.trim().toLowerCase() === defaultWorkspaceName.toLowerCase();
+}
+
+function findRecentProjectByPath(args: {
   projectPath?: string | null;
   recentProjects: RecentProjectState[];
 }) {
   const projectPath = args.projectPath?.trim();
   if (!projectPath) {
-    return "";
+    return null;
   }
-  const project = args.recentProjects.find((item) => item.projectPath === projectPath);
+
+  return args.recentProjects.find((item) => item.projectPath === projectPath) ?? null;
+}
+
+function normalizeRecentProjectPreferences(args: {
+  projectBasePrompt?: string | null;
+  newWorkspaceInitCommand?: string | null;
+  newWorkspaceUseRootNodeModulesSymlink?: boolean | null;
+}) {
+  return {
+    projectBasePrompt: normalizeProjectBasePrompt({
+      value: args.projectBasePrompt,
+    }),
+    newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
+      value: args.newWorkspaceInitCommand,
+    }),
+    newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
+      value: args.newWorkspaceUseRootNodeModulesSymlink,
+    }),
+  };
+}
+
+function resolveRecentProjectPreferences(args: {
+  projectPath?: string | null;
+  recentProjects: RecentProjectState[];
+}) {
+  return {
+    projectBasePrompt: resolveProjectBasePrompt(args),
+    newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand(args),
+    newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference(args),
+  };
+}
+
+export function resolveProjectWorkspaceInitCommand(args: {
+  projectPath?: string | null;
+  recentProjects: RecentProjectState[];
+}) {
+  const project = findRecentProjectByPath(args);
   return normalizeProjectWorkspaceInitCommand({ value: project?.newWorkspaceInitCommand });
 }
 
@@ -52,11 +113,7 @@ export function resolveProjectWorkspaceRootNodeModulesSymlinkPreference(args: {
   projectPath?: string | null;
   recentProjects: RecentProjectState[];
 }) {
-  const projectPath = args.projectPath?.trim();
-  if (!projectPath) {
-    return false;
-  }
-  const project = args.recentProjects.find((item) => item.projectPath === projectPath);
+  const project = findRecentProjectByPath(args);
   return normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
     value: project?.newWorkspaceUseRootNodeModulesSymlink,
   });
@@ -66,11 +123,7 @@ export function resolveProjectBasePrompt(args: {
   projectPath?: string | null;
   recentProjects: RecentProjectState[];
 }) {
-  const projectPath = args.projectPath?.trim();
-  if (!projectPath) {
-    return "";
-  }
-  const project = args.recentProjects.find((item) => item.projectPath === projectPath);
+  const project = findRecentProjectByPath(args);
   return normalizeProjectBasePrompt({ value: project?.projectBasePrompt });
 }
 
@@ -146,20 +199,50 @@ export function retainTaskWorkspaceOwnership(args: {
   );
 }
 
+function findWorkspaceById(args: {
+  workspaceId: string;
+  workspaces: WorkspaceSummary[];
+}) {
+  return args.workspaces.find((workspace) => workspace.id === args.workspaceId) ?? null;
+}
+
+function findRecentProjectWorkspaceById(args: {
+  workspaceId: string;
+  recentProjects: RecentProjectState[];
+}) {
+  for (const project of args.recentProjects) {
+    const workspace = findWorkspaceById({
+      workspaceId: args.workspaceId,
+      workspaces: project.workspaces,
+    });
+    if (workspace) {
+      return { project, workspace };
+    }
+  }
+
+  return null;
+}
+
 export function resolveWorkspaceName(args: {
   state: Pick<{ workspaces: WorkspaceSummary[]; recentProjects: RecentProjectState[] }, "workspaces" | "recentProjects">;
   workspaceId: string;
 }) {
-  const activeWorkspaceName = args.state.workspaces.find((workspace) => workspace.id === args.workspaceId)?.name;
-  if (activeWorkspaceName) {
-    return activeWorkspaceName;
+  const currentWorkspace = findWorkspaceById({
+    workspaceId: args.workspaceId,
+    workspaces: args.state.workspaces,
+  });
+  if (currentWorkspace?.name) {
+    return currentWorkspace.name;
   }
-  for (const project of args.state.recentProjects) {
-    const workspaceName = project.workspaces.find((workspace) => workspace.id === args.workspaceId)?.name;
-    if (workspaceName) {
-      return workspaceName;
-    }
+
+  const recentWorkspace = findRecentProjectWorkspaceById({
+    workspaceId: args.workspaceId,
+    recentProjects: args.state.recentProjects,
+  });
+  if (recentWorkspace?.workspace.name) {
+    return recentWorkspace.workspace.name;
   }
+
   return defaultWorkspaceName;
 }
 
@@ -172,23 +255,26 @@ export function resolveProjectForWorkspaceId(args: {
   }, "projectPath" | "projectName" | "workspaces" | "recentProjects">;
   workspaceId: string;
 }) {
-  if (
-    args.state.projectPath
-    && args.state.workspaces.some((workspace) => workspace.id === args.workspaceId)
-  ) {
+  const currentWorkspace = findWorkspaceById({
+    workspaceId: args.workspaceId,
+    workspaces: args.state.workspaces,
+  });
+  if (args.state.projectPath && currentWorkspace) {
     return {
       projectPath: args.state.projectPath,
       projectName: args.state.projectName ?? resolveProjectNameFromPath({ projectPath: args.state.projectPath }),
     };
   }
 
-  for (const project of args.state.recentProjects) {
-    if (project.workspaces.some((workspace) => workspace.id === args.workspaceId)) {
-      return {
-        projectPath: project.projectPath,
-        projectName: project.projectName,
-      };
-    }
+  const recentWorkspace = findRecentProjectWorkspaceById({
+    workspaceId: args.workspaceId,
+    recentProjects: args.state.recentProjects,
+  });
+  if (recentWorkspace) {
+    return {
+      projectPath: recentWorkspace.project.projectPath,
+      projectName: recentWorkspace.project.projectName,
+    };
   }
 
   return null;
@@ -273,11 +359,7 @@ export function toWorkspaceFolderName(args: { branch: string }) {
 }
 
 export function resolveProjectNameFromPath(args: { projectPath: string }) {
-  return args.projectPath
-    .split(/[\\/]/)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .at(-1) ?? "project";
+  return resolvePathBaseName({ path: args.projectPath, fallback: "project" });
 }
 
 export function normalizeProjectDisplayName(args: { projectPath: string; projectName?: string | null }) {
@@ -362,7 +444,7 @@ export function resolveCurrentProjectDefaultWorkspaceId(args: {
       }
 
       const workspace = args.workspaces.find((item) => item.id === workspaceId);
-      return workspace?.name.toLowerCase() === defaultWorkspaceName.toLowerCase();
+      return isDefaultWorkspaceName(workspace?.name);
     })?.[0];
   if (rememberedDefaultWorkspaceId) {
     return rememberedDefaultWorkspaceId;
@@ -376,7 +458,7 @@ export function resolveCurrentProjectDefaultWorkspaceId(args: {
     }
   }
   const compatibleNamedDefaultWorkspace = args.workspaces.find((workspace) => (
-    workspace.name.toLowerCase() === defaultWorkspaceName.toLowerCase()
+    isDefaultWorkspaceName(workspace.name)
     && (!comparableProjectPath || normalizeComparablePath(workspacePathById[workspace.id]) === comparableProjectPath)
   ));
   return args.workspaces.find((workspace) => workspace.id === starterWorkspaceId)?.id
@@ -420,7 +502,7 @@ function normalizeRecentProjectStateEntry(project: RecentProjectState): RecentPr
     const representsProjectRoot = (
       workspace.id === defaultWorkspaceId
       || comparableWorkspacePath === comparableProjectPath
-      || workspace.name.toLowerCase() === defaultWorkspaceName.toLowerCase()
+      || isDefaultWorkspaceName(workspace.name)
     );
     if (representsProjectRoot || seenWorkspaceIds.has(workspace.id)) {
       continue;
@@ -474,14 +556,10 @@ function normalizeRecentProjectStateEntry(project: RecentProjectState): RecentPr
     workspaceBranchById: nextWorkspaceBranchById,
     workspacePathById: nextWorkspacePathById,
     workspaceDefaultById: nextWorkspaceDefaultById,
-    projectBasePrompt: normalizeProjectBasePrompt({
-      value: project.projectBasePrompt,
-    }),
-    newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
-      value: project.newWorkspaceInitCommand,
-    }),
-    newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
-      value: project.newWorkspaceUseRootNodeModulesSymlink,
+    ...normalizeRecentProjectPreferences({
+      projectBasePrompt: project.projectBasePrompt,
+      newWorkspaceInitCommand: project.newWorkspaceInitCommand,
+      newWorkspaceUseRootNodeModulesSymlink: project.newWorkspaceUseRootNodeModulesSymlink,
     }),
   };
 }
@@ -502,7 +580,10 @@ export function normalizeCurrentProjectState(args: {
     return null;
   }
 
-  const rememberedProject = args.recentProjects.find((project) => project.projectPath === projectPath) ?? null;
+  const rememberedProject = findRecentProjectByPath({
+    projectPath,
+    recentProjects: args.recentProjects,
+  });
   return normalizeRecentProjectStateEntry({
     projectPath,
     projectName: args.projectName?.trim()
@@ -549,14 +630,10 @@ export function cloneRecentProjectState(project: RecentProjectState): RecentProj
     workspaceBranchById: { ...project.workspaceBranchById },
     workspacePathById: { ...project.workspacePathById },
     workspaceDefaultById: { ...project.workspaceDefaultById },
-    projectBasePrompt: normalizeProjectBasePrompt({
-      value: project.projectBasePrompt,
-    }),
-    newWorkspaceInitCommand: normalizeProjectWorkspaceInitCommand({
-      value: project.newWorkspaceInitCommand,
-    }),
-    newWorkspaceUseRootNodeModulesSymlink: normalizeProjectWorkspaceRootNodeModulesSymlinkPreference({
-      value: project.newWorkspaceUseRootNodeModulesSymlink,
+    ...normalizeRecentProjectPreferences({
+      projectBasePrompt: project.projectBasePrompt,
+      newWorkspaceInitCommand: project.newWorkspaceInitCommand,
+      newWorkspaceUseRootNodeModulesSymlink: project.newWorkspaceUseRootNodeModulesSymlink,
     }),
   };
 }
@@ -621,15 +698,7 @@ export function captureCurrentProjectState(args: {
       workspaceBranchById: args.workspaceBranchById,
       workspacePathById: args.workspacePathById,
       workspaceDefaultById: args.workspaceDefaultById,
-      projectBasePrompt: resolveProjectBasePrompt({
-        projectPath: args.projectPath,
-        recentProjects: args.recentProjects,
-      }),
-      newWorkspaceInitCommand: resolveProjectWorkspaceInitCommand({
-        projectPath: args.projectPath,
-        recentProjects: args.recentProjects,
-      }),
-      newWorkspaceUseRootNodeModulesSymlink: resolveProjectWorkspaceRootNodeModulesSymlinkPreference({
+      ...resolveRecentProjectPreferences({
         projectPath: args.projectPath,
         recentProjects: args.recentProjects,
       }),

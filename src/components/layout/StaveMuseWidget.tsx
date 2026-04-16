@@ -30,6 +30,7 @@ import { UI_LAYER_CLASS, UI_LAYER_VALUE } from "@/lib/ui-layers";
 import { STAVE_MUSE_SESSION_ID } from "@/lib/stave-muse";
 import { cn } from "@/lib/utils";
 import { STAVE_MUSE_OPEN_SETTINGS_EVENT, useAppStore } from "@/store/app.store";
+import { isDefaultWorkspaceName } from "@/store/project.utils";
 
 const TARGET_OPTIONS = [
   { value: "app", label: "App", icon: Globe2 },
@@ -299,7 +300,7 @@ export function StaveMuseWidget(args: {
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <WorkspaceIdentityMark
                     workspaceName={activeWorkspaceName ?? "Workspace"}
-                    isDefault={activeWorkspaceName?.toLowerCase() === "default workspace"}
+                    isDefault={isDefaultWorkspaceName(activeWorkspaceName)}
                     className="size-4 rounded-md"
                     iconClassName="size-2.5"
                   />

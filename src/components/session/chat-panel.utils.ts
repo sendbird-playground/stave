@@ -34,11 +34,11 @@ export type MessagePartSegment =
   | { kind: "image_contexts"; parts: ImageContextPart[]; startIndex: number }
   | { kind: "other"; part: MessagePart; index: number };
 
-function isSubagentToolPart(args: { toolName: string }) {
+export function isSubagentToolPart(args: { toolName: string }) {
   return args.toolName.trim().toLowerCase() === "agent";
 }
 
-function isTodoToolPart(args: { toolName: string }) {
+export function isTodoToolPart(args: { toolName: string }) {
   return args.toolName.trim().toLowerCase() === "todowrite";
 }
 

@@ -24,10 +24,6 @@ interface ContinueWorkspaceDialogProps {
   onContinue: (args: { name: string; baseBranch?: string }) => Promise<{ ok: boolean; message?: string; noticeLevel?: "success" | "warning" }>;
 }
 
-function buildSuggestedWorkspaceName(sourceBranch?: string) {
-  return buildContinueWorkspaceBranchName({ sourceBranch });
-}
-
 export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
   const [workspaceName, setWorkspaceName] = useState("");
   const [selectedBaseBranch, setSelectedBaseBranch] = useState(props.baseBranch);
@@ -48,7 +44,7 @@ export function ContinueWorkspaceDialog(props: ContinueWorkspaceDialogProps) {
       return;
     }
 
-    setWorkspaceName(buildSuggestedWorkspaceName(props.sourceBranch));
+    setWorkspaceName(buildContinueWorkspaceBranchName({ sourceBranch: props.sourceBranch }));
     setSelectedBaseBranch(props.baseBranch);
     setShowBaseBranchPicker(false);
     setAvailableRemoteBranches([]);

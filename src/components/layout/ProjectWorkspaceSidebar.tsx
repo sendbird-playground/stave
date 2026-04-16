@@ -76,6 +76,7 @@ import { resolveSidebarArtworkClass } from "@/lib/themes";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { isDefaultWorkspaceName } from "@/store/project.utils";
 import type { ChatMessage, Task } from "@/types/chat";
 
 type ProjectSidebarView = ProjectSidebarCollapsedProjectView;
@@ -131,7 +132,7 @@ function resolveRespondingToneClass(args: {
 }
 
 function formatWorkspaceName(name: string, branch?: string) {
-  if (name.toLowerCase() === "default workspace") {
+  if (isDefaultWorkspaceName(name)) {
     return (
       <>
         Default

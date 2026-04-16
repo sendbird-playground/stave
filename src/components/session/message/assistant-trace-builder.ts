@@ -1,4 +1,10 @@
-import { getRenderableMessageParts, isCodeDiffSummarySystemEvent } from "@/components/session/chat-panel.utils";
+import {
+  getRenderableMessageParts,
+  isCodeDiffSummarySystemEvent,
+  isSubagentProgressSystemEvent,
+  isSubagentToolPart,
+  isTodoToolPart,
+} from "@/components/session/chat-panel.utils";
 import { getAssistantResponseTextStartIndex } from "@/lib/session/assistant-response-parts";
 import type {
   ApprovalPart,
@@ -15,8 +21,6 @@ import type {
   ToolUsePart,
   UserInputPart,
 } from "@/types/chat";
-
-const SUBAGENT_PROGRESS_PREFIX = "Subagent progress:";
 
 /**
  * Heuristic: short filler phrases Claude emits mid-turn that add no user-visible
@@ -72,14 +76,6 @@ export interface AssistantTraceData {
   showStreamingPlaceholder: boolean;
 }
 
-function isSubagentToolPart(toolName: string) {
-  return toolName.trim().toLowerCase() === "agent";
-}
-
-function isTodoToolPart(toolName: string) {
-  return toolName.trim().toLowerCase() === "todowrite";
-}
-
 function shouldIncludeSystemEvent(part: SystemEventPart) {
   const normalized = part.content.trim().toLowerCase();
   if (!normalized) {
@@ -88,7 +84,7 @@ function shouldIncludeSystemEvent(part: SystemEventPart) {
   if (isCodeDiffSummarySystemEvent(part.content)) {
     return false;
   }
-  return !part.content.trimStart().startsWith(SUBAGENT_PROGRESS_PREFIX);
+  return !isSubagentProgressSystemEvent(part.content);
 }
 
 export function buildAssistantTrace(args: {
@@ -150,9 +146,9 @@ export function buildAssistantTrace(args: {
       }
       case "tool_use":
         entries.push({
-          kind: isSubagentToolPart(part.toolName)
+          kind: isSubagentToolPart({ toolName: part.toolName })
             ? "subagent"
-            : isTodoToolPart(part.toolName)
+            : isTodoToolPart({ toolName: part.toolName })
             ? "todo"
             : "tool",
           id: `tool-${index}`,

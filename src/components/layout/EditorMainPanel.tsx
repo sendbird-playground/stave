@@ -3,6 +3,7 @@ import type { editor as MonacoEditorApi, IPosition, IRange } from "monaco-editor
 import { FileCode2, LoaderCircle } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { resolvePathBaseName } from "@/lib/path-utils";
 import { useAppStore } from "@/store/app.store";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
@@ -406,7 +407,7 @@ export function EditorMainPanel() {
     if (tab.isDirty) {
       setTabToClose({
         id: tab.id,
-        fileName: tab.filePath.split("/").filter(Boolean).at(-1) ?? tab.filePath,
+        fileName: resolvePathBaseName({ path: tab.filePath, fallback: tab.filePath }),
       });
       return;
     }
@@ -527,7 +528,7 @@ export function EditorMainPanel() {
                 {activeTab.content ? (
                   <img
                     src={activeTab.content}
-                    alt={activeTab.filePath.split("/").filter(Boolean).at(-1) ?? activeTab.filePath}
+                    alt={resolvePathBaseName({ path: activeTab.filePath, fallback: activeTab.filePath })}
                     className="max-h-full max-w-full cursor-zoom-in object-contain"
                     title="Click to open full screen"
                     onClick={() => setImagePreviewOpen(true)}
@@ -641,7 +642,7 @@ export function EditorMainPanel() {
       <EditorImagePreviewOverlay
         open={Boolean(imagePreviewOpen && activeTabIsImage && activeTab)}
         imageSrc={activeTab?.content ?? ""}
-        alt={activeTab ? activeTab.filePath.split("/").filter(Boolean).at(-1) ?? activeTab.filePath : "Image preview"}
+        alt={activeTab ? resolvePathBaseName({ path: activeTab.filePath, fallback: activeTab.filePath }) : "Image preview"}
         onClose={() => setImagePreviewOpen(false)}
       />
       <ConfirmDialog
