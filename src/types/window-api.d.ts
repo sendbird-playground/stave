@@ -660,9 +660,7 @@ interface WindowTerminalApi {
   createSession?: (
     args: TerminalCreateSessionArgs,
   ) => Promise<{ ok: boolean; sessionId?: string }>;
-  createCliSession?: (
-    args: CliSessionCreateSessionArgs,
-  ) => Promise<{
+  createCliSession?: (args: CliSessionCreateSessionArgs) => Promise<{
     ok: boolean;
     sessionId?: string;
     nativeSessionId?: string;
@@ -1539,6 +1537,8 @@ interface WindowApi {
     minimize?: () => Promise<void>;
     toggleMaximize?: () => Promise<{ isMaximized: boolean }>;
     close?: () => Promise<void>;
+    confirmAppQuit?: () => Promise<{ ok: boolean }>;
+    cancelAppQuit?: () => Promise<{ ok: boolean }>;
     isMaximized?: () => Promise<{ isMaximized: boolean }>;
     getGpuStatus?: () => Promise<{
       hardwareAccelerationEnabled: boolean;
@@ -1548,6 +1548,7 @@ interface WindowApi {
       listener: (payload: { factor: number; percent: number }) => void,
     ) => () => void;
     subscribeCloseShortcut?: (listener: () => void) => () => void;
+    subscribeAppQuitRequested?: (listener: () => void) => () => void;
   };
   shell?: {
     openExternal?: (args: {

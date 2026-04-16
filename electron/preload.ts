@@ -238,6 +238,13 @@ ipcRenderer.on("shortcut:close-tab-or-task", () => {
   }
 });
 
+const appQuitRequestSubscribers = new Set<() => void>();
+ipcRenderer.on("window:app-quit-requested", () => {
+  for (const subscriber of appQuitRequestSubscribers) {
+    subscriber();
+  }
+});
+
 const lspEventSubscribers = new Set<(payload: LspEventPayload) => void>();
 ipcRenderer.on("lsp:event", (_event, payload: LspEventPayload) => {
   for (const subscriber of lspEventSubscribers) {
@@ -699,7 +706,8 @@ contextBridge.exposeInMainWorld("api", {
     loadWorkspaceEditorTabBodies: (args: {
       workspaceId: string;
       tabIds: string[];
-    }) => ipcRenderer.invoke("persistence:load-workspace-editor-tab-bodies", args),
+    }) =>
+      ipcRenderer.invoke("persistence:load-workspace-editor-tab-bodies", args),
     loadProjectRegistry: () =>
       ipcRenderer.invoke("persistence:load-project-registry"),
     upsertWorkspace: (args: { id: string; name: string; snapshot: unknown }) =>
@@ -998,10 +1006,8 @@ contextBridge.exposeInMainWorld("api", {
     }) => ipcRenderer.invoke("terminal:attach-session", args),
     detachSession: (args: { sessionId: string; attachmentId?: string }) =>
       ipcRenderer.invoke("terminal:detach-session", args),
-    resumeSessionStream: (args: {
-      sessionId: string;
-      attachmentId: string;
-    }) => ipcRenderer.invoke("terminal:resume-session-stream", args),
+    resumeSessionStream: (args: { sessionId: string; attachmentId: string }) =>
+      ipcRenderer.invoke("terminal:resume-session-stream", args),
     getSlotState: (args: { slotKey: string }) =>
       ipcRenderer.invoke("terminal:get-slot-state", args),
     getSessionResumeInfo: (args: { sessionId: string }) =>
@@ -1144,6 +1150,10 @@ contextBridge.exposeInMainWorld("api", {
     minimize: () => ipcRenderer.invoke("window:minimize"),
     toggleMaximize: () => ipcRenderer.invoke("window:toggle-maximize"),
     close: () => ipcRenderer.invoke("window:close"),
+    confirmAppQuit: () =>
+      ipcRenderer.invoke("window:confirm-app-quit") as Promise<{ ok: boolean }>,
+    cancelAppQuit: () =>
+      ipcRenderer.invoke("window:cancel-app-quit") as Promise<{ ok: boolean }>,
     isMaximized: () => ipcRenderer.invoke("window:is-maximized"),
     getGpuStatus: () =>
       ipcRenderer.invoke("window:get-gpu-status") as Promise<{
@@ -1162,6 +1172,12 @@ contextBridge.exposeInMainWorld("api", {
       closeShortcutSubscribers.add(listener);
       return () => {
         closeShortcutSubscribers.delete(listener);
+      };
+    },
+    subscribeAppQuitRequested: (listener: () => void) => {
+      appQuitRequestSubscribers.add(listener);
+      return () => {
+        appQuitRequestSubscribers.delete(listener);
       };
     },
   },

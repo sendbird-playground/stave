@@ -9,7 +9,15 @@ import {
 } from "./main/stave-mcp-server";
 import { createMainWindow, getMainWindow } from "./main/window";
 import { buildApplicationMenu } from "./main/application-menu";
-import { shouldSkipQuitConfirmation } from "./main/quit-state";
+import {
+  cancelQuitPrompt,
+  confirmQuitPrompt,
+  hasConfirmedQuit,
+  isQuitPromptOpen,
+  openQuitPrompt,
+  requestRendererQuitConfirmation,
+  shouldSkipQuitConfirmation,
+} from "./main/quit-state";
 
 const persistenceRuntime = configurePersistenceUserDataPath(app);
 process.env.STAVE_USER_DATA_PATH = persistenceRuntime.userDataPath;
@@ -56,9 +64,6 @@ app.whenReady().then(() => {
   });
 });
 
-let quitConfirmed = false;
-let isQuitPromptOpen = false;
-
 app.on("before-quit", (event) => {
   if (quittingAfterCleanup) {
     return;
@@ -67,7 +72,7 @@ app.on("before-quit", (event) => {
   event.preventDefault();
 
   // Programmatic quit paths (e.g. update-restart) bypass the user dialog.
-  if (shouldSkipQuitConfirmation() || quitConfirmed) {
+  if (shouldSkipQuitConfirmation() || hasConfirmedQuit()) {
     void runBeforeQuitCleanup().finally(() => {
       quittingAfterCleanup = true;
       app.quit();
@@ -75,20 +80,30 @@ app.on("before-quit", (event) => {
     return;
   }
 
-  // Guard against multiple concurrent dialogs (e.g. rapid Cmd+Q).
-  if (isQuitPromptOpen) {
-    return;
-  }
-  isQuitPromptOpen = true;
-
-  // Show confirmation dialog before quitting.
-  void showQuitConfirmation().then((confirmed) => {
-    isQuitPromptOpen = false;
-    if (!confirmed) {
+  if (isQuitPromptOpen()) {
+    if (requestRendererQuitConfirmation()) {
       return;
     }
-    quitConfirmed = true;
-    app.quit(); // re-trigger before-quit, this time quitConfirmed === true
+    cancelQuitPrompt();
+  }
+
+  // Guard against multiple concurrent dialogs (e.g. rapid Cmd+Q).
+  if (!openQuitPrompt()) {
+    return;
+  }
+
+  if (requestRendererQuitConfirmation()) {
+    return;
+  }
+
+  // Fall back to a native dialog when the renderer cannot receive the request.
+  void showQuitConfirmation().then((confirmed) => {
+    if (!confirmed) {
+      cancelQuitPrompt();
+      return;
+    }
+    confirmQuitPrompt();
+    app.quit(); // re-trigger before-quit, this time confirmation is already set
   });
 });
 
