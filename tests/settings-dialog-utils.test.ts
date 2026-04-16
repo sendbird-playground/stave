@@ -72,6 +72,16 @@ describe("resolveSettingsProjectSelection", () => {
       allowHighlightedOverride: false,
     })).toBe("/tmp/project-b");
   });
+
+  test("falls back to the first registered project when no other target matches", () => {
+    expect(resolveSettingsProjectSelection({
+      projects,
+      selectedProjectPath: "/tmp/removed-project",
+      highlightedProjectPath: "/tmp/missing-highlight",
+      currentProjectPath: "/tmp/missing-current",
+      allowHighlightedOverride: false,
+    })).toBe("/tmp/project-a");
+  });
 });
 
 describe("shouldCloseSettingsDialogFromMouseDown", () => {
