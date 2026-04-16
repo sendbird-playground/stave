@@ -2,7 +2,7 @@
 
 Track Claude SDK features that are worth integrating later, but are not part of the current shipped runtime surface.
 
-Last reviewed: 2026-03-16 — SDK 0.2.76, CLI 2.1.72
+Last reviewed: 2026-04-17 — SDK 0.2.111
 
 ## Current status
 

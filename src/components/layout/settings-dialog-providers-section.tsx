@@ -46,7 +46,10 @@ import {
   resolveStaveProviderForModel,
   STAVE_AUTO_MODEL_PRESETS,
 } from "@/lib/providers/stave-auto-profile";
-import { getDefaultModelForProvider } from "@/lib/providers/model-catalog";
+import {
+  DEFAULT_CLAUDE_OPUS_MODEL,
+  getDefaultModelForProvider,
+} from "@/lib/providers/model-catalog";
 import { useCodexModelCatalog } from "@/lib/providers/use-codex-model-catalog";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import type {
@@ -78,7 +81,13 @@ const STAVE_AUTO_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
 const CLAUDE_ADVISOR_SOURCE_MODEL_OPTIONS = buildModelSelectorOptions({
   providerIds: ["claude-code"],
   modelsByProvider: {
-    "claude-code": ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-6"],
+    "claude-code": [
+      "claude-haiku-4-5",
+      "claude-sonnet-4-6",
+      DEFAULT_CLAUDE_OPUS_MODEL,
+      "claude-opus-4-6",
+      "claude-opus-4-6[1m]",
+    ],
   },
 });
 
@@ -194,6 +203,14 @@ const CLAUDE_EFFORT_HELP = [
       "Spend more effort on difficult debugging, design, or review work.",
     example:
       "Useful for tricky bugs, architecture questions, or larger refactors.",
+  },
+  {
+    value: "xhigh",
+    label: "X-High",
+    description:
+      "Go deeper than `high` when the Claude model supports it, with a larger latency cost.",
+    example:
+      "Best for complex root-cause analysis or hard multi-step implementation planning.",
   },
   {
     value: "max",
@@ -444,7 +461,7 @@ function resolveClaudeAdvisorSourceModel(args: {
     return "claude-sonnet-4-6";
   }
   if (normalized.includes("opus")) {
-    return "claude-opus-4-6";
+    return DEFAULT_CLAUDE_OPUS_MODEL;
   }
   return args.fallback;
 }

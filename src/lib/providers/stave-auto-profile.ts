@@ -8,8 +8,13 @@ import type {
   StaveAutoRoleRuntimeOverridesMap,
   StaveWorkerRole,
 } from "@/lib/providers/provider.types";
+import { DEFAULT_CLAUDE_OPUS_MODEL } from "@/lib/providers/model-catalog";
 
-export type StaveAutoModelPresetId = "recommended" | "recommended-1m" | "claude-only" | "codex-only";
+export type StaveAutoModelPresetId =
+  | "recommended"
+  | "recommended-1m"
+  | "claude-only"
+  | "codex-only";
 
 type StaveAutoModelProfile = {
   classifierModel: string;
@@ -106,30 +111,35 @@ export function normalizeStaveAutoRoleRuntimeOverrides(args: {
 
     const roleValue = rawRole as Record<string, unknown>;
     const rawClaude = roleValue.claude;
-    if (rawClaude && typeof rawClaude === "object" && !Array.isArray(rawClaude)) {
+    if (
+      rawClaude &&
+      typeof rawClaude === "object" &&
+      !Array.isArray(rawClaude)
+    ) {
       const claudeValue = rawClaude as Record<string, unknown>;
       if (
-        claudeValue.permissionMode === "default"
-        || claudeValue.permissionMode === "acceptEdits"
-        || claudeValue.permissionMode === "bypassPermissions"
-        || claudeValue.permissionMode === "plan"
-        || claudeValue.permissionMode === "dontAsk"
-        || claudeValue.permissionMode === "auto"
+        claudeValue.permissionMode === "default" ||
+        claudeValue.permissionMode === "acceptEdits" ||
+        claudeValue.permissionMode === "bypassPermissions" ||
+        claudeValue.permissionMode === "plan" ||
+        claudeValue.permissionMode === "dontAsk" ||
+        claudeValue.permissionMode === "auto"
       ) {
         defaults[role].claude.permissionMode = claudeValue.permissionMode;
       }
       if (
-        claudeValue.thinkingMode === "adaptive"
-        || claudeValue.thinkingMode === "enabled"
-        || claudeValue.thinkingMode === "disabled"
+        claudeValue.thinkingMode === "adaptive" ||
+        claudeValue.thinkingMode === "enabled" ||
+        claudeValue.thinkingMode === "disabled"
       ) {
         defaults[role].claude.thinkingMode = claudeValue.thinkingMode;
       }
       if (
-        claudeValue.effort === "low"
-        || claudeValue.effort === "medium"
-        || claudeValue.effort === "high"
-        || claudeValue.effort === "max"
+        claudeValue.effort === "low" ||
+        claudeValue.effort === "medium" ||
+        claudeValue.effort === "high" ||
+        claudeValue.effort === "xhigh" ||
+        claudeValue.effort === "max"
       ) {
         defaults[role].claude.effort = claudeValue.effort;
       }
@@ -142,18 +152,18 @@ export function normalizeStaveAutoRoleRuntimeOverrides(args: {
     if (rawCodex && typeof rawCodex === "object" && !Array.isArray(rawCodex)) {
       const codexValue = rawCodex as Record<string, unknown>;
       if (
-        codexValue.approvalPolicy === "never"
-        || codexValue.approvalPolicy === "on-request"
-        || codexValue.approvalPolicy === "untrusted"
+        codexValue.approvalPolicy === "never" ||
+        codexValue.approvalPolicy === "on-request" ||
+        codexValue.approvalPolicy === "untrusted"
       ) {
         defaults[role].codex.approvalPolicy = codexValue.approvalPolicy;
       }
       if (
-        codexValue.reasoningEffort === "minimal"
-        || codexValue.reasoningEffort === "low"
-        || codexValue.reasoningEffort === "medium"
-        || codexValue.reasoningEffort === "high"
-        || codexValue.reasoningEffort === "xhigh"
+        codexValue.reasoningEffort === "minimal" ||
+        codexValue.reasoningEffort === "low" ||
+        codexValue.reasoningEffort === "medium" ||
+        codexValue.reasoningEffort === "high" ||
+        codexValue.reasoningEffort === "xhigh"
       ) {
         defaults[role].codex.reasoningEffort = codexValue.reasoningEffort;
       }
@@ -166,28 +176,33 @@ export function normalizeStaveAutoRoleRuntimeOverrides(args: {
   return defaults;
 }
 
-export const DEFAULT_STAVE_AUTO_MODEL_PRESET_ID: StaveAutoModelPresetId = "recommended";
+export const DEFAULT_STAVE_AUTO_MODEL_PRESET_ID: StaveAutoModelPresetId =
+  "recommended";
 
 export const STAVE_AUTO_MODEL_PRESETS = [
   {
     id: "recommended",
     label: "Recommended",
-    description: "Balanced Claude + Codex mix. Supervisor uses Sonnet. Verify uses GPT-5.4.",
+    description:
+      "Balanced Claude + Codex mix. Supervisor uses Sonnet. Verify uses GPT-5.4.",
   },
   {
     id: "recommended-1m",
     label: "Recommended (1M)",
-    description: "1M context for supervisor, analyze & general roles. Higher cost for longer sessions.",
+    description:
+      "1M context for supervisor, analyze & general roles. Higher cost for longer sessions.",
   },
   {
     id: "claude-only",
     label: "Claude Only",
-    description: "Keep every Stave Auto role on Claude models only, with supervisor on Sonnet.",
+    description:
+      "Keep every Stave Auto role on Claude models only, with supervisor on Sonnet.",
   },
   {
     id: "codex-only",
     label: "Codex Only",
-    description: "Use GPT-5.4 Mini for lightweight classifier/supervisor/general/quick-edit roles and keep heavy work on GPT-5.4 / GPT-5.3-Codex.",
+    description:
+      "Use GPT-5.4 Mini for lightweight classifier/supervisor/general/quick-edit roles and keep heavy work on GPT-5.4 / GPT-5.3-Codex.",
   },
 ] as const satisfies ReadonlyArray<{
   id: StaveAutoModelPresetId;
@@ -195,12 +210,15 @@ export const STAVE_AUTO_MODEL_PRESETS = [
   description: string;
 }>;
 
-const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAutoModelProfile> = {
+const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<
+  StaveAutoModelPresetId,
+  StaveAutoModelProfile
+> = {
   recommended: {
     classifierModel: "claude-haiku-4-5",
     supervisorModel: "claude-sonnet-4-6",
     planModel: "opusplan",
-    analyzeModel: "claude-opus-4-6",
+    analyzeModel: DEFAULT_CLAUDE_OPUS_MODEL,
     implementModel: "gpt-5.3-codex",
     quickEditModel: "claude-haiku-4-5",
     generalModel: "claude-sonnet-4-6",
@@ -210,7 +228,7 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAuto
     classifierModel: "claude-haiku-4-5",
     supervisorModel: "claude-sonnet-4-6[1m]",
     planModel: "opusplan",
-    analyzeModel: "claude-opus-4-6[1m]",
+    analyzeModel: DEFAULT_CLAUDE_OPUS_MODEL,
     implementModel: "gpt-5.3-codex",
     quickEditModel: "claude-haiku-4-5",
     generalModel: "claude-sonnet-4-6[1m]",
@@ -220,7 +238,7 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAuto
     classifierModel: "claude-haiku-4-5",
     supervisorModel: "claude-sonnet-4-6",
     planModel: "opusplan",
-    analyzeModel: "claude-opus-4-6",
+    analyzeModel: DEFAULT_CLAUDE_OPUS_MODEL,
     implementModel: "claude-sonnet-4-6",
     quickEditModel: "claude-haiku-4-5",
     generalModel: "claude-sonnet-4-6",
@@ -238,7 +256,9 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<StaveAutoModelPresetId, StaveAuto
   },
 };
 
-function toSettingsPatch(args: { profile: StaveAutoModelProfile }): StaveAutoModelSettingsPatch {
+function toSettingsPatch(args: {
+  profile: StaveAutoModelProfile;
+}): StaveAutoModelSettingsPatch {
   const { profile } = args;
   return {
     staveAutoClassifierModel: profile.classifierModel,
@@ -264,16 +284,24 @@ export function detectStaveAutoModelPreset(args: {
   settings: StaveAutoModelSettingsPatch;
 }): StaveAutoModelPresetId | null {
   for (const preset of STAVE_AUTO_MODEL_PRESETS) {
-    const presetSettings = buildStaveAutoModelSettingsPatch({ presetId: preset.id });
+    const presetSettings = buildStaveAutoModelSettingsPatch({
+      presetId: preset.id,
+    });
     if (
-      presetSettings.staveAutoClassifierModel === args.settings.staveAutoClassifierModel
-      && presetSettings.staveAutoSupervisorModel === args.settings.staveAutoSupervisorModel
-      && presetSettings.staveAutoPlanModel === args.settings.staveAutoPlanModel
-      && presetSettings.staveAutoAnalyzeModel === args.settings.staveAutoAnalyzeModel
-      && presetSettings.staveAutoImplementModel === args.settings.staveAutoImplementModel
-      && presetSettings.staveAutoQuickEditModel === args.settings.staveAutoQuickEditModel
-      && presetSettings.staveAutoGeneralModel === args.settings.staveAutoGeneralModel
-      && presetSettings.staveAutoVerifyModel === args.settings.staveAutoVerifyModel
+      presetSettings.staveAutoClassifierModel ===
+        args.settings.staveAutoClassifierModel &&
+      presetSettings.staveAutoSupervisorModel ===
+        args.settings.staveAutoSupervisorModel &&
+      presetSettings.staveAutoPlanModel === args.settings.staveAutoPlanModel &&
+      presetSettings.staveAutoAnalyzeModel ===
+        args.settings.staveAutoAnalyzeModel &&
+      presetSettings.staveAutoImplementModel ===
+        args.settings.staveAutoImplementModel &&
+      presetSettings.staveAutoQuickEditModel ===
+        args.settings.staveAutoQuickEditModel &&
+      presetSettings.staveAutoGeneralModel ===
+        args.settings.staveAutoGeneralModel &&
+      presetSettings.staveAutoVerifyModel === args.settings.staveAutoVerifyModel
     ) {
       return preset.id;
     }
@@ -318,11 +346,14 @@ export function buildStaveAutoProfileFromSettings(args: {
     }),
     promptSupervisorBreakdown: settings.promptSupervisorBreakdown || undefined,
     promptSupervisorSynthesis: settings.promptSupervisorSynthesis || undefined,
-    promptPreprocessorClassifier: settings.promptPreprocessorClassifier || undefined,
+    promptPreprocessorClassifier:
+      settings.promptPreprocessorClassifier || undefined,
   };
 }
 
-export function resolveStaveProviderForModel(args: { model: string }): Exclude<ProviderId, "stave"> {
+export function resolveStaveProviderForModel(args: {
+  model: string;
+}): Exclude<ProviderId, "stave"> {
   const normalizedModel = args.model.trim().toLowerCase();
   if (normalizedModel.includes("codex") || normalizedModel.startsWith("gpt-")) {
     return "codex";

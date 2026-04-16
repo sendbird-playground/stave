@@ -47,6 +47,7 @@ import {
   getProviderLabel,
   listProviderIds,
   normalizeModelSelection,
+  resolveClaudeEffortForModelSwitch,
   providerSupportsNativeCommandCatalog,
 } from "@/lib/providers/model-catalog";
 import { useCodexModelCatalog } from "@/lib/providers/use-codex-model-catalog";
@@ -79,6 +80,7 @@ import {
 } from "@/store/provider-message.utils";
 import {
   resolvePromptDraftPlanModeChange,
+  resolvePromptDraftModelForProvider,
   resolvePromptDraftRuntimeState,
 } from "@/store/prompt-draft-runtime";
 import type { Attachment, ChatMessage, PromptDraft } from "@/types/chat";
@@ -990,6 +992,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     modelClaude,
     modelCodex,
     modelStave,
+    storedClaudeEffort,
     skillsEnabled,
     skillsAutoSuggest,
     providerTimeoutMs,
@@ -1000,6 +1003,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           state.settings.modelClaude,
           state.settings.modelCodex,
           state.settings.modelStave,
+          state.settings.claudeEffort,
           state.settings.skillsEnabled,
           state.settings.skillsAutoSuggest,
           state.settings.providerTimeoutMs,
@@ -1120,10 +1124,22 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
   const isEmpty = activeMessageCount === 0;
   const activeModel =
     activeProvider === "claude-code"
-      ? modelClaude
+      ? resolvePromptDraftModelForProvider({
+          providerId: activeProvider,
+          runtimeOverrides: promptDraftRuntimeOverrides,
+          fallbackModel: modelClaude,
+        })
       : activeProvider === "stave"
-        ? modelStave
-        : modelCodex;
+        ? resolvePromptDraftModelForProvider({
+            providerId: activeProvider,
+            runtimeOverrides: promptDraftRuntimeOverrides,
+            fallbackModel: modelStave,
+          })
+        : resolvePromptDraftModelForProvider({
+            providerId: activeProvider,
+            runtimeOverrides: promptDraftRuntimeOverrides,
+            fallbackModel: modelCodex,
+          });
   const activeProviderAvailable = providerAvailability[activeProvider];
   const selectedModelOption = useMemo<ModelSelectorOption>(
     () =>
@@ -1446,7 +1462,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
 
     const runtimeOptions = buildCommandCatalogRuntimeOptions({
       activeProvider,
-      modelClaude,
+      model: activeModel,
       claudePermissionMode: effectiveClaudePermissionMode,
       claudeAllowDangerouslySkipPermissions,
       claudeSandboxEnabled,
@@ -1508,7 +1524,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     claudeSettingSources,
     providerCommandCatalogRefreshNonce,
     claudeThinkingMode,
-    modelClaude,
+    activeModel,
     workspaceCwd,
   ]);
 
@@ -1533,8 +1549,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
 
   // ── Cross-review: detect last assistant provider and offer opposite review ──
   const lastAssistantProviderId = useAppStore((state) => {
-    const messages =
-      state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
+    const messages = state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i] as ChatMessage | undefined;
       if (!msg) continue;
@@ -1668,46 +1683,41 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       crossReviewProvider={crossReviewProvider}
       onCrossReview={crossReviewProvider ? handleCrossReview : undefined}
       onModelSelect={({ selection }) => {
+        const nextModel = normalizeModelSelection({
+          value: selection.model,
+          fallback: getDefaultModelForProvider({
+            providerId: selection.providerId,
+          }),
+        });
         setTaskProvider({
           taskId: providerSelectionTarget,
           provider: selection.providerId,
         });
+        updatePromptDraft({
+          taskId: providerSelectionTarget,
+          patch: {
+            runtimeOverrides: {
+              ...(promptDraftRuntimeOverrides ?? {}),
+              model: nextModel,
+            },
+          },
+        });
         if (selection.providerId === "claude-code") {
           updateSettings({
             patch: {
-              modelClaude: normalizeModelSelection({
-                value: selection.model,
-                fallback: getDefaultModelForProvider({
-                  providerId: selection.providerId,
+              claudeEffort: resolveClaudeEffortForModelSwitch({
+                previousModel: resolvePromptDraftModelForProvider({
+                  providerId: "claude-code",
+                  runtimeOverrides: promptDraftRuntimeOverrides,
+                  fallbackModel: modelClaude,
                 }),
+                nextModel,
+                currentEffort: storedClaudeEffort,
               }),
             },
           });
           return;
         }
-        if (selection.providerId === "stave") {
-          updateSettings({
-            patch: {
-              modelStave: normalizeModelSelection({
-                value: selection.model,
-                fallback: getDefaultModelForProvider({
-                  providerId: selection.providerId,
-                }),
-              }),
-            },
-          });
-          return;
-        }
-        updateSettings({
-          patch: {
-            modelCodex: normalizeModelSelection({
-              value: selection.model,
-              fallback: getDefaultModelForProvider({
-                providerId: selection.providerId,
-              }),
-            }),
-          },
-        });
       }}
       fastMode={activeProvider === "codex" ? codexFastMode : undefined}
       onFastModeChange={

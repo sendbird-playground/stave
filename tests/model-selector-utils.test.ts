@@ -86,7 +86,7 @@ describe("model selector utils", () => {
         (option) => option.key,
       ),
     ).toEqual([
-      "claude-code:claude-opus-4-6",
+      "claude-code:claude-opus-4-7",
       "codex:gpt-5.4",
       "stave:stave-auto",
     ]);

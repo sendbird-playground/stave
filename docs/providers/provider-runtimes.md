@@ -20,14 +20,14 @@ When Stave plan mode resolves to a Codex-family `planModel`, Stave also forces `
 
 ### Direct intent table
 
-| Intent | Default model | Typical work |
-|--------|---------------|--------------|
-| `plan` | `opusplan` | design, strategy, planning-only requests |
-| `analyze` | `claude-opus-4-6` | explanation, debugging, review, root cause |
-| `implement` | `gpt-5.3-codex` | feature work, patching, refactors, test writing |
-| `quick_edit` | `claude-haiku-4-5` | rename, typo, tiny targeted changes |
-| `general` | `claude-sonnet-4-6` | balanced default path |
-| `verify` | `gpt-5.4` | orchestration-only validation/review step |
+| Intent       | Default model       | Typical work                                    |
+| ------------ | ------------------- | ----------------------------------------------- |
+| `plan`       | `opusplan`          | design, strategy, planning-only requests        |
+| `analyze`    | `claude-opus-4-7`   | explanation, debugging, review, root cause      |
+| `implement`  | `gpt-5.3-codex`     | feature work, patching, refactors, test writing |
+| `quick_edit` | `claude-haiku-4-5`  | rename, typo, tiny targeted changes             |
+| `general`    | `claude-sonnet-4-6` | balanced default path                           |
+| `verify`     | `gpt-5.4`           | orchestration-only validation/review step       |
 
 ### Complexity signals
 
@@ -136,7 +136,9 @@ If you want the user-facing setup workflow instead of the runtime internals, use
 - `effort`
   - `low`: fastest.
   - `medium`: balanced default.
-  - `high` / `max`: more deliberate, slower, better for hard tasks.
+  - `high`: more deliberate, slower, better for hard tasks.
+  - `xhigh`: deeper than `high` when supported by the active Claude model.
+  - `max`: highest deliberation and the most latency on models that support it.
 - Example mode presets
   - `Manual`: `acceptEdits` + sandbox on + unsandboxed off
   - `Guided`: `auto` + sandbox off + unsandboxed on

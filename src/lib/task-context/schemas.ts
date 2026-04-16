@@ -185,6 +185,7 @@ const AttachmentSchema = z.discriminatedUnion("kind", [
 
 const PromptDraftRuntimeOverridesSchema = z
   .object({
+    model: z.string().optional(),
     claudePermissionMode: z
       .union([
         z.literal("default"),
@@ -286,11 +287,7 @@ const EditorTabSchema = z.object({
   language: z.string(),
   content: z.string().optional().default(""),
   contentState: z
-    .union([
-      z.literal("ready"),
-      z.literal("deferred"),
-      z.literal("loading"),
-    ])
+    .union([z.literal("ready"), z.literal("deferred"), z.literal("loading")])
     .optional()
     .default("ready"),
   originalContent: z.string().optional(),

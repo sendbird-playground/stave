@@ -27,7 +27,7 @@ export function shouldOpenModelSelector(args: {
 }
 
 const DEFAULT_RECOMMENDED_MODEL_SELECTOR_KEYS = [
-  "claude-code:claude-opus-4-6",
+  "claude-code:claude-opus-4-7",
   "codex:gpt-5.4",
   "stave:stave-auto",
 ] as const;

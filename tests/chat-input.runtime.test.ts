@@ -44,7 +44,8 @@ describe("chat-input runtime helpers", () => {
   test("cycles Claude effort in provider order", () => {
     expect(cycleClaudeEffortValue("low")).toBe("medium");
     expect(cycleClaudeEffortValue("medium")).toBe("high");
-    expect(cycleClaudeEffortValue("high")).toBe("max");
+    expect(cycleClaudeEffortValue("high")).toBe("xhigh");
+    expect(cycleClaudeEffortValue("xhigh")).toBe("max");
     expect(cycleClaudeEffortValue("max")).toBe("low");
   });
 
@@ -60,23 +61,31 @@ describe("chat-input runtime helpers", () => {
     const items = buildChatInputRuntimeStatusItems(baseArgs);
 
     expect(items.find((item) => item.id === "timeout")?.value).toBe("1 hour");
-    expect(items.find((item) => item.id === "sandbox")?.value).toBe("Read Only");
+    expect(items.find((item) => item.id === "sandbox")?.value).toBe(
+      "Read Only",
+    );
     expect(items.find((item) => item.id === "plan-mode")?.value).toBe("On");
     expect(items.find((item) => item.id === "summary")?.value).toBe("Detailed");
-    expect(items.find((item) => item.id === "codex-binary")?.value).toBe(".../bin/codex");
+    expect(items.find((item) => item.id === "codex-binary")?.value).toBe(
+      ".../bin/codex",
+    );
   });
 
   test("only forwards command-catalog runtime options for Claude", () => {
-    expect(buildCommandCatalogRuntimeOptions({
-      ...baseArgs,
-      modelClaude: "claude-sonnet-4-6",
-    })).toBeUndefined();
+    expect(
+      buildCommandCatalogRuntimeOptions({
+        ...baseArgs,
+        model: "claude-sonnet-4-6",
+      }),
+    ).toBeUndefined();
 
-    expect(buildCommandCatalogRuntimeOptions({
-      ...baseArgs,
-      activeProvider: "claude-code",
-      modelClaude: "claude-sonnet-4-6",
-    })).toMatchObject({
+    expect(
+      buildCommandCatalogRuntimeOptions({
+        ...baseArgs,
+        activeProvider: "claude-code",
+        model: "claude-sonnet-4-6",
+      }),
+    ).toMatchObject({
       model: "claude-sonnet-4-6",
       claudeBinaryPath: "/opt/homebrew/bin/claude",
       claudePermissionMode: "acceptEdits",

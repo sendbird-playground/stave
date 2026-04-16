@@ -75,6 +75,7 @@ import {
   inferProviderIdFromModel,
   listProviderIds,
   normalizeModelSelection,
+  upgradeSettingsScopedClaudeOpusModel,
 } from "@/lib/providers/model-catalog";
 import {
   DEFAULT_PROMPT_RESPONSE_STYLE,
@@ -233,6 +234,7 @@ import type {
 } from "@/types/chat";
 import {
   arePromptDraftRuntimeOverridesEqual,
+  resolvePromptDraftModelForProvider,
   resolvePromptDraftRuntimeState,
 } from "@/store/prompt-draft-runtime";
 import {
@@ -841,7 +843,7 @@ export interface AppSettings {
   claudeTaskBudgetTokens: number;
   claudeAdvisorModel: string;
   claudeSettingSources: ClaudeSettingSource[];
-  claudeEffort: "low" | "medium" | "high" | "max";
+  claudeEffort: "low" | "medium" | "high" | "xhigh" | "max";
   claudeThinkingMode: "adaptive" | "enabled" | "disabled";
   claudeAgentProgressSummaries: boolean;
   claudeFastMode: boolean;
@@ -9338,10 +9340,22 @@ export const useAppStore = create<AppState>()(
               });
             const activeModel =
               provider === "claude-code"
-                ? state.settings.modelClaude
+                ? resolvePromptDraftModelForProvider({
+                    providerId: provider,
+                    runtimeOverrides: promptDraft.runtimeOverrides,
+                    fallbackModel: state.settings.modelClaude,
+                  })
                 : provider === "stave"
-                  ? state.settings.modelStave
-                  : state.settings.modelCodex;
+                  ? resolvePromptDraftModelForProvider({
+                      providerId: provider,
+                      runtimeOverrides: promptDraft.runtimeOverrides,
+                      fallbackModel: state.settings.modelStave,
+                    })
+                  : resolvePromptDraftModelForProvider({
+                      providerId: provider,
+                      runtimeOverrides: promptDraft.runtimeOverrides,
+                      fallbackModel: state.settings.modelCodex,
+                    });
 
             const skillSelection = resolveSkillSelections({
               text: content,
@@ -11380,6 +11394,41 @@ export const useAppStore = create<AppState>()(
         state.settings.staveAutoRoleRuntimeOverrides =
           normalizeStaveAutoRoleRuntimeOverrides({
             value: raw.staveAutoRoleRuntimeOverrides,
+          });
+        state.settings.modelClaude = upgradeSettingsScopedClaudeOpusModel({
+          model: state.settings.modelClaude,
+        });
+        state.settings.claudeAdvisorModel =
+          upgradeSettingsScopedClaudeOpusModel({
+            model: state.settings.claudeAdvisorModel,
+          });
+        state.settings.staveAutoSupervisorModel =
+          upgradeSettingsScopedClaudeOpusModel({
+            model: state.settings.staveAutoSupervisorModel,
+          });
+        state.settings.staveAutoPlanModel =
+          upgradeSettingsScopedClaudeOpusModel({
+            model: state.settings.staveAutoPlanModel,
+          });
+        state.settings.staveAutoAnalyzeModel =
+          upgradeSettingsScopedClaudeOpusModel({
+            model: state.settings.staveAutoAnalyzeModel,
+          });
+        state.settings.staveAutoImplementModel =
+          upgradeSettingsScopedClaudeOpusModel({
+            model: state.settings.staveAutoImplementModel,
+          });
+        state.settings.staveAutoQuickEditModel =
+          upgradeSettingsScopedClaudeOpusModel({
+            model: state.settings.staveAutoQuickEditModel,
+          });
+        state.settings.staveAutoGeneralModel =
+          upgradeSettingsScopedClaudeOpusModel({
+            model: state.settings.staveAutoGeneralModel,
+          });
+        state.settings.staveAutoVerifyModel =
+          upgradeSettingsScopedClaudeOpusModel({
+            model: state.settings.staveAutoVerifyModel,
           });
         state.settings.providerTimeoutMs = normalizeProviderTimeoutMs({
           value: state.settings.providerTimeoutMs,

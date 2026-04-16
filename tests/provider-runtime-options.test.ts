@@ -121,6 +121,23 @@ describe("buildProviderRuntimeOptions", () => {
     });
   });
 
+  test("forwards Claude xhigh effort into runtime options", () => {
+    expect(
+      buildProviderRuntimeOptions({
+        provider: "claude-code",
+        model: "claude-sonnet-4-6",
+        settings: {
+          ...settings,
+          claudeEffort: "xhigh",
+        },
+        providerSession: null,
+      }),
+    ).toMatchObject({
+      model: "claude-sonnet-4-6",
+      claudeEffort: "xhigh",
+    });
+  });
+
   test.each([
     {
       sourceModel: "claude-haiku-4-5",
@@ -128,15 +145,19 @@ describe("buildProviderRuntimeOptions", () => {
     },
     {
       sourceModel: "claude-sonnet-4-6",
-      expectedAdvisorModel: "claude-opus-4-6",
+      expectedAdvisorModel: "claude-opus-4-7",
     },
     {
       sourceModel: "claude-opus-4-6",
-      expectedAdvisorModel: "claude-opus-4-6",
+      expectedAdvisorModel: "claude-opus-4-7",
+    },
+    {
+      sourceModel: "claude-opus-4-7",
+      expectedAdvisorModel: "claude-opus-4-7",
     },
     {
       sourceModel: "claude-sonnet-4-6[1m]",
-      expectedAdvisorModel: "claude-opus-4-6",
+      expectedAdvisorModel: "claude-opus-4-7",
     },
   ])(
     "maps advisor source model `$sourceModel` to `$expectedAdvisorModel`",
