@@ -3,6 +3,7 @@ import {
   Cable,
   Code2,
   Cog,
+  FileText,
   Folder,
   Globe,
   KeyRound,
@@ -35,6 +36,7 @@ export const settingsSections = [
   { id: "tooling", label: "Tooling", icon: Shield },
   { id: "lens", label: "Lens", icon: Globe },
   { id: "developer", label: "Developer", icon: Wrench },
+  { id: "changelog", label: "Changelog", icon: FileText },
 ] as const;
 
 export type SectionId = (typeof settingsSections)[number]["id"];
@@ -44,5 +46,5 @@ export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> =
   { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
   { label: "Projects", ids: ["projects"] },
   { label: "Providers", ids: ["muse", "providers", "codex", "mcp", "prompts", "skills", "subagents", "commandPalette"] },
-  { label: "System", ids: ["tooling", "lens", "developer"] },
+  { label: "System", ids: ["tooling", "lens", "developer", "changelog"] },
 ];
