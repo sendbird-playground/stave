@@ -4,31 +4,37 @@ This folder is the stable documentation root for Stave.
 
 Use `docs/` for architecture, feature behavior, runtime contracts, and user-facing technical reference.
 
-## Getting Started
+![Stave desktop workspace overview](screenshots/stave-app.png)
 
-- [README](../README.md)
+The screenshot above shows the main Stave desktop workspace with the top bar, chat area, editor, side panels, and integrated desktop shell.
+
+## Start Here
+
 - [Install Guide](install-guide.md)
-- [Developer and Contributing Guide](developer/contributing.md)
-
-## Feature Guides
-
+- [README](../README.md)
+- [Integrated Terminal](features/integrated-terminal.md)
+- [Command Palette](features/command-palette.md)
+- [Attachments](features/attachments.md)
 - [Provider sandbox and approval guide](features/provider-sandbox-and-approval.md)
-- [Project Instructions](features/project-instructions.md)
-- [Lens](features/lens.md)
-- [Local MCP user guide](features/local-mcp-user-guide.md)
-- [Workspace latest turn summary](features/workspace-latest-turn-summary.md)
-- [Stave Muse](features/stave-muse.md)
-- [Stave Model Router](features/stave-model-router.md)
-- [Workspace PR Status](features/workspace-pr-status.md)
+
+## Most Used Guides
+
+- [Skill selector](features/skill-selector.md)
 - [Workspace Scripts](features/workspace-scripts.md)
 - [Notifications](features/notifications.md)
-- [Command Palette](features/command-palette.md)
-- [Integrated Terminal](features/integrated-terminal.md)
+- [Project Instructions](features/project-instructions.md)
+- [Local MCP user guide](features/local-mcp-user-guide.md)
 - [macOS Folder Access Prompts](features/macos-folder-access-prompts.md)
 - [Zen Mode](features/zen-mode.md)
-- [Skill selector](features/skill-selector.md)
-- [Attachments](features/attachments.md)
 - [Language intelligence](features/language-intelligence.md)
+
+## More Feature Guides
+
+- [Workspace PR Status](features/workspace-pr-status.md)
+- [Workspace latest turn summary](features/workspace-latest-turn-summary.md)
+- [Lens](features/lens.md)
+- [Stave Muse](features/stave-muse.md)
+- [Stave Model Router](features/stave-model-router.md)
 
 ## Architecture And Contracts
 
@@ -44,6 +50,7 @@ Use `docs/` for architecture, feature behavior, runtime contracts, and user-faci
 
 ## Developer Reference
 
+- [Developer and Contributing Guide](developer/contributing.md)
 - [Developer diagnostics](developer/diagnostics.md)
 - [Provider session stability](developer/provider-session-stability.md)
 - [Terminal regression prevention](developer/terminal-regression-prevention.md)

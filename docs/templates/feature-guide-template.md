@@ -38,6 +38,12 @@ Keep the document user-facing, task-oriented, and reusable for a future docs web
 - Explain the main controls in the order users encounter them.
 - Focus on meaning and outcome, not raw component names.
 
+## Optional Screenshots
+
+- Add one or two screenshots only when they materially help users find the entry point or confirm the expected UI state.
+- Place screenshots near `Summary`, `Quick Start`, or `Interface Walkthrough`.
+- Use a short caption and avoid personal paths, private prompt content, or transient task data.
+
 ## Common Workflows
 
 ### Create Or Configure Something
@@ -84,3 +90,4 @@ Keep the document user-facing, task-oriented, and reusable for a future docs web
 - Link the new guide from `docs/README.md`.
 - If the feature changes an existing workflow, update that guide instead of creating overlapping docs.
 - Keep copy stable enough to reuse in a docs website later.
+- If screenshots are included, keep them few, durable, and clearly captioned.

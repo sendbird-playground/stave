@@ -46,6 +46,12 @@ That installer script:
 - removes the macOS quarantine attribute from the installed app
 - opens Stave after installation
 
+After a successful install, Stave opens into the desktop workspace shown below.
+
+![Stave desktop workspace after install](screenshots/stave-app.png)
+
+The installed app uses this same workspace shell for chat, editor, side panels, and update actions.
+
 ## In-App Update Button
 
 Packaged macOS builds also show an app update action in the top bar.

@@ -26,3 +26,5 @@ Use this folder for user-facing feature guides.
 - Link every durable feature guide from [`docs/README.md`](../README.md).
 - Use stable headings so the same content can be reused in a future docs website.
 - Prefer short procedures, explicit UI labels, and small real examples over long prose.
+- Add screenshots when a guide depends on finding a specific UI surface or visually confirming success.
+- Keep screenshots durable: crop to the relevant surface, avoid personal paths or private prompt content, and add a short caption that explains what to look at.
