@@ -4,6 +4,7 @@ import {
   mapCodexElicitationToApproval,
   mapCodexElicitationToUserInput,
   summarizeCodexAppServerDebugMessage,
+  toCodexConfigLayerDisplayValue,
 } from "../electron/providers/codex-app-server-runtime";
 
 describe("mapCodexElicitationToUserInput", () => {
@@ -89,16 +90,18 @@ describe("mapCodexElicitationToUserInput", () => {
 
     expect(mapped).toEqual({
       mode: "url",
-      questions: [{
-        key: "__elicitation_url__",
-        header: "MCP URL Elicitation",
-        question: "Authorize the integration in your browser.",
-        inputType: "url_notice",
-        options: [],
-        allowCustom: false,
-        required: false,
-        linkUrl: "https://example.com/connect",
-      }],
+      questions: [
+        {
+          key: "__elicitation_url__",
+          header: "MCP URL Elicitation",
+          question: "Authorize the integration in your browser.",
+          inputType: "url_notice",
+          options: [],
+          allowCustom: false,
+          required: false,
+          linkUrl: "https://example.com/connect",
+        },
+      ],
       fields: [],
     });
   });
@@ -106,20 +109,23 @@ describe("mapCodexElicitationToUserInput", () => {
   test("maps MCP tool-call elicitation into an approval card", () => {
     const mapped = mapCodexElicitationToApproval({
       mode: "form",
-      message: 'Allow the stave-local MCP server to run tool "stave_list_projects"?',
+      message:
+        'Allow the stave-local MCP server to run tool "stave_list_projects"?',
       requestedSchema: {
         type: "object",
         properties: {},
       },
       _meta: {
         codex_approval_kind: "mcp_tool_call",
-        tool_description: "List projects already registered in the local Stave desktop app.",
+        tool_description:
+          "List projects already registered in the local Stave desktop app.",
       },
     });
 
     expect(mapped).toEqual({
       toolName: "stave_list_projects",
-      description: "List projects already registered in the local Stave desktop app.",
+      description:
+        "List projects already registered in the local Stave desktop app.",
     });
   });
 
@@ -135,15 +141,18 @@ describe("mapCodexElicitationToUserInput", () => {
 
     expect(mapped).toEqual({
       mode: "form",
-      questions: [{
-        key: "__elicitation_accept__",
-        header: "Confirm the action.",
-        question: "Submit to allow this MCP request, or decline to cancel it.",
-        inputType: "text",
-        options: [],
-        allowCustom: false,
-        required: false,
-      }],
+      questions: [
+        {
+          key: "__elicitation_accept__",
+          header: "Confirm the action.",
+          question:
+            "Submit to allow this MCP request, or decline to cancel it.",
+          inputType: "text",
+          options: [],
+          allowCustom: false,
+          required: false,
+        },
+      ],
       fields: [],
     });
   });
@@ -198,6 +207,26 @@ describe("summarizeCodexAppServerDebugMessage", () => {
   });
 });
 
+describe("toCodexConfigLayerDisplayValue", () => {
+  test("prefers readable object fields over generic object stringification", () => {
+    expect(
+      toCodexConfigLayerDisplayValue({
+        type: "file",
+        path: "/tmp/codex/config.toml",
+      }),
+    ).toBe("file:/tmp/codex/config.toml");
+  });
+
+  test("joins array values for layered labels", () => {
+    expect(
+      toCodexConfigLayerDisplayValue([
+        "workspace",
+        { type: "file", path: "/tmp/codex/config.toml" },
+      ]),
+    ).toBe("workspace / file:/tmp/codex/config.toml");
+  });
+});
+
 describe("createCodexAppServerElicitationPauseController", () => {
   test("increments and decrements timeout pause state for a resolved request", async () => {
     const calls: Array<{ method: string; params: unknown }> = [];
@@ -205,7 +234,10 @@ describe("createCodexAppServerElicitationPauseController", () => {
       client: {
         request: async (method, params) => {
           calls.push({ method, params });
-          return { count: method === "thread/increment_elicitation" ? 1 : 0, paused: true };
+          return {
+            count: method === "thread/increment_elicitation" ? 1 : 0,
+            paused: true,
+          };
         },
       },
       threadId: "thread-1",

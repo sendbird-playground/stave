@@ -167,12 +167,14 @@ function DenseSection(args: {
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 px-4 py-3">
-        <div className="space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <h4 className="text-sm font-semibold text-foreground">
             {args.title}
           </h4>
           {args.description ? (
-            <p className="text-sm text-muted-foreground">{args.description}</p>
+            <p className="break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
+              {args.description}
+            </p>
           ) : null}
         </div>
         {args.action}
@@ -2472,17 +2474,21 @@ export function CodexSection() {
                     description="Merged config plus per-layer diagnostics returned by Codex."
                   >
                     <Accordion type="multiple" className="w-full space-y-3">
-                      {snapshot.config?.layers.map((layer) => (
+                      {snapshot.config?.layers.map((layer, index) => (
                         <AccordionItem
-                          key={`${layer.name}:${layer.version}`}
-                          value={`${layer.name}:${layer.version}`}
+                          key={`${layer.name}:${layer.version}:${index}`}
+                          value={`${layer.name}:${layer.version}:${index}`}
                           className="rounded-xl border border-border/70 px-3"
                         >
                           <AccordionTrigger className="py-3">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex w-full min-w-0 flex-wrap items-center gap-2 pr-3">
                               <Layers2 className="size-4 text-muted-foreground" />
-                              <span>{layer.name}</span>
-                              <StatusPill label={layer.version} />
+                              <span className="min-w-0 break-words text-left [overflow-wrap:anywhere]">
+                                {layer.name}
+                              </span>
+                              {layer.version ? (
+                                <StatusPill label={layer.version} />
+                              ) : null}
                               {layer.disabledReason ? (
                                 <StatusPill label="disabled" tone="warning" />
                               ) : null}
@@ -2490,7 +2496,7 @@ export function CodexSection() {
                           </AccordionTrigger>
                           <AccordionContent className="space-y-2 pb-3">
                             {layer.disabledReason ? (
-                              <p className="text-sm text-muted-foreground">
+                              <p className="break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">
                                 {layer.disabledReason}
                               </p>
                             ) : null}
