@@ -3,7 +3,7 @@ import {
   buildWorkspaceContinueSummaryFilePath,
   buildWorkspaceContinueSummaryMarkdown,
 } from "../src/lib/workspace-continue";
-import { buildContinueWorkspaceBranchName } from "../src/store/project.utils";
+import { buildContinueWorkspaceBranchName, toWorkspaceFolderName } from "../src/store/project.utils";
 
 const originalWindow = globalThis.window;
 
@@ -48,7 +48,7 @@ describe("workspace continue summary helpers", () => {
     expect(buildContinueWorkspaceBranchName({
       sourceBranch: " Feature PR Status ",
       date: new Date("2026-04-04T16:45:12.000Z"),
-    })).toBe("feature-pr-status--continue--20260404-164512");
+    })).toBe("Feature-PR-Status--continue--20260404-164512");
 
     expect(buildContinueWorkspaceBranchName({
       date: new Date("2026-04-04T16:45:12.000Z"),
@@ -265,12 +265,17 @@ describe("continueWorkspaceFromSummary", () => {
     });
     expect(result.message).toContain(".stave/context/continued-from-feature-pr-status.md");
 
+    const continueWorkspacePath = `/tmp/stave-project/.stave/workspaces/${toWorkspaceFolderName({
+      branch: "feature/pr-status--continue--20260404-164512",
+      unique: true,
+    })}`;
+
     expect(runCalls.map((call) => call.command)).toEqual([
       "git fetch origin --prune",
       "git diff --stat \"origin/main\"...HEAD",
       "git diff --name-only \"origin/main\"...HEAD",
       "mkdir -p .stave/workspaces",
-      "git worktree add -b \"feature/pr-status--continue--20260404-164512\" \"/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512\" \"origin/main\"",
+      `git worktree add -b \"feature/pr-status--continue--20260404-164512\" ${JSON.stringify(continueWorkspacePath)} \"origin/main\"`,
     ]);
 
     expect(createdDirectories).toEqual([".stave/context"]);
@@ -449,13 +454,17 @@ describe("continueWorkspaceFromSummary", () => {
       ok: true,
       noticeLevel: "warning",
     });
+    const continueWorkspacePath = `/tmp/stave-project/.stave/workspaces/${toWorkspaceFolderName({
+      branch: "feature/pr-status--continue--20260404-164512",
+      unique: true,
+    })}`;
     expect(result.message).toContain("Could not refresh `origin/main`; continued from local `main` instead.");
     expect(runCalls.map((call) => call.command)).toEqual([
       "git fetch origin --prune",
       "git diff --stat \"main\"...HEAD",
       "git diff --name-only \"main\"...HEAD",
       "mkdir -p .stave/workspaces",
-      "git worktree add -b \"feature/pr-status--continue--20260404-164512\" \"/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512\" \"main\"",
+      `git worktree add -b \"feature/pr-status--continue--20260404-164512\" ${JSON.stringify(continueWorkspacePath)} \"main\"`,
     ]);
   });
 
@@ -594,12 +603,16 @@ describe("continueWorkspaceFromSummary", () => {
       ok: true,
       noticeLevel: "success",
     });
+    const continueWorkspacePath = `/tmp/stave-project/.stave/workspaces/${toWorkspaceFolderName({
+      branch: "feature/pr-status--continue--20260404-164512",
+      unique: true,
+    })}`;
     expect(runCalls.map((call) => call.command)).toEqual([
       "git fetch origin --prune",
       "git diff --stat \"origin/release\"...HEAD",
       "git diff --name-only \"origin/release\"...HEAD",
       "mkdir -p .stave/workspaces",
-      "git worktree add -b \"feature/pr-status--continue--20260404-164512\" \"/tmp/stave-project/.stave/workspaces/feature__pr-status--continue--20260404-164512\" \"origin/release\"",
+      `git worktree add -b \"feature/pr-status--continue--20260404-164512\" ${JSON.stringify(continueWorkspacePath)} \"origin/release\"`,
     ]);
   });
 });

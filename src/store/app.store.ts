@@ -5241,7 +5241,7 @@ export const useAppStore = create<AppState>()(
                 });
           const baseBranch =
             fromBranch?.trim() || current.defaultBranch || "main";
-          const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
+          const workspacePath = `${current.projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName, unique: true })}`;
           const workspaceId = buildImportedWorktreeWorkspaceId({
             projectPath: current.projectPath,
             worktreePath: workspacePath,
