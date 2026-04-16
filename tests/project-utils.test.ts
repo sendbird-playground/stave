@@ -12,6 +12,8 @@ import {
   resolveTaskWorkspaceContext,
   resolveCurrentProjectDefaultWorkspaceId,
   resolveWorkspaceName,
+  sanitizeBranchName,
+  toWorkspaceFolderName,
 } from "@/store/project.utils";
 
 const PROJECT_PATH = "/tmp/workspace/stave";
@@ -310,5 +312,70 @@ describe("project name normalization", () => {
       workspaceId: "ws-owned",
       cwd: "/tmp/owned",
     });
+  });
+});
+
+describe("sanitizeBranchName", () => {
+  test("preserves uppercase letters in branch names", () => {
+    expect(sanitizeBranchName({ value: "feature/MyFeature" })).toBe("feature/MyFeature");
+    expect(sanitizeBranchName({ value: "JIRA-123/Fix-Bug" })).toBe("JIRA-123/Fix-Bug");
+    expect(sanitizeBranchName({ value: "feat/Add-OAuth2-Support" })).toBe("feat/Add-OAuth2-Support");
+  });
+
+  test("trims surrounding whitespace", () => {
+    expect(sanitizeBranchName({ value: "  feature/MyBranch  " })).toBe("feature/MyBranch");
+  });
+
+  test("replaces disallowed characters with hyphens and strips leading/trailing hyphens", () => {
+    expect(sanitizeBranchName({ value: "feat: add OAuth" })).toBe("feat-add-OAuth");
+    expect(sanitizeBranchName({ value: "  Feature PR Status  " })).toBe("Feature-PR-Status");
+    expect(sanitizeBranchName({ value: "--bad-name--" })).toBe("bad-name");
+  });
+
+  test("preserves slashes, dots, and underscores already allowed in branch names", () => {
+    expect(sanitizeBranchName({ value: "feat/v2.0_release" })).toBe("feat/v2.0_release");
+  });
+
+  test("returns empty string for whitespace-only input", () => {
+    expect(sanitizeBranchName({ value: "   " })).toBe("");
+  });
+});
+
+describe("toWorkspaceFolderName", () => {
+  test("legacy mode converts slashes to double-underscores (case preserved)", () => {
+    expect(toWorkspaceFolderName({ branch: "feature/MyFeature" })).toBe("feature__MyFeature");
+    expect(toWorkspaceFolderName({ branch: "feature/pr-status" })).toBe("feature__pr-status");
+  });
+
+  test("unique mode produces a lowercase slug with a deterministic hash suffix", () => {
+    const folder = toWorkspaceFolderName({ branch: "feature/MyFeature", unique: true });
+    // Must be fully lowercase
+    expect(folder).toBe(folder.toLowerCase());
+    // Must contain a "--" separator before the hash
+    expect(folder).toMatch(/^feature__myfeature--[a-z0-9]+$/);
+  });
+
+  test("unique mode generates distinct folders for branches that differ only in case", () => {
+    const lower = toWorkspaceFolderName({ branch: "feature/abc", unique: true });
+    const upper = toWorkspaceFolderName({ branch: "feature/ABC", unique: true });
+    expect(lower).not.toBe(upper);
+    // Both prefixes should be lowercase-identical while hashes differ
+    expect(lower.split("--")[0]).toBe(upper.split("--")[0]);
+    expect(lower.split("--")[1]).not.toBe(upper.split("--")[1]);
+  });
+
+  test("unique mode is deterministic for the same input", () => {
+    const a = toWorkspaceFolderName({ branch: "feature/MyFeature", unique: true });
+    const b = toWorkspaceFolderName({ branch: "feature/MyFeature", unique: true });
+    expect(a).toBe(b);
+  });
+
+  test("legacy and unique modes produce different paths for mixed-case branches", () => {
+    const legacy = toWorkspaceFolderName({ branch: "feature/MyFeature" });
+    const unique = toWorkspaceFolderName({ branch: "feature/MyFeature", unique: true });
+    // Legacy keeps case; unique lowercases
+    expect(legacy).toBe("feature__MyFeature");
+    expect(unique).not.toBe("feature__MyFeature");
+    expect(unique).toBe(unique.toLowerCase());
   });
 });

@@ -331,9 +331,8 @@ export function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number)
 export function sanitizeBranchName(args: { value: string }) {
   return args.value
     .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9._/-]+/g, "-")
-    .replaceAll(/^\-|\-$/g, "");
+    .replaceAll(/[^A-Za-z0-9._/-]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
 }
 
 function padTimestampSegment(value: number) {
@@ -354,8 +353,19 @@ export function buildContinueWorkspaceBranchName(args: { sourceBranch?: string; 
   return `${sourceBranch}--continue--${formatUtcCompactTimestamp({ date: args.date })}`;
 }
 
-export function toWorkspaceFolderName(args: { branch: string }) {
-  return args.branch.replaceAll("/", "__");
+export function toWorkspaceFolderName(args: { branch: string; unique?: boolean }) {
+  const legacy = args.branch.replaceAll("/", "__");
+  if (args.unique !== true) {
+    return legacy;
+  }
+
+  const normalized = legacy
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9._-]+/g, "-")
+    .replaceAll(/^\-|\-$/g, "");
+  const readablePrefix = normalized || "workspace";
+  const suffix = hashProjectPath(args.branch).slice(0, 8);
+  return `${readablePrefix}--${suffix}`;
 }
 
 export function resolveProjectNameFromPath(args: { projectPath: string }) {

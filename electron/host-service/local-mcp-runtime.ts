@@ -1325,7 +1325,7 @@ export async function createWorkspace(args: {
   const existingWorkspace = toWorkspaceList(project).find((workspace) => (
     workspace.branch === branchName
     || workspace.name === branchName
-    || workspace.path === `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`
+    || workspace.path === `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName, unique: true })}`
   )) ?? null;
   if (existingWorkspace) {
     return {
@@ -1340,7 +1340,7 @@ export async function createWorkspace(args: {
     } satisfies CreatedWorkspaceInfo;
   }
 
-  const workspacePath = `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName })}`;
+  const workspacePath = `${projectPath}/.stave/workspaces/${toWorkspaceFolderName({ branch: branchName, unique: true })}`;
   const workspaceId = buildImportedWorktreeWorkspaceId({
     projectPath,
     worktreePath: workspacePath,
