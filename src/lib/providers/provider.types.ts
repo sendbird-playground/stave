@@ -85,12 +85,311 @@ export interface CodexMcpServerStatusSnapshot {
   authStatus: string | null;
   startupTimeoutSec: number | null;
   toolTimeoutSec: number | null;
+  tools?: Array<{
+    name: string;
+    title?: string;
+    description?: string;
+  }>;
+  resources?: Array<{
+    uri: string;
+    name: string;
+    title?: string;
+    description?: string;
+    mimeType?: string;
+  }>;
+  resourceTemplates?: Array<{
+    uriTemplate: string;
+    name: string;
+    title?: string;
+    description?: string;
+    mimeType?: string;
+  }>;
 }
 
 export interface CodexMcpStatusResponse {
   ok: boolean;
   detail: string;
   servers: CodexMcpServerStatusSnapshot[];
+}
+
+export interface CodexModelCatalogEntry {
+  id: string;
+  model: string;
+  displayName: string;
+  description: string;
+  hidden: boolean;
+  isDefault: boolean;
+  supportsPersonality: boolean;
+  defaultReasoningEffort: string;
+  supportedReasoningEfforts: string[];
+  inputModalities: string[];
+  additionalSpeedTiers: string[];
+  upgrade: string | null;
+  upgradeInfo: {
+    model: string;
+    upgradeCopy: string | null;
+    modelLink: string | null;
+    migrationMarkdown: string | null;
+  } | null;
+  availabilityNux: string | null;
+}
+
+export interface CodexModelCatalogResponse {
+  ok: boolean;
+  detail: string;
+  models: CodexModelCatalogEntry[];
+}
+
+export interface CodexSkillSnapshot {
+  name: string;
+  description: string;
+  shortDescription?: string | null;
+  path: string;
+  scope: string;
+  enabled: boolean;
+}
+
+export interface CodexSkillCatalogGroup {
+  cwd: string;
+  skills: CodexSkillSnapshot[];
+  errors: string[];
+}
+
+export interface CodexPluginMarketplaceSnapshot {
+  name: string;
+  path: string;
+  displayName: string | null;
+}
+
+export interface CodexPluginSummarySnapshot {
+  id: string;
+  name: string;
+  marketplaceName: string;
+  marketplacePath: string;
+  marketplaceDisplayName: string | null;
+  source: string;
+  installed: boolean;
+  enabled: boolean;
+  installPolicy: string;
+  authPolicy: string;
+}
+
+export interface CodexPluginDetailSnapshot {
+  marketplaceName: string;
+  marketplacePath: string;
+  id: string;
+  name: string;
+  source: string;
+  installed: boolean;
+  enabled: boolean;
+  installPolicy: string;
+  authPolicy: string;
+  description: string | null;
+  skills: Array<{
+    name: string;
+    description: string;
+    shortDescription: string | null;
+    path: string;
+    enabled: boolean;
+  }>;
+  apps: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    installUrl: string | null;
+    needsAuth: boolean;
+  }>;
+  mcpServers: string[];
+}
+
+export interface CodexPluginDetailResponse {
+  ok: boolean;
+  detail: string;
+  plugin?: CodexPluginDetailSnapshot;
+}
+
+export interface CodexPluginInstallResponse {
+  ok: boolean;
+  detail: string;
+  authPolicy: string | null;
+  appsNeedingAuth: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    installUrl: string | null;
+    needsAuth: boolean;
+  }>;
+}
+
+export interface CodexAppSnapshot {
+  id: string;
+  name: string;
+  description: string | null;
+  logoUrl: string | null;
+  logoUrlDark: string | null;
+  distributionChannel: string | null;
+  installUrl: string | null;
+  isAccessible: boolean;
+  isEnabled: boolean;
+  pluginDisplayNames: string[];
+  labels: Record<string, string> | null;
+}
+
+export interface CodexAccountSnapshot {
+  type: "apiKey" | "chatgpt" | "unknown";
+  email: string | null;
+  planType: string | null;
+  requiresOpenaiAuth: boolean;
+}
+
+export interface CodexCreditsSnapshot {
+  hasCredits: boolean;
+  unlimited: boolean;
+  balance: string | null;
+}
+
+export interface CodexRateLimitWindowSnapshot {
+  usedPercent: number;
+  windowDurationMins: number | null;
+  resetsAt: number | null;
+}
+
+export interface CodexRateLimitSnapshot {
+  limitId: string | null;
+  limitName: string | null;
+  planType: string | null;
+  primary: CodexRateLimitWindowSnapshot | null;
+  secondary: CodexRateLimitWindowSnapshot | null;
+  credits: CodexCreditsSnapshot | null;
+}
+
+export interface CodexThreadSnapshot {
+  id: string;
+  forkedFromId: string | null;
+  preview: string;
+  modelProvider: string;
+  createdAt: number;
+  updatedAt: number;
+  status: string;
+  cwd: string;
+  cliVersion: string;
+  source: string;
+  agentNickname: string | null;
+  agentRole: string | null;
+  name: string | null;
+  archived: boolean;
+}
+
+export interface CodexThreadDetailSnapshot extends CodexThreadSnapshot {
+  turnCount: number | null;
+  raw: Record<string, unknown>;
+}
+
+export interface CodexThreadReadResponse {
+  ok: boolean;
+  detail: string;
+  thread?: CodexThreadDetailSnapshot;
+}
+
+export interface CodexThreadForkResponse {
+  ok: boolean;
+  detail: string;
+  threadId?: string;
+}
+
+export interface CodexExperimentalFeatureSnapshot {
+  name: string;
+  stage: string;
+  displayName: string | null;
+  description: string | null;
+  announcement: string | null;
+  enabled: boolean;
+  defaultEnabled: boolean;
+}
+
+export interface CodexConfigLayerSnapshot {
+  name: string;
+  version: string;
+  disabledReason: string | null;
+  config: unknown;
+}
+
+export interface CodexConfigOriginSnapshot {
+  name: string;
+  version: string;
+}
+
+export interface CodexConfigRequirementsSnapshot {
+  allowedApprovalPolicies: string[] | null;
+  allowedSandboxModes: string[] | null;
+  allowedWebSearchModes: string[] | null;
+  featureRequirements: Record<string, boolean> | null;
+  enforceResidency: string | null;
+}
+
+export interface CodexExternalAgentConfigMigrationItem {
+  itemType: string;
+  description: string;
+  cwd: string | null;
+}
+
+export interface CodexConfigSnapshot {
+  config: Record<string, unknown>;
+  origins: Record<string, CodexConfigOriginSnapshot>;
+  layers: CodexConfigLayerSnapshot[];
+}
+
+export interface CodexAppServerSnapshot {
+  account: CodexAccountSnapshot | null;
+  rateLimits: CodexRateLimitSnapshot[];
+  skills: CodexSkillCatalogGroup[];
+  pluginMarketplaces: CodexPluginMarketplaceSnapshot[];
+  plugins: CodexPluginSummarySnapshot[];
+  pluginMarketplaceLoadErrors: string[];
+  apps: CodexAppSnapshot[];
+  experimentalFeatures: CodexExperimentalFeatureSnapshot[];
+  mcpServers: CodexMcpServerStatusSnapshot[];
+  threads: CodexThreadSnapshot[];
+  archivedThreads: CodexThreadSnapshot[];
+  config: CodexConfigSnapshot | null;
+  configRequirements: CodexConfigRequirementsSnapshot | null;
+  externalAgentConfigItems: CodexExternalAgentConfigMigrationItem[];
+}
+
+export interface CodexAppServerSnapshotResponse {
+  ok: boolean;
+  detail: string;
+  sectionErrors: Record<string, string>;
+  snapshot?: CodexAppServerSnapshot;
+}
+
+export interface CodexMcpOauthLoginResponse {
+  ok: boolean;
+  detail: string;
+  authorizationUrl?: string;
+}
+
+export interface CodexMcpResourceReadResponse {
+  ok: boolean;
+  detail: string;
+  contents: Array<{
+    uri: string;
+    mimeType?: string;
+    text?: string;
+    blob?: string;
+  }>;
+}
+
+export interface CodexReviewStartResponse {
+  ok: boolean;
+  detail: string;
+  reviewThreadId?: string;
+  turnId?: string;
+}
+
+export interface CodexMutationResponse {
+  ok: boolean;
+  detail: string;
 }
 
 export interface CanonicalRetrievedContextPart {
@@ -192,6 +491,7 @@ export type NormalizedProviderEvent =
     cacheReadTokens?: number;
     cacheCreationTokens?: number;
     totalCostUsd?: number;
+    ttftMs?: number;
   }
   | { type: "prompt_suggestions"; suggestions: string[] }
   | { type: "tool"; toolUseId?: string; toolName: string; input: string; output?: string; state: ToolUsePart["state"] }
@@ -250,6 +550,7 @@ export interface ProviderRuntimeOptions {
   claudeFastMode?: boolean;
   claudeAllowedTools?: string[];
   claudeDisallowedTools?: string[];
+  claudeAdvisorModel?: string;
   claudeResumeSessionId?: string;
   codexFileAccess?: "read-only" | "workspace-write" | "danger-full-access";
   codexNetworkAccess?: boolean;

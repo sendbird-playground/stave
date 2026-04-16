@@ -115,6 +115,7 @@ export const PROVIDER_RUNTIME_OPTION_KEYS = [
   "claudeFastMode",
   "claudeAllowedTools",
   "claudeDisallowedTools",
+  "claudeAdvisorModel",
   "claudeResumeSessionId",
   "codexFileAccess",
   "codexNetworkAccess",

@@ -15,6 +15,7 @@ const settings = {
   claudeAllowDangerouslySkipPermissions: false,
   claudeSandboxEnabled: true,
   claudeAllowUnsandboxedCommands: true,
+  claudeAdvisorModel: "",
   claudeEffort: "medium",
   claudeThinkingMode: "adaptive",
   claudeAgentProgressSummaries: true,
@@ -56,13 +57,15 @@ describe("normalizeCodexApprovalPolicy", () => {
 
 describe("buildProviderRuntimeOptions", () => {
   test("prepends the project base prompt ahead of an existing system prompt", () => {
-    expect(applyProjectBasePromptToRuntimeOptions({
-      runtimeOptions: {
-        model: "claude-sonnet-4-6",
-        claudeSystemPrompt: "Existing system prompt",
-      },
-      projectBasePrompt: "Project rules",
-    })).toMatchObject({
+    expect(
+      applyProjectBasePromptToRuntimeOptions({
+        runtimeOptions: {
+          model: "claude-sonnet-4-6",
+          claudeSystemPrompt: "Existing system prompt",
+        },
+        projectBasePrompt: "Project rules",
+      }),
+    ).toMatchObject({
       claudeSystemPrompt: "Project rules\n\nExisting system prompt",
     });
   });
@@ -73,23 +76,27 @@ describe("buildProviderRuntimeOptions", () => {
       codexFileAccess: "workspace-write" as const,
     };
 
-    expect(applyProjectBasePromptToRuntimeOptions({
-      runtimeOptions,
-      projectBasePrompt: "   ",
-    })).toBe(runtimeOptions);
+    expect(
+      applyProjectBasePromptToRuntimeOptions({
+        runtimeOptions,
+        projectBasePrompt: "   ",
+      }),
+    ).toBe(runtimeOptions);
   });
 
   test("forces Codex plan turns onto a read-only sandbox", () => {
-    expect(buildProviderRuntimeOptions({
-      provider: "codex",
-      model: "gpt-5.4",
-      settings: {
-        ...settings,
-        codexFileAccess: "danger-full-access",
-        codexPlanMode: true,
-      },
-      providerSession: null,
-    })).toMatchObject({
+    expect(
+      buildProviderRuntimeOptions({
+        provider: "codex",
+        model: "gpt-5.4",
+        settings: {
+          ...settings,
+          codexFileAccess: "danger-full-access",
+          codexPlanMode: true,
+        },
+        providerSession: null,
+      }),
+    ).toMatchObject({
       model: "gpt-5.4",
       codexApprovalPolicy: "never",
       codexFileAccess: "read-only",
@@ -98,30 +105,51 @@ describe("buildProviderRuntimeOptions", () => {
   });
 
   test("forwards the Claude binary override into runtime options", () => {
-    expect(buildProviderRuntimeOptions({
-      provider: "claude-code",
-      model: "claude-sonnet-4-6",
-      settings: {
-        ...settings,
-        claudeBinaryPath: "/tmp/claude",
-      },
-      providerSession: null,
-    })).toMatchObject({
+    expect(
+      buildProviderRuntimeOptions({
+        provider: "claude-code",
+        model: "claude-sonnet-4-6",
+        settings: {
+          ...settings,
+          claudeBinaryPath: "/tmp/claude",
+        },
+        providerSession: null,
+      }),
+    ).toMatchObject({
       model: "claude-sonnet-4-6",
       claudeBinaryPath: "/tmp/claude",
     });
   });
 
+  test("forwards the Claude advisor model override when enabled", () => {
+    expect(
+      buildProviderRuntimeOptions({
+        provider: "claude-code",
+        model: "claude-sonnet-4-6",
+        settings: {
+          ...settings,
+          claudeAdvisorModel: "claude-opus-4-6",
+        },
+        providerSession: null,
+      }),
+    ).toMatchObject({
+      model: "claude-sonnet-4-6",
+      claudeAdvisorModel: "claude-opus-4-6",
+    });
+  });
+
   test("forwards both resume ids when Stave routes across providers", () => {
-    expect(buildProviderRuntimeOptions({
-      provider: "stave",
-      model: "stave-auto",
-      settings,
-      providerSession: {
-        "claude-code": "claude-session-1",
-        codex: "codex-thread-1",
-      },
-    })).toMatchObject({
+    expect(
+      buildProviderRuntimeOptions({
+        provider: "stave",
+        model: "stave-auto",
+        settings,
+        providerSession: {
+          "claude-code": "claude-session-1",
+          codex: "codex-thread-1",
+        },
+      }),
+    ).toMatchObject({
       model: "stave-auto",
       claudeResumeSessionId: "claude-session-1",
       codexResumeThreadId: "codex-thread-1",
@@ -131,28 +159,32 @@ describe("buildProviderRuntimeOptions", () => {
   });
 
   test("limits resume ids to the active provider in direct turns", () => {
-    expect(buildProviderRuntimeOptions({
-      provider: "claude-code",
-      model: "claude-sonnet-4-6",
-      settings,
-      providerSession: {
-        "claude-code": "claude-session-1",
-        codex: "codex-thread-1",
-      },
-    })).toMatchObject({
+    expect(
+      buildProviderRuntimeOptions({
+        provider: "claude-code",
+        model: "claude-sonnet-4-6",
+        settings,
+        providerSession: {
+          "claude-code": "claude-session-1",
+          codex: "codex-thread-1",
+        },
+      }),
+    ).toMatchObject({
       model: "claude-sonnet-4-6",
       claudeResumeSessionId: "claude-session-1",
     });
 
-    expect(buildProviderRuntimeOptions({
-      provider: "codex",
-      model: "gpt-5.4",
-      settings,
-      providerSession: {
-        "claude-code": "claude-session-1",
-        codex: "codex-thread-1",
-      },
-    })).toMatchObject({
+    expect(
+      buildProviderRuntimeOptions({
+        provider: "codex",
+        model: "gpt-5.4",
+        settings,
+        providerSession: {
+          "claude-code": "claude-session-1",
+          codex: "codex-thread-1",
+        },
+      }),
+    ).toMatchObject({
       model: "gpt-5.4",
       codexResumeThreadId: "codex-thread-1",
       codexFileAccess: "workspace-write",

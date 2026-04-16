@@ -839,6 +839,7 @@ export interface AppSettings {
   claudeSandboxEnabled: boolean;
   claudeAllowUnsandboxedCommands: boolean;
   claudeTaskBudgetTokens: number;
+  claudeAdvisorModel: string;
   claudeSettingSources: ClaudeSettingSource[];
   claudeEffort: "low" | "medium" | "high" | "max";
   claudeThinkingMode: "adaptive" | "enabled" | "disabled";
@@ -1644,6 +1645,7 @@ const defaultSettings: AppSettings = {
   claudeSandboxEnabled: false,
   claudeAllowUnsandboxedCommands: true,
   claudeTaskBudgetTokens: 0,
+  claudeAdvisorModel: "",
   claudeSettingSources: ["project"],
   claudeEffort: "medium",
   claudeThinkingMode: "adaptive",
@@ -9760,10 +9762,12 @@ export const useAppStore = create<AppState>()(
                       > => event.type === "plan_ready",
                     )
                     .at(-1);
-                  const planTextToPersist = resolveWorkspacePlanPersistenceText({
-                    planText: nextPlanReady?.planText,
-                    lastPersistedPlanText: lastPersistedPlanTextForTurn,
-                  });
+                  const planTextToPersist = resolveWorkspacePlanPersistenceText(
+                    {
+                      planText: nextPlanReady?.planText,
+                      lastPersistedPlanText: lastPersistedPlanTextForTurn,
+                    },
+                  );
                   if (planTextToPersist && workspaceCwd) {
                     lastPersistedPlanTextForTurn = planTextToPersist;
                     void persistWorkspacePlanFile({

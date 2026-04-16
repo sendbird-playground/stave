@@ -1,10 +1,20 @@
 import type {
+  CodexAppServerSnapshotResponse,
+  CodexModelCatalogResponse,
+  CodexMcpOauthLoginResponse,
+  CodexMcpResourceReadResponse,
+  CodexThreadForkResponse,
+  CodexThreadReadResponse,
   CanonicalConversationRequest,
   ClaudeContextUsageResponse,
   CodexMcpStatusResponse,
   ClaudePluginReloadResponse,
+  CodexMutationResponse,
+  CodexPluginDetailResponse,
+  CodexPluginInstallResponse,
   ProviderId,
   ProviderRuntimeOptions,
+  CodexReviewStartResponse,
 } from "@/lib/providers/provider.types";
 import type {
   ConnectedToolId,
@@ -161,6 +171,103 @@ interface WindowProviderApi {
     cwd?: string;
     runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
   }) => Promise<CodexMcpStatusResponse>;
+  getCodexModelCatalog?: (args: {
+    cwd?: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexModelCatalogResponse>;
+  getCodexAppServerSnapshot?: (args: {
+    cwd?: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexAppServerSnapshotResponse>;
+  getCodexPluginDetail?: (args: {
+    marketplacePath: string;
+    pluginName: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexPluginDetailResponse>;
+  installCodexPlugin?: (args: {
+    marketplacePath: string;
+    pluginName: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexPluginInstallResponse>;
+  uninstallCodexPlugin?: (args: {
+    pluginId: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
+  setCodexExperimentalFeatureEnablement?: (args: {
+    enablement: Record<string, boolean>;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
+  startCodexMcpOauthLogin?: (args: {
+    name: string;
+    scopes?: string[];
+    timeoutSecs?: number;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMcpOauthLoginResponse>;
+  readCodexMcpResource?: (args: {
+    threadId: string;
+    server: string;
+    uri: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMcpResourceReadResponse>;
+  renameCodexThread?: (args: {
+    threadId: string;
+    name: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
+  readCodexThread?: (args: {
+    threadId: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexThreadReadResponse>;
+  forkCodexThread?: (args: {
+    threadId: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexThreadForkResponse>;
+  archiveCodexThread?: (args: {
+    threadId: string;
+    archived?: boolean;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
+  compactCodexThread?: (args: {
+    threadId: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
+  rollbackCodexThread?: (args: {
+    threadId: string;
+    numTurns: number;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
+  startCodexReview?: (args: {
+    threadId: string;
+    delivery?: "inline" | "detached";
+    target:
+      | { type: "uncommittedChanges" }
+      | { type: "baseBranch"; baseBranch: string }
+      | { type: "commit"; sha: string; title?: string }
+      | { type: "custom"; instructions: string };
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexReviewStartResponse>;
+  importCodexExternalConfig?: (args: {
+    migrationItems: Array<{
+      itemType: string;
+      description: string;
+      cwd: string | null;
+    }>;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
+  writeCodexConfigValue?: (args: {
+    keyPath: string;
+    value: unknown;
+    mergeStrategy?: string;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
+  batchWriteCodexConfig?: (args: {
+    edits: Array<{
+      keyPath: string;
+      value: unknown;
+      mergeStrategy?: string;
+    }>;
+    runtimeOptions?: ProviderStreamTurnArgs["runtimeOptions"];
+  }) => Promise<CodexMutationResponse>;
   /** Generates a short task title from the given prompt and optional
    *  conversation history using a lightweight single-turn Claude query
    *  isolated from the main task conversation. */
@@ -984,6 +1091,7 @@ interface WindowPersistenceApi {
             cacheReadTokens?: number;
             cacheCreationTokens?: number;
             totalCostUsd?: number;
+            ttftMs?: number;
           };
           promptSuggestions?: string[];
           parts: unknown[];
@@ -1043,6 +1151,7 @@ interface WindowPersistenceApi {
           cacheReadTokens?: number;
           cacheCreationTokens?: number;
           totalCostUsd?: number;
+          ttftMs?: number;
         };
         promptSuggestions?: string[];
         parts: unknown[];
@@ -1098,6 +1207,7 @@ interface WindowPersistenceApi {
             cacheReadTokens?: number;
             cacheCreationTokens?: number;
             totalCostUsd?: number;
+            ttftMs?: number;
           };
           promptSuggestions?: string[];
           parts: unknown[];
@@ -1232,6 +1342,7 @@ interface WindowPersistenceApi {
             cacheReadTokens?: number;
             cacheCreationTokens?: number;
             totalCostUsd?: number;
+            ttftMs?: number;
           };
           promptSuggestions?: string[];
           parts: unknown[];

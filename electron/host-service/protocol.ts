@@ -3,9 +3,19 @@ import type {
   TerminalCreateSessionArgs,
 } from "../../src/lib/terminal/types";
 import type {
+  CodexAppServerSnapshotResponse,
+  CodexModelCatalogResponse,
+  CodexMcpOauthLoginResponse,
+  CodexMcpResourceReadResponse,
+  CodexThreadForkResponse,
+  CodexThreadReadResponse,
   ClaudeContextUsageResponse,
   ClaudePluginReloadResponse,
   CodexMcpStatusResponse,
+  CodexMutationResponse,
+  CodexPluginDetailResponse,
+  CodexPluginInstallResponse,
+  CodexReviewStartResponse,
 } from "../../src/lib/providers/provider.types";
 import type {
   ConnectedToolStatusRequest,
@@ -382,6 +392,103 @@ export interface HostServiceRequestMap {
     cwd?: string;
     runtimeOptions?: StreamTurnArgs["runtimeOptions"];
   };
+  "provider.get-codex-model-catalog": {
+    cwd?: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.get-codex-app-server-snapshot": {
+    cwd?: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.get-codex-plugin-detail": {
+    marketplacePath: string;
+    pluginName: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.install-codex-plugin": {
+    marketplacePath: string;
+    pluginName: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.uninstall-codex-plugin": {
+    pluginId: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.set-codex-experimental-feature-enablement": {
+    enablement: Record<string, boolean>;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.start-codex-mcp-oauth-login": {
+    name: string;
+    scopes?: string[];
+    timeoutSecs?: number;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.read-codex-mcp-resource": {
+    threadId: string;
+    server: string;
+    uri: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.rename-codex-thread": {
+    threadId: string;
+    name: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.read-codex-thread": {
+    threadId: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.fork-codex-thread": {
+    threadId: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.archive-codex-thread": {
+    threadId: string;
+    archived?: boolean;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.compact-codex-thread": {
+    threadId: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.rollback-codex-thread": {
+    threadId: string;
+    numTurns: number;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.start-codex-review": {
+    threadId: string;
+    delivery?: "inline" | "detached";
+    target:
+      | { type: "uncommittedChanges" }
+      | { type: "baseBranch"; baseBranch: string }
+      | { type: "commit"; sha: string; title?: string }
+      | { type: "custom"; instructions: string };
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.import-codex-external-config": {
+    migrationItems: Array<{
+      itemType: string;
+      description: string;
+      cwd: string | null;
+    }>;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.write-codex-config-value": {
+    keyPath: string;
+    value: unknown;
+    mergeStrategy?: string;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
+  "provider.batch-write-codex-config": {
+    edits: Array<{
+      keyPath: string;
+      value: unknown;
+      mergeStrategy?: string;
+    }>;
+    runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+  };
   "provider.suggest-task-name": HostProviderSuggestTaskNameArgs;
   "provider.suggest-commit-message": HostProviderSuggestCommitMessageArgs;
   "provider.suggest-pr-description": HostProviderSuggestPRDescriptionArgs;
@@ -534,6 +641,24 @@ export interface HostServiceResponseMap {
   "provider.get-claude-context-usage": ClaudeContextUsageResponse;
   "provider.reload-claude-plugins": ClaudePluginReloadResponse;
   "provider.get-codex-mcp-status": CodexMcpStatusResponse;
+  "provider.get-codex-model-catalog": CodexModelCatalogResponse;
+  "provider.get-codex-app-server-snapshot": CodexAppServerSnapshotResponse;
+  "provider.get-codex-plugin-detail": CodexPluginDetailResponse;
+  "provider.install-codex-plugin": CodexPluginInstallResponse;
+  "provider.uninstall-codex-plugin": CodexMutationResponse;
+  "provider.set-codex-experimental-feature-enablement": CodexMutationResponse;
+  "provider.start-codex-mcp-oauth-login": CodexMcpOauthLoginResponse;
+  "provider.read-codex-mcp-resource": CodexMcpResourceReadResponse;
+  "provider.rename-codex-thread": CodexMutationResponse;
+  "provider.read-codex-thread": CodexThreadReadResponse;
+  "provider.fork-codex-thread": CodexThreadForkResponse;
+  "provider.archive-codex-thread": CodexMutationResponse;
+  "provider.compact-codex-thread": CodexMutationResponse;
+  "provider.rollback-codex-thread": CodexMutationResponse;
+  "provider.start-codex-review": CodexReviewStartResponse;
+  "provider.import-codex-external-config": CodexMutationResponse;
+  "provider.write-codex-config-value": CodexMutationResponse;
+  "provider.batch-write-codex-config": CodexMutationResponse;
   "provider.suggest-task-name": HostProviderSuggestTaskNameResult;
   "provider.suggest-commit-message": HostProviderSuggestCommitMessageResult;
   "provider.suggest-pr-description": HostProviderSuggestPRDescriptionResult;

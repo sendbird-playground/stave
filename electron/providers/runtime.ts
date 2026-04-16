@@ -29,7 +29,10 @@ import {
 } from "./stave-router";
 import { resolveAvailableStaveModel } from "./stave-model-fallback";
 import { runPreprocessor } from "./stave-preprocessor";
-import { getCachedAvailability, setCachedAvailability } from "./stave-availability";
+import {
+  getCachedAvailability,
+  setCachedAvailability,
+} from "./stave-availability";
 import { runOrchestrator } from "./stave-orchestrator";
 import type { BridgeEvent, ProviderRuntime, StreamTurnArgs } from "./types";
 import {
@@ -38,10 +41,16 @@ import {
   resolveStaveIntentModel,
   resolveStaveProviderForModel,
 } from "../../src/lib/providers/stave-auto-profile";
+import {
+  getCodexSlashCommandCatalogDetail,
+  listCodexSlashCommands,
+} from "../../src/lib/providers/codex-command-catalog";
 import { randomUUID } from "node:crypto";
 import { probeExecutableVersion } from "./runtime-shared";
 
-const sdkTurnTimeoutMs = Number(process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000);
+const sdkTurnTimeoutMs = Number(
+  process.env.STAVE_PROVIDER_TIMEOUT_MS ?? 300000,
+);
 const ACTIVE_STREAM_TTL_MS = 15 * 60 * 1000;
 const COMPLETED_STREAM_TTL_MS = 60 * 1000;
 const ACTIVE_STREAM_RETAINED_BYTES_MAX = 512 * 1024;
@@ -78,7 +87,8 @@ const activeStreams = new Map<string, ActiveStreamSession>();
  * SQLite being closed → "database connection is not open".
  */
 const activeTurnPromises = new Map<string, Promise<void>>();
-const CODEX_RUNTIME_SELECTOR = process.env.STAVE_CODEX_RUNTIME?.trim().toLowerCase();
+const CODEX_RUNTIME_SELECTOR =
+  process.env.STAVE_CODEX_RUNTIME?.trim().toLowerCase();
 
 function shouldUseLegacyCodexRuntime() {
   return CODEX_RUNTIME_SELECTOR === "legacy-sdk";
@@ -193,7 +203,9 @@ function clearActiveTaskSessions(args: { taskId: string }) {
   }
 }
 
-function describeClaudeAvailability(args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {}) {
+function describeClaudeAvailability(
+  args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {},
+) {
   const executablePath = resolveClaudeExecutablePath({
     explicitPath: args.runtimeOptions?.claudeBinaryPath,
   });
@@ -201,7 +213,8 @@ function describeClaudeAvailability(args: { runtimeOptions?: StreamTurnArgs["run
     setCachedAvailability("claude-code", false);
     return {
       available: false,
-      detail: "Claude CLI not found from runtime override, STAVE_CLAUDE_CLI_PATH, CLAUDE_CODE_PATH, login-shell PATH, or home-bin candidates.",
+      detail:
+        "Claude CLI not found from runtime override, STAVE_CLAUDE_CLI_PATH, CLAUDE_CODE_PATH, login-shell PATH, or home-bin candidates.",
     };
   }
 
@@ -216,12 +229,16 @@ function describeClaudeAvailability(args: { runtimeOptions?: StreamTurnArgs["run
         `Claude executable probe failed: ${executablePath}`,
         versionProbe.stderr,
         versionProbe.error,
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
   setCachedAvailability("claude-code", available);
   return { available, detail };
 }
 
-function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {}) {
+function describeCodexAvailability(
+  args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {},
+) {
   const executablePath = resolveCodexExecutablePath({
     explicitPath: args.runtimeOptions?.codexBinaryPath,
   });
@@ -229,7 +246,8 @@ function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runt
     setCachedAvailability("codex", false);
     return {
       available: false,
-      detail: "Codex executable not found from runtime override, env vars, login-shell PATH, or home-bin candidates.",
+      detail:
+        "Codex executable not found from runtime override, env vars, login-shell PATH, or home-bin candidates.",
     };
   }
 
@@ -244,12 +262,16 @@ function describeCodexAvailability(args: { runtimeOptions?: StreamTurnArgs["runt
         `Codex executable probe failed: ${executablePath}`,
         versionProbe.stderr,
         versionProbe.error,
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
   setCachedAvailability("codex", available);
   return { available, detail };
 }
 
-function describeStaveAvailability(args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {}) {
+function describeStaveAvailability(
+  args: { runtimeOptions?: StreamTurnArgs["runtimeOptions"] } = {},
+) {
   const claude = describeClaudeAvailability(args);
   const codex = describeCodexAvailability(args);
   const available = claude.available || codex.available;
@@ -286,14 +308,17 @@ async function withTimeout<T>(args: {
   }
 }
 
-async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: BridgeEvent) => void }) {
+async function runProviderTurn(
+  args: StreamTurnArgs & { onEvent?: (event: BridgeEvent) => void },
+) {
   const turnId = args.turnId ?? randomUUID();
   upsertActiveSession({
     turnId,
     providerId: args.providerId,
     taskId: args.taskId,
   });
-  const turnTimeoutMs = args.runtimeOptions?.providerTimeoutMs ?? sdkTurnTimeoutMs;
+  const turnTimeoutMs =
+    args.runtimeOptions?.providerTimeoutMs ?? sdkTurnTimeoutMs;
 
   // ── Stave meta-provider: Pre-processor → direct or orchestrate ────────────
   if (args.providerId === "stave") {
@@ -302,14 +327,17 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       (p) => p.type === "file_context" || p.type === "image_context",
     ).length;
     const historyLength = args.conversation?.history?.length ?? 0;
-    const profile = args.runtimeOptions?.staveAuto ?? DEFAULT_STAVE_AUTO_PROFILE;
+    const profile =
+      args.runtimeOptions?.staveAuto ?? DEFAULT_STAVE_AUTO_PROFILE;
 
     const forcedPlanTarget = resolveForcedStavePlanTarget({
       profile,
       runtimeOptions: args.runtimeOptions,
     });
     if (forcedPlanTarget != null) {
-      const chosenModel = resolveAvailableStaveModel({ model: forcedPlanTarget.model });
+      const chosenModel = resolveAvailableStaveModel({
+        model: forcedPlanTarget.model,
+      });
 
       const resolvedTarget: StaveRouteTarget = {
         providerId: resolveStaveProviderForModel({ model: chosenModel }),
@@ -370,7 +398,9 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     // Skills carry an explicit provider preference — no classifier needed.
     const skillTarget = resolveSkillFastPath({ contextParts, profile });
     if (skillTarget != null) {
-      const chosenModel = resolveAvailableStaveModel({ model: skillTarget.model });
+      const chosenModel = resolveAvailableStaveModel({
+        model: skillTarget.model,
+      });
 
       const resolvedTarget: StaveRouteTarget = {
         providerId: resolveStaveProviderForModel({ model: chosenModel }),
@@ -406,11 +436,16 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     // Helper: run a provider turn in batch mode (collect all events, no streaming).
     // Injected into the Pre-processor so it can call any provider without a
     // circular module dependency.
-    const runTurnBatch = async (batchArgs: StreamTurnArgs): Promise<BridgeEvent[]> => {
+    const runTurnBatch = async (
+      batchArgs: StreamTurnArgs,
+    ): Promise<BridgeEvent[]> => {
       const collected = createBoundedBridgeEventCollector({
         maxBytes: BATCH_TURN_RETAINED_BYTES_MAX,
       });
-      await runProviderTurn({ ...batchArgs, onEvent: (event) => collected.append(event) });
+      await runProviderTurn({
+        ...batchArgs,
+        onEvent: (event) => collected.append(event),
+      });
       if (collected.overflowed) {
         throw new Error(
           `Provider batch output exceeded ${BATCH_TURN_RETAINED_BYTES_MAX} bytes`,
@@ -424,7 +459,11 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
       historyLength,
       attachedFileCount,
       profile,
-      baseArgs: { cwd: args.cwd, taskId: args.taskId, workspaceId: args.workspaceId },
+      baseArgs: {
+        cwd: args.cwd,
+        taskId: args.taskId,
+        workspaceId: args.workspaceId,
+      },
       runTurnBatch,
     });
 
@@ -491,13 +530,19 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
         strategy: "direct",
         model: chosenModel,
         reason: plan.reason,
-        fastModeRequested: (plan.executionHints?.fastMode ?? false) || (profile.fastMode ?? false),
+        fastModeRequested:
+          (plan.executionHints?.fastMode ?? false) ||
+          (profile.fastMode ?? false),
         fastModeApplied,
       });
 
       // Notify the client of the resolved model (updates the message badge).
       // Note: the routing reason is already shown via the stave:execution_processing event → stave_processing MessagePart.
-      args.onEvent?.({ type: "model_resolved", resolvedProviderId: resolvedTarget.providerId, resolvedModel: resolvedTarget.model });
+      args.onEvent?.({
+        type: "model_resolved",
+        resolvedProviderId: resolvedTarget.providerId,
+        resolvedModel: resolvedTarget.model,
+      });
 
       return runProviderTurn(resolvedArgs);
     }
@@ -506,7 +551,11 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
     await runOrchestrator({
       userPrompt: args.prompt,
       profile,
-      baseArgs: { cwd: args.cwd, taskId: args.taskId, workspaceId: args.workspaceId },
+      baseArgs: {
+        cwd: args.cwd,
+        taskId: args.taskId,
+        workspaceId: args.workspaceId,
+      },
       runtimeOptions: args.runtimeOptions,
       onEvent: (event) => args.onEvent?.(event),
       runTurnBatch,
@@ -573,7 +622,9 @@ async function runProviderTurn(args: StreamTurnArgs & { onEvent?: (event: Bridge
   let timedOut = false;
   try {
     const events = await withTimeout({
-      task: (shouldUseLegacyCodexRuntime() ? streamCodexWithSdk : streamCodexWithAppServer)({
+      task: (shouldUseLegacyCodexRuntime()
+        ? streamCodexWithSdk
+        : streamCodexWithAppServer)({
         ...args,
         onEvent: (event) => {
           if (timedOut) {
@@ -760,7 +811,10 @@ export const providerRuntime: ProviderRuntime = {
   cleanupTask: ({ taskId }) => {
     clearActiveTaskSessions({ taskId });
     cleanupProviderTaskState(taskId);
-    return { ok: true, message: `Cleaned provider runtime state for task ${taskId}.` };
+    return {
+      ok: true,
+      message: `Cleaned provider runtime state for task ${taskId}.`,
+    };
   },
   respondApproval: ({ turnId, requestId, approved }) => ({
     ...(() => {
@@ -824,7 +878,8 @@ export const providerRuntime: ProviderRuntime = {
         ok: true,
         supported: false,
         commands: [],
-        detail: "Stave auto-routing does not expose a native command catalog. Switch to Claude Code or Codex directly to access provider-specific commands.",
+        detail:
+          "Stave auto-routing does not expose a native command catalog. Switch to Claude Code or Codex directly to access provider-specific commands.",
       };
     }
 
@@ -833,19 +888,21 @@ export const providerRuntime: ProviderRuntime = {
         task: getClaudeCommandCatalog({ cwd, runtimeOptions }),
         timeoutMs: 15_000,
       });
-      return result ?? {
-        ok: false,
-        supported: false,
-        commands: [],
-        detail: "Timed out loading the Claude command catalog.",
-      };
+      return (
+        result ?? {
+          ok: false,
+          supported: false,
+          commands: [],
+          detail: "Timed out loading the Claude command catalog.",
+        }
+      );
     }
 
     return {
       ok: true,
-      supported: false,
-      commands: [],
-      detail: "Codex does not expose a native slash-command catalog through the current SDK/CLI transport. Slash commands are passed through unchanged.",
+      supported: true,
+      commands: listCodexSlashCommands(),
+      detail: getCodexSlashCommandCatalogDetail(),
     };
   },
   getConnectedToolStatus: async (args) => getProviderConnectedToolStatus(args),

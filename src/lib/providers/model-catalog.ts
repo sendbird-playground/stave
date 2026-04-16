@@ -31,9 +31,7 @@ export const CODEX_MODEL_OPTIONS = [
 
 // Stave meta-provider: a single "Auto" pseudo-model that the router replaces
 // at runtime with the best matching real model for each prompt.
-export const STAVE_META_MODEL_OPTIONS = [
-  "stave-auto",
-] as const;
+export const STAVE_META_MODEL_OPTIONS = ["stave-auto"] as const;
 
 export interface ProviderDescriptor {
   id: ProviderId;
@@ -88,7 +86,7 @@ export const PROVIDER_DESCRIPTORS = [
     defaultModel: "gpt-5.4",
     sessionLabel: "Codex thread ID",
     capabilities: {
-      nativeCommandCatalog: false,
+      nativeCommandCatalog: true,
     },
   },
 ] as const satisfies readonly ProviderDescriptor[];
@@ -102,7 +100,9 @@ export function listProviderIds(): ProviderId[] {
 }
 
 export function getProviderDescriptor(args: { providerId: ProviderId }) {
-  const descriptor = PROVIDER_DESCRIPTORS.find((candidate) => candidate.id === args.providerId);
+  const descriptor = PROVIDER_DESCRIPTORS.find(
+    (candidate) => candidate.id === args.providerId,
+  );
   if (!descriptor) {
     throw new Error(`Unknown provider descriptor: ${args.providerId}`);
   }
@@ -117,19 +117,29 @@ export function getProviderLabel(args: {
   return args.variant === "full" ? descriptor.label : descriptor.shortLabel;
 }
 
-export function getProviderIconUrl(args: { providerId: ProviderId; model?: string; isDarkMode?: boolean }) {
+export function getProviderIconUrl(args: {
+  providerId: ProviderId;
+  model?: string;
+  isDarkMode?: boolean;
+}) {
   if (args.providerId === "stave") {
     if (args.model === "stave-auto") {
       return STAVE_LOGO_AUTO_ICON_URL;
     }
-    return args.isDarkMode ? STAVE_LOGO_LIGHT_ICON_URL : STAVE_LOGO_DARK_ICON_URL;
+    return args.isDarkMode
+      ? STAVE_LOGO_LIGHT_ICON_URL
+      : STAVE_LOGO_DARK_ICON_URL;
   }
   return getProviderDescriptor({ providerId: args.providerId }).iconUrl;
 }
 
 export function inferProviderIdFromModel(args: { model: string }): ProviderId {
   const normalizedModel = args.model.trim().toLowerCase();
-  if (!normalizedModel || normalizedModel === "stave-auto" || normalizedModel.startsWith("stave-")) {
+  if (
+    !normalizedModel ||
+    normalizedModel === "stave-auto" ||
+    normalizedModel.startsWith("stave-")
+  ) {
     return "stave";
   }
   if (normalizedModel.includes("codex") || normalizedModel.startsWith("gpt-")) {
@@ -138,7 +148,10 @@ export function inferProviderIdFromModel(args: { model: string }): ProviderId {
   return "claude-code";
 }
 
-export function resolveProviderDisplayId(args: { providerId: ProviderId; model?: string }) {
+export function resolveProviderDisplayId(args: {
+  providerId: ProviderId;
+  model?: string;
+}) {
   if (args.providerId !== "stave" || !args.model) {
     return args.providerId;
   }
@@ -147,7 +160,10 @@ export function resolveProviderDisplayId(args: { providerId: ProviderId; model?:
   return inferredProviderId === "stave" ? args.providerId : inferredProviderId;
 }
 
-export function getProviderWaveToneClass(args: { providerId: ProviderId; model?: string }) {
+export function getProviderWaveToneClass(args: {
+  providerId: ProviderId;
+  model?: string;
+}) {
   const displayProviderId = resolveProviderDisplayId(args);
 
   if (displayProviderId === "claude-code") {
@@ -167,7 +183,9 @@ export function getProviderSessionLabel(args: { providerId: ProviderId }) {
   return getProviderDescriptor(args).sessionLabel;
 }
 
-export function providerSupportsNativeCommandCatalog(args: { providerId: ProviderId }) {
+export function providerSupportsNativeCommandCatalog(args: {
+  providerId: ProviderId;
+}) {
   return getProviderDescriptor(args).capabilities.nativeCommandCatalog;
 }
 
@@ -181,14 +199,19 @@ export function getNextProviderId(args: { providerId: ProviderId }) {
   if (currentIndex < 0) {
     return providerIds[0] ?? args.providerId;
   }
-  return providerIds[(currentIndex + 1) % providerIds.length] ?? args.providerId;
+  return (
+    providerIds[(currentIndex + 1) % providerIds.length] ?? args.providerId
+  );
 }
 
 export function getSdkModelOptions(args: { providerId: ProviderId }) {
   return getProviderDescriptor(args).models;
 }
 
-export function normalizeModelSelection(args: { value: string; fallback: string }) {
+export function normalizeModelSelection(args: {
+  value: string;
+  fallback: string;
+}) {
   const trimmed = args.value.trim();
   if (trimmed.length === 0) {
     return args.fallback;
@@ -196,11 +219,44 @@ export function normalizeModelSelection(args: { value: string; fallback: string 
   return trimmed;
 }
 
+/**
+ * Dynamic display-name registry populated at runtime by the Codex model
+ * catalog (`model/list`). Entries here take priority over the static `known`
+ * map so that newly-added server-side models get correct names immediately
+ * without a Stave code change.
+ */
+const dynamicDisplayNames = new Map<string, string>();
+
+/**
+ * Merge server-provided display names into the runtime registry.
+ * Called from `useCodexModelCatalog` after a successful `model/list` fetch.
+ */
+export function registerDynamicDisplayNames(names: Map<string, string>) {
+  for (const [model, displayName] of names) {
+    dynamicDisplayNames.set(model, displayName);
+  }
+}
+
+/**
+ * Read-only access to the current dynamic display-name registry.
+ * Useful for tests and diagnostics.
+ */
+export function getDynamicDisplayNames(): ReadonlyMap<string, string> {
+  return dynamicDisplayNames;
+}
+
 export function toHumanModelName(args: { model: string }) {
+  // 1. Check dynamic registry first (server-provided names)
+  const dynamic = dynamicDisplayNames.get(args.model);
+  if (dynamic) {
+    return dynamic;
+  }
+
+  // 2. Static known names
   const known: Record<string, string> = {
     "claude-opus-4-6": "Claude Opus 4.6",
     "claude-opus-4-6[1m]": "Claude Opus 4.6 (1M)",
-    "opusplan": "Claude Opus Plan",
+    opusplan: "Claude Opus Plan",
     "claude-sonnet-4-6": "Claude Sonnet 4.6",
     "claude-sonnet-4-6[1m]": "Claude Sonnet 4.6 (1M)",
     "claude-haiku-4-5": "Claude Haiku 4.5",
@@ -215,6 +271,7 @@ export function toHumanModelName(args: { model: string }) {
     return exact;
   }
 
+  // 3. Best-effort formatting from the raw model ID
   return args.model
     .split("-")
     .map((chunk) => {

@@ -240,6 +240,7 @@ const ChatMessageSchema = z.object({
       cacheReadTokens: z.number().optional(),
       cacheCreationTokens: z.number().optional(),
       totalCostUsd: z.number().optional(),
+      ttftMs: z.number().optional(),
     })
     .optional(),
   promptSuggestions: z.array(z.string()).optional(),

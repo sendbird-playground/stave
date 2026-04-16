@@ -10,6 +10,8 @@ export interface ModelSelectorOption {
   providerId: ProviderId;
   model: string;
   label: string;
+  description?: string;
+  isDefault?: boolean;
   available: boolean;
 }
 
@@ -34,12 +36,16 @@ function buildModelSelectorOption(args: {
   providerId: ProviderId;
   model: string;
   available?: boolean;
+  description?: string;
+  isDefault?: boolean;
 }): ModelSelectorOption {
   return {
     key: `${args.providerId}:${args.model}`,
     providerId: args.providerId,
     model: args.model,
     label: toHumanModelName({ model: args.model }),
+    description: args.description,
+    isDefault: args.isDefault,
     available: args.available ?? true,
   };
 }
@@ -50,24 +56,37 @@ export function buildModelSelectorValue(args: {
   available?: boolean;
 }): ModelSelectorOption {
   return buildModelSelectorOption({
-    providerId: args.providerId ?? inferProviderIdFromModel({ model: args.model }),
+    providerId:
+      args.providerId ?? inferProviderIdFromModel({ model: args.model }),
     model: args.model,
     available: args.available,
   });
 }
 
+export interface ModelEnrichment {
+  description?: string;
+  isDefault?: boolean;
+}
+
 export function buildModelSelectorOptions(args: {
   providerIds: readonly ProviderId[];
   availabilityByProvider?: Partial<Record<ProviderId, boolean>>;
+  modelsByProvider?: Partial<Record<ProviderId, readonly string[]>>;
+  enrichmentByModel?: Map<string, ModelEnrichment>;
 }): ModelSelectorOption[] {
   return args.providerIds.flatMap((providerId) =>
-    getSdkModelOptions({ providerId }).map((model) =>
-      buildModelSelectorOption({
+    (
+      args.modelsByProvider?.[providerId] ?? getSdkModelOptions({ providerId })
+    ).map((model) => {
+      const enrichment = args.enrichmentByModel?.get(model);
+      return buildModelSelectorOption({
         providerId,
         model,
         available: args.availabilityByProvider?.[providerId] ?? true,
-      })
-    )
+        description: enrichment?.description,
+        isDefault: enrichment?.isDefault,
+      });
+    }),
   );
 }
 
@@ -75,7 +94,8 @@ export function buildRecommendedModelSelectorOptions(args: {
   options: readonly ModelSelectorOption[];
   recommendedKeys?: readonly string[];
 }): ModelSelectorOption[] {
-  const recommendedKeys = args.recommendedKeys ?? DEFAULT_RECOMMENDED_MODEL_SELECTOR_KEYS;
+  const recommendedKeys =
+    args.recommendedKeys ?? DEFAULT_RECOMMENDED_MODEL_SELECTOR_KEYS;
   const optionByKey = new Map(
     args.options
       .filter((option) => option.available)

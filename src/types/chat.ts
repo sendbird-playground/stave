@@ -198,6 +198,7 @@ export interface ChatMessage {
     cacheReadTokens?: number;
     cacheCreationTokens?: number;
     totalCostUsd?: number;
+    ttftMs?: number;
   };
   promptSuggestions?: string[];
   parts: MessagePart[];

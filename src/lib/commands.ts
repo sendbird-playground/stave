@@ -66,7 +66,9 @@ function toCommandSearchText(args: { command: string; description: string }) {
     args.command.replace(/^\//, ""),
     args.command.replace(/^\//, "").replaceAll(":", " "),
     args.description,
-  ].join(" ").toLowerCase();
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 function buildProviderPassthroughNote(provider: ProviderId) {
@@ -75,6 +77,12 @@ function buildProviderPassthroughNote(provider: ProviderId) {
     return [
       "Stave Auto does not expose provider-native slash commands.",
       "Switch to Claude Code or Codex directly if you want slash-command passthrough behavior.",
+    ].join("\n");
+  }
+  if (provider === "codex") {
+    return [
+      "Stave shows a bundled Codex slash-command reference in the popup.",
+      "Commands are still forwarded to Codex unchanged at send time, so unlisted commands can still work.",
     ].join("\n");
   }
   if (!providerSupportsNativeCommandCatalog({ providerId: provider })) {
@@ -102,21 +110,35 @@ function buildProviderPaletteNote(args: {
   }
 
   const catalog = args.providerCommandCatalog;
+  const catalogTitle =
+    args.provider === "codex"
+      ? `${providerLabel} slash commands`
+      : `${providerLabel} command catalog`;
+  const readyTitle =
+    args.provider === "codex"
+      ? `${providerLabel} slash commands`
+      : `${providerLabel} native commands`;
   if (!catalog || catalog.status === "idle") {
     return {
-      title: `${providerLabel} command catalog`,
-      description: `${providerLabel} native slash commands have not been loaded yet for this workspace.`,
+      title: catalogTitle,
+      description:
+        args.provider === "codex"
+          ? `Loading the bundled ${providerLabel} slash-command reference for this workspace.`
+          : `${providerLabel} native slash commands have not been loaded yet for this workspace.`,
     };
   }
   if (catalog.status === "loading") {
     return {
-      title: `${providerLabel} command catalog`,
-      description: `Loading ${providerLabel} native slash commands for the current workspace...`,
+      title: catalogTitle,
+      description:
+        args.provider === "codex"
+          ? `Loading the bundled ${providerLabel} slash-command reference for the current workspace...`
+          : `Loading ${providerLabel} native slash commands for the current workspace...`,
     };
   }
   if (catalog.status === "error") {
     return {
-      title: `${providerLabel} command catalog`,
+      title: catalogTitle,
       description: `${catalog.detail}\nSlash commands are still passed through unchanged while the catalog is unavailable.`,
     };
   }
@@ -128,7 +150,7 @@ function buildProviderPaletteNote(args: {
   }
 
   return {
-    title: `${providerLabel} native commands`,
+    title: readyTitle,
     description: catalog.detail || buildProviderPassthroughNote(args.provider),
   };
 }
@@ -137,7 +159,10 @@ export function getActiveSlashCommandTokenMatch(args: {
   value: string;
   caretIndex: number;
 }): SlashCommandTokenMatch | null {
-  const cappedCaretIndex = Math.max(0, Math.min(args.caretIndex, args.value.length));
+  const cappedCaretIndex = Math.max(
+    0,
+    Math.min(args.caretIndex, args.value.length),
+  );
   const beforeCaret = args.value.slice(0, cappedCaretIndex);
   const lineStart = Math.max(0, beforeCaret.lastIndexOf("\n") + 1);
   const activeSlice = beforeCaret.slice(lineStart);
@@ -153,7 +178,8 @@ export function getActiveSlashCommandTokenMatch(args: {
   }
 
   const triggerStart = cappedCaretIndex - token.length;
-  const prefixChar = triggerStart > 0 ? args.value[triggerStart - 1] ?? "" : "";
+  const prefixChar =
+    triggerStart > 0 ? (args.value[triggerStart - 1] ?? "") : "";
   if (prefixChar && !/\s|\(/.test(prefixChar)) {
     return null;
   }
@@ -167,10 +193,12 @@ export function getActiveSlashCommandTokenMatch(args: {
 }
 
 export function getSlashCommandSearchQuery(input: string) {
-  return getActiveSlashCommandTokenMatch({
-    value: input,
-    caretIndex: input.length,
-  })?.token ?? null;
+  return (
+    getActiveSlashCommandTokenMatch({
+      value: input,
+      caretIndex: input.length,
+    })?.token ?? null
+  );
 }
 
 export function replaceSlashCommandToken(args: {
@@ -189,8 +217,8 @@ export function buildCommandPaletteItems(args: {
   const items: CommandPaletteItem[] = [];
 
   if (
-    providerSupportsNativeCommandCatalog({ providerId: args.provider })
-    && args.providerCommandCatalog?.status === "ready"
+    providerSupportsNativeCommandCatalog({ providerId: args.provider }) &&
+    args.providerCommandCatalog?.status === "ready"
   ) {
     args.providerCommandCatalog.commands
       .slice()
@@ -206,7 +234,9 @@ export function buildCommandPaletteItems(args: {
           source: "provider_native",
           searchText: toCommandSearchText({
             command: command.command,
-            description: [command.description, command.argumentHint].filter(Boolean).join(" "),
+            description: [command.description, command.argumentHint]
+              .filter(Boolean)
+              .join(" "),
           }),
         });
       });
@@ -237,11 +267,17 @@ export function filterCommandPaletteItems(args: {
 
   return args.items.filter((item) => {
     const commandWithoutPrefix = item.command.replace(/^\//, "");
-    return item.searchText.includes(normalized) || commandWithoutPrefix.includes(normalized);
+    return (
+      item.searchText.includes(normalized) ||
+      commandWithoutPrefix.includes(normalized)
+    );
   });
 }
 
-export function resolveCommandInput(input: string, _ctx: CommandContext): CommandResult {
+export function resolveCommandInput(
+  input: string,
+  _ctx: CommandContext,
+): CommandResult {
   const parsed = parseSlashCommand(input);
   if (!parsed) {
     return { kind: "not-command" };

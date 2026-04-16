@@ -312,6 +312,7 @@ export const RuntimeOptionsObjectSchema = z
     claudeFastMode: z.boolean().optional(),
     claudeAllowedTools: z.array(z.string().max(200)).max(200).optional(),
     claudeDisallowedTools: z.array(z.string().max(200)).max(200).optional(),
+    claudeAdvisorModel: z.string().max(200).optional(),
     claudeResumeSessionId: z.string().max(200).optional(),
     codexFileAccess: z
       .union([
@@ -1155,6 +1156,162 @@ export const ConnectedToolStatusArgsSchema = z
 export const ClaudeRuntimeActionArgsSchema = z
   .object({
     cwd: z.string().max(4096).optional(),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexRuntimeActionArgsSchema = ClaudeRuntimeActionArgsSchema;
+
+export const CodexPluginDetailArgsSchema = z
+  .object({
+    marketplacePath: z.string().min(1).max(4096),
+    pluginName: z.string().min(1).max(200),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexPluginInstallArgsSchema = CodexPluginDetailArgsSchema;
+
+export const CodexPluginUninstallArgsSchema = z
+  .object({
+    pluginId: z.string().min(1).max(200),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexExperimentalFeatureEnablementArgsSchema = z
+  .object({
+    enablement: z.record(z.string().max(200), z.boolean()),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexMcpOauthLoginArgsSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    scopes: z.array(z.string().min(1).max(200)).max(32).optional(),
+    timeoutSecs: z.number().int().min(1).max(86_400).optional(),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexMcpResourceReadArgsSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    server: z.string().min(1).max(200),
+    uri: z.string().min(1).max(4096),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexThreadRenameArgsSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    name: z.string().min(1).max(200),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexThreadReadArgsSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexThreadForkArgsSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexThreadArchiveArgsSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    archived: z.boolean().optional(),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexThreadCompactArgsSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexThreadRollbackArgsSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    numTurns: z.number().int().min(1).max(100),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexReviewTargetSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("uncommittedChanges"),
+  }).strict(),
+  z.object({
+    type: z.literal("baseBranch"),
+    baseBranch: z.string().min(1).max(200),
+  }).strict(),
+  z.object({
+    type: z.literal("commit"),
+    sha: z.string().min(1).max(200),
+    title: z.string().max(200).optional(),
+  }).strict(),
+  z.object({
+    type: z.literal("custom"),
+    instructions: z.string().min(1).max(20_000),
+  }).strict(),
+]);
+
+export const CodexReviewStartArgsSchema = z
+  .object({
+    threadId: z.string().min(1).max(200),
+    delivery: z.union([z.literal("inline"), z.literal("detached")]).optional(),
+    target: CodexReviewTargetSchema,
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexExternalConfigImportItemSchema = z
+  .object({
+    itemType: z.string().min(1).max(100),
+    description: z.string().min(1).max(10_000),
+    cwd: z.string().max(4096).nullable(),
+  })
+  .strict();
+
+export const CodexExternalConfigImportArgsSchema = z
+  .object({
+    migrationItems: z.array(CodexExternalConfigImportItemSchema).max(200),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexConfigValueWriteArgsSchema = z
+  .object({
+    keyPath: z.string().min(1).max(512),
+    value: z.unknown(),
+    mergeStrategy: z.string().min(1).max(40).optional(),
+    runtimeOptions: RuntimeOptionsSchema,
+  })
+  .strict();
+
+export const CodexConfigBatchEditSchema = z
+  .object({
+    keyPath: z.string().min(1).max(512),
+    value: z.unknown(),
+    mergeStrategy: z.string().min(1).max(40).optional(),
+  })
+  .strict();
+
+export const CodexConfigBatchWriteArgsSchema = z
+  .object({
+    edits: z.array(CodexConfigBatchEditSchema).min(1).max(200),
     runtimeOptions: RuntimeOptionsSchema,
   })
   .strict();

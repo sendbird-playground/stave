@@ -1,5 +1,27 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
-import { Check, ChevronDown, ChevronRight, Contrast, FileAudio, Globe, Monitor, Moon, RefreshCcw, Sun, Trash2, Upload, X } from "lucide-react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentPropsWithoutRef,
+} from "react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Contrast,
+  FileAudio,
+  Globe,
+  Monitor,
+  Moon,
+  RefreshCcw,
+  Sun,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import {
   buildModelSelectorOptions,
   buildModelSelectorValue,
@@ -25,13 +47,18 @@ import {
   validateCustomAudioFile,
   type NotificationSoundPreset,
 } from "@/lib/notifications/notification-sound";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  CLAUDE_SDK_MODEL_OPTIONS,
-  CODEX_MODEL_OPTIONS,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   getDefaultModelForProvider,
   normalizeModelSelection,
 } from "@/lib/providers/model-catalog";
+import { useCodexModelCatalog } from "@/lib/providers/use-codex-model-catalog";
 import { BOOLEAN_TOGGLE_OPTIONS } from "@/lib/providers/runtime-option-contract";
 import { resolveSidebarArtworkClass } from "@/lib/themes";
 import { cn } from "@/lib/utils";
@@ -71,6 +98,7 @@ import {
 } from "@/lib/thinking-phrases";
 import type { ResolvedWorkspaceScriptsConfig } from "@/lib/workspace-scripts/types";
 import { DeveloperSection } from "./settings-dialog-developer-section";
+import { CodexSection } from "./settings-dialog-codex-section";
 import { McpSection } from "./settings-dialog-mcp-section";
 import { MuseSection } from "./settings-dialog-muse-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
@@ -99,18 +127,15 @@ function formatNotificationSoundPresetLabel(preset: NotificationSoundPreset) {
   return `${preset.slice(0, 1).toUpperCase()}${preset.slice(1)}`;
 }
 
-const NOTIFICATION_SOUND_PRESET_OPTIONS: Array<{ value: NotificationSoundPreset; label: string }> = NOTIFICATION_SOUND_PRESETS.map((preset) => ({
+const NOTIFICATION_SOUND_PRESET_OPTIONS: Array<{
+  value: NotificationSoundPreset;
+  label: string;
+}> = NOTIFICATION_SOUND_PRESETS.map((preset) => ({
   value: preset,
   label: formatNotificationSoundPresetLabel(preset),
 }));
 
 const PROMPT_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
-const PROMPT_MODEL_OPTIONS = buildModelSelectorOptions({
-  providerIds: PROMPT_MODEL_PROVIDER_IDS,
-});
-const PROMPT_RECOMMENDED_MODEL_OPTIONS = buildRecommendedModelSelectorOptions({
-  options: PROMPT_MODEL_OPTIONS,
-});
 
 interface GitRemoteState {
   name: string;
@@ -150,7 +175,10 @@ function parseGitRemotes(args: { stdout: string }) {
   return Array.from(remoteStateByName.values());
 }
 
-type DraftTextareaProps = Omit<ComponentPropsWithoutRef<typeof Textarea>, "value" | "defaultValue" | "onChange"> & {
+type DraftTextareaProps = Omit<
+  ComponentPropsWithoutRef<typeof Textarea>,
+  "value" | "defaultValue" | "onChange"
+> & {
   value: string;
   onCommit: (value: string) => void;
 };
@@ -192,13 +220,17 @@ function ProjectSettingsPanel(args: {
   const setProjectWorkspaceUseRootNodeModulesSymlink = useAppStore(
     (state) => state.setProjectWorkspaceUseRootNodeModulesSymlink,
   );
-  const [currentProjectPath, activeWorkspaceId, workspacePathById] = useAppStore(
-    useShallow((state) => [
-      state.projectPath,
-      state.activeWorkspaceId,
-      state.workspacePathById,
-    ] as const),
-  );
+  const [currentProjectPath, activeWorkspaceId, workspacePathById] =
+    useAppStore(
+      useShallow(
+        (state) =>
+          [
+            state.projectPath,
+            state.activeWorkspaceId,
+            state.workspacePathById,
+          ] as const,
+      ),
+    );
   const projectWorkspaceInitCommand = normalizeProjectWorkspaceInitCommand({
     value: args.project.newWorkspaceInitCommand,
   });
@@ -210,9 +242,12 @@ function ProjectSettingsPanel(args: {
       value: args.project.newWorkspaceUseRootNodeModulesSymlink,
     });
   const scriptsWorkspacePath = args.isCurrent
-    ? workspacePathById[activeWorkspaceId] ?? currentProjectPath ?? args.project.projectPath
+    ? (workspacePathById[activeWorkspaceId] ??
+      currentProjectPath ??
+      args.project.projectPath)
     : args.project.projectPath;
-  const [resolvedScriptsConfig, setResolvedScriptsConfig] = useState<ResolvedWorkspaceScriptsConfig | null>(null);
+  const [resolvedScriptsConfig, setResolvedScriptsConfig] =
+    useState<ResolvedWorkspaceScriptsConfig | null>(null);
   const [repositoryRefreshNonce, setRepositoryRefreshNonce] = useState(0);
   const [repositoryState, setRepositoryState] = useState<{
     status: "idle" | "loading" | "ready" | "error";
@@ -284,24 +319,25 @@ function ProjectSettingsPanel(args: {
           rootPath: null,
           remotes: [],
           detail:
-            rootResult.stderr?.trim()
-            || "This project is unavailable or is not a git repository.",
+            rootResult.stderr?.trim() ||
+            "This project is unavailable or is not a git repository.",
         });
         return;
       }
 
-      const rootPath = rootResult.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .find(Boolean) ?? args.project.projectPath;
+      const rootPath =
+        rootResult.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .find(Boolean) ?? args.project.projectPath;
       const remotes = remoteResult.ok
         ? parseGitRemotes({ stdout: remoteResult.stdout })
         : [];
       const detail = remoteResult.ok
-        ? (remotes.length > 0
-            ? `${remotes.length} remote${remotes.length === 1 ? "" : "s"} configured.`
-            : "No git remotes configured.")
-        : (remoteResult.stderr?.trim() || "Failed to inspect git remotes.");
+        ? remotes.length > 0
+          ? `${remotes.length} remote${remotes.length === 1 ? "" : "s"} configured.`
+          : "No git remotes configured."
+        : remoteResult.stderr?.trim() || "Failed to inspect git remotes.";
 
       setRepositoryState({
         status: "ready",
@@ -318,9 +354,7 @@ function ProjectSettingsPanel(args: {
 
   return (
     <div className="space-y-4">
-      <div
-        className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/80 bg-card/95 px-4 py-3 shadow-xs"
-      >
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border/80 bg-card/95 px-4 py-3 shadow-xs">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">Project Settings</Badge>
@@ -379,7 +413,8 @@ function ProjectSettingsPanel(args: {
               setProjectBasePrompt({
                 projectPath: args.project.projectPath,
                 prompt: nextValue,
-              })}
+              })
+            }
             placeholder="Prefer bun over npm. Preserve existing Zustand selector stability patterns. Keep documentation in sync with user-facing changes."
           />
         </LabeledField>
@@ -395,7 +430,8 @@ function ProjectSettingsPanel(args: {
               setProjectWorkspaceInitCommand({
                 projectPath: args.project.projectPath,
                 command: nextValue,
-              })}
+              })
+            }
             placeholder="bun install"
           />
         </LabeledField>
@@ -411,7 +447,8 @@ function ProjectSettingsPanel(args: {
               setProjectWorkspaceUseRootNodeModulesSymlink({
                 projectPath: args.project.projectPath,
                 enabled: !projectUseRootNodeModulesSymlink,
-              })}
+              })
+            }
             className={cn(
               "flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-left transition-colors",
               projectUseRootNodeModulesSymlink
@@ -424,8 +461,8 @@ function ProjectSettingsPanel(args: {
                 Enable shared `node_modules` symlink
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                The symlink exists only inside the created workspace, so deleting
-                the workspace leaves the repository root untouched.
+                The symlink exists only inside the created workspace, so
+                deleting the workspace leaves the repository root untouched.
               </p>
             </div>
             <span
@@ -504,7 +541,8 @@ function ProjectSettingsPanel(args: {
                 args.onRequestRemove({
                   projectPath: args.project.projectPath,
                   projectName: args.project.projectName,
-                })}
+                })
+              }
             >
               <Trash2 className="size-4" />
               Remove project
@@ -528,12 +566,17 @@ function ProjectsSection(args: {
   projects: RecentProjectState[];
   selectedProjectPath?: string | null;
 }) {
-  const removeProjectFromList = useAppStore((state) => state.removeProjectFromList);
+  const removeProjectFromList = useAppStore(
+    (state) => state.removeProjectFromList,
+  );
   const [projectToRemove, setProjectToRemove] = useState<{
     projectPath: string;
     projectName: string;
   } | null>(null);
-  const selectedProject = args.projects.find((project) => project.projectPath === args.selectedProjectPath) ?? null;
+  const selectedProject =
+    args.projects.find(
+      (project) => project.projectPath === args.selectedProjectPath,
+    ) ?? null;
 
   return (
     <>
@@ -547,8 +590,8 @@ function ProjectsSection(args: {
           description="Open a project from the sidebar to register it here."
         >
           <p className="text-sm text-muted-foreground">
-            Registered projects will show their repository defaults and
-            metadata in this section.
+            Registered projects will show their repository defaults and metadata
+            in this section.
           </p>
         </SettingsCard>
       ) : (
@@ -556,7 +599,9 @@ function ProjectsSection(args: {
           {selectedProject ? (
             <ProjectSettingsPanel
               project={selectedProject}
-              isCurrent={selectedProject.projectPath === args.currentProjectPath}
+              isCurrent={
+                selectedProject.projectPath === args.currentProjectPath
+              }
               onRequestRemove={setProjectToRemove}
             />
           ) : (
@@ -565,7 +610,8 @@ function ProjectsSection(args: {
               description="Choose a project from the Settings sidebar to open its settings panel."
             >
               <p className="text-sm text-muted-foreground">
-                Pick a project from the sidebar to inspect its workspace defaults and repository metadata.
+                Pick a project from the sidebar to inspect its workspace
+                defaults and repository metadata.
               </p>
             </SettingsCard>
           )}
@@ -606,19 +652,24 @@ function GeneralSection() {
     notificationSoundCustomAudioData,
     notificationSoundCustomAudioName,
   ] = useAppStore(
-    useShallow((state) => [
-      state.settings.appShellMode,
-      state.settings.confirmBeforeClose,
-      state.settings.notificationSoundEnabled,
-      state.settings.notificationSoundPreset,
-      state.settings.notificationSoundVolume,
-      state.settings.notificationSoundMode,
-      state.settings.notificationSoundCustomAudioData,
-      state.settings.notificationSoundCustomAudioName,
-    ] as const),
+    useShallow(
+      (state) =>
+        [
+          state.settings.appShellMode,
+          state.settings.confirmBeforeClose,
+          state.settings.notificationSoundEnabled,
+          state.settings.notificationSoundPreset,
+          state.settings.notificationSoundVolume,
+          state.settings.notificationSoundMode,
+          state.settings.notificationSoundCustomAudioData,
+          state.settings.notificationSoundCustomAudioName,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
-  const notificationSoundVolumePercent = Math.round(notificationSoundVolume * 100);
+  const notificationSoundVolumePercent = Math.round(
+    notificationSoundVolume * 100,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -655,7 +706,10 @@ function GeneralSection() {
   };
 
   const handleTestSound = () => {
-    if (notificationSoundMode === "custom" && notificationSoundCustomAudioData) {
+    if (
+      notificationSoundMode === "custom" &&
+      notificationSoundCustomAudioData
+    ) {
       playCustomNotificationSound({
         dataUrl: notificationSoundCustomAudioData,
         volume: notificationSoundVolume,
@@ -685,17 +739,21 @@ function GeneralSection() {
           >
             <ChoiceButtons
               value={appShellMode}
-              onChange={(value) => updateSettings({ patch: { appShellMode: value } })}
+              onChange={(value) =>
+                updateSettings({ patch: { appShellMode: value } })
+              }
               options={[
                 {
                   value: "stave",
                   label: "Stave",
-                  description: "Default workspace shell with sidebar, tabs, editor, terminal, and right rail.",
+                  description:
+                    "Default workspace shell with sidebar, tabs, editor, terminal, and right rail.",
                 },
                 {
                   value: "zen",
                   label: "Zen",
-                  description: "Focused shell that stays in Zen mode until you switch back to Stave.",
+                  description:
+                    "Focused shell that stays in Zen mode until you switch back to Stave.",
                 },
               ]}
             />
@@ -709,7 +767,9 @@ function GeneralSection() {
             title="Confirm Before Close"
             description="Show a confirmation dialog before closing the app with ⌘W / Ctrl+W when no tabs or tasks are open."
             checked={confirmBeforeClose}
-            onCheckedChange={(checked) => updateSettings({ patch: { confirmBeforeClose: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { confirmBeforeClose: checked } })
+            }
           />
         </SettingsCard>
         <SettingsCard
@@ -720,7 +780,9 @@ function GeneralSection() {
             title="Sound"
             description="Enable or mute the task completion sound."
             checked={notificationSoundEnabled}
-            onCheckedChange={(checked) => updateSettings({ patch: { notificationSoundEnabled: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { notificationSoundEnabled: checked } })
+            }
           />
           {notificationSoundEnabled ? (
             <>
@@ -730,7 +792,13 @@ function GeneralSection() {
               >
                 <ChoiceButtons
                   value={notificationSoundMode}
-                  onChange={(value) => updateSettings({ patch: { notificationSoundMode: value as "preset" | "custom" } })}
+                  onChange={(value) =>
+                    updateSettings({
+                      patch: {
+                        notificationSoundMode: value as "preset" | "custom",
+                      },
+                    })
+                  }
                   options={[
                     { value: "preset", label: "Preset" },
                     { value: "custom", label: "Custom" },
@@ -744,7 +812,11 @@ function GeneralSection() {
                 >
                   <ChoiceButtons
                     value={notificationSoundPreset}
-                    onChange={(value) => updateSettings({ patch: { notificationSoundPreset: value } })}
+                    onChange={(value) =>
+                      updateSettings({
+                        patch: { notificationSoundPreset: value },
+                      })
+                    }
                     options={NOTIFICATION_SOUND_PRESET_OPTIONS}
                   />
                 </LabeledField>
@@ -772,7 +844,9 @@ function GeneralSection() {
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-2 rounded-md border border-border/80 bg-muted/50 px-3 py-2 text-sm flex-1 min-w-0">
                           <FileAudio className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{notificationSoundCustomAudioName}</span>
+                          <span className="truncate">
+                            {notificationSoundCustomAudioName}
+                          </span>
                         </div>
                         <Button
                           size="sm"
@@ -824,7 +898,9 @@ function GeneralSection() {
                       if (typeof nextValue !== "number") {
                         return;
                       }
-                      updateSettings({ patch: { notificationSoundVolume: nextValue / 100 } });
+                      updateSettings({
+                        patch: { notificationSoundVolume: nextValue / 100 },
+                      });
                     }}
                   />
                   <Badge variant="outline" className="min-w-14 justify-center">
@@ -834,15 +910,20 @@ function GeneralSection() {
               </LabeledField>
               <LabeledField
                 title="Preview"
-                description={notificationSoundMode === "custom"
-                  ? "Play the uploaded audio once with the current volume."
-                  : "Play the current preset once with the current volume."}
+                description={
+                  notificationSoundMode === "custom"
+                    ? "Play the uploaded audio once with the current volume."
+                    : "Play the current preset once with the current volume."
+                }
               >
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={handleTestSound}
-                  disabled={notificationSoundMode === "custom" && !notificationSoundCustomAudioData}
+                  disabled={
+                    notificationSoundMode === "custom" &&
+                    !notificationSoundCustomAudioData
+                  }
                 >
                   Test Sound
                 </Button>
@@ -856,13 +937,16 @@ function GeneralSection() {
 }
 
 function ThemeSection() {
-  const [themeEditorMode, setThemeEditorMode] = useState<ThemeModeName>("light");
+  const [themeEditorMode, setThemeEditorMode] =
+    useState<ThemeModeName>("light");
   const themeMode = useAppStore((state) => state.settings.themeMode);
   const customThemeId = useAppStore((state) => state.settings.customThemeId);
   const sidebarArtworkMode = useAppStore(
     (state) => state.settings.sidebarArtworkMode,
   );
-  const userCustomThemes = useAppStore((state) => state.settings.userCustomThemes);
+  const userCustomThemes = useAppStore(
+    (state) => state.settings.userCustomThemes,
+  );
   const updateSettings = useAppStore((state) => state.updateSettings);
   const installCustomTheme = useAppStore((state) => state.installCustomTheme);
   const removeCustomTheme = useAppStore((state) => state.removeCustomTheme);
@@ -878,19 +962,49 @@ function ThemeSection() {
 
   return (
     <>
-      <SectionHeading title="Design" description="Control theme mode, theme presets, and design token overrides." />
+      <SectionHeading
+        title="Design"
+        description="Control theme mode, theme presets, and design token overrides."
+      />
       <SectionStack>
-        <SettingsCard title="Appearance" description="Choose how the app resolves light and dark mode.">
+        <SettingsCard
+          title="Appearance"
+          description="Choose how the app resolves light and dark mode."
+        >
           <div className="grid gap-2 sm:grid-cols-3">
-            <Button className="h-10 rounded-md" variant={themeMode === "light" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "light", customThemeId: null } })}>
+            <Button
+              className="h-10 rounded-md"
+              variant={themeMode === "light" ? "default" : "outline"}
+              onClick={() =>
+                updateSettings({
+                  patch: { themeMode: "light", customThemeId: null },
+                })
+              }
+            >
               <Sun className="size-4" />
               Light
             </Button>
-            <Button className="h-10 rounded-md" variant={themeMode === "dark" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "dark", customThemeId: null } })}>
+            <Button
+              className="h-10 rounded-md"
+              variant={themeMode === "dark" ? "default" : "outline"}
+              onClick={() =>
+                updateSettings({
+                  patch: { themeMode: "dark", customThemeId: null },
+                })
+              }
+            >
               <Moon className="size-4" />
               Dark
             </Button>
-            <Button className="h-10 rounded-md" variant={themeMode === "system" ? "default" : "outline"} onClick={() => updateSettings({ patch: { themeMode: "system", customThemeId: null } })}>
+            <Button
+              className="h-10 rounded-md"
+              variant={themeMode === "system" ? "default" : "outline"}
+              onClick={() =>
+                updateSettings({
+                  patch: { themeMode: "system", customThemeId: null },
+                })
+              }
+            >
               <Monitor className="size-4" />
               System
             </Button>
@@ -917,10 +1031,10 @@ function ThemeSection() {
                   onClick={() =>
                     updateSettings({
                       patch: {
-                        sidebarArtworkMode:
-                          option.value as SidebarArtworkMode,
+                        sidebarArtworkMode: option.value as SidebarArtworkMode,
                       },
-                    })}
+                    })
+                  }
                 >
                   <SidebarArtworkPreview
                     mode={option.value as SidebarArtworkMode}
@@ -928,7 +1042,10 @@ function ThemeSection() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold">{option.label}</p>
                     {option.value === "space-haze" ? (
-                      <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] uppercase tracking-wide"
+                      >
                         Default
                       </Badge>
                     ) : null}
@@ -959,9 +1076,17 @@ function ThemeSection() {
                 theme={theme}
                 isActive={customThemeId === theme.id}
                 isBuiltin={builtinIds.has(theme.id)}
-                onSelect={() => updateSettings({ patch: { customThemeId: theme.id } })}
-                onDeselect={() => updateSettings({ patch: { customThemeId: null } })}
-                onRemove={builtinIds.has(theme.id) ? undefined : () => removeCustomTheme({ themeId: theme.id })}
+                onSelect={() =>
+                  updateSettings({ patch: { customThemeId: theme.id } })
+                }
+                onDeselect={() =>
+                  updateSettings({ patch: { customThemeId: null } })
+                }
+                onRemove={
+                  builtinIds.has(theme.id)
+                    ? undefined
+                    : () => removeCustomTheme({ themeId: theme.id })
+                }
                 onExport={() => {
                   const json = exportCustomThemeJson({ theme });
                   const blob = new Blob([json], { type: "application/json" });
@@ -995,10 +1120,18 @@ function ThemeSection() {
         >
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/30 p-3">
             <div className="flex items-center gap-2">
-              <Button size="sm" variant={themeEditorMode === "light" ? "default" : "outline"} onClick={() => setThemeEditorMode("light")}>
+              <Button
+                size="sm"
+                variant={themeEditorMode === "light" ? "default" : "outline"}
+                onClick={() => setThemeEditorMode("light")}
+              >
                 Light Tokens
               </Button>
-              <Button size="sm" variant={themeEditorMode === "dark" ? "default" : "outline"} onClick={() => setThemeEditorMode("dark")}>
+              <Button
+                size="sm"
+                variant={themeEditorMode === "dark" ? "default" : "outline"}
+                onClick={() => setThemeEditorMode("dark")}
+              >
                 Dark Tokens
               </Button>
             </div>
@@ -1006,7 +1139,8 @@ function ThemeSection() {
               size="sm"
               variant="outline"
               onClick={() => {
-                const themeOverrides = useAppStore.getState().settings.themeOverrides;
+                const themeOverrides =
+                  useAppStore.getState().settings.themeOverrides;
                 updateSettings({
                   patch: {
                     themeOverrides: {
@@ -1023,7 +1157,11 @@ function ThemeSection() {
 
           <div className="grid gap-3">
             {THEME_TOKEN_NAMES.map((token) => (
-              <ThemeTokenRow key={`${themeEditorMode}-${token}`} token={token} themeEditorMode={themeEditorMode} />
+              <ThemeTokenRow
+                key={`${themeEditorMode}-${token}`}
+                token={token}
+                themeEditorMode={themeEditorMode}
+              />
             ))}
           </div>
         </SettingsCard>
@@ -1067,8 +1205,19 @@ const CustomThemeCard = memo(function CustomThemeCard(args: {
   onExport?: () => void;
 }) {
   const { theme, isActive, isBuiltin } = args;
-  const previewTokens = ["background", "foreground", "primary", "accent", "destructive", "border", "success", "warning"] as const;
-  const previewColors = previewTokens.map((t) => theme.tokens[t]).filter(Boolean);
+  const previewTokens = [
+    "background",
+    "foreground",
+    "primary",
+    "accent",
+    "destructive",
+    "border",
+    "success",
+    "warning",
+  ] as const;
+  const previewColors = previewTokens
+    .map((t) => theme.tokens[t])
+    .filter(Boolean);
 
   return (
     <div
@@ -1088,11 +1237,17 @@ const CustomThemeCard = memo(function CustomThemeCard(args: {
         <div className="flex items-center gap-2">
           <Contrast className="size-4 shrink-0 text-muted-foreground" />
           <p className="text-sm font-semibold">{theme.name}</p>
-          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+          <Badge
+            variant="outline"
+            className="text-[10px] uppercase tracking-wide"
+          >
             {theme.baseMode}
           </Badge>
           {!isBuiltin && (
-            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+            <Badge
+              variant="secondary"
+              className="text-[10px] uppercase tracking-wide"
+            >
               User
             </Badge>
           )}
@@ -1133,7 +1288,10 @@ const CustomThemeCard = memo(function CustomThemeCard(args: {
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-xs"
-              onClick={(e) => { e.stopPropagation(); args.onExport?.(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                args.onExport?.();
+              }}
             >
               <Upload className="size-3" />
               Export
@@ -1144,7 +1302,10 @@ const CustomThemeCard = memo(function CustomThemeCard(args: {
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-              onClick={(e) => { e.stopPropagation(); args.onRemove?.(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                args.onRemove?.();
+              }}
             >
               <Trash2 className="size-3" />
               Remove
@@ -1179,7 +1340,10 @@ function ThemeImportButton(args: {
     }
 
     const text = await file.text();
-    const result = parseCustomThemeFile({ text, existingIds: args.existingIds });
+    const result = parseCustomThemeFile({
+      text,
+      existingIds: args.existingIds,
+    });
     if (!result.ok) {
       setImportError(result.errors?.join(" ") ?? "Unknown validation error.");
       return;
@@ -1224,28 +1388,51 @@ function ThemeImportButton(args: {
       )}
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        Drop a <code className="rounded bg-muted px-1 py-0.5 text-[10px]">.theme.json</code> file
-        to install a community theme. The JSON must include <code className="rounded bg-muted px-1 py-0.5 text-[10px]">id</code>,{" "}
+        Drop a{" "}
+        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+          .theme.json
+        </code>{" "}
+        file to install a community theme. The JSON must include{" "}
+        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">id</code>,{" "}
         <code className="rounded bg-muted px-1 py-0.5 text-[10px]">name</code>,{" "}
-        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">baseMode</code>, and a{" "}
-        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">tokens</code> map.
+        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+          baseMode
+        </code>
+        , and a{" "}
+        <code className="rounded bg-muted px-1 py-0.5 text-[10px]">tokens</code>{" "}
+        map.
       </p>
     </div>
   );
 }
 
-const ThemeTokenRow = memo(function ThemeTokenRow(args: { token: ThemeTokenName; themeEditorMode: ThemeModeName }) {
+const ThemeTokenRow = memo(function ThemeTokenRow(args: {
+  token: ThemeTokenName;
+  themeEditorMode: ThemeModeName;
+}) {
   const updateSettings = useAppStore((state) => state.updateSettings);
-  const overrideValue = useAppStore((state) => state.settings.themeOverrides[args.themeEditorMode][args.token] ?? "");
-  const effectiveValue = overrideValue || PRESET_THEME_TOKENS[args.themeEditorMode][args.token];
+  const overrideValue = useAppStore(
+    (state) =>
+      state.settings.themeOverrides[args.themeEditorMode][args.token] ?? "",
+  );
+  const effectiveValue =
+    overrideValue || PRESET_THEME_TOKENS[args.themeEditorMode][args.token];
 
   return (
     <div className="grid gap-3 rounded-xl border border-border/70 bg-background/60 p-4 lg:grid-cols-[190px_52px_1fr_auto] lg:items-center">
       <div>
-        <p className="text-sm font-medium">{formatThemeTokenLabel(args.token)}</p>
-        <p className="text-xs text-muted-foreground">Preset: {PRESET_THEME_TOKENS[args.themeEditorMode][args.token]}</p>
+        <p className="text-sm font-medium">
+          {formatThemeTokenLabel(args.token)}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Preset: {PRESET_THEME_TOKENS[args.themeEditorMode][args.token]}
+        </p>
       </div>
-      <span className="size-11 rounded-lg border border-border" style={{ backgroundColor: effectiveValue }} aria-hidden="true" />
+      <span
+        className="size-11 rounded-lg border border-border"
+        style={{ backgroundColor: effectiveValue }}
+        aria-hidden="true"
+      />
       <DraftInput
         className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
         value={overrideValue}
@@ -1290,28 +1477,44 @@ const ThemeTokenRow = memo(function ThemeTokenRow(args: { token: ThemeTokenName;
 });
 
 function TerminalSection() {
-  const [terminalFontSize, terminalFontFamily, terminalCursorStyle, terminalLineHeight] = useAppStore(
-    useShallow((state) => [
-      state.settings.terminalFontSize,
-      state.settings.terminalFontFamily,
-      state.settings.terminalCursorStyle,
-      state.settings.terminalLineHeight,
-    ] as const),
+  const [
+    terminalFontSize,
+    terminalFontFamily,
+    terminalCursorStyle,
+    terminalLineHeight,
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.settings.terminalFontSize,
+          state.settings.terminalFontFamily,
+          state.settings.terminalCursorStyle,
+          state.settings.terminalLineHeight,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
 
   return (
     <>
-      <SectionHeading title="Terminal" description="Configure terminal appearance and behavior." />
+      <SectionHeading
+        title="Terminal"
+        description="Configure terminal appearance and behavior."
+      />
       <SectionStack>
-        <SettingsCard title="Typography" description="Tune readability for the integrated terminal.">
+        <SettingsCard
+          title="Typography"
+          description="Tune readability for the integrated terminal."
+        >
           <LabeledField title="Font Size">
             <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               value={String(terminalFontSize)}
               onCommit={(nextValue) =>
                 updateSettings({
-                  patch: { terminalFontSize: readInt(nextValue, terminalFontSize) },
+                  patch: {
+                    terminalFontSize: readInt(nextValue, terminalFontSize),
+                  },
                 })
               }
             />
@@ -1320,7 +1523,9 @@ function TerminalSection() {
             <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               value={terminalFontFamily}
-              onCommit={(nextValue) => updateSettings({ patch: { terminalFontFamily: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({ patch: { terminalFontFamily: nextValue } })
+              }
             />
           </LabeledField>
           <LabeledField title="Line Height">
@@ -1329,18 +1534,28 @@ function TerminalSection() {
               value={String(terminalLineHeight)}
               onCommit={(nextValue) =>
                 updateSettings({
-                  patch: { terminalLineHeight: readFloat(nextValue, terminalLineHeight) },
+                  patch: {
+                    terminalLineHeight: readFloat(
+                      nextValue,
+                      terminalLineHeight,
+                    ),
+                  },
                 })
               }
             />
           </LabeledField>
         </SettingsCard>
 
-        <SettingsCard title="Cursor" description="Choose the terminal cursor shape.">
+        <SettingsCard
+          title="Cursor"
+          description="Choose the terminal cursor shape."
+        >
           <ChoiceButtons
             value={terminalCursorStyle}
             columns={3}
-            onChange={(value) => updateSettings({ patch: { terminalCursorStyle: value } })}
+            onChange={(value) =>
+              updateSettings({ patch: { terminalCursorStyle: value } })
+            }
             options={[
               { value: "block", label: "Block" },
               { value: "bar", label: "Bar" },
@@ -1354,60 +1569,127 @@ function TerminalSection() {
 }
 
 function ModelsSection() {
-  const [modelClaude, modelCodex] = useAppStore(
-    useShallow((state) => [state.settings.modelClaude, state.settings.modelCodex] as const),
+  const [modelClaude, modelCodex, codexBinaryPath] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.settings.modelClaude,
+          state.settings.modelCodex,
+          state.settings.codexBinaryPath,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
+  const codexModelCatalog = useCodexModelCatalog({
+    enabled: true,
+    codexBinaryPath,
+  });
+  const codexModelEnrichment = useMemo(() => {
+    if (codexModelCatalog.entries.length === 0) {
+      return undefined;
+    }
+    const map = new Map<
+      string,
+      { description?: string; isDefault?: boolean }
+    >();
+    for (const entry of codexModelCatalog.entries) {
+      const id = entry.model.trim();
+      if (id) {
+        map.set(id, {
+          description: entry.description || undefined,
+          isDefault: entry.isDefault || undefined,
+        });
+      }
+    }
+    return map.size > 0 ? map : undefined;
+  }, [codexModelCatalog.entries]);
+  const modelOptions = useMemo(
+    () =>
+      buildModelSelectorOptions({
+        providerIds: ["claude-code", "codex"],
+        modelsByProvider: {
+          codex: codexModelCatalog.models,
+        },
+        enrichmentByModel: codexModelEnrichment,
+      }),
+    [codexModelCatalog.models, codexModelEnrichment],
+  );
+  const recommendedModelOptions = useMemo(
+    () => buildRecommendedModelSelectorOptions({ options: modelOptions }),
+    [modelOptions],
+  );
 
   return (
     <>
-      <SectionHeading title="Models" description="Set the default model routing used for new turns." />
+      <SectionHeading
+        title="Models"
+        description="Set the default model routing used for new turns. Codex options come from the current App Server runtime when available."
+      />
       <SectionStack>
-        <SettingsCard title="Model Routing" description="Verified model set only. Claude is limited to latest official models; Codex supports the latest Stave-supported IDs.">
+        <SettingsCard
+          title="Model Routing"
+          description="Pick the default Claude and Codex models used for new turns. Stave falls back to its verified Codex baseline if the App Server catalog is unavailable."
+        >
           <LabeledField title="Claude">
-            <DraftInput
-              className="h-10 rounded-md border-border/80 bg-background"
-              list="claude-model-options"
-              value={modelClaude}
-              onCommit={(nextValue) =>
+            <ModelSelector
+              value={buildModelSelectorValue({
+                providerId: "claude-code",
+                model: modelClaude,
+              })}
+              options={modelOptions.filter(
+                (option) => option.providerId === "claude-code",
+              )}
+              recommendedOptions={recommendedModelOptions.filter(
+                (option) => option.providerId === "claude-code",
+              )}
+              className="w-full"
+              triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
+              menuClassName="sm:max-w-lg"
+              onSelect={({ selection }) =>
                 updateSettings({
                   patch: {
-                    modelClaude: normalizeModelSelection({
-                      value: nextValue,
-                      fallback: getDefaultModelForProvider({ providerId: "claude-code" }),
-                    }),
+                    modelClaude: selection.model,
                   },
                 })
               }
             />
           </LabeledField>
-          <LabeledField title="Codex">
-            <DraftInput
-              className="h-10 rounded-md border-border/80 bg-background"
-              list="codex-model-options"
-              value={modelCodex}
-              onCommit={(nextValue) =>
+          <LabeledField
+            title="Codex"
+            description={
+              codexModelCatalog.detail.trim().length > 0
+                ? codexModelCatalog.detail
+                : undefined
+            }
+          >
+            <ModelSelector
+              value={buildModelSelectorValue({
+                providerId: "codex",
+                model: modelCodex,
+              })}
+              options={modelOptions.filter(
+                (option) => option.providerId === "codex",
+              )}
+              recommendedOptions={recommendedModelOptions.filter(
+                (option) => option.providerId === "codex",
+              )}
+              className="w-full"
+              triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
+              menuClassName="sm:max-w-lg"
+              onSelect={({ selection }) =>
                 updateSettings({
                   patch: {
                     modelCodex: normalizeModelSelection({
-                      value: nextValue,
-                      fallback: getDefaultModelForProvider({ providerId: "codex" }),
+                      value: selection.model,
+                      fallback: getDefaultModelForProvider({
+                        providerId: "codex",
+                      }),
                     }),
                   },
                 })
               }
             />
           </LabeledField>
-          <datalist id="claude-model-options">
-            {CLAUDE_SDK_MODEL_OPTIONS.map((model) => (
-              <option key={model} value={model} />
-            ))}
-          </datalist>
-          <datalist id="codex-model-options">
-            {CODEX_MODEL_OPTIONS.map((model) => (
-              <option key={model} value={model} />
-            ))}
-          </datalist>
         </SettingsCard>
       </SectionStack>
     </>
@@ -1416,24 +1698,40 @@ function ModelsSection() {
 
 function RulesSection() {
   const [rulesPresetPrimary, rulesPresetSecondary] = useAppStore(
-    useShallow((state) => [state.settings.rulesPresetPrimary, state.settings.rulesPresetSecondary] as const),
+    useShallow(
+      (state) =>
+        [
+          state.settings.rulesPresetPrimary,
+          state.settings.rulesPresetSecondary,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
 
   return (
     <>
-      <SectionHeading title="Rules" description="Default rule presets injected into provider runs." />
+      <SectionHeading
+        title="Rules"
+        description="Default rule presets injected into provider runs."
+      />
       <SectionStack>
-        <SettingsCard title="Rule Presets" description="Primary and secondary presets are appended to new task turns.">
+        <SettingsCard
+          title="Rule Presets"
+          description="Primary and secondary presets are appended to new task turns."
+        >
           <DraftInput
             className="h-10 rounded-md border-border/80 bg-background"
             value={rulesPresetPrimary}
-            onCommit={(nextValue) => updateSettings({ patch: { rulesPresetPrimary: nextValue } })}
+            onCommit={(nextValue) =>
+              updateSettings({ patch: { rulesPresetPrimary: nextValue } })
+            }
           />
           <DraftInput
             className="h-10 rounded-md border-border/80 bg-background"
             value={rulesPresetSecondary}
-            onCommit={(nextValue) => updateSettings({ patch: { rulesPresetSecondary: nextValue } })}
+            onCommit={(nextValue) =>
+              updateSettings({ patch: { rulesPresetSecondary: nextValue } })
+            }
           />
         </SettingsCard>
       </SectionStack>
@@ -1442,30 +1740,53 @@ function RulesSection() {
 }
 
 function ChatSection() {
-  const [smartSuggestions, chatSendPreview, chatStreamingEnabled, messageFontSize, messageCodeFontSize, messageFontFamily, messageMonoFontFamily, messageKoreanFontFamily, infoPanelScale, reasoningExpansionMode, showInterimMessages, thinkingPhraseAnimationStyle, codexFastModeVisible] = useAppStore(
-    useShallow((state) => [
-      state.settings.smartSuggestions,
-      state.settings.chatSendPreview,
-      state.settings.chatStreamingEnabled,
-      state.settings.messageFontSize,
-      state.settings.messageCodeFontSize,
-      state.settings.messageFontFamily,
-      state.settings.messageMonoFontFamily,
-      state.settings.messageKoreanFontFamily,
-      state.settings.infoPanelScale,
-      state.settings.reasoningExpansionMode,
-      state.settings.showInterimMessages,
-      state.settings.thinkingPhraseAnimationStyle,
-      state.settings.codexFastModeVisible,
-    ] as const),
+  const [
+    smartSuggestions,
+    chatSendPreview,
+    chatStreamingEnabled,
+    messageFontSize,
+    messageCodeFontSize,
+    messageFontFamily,
+    messageMonoFontFamily,
+    messageKoreanFontFamily,
+    infoPanelScale,
+    reasoningExpansionMode,
+    showInterimMessages,
+    thinkingPhraseAnimationStyle,
+    codexFastModeVisible,
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.settings.smartSuggestions,
+          state.settings.chatSendPreview,
+          state.settings.chatStreamingEnabled,
+          state.settings.messageFontSize,
+          state.settings.messageCodeFontSize,
+          state.settings.messageFontFamily,
+          state.settings.messageMonoFontFamily,
+          state.settings.messageKoreanFontFamily,
+          state.settings.infoPanelScale,
+          state.settings.reasoningExpansionMode,
+          state.settings.showInterimMessages,
+          state.settings.thinkingPhraseAnimationStyle,
+          state.settings.codexFastModeVisible,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
 
   return (
     <>
-      <SectionHeading title="Chat" description="Typography and behavior defaults for the chat message surface." />
+      <SectionHeading
+        title="Chat"
+        description="Typography and behavior defaults for the chat message surface."
+      />
       <SectionStack>
-        <SettingsCard title="Typography" description="Font sizes and families applied to the shared chat surface.">
+        <SettingsCard
+          title="Typography"
+          description="Font sizes and families applied to the shared chat surface."
+        >
           <LabeledField
             title="Message Font Size"
             description="Prose font size for chat messages. Line height scales proportionally."
@@ -1476,10 +1797,14 @@ function ChatSection() {
                 max={24}
                 step={1}
                 value={[messageFontSize]}
-                onValueChange={([value]) => updateSettings({ patch: { messageFontSize: value } })}
+                onValueChange={([value]) =>
+                  updateSettings({ patch: { messageFontSize: value } })
+                }
                 className="flex-1"
               />
-              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">{messageFontSize}px</span>
+              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">
+                {messageFontSize}px
+              </span>
             </div>
           </LabeledField>
           <LabeledField
@@ -1492,10 +1817,14 @@ function ChatSection() {
                 max={20}
                 step={1}
                 value={[messageCodeFontSize]}
-                onValueChange={([value]) => updateSettings({ patch: { messageCodeFontSize: value } })}
+                onValueChange={([value]) =>
+                  updateSettings({ patch: { messageCodeFontSize: value } })
+                }
                 className="flex-1"
               />
-              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">{messageCodeFontSize}px</span>
+              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">
+                {messageCodeFontSize}px
+              </span>
             </div>
           </LabeledField>
           <LabeledField
@@ -1505,7 +1834,9 @@ function ChatSection() {
             <DraftInput
               value={messageFontFamily}
               className="h-9 font-mono text-sm"
-              onCommit={(nextValue) => updateSettings({ patch: { messageFontFamily: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({ patch: { messageFontFamily: nextValue } })
+              }
             />
           </LabeledField>
           <LabeledField
@@ -1515,7 +1846,9 @@ function ChatSection() {
             <DraftInput
               value={messageMonoFontFamily}
               className="h-9 font-mono text-sm"
-              onCommit={(nextValue) => updateSettings({ patch: { messageMonoFontFamily: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({ patch: { messageMonoFontFamily: nextValue } })
+              }
             />
           </LabeledField>
           <LabeledField
@@ -1525,7 +1858,11 @@ function ChatSection() {
             <DraftInput
               value={messageKoreanFontFamily}
               className="h-9 font-mono text-sm"
-              onCommit={(nextValue) => updateSettings({ patch: { messageKoreanFontFamily: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({
+                  patch: { messageKoreanFontFamily: nextValue },
+                })
+              }
             />
           </LabeledField>
           <LabeledField
@@ -1538,28 +1875,43 @@ function ChatSection() {
                 max={130}
                 step={5}
                 value={[Math.round(infoPanelScale * 100)]}
-                onValueChange={([value]) => updateSettings({ patch: { infoPanelScale: (value ?? 100) / 100 } })}
+                onValueChange={([value]) =>
+                  updateSettings({
+                    patch: { infoPanelScale: (value ?? 100) / 100 },
+                  })
+                }
                 className="flex-1"
               />
-              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">{Math.round(infoPanelScale * 100)}%</span>
+              <span className="w-12 text-right text-sm tabular-nums text-muted-foreground">
+                {Math.round(infoPanelScale * 100)}%
+              </span>
             </div>
           </LabeledField>
         </SettingsCard>
-        <SettingsCard title="Behavior" description="Toggle chat features and display preferences.">
+        <SettingsCard
+          title="Behavior"
+          description="Toggle chat features and display preferences."
+        >
           <SwitchField
             title="Smart Suggestions"
             checked={smartSuggestions}
-            onCheckedChange={(checked) => updateSettings({ patch: { smartSuggestions: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { smartSuggestions: checked } })
+            }
           />
           <SwitchField
             title="Send Preview"
             checked={chatSendPreview}
-            onCheckedChange={(checked) => updateSettings({ patch: { chatSendPreview: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { chatSendPreview: checked } })
+            }
           />
           <SwitchField
             title="Streaming UI"
             checked={chatStreamingEnabled}
-            onCheckedChange={(checked) => updateSettings({ patch: { chatStreamingEnabled: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { chatStreamingEnabled: checked } })
+            }
           />
           <LabeledField
             title="Reasoning Expansion"
@@ -1567,7 +1919,9 @@ function ChatSection() {
           >
             <ChoiceButtons<"auto" | "manual">
               value={reasoningExpansionMode}
-              onChange={(value) => updateSettings({ patch: { reasoningExpansionMode: value } })}
+              onChange={(value) =>
+                updateSettings({ patch: { reasoningExpansionMode: value } })
+              }
               options={[
                 { value: "auto", label: "Auto" },
                 { value: "manual", label: "Manual" },
@@ -1578,7 +1932,9 @@ function ChatSection() {
             title="Show Interim Messages"
             description="Show pre-final assistant text segments between execution steps. Hidden by default to keep the final response cleaner."
             checked={showInterimMessages}
-            onCheckedChange={(checked) => updateSettings({ patch: { showInterimMessages: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { showInterimMessages: checked } })
+            }
           />
           <LabeledField
             title="Reasoning Phrase Animation"
@@ -1586,9 +1942,14 @@ function ChatSection() {
           >
             <Select
               value={thinkingPhraseAnimationStyle}
-              onValueChange={(value) => updateSettings({
-                patch: { thinkingPhraseAnimationStyle: normalizeThinkingPhraseAnimationStyle(value) },
-              })}
+              onValueChange={(value) =>
+                updateSettings({
+                  patch: {
+                    thinkingPhraseAnimationStyle:
+                      normalizeThinkingPhraseAnimationStyle(value),
+                  },
+                })
+              }
             >
               <SelectTrigger className="w-full bg-background">
                 <SelectValue placeholder="Select animation" />
@@ -1596,7 +1957,8 @@ function ChatSection() {
               <SelectContent>
                 {THINKING_PHRASE_ANIMATION_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    {option.label}{option.value === "soft" ? " (Recommended)" : ""}
+                    {option.label}
+                    {option.value === "soft" ? " (Recommended)" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1606,7 +1968,9 @@ function ChatSection() {
             title="Show Fast Mode Toggle (Codex)"
             description="Show the Fast mode toggle button when Codex is the active provider."
             checked={codexFastModeVisible}
-            onCheckedChange={(checked) => updateSettings({ patch: { codexFastModeVisible: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { codexFastModeVisible: checked } })
+            }
           />
         </SettingsCard>
       </SectionStack>
@@ -1615,37 +1979,59 @@ function ChatSection() {
 }
 
 function SkillsSection() {
-  const [skillsEnabled, skillsAutoSuggest, sharedSkillsHome, skillCatalog, activeWorkspaceId, projectPath, workspacePathById] = useAppStore(
-    useShallow((state) => [
-      state.settings.skillsEnabled,
-      state.settings.skillsAutoSuggest,
-      state.settings.sharedSkillsHome,
-      state.skillCatalog,
-      state.activeWorkspaceId,
-      state.projectPath,
-      state.workspacePathById,
-    ] as const),
+  const [
+    skillsEnabled,
+    skillsAutoSuggest,
+    sharedSkillsHome,
+    skillCatalog,
+    activeWorkspaceId,
+    projectPath,
+    workspacePathById,
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.settings.skillsEnabled,
+          state.settings.skillsAutoSuggest,
+          state.settings.sharedSkillsHome,
+          state.skillCatalog,
+          state.activeWorkspaceId,
+          state.projectPath,
+          state.workspacePathById,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
   const refreshSkillCatalog = useAppStore((state) => state.refreshSkillCatalog);
-  const workspacePath = workspacePathById[activeWorkspaceId] ?? projectPath ?? null;
+  const workspacePath =
+    workspacePathById[activeWorkspaceId] ?? projectPath ?? null;
 
   const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
 
   const skillCountByRootPath = useMemo(() => {
     const counts = new Map<string, number>();
     for (const skill of skillCatalog.skills) {
-      counts.set(skill.sourceRootPath, (counts.get(skill.sourceRootPath) ?? 0) + 1);
+      counts.set(
+        skill.sourceRootPath,
+        (counts.get(skill.sourceRootPath) ?? 0) + 1,
+      );
     }
     return counts;
   }, [skillCatalog.skills]);
 
   const skillsByRoot = useMemo(() => {
-    const groups = new Map<string, { root: (typeof skillCatalog.roots)[number] | null; skills: typeof skillCatalog.skills }>();
+    const groups = new Map<
+      string,
+      {
+        root: (typeof skillCatalog.roots)[number] | null;
+        skills: typeof skillCatalog.skills;
+      }
+    >();
     for (const skill of skillCatalog.skills) {
       const key = skill.sourceRootPath;
       if (!groups.has(key)) {
-        const matchingRoot = skillCatalog.roots.find((r) => r.path === key) ?? null;
+        const matchingRoot =
+          skillCatalog.roots.find((r) => r.path === key) ?? null;
         groups.set(key, { root: matchingRoot, skills: [] });
       }
       groups.get(key)!.skills.push(skill);
@@ -1658,19 +2044,21 @@ function SkillsSection() {
       return;
     }
     if (
-      skillCatalog.status === "loading"
-      && skillCatalog.workspacePath === workspacePath
-      && skillCatalog.sharedSkillsHome === (sharedSkillsHome.trim() || null)
+      skillCatalog.status === "loading" &&
+      skillCatalog.workspacePath === workspacePath &&
+      skillCatalog.sharedSkillsHome === (sharedSkillsHome.trim() || null)
     ) {
       return;
     }
     if (
-      skillCatalog.status === "ready"
-      && skillCatalog.workspacePath === workspacePath
-      && skillCatalog.sharedSkillsHome === (sharedSkillsHome.trim() || null)
+      skillCatalog.status === "ready" &&
+      skillCatalog.workspacePath === workspacePath &&
+      skillCatalog.sharedSkillsHome === (sharedSkillsHome.trim() || null)
     ) {
       const CATALOG_TTL_MS = 5 * 60 * 1000;
-      const fetchedAtMs = skillCatalog.fetchedAt ? Date.parse(skillCatalog.fetchedAt) : 0;
+      const fetchedAtMs = skillCatalog.fetchedAt
+        ? Date.parse(skillCatalog.fetchedAt)
+        : 0;
       if (Date.now() - fetchedAtMs < CATALOG_TTL_MS) {
         return;
       }
@@ -1689,18 +2077,28 @@ function SkillsSection() {
 
   return (
     <>
-      <SectionHeading title="Skills" description="Configure skill discovery and automatic prompting." />
+      <SectionHeading
+        title="Skills"
+        description="Configure skill discovery and automatic prompting."
+      />
       <SectionStack>
-        <SettingsCard title="Skills" description="Control skill suggestions and automatic prompting.">
+        <SettingsCard
+          title="Skills"
+          description="Control skill suggestions and automatic prompting."
+        >
           <SwitchField
             title="Enabled"
             checked={skillsEnabled}
-            onCheckedChange={(checked) => updateSettings({ patch: { skillsEnabled: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { skillsEnabled: checked } })
+            }
           />
           <SwitchField
             title="Auto Suggest"
             checked={skillsAutoSuggest}
-            onCheckedChange={(checked) => updateSettings({ patch: { skillsAutoSuggest: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { skillsAutoSuggest: checked } })
+            }
           />
           <LabeledField
             title="Shared Skills Root"
@@ -1710,7 +2108,9 @@ function SkillsSection() {
               className="h-10 rounded-md border-border/80 bg-background"
               placeholder="~/shared-skills"
               value={sharedSkillsHome}
-              onCommit={(nextValue) => updateSettings({ patch: { sharedSkillsHome: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({ patch: { sharedSkillsHome: nextValue } })
+              }
             />
           </LabeledField>
         </SettingsCard>
@@ -1724,13 +2124,16 @@ function SkillsSection() {
                 {skillCatalog.status === "loading"
                   ? "Refreshing catalog..."
                   : skillCatalog.status === "error"
-                  ? "Skill discovery failed"
-                  : `${skillCatalog.skills.length} skills across ${skillCatalog.roots.length} roots`}
+                    ? "Skill discovery failed"
+                    : `${skillCatalog.skills.length} skills across ${skillCatalog.roots.length} roots`}
               </p>
-              <p className="text-sm text-muted-foreground">{skillCatalog.detail}</p>
+              <p className="text-sm text-muted-foreground">
+                {skillCatalog.detail}
+              </p>
               {skillCatalog.fetchedAt ? (
                 <p className="text-xs text-muted-foreground">
-                  Last updated {formatTaskUpdatedAt({ value: skillCatalog.fetchedAt })}
+                  Last updated{" "}
+                  {formatTaskUpdatedAt({ value: skillCatalog.fetchedAt })}
                 </p>
               ) : null}
             </div>
@@ -1743,42 +2146,68 @@ function SkillsSection() {
             </Button>
           </div>
           <div className="space-y-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Roots</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Roots
+            </p>
             {skillCatalog.roots.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No skill roots were discovered for the current workspace.</p>
+              <p className="text-sm text-muted-foreground">
+                No skill roots were discovered for the current workspace.
+              </p>
             ) : (
               skillCatalog.roots.map((root) => (
-                <div key={root.id} className="rounded-lg border border-border/70 bg-background/60 px-3 py-2">
+                <div
+                  key={root.id}
+                  className="rounded-lg border border-border/70 bg-background/60 px-3 py-2"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{root.path}</span>
-                    <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                    <Badge
+                      variant="secondary"
+                      className="h-5 px-1.5 text-[10px] uppercase tracking-wide"
+                    >
                       {root.scope}
                     </Badge>
-                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                    <Badge
+                      variant="outline"
+                      className="h-5 px-1.5 text-[10px] uppercase tracking-wide"
+                    >
                       {root.provider}
                     </Badge>
                     <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
                       {skillCountByRootPath.get(root.path) ?? 0} skills
                     </Badge>
                   </div>
-                  {root.detail ? <p className="mt-1 text-xs text-muted-foreground">{root.detail}</p> : null}
+                  {root.detail ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {root.detail}
+                    </p>
+                  ) : null}
                 </div>
               ))
             )}
           </div>
           <div className="space-y-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Catalog</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              Catalog
+            </p>
             {skillCatalog.skills.length === 0 ? (
               skillCatalog.status === "loading" ? (
-                <p className="text-sm text-muted-foreground">Loading skills...</p>
+                <p className="text-sm text-muted-foreground">
+                  Loading skills...
+                </p>
               ) : (
-                <p className="text-sm text-muted-foreground">No SKILL.md entries were found.</p>
+                <p className="text-sm text-muted-foreground">
+                  No SKILL.md entries were found.
+                </p>
               )
             ) : (
               Array.from(skillsByRoot.entries()).map(([rootPath, group]) => {
                 const isCollapsed = collapsedGroups.includes(rootPath);
                 return (
-                  <div key={rootPath} className="rounded-lg border border-border/70 bg-background/40">
+                  <div
+                    key={rootPath}
+                    className="rounded-lg border border-border/70 bg-background/40"
+                  >
                     <button
                       type="button"
                       className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/30"
@@ -1791,12 +2220,20 @@ function SkillsSection() {
                       }}
                     >
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-medium">{rootPath}</span>
-                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                        <span className="truncate text-sm font-medium">
+                          {rootPath}
+                        </span>
+                        <Badge
+                          variant="secondary"
+                          className="h-5 px-1.5 text-[10px]"
+                        >
                           {group.skills.length}
                         </Badge>
                         {group.root ? (
-                          <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                          <Badge
+                            variant="outline"
+                            className="h-5 px-1.5 text-[10px] uppercase tracking-wide"
+                          >
                             {group.root.scope}
                           </Badge>
                         ) : null}
@@ -1810,18 +2247,33 @@ function SkillsSection() {
                     {!isCollapsed ? (
                       <div className="space-y-2 border-t border-border/70 px-3 py-2">
                         {group.skills.map((skill) => (
-                          <div key={skill.id} className="rounded-lg border border-border/70 bg-background/60 px-3 py-2">
+                          <div
+                            key={skill.id}
+                            className="rounded-lg border border-border/70 bg-background/60 px-3 py-2"
+                          >
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-medium">{skill.name}</span>
-                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                              <span className="text-sm font-medium">
+                                {skill.name}
+                              </span>
+                              <Badge
+                                variant="secondary"
+                                className="h-5 px-1.5 text-[10px] uppercase tracking-wide"
+                              >
                                 {skill.scope}
                               </Badge>
-                              <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
+                              <Badge
+                                variant="outline"
+                                className="h-5 px-1.5 text-[10px] uppercase tracking-wide"
+                              >
                                 {skill.provider}
                               </Badge>
                             </div>
-                            <p className="mt-1 text-sm text-muted-foreground">{skill.description}</p>
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground/70">{skill.path}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {skill.description}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground/70">
+                              {skill.path}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -1839,30 +2291,46 @@ function SkillsSection() {
 
 function SubagentsSection() {
   const [subagentsEnabled, subagentsProfile] = useAppStore(
-    useShallow((state) => [
-      state.settings.subagentsEnabled,
-      state.settings.subagentsProfile,
-    ] as const),
+    useShallow(
+      (state) =>
+        [
+          state.settings.subagentsEnabled,
+          state.settings.subagentsProfile,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
 
   return (
     <>
-      <SectionHeading title="Subagents" description="Control how the main agent delegates tasks to child agents." />
+      <SectionHeading
+        title="Subagents"
+        description="Control how the main agent delegates tasks to child agents."
+      />
       <SectionStack>
-        <SettingsCard title="Delegation" description="Subagents allow the primary model to spawn lightweight child agents for research, exploration, and parallel workstreams.">
+        <SettingsCard
+          title="Delegation"
+          description="Subagents allow the primary model to spawn lightweight child agents for research, exploration, and parallel workstreams."
+        >
           <SwitchField
             title="Enabled"
             description="When enabled, the agent may delegate sub-tasks to smaller worker agents."
             checked={subagentsEnabled}
-            onCheckedChange={(checked) => updateSettings({ patch: { subagentsEnabled: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { subagentsEnabled: checked } })
+            }
           />
-          <LabeledField title="Profile" description="Optional profile identifier that controls the subagent model and tool policy.">
+          <LabeledField
+            title="Profile"
+            description="Optional profile identifier that controls the subagent model and tool policy."
+          >
             <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
               placeholder="default"
               value={subagentsProfile}
-              onCommit={(nextValue) => updateSettings({ patch: { subagentsProfile: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({ patch: { subagentsProfile: nextValue } })
+              }
             />
           </LabeledField>
         </SettingsCard>
@@ -1878,12 +2346,15 @@ function CommandPaletteSection() {
     commandPaletteHiddenCommandIds,
     commandPaletteRecentCommandIds,
   ] = useAppStore(
-    useShallow((state) => [
-      state.settings.commandPaletteShowRecent,
-      state.settings.commandPalettePinnedCommandIds,
-      state.settings.commandPaletteHiddenCommandIds,
-      state.settings.commandPaletteRecentCommandIds,
-    ] as const),
+    useShallow(
+      (state) =>
+        [
+          state.settings.commandPaletteShowRecent,
+          state.settings.commandPalettePinnedCommandIds,
+          state.settings.commandPaletteHiddenCommandIds,
+          state.settings.commandPaletteRecentCommandIds,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
   const commands = useMemo(() => getCommandPaletteCoreCommands(), []);
@@ -1895,7 +2366,9 @@ function CommandPaletteSection() {
         commandPalettePinnedCommandIds: isPinned
           ? commandPalettePinnedCommandIds.filter((id) => id !== commandId)
           : [...commandPalettePinnedCommandIds, commandId],
-        commandPaletteHiddenCommandIds: commandPaletteHiddenCommandIds.filter((id) => id !== commandId),
+        commandPaletteHiddenCommandIds: commandPaletteHiddenCommandIds.filter(
+          (id) => id !== commandId,
+        ),
       },
     });
   }
@@ -1907,7 +2380,9 @@ function CommandPaletteSection() {
         commandPaletteHiddenCommandIds: isHidden
           ? commandPaletteHiddenCommandIds.filter((id) => id !== commandId)
           : [...commandPaletteHiddenCommandIds, commandId],
-        commandPalettePinnedCommandIds: commandPalettePinnedCommandIds.filter((id) => id !== commandId),
+        commandPalettePinnedCommandIds: commandPalettePinnedCommandIds.filter(
+          (id) => id !== commandId,
+        ),
         commandPaletteRecentCommandIds: isHidden
           ? commandPaletteRecentCommandIds
           : commandPaletteRecentCommandIds.filter((id) => id !== commandId),
@@ -1917,37 +2392,51 @@ function CommandPaletteSection() {
 
   return (
     <>
-      <SectionHeading title="Command Palette" description="Configure the global command launcher opened with Cmd/Ctrl+Shift+P. This is separate from slash commands in the chat input." />
+      <SectionHeading
+        title="Command Palette"
+        description="Configure the global command launcher opened with Cmd/Ctrl+Shift+P. This is separate from slash commands in the chat input."
+      />
       <SectionStack>
-        <SettingsCard title="Behavior" description="Pinned commands appear first, hidden commands stay out of the palette, and recent history can be shown as its own section.">
+        <SettingsCard
+          title="Behavior"
+          description="Pinned commands appear first, hidden commands stay out of the palette, and recent history can be shown as its own section."
+        >
           <SwitchField
             title="Recent Commands"
             checked={commandPaletteShowRecent}
-            onCheckedChange={(checked) => updateSettings({ patch: { commandPaletteShowRecent: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { commandPaletteShowRecent: checked } })
+            }
           />
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              onClick={() => updateSettings({ patch: { commandPaletteRecentCommandIds: [] } })}
+              onClick={() =>
+                updateSettings({
+                  patch: { commandPaletteRecentCommandIds: [] },
+                })
+              }
               disabled={commandPaletteRecentCommandIds.length === 0}
             >
               Clear Recent History
             </Button>
             <Button
               variant="outline"
-              onClick={() => updateSettings({
-                patch: {
-                  commandPalettePinnedCommandIds: [],
-                  commandPaletteHiddenCommandIds: [],
-                  commandPaletteRecentCommandIds: [],
-                  commandPaletteShowRecent: true,
-                },
-              })}
+              onClick={() =>
+                updateSettings({
+                  patch: {
+                    commandPalettePinnedCommandIds: [],
+                    commandPaletteHiddenCommandIds: [],
+                    commandPaletteRecentCommandIds: [],
+                    commandPaletteShowRecent: true,
+                  },
+                })
+              }
               disabled={
-                commandPalettePinnedCommandIds.length === 0
-                && commandPaletteHiddenCommandIds.length === 0
-                && commandPaletteRecentCommandIds.length === 0
-                && commandPaletteShowRecent
+                commandPalettePinnedCommandIds.length === 0 &&
+                commandPaletteHiddenCommandIds.length === 0 &&
+                commandPaletteRecentCommandIds.length === 0 &&
+                commandPaletteShowRecent
               }
             >
               Reset Palette Settings
@@ -1955,25 +2444,47 @@ function CommandPaletteSection() {
           </div>
         </SettingsCard>
 
-        <SettingsCard title="Command Visibility" description="Pin the core actions you use most, or hide the ones you never want in the global palette.">
+        <SettingsCard
+          title="Command Visibility"
+          description="Pin the core actions you use most, or hide the ones you never want in the global palette."
+        >
           <div className="space-y-2">
             {commands.map((command) => {
-              const isPinned = commandPalettePinnedCommandIds.includes(command.id);
-              const isHidden = commandPaletteHiddenCommandIds.includes(command.id);
+              const isPinned = commandPalettePinnedCommandIds.includes(
+                command.id,
+              );
+              const isHidden = commandPaletteHiddenCommandIds.includes(
+                command.id,
+              );
 
               return (
-                <div key={command.id} className="rounded-lg border border-border/70 bg-card/60 p-3">
+                <div
+                  key={command.id}
+                  className="rounded-lg border border-border/70 bg-card/60 p-3"
+                >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-foreground">{command.title}</p>
-                        <Badge variant="outline">{COMMAND_PALETTE_GROUP_LABELS[command.group]}</Badge>
-                        {command.shortcut ? <Badge variant="secondary">{command.shortcut}</Badge> : null}
+                        <p className="font-medium text-foreground">
+                          {command.title}
+                        </p>
+                        <Badge variant="outline">
+                          {COMMAND_PALETTE_GROUP_LABELS[command.group]}
+                        </Badge>
+                        {command.shortcut ? (
+                          <Badge variant="secondary">{command.shortcut}</Badge>
+                        ) : null}
                         {isPinned ? <Badge>Pinned</Badge> : null}
-                        {isHidden ? <Badge variant="destructive">Hidden</Badge> : null}
+                        {isHidden ? (
+                          <Badge variant="destructive">Hidden</Badge>
+                        ) : null}
                       </div>
-                      <p className="text-sm text-muted-foreground">{command.description}</p>
-                      <p className="font-mono text-[11px] text-muted-foreground">{command.id}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {command.description}
+                      </p>
+                      <p className="font-mono text-[11px] text-muted-foreground">
+                        {command.id}
+                      </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <Button
@@ -1998,13 +2509,15 @@ function CommandPaletteSection() {
           </div>
         </SettingsCard>
 
-        <SettingsCard title="Programmatic Contributors" description="The palette is backed by a registry so internal modules can add commands without coupling to the dialog component.">
+        <SettingsCard
+          title="Programmatic Contributors"
+          description="The palette is backed by a registry so internal modules can add commands without coupling to the dialog component."
+        >
           <p className="text-sm leading-6 text-muted-foreground">
-            Use
-            {" "}
-            <code>registerCommandPaletteContributor()</code>
-            {" "}
-            to inject additional commands. Core Stave commands are customizable here; dynamic workspace/task entries and future contributed commands inherit the same execution surface automatically.
+            Use <code>registerCommandPaletteContributor()</code> to inject
+            additional commands. Core Stave commands are customizable here;
+            dynamic workspace/task entries and future contributed commands
+            inherit the same execution surface automatically.
           </p>
         </SettingsCard>
       </SectionStack>
@@ -2027,28 +2540,37 @@ function EditorSection() {
     pythonLspCommand,
     typescriptLspCommand,
   ] = useAppStore(
-    useShallow((state) => [
-      state.settings.editorFontSize,
-      state.settings.editorFontFamily,
-      state.settings.editorWordWrap,
-      state.settings.editorMinimap,
-      state.settings.editorLineNumbers,
-      state.settings.editorTabSize,
-      state.settings.editorLspEnabled,
-      state.settings.editorAiCompletions,
-      state.settings.editorEslintEnabled,
-      state.settings.editorFormatOnSave,
-      state.settings.pythonLspCommand,
-      state.settings.typescriptLspCommand,
-    ] as const),
+    useShallow(
+      (state) =>
+        [
+          state.settings.editorFontSize,
+          state.settings.editorFontFamily,
+          state.settings.editorWordWrap,
+          state.settings.editorMinimap,
+          state.settings.editorLineNumbers,
+          state.settings.editorTabSize,
+          state.settings.editorLspEnabled,
+          state.settings.editorAiCompletions,
+          state.settings.editorEslintEnabled,
+          state.settings.editorFormatOnSave,
+          state.settings.pythonLspCommand,
+          state.settings.typescriptLspCommand,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
 
   return (
     <>
-      <SectionHeading title="Editor" description="Configure code editor defaults used by tabs and previews." />
+      <SectionHeading
+        title="Editor"
+        description="Configure code editor defaults used by tabs and previews."
+      />
       <SectionStack>
-        <SettingsCard title="Typography" description="Base editor type and spacing defaults.">
+        <SettingsCard
+          title="Typography"
+          description="Base editor type and spacing defaults."
+        >
           <LabeledField title="Font Size">
             <DraftInput
               className="h-10 rounded-md border-border/80 bg-background"
@@ -2067,7 +2589,9 @@ function EditorSection() {
             <DraftInput
               className="h-10 rounded-md border-border/80 bg-background font-mono"
               value={editorFontFamily}
-              onCommit={(nextValue) => updateSettings({ patch: { editorFontFamily: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({ patch: { editorFontFamily: nextValue } })
+              }
             />
           </LabeledField>
           <LabeledField title="Tab Size">
@@ -2086,17 +2610,24 @@ function EditorSection() {
           </LabeledField>
         </SettingsCard>
 
-        <SettingsCard title="Display" description="Toggle editor line wrapping and chrome.">
+        <SettingsCard
+          title="Display"
+          description="Toggle editor line wrapping and chrome."
+        >
           <SwitchField
             title="Word Wrap"
             checked={editorWordWrap}
-            onCheckedChange={(checked) => updateSettings({ patch: { editorWordWrap: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { editorWordWrap: checked } })
+            }
           />
           <LabeledField title="Line Numbers">
             <ChoiceButtons
               value={editorLineNumbers}
               columns={3}
-              onChange={(value) => updateSettings({ patch: { editorLineNumbers: value } })}
+              onChange={(value) =>
+                updateSettings({ patch: { editorLineNumbers: value } })
+              }
               options={[
                 { value: "on", label: "On" },
                 { value: "off", label: "Off" },
@@ -2107,7 +2638,9 @@ function EditorSection() {
           <SwitchField
             title="Minimap"
             checked={editorMinimap}
-            onCheckedChange={(checked) => updateSettings({ patch: { editorMinimap: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { editorMinimap: checked } })
+            }
           />
         </SettingsCard>
 
@@ -2119,7 +2652,9 @@ function EditorSection() {
             title="Enable AI Completions"
             description="Shows AI-generated inline suggestions as you type. Press Tab to accept. Uses Claude Haiku for fast, low-cost completions."
             checked={editorAiCompletions}
-            onCheckedChange={(checked) => updateSettings({ patch: { editorAiCompletions: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { editorAiCompletions: checked } })
+            }
           />
         </SettingsCard>
 
@@ -2131,7 +2666,9 @@ function EditorSection() {
             title="Enable LSP Runtime"
             description="Uses Electron-managed stdio language-server sessions per active workspace. Keep this off if you only want Monaco's built-in syntax support."
             checked={editorLspEnabled}
-            onCheckedChange={(checked) => updateSettings({ patch: { editorLspEnabled: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { editorLspEnabled: checked } })
+            }
           />
           <LabeledField
             title="TypeScript LSP Command"
@@ -2141,7 +2678,9 @@ function EditorSection() {
               className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
               placeholder="typescript-language-server"
               value={typescriptLspCommand}
-              onCommit={(nextValue) => updateSettings({ patch: { typescriptLspCommand: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({ patch: { typescriptLspCommand: nextValue } })
+              }
             />
           </LabeledField>
           <LabeledField
@@ -2152,7 +2691,9 @@ function EditorSection() {
               className="h-10 rounded-md border-border/80 bg-background font-mono text-sm"
               placeholder="pyright-langserver"
               value={pythonLspCommand}
-              onCommit={(nextValue) => updateSettings({ patch: { pythonLspCommand: nextValue } })}
+              onCommit={(nextValue) =>
+                updateSettings({ patch: { pythonLspCommand: nextValue } })
+              }
             />
           </LabeledField>
         </SettingsCard>
@@ -2161,13 +2702,17 @@ function EditorSection() {
             title="Enable ESLint"
             description="Reads ESLint config from the opened project and shows diagnostics in the editor. Requires ESLint installed in the project's node_modules."
             checked={editorEslintEnabled}
-            onCheckedChange={(checked) => updateSettings({ patch: { editorEslintEnabled: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { editorEslintEnabled: checked } })
+            }
           />
           <SwitchField
             title="Format on Save"
             description="Automatically apply ESLint auto-fix when saving a file."
             checked={editorFormatOnSave}
-            onCheckedChange={(checked) => updateSettings({ patch: { editorFormatOnSave: checked } })}
+            onCheckedChange={(checked) =>
+              updateSettings({ patch: { editorFormatOnSave: checked } })
+            }
           />
         </SettingsCard>
       </SectionStack>
@@ -2212,6 +2757,8 @@ export function SettingsDialogSectionContent(args: {
       return <EditorSection />;
     case "providers":
       return <ProvidersSection />;
+    case "codex":
+      return <CodexSection />;
     case "mcp":
       return <McpSection />;
     case "prompts":
@@ -2237,7 +2784,13 @@ interface PromptFieldProps {
   onCommit: (value: string) => void;
 }
 
-function PromptField({ title, description, value, defaultValue, onCommit }: PromptFieldProps) {
+function PromptField({
+  title,
+  description,
+  value,
+  defaultValue,
+  onCommit,
+}: PromptFieldProps) {
   const [draft, setDraft] = useState(value);
   const isDefault = draft === defaultValue;
 
@@ -2266,7 +2819,12 @@ function PromptField({ title, description, value, defaultValue, onCommit }: Prom
         placeholder="(empty = disabled)"
       />
       <div className="flex items-center justify-between">
-        <p className={cn("text-xs", isDefault ? "text-muted-foreground" : "text-primary")}>
+        <p
+          className={cn(
+            "text-xs",
+            isDefault ? "text-muted-foreground" : "text-primary",
+          )}
+        >
           {isDefault ? "Using default" : "Customised"}
         </p>
         {!isDefault && (
@@ -2292,12 +2850,54 @@ function PromptModelField(args: {
   value: string;
   onSelect: (model: string) => void;
 }) {
+  const codexBinaryPath = useAppStore(
+    (state) => state.settings.codexBinaryPath,
+  );
+  const codexModelCatalog = useCodexModelCatalog({
+    enabled: true,
+    codexBinaryPath,
+  });
+  const codexModelEnrichmentForPrompt = useMemo(() => {
+    if (codexModelCatalog.entries.length === 0) {
+      return undefined;
+    }
+    const map = new Map<
+      string,
+      { description?: string; isDefault?: boolean }
+    >();
+    for (const entry of codexModelCatalog.entries) {
+      const id = entry.model.trim();
+      if (id) {
+        map.set(id, {
+          description: entry.description || undefined,
+          isDefault: entry.isDefault || undefined,
+        });
+      }
+    }
+    return map.size > 0 ? map : undefined;
+  }, [codexModelCatalog.entries]);
+  const promptModelOptions = useMemo(
+    () =>
+      buildModelSelectorOptions({
+        providerIds: PROMPT_MODEL_PROVIDER_IDS,
+        modelsByProvider: {
+          codex: codexModelCatalog.models,
+        },
+        enrichmentByModel: codexModelEnrichmentForPrompt,
+      }),
+    [codexModelCatalog.models, codexModelEnrichmentForPrompt],
+  );
+  const promptRecommendedModelOptions = useMemo(
+    () => buildRecommendedModelSelectorOptions({ options: promptModelOptions }),
+    [promptModelOptions],
+  );
+
   return (
     <LabeledField title={args.title} description={args.description}>
       <ModelSelector
         value={buildModelSelectorValue({ model: args.value })}
-        options={PROMPT_MODEL_OPTIONS}
-        recommendedOptions={PROMPT_RECOMMENDED_MODEL_OPTIONS}
+        options={promptModelOptions}
+        recommendedOptions={promptRecommendedModelOptions}
         className="w-full"
         triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
         menuClassName="sm:max-w-lg"
@@ -2319,17 +2919,20 @@ function PromptsSection() {
     workspaceTurnSummaryFallbackModel,
     workspaceTurnSummaryPrompt,
   ] = useAppStore(
-    useShallow((state) => [
-      state.settings.promptResponseStyle,
-      state.settings.promptPrDescription,
-      state.settings.promptSupervisorBreakdown,
-      state.settings.promptSupervisorSynthesis,
-      state.settings.promptPreprocessorClassifier,
-      state.settings.promptInlineCompletion,
-      state.settings.workspaceTurnSummaryPrimaryModel,
-      state.settings.workspaceTurnSummaryFallbackModel,
-      state.settings.workspaceTurnSummaryPrompt,
-    ] as const),
+    useShallow(
+      (state) =>
+        [
+          state.settings.promptResponseStyle,
+          state.settings.promptPrDescription,
+          state.settings.promptSupervisorBreakdown,
+          state.settings.promptSupervisorSynthesis,
+          state.settings.promptPreprocessorClassifier,
+          state.settings.promptInlineCompletion,
+          state.settings.workspaceTurnSummaryPrimaryModel,
+          state.settings.workspaceTurnSummaryFallbackModel,
+          state.settings.workspaceTurnSummaryPrompt,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
 
@@ -2350,7 +2953,9 @@ function PromptsSection() {
             description="Appended to the system prompt (Claude) or injected as hidden developer instructions (Codex). Empty disables the injection."
             value={promptResponseStyle}
             defaultValue={DEFAULT_PROMPT_RESPONSE_STYLE}
-            onCommit={(v) => updateSettings({ patch: { promptResponseStyle: v } })}
+            onCommit={(v) =>
+              updateSettings({ patch: { promptResponseStyle: v } })
+            }
           />
         </SettingsCard>
 
@@ -2363,7 +2968,9 @@ function PromptsSection() {
             description="The instruction part of the prompt. Branch context (diff, commit log, file list) is appended automatically."
             value={promptPrDescription}
             defaultValue={DEFAULT_PROMPT_PR_DESCRIPTION}
-            onCommit={(v) => updateSettings({ patch: { promptPrDescription: v } })}
+            onCommit={(v) =>
+              updateSettings({ patch: { promptPrDescription: v } })
+            }
           />
         </SettingsCard>
 
@@ -2376,21 +2983,27 @@ function PromptsSection() {
             description="Instructs the supervisor how to decompose a request into subtasks. Use {maxSubtasks} and {providerNote} placeholders for dynamic values."
             value={promptSupervisorBreakdown}
             defaultValue={DEFAULT_PROMPT_SUPERVISOR_BREAKDOWN}
-            onCommit={(v) => updateSettings({ patch: { promptSupervisorBreakdown: v } })}
+            onCommit={(v) =>
+              updateSettings({ patch: { promptSupervisorBreakdown: v } })
+            }
           />
           <PromptField
             title="Supervisor Synthesis"
             description="Instructs the supervisor how to merge subtask results into a final response."
             value={promptSupervisorSynthesis}
             defaultValue={DEFAULT_PROMPT_SUPERVISOR_SYNTHESIS}
-            onCommit={(v) => updateSettings({ patch: { promptSupervisorSynthesis: v } })}
+            onCommit={(v) =>
+              updateSettings({ patch: { promptSupervisorSynthesis: v } })
+            }
           />
           <PromptField
             title="Preprocessor Classifier"
             description="Classifies user intent for direct routing vs orchestration. Use {orchestrationGuidance} for mode-aware phrasing."
             value={promptPreprocessorClassifier}
             defaultValue={DEFAULT_PROMPT_PREPROCESSOR_CLASSIFIER}
-            onCommit={(v) => updateSettings({ patch: { promptPreprocessorClassifier: v } })}
+            onCommit={(v) =>
+              updateSettings({ patch: { promptPreprocessorClassifier: v } })
+            }
           />
         </SettingsCard>
 
@@ -2403,7 +3016,9 @@ function PromptsSection() {
             description="Controls how the model generates code completions. Must instruct the model to output raw code only."
             value={promptInlineCompletion}
             defaultValue={DEFAULT_PROMPT_INLINE_COMPLETION}
-            onCommit={(v) => updateSettings({ patch: { promptInlineCompletion: v } })}
+            onCommit={(v) =>
+              updateSettings({ patch: { promptInlineCompletion: v } })
+            }
           />
         </SettingsCard>
 
@@ -2418,7 +3033,8 @@ function PromptsSection() {
             onSelect={(model) =>
               updateSettings({
                 patch: { workspaceTurnSummaryPrimaryModel: model },
-              })}
+              })
+            }
           />
           <PromptModelField
             title="Fallback Model"
@@ -2427,7 +3043,8 @@ function PromptsSection() {
             onSelect={(model) =>
               updateSettings({
                 patch: { workspaceTurnSummaryFallbackModel: model },
-              })}
+              })
+            }
           />
           <PromptField
             title="Summary Prompt"
@@ -2437,7 +3054,8 @@ function PromptsSection() {
             onCommit={(v) =>
               updateSettings({
                 patch: { workspaceTurnSummaryPrompt: v },
-              })}
+              })
+            }
           />
         </SettingsCard>
       </SectionStack>
@@ -2451,10 +3069,13 @@ function PromptsSection() {
 
 function LensSection() {
   const [heuristic, reactDebugSource] = useAppStore(
-    useShallow((state) => [
-      state.settings.lensSourceMappingHeuristic,
-      state.settings.lensSourceMappingReactDebugSource,
-    ] as const),
+    useShallow(
+      (state) =>
+        [
+          state.settings.lensSourceMappingHeuristic,
+          state.settings.lensSourceMappingReactDebugSource,
+        ] as const,
+    ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
 

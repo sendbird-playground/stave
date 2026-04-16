@@ -57,6 +57,13 @@ import {
   measureBridgeEventBytes,
 } from "./provider-buffering";
 
+/**
+ * Cache boundary marker for the claude-agent-sdk systemPrompt string[] API.
+ * Matches the SDK's SYSTEM_PROMPT_DYNAMIC_BOUNDARY export — inlined here to
+ * avoid a flaky ESM named-value import in bun's parallel test runner.
+ */
+const SYSTEM_PROMPT_DYNAMIC_BOUNDARY = "__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__";
+
 /** SDK-level permission modes accepted by the claude-agent-sdk query() API. */
 type ClaudePermissionMode =
   | "default"
@@ -475,7 +482,7 @@ export function buildClaudeSystemPrompt(args: {
   cwd: string;
   baseSystemPrompt?: string;
   responseStylePrompt?: string;
-}) {
+}): string[] {
   const workspacePrompt = [
     "Stave workspace context:",
     `Current workspace root: ${args.cwd}`,
@@ -484,17 +491,25 @@ export function buildClaudeSystemPrompt(args: {
     "If the user explicitly asks to access a path outside the workspace root, keep the exact requested path and request approval instead of guessing a nearby absolute path.",
   ].join("\n");
 
-  const parts: string[] = [];
+  // Static prefix — eligible for cross-session prompt caching.
+  const staticParts: string[] = [];
   const baseSystemPrompt = args.baseSystemPrompt?.trim();
   if (baseSystemPrompt) {
-    parts.push(baseSystemPrompt);
+    staticParts.push(baseSystemPrompt);
   }
   const responseStyle = args.responseStylePrompt?.trim();
   if (responseStyle) {
-    parts.push(responseStyle);
+    staticParts.push(responseStyle);
   }
-  parts.push(workspacePrompt);
-  return parts.join("\n\n");
+
+  // Dynamic suffix — session-specific, not globally cached.
+  const dynamicParts: string[] = [workspacePrompt];
+
+  return [
+    staticParts.join("\n\n"),
+    SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
+    dynamicParts.join("\n\n"),
+  ];
 }
 
 function extractClaudeTerminalIssue(args: { stdoutTail: string }) {
@@ -715,7 +730,7 @@ function buildClaudeQueryOptions(args: {
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
   permissionMode?: ClaudePermissionMode;
   resume?: string;
-  systemPrompt?: string;
+  systemPrompt?: string | string[];
   includePartialMessages?: boolean;
   promptSuggestions?: boolean;
   canUseTool?: CanUseTool;
@@ -791,6 +806,9 @@ function buildClaudeQueryOptions(args: {
       : {}),
     ...(disallowedTools.length > 0 ? { disallowedTools } : {}),
     ...(settingSources !== undefined ? { settingSources } : {}),
+    ...(args.runtimeOptions?.claudeAdvisorModel
+      ? { advisorModel: args.runtimeOptions.claudeAdvisorModel }
+      : {}),
     ...(args.runtimeOptions?.claudeFastMode
       ? { settings: { fastMode: true } }
       : {}),
@@ -1009,6 +1027,9 @@ function buildClaudeUsageEvent(resultMsg: SDKResultMessage): BridgeEvent {
       : {}),
     ...(typeof resultMsg.total_cost_usd === "number"
       ? { totalCostUsd: resultMsg.total_cost_usd }
+      : {}),
+    ...(typeof resultMsg.ttft_ms === "number"
+      ? { ttftMs: resultMsg.ttft_ms }
       : {}),
   };
 }
@@ -1275,6 +1296,11 @@ export function mapClaudeMessageToEvents(args: {
           { type: "system", content: "Compacting conversation context\u2026" },
         ];
       }
+      if (status === "requesting") {
+        return [
+          { type: "system", content: "Sending request to model\u2026" },
+        ];
+      }
       return [];
     }
     const taskProgressEvents = buildClaudeTaskProgressEvents(sysMsg);
@@ -1507,6 +1533,7 @@ export function mapClaudeMessageToEvents(args: {
         status?: string;
         resetsAt?: number;
         utilization?: number;
+        api_error_status?: number | null;
       };
     };
     const info = rlMsg.rate_limit_info;
@@ -1514,10 +1541,12 @@ export function mapClaudeMessageToEvents(args: {
       const resetTime = info.resetsAt
         ? new Date(info.resetsAt * 1000).toLocaleTimeString()
         : "unknown";
+      const statusSuffix =
+        info.api_error_status != null ? ` (HTTP ${info.api_error_status})` : "";
       return [
         {
           type: "error",
-          message: `Rate limit reached. Resets at ${resetTime}.`,
+          message: `Rate limit reached. Resets at ${resetTime}.${statusSuffix}`,
           recoverable: true,
         },
       ];
@@ -1563,6 +1592,34 @@ export function mapClaudeMessageToEvents(args: {
     const summary = sumMsg.summary?.trim();
     if (summary) {
       return [{ type: "system", content: summary }];
+    }
+    return [];
+  }
+
+  // plugin_install — headless plugin installation progress (SDK 0.2.110+).
+  // Subtype lives under the system message umbrella but arrives with type set
+  // directly. Surface completed installs as system events; silence the rest.
+  if (
+    message.type === "system" &&
+    (message as { subtype?: string }).subtype === "plugin_install"
+  ) {
+    const pluginMsg = message as {
+      status: "started" | "installed" | "failed" | "completed";
+      name?: string;
+      error?: string;
+    };
+    if (pluginMsg.status === "installed" && pluginMsg.name) {
+      return [
+        { type: "system", content: `Plugin installed: ${pluginMsg.name}` },
+      ];
+    }
+    if (pluginMsg.status === "failed" && pluginMsg.name) {
+      return [
+        {
+          type: "system",
+          content: `Plugin install failed: ${pluginMsg.name}${pluginMsg.error ? ` — ${pluginMsg.error}` : ""}`,
+        },
+      ];
     }
     return [];
   }

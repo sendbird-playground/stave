@@ -1,11 +1,21 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  CodexAppServerSnapshotResponse,
+  CodexModelCatalogResponse,
+  CodexMcpOauthLoginResponse,
+  CodexMcpResourceReadResponse,
+  CodexThreadForkResponse,
+  CodexThreadReadResponse,
   CanonicalConversationRequest,
   ClaudeContextUsageResponse,
   CodexMcpStatusResponse,
   ClaudePluginReloadResponse,
+  CodexMutationResponse,
+  CodexPluginDetailResponse,
+  CodexPluginInstallResponse,
   ProviderId,
   ProviderRuntimeOptions,
+  CodexReviewStartResponse,
 } from "../src/lib/providers/provider.types";
 import type {
   ConnectedToolId,
@@ -457,6 +467,175 @@ contextBridge.exposeInMainWorld("api", {
         "provider:get-codex-mcp-status",
         args,
       ) as Promise<CodexMcpStatusResponse>,
+    getCodexModelCatalog: (args: {
+      cwd?: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:get-codex-model-catalog",
+        args,
+      ) as Promise<CodexModelCatalogResponse>,
+    getCodexAppServerSnapshot: (args: {
+      cwd?: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:get-codex-app-server-snapshot",
+        args,
+      ) as Promise<CodexAppServerSnapshotResponse>,
+    getCodexPluginDetail: (args: {
+      marketplacePath: string;
+      pluginName: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:get-codex-plugin-detail",
+        args,
+      ) as Promise<CodexPluginDetailResponse>,
+    installCodexPlugin: (args: {
+      marketplacePath: string;
+      pluginName: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:install-codex-plugin",
+        args,
+      ) as Promise<CodexPluginInstallResponse>,
+    uninstallCodexPlugin: (args: {
+      pluginId: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:uninstall-codex-plugin",
+        args,
+      ) as Promise<CodexMutationResponse>,
+    setCodexExperimentalFeatureEnablement: (args: {
+      enablement: Record<string, boolean>;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:set-codex-experimental-feature-enablement",
+        args,
+      ) as Promise<CodexMutationResponse>,
+    startCodexMcpOauthLogin: (args: {
+      name: string;
+      scopes?: string[];
+      timeoutSecs?: number;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:start-codex-mcp-oauth-login",
+        args,
+      ) as Promise<CodexMcpOauthLoginResponse>,
+    readCodexMcpResource: (args: {
+      threadId: string;
+      server: string;
+      uri: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:read-codex-mcp-resource",
+        args,
+      ) as Promise<CodexMcpResourceReadResponse>,
+    renameCodexThread: (args: {
+      threadId: string;
+      name: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:rename-codex-thread",
+        args,
+      ) as Promise<CodexMutationResponse>,
+    readCodexThread: (args: {
+      threadId: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:read-codex-thread",
+        args,
+      ) as Promise<CodexThreadReadResponse>,
+    forkCodexThread: (args: {
+      threadId: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:fork-codex-thread",
+        args,
+      ) as Promise<CodexThreadForkResponse>,
+    archiveCodexThread: (args: {
+      threadId: string;
+      archived?: boolean;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:archive-codex-thread",
+        args,
+      ) as Promise<CodexMutationResponse>,
+    compactCodexThread: (args: {
+      threadId: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:compact-codex-thread",
+        args,
+      ) as Promise<CodexMutationResponse>,
+    rollbackCodexThread: (args: {
+      threadId: string;
+      numTurns: number;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:rollback-codex-thread",
+        args,
+      ) as Promise<CodexMutationResponse>,
+    startCodexReview: (args: {
+      threadId: string;
+      delivery?: "inline" | "detached";
+      target:
+        | { type: "uncommittedChanges" }
+        | { type: "baseBranch"; baseBranch: string }
+        | { type: "commit"; sha: string; title?: string }
+        | { type: "custom"; instructions: string };
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:start-codex-review",
+        args,
+      ) as Promise<CodexReviewStartResponse>,
+    importCodexExternalConfig: (args: {
+      migrationItems: Array<{
+        itemType: string;
+        description: string;
+        cwd: string | null;
+      }>;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:import-codex-external-config",
+        args,
+      ) as Promise<CodexMutationResponse>,
+    writeCodexConfigValue: (args: {
+      keyPath: string;
+      value: unknown;
+      mergeStrategy?: string;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:write-codex-config-value",
+        args,
+      ) as Promise<CodexMutationResponse>,
+    batchWriteCodexConfig: (args: {
+      edits: Array<{
+        keyPath: string;
+        value: unknown;
+        mergeStrategy?: string;
+      }>;
+      runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+    }) =>
+      ipcRenderer.invoke(
+        "provider:batch-write-codex-config",
+        args,
+      ) as Promise<CodexMutationResponse>,
     suggestTaskName: (args: {
       prompt: string;
       history?: Array<{ role: string; content: string }>;
