@@ -54,6 +54,26 @@ import type {
 } from "./host-service/protocol";
 import { providerRuntime } from "./providers/runtime";
 import {
+  archiveCodexThread,
+  batchWriteCodexConfig,
+  compactCodexThread,
+  forkCodexThread,
+  getCodexAppServerSnapshot,
+  getCodexModelCatalog,
+  getCodexPluginDetail,
+  importCodexExternalConfig,
+  installCodexPlugin,
+  readCodexThread,
+  readCodexMcpResource,
+  renameCodexThread,
+  rollbackCodexThread,
+  setCodexExperimentalFeatureEnablement,
+  startCodexMcpOauthLogin,
+  startCodexReview,
+  uninstallCodexPlugin,
+  writeCodexConfigValue,
+} from "./providers/codex-app-server-runtime";
+import {
   getClaudeContextUsage,
   prewarmClaudeSdk,
   reloadClaudePlugins,
@@ -921,6 +941,114 @@ async function handleRequest(request: AnyHostServiceRequestEnvelope) {
         await getCodexMcpStatus({
           codexBinaryPath: request.params.runtimeOptions?.codexBinaryPath,
         }),
+      );
+      return;
+    case "provider.get-codex-model-catalog":
+      await respond(
+        request.id,
+        await getCodexModelCatalog(request.params),
+      );
+      return;
+    case "provider.get-codex-app-server-snapshot":
+      await respond(
+        request.id,
+        await getCodexAppServerSnapshot(request.params),
+      );
+      return;
+    case "provider.get-codex-plugin-detail":
+      await respond(
+        request.id,
+        await getCodexPluginDetail(request.params),
+      );
+      return;
+    case "provider.install-codex-plugin":
+      await respond(
+        request.id,
+        await installCodexPlugin(request.params),
+      );
+      return;
+    case "provider.uninstall-codex-plugin":
+      await respond(
+        request.id,
+        await uninstallCodexPlugin(request.params),
+      );
+      return;
+    case "provider.set-codex-experimental-feature-enablement":
+      await respond(
+        request.id,
+        await setCodexExperimentalFeatureEnablement(request.params),
+      );
+      return;
+    case "provider.start-codex-mcp-oauth-login":
+      await respond(
+        request.id,
+        await startCodexMcpOauthLogin(request.params),
+      );
+      return;
+    case "provider.read-codex-mcp-resource":
+      await respond(
+        request.id,
+        await readCodexMcpResource(request.params),
+      );
+      return;
+    case "provider.rename-codex-thread":
+      await respond(
+        request.id,
+        await renameCodexThread(request.params),
+      );
+      return;
+    case "provider.read-codex-thread":
+      await respond(
+        request.id,
+        await readCodexThread(request.params),
+      );
+      return;
+    case "provider.fork-codex-thread":
+      await respond(
+        request.id,
+        await forkCodexThread(request.params),
+      );
+      return;
+    case "provider.archive-codex-thread":
+      await respond(
+        request.id,
+        await archiveCodexThread(request.params),
+      );
+      return;
+    case "provider.compact-codex-thread":
+      await respond(
+        request.id,
+        await compactCodexThread(request.params),
+      );
+      return;
+    case "provider.rollback-codex-thread":
+      await respond(
+        request.id,
+        await rollbackCodexThread(request.params),
+      );
+      return;
+    case "provider.start-codex-review":
+      await respond(
+        request.id,
+        await startCodexReview(request.params),
+      );
+      return;
+    case "provider.import-codex-external-config":
+      await respond(
+        request.id,
+        await importCodexExternalConfig(request.params),
+      );
+      return;
+    case "provider.write-codex-config-value":
+      await respond(
+        request.id,
+        await writeCodexConfigValue(request.params),
+      );
+      return;
+    case "provider.batch-write-codex-config":
+      await respond(
+        request.id,
+        await batchWriteCodexConfig(request.params),
       );
       return;
     case "provider.suggest-task-name":

@@ -1,5 +1,6 @@
 import { PromptInput, ZenPromptInput } from "@/components/ai-elements";
 import {
+  useCallback,
   useDeferredValue,
   useEffect,
   useLayoutEffect,
@@ -48,6 +49,7 @@ import {
   normalizeModelSelection,
   providerSupportsNativeCommandCatalog,
 } from "@/lib/providers/model-catalog";
+import { useCodexModelCatalog } from "@/lib/providers/use-codex-model-catalog";
 import {
   CLAUDE_EFFORT_OPTIONS,
   CODEX_EFFORT_OPTIONS,
@@ -174,6 +176,8 @@ interface ChatInputComposerProps {
   onThinkingModeChange?: (value: "adaptive" | "enabled" | "disabled") => void;
   onProviderModeSelect?: (presetId: ProviderModePresetId) => void;
   onModelSelect: (args: { selection: ModelSelectorOption }) => void;
+  crossReviewProvider?: "claude-code" | "codex" | null;
+  onCrossReview?: (args: { instructions?: string }) => void;
 }
 
 function ChatInputComposer(args: ChatInputComposerProps) {
@@ -818,6 +822,8 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           onAttachmentsChange={({ attachments }) =>
             updateNonTextPromptDraft({ attachments })
           }
+          crossReviewProvider={args.crossReviewProvider}
+          onCrossReview={args.onCrossReview}
           onFocus={() => setStaveMuseOpen({ open: false })}
           onSubmit={async ({ text, filePaths }) => {
             cancelPendingDraftSave();
@@ -905,6 +911,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     abortTaskTurn,
     updateSettings,
     refreshSkillCatalog,
+    sendUserMessage,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -918,6 +925,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           state.abortTaskTurn,
           state.updateSettings,
           state.refreshSkillCatalog,
+          state.sendUserMessage,
         ] as const,
     ),
   );
@@ -929,6 +937,9 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
   );
   const draftProvider = useAppStore((state) => state.draftProvider);
   const activeProvider = activeTask?.provider ?? draftProvider;
+  const codexBinaryPathForCatalog = useAppStore(
+    (state) => state.settings.codexBinaryPath,
+  );
   const promptDraftRuntimeOverrides = useAppStore(
     (state) =>
       state.promptDraftByTask[activeTaskId || "draft:session"]
@@ -1118,13 +1129,40 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       }),
     [activeModel, activeProvider, activeProviderAvailable],
   );
+  const codexModelCatalog = useCodexModelCatalog({
+    enabled: true,
+    codexBinaryPath: codexBinaryPathForCatalog,
+  });
+  const codexModelEnrichment = useMemo(() => {
+    if (codexModelCatalog.entries.length === 0) {
+      return undefined;
+    }
+    const map = new Map<
+      string,
+      { description?: string; isDefault?: boolean }
+    >();
+    for (const entry of codexModelCatalog.entries) {
+      const id = entry.model.trim();
+      if (id) {
+        map.set(id, {
+          description: entry.description || undefined,
+          isDefault: entry.isDefault || undefined,
+        });
+      }
+    }
+    return map.size > 0 ? map : undefined;
+  }, [codexModelCatalog.entries]);
   const modelOptions = useMemo<ModelSelectorOption[]>(
     () =>
       buildModelSelectorOptions({
         providerIds: PROVIDER_IDS,
         availabilityByProvider: providerAvailability,
+        modelsByProvider: {
+          codex: codexModelCatalog.models,
+        },
+        enrichmentByModel: codexModelEnrichment,
       }),
-    [providerAvailability],
+    [codexModelCatalog.models, codexModelEnrichment, providerAvailability],
   );
   const recommendedModelOptions = useMemo<ModelSelectorOption[]>(
     () => buildRecommendedModelSelectorOptions({ options: modelOptions }),
@@ -1492,6 +1530,75 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
   const deferredCommandPaletteItems = useDeferredValue(commandPalette.items);
   const deferredSkillPalette = useDeferredValue(skillPalette);
 
+  // ── Cross-review: detect last assistant provider and offer opposite review ──
+  const lastAssistantProviderId = useAppStore((state) => {
+    const messages =
+      state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i] as ChatMessage | undefined;
+      if (!msg) continue;
+      if (
+        msg.role === "assistant" &&
+        (msg.providerId === "claude-code" || msg.providerId === "codex")
+      ) {
+        return msg.providerId;
+      }
+    }
+    return null;
+  });
+  const crossReviewProvider = useMemo<"claude-code" | "codex" | null>(() => {
+    if (!lastAssistantProviderId || isTurnActive) return null;
+    if (lastAssistantProviderId === "claude-code") return "codex";
+    if (lastAssistantProviderId === "codex") return "claude-code";
+    return null;
+  }, [lastAssistantProviderId, isTurnActive]);
+  const crossReviewReturnProviderRef = useRef<
+    "claude-code" | "codex" | "stave" | null
+  >(null);
+  const handleCrossReview = useCallback(
+    async (reviewArgs: { instructions?: string }) => {
+      if (!crossReviewProvider || !activeTaskId) return;
+      // Remember the current provider so we can revert after the review turn.
+      crossReviewReturnProviderRef.current = activeProvider;
+      setTaskProvider({
+        taskId: providerSelectionTarget,
+        provider: crossReviewProvider,
+      });
+      // Yield a microtask so the provider state update fully settles
+      // before dispatching (setTaskProvider fires cleanupTask IPC concurrently).
+      await Promise.resolve();
+      const content = reviewArgs.instructions
+        ? `/review ${reviewArgs.instructions}`
+        : "/review";
+      await sendUserMessage({
+        taskId: activeTaskId,
+        content,
+      });
+    },
+    [
+      activeProvider,
+      activeTaskId,
+      crossReviewProvider,
+      providerSelectionTarget,
+      sendUserMessage,
+      setTaskProvider,
+    ],
+  );
+  // Revert provider after cross-review turn completes.
+  const wasTurnActiveRef = useRef(isTurnActive);
+  useEffect(() => {
+    const wasActive = wasTurnActiveRef.current;
+    wasTurnActiveRef.current = isTurnActive;
+    if (wasActive && !isTurnActive && crossReviewReturnProviderRef.current) {
+      const returnProvider = crossReviewReturnProviderRef.current;
+      crossReviewReturnProviderRef.current = null;
+      setTaskProvider({
+        taskId: providerSelectionTarget,
+        provider: returnProvider,
+      });
+    }
+  }, [isTurnActive, providerSelectionTarget, setTaskProvider]);
+
   useEffect(() => {
     if (!skillsEnabled) {
       return;
@@ -1557,6 +1664,8 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       effortLabel={effortLabel}
       effortValue={effortValue}
       onEffortCycle={onEffortCycle}
+      crossReviewProvider={crossReviewProvider}
+      onCrossReview={crossReviewProvider ? handleCrossReview : undefined}
       onModelSelect={({ selection }) => {
         setTaskProvider({
           taskId: providerSelectionTarget,

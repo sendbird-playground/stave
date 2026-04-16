@@ -43,6 +43,7 @@ export type BridgeEvent =
     cacheReadTokens?: number;
     cacheCreationTokens?: number;
     totalCostUsd?: number;
+    ttftMs?: number;
   }
   | { type: "prompt_suggestions"; suggestions: string[] }
   | { type: "tool"; toolUseId?: string; toolName: string; input: string; output?: string; state: "input-streaming" | "input-available" | "output-available" | "output-error" }

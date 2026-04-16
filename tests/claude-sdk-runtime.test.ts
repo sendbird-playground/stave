@@ -364,20 +364,30 @@ describe("Claude internal tool auto-allow", () => {
 });
 
 describe("buildClaudeSystemPrompt", () => {
-  test("anchors relative paths to the active workspace root", () => {
-    expect(buildClaudeSystemPrompt({
-      cwd: workspaceRoot,
-    })).toContain(`Current workspace root: ${workspaceRoot}`);
+  test("returns string[] with cache boundary marker", () => {
+    const parts = buildClaudeSystemPrompt({ cwd: workspaceRoot });
+    expect(Array.isArray(parts)).toBe(true);
+    expect(parts.length).toBe(3);
+    // The second element must be the dynamic boundary sentinel.
+    expect(parts[1]).toBe("__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__");
   });
 
-  test("preserves any existing system prompt before appending workspace rules", () => {
-    const systemPrompt = buildClaudeSystemPrompt({
+  test("anchors relative paths to the active workspace root", () => {
+    const parts = buildClaudeSystemPrompt({ cwd: workspaceRoot });
+    const joined = parts.join("\n\n");
+    expect(joined).toContain(`Current workspace root: ${workspaceRoot}`);
+  });
+
+  test("places base system prompt in the static (cacheable) prefix", () => {
+    const parts = buildClaudeSystemPrompt({
       cwd: workspaceRoot,
       baseSystemPrompt: "Follow repository conventions.",
     });
 
-    expect(systemPrompt.startsWith("Follow repository conventions.")).toBe(true);
-    expect(systemPrompt).toContain("Resolve every relative filesystem path against the workspace root above.");
+    // Static prefix is parts[0] (before boundary).
+    expect(parts[0].startsWith("Follow repository conventions.")).toBe(true);
+    // Workspace context sits in the dynamic suffix (parts[2]).
+    expect(parts[2]).toContain("Resolve every relative filesystem path against the workspace root above.");
   });
 });
 

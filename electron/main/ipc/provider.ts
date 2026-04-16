@@ -8,6 +8,23 @@ import {
   ClaudeRuntimeActionArgsSchema,
   CheckAvailabilityArgsSchema,
   ConnectedToolStatusArgsSchema,
+  CodexConfigBatchWriteArgsSchema,
+  CodexConfigValueWriteArgsSchema,
+  CodexExperimentalFeatureEnablementArgsSchema,
+  CodexExternalConfigImportArgsSchema,
+  CodexMcpOauthLoginArgsSchema,
+  CodexMcpResourceReadArgsSchema,
+  CodexPluginDetailArgsSchema,
+  CodexPluginInstallArgsSchema,
+  CodexPluginUninstallArgsSchema,
+  CodexReviewStartArgsSchema,
+  CodexRuntimeActionArgsSchema,
+  CodexThreadArchiveArgsSchema,
+  CodexThreadCompactArgsSchema,
+  CodexThreadForkArgsSchema,
+  CodexThreadReadArgsSchema,
+  CodexThreadRenameArgsSchema,
+  CodexThreadRollbackArgsSchema,
   CleanupTaskArgsSchema,
   ProviderCommandCatalogArgsSchema,
   StreamAckArgsSchema,
@@ -318,6 +335,231 @@ export function registerProviderHandlers() {
       };
     }
     return invokeHostService("provider.get-codex-mcp-status", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:get-codex-model-catalog", (_event, args: unknown) => {
+    const parsedArgs = CodexRuntimeActionArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex model catalog request.",
+        models: [],
+      };
+    }
+    return invokeHostService("provider.get-codex-model-catalog", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:get-codex-app-server-snapshot", (_event, args: unknown) => {
+    const parsedArgs = CodexRuntimeActionArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex App Server snapshot request.",
+        sectionErrors: {},
+      };
+    }
+    return invokeHostService(
+      "provider.get-codex-app-server-snapshot",
+      parsedArgs.data,
+    );
+  });
+
+  ipcMain.handle("provider:get-codex-plugin-detail", (_event, args: unknown) => {
+    const parsedArgs = CodexPluginDetailArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex plugin detail request.",
+      };
+    }
+    return invokeHostService("provider.get-codex-plugin-detail", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:install-codex-plugin", (_event, args: unknown) => {
+    const parsedArgs = CodexPluginInstallArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex plugin install request.",
+        authPolicy: null,
+        appsNeedingAuth: [],
+      };
+    }
+    return invokeHostService("provider.install-codex-plugin", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:uninstall-codex-plugin", (_event, args: unknown) => {
+    const parsedArgs = CodexPluginUninstallArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex plugin uninstall request.",
+      };
+    }
+    return invokeHostService("provider.uninstall-codex-plugin", parsedArgs.data);
+  });
+
+  ipcMain.handle(
+    "provider:set-codex-experimental-feature-enablement",
+    (_event, args: unknown) => {
+      const parsedArgs =
+        CodexExperimentalFeatureEnablementArgsSchema.safeParse(args);
+      if (!parsedArgs.success) {
+        return {
+          ok: false,
+          detail: "Invalid Codex experimental feature request.",
+        };
+      }
+      return invokeHostService(
+        "provider.set-codex-experimental-feature-enablement",
+        parsedArgs.data,
+      );
+    },
+  );
+
+  ipcMain.handle("provider:start-codex-mcp-oauth-login", (_event, args: unknown) => {
+    const parsedArgs = CodexMcpOauthLoginArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex MCP OAuth login request.",
+      };
+    }
+    return invokeHostService(
+      "provider.start-codex-mcp-oauth-login",
+      parsedArgs.data,
+    );
+  });
+
+  ipcMain.handle("provider:read-codex-mcp-resource", (_event, args: unknown) => {
+    const parsedArgs = CodexMcpResourceReadArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex MCP resource read request.",
+        contents: [],
+      };
+    }
+    return invokeHostService("provider.read-codex-mcp-resource", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:rename-codex-thread", (_event, args: unknown) => {
+    const parsedArgs = CodexThreadRenameArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex thread rename request.",
+      };
+    }
+    return invokeHostService("provider.rename-codex-thread", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:read-codex-thread", (_event, args: unknown) => {
+    const parsedArgs = CodexThreadReadArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex thread read request.",
+      };
+    }
+    return invokeHostService("provider.read-codex-thread", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:fork-codex-thread", (_event, args: unknown) => {
+    const parsedArgs = CodexThreadForkArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex thread fork request.",
+      };
+    }
+    return invokeHostService("provider.fork-codex-thread", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:archive-codex-thread", (_event, args: unknown) => {
+    const parsedArgs = CodexThreadArchiveArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex thread archive request.",
+      };
+    }
+    return invokeHostService("provider.archive-codex-thread", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:compact-codex-thread", (_event, args: unknown) => {
+    const parsedArgs = CodexThreadCompactArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex thread compact request.",
+      };
+    }
+    return invokeHostService("provider.compact-codex-thread", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:rollback-codex-thread", (_event, args: unknown) => {
+    const parsedArgs = CodexThreadRollbackArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex thread rollback request.",
+      };
+    }
+    return invokeHostService("provider.rollback-codex-thread", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:start-codex-review", (_event, args: unknown) => {
+    const parsedArgs = CodexReviewStartArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex review request.",
+      };
+    }
+    return invokeHostService("provider.start-codex-review", parsedArgs.data);
+  });
+
+  ipcMain.handle("provider:import-codex-external-config", (_event, args: unknown) => {
+    const parsedArgs = CodexExternalConfigImportArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex external config import request.",
+      };
+    }
+    return invokeHostService(
+      "provider.import-codex-external-config",
+      parsedArgs.data,
+    );
+  });
+
+  ipcMain.handle("provider:write-codex-config-value", (_event, args: unknown) => {
+    const parsedArgs = CodexConfigValueWriteArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex config write request.",
+      };
+    }
+    return invokeHostService(
+      "provider.write-codex-config-value",
+      parsedArgs.data,
+    );
+  });
+
+  ipcMain.handle("provider:batch-write-codex-config", (_event, args: unknown) => {
+    const parsedArgs = CodexConfigBatchWriteArgsSchema.safeParse(args);
+    if (!parsedArgs.success) {
+      return {
+        ok: false,
+        detail: "Invalid Codex config batch write request.",
+      };
+    }
+    return invokeHostService(
+      "provider.batch-write-codex-config",
+      parsedArgs.data,
+    );
   });
 
   ipcMain.handle("provider:suggest-task-name", (_event, args: unknown) => {

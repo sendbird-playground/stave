@@ -583,6 +583,7 @@ export function appendProviderEventToAssistant(args: {
         ...(args.event.cacheReadTokens != null ? { cacheReadTokens: args.event.cacheReadTokens } : {}),
         ...(args.event.cacheCreationTokens != null ? { cacheCreationTokens: args.event.cacheCreationTokens } : {}),
         ...(args.event.totalCostUsd != null ? { totalCostUsd: args.event.totalCostUsd } : {}),
+        ...(args.event.ttftMs != null ? { ttftMs: args.event.ttftMs } : {}),
       },
     };
   }

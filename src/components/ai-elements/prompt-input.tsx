@@ -1,4 +1,4 @@
-import { Brain, ClipboardCheck, FolderOpen, Globe2, OctagonX, Paperclip, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
+import { ArrowRightLeft, Brain, ClipboardCheck, FolderOpen, Globe2, OctagonX, Paperclip, Send, SlidersHorizontal, Sparkles, UserRound, X, Zap } from "lucide-react";
 import type { Attachment, PromptDraftQueuedNextTurn, UserInputPart } from "@/types/chat";
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button, Command, CommandEmpty, CommandGroup, CommandItem, CommandList, Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger, Kbd, KbdGroup, Popover, PopoverAnchor, PopoverContent, Textarea, Tooltip, TooltipContent, TooltipTrigger, buttonVariants } from "@/components/ui";
@@ -76,6 +76,8 @@ interface PromptInputProps {
   pendingUserInput?: { messageId: string; part: UserInputPart } | null;
   onUserInputSubmit?: (args: { messageId: string; answers: Record<string, string> }) => void;
   onUserInputDeny?: (args: { messageId: string }) => void;
+  crossReviewProvider?: "claude-code" | "codex" | null;
+  onCrossReview?: (args: { instructions?: string }) => void;
   onSubmit: (args: { text: string; filePaths: string[] }) => void | Promise<void>;
   onClearQueuedNextTurn?: () => void;
   onAbort?: () => void;
@@ -133,6 +135,99 @@ function getPaletteItemSelector(index: number) {
   return `[${PALETTE_ITEM_INDEX_ATTRIBUTE}="${index}"]`;
 }
 
+function CrossReviewPopover(args: {
+  provider: "claude-code" | "codex";
+  disabled: boolean;
+  minimal: boolean;
+  onSubmit: (submitArgs: { instructions?: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [instructions, setInstructions] = useState("");
+  const providerLabel = args.provider === "codex" ? "Codex" : "Claude";
+
+  function handleSubmit() {
+    const trimmed = instructions.trim();
+    args.onSubmit({ instructions: trimmed || undefined });
+    setOpen(false);
+    setInstructions("");
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverAnchor asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={args.disabled}
+              onClick={() => setOpen((prev) => !prev)}
+              className={cn(
+                PROMPT_TOOLBAR_ICON_BUTTON,
+                "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                args.minimal && "h-8 w-8 rounded-md border border-border/60 bg-background/50",
+              )}
+              aria-label="Cross review"
+            >
+              <ArrowRightLeft className="size-3.5" />
+            </Button>
+          </PopoverAnchor>
+        </TooltipTrigger>
+        {!open ? (
+          <TooltipContent side="top">
+            Cross review with {providerLabel}
+          </TooltipContent>
+        ) : null}
+      </Tooltip>
+      <PopoverContent
+        side="top"
+        align="end"
+        sideOffset={8}
+        className="w-72 rounded-lg border border-border/80 bg-popover p-3 shadow-lg"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-foreground">
+              Cross review
+            </p>
+            <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {providerLabel}
+            </span>
+          </div>
+          <Textarea
+            value={instructions}
+            onChange={(event) => setInstructions(event.target.value)}
+            placeholder="Optional instructions, e.g. focus on security..."
+            className="min-h-[60px] resize-y text-sm"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                handleSubmit();
+              }
+            }}
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-muted-foreground">
+              <kbd className="rounded border border-border/70 px-1 py-px text-[10px]">⌘</kbd>{" "}
+              <kbd className="rounded border border-border/70 px-1 py-px text-[10px]">↵</kbd>
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 px-3 text-xs"
+              onClick={handleSubmit}
+            >
+              Start review
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function PromptInput(args: PromptInputProps) {
   const {
     disabled,
@@ -180,6 +275,8 @@ export function PromptInput(args: PromptInputProps) {
     pendingUserInput,
     onUserInputSubmit,
     onUserInputDeny,
+    crossReviewProvider,
+    onCrossReview,
     onSubmit,
     onClearQueuedNextTurn,
     onAbort,
@@ -1100,7 +1197,7 @@ export function PromptInput(args: PromptInputProps) {
                     </CommandGroup>
                   ) : null}
                   {activePalette === "command" && providerCommandItems.length > 0 ? (
-                    <CommandGroup heading={selectedModel.providerId === "claude-code" ? "Claude native commands" : "Provider commands"}>
+                    <CommandGroup heading={selectedModel.providerId === "claude-code" ? "Claude native commands" : selectedModel.providerId === "codex" ? "Codex commands" : "Provider commands"}>
                       {providerCommandItems.map(({ item, index }) => (
                         <CommandItem
                           key={item.id}
@@ -1115,7 +1212,7 @@ export function PromptInput(args: PromptInputProps) {
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{item.command}</span>
                               <Badge variant="outline" className="h-5 px-1.5 text-[10px] uppercase tracking-wide">
-                                {selectedModel.providerId === "claude-code" ? "Claude" : "Provider"}
+                                {selectedModel.providerId === "claude-code" ? "Claude" : selectedModel.providerId === "codex" ? "Codex" : "Provider"}
                               </Badge>
                             </div>
                             <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
@@ -1376,6 +1473,14 @@ export function PromptInput(args: PromptInputProps) {
             </TooltipTrigger>
             <TooltipContent side="top">Attach files</TooltipContent>
           </Tooltip>
+          {crossReviewProvider && !isTurnActive ? (
+            <CrossReviewPopover
+              provider={crossReviewProvider}
+              disabled={interactionsDisabled}
+              minimal={minimal}
+              onSubmit={(submitArgs) => onCrossReview?.(submitArgs)}
+            />
+          ) : null}
           {isTurnActive ? (
             <Tooltip>
               <TooltipTrigger

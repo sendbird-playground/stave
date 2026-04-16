@@ -31,7 +31,9 @@ const claudeCommandCatalog: ProviderCommandCatalogState = {
   ],
 };
 
-function createContext(overrides: Partial<CommandContext> = {}): CommandContext {
+function createContext(
+  overrides: Partial<CommandContext> = {},
+): CommandContext {
   return {
     provider: "codex",
     ...overrides,
@@ -54,13 +56,23 @@ describe("resolveCommandInput", () => {
   });
 
   test("keeps provider-native and plugin-provided slash commands untouched", () => {
-    expect(resolveCommandInput("/ralph-loop", createContext({ provider: "claude-code" }))).toEqual({
+    expect(
+      resolveCommandInput(
+        "/ralph-loop",
+        createContext({ provider: "claude-code" }),
+      ),
+    ).toEqual({
       kind: "provider-passthrough",
       command: "/ralph-loop",
       rawArgs: "",
     });
 
-    expect(resolveCommandInput("/claude:review", createContext({ provider: "claude-code" }))).toEqual({
+    expect(
+      resolveCommandInput(
+        "/claude:review",
+        createContext({ provider: "claude-code" }),
+      ),
+    ).toEqual({
       kind: "provider-passthrough",
       command: "/claude:review",
       rawArgs: "",
@@ -78,10 +90,12 @@ describe("resolveCommandInput", () => {
 
 describe("getActiveSlashCommandTokenMatch", () => {
   test("detects slash commands at the start of the draft", () => {
-    expect(getActiveSlashCommandTokenMatch({
-      value: "/simp",
-      caretIndex: 5,
-    })).toEqual({
+    expect(
+      getActiveSlashCommandTokenMatch({
+        value: "/simp",
+        caretIndex: 5,
+      }),
+    ).toEqual({
       start: 0,
       end: 5,
       query: "simp",
@@ -91,10 +105,12 @@ describe("getActiveSlashCommandTokenMatch", () => {
 
   test("detects slash commands anywhere in the current line", () => {
     const value = "Please run /claude-a";
-    expect(getActiveSlashCommandTokenMatch({
-      value,
-      caretIndex: value.length,
-    })).toEqual({
+    expect(
+      getActiveSlashCommandTokenMatch({
+        value,
+        caretIndex: value.length,
+      }),
+    ).toEqual({
       start: 11,
       end: value.length,
       query: "claude-a",
@@ -103,15 +119,19 @@ describe("getActiveSlashCommandTokenMatch", () => {
   });
 
   test("ignores slash text inside other words or after arguments", () => {
-    expect(getActiveSlashCommandTokenMatch({
-      value: "abc/review",
-      caretIndex: 10,
-    })).toBeNull();
+    expect(
+      getActiveSlashCommandTokenMatch({
+        value: "abc/review",
+        caretIndex: 10,
+      }),
+    ).toBeNull();
 
-    expect(getActiveSlashCommandTokenMatch({
-      value: "/review now",
-      caretIndex: 11,
-    })).toBeNull();
+    expect(
+      getActiveSlashCommandTokenMatch({
+        value: "/review now",
+        caretIndex: 11,
+      }),
+    ).toBeNull();
   });
 });
 
@@ -130,14 +150,34 @@ describe("buildCommandPaletteItems", () => {
     expect(palette.providerNote.title).toBe("Claude native commands");
   });
 
-  test("returns passthrough guidance for Codex without synthesizing a fake catalog", () => {
+  test("lists the bundled Codex slash commands when the provider catalog is ready", () => {
     const palette = buildCommandPaletteItems({
       provider: "codex",
+      providerCommandCatalog: {
+        providerId: "codex",
+        status: "ready",
+        detail: "Loaded bundled Codex slash commands.",
+        commands: [
+          {
+            name: "model",
+            command: "/model",
+            description: "Choose the active model.",
+          },
+          {
+            name: "review",
+            command: "/review",
+            description: "Review the current working tree.",
+          },
+        ],
+      },
     });
 
-    expect(palette.items).toEqual([]);
-    expect(palette.providerNote.title).toBe("Codex passthrough");
-    expect(palette.providerNote.description).toContain("forwards slash commands to Codex unchanged");
+    expect(palette.items.map((item) => item.command)).toEqual([
+      "/model",
+      "/review",
+    ]);
+    expect(palette.providerNote.title).toBe("Codex slash commands");
+    expect(palette.providerNote.description).toContain("Codex slash commands");
   });
 });
 
@@ -148,14 +188,18 @@ describe("filterCommandPaletteItems", () => {
       providerCommandCatalog: claudeCommandCatalog,
     });
 
-    expect(filterCommandPaletteItems({
-      items: palette.items,
-      query: "simp",
-    }).map((item) => item.command)).toEqual(["/simplify"]);
+    expect(
+      filterCommandPaletteItems({
+        items: palette.items,
+        query: "simp",
+      }).map((item) => item.command),
+    ).toEqual(["/simplify"]);
 
-    expect(filterCommandPaletteItems({
-      items: palette.items,
-      query: "/claude",
-    }).map((item) => item.command)).toEqual(["/claude-api"]);
+    expect(
+      filterCommandPaletteItems({
+        items: palette.items,
+        query: "/claude",
+      }).map((item) => item.command),
+    ).toEqual(["/claude-api"]);
   });
 });

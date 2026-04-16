@@ -8,6 +8,7 @@ import {
   KeyRound,
   Network,
   Palette,
+  Package2,
   ScrollText,
   SearchCheck,
   Shield,
@@ -23,6 +24,7 @@ export const settingsSections = [
   { id: "chat", label: "Chat", icon: Bot },
   { id: "muse", label: "Muse", icon: Sparkles },
   { id: "providers", label: "Providers", icon: Wrench },
+  { id: "codex", label: "Codex", icon: Package2 },
   { id: "mcp", label: "MCP", icon: Cable },
   { id: "prompts", label: "Prompts", icon: ScrollText },
   { id: "skills", label: "Skills", icon: SearchCheck },
@@ -41,6 +43,6 @@ export const settingsSectionGroups: Array<{ label: string; ids: SectionId[] }> =
   { label: "Workspace", ids: ["general"] },
   { label: "Appearance", ids: ["theme", "chat", "editor", "terminal"] },
   { label: "Projects", ids: ["projects"] },
-  { label: "Providers", ids: ["muse", "providers", "mcp", "prompts", "skills", "subagents", "commandPalette"] },
+  { label: "Providers", ids: ["muse", "providers", "codex", "mcp", "prompts", "skills", "subagents", "commandPalette"] },
   { label: "System", ids: ["tooling", "lens", "developer"] },
 ];

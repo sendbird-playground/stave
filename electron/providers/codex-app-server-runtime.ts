@@ -4,6 +4,31 @@ import type {
   ConnectedToolStatusEntry,
   ConnectedToolStatusResponse,
 } from "../../src/lib/providers/connected-tool-status";
+import type {
+  CodexAppServerSnapshot,
+  CodexAppServerSnapshotResponse,
+  CodexConfigLayerSnapshot,
+  CodexConfigOriginSnapshot,
+  CodexConfigRequirementsSnapshot,
+  CodexConfigSnapshot,
+  CodexExternalAgentConfigMigrationItem,
+  CodexModelCatalogEntry,
+  CodexModelCatalogResponse,
+  CodexMcpOauthLoginResponse,
+  CodexMcpResourceReadResponse,
+  CodexMcpServerStatusSnapshot,
+  CodexMutationResponse,
+  CodexPluginDetailResponse,
+  CodexPluginDetailSnapshot,
+  CodexPluginInstallResponse,
+  CodexPluginMarketplaceSnapshot,
+  CodexPluginSummarySnapshot,
+  CodexReviewStartResponse,
+  CodexSkillCatalogGroup,
+  CodexThreadForkResponse,
+  CodexThreadReadResponse,
+  CodexThreadSnapshot,
+} from "../../src/lib/providers/provider.types";
 import {
   buildCodexCliEnv,
   resolveCodexCliExecutablePath,
@@ -1468,6 +1493,1256 @@ export function cleanupCodexAppServerTask(taskId: string) {
   }
 }
 
+function getCodexAppServerClientFromRuntimeOptions(args: {
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}) {
+  const executablePath = resolveCodexExecutablePath({
+    explicitPath: args.runtimeOptions?.codexBinaryPath,
+  });
+  if (!executablePath) {
+    throw new Error("Codex executable not found.");
+  }
+  return getCodexAppServerClient({ executablePath });
+}
+
+function toCodexStatusLabel(status: unknown) {
+  if (!status || typeof status !== "object") {
+    return "unknown";
+  }
+  const type = (status as { type?: unknown }).type;
+  return typeof type === "string" ? type : "unknown";
+}
+
+function toCodexSourceLabel(source: unknown) {
+  if (typeof source === "string") {
+    return source;
+  }
+  if (!source || typeof source !== "object") {
+    return "unknown";
+  }
+  if (typeof (source as { custom?: unknown }).custom === "string") {
+    return `custom:${String((source as { custom?: unknown }).custom)}`;
+  }
+  const subAgent = (source as { subAgent?: unknown }).subAgent;
+  if (subAgent != null) {
+    return `subAgent:${String(subAgent)}`;
+  }
+  return "unknown";
+}
+
+function mapCodexModelCatalogEntry(model: any): CodexModelCatalogEntry {
+  return {
+    id: String(model?.id ?? model?.model ?? ""),
+    model: String(model?.model ?? ""),
+    displayName: String(model?.displayName ?? model?.model ?? ""),
+    description: typeof model?.description === "string" ? model.description : "",
+    hidden: Boolean(model?.hidden),
+    isDefault: Boolean(model?.isDefault),
+    supportsPersonality: Boolean(model?.supportsPersonality),
+    defaultReasoningEffort:
+      typeof model?.defaultReasoningEffort === "string"
+        ? model.defaultReasoningEffort
+        : "medium",
+    supportedReasoningEfforts: Array.isArray(model?.supportedReasoningEfforts)
+      ? model.supportedReasoningEfforts
+          .map((entry: any) =>
+            typeof entry === "string"
+              ? entry
+              : typeof entry?.value === "string"
+                ? entry.value
+                : "",
+          )
+          .filter(Boolean)
+      : [],
+    inputModalities: Array.isArray(model?.inputModalities)
+      ? model.inputModalities
+          .map((entry: unknown) => String(entry ?? "").trim())
+          .filter(Boolean)
+      : [],
+    additionalSpeedTiers: Array.isArray(model?.additionalSpeedTiers)
+      ? model.additionalSpeedTiers
+          .map((entry: unknown) => String(entry ?? "").trim())
+          .filter(Boolean)
+      : [],
+    upgrade:
+      typeof model?.upgrade === "string" ? model.upgrade : null,
+    upgradeInfo: model?.upgradeInfo && typeof model.upgradeInfo === "object"
+      ? {
+          model: String(model.upgradeInfo.model ?? ""),
+          upgradeCopy:
+            typeof model.upgradeInfo.upgradeCopy === "string"
+              ? model.upgradeInfo.upgradeCopy
+              : null,
+          modelLink:
+            typeof model.upgradeInfo.modelLink === "string"
+              ? model.upgradeInfo.modelLink
+              : null,
+          migrationMarkdown:
+            typeof model.upgradeInfo.migrationMarkdown === "string"
+              ? model.upgradeInfo.migrationMarkdown
+              : null,
+        }
+      : null,
+    availabilityNux:
+      typeof model?.availabilityNux?.message === "string"
+        ? model.availabilityNux.message
+        : typeof model?.availabilityNux === "string"
+          ? model.availabilityNux
+          : null,
+  };
+}
+
+function mapCodexMcpStatusSnapshot(server: any): CodexMcpServerStatusSnapshot {
+  const tools = server?.tools && typeof server.tools === "object"
+    ? Object.values(server.tools).map((tool: any) => ({
+        name: String(tool?.name ?? ""),
+        ...(typeof tool?.title === "string" ? { title: tool.title } : {}),
+        ...(typeof tool?.description === "string"
+          ? { description: tool.description }
+          : {}),
+      }))
+    : [];
+  const resources = Array.isArray(server?.resources)
+    ? server.resources.map((resource: any) => ({
+        uri: String(resource?.uri ?? ""),
+        name: String(resource?.name ?? resource?.title ?? resource?.uri ?? ""),
+        ...(typeof resource?.title === "string" ? { title: resource.title } : {}),
+        ...(typeof resource?.description === "string"
+          ? { description: resource.description }
+          : {}),
+        ...(typeof resource?.mimeType === "string"
+          ? { mimeType: resource.mimeType }
+          : {}),
+      }))
+    : [];
+  const resourceTemplates = Array.isArray(server?.resourceTemplates)
+    ? server.resourceTemplates.map((template: any) => ({
+        uriTemplate: String(template?.uriTemplate ?? ""),
+        name: String(
+          template?.name ?? template?.title ?? template?.uriTemplate ?? "",
+        ),
+        ...(typeof template?.title === "string" ? { title: template.title } : {}),
+        ...(typeof template?.description === "string"
+          ? { description: template.description }
+          : {}),
+        ...(typeof template?.mimeType === "string"
+          ? { mimeType: template.mimeType }
+          : {}),
+      }))
+    : [];
+
+  return {
+    name: String(server?.name ?? ""),
+    enabled: true,
+    disabledReason: null,
+    transportType: typeof server?.transportType === "string"
+      ? server.transportType
+      : "mcp",
+    url: typeof server?.url === "string" ? server.url : null,
+    bearerTokenEnvVar:
+      typeof server?.bearerTokenEnvVar === "string"
+        ? server.bearerTokenEnvVar
+        : null,
+    authStatus:
+      typeof server?.authStatus === "string"
+        ? server.authStatus
+        : typeof server?.authStatus?.type === "string"
+          ? server.authStatus.type
+          : null,
+    startupTimeoutSec:
+      typeof server?.startupTimeoutSec === "number"
+        ? server.startupTimeoutSec
+        : null,
+    toolTimeoutSec:
+      typeof server?.toolTimeoutSec === "number" ? server.toolTimeoutSec : null,
+    ...(tools.length > 0 ? { tools } : {}),
+    ...(resources.length > 0 ? { resources } : {}),
+    ...(resourceTemplates.length > 0 ? { resourceTemplates } : {}),
+  };
+}
+
+function mapCodexPluginSummary(
+  plugin: any,
+  marketplace: any,
+): CodexPluginSummarySnapshot {
+  return {
+    id: String(plugin?.id ?? ""),
+    name: String(plugin?.name ?? ""),
+    marketplaceName: String(marketplace?.name ?? ""),
+    marketplacePath: String(marketplace?.path ?? ""),
+    marketplaceDisplayName:
+      typeof marketplace?.interface?.displayName === "string"
+        ? marketplace.interface.displayName
+        : null,
+    source: typeof plugin?.source === "string"
+      ? plugin.source
+      : JSON.stringify(plugin?.source ?? "unknown"),
+    installed: Boolean(plugin?.installed),
+    enabled: Boolean(plugin?.enabled),
+    installPolicy:
+      typeof plugin?.installPolicy === "string"
+        ? plugin.installPolicy
+        : "unknown",
+    authPolicy:
+      typeof plugin?.authPolicy === "string" ? plugin.authPolicy : "unknown",
+  };
+}
+
+function mapCodexPluginDetail(plugin: any): CodexPluginDetailSnapshot {
+  return {
+    marketplaceName: String(plugin?.marketplaceName ?? ""),
+    marketplacePath: String(plugin?.marketplacePath ?? ""),
+    id: String(plugin?.summary?.id ?? ""),
+    name: String(plugin?.summary?.name ?? ""),
+    source: typeof plugin?.summary?.source === "string"
+      ? plugin.summary.source
+      : JSON.stringify(plugin?.summary?.source ?? "unknown"),
+    installed: Boolean(plugin?.summary?.installed),
+    enabled: Boolean(plugin?.summary?.enabled),
+    installPolicy:
+      typeof plugin?.summary?.installPolicy === "string"
+        ? plugin.summary.installPolicy
+        : "unknown",
+    authPolicy:
+      typeof plugin?.summary?.authPolicy === "string"
+        ? plugin.summary.authPolicy
+        : "unknown",
+    description:
+      typeof plugin?.description === "string" ? plugin.description : null,
+    skills: Array.isArray(plugin?.skills)
+      ? plugin.skills.map((skill: any) => ({
+          name: String(skill?.name ?? ""),
+          description: String(skill?.description ?? ""),
+          shortDescription:
+            typeof skill?.shortDescription === "string"
+              ? skill.shortDescription
+              : null,
+          path: String(skill?.path ?? ""),
+          enabled: Boolean(skill?.enabled),
+        }))
+      : [],
+    apps: Array.isArray(plugin?.apps)
+      ? plugin.apps.map((app: any) => ({
+          id: String(app?.id ?? ""),
+          name: String(app?.name ?? ""),
+          description:
+            typeof app?.description === "string" ? app.description : null,
+          installUrl:
+            typeof app?.installUrl === "string" ? app.installUrl : null,
+          needsAuth: Boolean(app?.needsAuth),
+        }))
+      : [],
+    mcpServers: Array.isArray(plugin?.mcpServers)
+      ? plugin.mcpServers
+          .map((server: unknown) => String(server ?? "").trim())
+          .filter(Boolean)
+      : [],
+  };
+}
+
+function mapCodexThreadSnapshot(thread: any, archived: boolean): CodexThreadSnapshot {
+  return {
+    id: String(thread?.id ?? ""),
+    forkedFromId:
+      typeof thread?.forkedFromId === "string" ? thread.forkedFromId : null,
+    preview: typeof thread?.preview === "string" ? thread.preview : "",
+    modelProvider:
+      typeof thread?.modelProvider === "string" ? thread.modelProvider : "openai",
+    createdAt:
+      typeof thread?.createdAt === "number" ? thread.createdAt : 0,
+    updatedAt:
+      typeof thread?.updatedAt === "number" ? thread.updatedAt : 0,
+    status: toCodexStatusLabel(thread?.status),
+    cwd: typeof thread?.cwd === "string" ? thread.cwd : "",
+    cliVersion:
+      typeof thread?.cliVersion === "string" ? thread.cliVersion : "",
+    source: toCodexSourceLabel(thread?.source),
+    agentNickname:
+      typeof thread?.agentNickname === "string" ? thread.agentNickname : null,
+    agentRole:
+      typeof thread?.agentRole === "string" ? thread.agentRole : null,
+    name: typeof thread?.name === "string" ? thread.name : null,
+    archived,
+  };
+}
+
+function mapCodexConfigSnapshot(response: any): CodexConfigSnapshot {
+  const origins: Record<string, CodexConfigOriginSnapshot> = {};
+  if (response?.origins && typeof response.origins === "object") {
+    for (const [key, origin] of Object.entries(response.origins)) {
+      origins[key] = {
+        name: String((origin as any)?.name ?? ""),
+        version: String((origin as any)?.version ?? ""),
+      };
+    }
+  }
+
+  return {
+    config:
+      response?.config && typeof response.config === "object"
+        ? (response.config as Record<string, unknown>)
+        : {},
+    origins,
+    layers: Array.isArray(response?.layers)
+      ? response.layers.map((layer: any): CodexConfigLayerSnapshot => ({
+          name: String(layer?.name ?? ""),
+          version: String(layer?.version ?? ""),
+          disabledReason:
+            typeof layer?.disabledReason === "string"
+              ? layer.disabledReason
+              : null,
+          config: layer?.config ?? null,
+        }))
+      : [],
+  };
+}
+
+async function listPaginatedCodexData<T>(args: {
+  client: CodexAppServerClient;
+  method: string;
+  params?: Record<string, unknown>;
+  maxPages?: number;
+}): Promise<T[]> {
+  const results: T[] = [];
+  let cursor: string | null = null;
+  let pages = 0;
+  const maxPages = args.maxPages ?? 10;
+  while (pages < maxPages) {
+    const response = await args.client.request<{
+      data?: T[];
+      nextCursor?: string | null;
+    }>(args.method, {
+      ...(args.params ?? {}),
+      ...(cursor ? { cursor } : {}),
+    });
+    results.push(...(response.data ?? []));
+    cursor = response.nextCursor ?? null;
+    pages += 1;
+    if (!cursor) {
+      break;
+    }
+  }
+  return results;
+}
+
+export async function getCodexModelCatalog(args: {
+  cwd?: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexModelCatalogResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const models = await listPaginatedCodexData<any>({
+      client,
+      method: "model/list",
+      params: {
+        includeHidden: false,
+        limit: 100,
+      },
+    });
+    return {
+      ok: true,
+      detail: "Loaded Codex model catalog from App Server.",
+      models: models.map(mapCodexModelCatalogEntry),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+      models: [],
+    };
+  }
+}
+
+export async function getCodexAppServerSnapshot(args: {
+  cwd?: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexAppServerSnapshotResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const cwd = args.cwd?.trim() || process.cwd();
+    const snapshot: CodexAppServerSnapshot = {
+      account: null,
+      rateLimits: [],
+      skills: [],
+      pluginMarketplaces: [],
+      plugins: [],
+      pluginMarketplaceLoadErrors: [],
+      apps: [],
+      experimentalFeatures: [],
+      mcpServers: [],
+      threads: [],
+      archivedThreads: [],
+      config: null,
+      configRequirements: null,
+      externalAgentConfigItems: [],
+    };
+    const sectionErrors: Record<string, string> = {};
+    let loadedSectionCount = 0;
+
+    const loadSection = async (
+      key: string,
+      loader: () => Promise<void>,
+    ) => {
+      try {
+        await loader();
+        loadedSectionCount += 1;
+      } catch (error) {
+        sectionErrors[key] = toCodexUserFacingErrorMessage({
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+
+    await Promise.all([
+      loadSection("account", async () => {
+        const response = await client.request<any>("account/read", {
+          refreshToken: false,
+        });
+        const account = response?.account;
+        snapshot.account = {
+          type:
+            typeof account?.type === "string"
+              ? account.type
+              : "unknown",
+          email: typeof account?.email === "string" ? account.email : null,
+          planType:
+            typeof account?.planType === "string" ? account.planType : null,
+          requiresOpenaiAuth: Boolean(response?.requiresOpenaiAuth),
+        };
+      }),
+      loadSection("rateLimits", async () => {
+        const response = await client.request<any>("account/rateLimits/read", {});
+        const buckets = response?.rateLimitsByLimitId
+          && typeof response.rateLimitsByLimitId === "object"
+          ? Object.values(response.rateLimitsByLimitId)
+          : response?.rateLimits
+            ? [response.rateLimits]
+            : [];
+        snapshot.rateLimits = buckets.map((bucket: any) => ({
+          limitId:
+            typeof bucket?.limitId === "string" ? bucket.limitId : null,
+          limitName:
+            typeof bucket?.limitName === "string" ? bucket.limitName : null,
+          planType:
+            typeof bucket?.planType === "string" ? bucket.planType : null,
+          primary: bucket?.primary
+            ? {
+                usedPercent:
+                  typeof bucket.primary.usedPercent === "number"
+                    ? bucket.primary.usedPercent
+                    : 0,
+                windowDurationMins:
+                  typeof bucket.primary.windowDurationMins === "number"
+                    ? bucket.primary.windowDurationMins
+                    : null,
+                resetsAt:
+                  typeof bucket.primary.resetsAt === "number"
+                    ? bucket.primary.resetsAt
+                    : null,
+              }
+            : null,
+          secondary: bucket?.secondary
+            ? {
+                usedPercent:
+                  typeof bucket.secondary.usedPercent === "number"
+                    ? bucket.secondary.usedPercent
+                    : 0,
+                windowDurationMins:
+                  typeof bucket.secondary.windowDurationMins === "number"
+                    ? bucket.secondary.windowDurationMins
+                    : null,
+                resetsAt:
+                  typeof bucket.secondary.resetsAt === "number"
+                    ? bucket.secondary.resetsAt
+                    : null,
+              }
+            : null,
+          credits: bucket?.credits
+            ? {
+                hasCredits: Boolean(bucket.credits.hasCredits),
+                unlimited: Boolean(bucket.credits.unlimited),
+                balance:
+                  typeof bucket.credits.balance === "string"
+                    ? bucket.credits.balance
+                    : null,
+              }
+            : null,
+        }));
+      }),
+      loadSection("skills", async () => {
+        const response = await client.request<any>("skills/list", {
+          cwds: [cwd],
+          forceReload: false,
+        });
+        snapshot.skills = Array.isArray(response?.data)
+          ? response.data.map((entry: any): CodexSkillCatalogGroup => ({
+              cwd: String(entry?.cwd ?? cwd),
+              skills: Array.isArray(entry?.skills)
+                ? entry.skills.map((skill: any) => ({
+                    name: String(skill?.name ?? ""),
+                    description: String(skill?.description ?? ""),
+                    shortDescription:
+                      typeof skill?.shortDescription === "string"
+                        ? skill.shortDescription
+                        : typeof skill?.interface?.short_description === "string"
+                          ? skill.interface.short_description
+                          : null,
+                    path: String(skill?.path ?? ""),
+                    scope: typeof skill?.scope === "string"
+                      ? skill.scope
+                      : "unknown",
+                    enabled: Boolean(skill?.enabled),
+                  }))
+                : [],
+              errors: Array.isArray(entry?.errors)
+                ? entry.errors.map((error: any) =>
+                    typeof error?.message === "string"
+                      ? error.message
+                      : JSON.stringify(error ?? {}),
+                  )
+                : [],
+            }))
+          : [];
+      }),
+      loadSection("plugins", async () => {
+        const response = await client.request<any>("plugin/list", {
+          cwds: [cwd],
+          forceRemoteSync: false,
+        });
+        snapshot.pluginMarketplaces = Array.isArray(response?.marketplaces)
+          ? response.marketplaces.map(
+              (marketplace: any): CodexPluginMarketplaceSnapshot => ({
+                name: String(marketplace?.name ?? ""),
+                path: String(marketplace?.path ?? ""),
+                displayName:
+                  typeof marketplace?.interface?.displayName === "string"
+                    ? marketplace.interface.displayName
+                    : null,
+              }),
+            )
+          : [];
+        snapshot.plugins = Array.isArray(response?.marketplaces)
+          ? response.marketplaces.flatMap((marketplace: any) =>
+              Array.isArray(marketplace?.plugins)
+                ? marketplace.plugins.map((plugin: any) =>
+                    mapCodexPluginSummary(plugin, marketplace),
+                  )
+                : [],
+            )
+          : [];
+        snapshot.pluginMarketplaceLoadErrors = Array.isArray(
+          response?.marketplaceLoadErrors,
+        )
+          ? response.marketplaceLoadErrors.map((error: any) =>
+              typeof error?.message === "string"
+                ? error.message
+                : JSON.stringify(error ?? {}),
+            )
+          : [];
+      }),
+      loadSection("apps", async () => {
+        const apps = await listPaginatedCodexData<any>({
+          client,
+          method: "app/list",
+          params: { limit: 100, forceRefetch: false },
+        });
+        snapshot.apps = apps.map((app: any) => ({
+          id: String(app?.id ?? ""),
+          name: String(app?.name ?? ""),
+          description:
+            typeof app?.description === "string" ? app.description : null,
+          logoUrl: typeof app?.logoUrl === "string" ? app.logoUrl : null,
+          logoUrlDark:
+            typeof app?.logoUrlDark === "string" ? app.logoUrlDark : null,
+          distributionChannel:
+            typeof app?.distributionChannel === "string"
+              ? app.distributionChannel
+              : null,
+          installUrl:
+            typeof app?.installUrl === "string" ? app.installUrl : null,
+          isAccessible: Boolean(app?.isAccessible),
+          isEnabled: Boolean(app?.isEnabled),
+          pluginDisplayNames: Array.isArray(app?.pluginDisplayNames)
+            ? app.pluginDisplayNames
+                .map((name: unknown) => String(name ?? "").trim())
+                .filter(Boolean)
+            : [],
+          labels:
+            app?.labels && typeof app.labels === "object"
+              ? Object.fromEntries(
+                  Object.entries(app.labels).map(([key, value]) => [
+                    key,
+                    String(value ?? ""),
+                  ]),
+                )
+              : null,
+        }));
+      }),
+      loadSection("experimentalFeatures", async () => {
+        const features = await listPaginatedCodexData<any>({
+          client,
+          method: "experimentalFeature/list",
+          params: { limit: 100 },
+        });
+        snapshot.experimentalFeatures = features.map((feature: any) => ({
+          name: String(feature?.name ?? ""),
+          stage: typeof feature?.stage === "string" ? feature.stage : "unknown",
+          displayName:
+            typeof feature?.displayName === "string"
+              ? feature.displayName
+              : null,
+          description:
+            typeof feature?.description === "string"
+              ? feature.description
+              : null,
+          announcement:
+            typeof feature?.announcement === "string"
+              ? feature.announcement
+              : null,
+          enabled: Boolean(feature?.enabled),
+          defaultEnabled: Boolean(feature?.defaultEnabled),
+        }));
+      }),
+      loadSection("mcpServers", async () => {
+        const response = await client.request<{ data?: any[] }>(
+          "mcpServerStatus/list",
+          {
+            detail: "full",
+          },
+        );
+        snapshot.mcpServers = (response.data ?? []).map(
+          mapCodexMcpStatusSnapshot,
+        );
+      }),
+      loadSection("threads", async () => {
+        const threads = await listPaginatedCodexData<any>({
+          client,
+          method: "thread/list",
+          params: {
+            cwd,
+            archived: false,
+            limit: 100,
+          },
+        });
+        snapshot.threads = threads.map((thread: any) =>
+          mapCodexThreadSnapshot(thread, false),
+        );
+      }),
+      loadSection("archivedThreads", async () => {
+        const threads = await listPaginatedCodexData<any>({
+          client,
+          method: "thread/list",
+          params: {
+            cwd,
+            archived: true,
+            limit: 100,
+          },
+        });
+        snapshot.archivedThreads = threads.map((thread: any) =>
+          mapCodexThreadSnapshot(thread, true),
+        );
+      }),
+      loadSection("config", async () => {
+        const response = await client.request<any>("config/read", {
+          includeLayers: true,
+          cwd,
+        });
+        snapshot.config = mapCodexConfigSnapshot(response);
+      }),
+      loadSection("configRequirements", async () => {
+        const response = await client.request<any>(
+          "configRequirements/read",
+          {},
+        );
+        snapshot.configRequirements = response?.requirements
+          ? {
+              allowedApprovalPolicies: Array.isArray(
+                response.requirements.allowedApprovalPolicies,
+              )
+                ? response.requirements.allowedApprovalPolicies.map(
+                    (entry: unknown) => String(entry ?? ""),
+                  )
+                : null,
+              allowedSandboxModes: Array.isArray(
+                response.requirements.allowedSandboxModes,
+              )
+                ? response.requirements.allowedSandboxModes.map(
+                    (entry: unknown) => String(entry ?? ""),
+                  )
+                : null,
+              allowedWebSearchModes: Array.isArray(
+                response.requirements.allowedWebSearchModes,
+              )
+                ? response.requirements.allowedWebSearchModes.map(
+                    (entry: unknown) => String(entry ?? ""),
+                  )
+                : null,
+              featureRequirements:
+                response.requirements.featureRequirements
+                  && typeof response.requirements.featureRequirements === "object"
+                  ? Object.fromEntries(
+                      Object.entries(
+                        response.requirements.featureRequirements,
+                      ).map(([key, value]) => [key, Boolean(value)]),
+                    )
+                  : null,
+              enforceResidency:
+                typeof response.requirements.enforceResidency === "string"
+                  ? response.requirements.enforceResidency
+                  : null,
+            }
+          : null;
+      }),
+      loadSection("externalAgentConfig", async () => {
+        const response = await client.request<any>(
+          "externalAgentConfig/detect",
+          {
+            includeHome: true,
+            cwds: [cwd],
+          },
+        );
+        snapshot.externalAgentConfigItems = Array.isArray(response?.items)
+          ? response.items.map(
+              (item: any): CodexExternalAgentConfigMigrationItem => ({
+                itemType: String(item?.itemType ?? ""),
+                description: String(item?.description ?? ""),
+                cwd:
+                  typeof item?.cwd === "string" ? item.cwd : null,
+              }),
+            )
+          : [];
+      }),
+    ]);
+
+    if (loadedSectionCount === 0) {
+      return {
+        ok: false,
+        detail: "Failed to load Codex App Server snapshot.",
+        sectionErrors,
+      };
+    }
+
+    return {
+      ok: true,
+      detail:
+        Object.keys(sectionErrors).length === 0
+          ? "Loaded Codex App Server snapshot."
+          : `Loaded Codex App Server snapshot with ${Object.keys(sectionErrors).length} section error(s).`,
+      sectionErrors,
+      snapshot,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+      sectionErrors: {},
+    };
+  }
+}
+
+export async function getCodexPluginDetail(args: {
+  marketplacePath: string;
+  pluginName: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexPluginDetailResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const response = await client.request<any>("plugin/read", {
+      marketplacePath: args.marketplacePath,
+      pluginName: args.pluginName,
+    });
+    return {
+      ok: true,
+      detail: `Loaded plugin details for ${args.pluginName}.`,
+      plugin: mapCodexPluginDetail(response.plugin),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function installCodexPlugin(args: {
+  marketplacePath: string;
+  pluginName: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexPluginInstallResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const response = await client.request<any>("plugin/install", {
+      marketplacePath: args.marketplacePath,
+      pluginName: args.pluginName,
+      forceRemoteSync: false,
+    });
+    return {
+      ok: true,
+      detail: `Installed Codex plugin ${args.pluginName}.`,
+      authPolicy:
+        typeof response?.authPolicy === "string" ? response.authPolicy : null,
+      appsNeedingAuth: Array.isArray(response?.appsNeedingAuth)
+        ? response.appsNeedingAuth.map((app: any) => ({
+            id: String(app?.id ?? ""),
+            name: String(app?.name ?? ""),
+            description:
+              typeof app?.description === "string" ? app.description : null,
+            installUrl:
+              typeof app?.installUrl === "string" ? app.installUrl : null,
+            needsAuth: Boolean(app?.needsAuth),
+          }))
+        : [],
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+      authPolicy: null,
+      appsNeedingAuth: [],
+    };
+  }
+}
+
+export async function uninstallCodexPlugin(args: {
+  pluginId: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request("plugin/uninstall", {
+      pluginId: args.pluginId,
+      forceRemoteSync: false,
+    });
+    return {
+      ok: true,
+      detail: `Uninstalled Codex plugin ${args.pluginId}.`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function setCodexExperimentalFeatureEnablement(args: {
+  enablement: Record<string, boolean>;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request("experimentalFeature/enablement/set", {
+      enablement: args.enablement,
+    });
+    return {
+      ok: true,
+      detail: "Updated Codex experimental feature enablement.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function startCodexMcpOauthLogin(args: {
+  name: string;
+  scopes?: string[];
+  timeoutSecs?: number;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMcpOauthLoginResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const response = await client.request<any>("mcpServer/oauth/login", {
+      name: args.name,
+      ...(args.scopes?.length ? { scopes: args.scopes } : {}),
+      ...(typeof args.timeoutSecs === "number"
+        ? { timeoutSecs: args.timeoutSecs }
+        : {}),
+    });
+    return {
+      ok: true,
+      detail: `Started MCP OAuth login for ${args.name}.`,
+      authorizationUrl:
+        typeof response?.authorizationUrl === "string"
+          ? response.authorizationUrl
+          : undefined,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function readCodexMcpResource(args: {
+  threadId: string;
+  server: string;
+  uri: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMcpResourceReadResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const response = await client.request<any>("mcpServer/resource/read", {
+      threadId: args.threadId,
+      server: args.server,
+      uri: args.uri,
+    });
+    return {
+      ok: true,
+      detail: `Read MCP resource ${args.uri}.`,
+      contents: Array.isArray(response?.contents)
+        ? response.contents.map((content: any) => ({
+            uri: String(content?.uri ?? args.uri),
+            ...(typeof content?.mimeType === "string"
+              ? { mimeType: content.mimeType }
+              : {}),
+            ...(typeof content?.text === "string"
+              ? { text: content.text }
+              : {}),
+            ...(typeof content?.blob === "string"
+              ? { blob: content.blob }
+              : {}),
+          }))
+        : [],
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+      contents: [],
+    };
+  }
+}
+
+export async function renameCodexThread(args: {
+  threadId: string;
+  name: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request("thread/name/set", {
+      threadId: args.threadId,
+      name: args.name,
+    });
+    return {
+      ok: true,
+      detail: "Renamed Codex thread.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function readCodexThread(args: {
+  threadId: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexThreadReadResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const response = await client.request<any>("thread/read", {
+      threadId: args.threadId,
+    });
+    const rawThread =
+      response?.thread && typeof response.thread === "object"
+        ? (response.thread as Record<string, unknown>)
+        : null;
+    if (!rawThread) {
+      return {
+        ok: false,
+        detail: "Codex App Server did not return a thread payload.",
+      };
+    }
+    const snapshot = mapCodexThreadSnapshot(
+      rawThread,
+      Boolean(rawThread.archived),
+    );
+    return {
+      ok: true,
+      detail: "Loaded Codex thread details.",
+      thread: {
+        ...snapshot,
+        turnCount: Array.isArray((rawThread as any).turns)
+          ? (rawThread as any).turns.length
+          : null,
+        raw: rawThread,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function forkCodexThread(args: {
+  threadId: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexThreadForkResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const response = await client.request<any>("thread/fork", {
+      threadId: args.threadId,
+    });
+    return {
+      ok: true,
+      detail: "Forked Codex thread.",
+      threadId:
+        typeof response?.thread?.id === "string"
+          ? response.thread.id
+          : typeof response?.threadId === "string"
+            ? response.threadId
+            : undefined,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function archiveCodexThread(args: {
+  threadId: string;
+  archived?: boolean;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request(
+      args.archived === false ? "thread/unarchive" : "thread/archive",
+      { threadId: args.threadId },
+    );
+    return {
+      ok: true,
+      detail:
+        args.archived === false
+          ? "Restored Codex thread from archive."
+          : "Archived Codex thread.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function compactCodexThread(args: {
+  threadId: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request("thread/compact/start", {
+      threadId: args.threadId,
+    });
+    return {
+      ok: true,
+      detail: "Started Codex thread compaction.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function rollbackCodexThread(args: {
+  threadId: string;
+  numTurns: number;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request("thread/rollback", {
+      threadId: args.threadId,
+      numTurns: args.numTurns,
+    });
+    return {
+      ok: true,
+      detail: `Rolled back ${args.numTurns} turn(s) from the Codex thread.`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function startCodexReview(args: {
+  threadId: string;
+  delivery?: "inline" | "detached";
+  target:
+    | { type: "uncommittedChanges" }
+    | { type: "baseBranch"; baseBranch: string }
+    | { type: "commit"; sha: string; title?: string }
+    | { type: "custom"; instructions: string };
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexReviewStartResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    const target =
+      args.target.type === "uncommittedChanges"
+        ? { type: "uncommittedChanges" as const }
+        : args.target.type === "baseBranch"
+          ? { type: "baseBranch" as const, branch: args.target.baseBranch }
+          : args.target.type === "commit"
+            ? {
+                type: "commit" as const,
+                sha: args.target.sha,
+                title: args.target.title ?? null,
+              }
+            : {
+                type: "custom" as const,
+                instructions: args.target.instructions,
+              };
+    const response = await client.request<any>("review/start", {
+      threadId: args.threadId,
+      delivery: args.delivery ?? "detached",
+      target,
+    });
+    return {
+      ok: true,
+      detail:
+        args.delivery === "inline"
+          ? "Started inline Codex review."
+          : "Started detached Codex review thread.",
+      reviewThreadId:
+        typeof response?.reviewThreadId === "string"
+          ? response.reviewThreadId
+          : undefined,
+      turnId:
+        typeof response?.turn?.id === "string" ? response.turn.id : undefined,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function importCodexExternalConfig(args: {
+  migrationItems: CodexExternalAgentConfigMigrationItem[];
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request("externalAgentConfig/import", {
+      migrationItems: args.migrationItems,
+    });
+    return {
+      ok: true,
+      detail: "Imported external agent config into Codex.",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function writeCodexConfigValue(args: {
+  keyPath: string;
+  value: unknown;
+  mergeStrategy?: string;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request("config/value/write", {
+      keyPath: args.keyPath,
+      value: args.value,
+      ...(args.mergeStrategy ? { mergeStrategy: args.mergeStrategy } : {}),
+    });
+    return {
+      ok: true,
+      detail: `Updated Codex config value at ${args.keyPath}.`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
+export async function batchWriteCodexConfig(args: {
+  edits: Array<{
+    keyPath: string;
+    value: unknown;
+    mergeStrategy?: string;
+  }>;
+  runtimeOptions?: StreamTurnArgs["runtimeOptions"];
+}): Promise<CodexMutationResponse> {
+  try {
+    const client = getCodexAppServerClientFromRuntimeOptions(args);
+    await client.request("config/batchWrite", {
+      edits: args.edits.map((edit) => ({
+        keyPath: edit.keyPath,
+        value: edit.value,
+        ...(edit.mergeStrategy ? { mergeStrategy: edit.mergeStrategy } : {}),
+      })),
+    });
+    return {
+      ok: true,
+      detail: `Applied ${args.edits.length} Codex config edit(s).`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: toCodexUserFacingErrorMessage({
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+}
+
 export async function getCodexConnectedToolStatus(args: {
   cwd?: string;
   runtimeOptions?: StreamTurnArgs["runtimeOptions"];
@@ -1572,7 +2847,7 @@ export async function streamCodexWithAppServer(
     const account = await client.request<{
       account: unknown | null;
       requiresOpenaiAuth: boolean;
-    }>("account/read", {});
+    }>("account/read", { refreshToken: false });
     if (!account.account && account.requiresOpenaiAuth) {
       const events: BridgeEvent[] = [
         {

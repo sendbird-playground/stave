@@ -282,6 +282,16 @@ const MessageRow = memo(function MessageRow(args: MessageRowProps) {
                             </span>
                           </>
                         ) : null}
+                        {message.usage.ttftMs != null ? (
+                          <>
+                            <span className="text-background/70">TTFT</span>
+                            <span className="text-right font-mono">
+                              {message.usage.ttftMs >= 1000
+                                ? `${(message.usage.ttftMs / 1000).toFixed(1)}s`
+                                : `${Math.round(message.usage.ttftMs)}ms`}
+                            </span>
+                          </>
+                        ) : null}
                       </div>
                     </TooltipContent>
                   </Tooltip>

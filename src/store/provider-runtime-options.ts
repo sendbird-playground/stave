@@ -3,13 +3,21 @@ import {
   resolveEffectiveCodexApprovalPolicy,
   resolveEffectiveCodexFileAccessMode,
 } from "@/lib/providers/codex-runtime-options";
-import type { ClaudeSettingSource, ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
+import type {
+  ClaudeSettingSource,
+  ProviderId,
+  ProviderRuntimeOptions,
+} from "@/lib/providers/provider.types";
 import { buildStaveAutoProfileFromSettings } from "@/lib/providers/stave-auto-profile";
 import type { AppSettings } from "@/store/app.store";
 
 const DEFAULT_CODEX_APPROVAL_POLICY = "untrusted";
 const MAX_CLAUDE_TASK_BUDGET_TOKENS = 1_000_000;
-const CLAUDE_SETTING_SOURCE_ORDER = ["project", "local", "user"] as const satisfies readonly ClaudeSettingSource[];
+const CLAUDE_SETTING_SOURCE_ORDER = [
+  "project",
+  "local",
+  "user",
+] as const satisfies readonly ClaudeSettingSource[];
 
 type RuntimeSettings = Pick<
   AppSettings,
@@ -22,6 +30,7 @@ type RuntimeSettings = Pick<
   | "claudeSandboxEnabled"
   | "claudeAllowUnsandboxedCommands"
   | "claudeTaskBudgetTokens"
+  | "claudeAdvisorModel"
   | "claudeSettingSources"
   | "claudeEffort"
   | "claudeThinkingMode"
@@ -93,7 +102,9 @@ export function normalizeClaudeSettingSources(args: {
     }
   });
 
-  return CLAUDE_SETTING_SOURCE_ORDER.filter((source) => normalizedSet.has(source));
+  return CLAUDE_SETTING_SOURCE_ORDER.filter((source) =>
+    normalizedSet.has(source),
+  );
 }
 
 export function applyProjectBasePromptToRuntimeOptions(args: {
@@ -124,6 +135,7 @@ export function buildProviderRuntimeOptions(args: {
   const claudeTaskBudgetTokens = normalizeClaudeTaskBudgetTokens({
     value: settings.claudeTaskBudgetTokens,
   });
+  const claudeAdvisorModel = settings.claudeAdvisorModel.trim();
 
   return {
     model: args.model,
@@ -132,7 +144,8 @@ export function buildProviderRuntimeOptions(args: {
     providerTimeoutMs: settings.providerTimeoutMs,
     claudeBinaryPath: settings.claudeBinaryPath || undefined,
     claudePermissionMode: settings.claudePermissionMode,
-    claudeAllowDangerouslySkipPermissions: settings.claudeAllowDangerouslySkipPermissions,
+    claudeAllowDangerouslySkipPermissions:
+      settings.claudeAllowDangerouslySkipPermissions,
     claudeSandboxEnabled: settings.claudeSandboxEnabled,
     claudeAllowUnsandboxedCommands: settings.claudeAllowUnsandboxedCommands,
     claudeSettingSources: normalizeClaudeSettingSources({
@@ -143,6 +156,7 @@ export function buildProviderRuntimeOptions(args: {
           claudeTaskBudgetTokens,
         }
       : {}),
+    ...(claudeAdvisorModel ? { claudeAdvisorModel } : {}),
     claudeEffort: settings.claudeEffort,
     claudeThinkingMode: settings.claudeThinkingMode,
     claudeAgentProgressSummaries: settings.claudeAgentProgressSummaries,
@@ -156,7 +170,8 @@ export function buildProviderRuntimeOptions(args: {
             ? { codexResumeThreadId: providerSession.codex }
             : {}),
         }
-      : args.provider === "claude-code" && providerSession?.["claude-code"]?.trim()
+      : args.provider === "claude-code" &&
+          providerSession?.["claude-code"]?.trim()
         ? { claudeResumeSessionId: providerSession["claude-code"] }
         : {}),
     codexFileAccess: resolveEffectiveCodexFileAccessMode({
