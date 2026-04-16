@@ -3,6 +3,8 @@ import {
   CODEX_MODEL_OPTIONS,
   STAVE_META_MODEL_OPTIONS,
   getDynamicDisplayNames,
+  resolveClaudeEffortForModelSwitch,
+  resolveDefaultClaudeEffortForModel,
   getDefaultModelForProvider,
   getNextProviderId,
   getProviderIconUrl,
@@ -39,6 +41,42 @@ describe("model catalog", () => {
     expect(getDefaultModelForProvider({ providerId: "claude-code" })).toBe(
       "claude-sonnet-4-6",
     );
+  });
+
+  test("uses xhigh as the Claude effort default for Opus models", () => {
+    expect(
+      resolveDefaultClaudeEffortForModel({ model: "claude-opus-4-6" }),
+    ).toBe("xhigh");
+    expect(
+      resolveDefaultClaudeEffortForModel({ model: "claude-opus-4-6[1m]" }),
+    ).toBe("xhigh");
+    expect(
+      resolveDefaultClaudeEffortForModel({ model: "claude-sonnet-4-6" }),
+    ).toBe("medium");
+  });
+
+  test("only updates Claude effort on model switch when the current value is still the previous model default", () => {
+    expect(
+      resolveClaudeEffortForModelSwitch({
+        previousModel: "claude-sonnet-4-6",
+        nextModel: "claude-opus-4-6",
+        currentEffort: "medium",
+      }),
+    ).toBe("xhigh");
+    expect(
+      resolveClaudeEffortForModelSwitch({
+        previousModel: "claude-opus-4-6",
+        nextModel: "claude-sonnet-4-6",
+        currentEffort: "xhigh",
+      }),
+    ).toBe("medium");
+    expect(
+      resolveClaudeEffortForModelSwitch({
+        previousModel: "claude-sonnet-4-6",
+        nextModel: "claude-opus-4-6",
+        currentEffort: "max",
+      }),
+    ).toBe("max");
   });
 
   test("returns provider wave tone classes", () => {

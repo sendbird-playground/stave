@@ -1,4 +1,4 @@
-import type { ProviderId } from "@/lib/providers/provider.types";
+import type { ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
 
 const CLAUDE_COLOR_ICON_URL = `${import.meta.env.BASE_URL}claude-color.svg`;
 const CODEX_COLOR_ICON_URL = `${import.meta.env.BASE_URL}codex-color.svg`;
@@ -217,6 +217,27 @@ export function normalizeModelSelection(args: {
     return args.fallback;
   }
   return trimmed;
+}
+
+export function resolveDefaultClaudeEffortForModel(args: {
+  model: string;
+}): NonNullable<ProviderRuntimeOptions["claudeEffort"]> {
+  const normalizedModel = args.model.trim().toLowerCase();
+  return normalizedModel.includes("opus") ? "xhigh" : "medium";
+}
+
+export function resolveClaudeEffortForModelSwitch(args: {
+  previousModel: string;
+  nextModel: string;
+  currentEffort: NonNullable<ProviderRuntimeOptions["claudeEffort"]>;
+}): NonNullable<ProviderRuntimeOptions["claudeEffort"]> {
+  const previousDefaultEffort = resolveDefaultClaudeEffortForModel({
+    model: args.previousModel,
+  });
+  if (args.currentEffort !== previousDefaultEffort) {
+    return args.currentEffort;
+  }
+  return resolveDefaultClaudeEffortForModel({ model: args.nextModel });
 }
 
 /**

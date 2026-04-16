@@ -44,7 +44,8 @@ describe("chat-input runtime helpers", () => {
   test("cycles Claude effort in provider order", () => {
     expect(cycleClaudeEffortValue("low")).toBe("medium");
     expect(cycleClaudeEffortValue("medium")).toBe("high");
-    expect(cycleClaudeEffortValue("high")).toBe("max");
+    expect(cycleClaudeEffortValue("high")).toBe("xhigh");
+    expect(cycleClaudeEffortValue("xhigh")).toBe("max");
     expect(cycleClaudeEffortValue("max")).toBe("low");
   });
 

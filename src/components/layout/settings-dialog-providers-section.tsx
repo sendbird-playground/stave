@@ -196,6 +196,14 @@ const CLAUDE_EFFORT_HELP = [
       "Useful for tricky bugs, architecture questions, or larger refactors.",
   },
   {
+    value: "xhigh",
+    label: "X-High",
+    description:
+      "Go deeper than `high` when the Claude model supports it, with a larger latency cost.",
+    example:
+      "Best for complex root-cause analysis or hard multi-step implementation planning.",
+  },
+  {
     value: "max",
     label: "Max",
     description: "Highest deliberation and the most latency.",

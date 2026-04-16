@@ -129,6 +129,7 @@ export function normalizeStaveAutoRoleRuntimeOverrides(args: {
         claudeValue.effort === "low"
         || claudeValue.effort === "medium"
         || claudeValue.effort === "high"
+        || claudeValue.effort === "xhigh"
         || claudeValue.effort === "max"
       ) {
         defaults[role].claude.effort = claudeValue.effort;

@@ -407,7 +407,7 @@ export type StaveAutoRoleName = "classifier" | "supervisor" | StaveAutoIntent | 
 export interface StaveAutoClaudeRoleRuntimeOverrides {
   permissionMode?: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
   thinkingMode?: "adaptive" | "enabled" | "disabled";
-  effort?: "low" | "medium" | "high" | "max";
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
   fastMode?: boolean;
 }
 
@@ -544,7 +544,7 @@ export interface ProviderRuntimeOptions {
   claudeMaxBudgetUsd?: number;
   claudeTaskBudgetTokens?: number;
   claudeSettingSources?: ClaudeSettingSource[];
-  claudeEffort?: "low" | "medium" | "high" | "max";
+  claudeEffort?: "low" | "medium" | "high" | "xhigh" | "max";
   claudeThinkingMode?: "adaptive" | "enabled" | "disabled";
   claudeAgentProgressSummaries?: boolean;
   claudeFastMode?: boolean;

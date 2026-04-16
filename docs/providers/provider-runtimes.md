@@ -136,7 +136,9 @@ If you want the user-facing setup workflow instead of the runtime internals, use
 - `effort`
   - `low`: fastest.
   - `medium`: balanced default.
-  - `high` / `max`: more deliberate, slower, better for hard tasks.
+  - `high`: more deliberate, slower, better for hard tasks.
+  - `xhigh`: deeper than `high` when supported by the active Claude model.
+  - `max`: highest deliberation and the most latency on models that support it.
 - Example mode presets
   - `Manual`: `acceptEdits` + sandbox on + unsandboxed off
   - `Guided`: `auto` + sandbox off + unsandboxed on

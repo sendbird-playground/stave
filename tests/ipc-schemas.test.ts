@@ -22,6 +22,18 @@ describe("provider IPC schemas", () => {
     expect(parsed.success).toBe(false);
   });
 
+  test("accepts Claude xhigh effort in runtime options", () => {
+    const parsed = StreamTurnArgsSchema.safeParse({
+      providerId: "claude-code",
+      prompt: "continue",
+      runtimeOptions: {
+        claudeEffort: "xhigh",
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
   test("accepts stave_processing in canonical history", () => {
     const parsed = StreamTurnArgsSchema.safeParse({
       turnId: "turn-1",

@@ -841,7 +841,7 @@ export interface AppSettings {
   claudeTaskBudgetTokens: number;
   claudeAdvisorModel: string;
   claudeSettingSources: ClaudeSettingSource[];
-  claudeEffort: "low" | "medium" | "high" | "max";
+  claudeEffort: "low" | "medium" | "high" | "xhigh" | "max";
   claudeThinkingMode: "adaptive" | "enabled" | "disabled";
   claudeAgentProgressSummaries: boolean;
   claudeFastMode: boolean;

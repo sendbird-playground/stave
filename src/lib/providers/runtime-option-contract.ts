@@ -35,6 +35,7 @@ export const CLAUDE_EFFORT_OPTIONS = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
+  { value: "xhigh", label: "X-High" },
   { value: "max", label: "Max" },
 ] as const satisfies readonly SelectOption<NonNullable<ProviderRuntimeOptions["claudeEffort"]>>[];
 

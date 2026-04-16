@@ -121,6 +121,23 @@ describe("buildProviderRuntimeOptions", () => {
     });
   });
 
+  test("forwards Claude xhigh effort into runtime options", () => {
+    expect(
+      buildProviderRuntimeOptions({
+        provider: "claude-code",
+        model: "claude-sonnet-4-6",
+        settings: {
+          ...settings,
+          claudeEffort: "xhigh",
+        },
+        providerSession: null,
+      }),
+    ).toMatchObject({
+      model: "claude-sonnet-4-6",
+      claudeEffort: "xhigh",
+    });
+  });
+
   test.each([
     {
       sourceModel: "claude-haiku-4-5",

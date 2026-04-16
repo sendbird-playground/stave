@@ -140,7 +140,7 @@ describe("applyStaveRoleRuntimeOverrides", () => {
               claude: {
                 permissionMode: "acceptEdits",
                 thinkingMode: "enabled",
-                effort: "high",
+                effort: "xhigh",
                 fastMode: true,
               },
             },
@@ -162,7 +162,7 @@ describe("applyStaveRoleRuntimeOverrides", () => {
     })).toMatchObject({
       claudePermissionMode: "acceptEdits",
       claudeThinkingMode: "enabled",
-      claudeEffort: "high",
+      claudeEffort: "xhigh",
       claudeFastMode: true,
     });
   });

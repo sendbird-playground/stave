@@ -298,6 +298,7 @@ export const RuntimeOptionsObjectSchema = z
         z.literal("low"),
         z.literal("medium"),
         z.literal("high"),
+        z.literal("xhigh"),
         z.literal("max"),
       ])
       .optional(),
@@ -406,6 +407,7 @@ export const RuntimeOptionsObjectSchema = z
                         z.literal("low"),
                         z.literal("medium"),
                         z.literal("high"),
+                        z.literal("xhigh"),
                         z.literal("max"),
                       ])
                       .optional(),
@@ -461,6 +463,7 @@ export const RuntimeOptionsObjectSchema = z
                         z.literal("low"),
                         z.literal("medium"),
                         z.literal("high"),
+                        z.literal("xhigh"),
                         z.literal("max"),
                       ])
                       .optional(),
@@ -516,6 +519,7 @@ export const RuntimeOptionsObjectSchema = z
                         z.literal("low"),
                         z.literal("medium"),
                         z.literal("high"),
+                        z.literal("xhigh"),
                         z.literal("max"),
                       ])
                       .optional(),
@@ -571,6 +575,7 @@ export const RuntimeOptionsObjectSchema = z
                         z.literal("low"),
                         z.literal("medium"),
                         z.literal("high"),
+                        z.literal("xhigh"),
                         z.literal("max"),
                       ])
                       .optional(),
@@ -626,6 +631,7 @@ export const RuntimeOptionsObjectSchema = z
                         z.literal("low"),
                         z.literal("medium"),
                         z.literal("high"),
+                        z.literal("xhigh"),
                         z.literal("max"),
                       ])
                       .optional(),
@@ -681,6 +687,7 @@ export const RuntimeOptionsObjectSchema = z
                         z.literal("low"),
                         z.literal("medium"),
                         z.literal("high"),
+                        z.literal("xhigh"),
                         z.literal("max"),
                       ])
                       .optional(),
@@ -736,6 +743,7 @@ export const RuntimeOptionsObjectSchema = z
                         z.literal("low"),
                         z.literal("medium"),
                         z.literal("high"),
+                        z.literal("xhigh"),
                         z.literal("max"),
                       ])
                       .optional(),
@@ -791,6 +799,7 @@ export const RuntimeOptionsObjectSchema = z
                         z.literal("low"),
                         z.literal("medium"),
                         z.literal("high"),
+                        z.literal("xhigh"),
                         z.literal("max"),
                       ])
                       .optional(),

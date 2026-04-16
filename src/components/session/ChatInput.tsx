@@ -47,6 +47,7 @@ import {
   getProviderLabel,
   listProviderIds,
   normalizeModelSelection,
+  resolveClaudeEffortForModelSwitch,
   providerSupportsNativeCommandCatalog,
 } from "@/lib/providers/model-catalog";
 import { useCodexModelCatalog } from "@/lib/providers/use-codex-model-catalog";
@@ -990,6 +991,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     modelClaude,
     modelCodex,
     modelStave,
+    storedClaudeEffort,
     skillsEnabled,
     skillsAutoSuggest,
     providerTimeoutMs,
@@ -1000,6 +1002,7 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           state.settings.modelClaude,
           state.settings.modelCodex,
           state.settings.modelStave,
+          state.settings.claudeEffort,
           state.settings.skillsEnabled,
           state.settings.skillsAutoSuggest,
           state.settings.providerTimeoutMs,
@@ -1673,13 +1676,19 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           provider: selection.providerId,
         });
         if (selection.providerId === "claude-code") {
+          const nextModel = normalizeModelSelection({
+            value: selection.model,
+            fallback: getDefaultModelForProvider({
+              providerId: selection.providerId,
+            }),
+          });
           updateSettings({
             patch: {
-              modelClaude: normalizeModelSelection({
-                value: selection.model,
-                fallback: getDefaultModelForProvider({
-                  providerId: selection.providerId,
-                }),
+              modelClaude: nextModel,
+              claudeEffort: resolveClaudeEffortForModelSwitch({
+                previousModel: modelClaude,
+                nextModel,
+                currentEffort: storedClaudeEffort,
               }),
             },
           });

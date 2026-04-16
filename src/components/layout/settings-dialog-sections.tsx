@@ -57,6 +57,7 @@ import {
 import {
   getDefaultModelForProvider,
   normalizeModelSelection,
+  resolveClaudeEffortForModelSwitch,
 } from "@/lib/providers/model-catalog";
 import { useCodexModelCatalog } from "@/lib/providers/use-codex-model-catalog";
 import { BOOLEAN_TOGGLE_OPTIONS } from "@/lib/providers/runtime-option-contract";
@@ -1569,12 +1570,13 @@ function TerminalSection() {
 }
 
 function ModelsSection() {
-  const [modelClaude, modelCodex, codexBinaryPath] = useAppStore(
+  const [modelClaude, modelCodex, claudeEffort, codexBinaryPath] = useAppStore(
     useShallow(
       (state) =>
         [
           state.settings.modelClaude,
           state.settings.modelCodex,
+          state.settings.claudeEffort,
           state.settings.codexBinaryPath,
         ] as const,
     ),
@@ -1645,13 +1647,24 @@ function ModelsSection() {
               className="w-full"
               triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
               menuClassName="sm:max-w-lg"
-              onSelect={({ selection }) =>
+              onSelect={({ selection }) => {
+                const nextModel = normalizeModelSelection({
+                  value: selection.model,
+                  fallback: getDefaultModelForProvider({
+                    providerId: "claude-code",
+                  }),
+                });
                 updateSettings({
                   patch: {
-                    modelClaude: selection.model,
+                    modelClaude: nextModel,
+                    claudeEffort: resolveClaudeEffortForModelSwitch({
+                      previousModel: modelClaude,
+                      nextModel,
+                      currentEffort: claudeEffort,
+                    }),
                   },
-                })
-              }
+                });
+              }}
             />
           </LabeledField>
           <LabeledField
