@@ -14,26 +14,20 @@ import {
 import { copyTextToClipboard } from "@/lib/clipboard";
 import type { SectionId } from "@/components/layout/settings-dialog.schema";
 import { isTaskArchived } from "@/lib/tasks";
-import { SCRIPT_LOG_HISTORY_LIMIT, SCRIPT_TRIGGER_METADATA } from "@/lib/workspace-scripts";
+import { SCRIPT_TRIGGER_METADATA } from "@/lib/workspace-scripts";
 import type {
   ScriptKind,
   ScriptTrigger,
   ResolvedWorkspaceScriptsConfig,
-  WorkspaceScriptEventEnvelope,
   WorkspaceScriptStatusEntry,
 } from "@/lib/workspace-scripts/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
-
-interface ScriptUiState {
-  running: boolean;
-  runId?: string;
-  sessionId?: string;
-  log: string;
-  error?: string;
-  orbitUrl?: string;
-  sourceLabel?: string;
-}
+import {
+  buildScriptRunFailureState,
+  type ScriptUiState,
+  reduceScriptUiState,
+} from "./workspace-scripts-panel.utils";
 
 function scriptKey(args: { scriptId: string; scriptKind: ScriptKind }) {
   return `${args.scriptKind}:${args.scriptId}`;
@@ -41,18 +35,6 @@ function scriptKey(args: { scriptId: string; scriptKind: ScriptKind }) {
 
 function scriptEntryKey(args: { id: string; kind: ScriptKind }) {
   return `${args.kind}:${args.id}`;
-}
-
-function appendLog(current: string, chunk: string) {
-  const next = current + chunk;
-  if (next.length <= SCRIPT_LOG_HISTORY_LIMIT) {
-    return next;
-  }
-  return next.slice(next.length - SCRIPT_LOG_HISTORY_LIMIT);
-}
-
-function sourceLabel(event: WorkspaceScriptEventEnvelope) {
-  return event.source.kind === "hook" ? `Hook · ${SCRIPT_TRIGGER_METADATA[event.source.trigger].label}` : "Manual";
 }
 
 function openExternalUrl(url: string) {
@@ -348,45 +330,9 @@ export function WorkspaceScriptsPanel(props: {
     return subscribeEvents({ workspaceId: activeWorkspaceId }, (payload) => {
       const key = scriptKey(payload);
       setEntryStateByKey((current) => {
-        const existing = current[key] ?? { running: false, log: "" };
-        const isNewRun = Boolean(payload.runId && payload.runId !== existing.runId);
-        const next: ScriptUiState = {
-          ...existing,
-          runId: payload.runId,
-          sessionId: payload.sessionId,
-          sourceLabel: sourceLabel(payload),
-        };
-
-        switch (payload.event.type) {
-          case "started":
-            next.running = true;
-            next.error = undefined;
-            if (isNewRun) {
-              next.log = "";
-              next.orbitUrl = undefined;
-            }
-            break;
-          case "orbit-url":
-            next.orbitUrl = payload.event.url;
-            break;
-          case "output":
-            next.log = appendLog(existing.log, payload.event.data);
-            break;
-          case "error":
-            next.running = false;
-            next.error = payload.event.error;
-            break;
-          case "completed":
-          case "stopped":
-            next.running = false;
-            break;
-          default:
-            break;
-        }
-
         return {
           ...current,
-          [key]: next,
+          [key]: reduceScriptUiState(current[key], payload),
         };
       });
     });
@@ -408,6 +354,13 @@ export function WorkspaceScriptsPanel(props: {
       branch: workspaceBranch || workspaceName,
     });
     if (!result.ok) {
+      setEntryStateByKey((current) => ({
+        ...current,
+        [scriptKey(args)]: buildScriptRunFailureState({
+          existing: current[scriptKey(args)],
+          error: result.error ?? "Unknown error",
+        }),
+      }));
       toast.error("Script failed to start", {
         description: result.error ?? "Unknown error",
       });
