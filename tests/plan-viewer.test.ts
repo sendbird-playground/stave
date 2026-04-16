@@ -256,6 +256,36 @@ describe("resolvePlanViewerState", () => {
     });
   });
 
+  test("hides the Codex viewer once plan mode is turned off, even if the latest message is a plan", () => {
+    const state = resolvePlanViewerState({
+      activeProvider: "codex",
+      claudePermissionMode: "default",
+      codexPlanMode: false,
+      isTurnActive: false,
+      latestPlanMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "1. Inspect\n2. Patch",
+      },
+      lastMessage: {
+        role: "assistant",
+        providerId: "codex",
+        isPlanResponse: true,
+        isStreaming: false,
+        planText: "1. Inspect\n2. Patch",
+      },
+    });
+
+    expect(state).toEqual({
+      planText: "1. Inspect\n2. Patch",
+      isPlanPreparing: false,
+      isPlanPending: false,
+      canReplyToPlan: false,
+    });
+  });
+
   test("stays hidden when no plan mode and no plan response", () => {
     const state = resolvePlanViewerState({
       activeProvider: "claude-code",
@@ -291,14 +321,16 @@ describe("resolvePlanViewerState", () => {
         providerId: "codex",
         isPlanResponse: true,
         isStreaming: false,
-        planText: "...\n\n## Plan\n- Strip commentary\n- Keep only steps\n\nLet me know if you want changes.",
+        planText:
+          "...\n\n## Plan\n- Strip commentary\n- Keep only steps\n\nLet me know if you want changes.",
       },
       lastMessage: {
         role: "assistant",
         providerId: "codex",
         isPlanResponse: true,
         isStreaming: false,
-        planText: "...\n\n## Plan\n- Strip commentary\n- Keep only steps\n\nLet me know if you want changes.",
+        planText:
+          "...\n\n## Plan\n- Strip commentary\n- Keep only steps\n\nLet me know if you want changes.",
       },
     });
 
@@ -343,10 +375,12 @@ describe("resolvePlanViewerState", () => {
 
 describe("resolvePlanViewerInsets", () => {
   test("anchors the viewer above the chat input dock in normal mode", () => {
-    expect(resolvePlanViewerInsets({
-      isExpanded: false,
-      inputDockHeight: 76,
-    })).toEqual({
+    expect(
+      resolvePlanViewerInsets({
+        isExpanded: false,
+        inputDockHeight: 76,
+      }),
+    ).toEqual({
       topOffset: null,
       rightOffset: 16,
       bottomOffset: 84,
@@ -354,10 +388,12 @@ describe("resolvePlanViewerInsets", () => {
   });
 
   test("keeps expanded mode pinned to the full chat viewport above the input dock", () => {
-    expect(resolvePlanViewerInsets({
-      isExpanded: true,
-      inputDockHeight: 76,
-    })).toEqual({
+    expect(
+      resolvePlanViewerInsets({
+        isExpanded: true,
+        inputDockHeight: 76,
+      }),
+    ).toEqual({
       topOffset: 12,
       rightOffset: 16,
       bottomOffset: 84,
@@ -367,54 +403,68 @@ describe("resolvePlanViewerInsets", () => {
 
 describe("resolvePlanViewerAutoViewState", () => {
   test("minimizes an expanded viewer when replanning starts from an existing plan", () => {
-    expect(resolvePlanViewerAutoViewState({
-      viewState: "expanded",
-      isPlanPreparing: true,
-      planText: "1. Inspect\n2. Patch",
-    })).toBe("minimized");
+    expect(
+      resolvePlanViewerAutoViewState({
+        viewState: "expanded",
+        isPlanPreparing: true,
+        planText: "1. Inspect\n2. Patch",
+      }),
+    ).toBe("minimized");
   });
 
   test("keeps the current view state when there is no historical plan text", () => {
-    expect(resolvePlanViewerAutoViewState({
-      viewState: "expanded",
-      isPlanPreparing: true,
-      planText: "",
-    })).toBe("expanded");
+    expect(
+      resolvePlanViewerAutoViewState({
+        viewState: "expanded",
+        isPlanPreparing: true,
+        planText: "",
+      }),
+    ).toBe("expanded");
   });
 });
 
 describe("buildPlanViewerContextKey", () => {
   test("changes when switching to another workspace task with a visible plan viewer", () => {
-    expect(buildPlanViewerContextKey({
-      activeWorkspaceId: "workspace-alpha",
-      activeTaskId: "task-alpha",
-      latestPlanMessageId: "plan-alpha",
-    })).not.toBe(buildPlanViewerContextKey({
-      activeWorkspaceId: "workspace-beta",
-      activeTaskId: "task-beta",
-      latestPlanMessageId: "plan-beta",
-    }));
+    expect(
+      buildPlanViewerContextKey({
+        activeWorkspaceId: "workspace-alpha",
+        activeTaskId: "task-alpha",
+        latestPlanMessageId: "plan-alpha",
+      }),
+    ).not.toBe(
+      buildPlanViewerContextKey({
+        activeWorkspaceId: "workspace-beta",
+        activeTaskId: "task-beta",
+        latestPlanMessageId: "plan-beta",
+      }),
+    );
   });
 
   test("changes when a new plan response replaces the current one in the same task", () => {
-    expect(buildPlanViewerContextKey({
-      activeWorkspaceId: "workspace-alpha",
-      activeTaskId: "task-alpha",
-      latestPlanMessageId: "plan-1",
-    })).not.toBe(buildPlanViewerContextKey({
-      activeWorkspaceId: "workspace-alpha",
-      activeTaskId: "task-alpha",
-      latestPlanMessageId: "plan-2",
-    }));
+    expect(
+      buildPlanViewerContextKey({
+        activeWorkspaceId: "workspace-alpha",
+        activeTaskId: "task-alpha",
+        latestPlanMessageId: "plan-1",
+      }),
+    ).not.toBe(
+      buildPlanViewerContextKey({
+        activeWorkspaceId: "workspace-alpha",
+        activeTaskId: "task-alpha",
+        latestPlanMessageId: "plan-2",
+      }),
+    );
   });
 });
 
 describe("resolvePlanViewerLayout", () => {
   test("anchors the normal viewer to the bottom-right and grows leftward", () => {
-    expect(resolvePlanViewerLayout({
-      viewState: "normal",
-      inputDockHeight: 76,
-    })).toEqual({
+    expect(
+      resolvePlanViewerLayout({
+        viewState: "normal",
+        inputDockHeight: 76,
+      }),
+    ).toEqual({
       wrapperClassName: "pointer-events-none absolute z-[25]",
       wrapperStyle: {
         right: 16,
@@ -422,15 +472,18 @@ describe("resolvePlanViewerLayout", () => {
         width: "calc(100% - 32px)",
         maxWidth: 672,
       },
-      cardClassName: "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
+      cardClassName:
+        "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
     });
   });
 
   test("anchors the expanded viewer to the same bottom-right origin above the input dock", () => {
-    expect(resolvePlanViewerLayout({
-      viewState: "expanded",
-      inputDockHeight: 76,
-    })).toEqual({
+    expect(
+      resolvePlanViewerLayout({
+        viewState: "expanded",
+        inputDockHeight: 76,
+      }),
+    ).toEqual({
       wrapperClassName: "pointer-events-none absolute z-[25]",
       wrapperStyle: {
         right: 16,
@@ -438,25 +491,29 @@ describe("resolvePlanViewerLayout", () => {
         width: "calc(100% - 32px)",
         height: "max(0px, calc(100% - 96px))",
       },
-      cardClassName: "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg h-full w-full",
+      cardClassName:
+        "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg h-full w-full",
     });
   });
 
   test("keeps the dragged minimized viewer at its explicit position", () => {
-    expect(resolvePlanViewerLayout({
-      viewState: "minimized",
-      inputDockHeight: 76,
-      dragPos: {
-        x: 120,
-        y: 48,
-      },
-    })).toEqual({
+    expect(
+      resolvePlanViewerLayout({
+        viewState: "minimized",
+        inputDockHeight: 76,
+        dragPos: {
+          x: 120,
+          y: 48,
+        },
+      }),
+    ).toEqual({
       wrapperClassName: "pointer-events-none absolute z-[25]",
       wrapperStyle: {
         top: 48,
         left: 120,
       },
-      cardClassName: "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg w-72",
+      cardClassName:
+        "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg w-72",
     });
   });
 });

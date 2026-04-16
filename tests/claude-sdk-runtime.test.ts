@@ -185,6 +185,68 @@ describe("mapClaudeMessageToEvents", () => {
       },
     ]);
   });
+
+  test("surfaces streamed ExitPlanMode input_json_delta as an early plan_ready event", () => {
+    const planState = {
+      exitPlanBlocksByIndex: new Map(),
+    };
+
+    const startEvents = mapClaudeMessageToEvents({
+      message: {
+        type: "stream_event",
+        event: {
+          type: "content_block_start",
+          index: 0,
+          content_block: {
+            type: "tool_use",
+            id: "tool-plan-1",
+            name: "ExitPlanMode",
+            input: {},
+          },
+        },
+      } as never,
+      claudeDebugStream: false,
+      planState,
+    });
+
+    const deltaEvents = mapClaudeMessageToEvents({
+      message: {
+        type: "stream_event",
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: {
+            type: "input_json_delta",
+            partial_json: "{\"plan\":\"1. Inspect the task\\n2. Ship the patch\"}",
+          },
+        },
+      } as never,
+      claudeDebugStream: false,
+      planState,
+    });
+
+    const stopEvents = mapClaudeMessageToEvents({
+      message: {
+        type: "stream_event",
+        event: {
+          type: "content_block_stop",
+          index: 0,
+        },
+      } as never,
+      claudeDebugStream: false,
+      planState,
+    });
+
+    expect(startEvents).toEqual([]);
+    expect(deltaEvents).toEqual([
+      {
+        type: "plan_ready",
+        planText: "1. Inspect the task\n2. Ship the patch",
+        sourceSegmentId: "tool-plan-1",
+      },
+    ]);
+    expect(stopEvents).toEqual([]);
+  });
 });
 
 describe("buildClaudeApprovalPermissionResult", () => {

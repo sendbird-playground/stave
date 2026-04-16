@@ -235,7 +235,10 @@ import {
   arePromptDraftRuntimeOverridesEqual,
   resolvePromptDraftRuntimeState,
 } from "@/store/prompt-draft-runtime";
-import { persistWorkspacePlanFile } from "@/lib/plans";
+import {
+  resolveWorkspacePlanPersistenceText,
+  persistWorkspacePlanFile,
+} from "@/lib/plans";
 import {
   appendInterruptedTurnNotices,
   buildWorkspaceSessionStateFromShell,
@@ -9591,6 +9594,7 @@ export const useAppStore = create<AppState>()(
               lastEventAt: turnActivityStartedAt,
             });
 
+            let lastPersistedPlanTextForTurn: string | null = null;
             const providerTurnEventController =
               createProviderTurnEventController({
                 flushEvents: (pendingEvents) => {
@@ -9714,11 +9718,16 @@ export const useAppStore = create<AppState>()(
                       > => event.type === "plan_ready",
                     )
                     .at(-1);
-                  if (nextPlanReady?.planText?.trim() && workspaceCwd) {
+                  const planTextToPersist = resolveWorkspacePlanPersistenceText({
+                    planText: nextPlanReady?.planText,
+                    lastPersistedPlanText: lastPersistedPlanTextForTurn,
+                  });
+                  if (planTextToPersist && workspaceCwd) {
+                    lastPersistedPlanTextForTurn = planTextToPersist;
                     void persistWorkspacePlanFile({
                       rootPath: workspaceCwd,
                       taskId: resolvedTaskId,
-                      planText: nextPlanReady.planText,
+                      planText: planTextToPersist,
                     }).then((filePath) => {
                       if (filePath) {
                         latestState.notifyWorkspacePlansChanged();
