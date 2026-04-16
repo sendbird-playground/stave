@@ -1,7 +1,8 @@
-import { Copy, File, GitBranch, GitCommitHorizontal, History, LoaderCircle, Minus, Plus, RotateCcw } from "lucide-react";
+import { Check, Copy, File, GitBranch, GitCommitHorizontal, History, LoaderCircle, Minus, Plus, RefreshCw, RotateCcw, Timer } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Badge, Button, Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { SourceControlStatusItem } from "@/lib/source-control-status";
 import { cn } from "@/lib/utils";
 import { WorkspaceFileIcon } from "./explorer-entry-icon";
@@ -13,6 +14,21 @@ interface SourceControlHistoryEntry {
   hash: string;
   relativeDate: string;
   subject: string;
+}
+
+const AUTO_REFRESH_OPTIONS: Array<{ seconds: number; label: string }> = [
+  { seconds: 0, label: "Off" },
+  { seconds: 5, label: "Every 5 seconds" },
+  { seconds: 10, label: "Every 10 seconds" },
+  { seconds: 30, label: "Every 30 seconds" },
+  { seconds: 60, label: "Every minute" },
+];
+
+function formatAutoRefreshShortLabel(seconds: number) {
+  if (seconds <= 0) return "Off";
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.round(seconds / 60);
+  return `${minutes}m`;
 }
 
 function formatFileCount(count: number) {
@@ -226,6 +242,9 @@ export function WorkspaceChangesPanel(props: {
   onStageAction: (args: { action: "stage" | "unstage"; item: SourceControlStatusItem }) => Promise<void>;
   onDiscardChange: (item: SourceControlStatusItem) => Promise<void>;
   sourceHistory: SourceControlHistoryEntry[];
+  onRefresh: () => Promise<void>;
+  autoRefreshSeconds: number;
+  onAutoRefreshSecondsChange: (seconds: number) => void;
 }) {
   const [view, setView] = useState<SourceControlPanelView>("changes");
   const showStageAll = props.sourceControlSummary.workingTreeCount > 0;
@@ -245,8 +264,8 @@ export function WorkspaceChangesPanel(props: {
 
   return (
     <Tabs value={view} onValueChange={(nextValue) => setView(nextValue as SourceControlPanelView)} className="flex h-full min-h-0 flex-col gap-0">
-      <div className="border-b border-border/80 px-3 py-2">
-        <TabsList className="h-auto w-full justify-start rounded-xl border border-border/70 bg-muted/30 p-1">
+      <div className="flex items-center gap-2 border-b border-border/80 px-3 py-2">
+        <TabsList className="h-auto flex-1 justify-start rounded-xl border border-border/70 bg-muted/30 p-1">
           <TabsTrigger value="changes" className="h-8 flex-none gap-2 rounded-lg px-3 text-xs font-medium">
             <span>Changes</span>
             <span className="text-[11px] text-muted-foreground">{props.filteredScmItems.length}</span>
@@ -257,6 +276,61 @@ export function WorkspaceChangesPanel(props: {
             <span className="text-[11px] text-muted-foreground">{props.sourceHistory.length}</span>
           </TabsTrigger>
         </TabsList>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            size="icon-xs"
+            variant="ghost"
+            aria-label="Refresh source control"
+            title="Refresh"
+            className="size-8 rounded-lg text-muted-foreground hover:text-foreground"
+            disabled={props.isScmBusy}
+            onClick={() => void props.onRefresh()}
+          >
+            <RefreshCw className={cn("size-3.5", props.isScmBusy && "animate-spin")} />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Auto refresh options"
+                title={props.autoRefreshSeconds > 0
+                  ? `Auto refresh: ${formatAutoRefreshShortLabel(props.autoRefreshSeconds)}`
+                  : "Auto refresh: Off"}
+                className={cn(
+                  "h-8 gap-1 rounded-lg px-1.5 text-muted-foreground hover:text-foreground",
+                  props.autoRefreshSeconds > 0 && "text-success hover:text-success",
+                )}
+              >
+                <Timer className="size-3.5" />
+                <span className="text-[11px] font-medium tracking-tight">
+                  {formatAutoRefreshShortLabel(props.autoRefreshSeconds)}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Auto refresh
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {AUTO_REFRESH_OPTIONS.map((option) => {
+                const isActive = option.seconds === props.autoRefreshSeconds;
+                return (
+                  <DropdownMenuItem
+                    key={option.seconds}
+                    onSelect={() => props.onAutoRefreshSecondsChange(option.seconds)}
+                    className="justify-between"
+                  >
+                    <span>{option.label}</span>
+                    {isActive ? <Check className="size-3.5 text-success" /> : null}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <TabsContent value="changes" className="min-h-0 flex-1 overflow-auto">

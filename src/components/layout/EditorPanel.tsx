@@ -100,11 +100,13 @@ export function EditorPanel(props: EditorPanelProps) {
     sidebarOverlayVisible,
     sidebarOverlayTab,
     workspaceCwd,
+    scmAutoRefreshSeconds,
     openFileFromTree,
     openDiffInEditor,
     setLayout,
     refreshProjectFiles,
     closeEditorTab,
+    updateSettings,
   ] = useAppStore(useShallow((state) => [
     state.activeWorkspaceId,
     state.hasHydratedWorkspaces,
@@ -112,11 +114,13 @@ export function EditorPanel(props: EditorPanelProps) {
     state.layout.sidebarOverlayVisible,
     state.layout.sidebarOverlayTab,
     state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined,
+    state.settings.scmAutoRefreshSeconds,
     state.openFileFromTree,
     state.openDiffInEditor,
     state.setLayout,
     state.refreshProjectFiles,
     state.closeEditorTab,
+    state.updateSettings,
   ] as const));
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -329,6 +333,25 @@ export function EditorPanel(props: EditorPanelProps) {
       void loadScmStatus();
     }
   }, [rightTab, sidebarOverlayVisible, workspaceCwd]);
+
+  const loadScmStatusRef = useRef(loadScmStatus);
+  loadScmStatusRef.current = loadScmStatus;
+  const isScmBusyRef = useRef(isScmBusy);
+  isScmBusyRef.current = isScmBusy;
+
+  useEffect(() => {
+    if (scmAutoRefreshSeconds <= 0) return;
+    if (rightTab !== "changes" || !sidebarOverlayVisible) return;
+    if (!workspaceCwd) return;
+
+    const intervalId = window.setInterval(() => {
+      if (isScmBusyRef.current) return;
+      if (document.visibilityState === "hidden") return;
+      void loadScmStatusRef.current({ skipBusyState: true });
+    }, scmAutoRefreshSeconds * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [scmAutoRefreshSeconds, rightTab, sidebarOverlayVisible, workspaceCwd]);
 
   async function handleStageAll() {
     const stageAll = window.api?.sourceControl?.stageAll;
@@ -902,6 +925,9 @@ export function EditorPanel(props: EditorPanelProps) {
               onStageAction={handleStageAction}
               onDiscardChange={(item) => handleDiscardChange({ item })}
               sourceHistory={sourceHistory}
+              onRefresh={() => loadScmStatus()}
+              autoRefreshSeconds={scmAutoRefreshSeconds}
+              onAutoRefreshSecondsChange={(seconds) => updateSettings({ patch: { scmAutoRefreshSeconds: seconds } })}
             />
           ) : null}
 
