@@ -76,17 +76,19 @@ describe("task script hooks", () => {
       projectPath: "/tmp/stave-project",
       projectName: "stave-project",
       defaultBranch: "main",
-      recentProjects: [{
-        projectPath: "/tmp/stave-project",
-        projectName: "stave-project",
-        lastOpenedAt: "2026-04-06T00:00:00.000Z",
-        defaultBranch: "main",
-        workspaces: [],
-        activeWorkspaceId: "",
-        workspaceBranchById: {},
-        workspacePathById: {},
-        workspaceDefaultById: {},
-      }],
+      recentProjects: [
+        {
+          projectPath: "/tmp/stave-project",
+          projectName: "stave-project",
+          lastOpenedAt: "2026-04-06T00:00:00.000Z",
+          defaultBranch: "main",
+          workspaces: [],
+          activeWorkspaceId: "",
+          workspaceBranchById: {},
+          workspacePathById: {},
+          workspaceDefaultById: {},
+        },
+      ],
       workspaces: [],
       activeWorkspaceId: "",
       workspaceBranchById: {},
@@ -105,11 +107,13 @@ describe("task script hooks", () => {
     const nextState = useAppStore.getState();
     expect(nextState.tasks).toHaveLength(1);
     expect(hookCalls).toHaveLength(1);
+    const workspacePath =
+      nextState.workspacePathById[nextState.activeWorkspaceId];
     expect(hookCalls[0]).toMatchObject({
       workspaceId: nextState.activeWorkspaceId,
       trigger: "task.created",
       projectPath: "/tmp/stave-project",
-      workspacePath: "/tmp/stave-project/.stave/workspaces/feature__seeded-task",
+      workspacePath,
       workspaceName: "feature/seeded-task",
       branch: "feature/seeded-task",
       taskTitle: "New Task",
@@ -149,7 +153,9 @@ describe("task script hooks", () => {
     useAppStore.setState({
       ...initialState,
       hasHydratedWorkspaces: true,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-04-04T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-04-04T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       projectPath: "/tmp/stave-project",
       workspacePathById: { "ws-main": "/tmp/stave-project" },
@@ -216,21 +222,25 @@ describe("task script hooks", () => {
     useAppStore.setState({
       ...initialState,
       hasHydratedWorkspaces: true,
-      workspaces: [{ id: "ws-main", name: "Main", updatedAt: "2026-04-04T00:00:00.000Z" }],
+      workspaces: [
+        { id: "ws-main", name: "Main", updatedAt: "2026-04-04T00:00:00.000Z" },
+      ],
       activeWorkspaceId: "ws-main",
       activeTaskId: "task-1",
       projectPath: "/tmp/stave-project",
       workspacePathById: { "ws-main": "/tmp/stave-project" },
       workspaceBranchById: { "ws-main": "main" },
       workspaceDefaultById: { "ws-main": true },
-      tasks: [{
-        id: "task-1",
-        title: "Plan Task",
-        provider: "codex",
-        updatedAt: "2026-04-04T00:00:00.000Z",
-        unread: false,
-        archivedAt: null,
-      }],
+      tasks: [
+        {
+          id: "task-1",
+          title: "Plan Task",
+          provider: "codex",
+          updatedAt: "2026-04-04T00:00:00.000Z",
+          unread: false,
+          archivedAt: null,
+        },
+      ],
       messagesByTask: { "task-1": [] },
       promptDraftByTask: {},
       messageCountByTask: { "task-1": 0 },

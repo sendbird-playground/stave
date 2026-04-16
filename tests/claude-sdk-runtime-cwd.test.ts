@@ -2,15 +2,20 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 const queryCalls: Array<{ prompt: string; options: { cwd?: string } }> = [];
 const closeCalls: string[] = [];
+const actualCliPathEnv = await import("../electron/providers/cli-path-env");
+const actualStaveLocalMcpManifest =
+  await import("../electron/main/stave-local-mcp-manifest");
 
 mock.module("@anthropic-ai/claude-agent-sdk", () => ({
   query: (args: { prompt: string; options: { cwd?: string } }) => {
     queryCalls.push(args);
     return {
-      supportedCommands: async () => [{
-        name: "review",
-        description: "Review the current change",
-      }],
+      supportedCommands: async () => [
+        {
+          name: "review",
+          description: "Review the current change",
+        },
+      ],
       close: () => {
         closeCalls.push("close");
       },
@@ -19,18 +24,19 @@ mock.module("@anthropic-ai/claude-agent-sdk", () => ({
 }));
 
 mock.module("../electron/providers/cli-path-env", () => ({
+  ...actualCliPathEnv,
   buildClaudeCliEnv: () => ({
     PATH: "/tmp/bin",
   }),
 }));
 
 mock.module("../electron/main/stave-local-mcp-manifest", () => ({
+  ...actualStaveLocalMcpManifest,
   readPrimaryStaveLocalMcpManifest: async () => null,
-  STAVE_LOCAL_MCP_SERVER_NAME: "stave-local-mcp",
-  toClaudeSdkMcpServerConfig: (value: unknown) => value,
 }));
 
-const { getClaudeCommandCatalog } = await import("../electron/providers/claude-sdk-runtime");
+const { getClaudeCommandCatalog } =
+  await import("../electron/providers/claude-sdk-runtime");
 
 afterEach(() => {
   queryCalls.length = 0;
@@ -50,11 +56,13 @@ describe("getClaudeCommandCatalog", () => {
     expect(result).toMatchObject({
       ok: true,
       supported: true,
-      commands: [{
-        name: "review",
-        command: "/review",
-        description: "Review the current change",
-      }],
+      commands: [
+        {
+          name: "review",
+          command: "/review",
+          description: "Review the current change",
+        },
+      ],
     });
     expect(queryCalls).toHaveLength(1);
     expect(queryCalls[0]?.options.cwd).toBe(process.cwd());
