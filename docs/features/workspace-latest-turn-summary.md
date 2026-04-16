@@ -5,6 +5,10 @@
 - Stave can automatically write a short latest-turn summary to the top of each workspace Information panel.
 - The summary captures both what the user asked for and what the AI actually did, so it is easier to recover context when switching between tasks or workspaces.
 
+![Information panel with latest-turn summary, notes, todos, and linked resources](../screenshots/information-panel.png)
+
+This rendered example shows the Information panel with the latest-turn summary pinned above notes, todos, linked resources, and other workspace memory.
+
 ## When To Use It
 
 - Use it when you bounce between multiple tasks and want a quick reminder of the last completed turn in a workspace.

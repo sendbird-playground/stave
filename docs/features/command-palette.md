@@ -6,6 +6,10 @@
 - Keep slash commands separate as chat-input syntax, not shell-wide actions.
 - Make palette actions extensible through a registry instead of hard-coded dialog state.
 
+![Command Palette with grouped workspace actions](../screenshots/command-palette.png)
+
+This rendered example shows the global command palette listing grouped actions for navigation, tasks, settings, and workspace context changes.
+
 ## UX Model
 
 - `Cmd/Ctrl+Shift+P` opens the global command palette anywhere in the app.

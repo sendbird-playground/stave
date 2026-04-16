@@ -2,6 +2,10 @@
 
 Stave now includes an in-app notification center for background task activity.
 
+![Notifications popover with unread task updates and approval requests](../screenshots/notifications.png)
+
+This rendered example shows the top-bar notification center with unread task completions and approval requests grouped in one popover.
+
 ## What it does
 
 - records task turn completions across workspaces

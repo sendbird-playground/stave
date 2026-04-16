@@ -5,344 +5,267 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Stave is a local-first AI coding workspace for Claude and Codex. Isolated task workspaces, repo-map context, built-in editor and terminal, an information panel, session replay, notifications, skills, and customizable themes."
+      content="Stave is a desktop AI coding workspace for Claude and Codex. Use task workspaces, a built-in editor and terminal, an information panel, notifications, and local-first persistence in one place."
     />
-    <title>Stave — Local-First AI Coding Workspace</title>
-    <link rel="icon" href="./assets/stave-logo-light.svg" type="image/svg+xml" />
+    <title>Stave — Desktop AI Coding Workspace</title>
+    <link rel="icon" href="./assets/stave-logo-dark.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <!-- Background layers -->
-    <div class="bg-grid" aria-hidden="true"></div>
-    <div class="bg-glow bg-glow--top" aria-hidden="true"></div>
-    <div class="bg-glow bg-glow--bottom" aria-hidden="true"></div>
-
-    <!-- Header -->
     <header class="site-header">
-      <div class="header-inner">
+      <div class="site-shell site-header__inner">
         <a class="brand" href="#top" aria-label="Stave home">
-          <img
-            src="./assets/stave-logo-light.svg"
-            alt="Stave"
-            width="28"
-            height="28"
-          />
+          <img src="./assets/stave-logo-dark.svg" alt="Stave" width="28" height="28" />
           <span>Stave</span>
         </a>
-        <nav class="site-nav" aria-label="Main navigation">
-          <a href="#overview">Overview</a>
-          <a href="#workflow">Workflow</a>
+        <nav class="site-nav" aria-label="Primary navigation">
           <a href="#features">Features</a>
+          <a href="#docs">Docs</a>
+          <a href="#install">Install</a>
         </nav>
         <div class="header-actions">
           <a
-            class="btn btn--ghost"
+            class="button button--ghost"
             href="https://github.com/sendbird-playground/stave"
             target="_blank"
             rel="noreferrer"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-            </svg>
             GitHub
           </a>
-          <a
-            class="btn btn--primary"
-            href="https://github.com/sendbird-playground/stave/blob/main/docs/install-guide.md"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Get Started
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M5 12h14"/>
-              <path d="m12 5 7 7-7 7"/>
-            </svg>
+          <a class="button button--primary" href="./docs/install-guide.html">
+            Install Guide
           </a>
         </div>
       </div>
     </header>
 
-    <!-- Main content -->
     <main id="top">
-
-      <!-- Hero -->
       <section class="hero">
-        <div class="hero__content" data-reveal>
-          <div class="badge">
-            <span class="badge__dot"></span>
-            <span class="mono">Local-first AI coding workspace</span>
-          </div>
-          <h1>Claude &amp; Codex,<br/>inside a real dev workspace</h1>
-          <p class="hero__lead">
-            Stave gives Claude and Codex the rest of your workflow too:
-            isolated task workspaces, repo-map context, a built-in editor and
-            terminal, an information panel, session replay, notifications, and
-            local-first persistence.
-          </p>
-          <div class="hero__actions">
-            <a
-              class="btn btn--primary btn--lg"
-              href="https://github.com/sendbird-playground/stave/blob/main/docs/install-guide.md"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Install Guide
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-              </svg>
-            </a>
-            <a
-              class="btn btn--outline btn--lg"
-              href="https://github.com/sendbird-playground/stave"
-              target="_blank"
-              rel="noreferrer"
-            >
-              View on GitHub
-            </a>
-          </div>
-          <ul class="hero__meta">
-            <li><span class="mono">Desktop-first</span></li>
-            <li><span class="mono">Workspaces + worktrees</span></li>
-            <li><span class="mono">Repo-map context</span></li>
-            <li><span class="mono">Info panel</span></li>
-            <li><span class="mono">Local-first</span></li>
-          </ul>
-        </div>
-
-        <figure class="hero__screenshot" data-reveal data-reveal-delay="200">
-          <div class="screenshot-frame">
-            <div class="screenshot-bar">
-              <span></span><span></span><span></span>
+        <div class="site-shell hero__layout">
+          <div class="hero__copy">
+            <p class="eyebrow">Desktop AI coding workspace</p>
+            <h1>Claude and Codex in one real workspace.</h1>
+            <p class="hero__lead">
+              Stave keeps task chat, files, terminal work, workspace memory, and
+              provider setup in one desktop app so you can stay in flow without
+              stitching together side tools by hand.
+            </p>
+            <div class="hero__actions">
+              <a class="button button--primary" href="./docs/install-guide.html">
+                Open Install Guide
+              </a>
+              <a class="button button--secondary" href="./docs/">
+                Browse Docs
+              </a>
             </div>
-            <img
-              src="./assets/stave-app.png"
-              alt="Stave interface showing task tabs, chat panel, code editor, and terminal in a unified workspace"
-              loading="eager"
-            />
+            <ul class="hero__meta">
+              <li>Task-based workspaces and worktrees</li>
+              <li>Editor, docked terminal, and command palette</li>
+              <li>Information panel, notifications, and local-first state</li>
+            </ul>
           </div>
-          <div class="screenshot-glow" aria-hidden="true"></div>
-        </figure>
+
+          <figure class="hero__media">
+            <div class="hero__frame">
+              <div class="hero__frame-bar">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <img
+                src="./assets/stave-app.png"
+                alt="Stave desktop workspace showing chat, editor, and workspace side panels"
+                loading="eager"
+              />
+            </div>
+          </figure>
+        </div>
       </section>
 
-      <!-- Overview -->
-      <section id="overview" class="section">
-        <div class="section__header" data-reveal>
-          <p class="label mono">What is Stave</p>
-          <h2>An AI workspace, not just an AI chat</h2>
-          <p class="section__desc">
-            Chat, code, task context, and operational visibility stay in one
-            place so you can keep momentum without juggling terminals, browser
-            tabs, or branch state by hand.
-          </p>
-        </div>
-
-        <div class="bento" data-reveal data-reveal-delay="100">
-          <article class="bento__card bento__card--wide">
-            <div class="bento__icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-            </div>
-            <h3>Task-oriented workspaces</h3>
+      <section class="section section--tight">
+        <div class="site-shell value-grid">
+          <article class="value-card">
+            <p class="value-card__label">Task scope</p>
+            <h2>Keep each change in its own workspace.</h2>
             <p>
-              Each task keeps its own chat history, branch context, and optional
-              git worktree. Import existing worktrees or spin up isolated
-              experiments without context bleed.
+              Stave ties tasks to workspaces, branches, and optional worktrees so
+              ongoing AI work stays isolated and reviewable.
             </p>
           </article>
-          <article class="bento__card">
-            <div class="bento__icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 22h2a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="M14 2v5h5"/><circle cx="8" cy="16" r="6"/><path d="M9.5 17.5 8 16.25V14"/></svg>
-            </div>
-            <h3>Information panel</h3>
+          <article class="value-card">
+            <p class="value-card__label">Context</p>
+            <h2>Keep notes, links, and PR status beside the task.</h2>
             <p>
-              Pin Jira, Figma, Confluence, and Slack links beside notes, todos,
-              PRs, and structured fields so task context stays attached to the
-              workspace.
+              The information panel stores durable task context such as todos,
+              Slack threads, Figma links, Confluence pages, and latest-turn summaries.
             </p>
           </article>
-          <article class="bento__card">
-            <div class="bento__icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </div>
-            <h3>Replay + notifications</h3>
+          <article class="value-card">
+            <p class="value-card__label">Workflow</p>
+            <h2>Keep chat, code, and shell work in one window.</h2>
             <p>
-              Inspect recent turns, request snapshots, and approval events in
-              Session Replay, then jump back from durable notifications when
-              something needs attention.
+              Use the editor, docked terminal, notifications, and command palette
+              without hopping between separate apps.
             </p>
           </article>
         </div>
       </section>
 
-      <!-- Workflow -->
-      <section id="workflow" class="section">
-        <div class="section__header" data-reveal>
-          <p class="label mono">How it works</p>
-          <h2>From context to iteration</h2>
-        </div>
-
-        <ol class="steps" data-reveal data-reveal-delay="100">
-          <li class="step">
-            <div class="step__num mono">01</div>
-            <div class="step__body">
-              <h3>Open a project</h3>
-              <p>
-                Stave keeps project, workspace, and task state together and can
-                import existing branch-backed worktrees when you start.
-              </p>
-            </div>
-          </li>
-          <li class="step">
-            <div class="step__num mono">02</div>
-            <div class="step__body">
-              <h3>Attach context</h3>
-              <p>
-                Drop files and images, let repo-map prewarm codebase context,
-                and pin Jira, Figma, Confluence, or Slack URLs in the workspace
-                information panel.
-              </p>
-            </div>
-          </li>
-          <li class="step">
-            <div class="step__num mono">03</div>
-            <div class="step__body">
-              <h3>Run Claude or Codex</h3>
-              <p>
-                Chat, edit, and run terminal commands in one layout. Use
-                approvals, plans, and follow-up turns without leaving the
-                workspace.
-              </p>
-            </div>
-          </li>
-          <li class="step">
-            <div class="step__num mono">04</div>
-            <div class="step__body">
-              <h3>Replay and continue</h3>
-              <p>
-                Use Session Replay and notifications to inspect what happened,
-                jump back into the right task, and keep the loop moving.
-              </p>
-            </div>
-          </li>
-        </ol>
-      </section>
-
-      <!-- Features -->
-      <section id="features" class="section">
-        <div class="section__header" data-reveal>
-          <p class="label mono">Core features</p>
-          <h2>Built for real task flow, not just chat</h2>
-        </div>
-
-        <div class="features-grid" data-reveal data-reveal-delay="100">
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>
-              Dual-provider runtime
-            </h3>
-            <p>Run Claude and Codex in the same project context. Switch models per task without losing state.</p>
-          </article>
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6m8.66-14.5-5.2 3m-6.92 4-5.2 3m14.84 0-5.2-3M3.34 7.5l5.2 3"/></svg>
-              Task workspaces
-            </h3>
-            <p>Keep task history isolated and switch across workspaces without losing branch or provider context.</p>
-          </article>
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 3-3 3 3"/><path d="M7 3v11"/><path d="m20 18-3 3-3-3"/><path d="M17 21V10"/><path d="M3 14c0-1.657 1.343-3 3-3h4"/><path d="M21 10c0 1.657-1.343 3-3 3h-4"/></svg>
-              Repo-map context
-            </h3>
-            <p>Prewarm repo awareness in the background so the first turn starts with codebase context instead of manual copy-paste.</p>
-          </article>
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l1.92-1.92a5 5 0 0 0-7.07-7.07L11.3 5.64"/><path d="M14 11a5 5 0 0 0-7.54-.54L4.54 12.38a5 5 0 0 0 7.07 7.07l1.09-1.09"/></svg>
-              Information panel
-            </h3>
-            <p>Store Jira, Figma, Confluence, and Slack URLs next to PRs, notes, todos, saved plans, and custom fields.</p>
-          </article>
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>
-              Monaco + terminal
-            </h3>
-            <p>Edit code with TypeScript IntelliSense, run commands, and inspect source control from the same window.</p>
-          </article>
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v12"/><path d="M17.196 9A3 3 0 1 0 12 6.999 3 3 0 1 0 6.804 9"/><path d="M6 9h12"/><path d="M6 9v7a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9"/></svg>
-              Skills system
-            </h3>
-            <p>Use <span class="mono">$skill-name</span> in the composer to trigger reusable workflows across global, user, and workspace scopes.</p>
-          </article>
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Session Replay + notifications
-            </h3>
-            <p>Inspect recent turns, request snapshots, and approval events, then jump back from durable read/unread notifications.</p>
-          </article>
-          <article class="feature">
-            <h3>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3"/><path d="M18.36 5.64 16.24 7.76"/><path d="M21 12h-3"/><path d="m18.36 18.36-2.12-2.12"/><path d="M12 21v-3"/><path d="m5.64 18.36 2.12-2.12"/><path d="M3 12h3"/><path d="m5.64 5.64 2.12 2.12"/><circle cx="12" cy="12" r="3"/></svg>
-              Themes + local-first
-            </h3>
-            <p>Built-in light/dark modes, curated presets, and installable custom themes, with SQLite-backed persistence that stays on your machine.</p>
-          </article>
-        </div>
-      </section>
-
-      <!-- CTA -->
-      <section class="section cta" data-reveal>
-        <div class="cta__inner">
-          <h2>Looking for early users</h2>
+      <section class="section" id="features">
+        <div class="site-shell section-heading">
+          <p class="eyebrow">Features</p>
+          <h2>Built for day-to-day AI-assisted development.</h2>
           <p>
-            If you try Stave, I'd love feedback on rough edges, missing
-            workflows, bugs, or anything that breaks the flow.
+            Stave focuses on the pieces that tend to break flow when they live in
+            separate tools.
           </p>
-          <div class="cta__actions">
-            <a
-              class="btn btn--primary btn--lg"
-              href="https://github.com/sendbird-playground/stave/blob/main/docs/install-guide.md"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open Install Guide
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-              </svg>
+        </div>
+        <div class="site-shell feature-grid">
+          <article class="feature-card">
+            <h3>Workspace-aware tasks</h3>
+            <p>
+              Run Claude and Codex per task, keep branch context attached, and
+              continue work in fresh workspaces when a branch is merged.
+            </p>
+          </article>
+          <article class="feature-card">
+            <h3>Integrated editor and terminal</h3>
+            <p>
+              Open files, inspect diffs, use the docked terminal, or switch into
+              a full-panel CLI session without leaving the app.
+            </p>
+          </article>
+          <article class="feature-card">
+            <h3>Command palette and shortcuts</h3>
+            <p>
+              Jump to files, open settings, toggle panels, and drive common
+              workspace actions through one global command surface.
+            </p>
+          </article>
+          <article class="feature-card">
+            <h3>Information panel and notifications</h3>
+            <p>
+              Track summaries, notes, todos, PRs, and approval requests with
+              durable local state and lightweight alerts.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="docs">
+        <div class="site-shell docs-callout">
+          <div class="docs-callout__copy">
+            <p class="eyebrow">Docs</p>
+            <h2>Start with install and workflow, then go deeper only when needed.</h2>
+            <p>
+              The docs now mirror how people actually use Stave: install first,
+              then core workflows, then feature guides, architecture, and contributor
+              reference.
+            </p>
+            <div class="docs-callout__actions">
+              <a class="button button--primary" href="./docs/">
+                Open Docs
+              </a>
+              <a class="button button--secondary" href="./docs/install-guide.html">
+                Install Guide
+              </a>
+            </div>
+          </div>
+          <div class="docs-links">
+            <a class="docs-link-card" href="./docs/install-guide.html">
+              <span class="docs-link-card__title">Install Guide</span>
+              <span class="docs-link-card__body">
+                Install the macOS app, update it safely, and get provider auth working.
+              </span>
             </a>
-            <a
-              class="btn btn--outline btn--lg"
-              href="https://github.com/sendbird-playground/stave"
-              target="_blank"
-              rel="noreferrer"
-            >
-              View GitHub Repo
+            <a class="docs-link-card" href="./docs/features/integrated-terminal.html">
+              <span class="docs-link-card__title">Integrated Terminal</span>
+              <span class="docs-link-card__body">
+                Learn the docked terminal and full-panel CLI session workflow.
+              </span>
+            </a>
+            <a class="docs-link-card" href="./docs/features/command-palette.html">
+              <span class="docs-link-card__title">Command Palette</span>
+              <span class="docs-link-card__body">
+                Find the main shortcuts, action groups, and extensibility points.
+              </span>
+            </a>
+            <a class="docs-link-card" href="./docs/features/local-mcp-user-guide.html">
+              <span class="docs-link-card__title">Local MCP User Guide</span>
+              <span class="docs-link-card__body">
+                Connect same-machine automation workflows to the running desktop app.
+              </span>
             </a>
           </div>
+        </div>
+      </section>
+
+      <section class="section" id="install">
+        <div class="site-shell section-heading">
+          <p class="eyebrow">Install</p>
+          <h2>Get to a working desktop setup quickly.</h2>
+        </div>
+        <div class="site-shell install-grid">
+          <article class="install-step">
+            <span class="install-step__number">01</span>
+            <h3>Install the app on macOS</h3>
+            <p>
+              Use the packaged install flow from GitHub Releases, then launch Stave
+              from `Applications`.
+            </p>
+          </article>
+          <article class="install-step">
+            <span class="install-step__number">02</span>
+            <h3>Authenticate Claude or Codex</h3>
+            <p>
+              Sign in with the CLIs you want Stave to drive, then confirm provider
+              settings in the app.
+            </p>
+          </article>
+          <article class="install-step">
+            <span class="install-step__number">03</span>
+            <h3>Open a repo and start a task</h3>
+            <p>
+              Create or import a workspace, attach context, and use the docs as a
+              quick reference when you hit a new surface.
+            </p>
+          </article>
         </div>
       </section>
     </main>
 
-    <!-- Footer -->
     <footer class="site-footer">
-      <div class="footer-inner">
-        <div class="footer-brand">
-          <img src="./assets/stave-logo-light.svg" alt="" width="20" height="20" />
-          <span class="mono">Stave</span>
+      <div class="site-shell site-footer__inner">
+        <div>
+          <a class="brand brand--footer" href="#top">
+            <img src="./assets/stave-logo-dark.svg" alt="Stave" width="24" height="24" />
+            <span>Stave</span>
+          </a>
+          <p class="site-footer__copy">
+            Local-first AI coding workspace for Claude and Codex.
+          </p>
         </div>
-        <p>&copy; <span id="year"></span> Stave. Agentic coding workspace for focused builders.</p>
+        <div class="site-footer__links">
+          <a href="./docs/">Docs</a>
+          <a href="./docs/install-guide.html">Install</a>
+          <a
+            href="https://github.com/sendbird-playground/stave"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub
+          </a>
+        </div>
+        <p class="site-footer__meta">© <span id="year"></span> Stave</p>
       </div>
     </footer>
 
-    <script src="./app.js" defer></script>
+    <script src="./app.js"></script>
   </body>
 </html>

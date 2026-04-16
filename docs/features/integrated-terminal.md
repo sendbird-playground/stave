@@ -8,9 +8,9 @@
 - You can open a terminal for the workspace root or for a specific Explorer path without leaving Stave.
 - Live PTY sessions now run in an isolated host-service child process instead of sharing the Electron main-process event loop.
 
-![Stave workspace shell overview](../screenshots/stave-app.png)
+![Integrated terminal dock in the Stave workspace shell](../screenshots/integrated-terminal.png)
 
-The integrated terminal lives inside this same workspace shell: docked terminals stay below the main content area, while CLI sessions take over the center panel.
+This rendered example shows the docked terminal inside the main Stave workspace shell. Docked terminals stay below the main content area, while CLI sessions take over the center panel.
 
 ## When To Use It
 

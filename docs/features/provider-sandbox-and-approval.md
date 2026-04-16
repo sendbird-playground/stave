@@ -6,6 +6,14 @@
 - Use this guide to choose the right combination for review-only work, normal edits, planning, or higher-autonomy automation.
 - While a turn is running, the composer can stage one follow-up prompt per task and auto-send it when that task becomes idle again.
 
+![Settings dialog showing Claude runtime controls such as permission mode, sandbox, and effort](../screenshots/provider-controls-claude.png)
+
+This rendered example shows the Claude runtime controls tab with the preset selector, permission mode, sandbox toggles, and thinking controls.
+
+![Settings dialog showing Codex runtime controls such as file access, approvals, and web search](../screenshots/provider-controls-codex.png)
+
+This rendered example shows the Codex runtime controls tab with file access, approval policy, network access, and web search settings.
+
 ## When To Use It
 
 - You want to limit whether a turn can edit files, use the network, or stop for approval.

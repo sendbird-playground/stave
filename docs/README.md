@@ -11,17 +11,18 @@ The screenshot above shows the main Stave desktop workspace with the top bar, ch
 ## Start Here
 
 - [Install Guide](install-guide.md)
-- [README](../README.md)
 - [Integrated Terminal](features/integrated-terminal.md)
 - [Command Palette](features/command-palette.md)
-- [Attachments](features/attachments.md)
+- [Notifications](features/notifications.md)
+- [Workspace latest turn summary](features/workspace-latest-turn-summary.md)
+- [Skill selector](features/skill-selector.md)
+- [Workspace Scripts](features/workspace-scripts.md)
 - [Provider sandbox and approval guide](features/provider-sandbox-and-approval.md)
+- [Attachments](features/attachments.md)
+- [README](../README.md)
 
 ## Most Used Guides
 
-- [Skill selector](features/skill-selector.md)
-- [Workspace Scripts](features/workspace-scripts.md)
-- [Notifications](features/notifications.md)
 - [Project Instructions](features/project-instructions.md)
 - [Local MCP user guide](features/local-mcp-user-guide.md)
 - [macOS Folder Access Prompts](features/macos-folder-access-prompts.md)

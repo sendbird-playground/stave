@@ -1,4 +1,4 @@
-name: Deploy Landing Page
+name: Deploy Pages Site
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - landing/**
+      - docs/**
+      - package.json
+      - bun.lock
+      - scripts/build-pages-site.mjs
       - .github/workflows/github-pages-landing.yml
   workflow_dispatch:
 
@@ -28,10 +32,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Upload static landing artifact
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build Pages site
+        run: bun run build:pages
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: landing
+          path: .pages-dist
 
       - name: Deploy to GitHub Pages
         id: deployment

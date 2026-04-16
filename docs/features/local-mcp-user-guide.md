@@ -2,6 +2,10 @@
 
 This guide explains how a packaged Stave desktop user can expose the built-in local MCP server to same-machine automation tools.
 
+![Settings dialog showing the Local MCP server and request log cards](../screenshots/mcp-settings.png)
+
+This rendered example shows the `Settings > MCP` view with the Local MCP Server card, the request log, and Codex native runtime status in one place.
+
 ## Who This Is For
 
 Use this when:

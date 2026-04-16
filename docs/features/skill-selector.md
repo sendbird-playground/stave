@@ -6,6 +6,10 @@
 - Let users type `$` in the prompt composer to search and insert skill tokens.
 - Resolve `$skill-name` selections into provider-appropriate dispatch at send time.
 
+![Skills panel showing detected workspace and shared skills](../screenshots/skills-panel.png)
+
+This rendered example shows the right-rail Skills panel with installed skills grouped from shared and workspace roots.
+
 ## Discovery Model
 
 Stave reads three scope layers:

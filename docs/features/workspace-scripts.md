@@ -6,6 +6,10 @@
 - The Scripts Manager now lives under `Settings > Projects`, where it provides a lightweight GUI for editing shared `actions`, `services`, and `hooks` in `.stave/scripts.json` without exposing a raw JSON editor.
 - Script execution now runs through the isolated desktop host-service child process, which keeps long-lived output and hook churn off the Electron main-process event loop.
 
+![Scripts runtime panel showing actions, services, and hook wiring](../screenshots/scripts-panel.png)
+
+This rendered example shows the right-rail Scripts runtime with a running local docs preview service, a completed bootstrap action, and hook wiring for the current workspace.
+
 ## When To Use It
 
 - Use this when a workspace needs repeatable setup commands, dev services, or task/turn/PR lifecycle scripts.

@@ -5,6 +5,10 @@
 - `Settings → Projects` now includes a per-project `Project Instructions` field.
 - Stave prepends this text to every Claude and Codex turn for the selected project so repository-specific rules do not need to be repeated in each task.
 
+![Settings dialog showing the Project Instructions field for the current repository](../screenshots/project-instructions.png)
+
+This rendered example shows the `Settings → Projects` section with repository-level instructions, workspace bootstrap settings, and project defaults in one place.
+
 ## When To Use It
 
 - Use it when one repository has durable AI guidance such as tooling preferences, review rules, or architectural constraints.
@@ -57,7 +61,7 @@
 
 ```json
 {
-  "projectPath": "/Users/example/workspace/my-repo",
+  "projectPath": "<workspace>/my-repo",
   "projectBasePrompt": "Prefer bun over npm. Keep docs in sync with user-facing changes."
 }
 ```

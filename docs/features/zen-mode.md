@@ -5,6 +5,10 @@
 - Zen mode hides most surrounding workspace chrome so the window can focus on the current chat, prompt composer, and final results.
 - It also suppresses assistant thinking and execution-trace detail, switches the chat transcript and composer to a monospace treatment, and leaves only a minimal project list in the left rail.
 
+![Settings dialog showing the Workspace Mode control with Stave and Zen options](../screenshots/workspace-mode.png)
+
+This rendered example shows the `Settings → General` workspace mode control where users can keep the full Stave shell or stay in Zen by default.
+
 ## When To Use It
 
 - Use it when you want to read or write in the current task without sidebar, editor, tabs, terminal, or right-rail noise.

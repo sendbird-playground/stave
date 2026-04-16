@@ -2,6 +2,10 @@
 
 Stave supports two editor intelligence paths today.
 
+![Settings dialog showing the Project Language Servers card with TypeScript and Python commands](../screenshots/language-intelligence.png)
+
+This rendered example shows the `Settings → Editor` section with the `Project Language Servers` card and command overrides for TypeScript and Python LSP runtimes.
+
 ## Built-in Monaco support
 
 TypeScript and JavaScript use Monaco's built-in TypeScript worker plus workspace-loaded `tsconfig.json`, source files, and type libraries.
