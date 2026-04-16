@@ -13,6 +13,8 @@ import type { AppSettings } from "@/store/app.store";
 
 const DEFAULT_CODEX_APPROVAL_POLICY = "untrusted";
 const MAX_CLAUDE_TASK_BUDGET_TOKENS = 1_000_000;
+const CLAUDE_ADVISOR_SOURCE_SONNET_MODEL = "claude-sonnet-4-6";
+const CLAUDE_ADVISOR_SOURCE_OPUS_MODEL = "claude-opus-4-6";
 const CLAUDE_SETTING_SOURCE_ORDER = [
   "project",
   "local",
@@ -107,6 +109,37 @@ export function normalizeClaudeSettingSources(args: {
   );
 }
 
+function resolveClaudeAdvisorSourceFamily(args: {
+  sourceModel: string;
+}): "haiku" | "sonnet" | "opus" {
+  const normalized = args.sourceModel.trim().toLowerCase();
+  if (normalized.includes("haiku")) {
+    return "haiku";
+  }
+  if (normalized.includes("sonnet")) {
+    return "sonnet";
+  }
+  if (normalized.includes("opus")) {
+    return "opus";
+  }
+  return "sonnet";
+}
+
+function mapClaudeAdvisorModelFromSource(args: {
+  sourceModel: string;
+}): string {
+  const sourceFamily = resolveClaudeAdvisorSourceFamily({
+    sourceModel: args.sourceModel,
+  });
+  if (sourceFamily === "haiku") {
+    return CLAUDE_ADVISOR_SOURCE_SONNET_MODEL;
+  }
+  if (sourceFamily === "sonnet") {
+    return CLAUDE_ADVISOR_SOURCE_OPUS_MODEL;
+  }
+  return CLAUDE_ADVISOR_SOURCE_OPUS_MODEL;
+}
+
 export function applyProjectBasePromptToRuntimeOptions(args: {
   runtimeOptions: ProviderRuntimeOptions;
   projectBasePrompt?: string | null;
@@ -135,7 +168,12 @@ export function buildProviderRuntimeOptions(args: {
   const claudeTaskBudgetTokens = normalizeClaudeTaskBudgetTokens({
     value: settings.claudeTaskBudgetTokens,
   });
-  const claudeAdvisorModel = settings.claudeAdvisorModel.trim();
+  const claudeAdvisorModelSetting = settings.claudeAdvisorModel.trim();
+  const claudeAdvisorModel = claudeAdvisorModelSetting
+    ? mapClaudeAdvisorModelFromSource({
+        sourceModel: claudeAdvisorModelSetting,
+      })
+    : undefined;
 
   return {
     model: args.model,
