@@ -504,7 +504,7 @@ async function runServiceScript(args: {
       });
   const sessionId = randomUUID();
 
-  createProcessEntry({
+  const entry = createProcessEntry({
     workspaceId: args.workspaceId,
     scriptId: args.scriptEntry.id,
     scriptKind: args.scriptEntry.kind,
