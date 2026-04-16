@@ -822,6 +822,8 @@ export interface AppSettings {
   pythonLspCommand: string;
   typescriptLspCommand: string;
   diffViewMode: "unified" | "split";
+  /** Auto-refresh interval (seconds) for the Source Control panel. 0 = disabled. */
+  scmAutoRefreshSeconds: number;
   confirmBeforeClose: boolean;
   notificationSoundEnabled: boolean;
   notificationSoundVolume: number;
@@ -1631,6 +1633,7 @@ const defaultSettings: AppSettings = {
   pythonLspCommand: "",
   typescriptLspCommand: "",
   diffViewMode: "unified",
+  scmAutoRefreshSeconds: 0,
   confirmBeforeClose: true,
   notificationSoundEnabled: true,
   notificationSoundVolume: DEFAULT_NOTIFICATION_SOUND_VOLUME,
