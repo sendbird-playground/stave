@@ -47,16 +47,22 @@ describe("PromptInput queue mode", () => {
       import("@/components/ai-elements/prompt-input"),
       import("@/components/ui"),
     ]);
-    const html = renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PromptInput, {
-      value: "",
-      selectedModel: MODEL_OPTION,
-      modelOptions: [MODEL_OPTION],
-      attachedFilePaths: [],
-      onValueChange: () => {},
-      onModelSelect: () => {},
-      onAttachFilesChange: () => {},
-      onSubmit: () => {},
-    })));
+    const html = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(PromptInput, {
+          value: "",
+          selectedModel: MODEL_OPTION,
+          modelOptions: [MODEL_OPTION],
+          attachedFilePaths: [],
+          onValueChange: () => {},
+          onModelSelect: () => {},
+          onAttachFilesChange: () => {},
+          onSubmit: () => {},
+        }),
+      ),
+    );
 
     expect(html).toContain("Focus");
     expect(html).toContain("pointer-events-none absolute right-0 top-0");
@@ -70,19 +76,61 @@ describe("PromptInput queue mode", () => {
       import("@/components/ai-elements/prompt-input"),
       import("@/components/ui"),
     ]);
-    const html = renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PromptInput, {
-      value: "Draft plan request",
-      selectedModel: MODEL_OPTION,
-      modelOptions: [MODEL_OPTION],
-      attachedFilePaths: [],
-      onValueChange: () => {},
-      onModelSelect: () => {},
-      onAttachFilesChange: () => {},
-      onSubmit: () => {},
-    })));
+    const html = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(PromptInput, {
+          value: "Draft plan request",
+          selectedModel: MODEL_OPTION,
+          modelOptions: [MODEL_OPTION],
+          attachedFilePaths: [],
+          onValueChange: () => {},
+          onModelSelect: () => {},
+          onAttachFilesChange: () => {},
+          onSubmit: () => {},
+        }),
+      ),
+    );
 
     expect(html).not.toContain("Focus");
     expect(html).not.toContain("pointer-events-none absolute right-0 top-0");
+  });
+
+  test("renders the cross-review CTA before attach with visible text", async () => {
+    setWindowContext();
+    const [{ PromptInput }, { TooltipProvider }] = await Promise.all([
+      import("@/components/ai-elements/prompt-input"),
+      import("@/components/ui"),
+    ]);
+    const html = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(PromptInput, {
+          value: "",
+          selectedModel: MODEL_OPTION,
+          modelOptions: [MODEL_OPTION],
+          attachedFilePaths: [],
+          crossReviewProvider: "claude-code" as const,
+          onValueChange: () => {},
+          onModelSelect: () => {},
+          onAttachFilesChange: () => {},
+          onCrossReview: () => {},
+          onSubmit: () => {},
+        }),
+      ),
+    );
+
+    expect(html).toContain('aria-label="Cross review with Claude"');
+    expect(html).toContain(">Review</span>");
+    expect(html).toContain(">Claude</span>");
+    expect(html).toContain("border-primary/35");
+    expect(html).toContain("bg-primary/10");
+    expect(html).toContain("text-primary");
+    expect(html.indexOf('aria-label="Cross review with Claude"')).toBeLessThan(
+      html.indexOf('aria-label="Attach files"'),
+    );
   });
 
   test("renders queued-next-turn preview and queue action during an active turn", async () => {
@@ -91,40 +139,50 @@ describe("PromptInput queue mode", () => {
       import("@/components/ai-elements/prompt-input"),
       import("@/components/ui"),
     ]);
-    const html = renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PromptInput, {
-      value: "Follow up after this finishes",
-      isTurnActive: true,
-      submitMode: "queue-next" as const,
-      queuedNextTurn: {
-        queuedAt: "2026-04-09T00:00:00.000Z",
-        sourceTurnId: "turn-1",
-        content: "Follow up after this finishes",
-      },
-      selectedModel: MODEL_OPTION,
-      modelOptions: [MODEL_OPTION],
-      attachedFilePaths: ["README.md"],
-      attachments: [{
-        kind: "image" as const,
-        id: "image-1",
-        dataUrl: "data:image/png;base64,abc",
-        label: "diagram.png",
-      }],
-      onValueChange: () => {},
-      onModelSelect: () => {},
-      onAttachFilesChange: () => {},
-      onSubmit: () => {},
-      onClearQueuedNextTurn: () => {},
-      onAbort: () => {},
-    })));
+    const html = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(PromptInput, {
+          value: "Follow up after this finishes",
+          isTurnActive: true,
+          submitMode: "queue-next" as const,
+          queuedNextTurn: {
+            queuedAt: "2026-04-09T00:00:00.000Z",
+            sourceTurnId: "turn-1",
+            content: "Follow up after this finishes",
+          },
+          selectedModel: MODEL_OPTION,
+          modelOptions: [MODEL_OPTION],
+          attachedFilePaths: ["README.md"],
+          attachments: [
+            {
+              kind: "image" as const,
+              id: "image-1",
+              dataUrl: "data:image/png;base64,abc",
+              label: "diagram.png",
+            },
+          ],
+          onValueChange: () => {},
+          onModelSelect: () => {},
+          onAttachFilesChange: () => {},
+          onSubmit: () => {},
+          onClearQueuedNextTurn: () => {},
+          onAbort: () => {},
+        }),
+      ),
+    );
 
     expect(html).toContain("Queued next");
     expect(html).toContain("Follow up after this finishes");
-    expect(html).toContain("Sends automatically when the current response finishes.");
+    expect(html).toContain(
+      "Sends automatically when the current response finishes.",
+    );
     expect(html).toContain("1 file");
     expect(html).toContain("1 image");
     expect(html).toContain("Update queued");
     expect(html).toContain("Clear");
-    expect(html).toContain("aria-label=\"Abort\"");
+    expect(html).toContain('aria-label="Abort"');
     expect(html).toContain("dark:bg-transparent");
     expect(html).not.toContain("absolute right-4 top-4");
     expect(html).not.toContain("README.md");
