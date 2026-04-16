@@ -98,6 +98,7 @@ import {
   normalizeThinkingPhraseAnimationStyle,
 } from "@/lib/thinking-phrases";
 import type { ResolvedWorkspaceScriptsConfig } from "@/lib/workspace-scripts/types";
+import { ChangelogSection } from "./settings-dialog-changelog-section";
 import { DeveloperSection } from "./settings-dialog-developer-section";
 import { CodexSection } from "./settings-dialog-codex-section";
 import { McpSection } from "./settings-dialog-mcp-section";
@@ -2780,6 +2781,8 @@ export function SettingsDialogSectionContent(args: {
       return <DeveloperSection />;
     case "lens":
       return <LensSection />;
+    case "changelog":
+      return <ChangelogSection />;
     default:
       return null;
   }
