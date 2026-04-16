@@ -231,7 +231,6 @@ function getPaletteItemSelector(index: number) {
 function CrossReviewPopover(args: {
   provider: "claude-code" | "codex";
   disabled: boolean;
-  minimal: boolean;
   onSubmit: (submitArgs: { instructions?: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -253,20 +252,16 @@ function CrossReviewPopover(args: {
           <PopoverAnchor asChild>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               disabled={args.disabled}
               onClick={() => setOpen((prev) => !prev)}
-              className={cn(
-                "h-8 gap-2 border-primary/35 bg-primary/10 px-3 text-primary shadow-sm hover:border-primary/45 hover:bg-primary/15 hover:text-primary dark:bg-primary/15 dark:hover:bg-primary/20",
-                args.minimal &&
-                  "bg-background/60 supports-backdrop-filter:backdrop-blur-md",
-              )}
+              className="h-8 gap-2 px-3 text-muted-foreground hover:bg-secondary/30 hover:text-foreground"
               aria-label={crossReviewLabel}
             >
               <GitPullRequest className="size-3.5" />
               <span>Review</span>
-              <span className="rounded-full bg-primary/12 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.12em] text-primary/80">
+              <span className="rounded-full bg-secondary/20 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.12em] text-secondary-foreground/70">
                 {providerLabel}
               </span>
             </Button>
@@ -1866,7 +1861,6 @@ export function PromptInput(args: PromptInputProps) {
               <CrossReviewPopover
                 provider={crossReviewProvider}
                 disabled={interactionsDisabled}
-                minimal={minimal}
                 onSubmit={(submitArgs) => onCrossReview?.(submitArgs)}
               />
             ) : null}
