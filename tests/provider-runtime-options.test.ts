@@ -121,21 +121,55 @@ describe("buildProviderRuntimeOptions", () => {
     });
   });
 
-  test("forwards the Claude advisor model override when enabled", () => {
-    expect(
-      buildProviderRuntimeOptions({
-        provider: "claude-code",
+  test.each([
+    {
+      sourceModel: "claude-haiku-4-5",
+      expectedAdvisorModel: "claude-sonnet-4-6",
+    },
+    {
+      sourceModel: "claude-sonnet-4-6",
+      expectedAdvisorModel: "claude-opus-4-6",
+    },
+    {
+      sourceModel: "claude-opus-4-6",
+      expectedAdvisorModel: "claude-opus-4-6",
+    },
+    {
+      sourceModel: "claude-sonnet-4-6[1m]",
+      expectedAdvisorModel: "claude-opus-4-6",
+    },
+  ])(
+    "maps advisor source model `$sourceModel` to `$expectedAdvisorModel`",
+    ({ sourceModel, expectedAdvisorModel }) => {
+      expect(
+        buildProviderRuntimeOptions({
+          provider: "claude-code",
+          model: "claude-sonnet-4-6",
+          settings: {
+            ...settings,
+            claudeAdvisorModel: sourceModel,
+          },
+          providerSession: null,
+        }),
+      ).toMatchObject({
         model: "claude-sonnet-4-6",
-        settings: {
-          ...settings,
-          claudeAdvisorModel: "claude-opus-4-6",
-        },
-        providerSession: null,
-      }),
-    ).toMatchObject({
+        claudeAdvisorModel: expectedAdvisorModel,
+      });
+    },
+  );
+
+  test("omits advisorModel when advisor forwarding is disabled", () => {
+    const runtimeOptions = buildProviderRuntimeOptions({
+      provider: "claude-code",
       model: "claude-sonnet-4-6",
-      claudeAdvisorModel: "claude-opus-4-6",
+      settings: {
+        ...settings,
+        claudeAdvisorModel: "",
+      },
+      providerSession: null,
     });
+
+    expect(runtimeOptions).not.toHaveProperty("claudeAdvisorModel");
   });
 
   test("forwards both resume ids when Stave routes across providers", () => {

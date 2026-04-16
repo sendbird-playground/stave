@@ -75,13 +75,12 @@ import {
 } from "./settings-dialog-developer-section";
 
 const STAVE_AUTO_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
-const CLAUDE_ADVISOR_MODEL_OPTIONS = buildModelSelectorOptions({
+const CLAUDE_ADVISOR_SOURCE_MODEL_OPTIONS = buildModelSelectorOptions({
   providerIds: ["claude-code"],
+  modelsByProvider: {
+    "claude-code": ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-6"],
+  },
 });
-const CLAUDE_ADVISOR_RECOMMENDED_MODEL_OPTIONS =
-  buildRecommendedModelSelectorOptions({
-    options: CLAUDE_ADVISOR_MODEL_OPTIONS,
-  });
 
 const STAVE_AUTO_BOOLEAN_OVERRIDE_OPTIONS = [
   { value: "on", label: "on" },
@@ -431,6 +430,23 @@ function buildGuideExamples<T extends string>(
       label: option.label,
       description: option.example ?? "",
     }));
+}
+
+function resolveClaudeAdvisorSourceModel(args: {
+  model: string;
+  fallback: string;
+}) {
+  const normalized = args.model.trim().toLowerCase();
+  if (normalized.includes("haiku")) {
+    return "claude-haiku-4-5";
+  }
+  if (normalized.includes("sonnet")) {
+    return "claude-sonnet-4-6";
+  }
+  if (normalized.includes("opus")) {
+    return "claude-opus-4-6";
+  }
+  return args.fallback;
 }
 
 function findExplainedOption<T extends string>(
@@ -1118,6 +1134,7 @@ function StaveAutoCard() {
 
 export function ProvidersSection() {
   const [
+    modelClaude,
     claudePermissionMode,
     claudeAllowDangerouslySkipPermissions,
     claudeSandboxEnabled,
@@ -1141,6 +1158,7 @@ export function ProvidersSection() {
     useShallow(
       (state) =>
         [
+          state.settings.modelClaude,
           state.settings.claudePermissionMode,
           state.settings.claudeAllowDangerouslySkipPermissions,
           state.settings.claudeSandboxEnabled,
@@ -1193,9 +1211,15 @@ export function ProvidersSection() {
   const defaultClaudeAdvisorModel = getDefaultModelForProvider({
     providerId: "claude-code",
   });
+  const defaultClaudeAdvisorSourceModel = resolveClaudeAdvisorSourceModel({
+    model: defaultClaudeAdvisorModel,
+    fallback: "claude-sonnet-4-6",
+  });
   const claudeAdvisorModelEnabled = claudeAdvisorModel.trim().length > 0;
-  const activeClaudeAdvisorModel =
-    claudeAdvisorModel.trim() || defaultClaudeAdvisorModel;
+  const activeClaudeAdvisorSourceModel = resolveClaudeAdvisorSourceModel({
+    model: claudeAdvisorModel.trim() || modelClaude,
+    fallback: defaultClaudeAdvisorSourceModel,
+  });
   const toggleClaudeSettingSource = (source: "user" | "project" | "local") => {
     updateSettings({
       patch: {
@@ -1389,14 +1413,14 @@ export function ProvidersSection() {
                 />
               </LabeledField>
               <SwitchField
-                title="Advisor Model Override"
-                description="Pin Claude's server-side advisor tool to a specific Claude model instead of using the SDK default."
+                title="Use Advisor"
+                description="Control whether Stave passes `advisorModel` to the Claude SDK."
                 checked={claudeAdvisorModelEnabled}
                 onCheckedChange={(checked) =>
                   updateSettings({
                     patch: {
                       claudeAdvisorModel: checked
-                        ? activeClaudeAdvisorModel
+                        ? activeClaudeAdvisorSourceModel
                         : "",
                     },
                   })
@@ -1404,17 +1428,14 @@ export function ProvidersSection() {
               />
               {claudeAdvisorModelEnabled ? (
                 <LabeledField
-                  title="Advisor Model"
-                  description="Choose which Claude model powers the SDK advisor tool when the override is enabled."
+                  title="Claude Model"
+                  description="Select a Claude model family for advisor mapping. Stave maps it as haiku->sonnet, sonnet->opus, opus->opus before sending `advisorModel`."
                 >
                   <ModelSelector
                     value={buildModelSelectorValue({
-                      model: activeClaudeAdvisorModel,
+                      model: activeClaudeAdvisorSourceModel,
                     })}
-                    options={CLAUDE_ADVISOR_MODEL_OPTIONS}
-                    recommendedOptions={
-                      CLAUDE_ADVISOR_RECOMMENDED_MODEL_OPTIONS
-                    }
+                    options={CLAUDE_ADVISOR_SOURCE_MODEL_OPTIONS}
                     className="w-full"
                     triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
                     menuClassName="sm:max-w-lg"
