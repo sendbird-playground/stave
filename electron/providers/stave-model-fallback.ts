@@ -2,14 +2,15 @@ import { resolveStaveProviderForModel } from "../../src/lib/providers/stave-auto
 import { getCachedAvailability } from "./stave-availability";
 
 export const STAVE_MODEL_FALLBACK: Record<string, string> = {
+  "claude-opus-4-7": "gpt-5.4",
   "claude-opus-4-6": "gpt-5.4",
   "claude-opus-4-6[1m]": "claude-opus-4-6",
   "claude-sonnet-4-6": "gpt-5.4",
   "claude-sonnet-4-6[1m]": "claude-sonnet-4-6",
   "claude-haiku-4-5": "gpt-5.3-codex",
-  "gpt-5.4": "claude-opus-4-6",
+  "gpt-5.4": "claude-opus-4-7",
   "gpt-5.3-codex": "claude-haiku-4-5",
-  "opusplan": "claude-opus-4-6",
+  opusplan: "claude-opus-4-7",
 };
 
 export function resolveAvailableStaveModel(args: { model: string }): string {

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { parseWorkspaceSnapshot } from "@/lib/task-context/schemas";
 import {
   resolvePromptDraftPlanModeChange,
+  resolvePromptDraftModelForProvider,
   resolvePromptDraftRuntimeState,
   transitionClaudePromptDraftPermissionMode,
 } from "@/store/prompt-draft-runtime";
@@ -44,6 +45,28 @@ describe("prompt-draft runtime state", () => {
       claudePermissionMode: "acceptEdits",
       claudePermissionModeBeforePlan: null,
     });
+  });
+
+  test("uses the task-local model override only when it matches the active provider", () => {
+    expect(
+      resolvePromptDraftModelForProvider({
+        providerId: "claude-code",
+        runtimeOverrides: {
+          model: "claude-opus-4-6",
+        },
+        fallbackModel: "claude-sonnet-4-6",
+      }),
+    ).toBe("claude-opus-4-6");
+
+    expect(
+      resolvePromptDraftModelForProvider({
+        providerId: "codex",
+        runtimeOverrides: {
+          model: "claude-opus-4-6",
+        },
+        fallbackModel: "gpt-5.4",
+      }),
+    ).toBe("gpt-5.4");
   });
 
   test("restores the prior Claude mode without clearing Codex sessions when plan mode is disabled", () => {
@@ -158,6 +181,7 @@ describe("prompt-draft runtime state", () => {
             attachedFilePaths: [],
             attachments: [],
             runtimeOverrides: {
+              model: "claude-opus-4-6",
               claudePermissionMode: "plan",
               claudePermissionModeBeforePlan: "acceptEdits",
               codexPlanMode: true,
@@ -171,6 +195,7 @@ describe("prompt-draft runtime state", () => {
     });
 
     expect(parsed?.promptDraftByTask["task-1"]?.runtimeOverrides).toEqual({
+      model: "claude-opus-4-6",
       claudePermissionMode: "plan",
       claudePermissionModeBeforePlan: "acceptEdits",
       codexPlanMode: true,

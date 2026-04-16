@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   CODEX_MODEL_OPTIONS,
+  DEFAULT_CLAUDE_OPUS_MODEL,
   STAVE_META_MODEL_OPTIONS,
   getDynamicDisplayNames,
   resolveClaudeEffortForModelSwitch,
@@ -15,6 +16,7 @@ import {
   listProviderIds,
   registerDynamicDisplayNames,
   toHumanModelName,
+  upgradeSettingsScopedClaudeOpusModel,
 } from "@/lib/providers/model-catalog";
 
 describe("model catalog", () => {
@@ -45,7 +47,7 @@ describe("model catalog", () => {
 
   test("uses xhigh as the Claude effort default for Opus models", () => {
     expect(
-      resolveDefaultClaudeEffortForModel({ model: "claude-opus-4-6" }),
+      resolveDefaultClaudeEffortForModel({ model: DEFAULT_CLAUDE_OPUS_MODEL }),
     ).toBe("xhigh");
     expect(
       resolveDefaultClaudeEffortForModel({ model: "claude-opus-4-6[1m]" }),
@@ -59,13 +61,13 @@ describe("model catalog", () => {
     expect(
       resolveClaudeEffortForModelSwitch({
         previousModel: "claude-sonnet-4-6",
-        nextModel: "claude-opus-4-6",
+        nextModel: DEFAULT_CLAUDE_OPUS_MODEL,
         currentEffort: "medium",
       }),
     ).toBe("xhigh");
     expect(
       resolveClaudeEffortForModelSwitch({
-        previousModel: "claude-opus-4-6",
+        previousModel: DEFAULT_CLAUDE_OPUS_MODEL,
         nextModel: "claude-sonnet-4-6",
         currentEffort: "xhigh",
       }),
@@ -73,10 +75,22 @@ describe("model catalog", () => {
     expect(
       resolveClaudeEffortForModelSwitch({
         previousModel: "claude-sonnet-4-6",
-        nextModel: "claude-opus-4-6",
+        nextModel: DEFAULT_CLAUDE_OPUS_MODEL,
         currentEffort: "max",
       }),
     ).toBe("max");
+  });
+
+  test("upgrades settings-scoped Opus 4.6 aliases to Opus 4.7", () => {
+    expect(
+      upgradeSettingsScopedClaudeOpusModel({ model: "claude-opus-4-6" }),
+    ).toBe(DEFAULT_CLAUDE_OPUS_MODEL);
+    expect(
+      upgradeSettingsScopedClaudeOpusModel({ model: "claude-opus-4-6[1m]" }),
+    ).toBe(DEFAULT_CLAUDE_OPUS_MODEL);
+    expect(
+      upgradeSettingsScopedClaudeOpusModel({ model: "claude-opus-4-6-fast" }),
+    ).toBe("claude-opus-4-6-fast");
   });
 
   test("returns provider wave tone classes", () => {
@@ -229,8 +243,8 @@ describe("model catalog", () => {
     });
 
     test("toHumanModelName still returns static names when no dynamic entry exists", () => {
-      expect(toHumanModelName({ model: "claude-opus-4-6" })).toBe(
-        "Claude Opus 4.6",
+      expect(toHumanModelName({ model: DEFAULT_CLAUDE_OPUS_MODEL })).toBe(
+        "Claude Opus 4.7",
       );
     });
 

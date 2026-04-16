@@ -3,6 +3,7 @@ import {
   resolveEffectiveCodexApprovalPolicy,
   resolveEffectiveCodexFileAccessMode,
 } from "@/lib/providers/codex-runtime-options";
+import { DEFAULT_CLAUDE_OPUS_MODEL } from "@/lib/providers/model-catalog";
 import type {
   ClaudeSettingSource,
   ProviderId,
@@ -14,7 +15,7 @@ import type { AppSettings } from "@/store/app.store";
 const DEFAULT_CODEX_APPROVAL_POLICY = "untrusted";
 const MAX_CLAUDE_TASK_BUDGET_TOKENS = 1_000_000;
 const CLAUDE_ADVISOR_SOURCE_SONNET_MODEL = "claude-sonnet-4-6";
-const CLAUDE_ADVISOR_SOURCE_OPUS_MODEL = "claude-opus-4-6";
+const CLAUDE_ADVISOR_SOURCE_OPUS_MODEL = DEFAULT_CLAUDE_OPUS_MODEL;
 const CLAUDE_SETTING_SOURCE_ORDER = [
   "project",
   "local",

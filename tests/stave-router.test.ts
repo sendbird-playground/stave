@@ -33,37 +33,49 @@ describe("resolveStaveTarget", () => {
 
   describe("Rule 1 — planning intent → opusplan", () => {
     test("routes '계획' keyword to opusplan", () => {
-      const result = resolveStaveTarget({ prompt: "이 기능 어떻게 구현할 계획을 세워줘" });
+      const result = resolveStaveTarget({
+        prompt: "이 기능 어떻게 구현할 계획을 세워줘",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("opusplan");
     });
 
     test("routes '설계' keyword to opusplan", () => {
-      const result = resolveStaveTarget({ prompt: "새로운 모듈 설계 방향을 잡아줘" });
+      const result = resolveStaveTarget({
+        prompt: "새로운 모듈 설계 방향을 잡아줘",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("opusplan");
     });
 
     test("routes '전략' keyword to opusplan", () => {
-      const result = resolveStaveTarget({ prompt: "마이그레이션 전략을 어떻게 잡을까?" });
+      const result = resolveStaveTarget({
+        prompt: "마이그레이션 전략을 어떻게 잡을까?",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("opusplan");
     });
 
     test("routes 'approach' keyword to opusplan", () => {
-      const result = resolveStaveTarget({ prompt: "What's the best approach to add OAuth to this app?" });
+      const result = resolveStaveTarget({
+        prompt: "What's the best approach to add OAuth to this app?",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("opusplan");
     });
 
     test("routes 'how should I structure' to opusplan", () => {
-      const result = resolveStaveTarget({ prompt: "How should I structure the new payment module?" });
+      const result = resolveStaveTarget({
+        prompt: "How should I structure the new payment module?",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("opusplan");
     });
 
     test("routes 'before implement' to opusplan", () => {
-      const result = resolveStaveTarget({ prompt: "Before I implement this feature, give me a plan." });
+      const result = resolveStaveTarget({
+        prompt: "Before I implement this feature, give me a plan.",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("opusplan");
     });
@@ -89,7 +101,9 @@ describe("resolveStaveTarget", () => {
     });
 
     test("routes '어떻게 할까' to opusplan", () => {
-      const result = resolveStaveTarget({ prompt: "이 버그 어떻게할까 좋은 방향을 알려줘" });
+      const result = resolveStaveTarget({
+        prompt: "이 버그 어떻게할까 좋은 방향을 알려줘",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("opusplan");
     });
@@ -99,75 +113,89 @@ describe("resolveStaveTarget", () => {
 
   describe("Rule 2 — OpenAI keywords follow normal intent rules", () => {
     test("treats OpenAI API questions as general requests by default", () => {
-      const result = resolveStaveTarget({ prompt: "How do I call the OpenAI chat API?" });
+      const result = resolveStaveTarget({
+        prompt: "How do I call the OpenAI chat API?",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("claude-sonnet-4-6");
     });
 
     test("still routes implementation prompts about OpenAI to the implement model", () => {
-      const result = resolveStaveTarget({ prompt: "Write code that calls o3-mini for embeddings" });
+      const result = resolveStaveTarget({
+        prompt: "Write code that calls o3-mini for embeddings",
+      });
       expect(result.providerId).toBe("codex");
       expect(result.model).toBe("gpt-5.3-codex");
     });
 
     test("lets quick-edit heuristics win when the prompt is a tiny OpenAI rename", () => {
-      const result = resolveStaveTarget({ prompt: "Just rename the openai client variable" });
+      const result = resolveStaveTarget({
+        prompt: "Just rename the openai client variable",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("claude-haiku-4-5");
     });
   });
 
-  // ── Rule 3: analysis / planning → claude-opus-4-6 ──────────────────────
+  // ── Rule 3: analysis / planning → claude-opus-4-7 ──────────────────────
 
-  describe("Rule 3 — analysis/planning → claude-opus-4-6", () => {
-    test("routes long analysis prompt (> 1200 chars) to claude-opus-4-6", () => {
-      const longPrompt = padTo("Explain how the authentication system works. ", 1201);
+  describe("Rule 3 — analysis/planning → claude-opus-4-7", () => {
+    test("routes long analysis prompt (> 1200 chars) to claude-opus-4-7", () => {
+      const longPrompt = padTo(
+        "Explain how the authentication system works. ",
+        1201,
+      );
       const result = resolveStaveTarget({ prompt: longPrompt });
       expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
-    test("routes analysis prompt with 4+ attached files to claude-opus-4-6", () => {
+    test("routes analysis prompt with 4+ attached files to claude-opus-4-7", () => {
       const result = resolveStaveTarget({
         prompt: "Analyze all these files and summarize what they do",
         attachedFileCount: 4,
       });
       expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
-    test("routes analysis prompt with 8+ history messages to claude-opus-4-6", () => {
+    test("routes analysis prompt with 8+ history messages to claude-opus-4-7", () => {
       const result = resolveStaveTarget({
         prompt: "Why does this module keep crashing?",
         historyLength: 8,
       });
       expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
-    test("routes mixed plan+analysis complex prompt to claude-opus-4-6 (not opusplan)", () => {
-      const longPrompt = padTo("Analyze the codebase and give me a refactoring plan. ", 1201);
+    test("routes mixed plan+analysis complex prompt to claude-opus-4-7 (not opusplan)", () => {
+      const longPrompt = padTo(
+        "Analyze the codebase and give me a refactoring plan. ",
+        1201,
+      );
       const result = resolveStaveTarget({ prompt: longPrompt });
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
-    test("routes '분석' keyword with large context to claude-opus-4-6", () => {
+    test("routes '분석' keyword with large context to claude-opus-4-7", () => {
       const result = resolveStaveTarget({
         prompt: "이 코드베이스 전체를 분석해줘",
         attachedFileCount: 5,
       });
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
-    test("routes short analysis prompt to claude-opus-4-6", () => {
-      const result = resolveStaveTarget({ prompt: "Why is this function slow?" });
-      expect(result.model).toBe("claude-opus-4-6");
+    test("routes short analysis prompt to claude-opus-4-7", () => {
+      const result = resolveStaveTarget({
+        prompt: "Why is this function slow?",
+      });
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
-    test("routes short Korean review prompt to claude-opus-4-6", () => {
+    test("routes short Korean review prompt to claude-opus-4-7", () => {
       const result = resolveStaveTarget({ prompt: "리뷰해" });
       expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
   });
 
@@ -175,31 +203,41 @@ describe("resolveStaveTarget", () => {
 
   describe("Rule 4 — precise code generation → gpt-5.3-codex", () => {
     test("routes 'write a function' to gpt-5.3-codex", () => {
-      const result = resolveStaveTarget({ prompt: "Write a function to validate email addresses" });
+      const result = resolveStaveTarget({
+        prompt: "Write a function to validate email addresses",
+      });
       expect(result.providerId).toBe("codex");
       expect(result.model).toBe("gpt-5.3-codex");
     });
 
     test("routes 'generate code' to gpt-5.3-codex", () => {
-      const result = resolveStaveTarget({ prompt: "Generate code for a binary search tree" });
+      const result = resolveStaveTarget({
+        prompt: "Generate code for a binary search tree",
+      });
       expect(result.providerId).toBe("codex");
       expect(result.model).toBe("gpt-5.3-codex");
     });
 
     test("routes 'implement a function' to gpt-5.3-codex", () => {
-      const result = resolveStaveTarget({ prompt: "Implement a function to debounce API calls" });
+      const result = resolveStaveTarget({
+        prompt: "Implement a function to debounce API calls",
+      });
       expect(result.providerId).toBe("codex");
       expect(result.model).toBe("gpt-5.3-codex");
     });
 
     test("routes 'implement an algorithm' to gpt-5.3-codex", () => {
-      const result = resolveStaveTarget({ prompt: "Implement an algorithm for topological sort" });
+      const result = resolveStaveTarget({
+        prompt: "Implement an algorithm for topological sort",
+      });
       expect(result.providerId).toBe("codex");
       expect(result.model).toBe("gpt-5.3-codex");
     });
 
     test("routes 'write a class' to gpt-5.3-codex", () => {
-      const result = resolveStaveTarget({ prompt: "Write a class for managing user sessions" });
+      const result = resolveStaveTarget({
+        prompt: "Write a class for managing user sessions",
+      });
       expect(result.providerId).toBe("codex");
       expect(result.model).toBe("gpt-5.3-codex");
     });
@@ -212,7 +250,9 @@ describe("resolveStaveTarget", () => {
     });
 
     test("routes test-writing requests to gpt-5.3-codex", () => {
-      const result = resolveStaveTarget({ prompt: "Write unit tests for the UserService class" });
+      const result = resolveStaveTarget({
+        prompt: "Write unit tests for the UserService class",
+      });
       expect(result.providerId).toBe("codex");
       expect(result.model).toBe("gpt-5.3-codex");
     });
@@ -228,19 +268,25 @@ describe("resolveStaveTarget", () => {
     });
 
     test("routes 'rename' keyword to claude-haiku-4-5", () => {
-      const result = resolveStaveTarget({ prompt: "Rename getUserById to findUserById" });
+      const result = resolveStaveTarget({
+        prompt: "Rename getUserById to findUserById",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("claude-haiku-4-5");
     });
 
     test("routes 'just fix' keyword to claude-haiku-4-5", () => {
-      const result = resolveStaveTarget({ prompt: "Just fix the missing semicolon" });
+      const result = resolveStaveTarget({
+        prompt: "Just fix the missing semicolon",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("claude-haiku-4-5");
     });
 
     test("routes 'quick fix' keyword to claude-haiku-4-5", () => {
-      const result = resolveStaveTarget({ prompt: "Quick fix: remove the extra import" });
+      const result = resolveStaveTarget({
+        prompt: "Quick fix: remove the extra import",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("claude-haiku-4-5");
     });
@@ -258,7 +304,9 @@ describe("resolveStaveTarget", () => {
     });
 
     test("routes '이름 변경' keyword to claude-haiku-4-5", () => {
-      const result = resolveStaveTarget({ prompt: "이름 변경: userId → accountId" });
+      const result = resolveStaveTarget({
+        prompt: "이름 변경: userId → accountId",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("claude-haiku-4-5");
     });
@@ -274,21 +322,27 @@ describe("resolveStaveTarget", () => {
 
   describe("Rule 6 — default → claude-sonnet-4-6", () => {
     test("routes generic implementation request to claude-sonnet-4-6", () => {
-      const result = resolveStaveTarget({ prompt: "Add error handling to the fetchUser function" });
+      const result = resolveStaveTarget({
+        prompt: "Add error handling to the fetchUser function",
+      });
       expect(result.providerId).toBe("claude-code");
       expect(result.model).toBe("claude-sonnet-4-6");
     });
 
-    test("routes debugging request to claude-opus-4-6", () => {
-      const result = resolveStaveTarget({ prompt: "Debug the login flow for me" });
+    test("routes debugging request to claude-opus-4-7", () => {
+      const result = resolveStaveTarget({
+        prompt: "Debug the login flow for me",
+      });
       expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
-    test("routes code review request to claude-opus-4-6", () => {
-      const result = resolveStaveTarget({ prompt: "Review this PR and give me feedback" });
+    test("routes code review request to claude-opus-4-7", () => {
+      const result = resolveStaveTarget({
+        prompt: "Review this PR and give me feedback",
+      });
       expect(result.providerId).toBe("claude-code");
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
     test("routes empty prompt to claude-sonnet-4-6", () => {
@@ -304,13 +358,13 @@ describe("resolveStaveTarget", () => {
     test("prompt exactly 1200 chars still routes analysis prompts to opus", () => {
       const prompt = padTo("Explain why this function is slow. ", 1200);
       const result = resolveStaveTarget({ prompt });
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
     test("prompt exactly 1201 chars IS complex", () => {
       const prompt = padTo("Explain why this function is slow. ", 1201);
       const result = resolveStaveTarget({ prompt });
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
     test("3 attached files still route analysis prompts to opus", () => {
@@ -318,7 +372,7 @@ describe("resolveStaveTarget", () => {
         prompt: "Analyze these files",
         attachedFileCount: 3,
       });
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
     test("4 attached files IS complex", () => {
@@ -326,7 +380,7 @@ describe("resolveStaveTarget", () => {
         prompt: "Analyze these files",
         attachedFileCount: 4,
       });
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
     test("7 history messages still route analysis prompts to opus", () => {
@@ -334,7 +388,7 @@ describe("resolveStaveTarget", () => {
         prompt: "Why does this crash?",
         historyLength: 7,
       });
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
 
     test("8 history messages IS complex", () => {
@@ -342,7 +396,7 @@ describe("resolveStaveTarget", () => {
         prompt: "Why does this crash?",
         historyLength: 8,
       });
-      expect(result.model).toBe("claude-opus-4-6");
+      expect(result.model).toBe("claude-opus-4-7");
     });
   });
 
@@ -462,7 +516,12 @@ describe("profile overrides", () => {
   });
 
   test("infers claude-code provider for overridden Claude-family models", () => {
-    for (const model of ["claude-opus-4-6", "opusplan", "claude-sonnet-4-6", "claude-haiku-4-5"]) {
+    for (const model of [
+      "claude-opus-4-6",
+      "opusplan",
+      "claude-sonnet-4-6",
+      "claude-haiku-4-5",
+    ]) {
       const result = resolveStaveTarget({
         prompt: "Add error handling",
         profile: customProfile({ generalModel: model }),
@@ -493,7 +552,9 @@ describe("profile overrides", () => {
 
 // ── resolveSkillFastPath ──────────────────────────────────────────────────────
 
-function makeSkill(overrides: Partial<SkillPromptContext> = {}): SkillPromptContext {
+function makeSkill(
+  overrides: Partial<SkillPromptContext> = {},
+): SkillPromptContext {
   return {
     id: "skill-1",
     slug: "commit",
@@ -630,7 +691,12 @@ describe("resolveSkillFastPath", () => {
 
   test("ignores non-skill contextParts (file_context, image_context)", () => {
     const contextParts: CanonicalConversationRequest["contextParts"] = [
-      { type: "file_context", filePath: "/foo.ts", content: "const x = 1;", language: "typescript" },
+      {
+        type: "file_context",
+        filePath: "/foo.ts",
+        content: "const x = 1;",
+        language: "typescript",
+      },
     ];
     const result = resolveSkillFastPath({
       contextParts,
@@ -642,17 +708,21 @@ describe("resolveSkillFastPath", () => {
 
 describe("resolveForcedStavePlanTarget", () => {
   test("returns null when Claude plan mode is not active", () => {
-    expect(resolveForcedStavePlanTarget({
-      profile: DEFAULT_STAVE_AUTO_PROFILE,
-      runtimeOptions: { claudePermissionMode: "acceptEdits" },
-    })).toBeNull();
+    expect(
+      resolveForcedStavePlanTarget({
+        profile: DEFAULT_STAVE_AUTO_PROFILE,
+        runtimeOptions: { claudePermissionMode: "acceptEdits" },
+      }),
+    ).toBeNull();
   });
 
   test("forces the profile plan model when Stave is in plan mode", () => {
-    expect(resolveForcedStavePlanTarget({
-      profile: DEFAULT_STAVE_AUTO_PROFILE,
-      runtimeOptions: { claudePermissionMode: "plan" },
-    })).toEqual({
+    expect(
+      resolveForcedStavePlanTarget({
+        profile: DEFAULT_STAVE_AUTO_PROFILE,
+        runtimeOptions: { claudePermissionMode: "plan" },
+      }),
+    ).toEqual({
       providerId: "claude-code",
       model: "opusplan",
       reason: "Plan mode forced -> opusplan",
@@ -660,10 +730,12 @@ describe("resolveForcedStavePlanTarget", () => {
   });
 
   test("can force a Codex plan model when the active profile uses one", () => {
-    expect(resolveForcedStavePlanTarget({
-      profile: customProfile({ planModel: "gpt-5.4" }),
-      runtimeOptions: { claudePermissionMode: "plan" },
-    })).toEqual({
+    expect(
+      resolveForcedStavePlanTarget({
+        profile: customProfile({ planModel: "gpt-5.4" }),
+        runtimeOptions: { claudePermissionMode: "plan" },
+      }),
+    ).toEqual({
       providerId: "codex",
       model: "gpt-5.4",
       reason: "Plan mode forced -> gpt-5.4",
@@ -703,7 +775,11 @@ describe("buildStaveResolvedArgs", () => {
   });
 
   test("preserves all top-level args (prompt, cwd, taskId, etc.)", () => {
-    const args = minimalArgs({ prompt: "hello world", cwd: "/my/project", taskId: "task-42" });
+    const args = minimalArgs({
+      prompt: "hello world",
+      cwd: "/my/project",
+      taskId: "task-42",
+    });
     const resolved = buildStaveResolvedArgs(args, target);
     expect(resolved.prompt).toBe("hello world");
     expect(resolved.cwd).toBe("/my/project");
@@ -732,7 +808,11 @@ describe("buildStaveResolvedArgs", () => {
   });
 
   test("preserves conversation history and context parts unchanged", () => {
-    const historyEntry = { role: "user" as const, content: "prev message", parts: [] };
+    const historyEntry = {
+      role: "user" as const,
+      content: "prev message",
+      parts: [],
+    };
     const args = minimalArgs({
       conversation: {
         mode: "chat",

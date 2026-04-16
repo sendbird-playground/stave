@@ -1,6 +1,9 @@
 import type { PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
 import { resolveEffectiveCodexFileAccessMode } from "@/lib/providers/codex-runtime-options";
-import type { ProviderId, ProviderRuntimeOptions } from "@/lib/providers/provider.types";
+import type {
+  ProviderId,
+  ProviderRuntimeOptions,
+} from "@/lib/providers/provider.types";
 import {
   CLAUDE_EFFORT_OPTIONS,
   CODEX_EFFORT_OPTIONS,
@@ -60,10 +63,12 @@ type CommandCatalogRuntimeArgs = Pick<
   | "claudeAgentProgressSummaries"
   | "claudeBinaryPath"
 > & {
-  modelClaude: string;
+  model: string;
 };
 
-const CLAUDE_EFFORT_CYCLE_ORDER = CLAUDE_EFFORT_OPTIONS.map((option) => option.value);
+const CLAUDE_EFFORT_CYCLE_ORDER = CLAUDE_EFFORT_OPTIONS.map(
+  (option) => option.value,
+);
 const CODEX_EFFORT_CYCLE_ORDER = [
   "low",
   "medium",
@@ -90,14 +95,18 @@ export function cycleClaudeEffortValue(current: AppSettings["claudeEffort"]) {
   });
 }
 
-export function cycleCodexEffortValue(current: AppSettings["codexReasoningEffort"]) {
+export function cycleCodexEffortValue(
+  current: AppSettings["codexReasoningEffort"],
+) {
   return cycleOptionValue({
     current,
     order: CODEX_EFFORT_CYCLE_ORDER,
   });
 }
 
-export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): PromptInputRuntimeStatusItem[] {
+export function buildChatInputRuntimeStatusItems(
+  args: ChatInputRuntimeArgs,
+): PromptInputRuntimeStatusItem[] {
   if (args.activeProvider === "stave") {
     return [];
   }
@@ -141,11 +150,13 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
         value: args.claudeAgentProgressSummaries ? "On" : "Off",
       },
       ...(args.claudeBinaryPath.trim()
-        ? [{
-            id: "claude-binary",
-            label: "Claude Binary",
-            value: formatShortRuntimePath(args.claudeBinaryPath),
-          } satisfies PromptInputRuntimeStatusItem]
+        ? [
+            {
+              id: "claude-binary",
+              label: "Claude Binary",
+              value: formatShortRuntimePath(args.claudeBinaryPath),
+            } satisfies PromptInputRuntimeStatusItem,
+          ]
         : []),
     ];
   }
@@ -166,7 +177,10 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
       id: "sandbox",
       label: "Files",
       value: formatTitleCaseRuntimeValue(effectiveCodexFileAccess),
-      tone: effectiveCodexFileAccess === "danger-full-access" ? "warning" : "default",
+      tone:
+        effectiveCodexFileAccess === "danger-full-access"
+          ? "warning"
+          : "default",
     },
     {
       id: "network",
@@ -181,12 +195,18 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
     {
       id: "summary",
       label: "Summary",
-      value: findOptionLabel(CODEX_REASONING_SUMMARY_OPTIONS, args.codexReasoningSummary),
+      value: findOptionLabel(
+        CODEX_REASONING_SUMMARY_OPTIONS,
+        args.codexReasoningSummary,
+      ),
     },
     {
       id: "summary-support",
       label: "Summary Support",
-      value: findOptionLabel(CODEX_REASONING_SUPPORT_OPTIONS, args.codexReasoningSummarySupport),
+      value: findOptionLabel(
+        CODEX_REASONING_SUPPORT_OPTIONS,
+        args.codexReasoningSummarySupport,
+      ),
     },
     {
       id: "plan-mode",
@@ -201,24 +221,29 @@ export function buildChatInputRuntimeStatusItems(args: ChatInputRuntimeArgs): Pr
       tone: args.codexFastMode ? "warning" : "default",
     },
     ...(args.codexBinaryPath.trim()
-      ? [{
-          id: "codex-binary",
-          label: "Codex Binary",
-          value: formatShortRuntimePath(args.codexBinaryPath),
-        } satisfies PromptInputRuntimeStatusItem]
+      ? [
+          {
+            id: "codex-binary",
+            label: "Codex Binary",
+            value: formatShortRuntimePath(args.codexBinaryPath),
+          } satisfies PromptInputRuntimeStatusItem,
+        ]
       : []),
   ];
 }
 
-export function buildCommandCatalogRuntimeOptions(args: CommandCatalogRuntimeArgs): ProviderRuntimeOptions | undefined {
+export function buildCommandCatalogRuntimeOptions(
+  args: CommandCatalogRuntimeArgs,
+): ProviderRuntimeOptions | undefined {
   if (args.activeProvider !== "claude-code") {
     return undefined;
   }
 
   return {
-    model: args.modelClaude,
+    model: args.model,
     claudePermissionMode: args.claudePermissionMode,
-    claudeAllowDangerouslySkipPermissions: args.claudeAllowDangerouslySkipPermissions,
+    claudeAllowDangerouslySkipPermissions:
+      args.claudeAllowDangerouslySkipPermissions,
     claudeSandboxEnabled: args.claudeSandboxEnabled,
     claudeAllowUnsandboxedCommands: args.claudeAllowUnsandboxedCommands,
     claudeSettingSources: args.claudeSettingSources,

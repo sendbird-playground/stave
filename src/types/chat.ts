@@ -17,13 +17,23 @@ export type Attachment =
   | { kind: "file"; filePath: string }
   | { kind: "image"; id: string; dataUrl: string; label: string };
 
-export type ClaudePermissionMode = "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
-export type ClaudePermissionModeBeforePlan = Exclude<ClaudePermissionMode, "plan"> | null;
+export type ClaudePermissionMode =
+  | "default"
+  | "acceptEdits"
+  | "bypassPermissions"
+  | "plan"
+  | "dontAsk"
+  | "auto";
+export type ClaudePermissionModeBeforePlan = Exclude<
+  ClaudePermissionMode,
+  "plan"
+> | null;
 
 export interface PromptDraftRuntimeOverrides {
   claudePermissionMode?: ClaudePermissionMode;
   claudePermissionModeBeforePlan?: ClaudePermissionModeBeforePlan;
   codexPlanMode?: boolean;
+  model?: string;
 }
 
 export interface PromptDraftQueuedNextTurn {
@@ -65,7 +75,11 @@ export interface ToolUsePart extends MessagePartBase {
   toolName: string;
   input: string;
   output?: string;
-  state: "input-streaming" | "input-available" | "output-available" | "output-error";
+  state:
+    | "input-streaming"
+    | "input-available"
+    | "output-available"
+    | "output-error";
   elapsedSeconds?: number;
   /** Progress messages streamed from a running subagent (Agent tool only). */
   progressMessages?: string[];
@@ -92,7 +106,11 @@ export interface ApprovalPart extends MessagePartBase {
   toolName: string;
   description: string;
   requestId: string;
-  state: "approval-requested" | "approval-responded" | "approval-interrupted" | "output-denied";
+  state:
+    | "approval-requested"
+    | "approval-responded"
+    | "approval-interrupted"
+    | "output-denied";
 }
 
 export interface UserInputOption {
@@ -120,7 +138,11 @@ export interface UserInputPart extends MessagePartBase {
   toolName: string;
   questions: UserInputQuestion[];
   answers?: Record<string, string>;
-  state: "input-requested" | "input-responded" | "input-interrupted" | "input-denied";
+  state:
+    | "input-requested"
+    | "input-responded"
+    | "input-interrupted"
+    | "input-denied";
 }
 
 export interface ImageContextPart extends MessagePartBase {

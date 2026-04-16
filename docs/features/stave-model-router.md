@@ -43,25 +43,25 @@ The Pre-processor selected one direct intent. The routing runtime resolves that 
 
 **Default direct intent palette:**
 
-| Intent | Model | Notes |
-|---|---|---|
-| `quick_edit` | `claude-haiku-4-5` | rename, typo, tiny targeted change |
-| `general` | `claude-sonnet-4-6` | balanced default |
-| `implement` | `gpt-5.3-codex` | code generation, patching, refactors |
-| `analyze` | `claude-opus-4-6` | debugging, review, architecture, root cause |
-| `plan` | `opusplan` | planning-only, no file edits intended |
+| Intent       | Model               | Notes                                       |
+| ------------ | ------------------- | ------------------------------------------- |
+| `quick_edit` | `claude-haiku-4-5`  | rename, typo, tiny targeted change          |
+| `general`    | `claude-sonnet-4-6` | balanced default                            |
+| `implement`  | `gpt-5.3-codex`     | code generation, patching, refactors        |
+| `analyze`    | `claude-opus-4-7`   | debugging, review, architecture, root cause |
+| `plan`       | `opusplan`          | planning-only, no file edits intended       |
 
-Urgency signals that trigger `fastMode: true`: *빠르게, 빨리, quick, fast, ASAP, urgent, 즉시*.
+Urgency signals that trigger `fastMode: true`: _빠르게, 빨리, quick, fast, ASAP, urgent, 즉시_.
 
 **Automatic availability fallbacks:**
 
-| Chosen model | Fallback when unavailable |
-|---|---|
-| `claude-opus-4-6` | `gpt-5.4` |
-| `claude-sonnet-4-6` | `gpt-5.4` |
-| `claude-haiku-4-5` | `gpt-5.3-codex` |
-| `gpt-5.4` | `claude-opus-4-6` |
-| `gpt-5.3-codex` | `claude-haiku-4-5` |
+| Chosen model        | Fallback when unavailable |
+| ------------------- | ------------------------- |
+| `claude-opus-4-7`   | `gpt-5.4`                 |
+| `claude-sonnet-4-6` | `gpt-5.4`                 |
+| `claude-haiku-4-5`  | `gpt-5.3-codex`           |
+| `gpt-5.4`           | `claude-opus-4-7`         |
+| `gpt-5.3-codex`     | `claude-haiku-4-5`        |
 
 ### Stage 2b — Orchestrate (multi-model)
 
@@ -97,30 +97,30 @@ Stave Auto now uses presets plus role-based settings under **Settings → Provid
 
 ### Presets
 
-| Preset | Summary |
-|---|---|
-| `Recommended` | Current mixed default. Uses Claude for classifier/planning/analysis, Sonnet for supervisor, Codex for implementation, and `gpt-5.4` for verify. |
-| `Recommended (1M)` | Same as Recommended, but switches supervisor, analyze, and general to the `[1m]` variants. |
-| `Claude Only` | Keeps every role on Claude models only, with supervisor on Claude Sonnet. |
-| `Codex Only` | Keeps every role on Codex models only, using `gpt-5.4-mini` for lightweight classifier/general/quick-edit/supervisor work and `gpt-5.3-codex` for implementation. |
+| Preset             | Summary                                                                                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Recommended`      | Current mixed default. Uses Claude for classifier/planning/analysis, Sonnet for supervisor, Codex for implementation, and `gpt-5.4` for verify.                   |
+| `Recommended (1M)` | Same as Recommended, but switches supervisor, analyze, and general to the `[1m]` variants.                                                                        |
+| `Claude Only`      | Keeps every role on Claude models only, with supervisor on Claude Sonnet.                                                                                         |
+| `Codex Only`       | Keeps every role on Codex models only, using `gpt-5.4-mini` for lightweight classifier/general/quick-edit/supervisor work and `gpt-5.3-codex` for implementation. |
 
 ### Role settings
 
-| Setting | Default | Description |
-|---|---|---|
-| `staveAutoClassifierModel` | `claude-haiku-4-5` | Lightweight classifier for direct vs orchestration |
-| `staveAutoSupervisorModel` | `claude-sonnet-4-6` | Decompose/synthesise orchestration runs |
-| `staveAutoPlanModel` | `opusplan` | Planning-only requests |
-| `staveAutoAnalyzeModel` | `claude-opus-4-6` | Debug/review/explanation/root cause |
-| `staveAutoImplementModel` | `gpt-5.3-codex` | Implement/build/patch/refactor |
-| `staveAutoQuickEditModel` | `claude-haiku-4-5` | Tiny edits |
-| `staveAutoGeneralModel` | `claude-sonnet-4-6` | Balanced default |
-| `staveAutoVerifyModel` | `gpt-5.4` | Validation/review step in orchestration |
-| `staveAutoOrchestrationMode` | `auto` | `off`, `auto`, or `aggressive` |
-| `staveAutoFastMode` | `false` | Request fast execution for Stave Auto turns when supported by the resolved provider |
-| `staveAutoMaxSubtasks` | `3` | Max subtasks per orchestration run |
-| `staveAutoMaxParallelSubtasks` | `2` | Max concurrent independent subtasks |
-| `staveAutoAllowCrossProviderWorkers` | `true` | Allow Claude + Codex workers in the same orchestration |
+| Setting                              | Default             | Description                                                                         |
+| ------------------------------------ | ------------------- | ----------------------------------------------------------------------------------- |
+| `staveAutoClassifierModel`           | `claude-haiku-4-5`  | Lightweight classifier for direct vs orchestration                                  |
+| `staveAutoSupervisorModel`           | `claude-sonnet-4-6` | Decompose/synthesise orchestration runs                                             |
+| `staveAutoPlanModel`                 | `opusplan`          | Planning-only requests                                                              |
+| `staveAutoAnalyzeModel`              | `claude-opus-4-7`   | Debug/review/explanation/root cause                                                 |
+| `staveAutoImplementModel`            | `gpt-5.3-codex`     | Implement/build/patch/refactor                                                      |
+| `staveAutoQuickEditModel`            | `claude-haiku-4-5`  | Tiny edits                                                                          |
+| `staveAutoGeneralModel`              | `claude-sonnet-4-6` | Balanced default                                                                    |
+| `staveAutoVerifyModel`               | `gpt-5.4`           | Validation/review step in orchestration                                             |
+| `staveAutoOrchestrationMode`         | `auto`              | `off`, `auto`, or `aggressive`                                                      |
+| `staveAutoFastMode`                  | `false`             | Request fast execution for Stave Auto turns when supported by the resolved provider |
+| `staveAutoMaxSubtasks`               | `3`                 | Max subtasks per orchestration run                                                  |
+| `staveAutoMaxParallelSubtasks`       | `2`                 | Max concurrent independent subtasks                                                 |
+| `staveAutoAllowCrossProviderWorkers` | `true`              | Allow Claude + Codex workers in the same orchestration                              |
 
 ### Per-role runtime overrides
 
@@ -136,13 +136,13 @@ Each Stave Auto role has provider-aware runtime defaults in **Settings → Provi
 
 Stave emits its own meta-events (prefixed `stave:`) alongside the provider's native events:
 
-| Event | When |
-|---|---|
-| `stave:execution_processing` | Pre-processor returns the routing decision (before the actual turn starts) |
-| `stave:orchestration_processing` | Supervisor returns the subtask breakdown |
-| `stave:subtask_started` | A worker agent begins its subtask |
-| `stave:subtask_done` | A worker agent finishes |
-| `stave:synthesis_started` | Supervisor begins merging worker outputs |
+| Event                            | When                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| `stave:execution_processing`     | Pre-processor returns the routing decision (before the actual turn starts) |
+| `stave:orchestration_processing` | Supervisor returns the subtask breakdown                                   |
+| `stave:subtask_started`          | A worker agent begins its subtask                                          |
+| `stave:subtask_done`             | A worker agent finishes                                                    |
+| `stave:synthesis_started`        | Supervisor begins merging worker outputs                                   |
 
 ## Extending the router
 

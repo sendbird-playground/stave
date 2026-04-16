@@ -1,9 +1,9 @@
 import type {
   ClaudePermissionMode,
   ClaudePermissionModeBeforePlan,
-  PromptDraft,
   PromptDraftRuntimeOverrides,
 } from "@/types/chat";
+import { inferProviderIdFromModel } from "@/lib/providers/model-catalog";
 import type { ProviderId } from "@/lib/providers/provider.types";
 
 export interface ResolvedPromptDraftRuntimeState {
@@ -13,7 +13,7 @@ export interface ResolvedPromptDraftRuntimeState {
 }
 
 export function resolvePromptDraftRuntimeState(args: {
-  promptDraft?: PromptDraft | null;
+  promptDraft?: { runtimeOverrides?: PromptDraftRuntimeOverrides } | null;
   fallback: ResolvedPromptDraftRuntimeState;
 }): ResolvedPromptDraftRuntimeState {
   const runtimeOverrides = args.promptDraft?.runtimeOverrides;
@@ -27,6 +27,22 @@ export function resolvePromptDraftRuntimeState(args: {
     codexPlanMode:
       runtimeOverrides?.codexPlanMode ?? args.fallback.codexPlanMode,
   };
+}
+
+export function resolvePromptDraftModelForProvider(args: {
+  providerId: ProviderId;
+  runtimeOverrides?: PromptDraftRuntimeOverrides;
+  fallbackModel: string;
+}) {
+  const overrideModel = args.runtimeOverrides?.model?.trim();
+  if (!overrideModel) {
+    return args.fallbackModel;
+  }
+
+  const overrideProviderId = inferProviderIdFromModel({ model: overrideModel });
+  return overrideProviderId === args.providerId
+    ? overrideModel
+    : args.fallbackModel;
 }
 
 export function transitionClaudePromptDraftPermissionMode(args: {
@@ -116,6 +132,7 @@ export function arePromptDraftRuntimeOverridesEqual(
   right?: PromptDraftRuntimeOverrides,
 ) {
   return (
+    left?.model === right?.model &&
     left?.claudePermissionMode === right?.claudePermissionMode &&
     left?.claudePermissionModeBeforePlan ===
       right?.claudePermissionModeBeforePlan &&

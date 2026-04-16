@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { invalidateAvailability, setCachedAvailability } from "../electron/providers/stave-availability";
+import {
+  invalidateAvailability,
+  setCachedAvailability,
+} from "../electron/providers/stave-availability";
 import { runOrchestrator } from "../electron/providers/stave-orchestrator";
 import type { BridgeEvent, StreamTurnArgs } from "../electron/providers/types";
 import { DEFAULT_STAVE_AUTO_PROFILE } from "../src/lib/providers/stave-auto-profile";
 
-function customProfile(overrides: Partial<typeof DEFAULT_STAVE_AUTO_PROFILE> = {}) {
+function customProfile(
+  overrides: Partial<typeof DEFAULT_STAVE_AUTO_PROFILE> = {},
+) {
   return {
     ...DEFAULT_STAVE_AUTO_PROFILE,
     ...overrides,
@@ -12,10 +17,7 @@ function customProfile(overrides: Partial<typeof DEFAULT_STAVE_AUTO_PROFILE> = {
 }
 
 function textResponse(text: string): BridgeEvent[] {
-  return [
-    { type: "text", text },
-    { type: "done" },
-  ];
+  return [{ type: "text", text }, { type: "done" }];
 }
 
 afterEach(() => {
@@ -67,12 +69,14 @@ Use this plan.`);
     expect(emittedEvents).toContainEqual({
       type: "stave:orchestration_processing",
       supervisorModel: DEFAULT_STAVE_AUTO_PROFILE.supervisorModel,
-      subtasks: [{
-        id: "st-1",
-        title: "Review implementation",
-        model: DEFAULT_STAVE_AUTO_PROFILE.verifyModel!,
-        dependsOn: [],
-      }],
+      subtasks: [
+        {
+          id: "st-1",
+          title: "Review implementation",
+          model: DEFAULT_STAVE_AUTO_PROFILE.verifyModel!,
+          dependsOn: [],
+        },
+      ],
     });
   });
 
@@ -115,12 +119,14 @@ This keeps the response concise.`);
     expect(emittedEvents).toContainEqual({
       type: "stave:orchestration_processing",
       supervisorModel: DEFAULT_STAVE_AUTO_PROFILE.supervisorModel,
-      subtasks: [{
-        id: "st-1",
-        title: "Implement parser fix",
-        model: DEFAULT_STAVE_AUTO_PROFILE.implementModel,
-        dependsOn: [],
-      }],
+      subtasks: [
+        {
+          id: "st-1",
+          title: "Implement parser fix",
+          model: DEFAULT_STAVE_AUTO_PROFILE.implementModel,
+          dependsOn: [],
+        },
+      ],
     });
   });
 
@@ -131,29 +137,57 @@ This keeps the response concise.`);
     await runOrchestrator({
       userPrompt: "Circular dep test",
       profile: customProfile(),
-      baseArgs: { cwd: "/tmp/workspace", taskId: "task-cycle", workspaceId: "ws-cycle" },
-      onEvent: (event) => { emittedEvents.push(event); },
+      baseArgs: {
+        cwd: "/tmp/workspace",
+        taskId: "task-cycle",
+        workspaceId: "ws-cycle",
+      },
+      onEvent: (event) => {
+        emittedEvents.push(event);
+      },
       runTurnBatch: async (args) => {
         calls.push(args);
         switch (calls.length) {
           case 1:
             // Supervisor returns two subtasks that depend on each other (cycle).
-            return textResponse(JSON.stringify([
-              { id: "st-1", title: "Step A", role: "analyze", prompt: "Do A with {st-2}", dependsOn: ["st-2"] },
-              { id: "st-2", title: "Step B", role: "implement", prompt: "Do B with {st-1}", dependsOn: ["st-1"] },
-            ]));
-          case 2: return textResponse("Result A");
-          case 3: return textResponse("Result B");
-          case 4: return textResponse("Synthesised.");
-          default: throw new Error(`Unexpected call ${calls.length}`);
+            return textResponse(
+              JSON.stringify([
+                {
+                  id: "st-1",
+                  title: "Step A",
+                  role: "analyze",
+                  prompt: "Do A with {st-2}",
+                  dependsOn: ["st-2"],
+                },
+                {
+                  id: "st-2",
+                  title: "Step B",
+                  role: "implement",
+                  prompt: "Do B with {st-1}",
+                  dependsOn: ["st-1"],
+                },
+              ]),
+            );
+          case 2:
+            return textResponse("Result A");
+          case 3:
+            return textResponse("Result B");
+          case 4:
+            return textResponse("Synthesised.");
+          default:
+            throw new Error(`Unexpected call ${calls.length}`);
         }
       },
     });
 
     // Must not crash — both subtasks should complete.
-    const doneTasks = emittedEvents.filter((e) => e.type === "stave:subtask_done");
+    const doneTasks = emittedEvents.filter(
+      (e) => e.type === "stave:subtask_done",
+    );
     expect(doneTasks).toHaveLength(2);
-    expect(emittedEvents.some((e) => e.type === "stave:synthesis_started")).toBe(true);
+    expect(
+      emittedEvents.some((e) => e.type === "stave:synthesis_started"),
+    ).toBe(true);
   });
 
   test("strips self-referencing dependsOn and deduplicates subtask IDs", async () => {
@@ -163,27 +197,59 @@ This keeps the response concise.`);
     await runOrchestrator({
       userPrompt: "Self-ref + dup test",
       profile: customProfile(),
-      baseArgs: { cwd: "/tmp/workspace", taskId: "task-self", workspaceId: "ws-self" },
-      onEvent: (event) => { emittedEvents.push(event); },
+      baseArgs: {
+        cwd: "/tmp/workspace",
+        taskId: "task-self",
+        workspaceId: "ws-self",
+      },
+      onEvent: (event) => {
+        emittedEvents.push(event);
+      },
       runTurnBatch: async (args) => {
         calls.push(args);
         switch (calls.length) {
           case 1:
             // Self-referencing dep + duplicate ID.
-            return textResponse(JSON.stringify([
-              { id: "st-1", title: "First", role: "analyze", prompt: "Analyze", dependsOn: ["st-1"] },
-              { id: "st-1", title: "Duplicate", role: "implement", prompt: "Should be skipped", dependsOn: [] },
-              { id: "st-2", title: "Second", role: "implement", prompt: "Implement", dependsOn: ["st-1"] },
-            ]));
-          case 2: return textResponse("Analysis result");
-          case 3: return textResponse("Implementation result");
-          case 4: return textResponse("Synthesised.");
-          default: throw new Error(`Unexpected call ${calls.length}`);
+            return textResponse(
+              JSON.stringify([
+                {
+                  id: "st-1",
+                  title: "First",
+                  role: "analyze",
+                  prompt: "Analyze",
+                  dependsOn: ["st-1"],
+                },
+                {
+                  id: "st-1",
+                  title: "Duplicate",
+                  role: "implement",
+                  prompt: "Should be skipped",
+                  dependsOn: [],
+                },
+                {
+                  id: "st-2",
+                  title: "Second",
+                  role: "implement",
+                  prompt: "Implement",
+                  dependsOn: ["st-1"],
+                },
+              ]),
+            );
+          case 2:
+            return textResponse("Analysis result");
+          case 3:
+            return textResponse("Implementation result");
+          case 4:
+            return textResponse("Synthesised.");
+          default:
+            throw new Error(`Unexpected call ${calls.length}`);
         }
       },
     });
 
-    const processing = emittedEvents.find((e) => e.type === "stave:orchestration_processing");
+    const processing = emittedEvents.find(
+      (e) => e.type === "stave:orchestration_processing",
+    );
     expect(processing).toBeDefined();
     if (processing && processing.type === "stave:orchestration_processing") {
       // Duplicate "st-1" should be deduplicated — only 2 subtasks.
@@ -199,24 +265,55 @@ This keeps the response concise.`);
     await runOrchestrator({
       userPrompt: "Placeholder scoping test",
       profile: customProfile(),
-      baseArgs: { cwd: "/tmp/workspace", taskId: "task-scope", workspaceId: "ws-scope" },
-      onEvent: (event) => { emittedEvents.push(event); },
+      baseArgs: {
+        cwd: "/tmp/workspace",
+        taskId: "task-scope",
+        workspaceId: "ws-scope",
+      },
+      onEvent: (event) => {
+        emittedEvents.push(event);
+      },
       runTurnBatch: async (args) => {
         calls.push(args);
         switch (calls.length) {
           case 1:
-            return textResponse(JSON.stringify([
-              { id: "st-1", title: "Step 1", role: "analyze", prompt: "Analyze", dependsOn: [] },
-              { id: "st-2", title: "Step 2", role: "implement", prompt: "Use {st-1} here", dependsOn: ["st-1"] },
-              { id: "st-3", title: "Step 3", role: "general", prompt: "Unrelated {st-1} ref", dependsOn: [] },
-            ]));
-          case 2: return textResponse("analysis output");
+            return textResponse(
+              JSON.stringify([
+                {
+                  id: "st-1",
+                  title: "Step 1",
+                  role: "analyze",
+                  prompt: "Analyze",
+                  dependsOn: [],
+                },
+                {
+                  id: "st-2",
+                  title: "Step 2",
+                  role: "implement",
+                  prompt: "Use {st-1} here",
+                  dependsOn: ["st-1"],
+                },
+                {
+                  id: "st-3",
+                  title: "Step 3",
+                  role: "general",
+                  prompt: "Unrelated {st-1} ref",
+                  dependsOn: [],
+                },
+              ]),
+            );
+          case 2:
+            return textResponse("analysis output");
           // st-3 has no deps on st-1, so runs in the same group as st-1.
-          case 3: return textResponse("st-3 output");
+          case 3:
+            return textResponse("st-3 output");
           // st-2 depends on st-1, so runs after.
-          case 4: return textResponse("st-2 output");
-          case 5: return textResponse("Synthesised.");
-          default: throw new Error(`Unexpected call ${calls.length}`);
+          case 4:
+            return textResponse("st-2 output");
+          case 5:
+            return textResponse("Synthesised.");
+          default:
+            throw new Error(`Unexpected call ${calls.length}`);
         }
       },
     });
@@ -237,7 +334,11 @@ This keeps the response concise.`);
     await runOrchestrator({
       userPrompt: "Chain test",
       profile: customProfile(),
-      baseArgs: { cwd: "/tmp/workspace", taskId: "task-chain", workspaceId: "ws-chain" },
+      baseArgs: {
+        cwd: "/tmp/workspace",
+        taskId: "task-chain",
+        workspaceId: "ws-chain",
+      },
       onEvent: (event) => {
         if (event.type === "stave:subtask_started") {
           startedSubtasks.push(event.subtaskId);
@@ -247,16 +348,41 @@ This keeps the response concise.`);
         calls.push(args);
         switch (calls.length) {
           case 1:
-            return textResponse(JSON.stringify([
-              { id: "st-1", title: "Base", role: "analyze", prompt: "Base analysis", dependsOn: [] },
-              { id: "st-2", title: "Mid", role: "implement", prompt: "Based on {st-1}", dependsOn: ["st-1"] },
-              { id: "st-3", title: "Top", role: "verify", prompt: "Verify {st-2}", dependsOn: ["st-2"] },
-            ]));
-          case 2: return textResponse("base result");
-          case 3: return textResponse("mid result");
-          case 4: return textResponse("top result");
-          case 5: return textResponse("Final synthesis.");
-          default: throw new Error(`Unexpected call ${calls.length}`);
+            return textResponse(
+              JSON.stringify([
+                {
+                  id: "st-1",
+                  title: "Base",
+                  role: "analyze",
+                  prompt: "Base analysis",
+                  dependsOn: [],
+                },
+                {
+                  id: "st-2",
+                  title: "Mid",
+                  role: "implement",
+                  prompt: "Based on {st-1}",
+                  dependsOn: ["st-1"],
+                },
+                {
+                  id: "st-3",
+                  title: "Top",
+                  role: "verify",
+                  prompt: "Verify {st-2}",
+                  dependsOn: ["st-2"],
+                },
+              ]),
+            );
+          case 2:
+            return textResponse("base result");
+          case 3:
+            return textResponse("mid result");
+          case 4:
+            return textResponse("top result");
+          case 5:
+            return textResponse("Final synthesis.");
+          default:
+            throw new Error(`Unexpected call ${calls.length}`);
         }
       },
     });
@@ -290,7 +416,9 @@ This keeps the response concise.`);
         calls.push(args);
         switch (calls.length) {
           case 1:
-            return textResponse("I can handle this directly without a structured breakdown.");
+            return textResponse(
+              "I can handle this directly without a structured breakdown.",
+            );
           case 2:
             return textResponse("Handled via fallback worker.");
           case 3:
@@ -306,12 +434,14 @@ This keeps the response concise.`);
     expect(emittedEvents).toContainEqual({
       type: "stave:orchestration_processing",
       supervisorModel: DEFAULT_STAVE_AUTO_PROFILE.supervisorModel,
-      subtasks: [{
-        id: "st-fallback",
-        title: "Process request",
-        model: DEFAULT_STAVE_AUTO_PROFILE.generalModel,
-        dependsOn: [],
-      }],
+      subtasks: [
+        {
+          id: "st-fallback",
+          title: "Process request",
+          model: DEFAULT_STAVE_AUTO_PROFILE.generalModel,
+          dependsOn: [],
+        },
+      ],
     });
   });
 
@@ -336,9 +466,17 @@ This keeps the response concise.`);
         calls.push(args);
         switch (calls.length) {
           case 1:
-            return textResponse(JSON.stringify([
-              { id: "st-1", title: "Implement", role: "implement", prompt: "Patch it", dependsOn: [] },
-            ]));
+            return textResponse(
+              JSON.stringify([
+                {
+                  id: "st-1",
+                  title: "Implement",
+                  role: "implement",
+                  prompt: "Patch it",
+                  dependsOn: [],
+                },
+              ]),
+            );
           case 2:
             return textResponse("Patched.");
           case 3:
@@ -354,12 +492,14 @@ This keeps the response concise.`);
     expect(emittedEvents).toContainEqual({
       type: "stave:orchestration_processing",
       supervisorModel: "gpt-5.4",
-      subtasks: [{
-        id: "st-1",
-        title: "Implement",
-        model: DEFAULT_STAVE_AUTO_PROFILE.implementModel,
-        dependsOn: [],
-      }],
+      subtasks: [
+        {
+          id: "st-1",
+          title: "Implement",
+          model: DEFAULT_STAVE_AUTO_PROFILE.implementModel,
+          dependsOn: [],
+        },
+      ],
     });
   });
 
@@ -384,9 +524,17 @@ This keeps the response concise.`);
         calls.push(args);
         switch (calls.length) {
           case 1:
-            return textResponse(JSON.stringify([
-              { id: "st-1", title: "Verify fix", role: "verify", prompt: "Check it", dependsOn: [] },
-            ]));
+            return textResponse(
+              JSON.stringify([
+                {
+                  id: "st-1",
+                  title: "Verify fix",
+                  role: "verify",
+                  prompt: "Check it",
+                  dependsOn: [],
+                },
+              ]),
+            );
           case 2:
             return textResponse("Checked.");
           case 3:
@@ -401,12 +549,14 @@ This keeps the response concise.`);
     expect(emittedEvents).toContainEqual({
       type: "stave:orchestration_processing",
       supervisorModel: DEFAULT_STAVE_AUTO_PROFILE.supervisorModel,
-      subtasks: [{
-        id: "st-1",
-        title: "Verify fix",
-        model: "claude-opus-4-6",
-        dependsOn: [],
-      }],
+      subtasks: [
+        {
+          id: "st-1",
+          title: "Verify fix",
+          model: "claude-opus-4-7",
+          dependsOn: [],
+        },
+      ],
     });
   });
 });
