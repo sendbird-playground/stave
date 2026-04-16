@@ -13,6 +13,7 @@ import {
   normalizeAppVersionTag,
 } from "../../../src/lib/app-update";
 import { resolveExecutableLookupPath } from "../../providers/executable-path";
+import { bypassQuitConfirmation } from "../quit-state";
 import { runCommandArgs } from "./command";
 
 const DEFAULT_REPO = "sendbird-playground/stave";
@@ -313,6 +314,8 @@ export async function scheduleAppUpdateInstallAndRestart(): Promise<AppUpdateIns
   });
   helperProcess.unref();
 
+  // Skip the quit-confirmation dialog — the user already confirmed the update.
+  bypassQuitConfirmation();
   setTimeout(() => {
     app.quit();
   }, 150);
