@@ -236,7 +236,7 @@ function CrossReviewPopover(args: {
   const [open, setOpen] = useState(false);
   const [instructions, setInstructions] = useState("");
   const providerLabel = args.provider === "codex" ? "Codex" : "Claude";
-  const crossReviewLabel = `Cross review with ${providerLabel}`;
+  const crossReviewLabel = `Review by ${providerLabel}`;
 
   function handleSubmit() {
     const trimmed = instructions.trim();
@@ -260,7 +260,7 @@ function CrossReviewPopover(args: {
               aria-label={crossReviewLabel}
             >
               <GitPullRequest className="size-3.5" />
-              <span>Review</span>
+              <span>Review by</span>
               <span className="rounded-full bg-secondary/20 px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.12em] text-secondary-foreground/70">
                 {providerLabel}
               </span>
@@ -286,7 +286,7 @@ function CrossReviewPopover(args: {
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-foreground">
-                  Review with {providerLabel}
+                  Review by {providerLabel}
                 </p>
                 <span className="rounded-md border border-border/70 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                   {providerLabel}

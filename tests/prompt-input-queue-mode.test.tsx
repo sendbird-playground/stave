@@ -30,7 +30,7 @@ function setWindowContext() {
 
 function getCrossReviewButtonMarkup(html: string) {
   return html.match(
-    /<button[^>]*aria-label="Cross review with Claude"[^>]*>[\s\S]*?<\/button>/,
+    /<button[^>]*aria-label="Review by Claude"[^>]*>[\s\S]*?<\/button>/,
   )?.[0];
 }
 
@@ -129,15 +129,15 @@ describe("PromptInput queue mode", () => {
     );
     const buttonMarkup = getCrossReviewButtonMarkup(html);
 
-    expect(html).toContain('aria-label="Cross review with Claude"');
-    expect(html).toContain(">Review</span>");
+    expect(html).toContain('aria-label="Review by Claude"');
+    expect(html).toContain(">Review by</span>");
     expect(html).toContain(">Claude</span>");
     expect(buttonMarkup).toBeTruthy();
     expect(buttonMarkup).toContain('data-variant="ghost"');
     expect(buttonMarkup).toContain("text-muted-foreground");
     expect(buttonMarkup).toContain("hover:bg-secondary/30");
     expect(buttonMarkup).toContain("bg-secondary/20");
-    expect(html.indexOf('aria-label="Cross review with Claude"')).toBeLessThan(
+    expect(html.indexOf('aria-label="Review by Claude"')).toBeLessThan(
       html.indexOf('aria-label="Attach files"'),
     );
   });
