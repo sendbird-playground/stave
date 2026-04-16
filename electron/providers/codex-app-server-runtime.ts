@@ -1015,15 +1015,15 @@ function inferCodexMcpToolName(args: {
     return metaToolName;
   }
 
-  const quotedToolName = args.message.match(/tool\s+["'“”]([^"'“”]+)["'“”]/i)?.[1]?.trim();
+  const quotedToolName = args.message
+    .match(/tool\s+["'“”]([^"'“”]+)["'“”]/i)?.[1]
+    ?.trim();
   return quotedToolName && quotedToolName.length > 0
     ? quotedToolName
     : "MCP tool";
 }
 
-export function mapCodexElicitationToApproval(
-  params: Record<string, unknown>,
-) {
+export function mapCodexElicitationToApproval(params: Record<string, unknown>) {
   if ((params.mode === "url" ? "url" : "form") !== "form") {
     return null;
   }
@@ -1520,12 +1520,38 @@ function toCodexSourceLabel(source: unknown) {
   if (!source || typeof source !== "object") {
     return "unknown";
   }
-  if (typeof (source as { custom?: unknown }).custom === "string") {
-    return `custom:${String((source as { custom?: unknown }).custom)}`;
+  const sourceRecord = source as Record<string, unknown>;
+  if (typeof sourceRecord.custom === "string") {
+    return `custom:${sourceRecord.custom}`;
   }
-  const subAgent = (source as { subAgent?: unknown }).subAgent;
+  const subAgent = sourceRecord.subAgent;
   if (subAgent != null) {
     return `subAgent:${String(subAgent)}`;
+  }
+  if (typeof sourceRecord.type === "string") {
+    const detail = [
+      sourceRecord.id,
+      sourceRecord.name,
+      sourceRecord.label,
+    ].find(
+      (value) =>
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean",
+    );
+    return detail == null
+      ? sourceRecord.type
+      : `${sourceRecord.type}:${String(detail)}`;
+  }
+  const firstScalarEntry = Object.entries(sourceRecord).find(
+    ([, value]) =>
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean",
+  );
+  if (firstScalarEntry) {
+    const [key, value] = firstScalarEntry;
+    return `${key}:${String(value)}`;
   }
   return "unknown";
 }
@@ -1535,7 +1561,8 @@ function mapCodexModelCatalogEntry(model: any): CodexModelCatalogEntry {
     id: String(model?.id ?? model?.model ?? ""),
     model: String(model?.model ?? ""),
     displayName: String(model?.displayName ?? model?.model ?? ""),
-    description: typeof model?.description === "string" ? model.description : "",
+    description:
+      typeof model?.description === "string" ? model.description : "",
     hidden: Boolean(model?.hidden),
     isDefault: Boolean(model?.isDefault),
     supportsPersonality: Boolean(model?.supportsPersonality),
@@ -1564,25 +1591,25 @@ function mapCodexModelCatalogEntry(model: any): CodexModelCatalogEntry {
           .map((entry: unknown) => String(entry ?? "").trim())
           .filter(Boolean)
       : [],
-    upgrade:
-      typeof model?.upgrade === "string" ? model.upgrade : null,
-    upgradeInfo: model?.upgradeInfo && typeof model.upgradeInfo === "object"
-      ? {
-          model: String(model.upgradeInfo.model ?? ""),
-          upgradeCopy:
-            typeof model.upgradeInfo.upgradeCopy === "string"
-              ? model.upgradeInfo.upgradeCopy
-              : null,
-          modelLink:
-            typeof model.upgradeInfo.modelLink === "string"
-              ? model.upgradeInfo.modelLink
-              : null,
-          migrationMarkdown:
-            typeof model.upgradeInfo.migrationMarkdown === "string"
-              ? model.upgradeInfo.migrationMarkdown
-              : null,
-        }
-      : null,
+    upgrade: typeof model?.upgrade === "string" ? model.upgrade : null,
+    upgradeInfo:
+      model?.upgradeInfo && typeof model.upgradeInfo === "object"
+        ? {
+            model: String(model.upgradeInfo.model ?? ""),
+            upgradeCopy:
+              typeof model.upgradeInfo.upgradeCopy === "string"
+                ? model.upgradeInfo.upgradeCopy
+                : null,
+            modelLink:
+              typeof model.upgradeInfo.modelLink === "string"
+                ? model.upgradeInfo.modelLink
+                : null,
+            migrationMarkdown:
+              typeof model.upgradeInfo.migrationMarkdown === "string"
+                ? model.upgradeInfo.migrationMarkdown
+                : null,
+          }
+        : null,
     availabilityNux:
       typeof model?.availabilityNux?.message === "string"
         ? model.availabilityNux.message
@@ -1593,20 +1620,23 @@ function mapCodexModelCatalogEntry(model: any): CodexModelCatalogEntry {
 }
 
 function mapCodexMcpStatusSnapshot(server: any): CodexMcpServerStatusSnapshot {
-  const tools = server?.tools && typeof server.tools === "object"
-    ? Object.values(server.tools).map((tool: any) => ({
-        name: String(tool?.name ?? ""),
-        ...(typeof tool?.title === "string" ? { title: tool.title } : {}),
-        ...(typeof tool?.description === "string"
-          ? { description: tool.description }
-          : {}),
-      }))
-    : [];
+  const tools =
+    server?.tools && typeof server.tools === "object"
+      ? Object.values(server.tools).map((tool: any) => ({
+          name: String(tool?.name ?? ""),
+          ...(typeof tool?.title === "string" ? { title: tool.title } : {}),
+          ...(typeof tool?.description === "string"
+            ? { description: tool.description }
+            : {}),
+        }))
+      : [];
   const resources = Array.isArray(server?.resources)
     ? server.resources.map((resource: any) => ({
         uri: String(resource?.uri ?? ""),
         name: String(resource?.name ?? resource?.title ?? resource?.uri ?? ""),
-        ...(typeof resource?.title === "string" ? { title: resource.title } : {}),
+        ...(typeof resource?.title === "string"
+          ? { title: resource.title }
+          : {}),
         ...(typeof resource?.description === "string"
           ? { description: resource.description }
           : {}),
@@ -1621,7 +1651,9 @@ function mapCodexMcpStatusSnapshot(server: any): CodexMcpServerStatusSnapshot {
         name: String(
           template?.name ?? template?.title ?? template?.uriTemplate ?? "",
         ),
-        ...(typeof template?.title === "string" ? { title: template.title } : {}),
+        ...(typeof template?.title === "string"
+          ? { title: template.title }
+          : {}),
         ...(typeof template?.description === "string"
           ? { description: template.description }
           : {}),
@@ -1635,9 +1667,8 @@ function mapCodexMcpStatusSnapshot(server: any): CodexMcpServerStatusSnapshot {
     name: String(server?.name ?? ""),
     enabled: true,
     disabledReason: null,
-    transportType: typeof server?.transportType === "string"
-      ? server.transportType
-      : "mcp",
+    transportType:
+      typeof server?.transportType === "string" ? server.transportType : "mcp",
     url: typeof server?.url === "string" ? server.url : null,
     bearerTokenEnvVar:
       typeof server?.bearerTokenEnvVar === "string"
@@ -1674,9 +1705,7 @@ function mapCodexPluginSummary(
       typeof marketplace?.interface?.displayName === "string"
         ? marketplace.interface.displayName
         : null,
-    source: typeof plugin?.source === "string"
-      ? plugin.source
-      : JSON.stringify(plugin?.source ?? "unknown"),
+    source: toCodexSourceLabel(plugin?.source),
     installed: Boolean(plugin?.installed),
     enabled: Boolean(plugin?.enabled),
     installPolicy:
@@ -1694,9 +1723,7 @@ function mapCodexPluginDetail(plugin: any): CodexPluginDetailSnapshot {
     marketplacePath: String(plugin?.marketplacePath ?? ""),
     id: String(plugin?.summary?.id ?? ""),
     name: String(plugin?.summary?.name ?? ""),
-    source: typeof plugin?.summary?.source === "string"
-      ? plugin.summary.source
-      : JSON.stringify(plugin?.summary?.source ?? "unknown"),
+    source: toCodexSourceLabel(plugin?.summary?.source),
     installed: Boolean(plugin?.summary?.installed),
     enabled: Boolean(plugin?.summary?.enabled),
     installPolicy:
@@ -1740,27 +1767,28 @@ function mapCodexPluginDetail(plugin: any): CodexPluginDetailSnapshot {
   };
 }
 
-function mapCodexThreadSnapshot(thread: any, archived: boolean): CodexThreadSnapshot {
+function mapCodexThreadSnapshot(
+  thread: any,
+  archived: boolean,
+): CodexThreadSnapshot {
   return {
     id: String(thread?.id ?? ""),
     forkedFromId:
       typeof thread?.forkedFromId === "string" ? thread.forkedFromId : null,
     preview: typeof thread?.preview === "string" ? thread.preview : "",
     modelProvider:
-      typeof thread?.modelProvider === "string" ? thread.modelProvider : "openai",
-    createdAt:
-      typeof thread?.createdAt === "number" ? thread.createdAt : 0,
-    updatedAt:
-      typeof thread?.updatedAt === "number" ? thread.updatedAt : 0,
+      typeof thread?.modelProvider === "string"
+        ? thread.modelProvider
+        : "openai",
+    createdAt: typeof thread?.createdAt === "number" ? thread.createdAt : 0,
+    updatedAt: typeof thread?.updatedAt === "number" ? thread.updatedAt : 0,
     status: toCodexStatusLabel(thread?.status),
     cwd: typeof thread?.cwd === "string" ? thread.cwd : "",
-    cliVersion:
-      typeof thread?.cliVersion === "string" ? thread.cliVersion : "",
+    cliVersion: typeof thread?.cliVersion === "string" ? thread.cliVersion : "",
     source: toCodexSourceLabel(thread?.source),
     agentNickname:
       typeof thread?.agentNickname === "string" ? thread.agentNickname : null,
-    agentRole:
-      typeof thread?.agentRole === "string" ? thread.agentRole : null,
+    agentRole: typeof thread?.agentRole === "string" ? thread.agentRole : null,
     name: typeof thread?.name === "string" ? thread.name : null,
     archived,
   };
@@ -1784,15 +1812,17 @@ function mapCodexConfigSnapshot(response: any): CodexConfigSnapshot {
         : {},
     origins,
     layers: Array.isArray(response?.layers)
-      ? response.layers.map((layer: any): CodexConfigLayerSnapshot => ({
-          name: String(layer?.name ?? ""),
-          version: String(layer?.version ?? ""),
-          disabledReason:
-            typeof layer?.disabledReason === "string"
-              ? layer.disabledReason
-              : null,
-          config: layer?.config ?? null,
-        }))
+      ? response.layers.map(
+          (layer: any): CodexConfigLayerSnapshot => ({
+            name: String(layer?.name ?? ""),
+            version: String(layer?.version ?? ""),
+            disabledReason:
+              typeof layer?.disabledReason === "string"
+                ? layer.disabledReason
+                : null,
+            config: layer?.config ?? null,
+          }),
+        )
       : [],
   };
 }
@@ -1881,10 +1911,7 @@ export async function getCodexAppServerSnapshot(args: {
     const sectionErrors: Record<string, string> = {};
     let loadedSectionCount = 0;
 
-    const loadSection = async (
-      key: string,
-      loader: () => Promise<void>,
-    ) => {
+    const loadSection = async (key: string, loader: () => Promise<void>) => {
       try {
         await loader();
         loadedSectionCount += 1;
@@ -1902,10 +1929,7 @@ export async function getCodexAppServerSnapshot(args: {
         });
         const account = response?.account;
         snapshot.account = {
-          type:
-            typeof account?.type === "string"
-              ? account.type
-              : "unknown",
+          type: typeof account?.type === "string" ? account.type : "unknown",
           email: typeof account?.email === "string" ? account.email : null,
           planType:
             typeof account?.planType === "string" ? account.planType : null,
@@ -1913,16 +1937,19 @@ export async function getCodexAppServerSnapshot(args: {
         };
       }),
       loadSection("rateLimits", async () => {
-        const response = await client.request<any>("account/rateLimits/read", {});
-        const buckets = response?.rateLimitsByLimitId
-          && typeof response.rateLimitsByLimitId === "object"
-          ? Object.values(response.rateLimitsByLimitId)
-          : response?.rateLimits
-            ? [response.rateLimits]
-            : [];
+        const response = await client.request<any>(
+          "account/rateLimits/read",
+          {},
+        );
+        const buckets =
+          response?.rateLimitsByLimitId &&
+          typeof response.rateLimitsByLimitId === "object"
+            ? Object.values(response.rateLimitsByLimitId)
+            : response?.rateLimits
+              ? [response.rateLimits]
+              : [];
         snapshot.rateLimits = buckets.map((bucket: any) => ({
-          limitId:
-            typeof bucket?.limitId === "string" ? bucket.limitId : null,
+          limitId: typeof bucket?.limitId === "string" ? bucket.limitId : null,
           limitName:
             typeof bucket?.limitName === "string" ? bucket.limitName : null,
           planType:
@@ -1977,33 +2004,37 @@ export async function getCodexAppServerSnapshot(args: {
           forceReload: false,
         });
         snapshot.skills = Array.isArray(response?.data)
-          ? response.data.map((entry: any): CodexSkillCatalogGroup => ({
-              cwd: String(entry?.cwd ?? cwd),
-              skills: Array.isArray(entry?.skills)
-                ? entry.skills.map((skill: any) => ({
-                    name: String(skill?.name ?? ""),
-                    description: String(skill?.description ?? ""),
-                    shortDescription:
-                      typeof skill?.shortDescription === "string"
-                        ? skill.shortDescription
-                        : typeof skill?.interface?.short_description === "string"
-                          ? skill.interface.short_description
-                          : null,
-                    path: String(skill?.path ?? ""),
-                    scope: typeof skill?.scope === "string"
-                      ? skill.scope
-                      : "unknown",
-                    enabled: Boolean(skill?.enabled),
-                  }))
-                : [],
-              errors: Array.isArray(entry?.errors)
-                ? entry.errors.map((error: any) =>
-                    typeof error?.message === "string"
-                      ? error.message
-                      : JSON.stringify(error ?? {}),
-                  )
-                : [],
-            }))
+          ? response.data.map(
+              (entry: any): CodexSkillCatalogGroup => ({
+                cwd: String(entry?.cwd ?? cwd),
+                skills: Array.isArray(entry?.skills)
+                  ? entry.skills.map((skill: any) => ({
+                      name: String(skill?.name ?? ""),
+                      description: String(skill?.description ?? ""),
+                      shortDescription:
+                        typeof skill?.shortDescription === "string"
+                          ? skill.shortDescription
+                          : typeof skill?.interface?.short_description ===
+                              "string"
+                            ? skill.interface.short_description
+                            : null,
+                      path: String(skill?.path ?? ""),
+                      scope:
+                        typeof skill?.scope === "string"
+                          ? skill.scope
+                          : "unknown",
+                      enabled: Boolean(skill?.enabled),
+                    }))
+                  : [],
+                errors: Array.isArray(entry?.errors)
+                  ? entry.errors.map((error: any) =>
+                      typeof error?.message === "string"
+                        ? error.message
+                        : JSON.stringify(error ?? {}),
+                    )
+                  : [],
+              }),
+            )
           : [];
       }),
       loadSection("plugins", async () => {
@@ -2180,8 +2211,8 @@ export async function getCodexAppServerSnapshot(args: {
                   )
                 : null,
               featureRequirements:
-                response.requirements.featureRequirements
-                  && typeof response.requirements.featureRequirements === "object"
+                response.requirements.featureRequirements &&
+                typeof response.requirements.featureRequirements === "object"
                   ? Object.fromEntries(
                       Object.entries(
                         response.requirements.featureRequirements,
@@ -2208,8 +2239,7 @@ export async function getCodexAppServerSnapshot(args: {
               (item: any): CodexExternalAgentConfigMigrationItem => ({
                 itemType: String(item?.itemType ?? ""),
                 description: String(item?.description ?? ""),
-                cwd:
-                  typeof item?.cwd === "string" ? item.cwd : null,
+                cwd: typeof item?.cwd === "string" ? item.cwd : null,
               }),
             )
           : [];
