@@ -1,6 +1,6 @@
 # Install Guide
 
-Internal macOS installation for Stave is optimized around GitHub CLI authentication rather than double-clicking a downloaded helper.
+The current macOS installation flow for Stave is optimized around GitHub CLI authentication rather than double-clicking a downloaded helper.
 
 ## Prerequisites
 
@@ -60,35 +60,6 @@ On packaged macOS builds, the restart helper also carries a Homebrew-friendly PA
 
 If macOS keeps re-asking for Desktop, Documents, or Downloads access after install or update, see [macOS Folder Access Prompts](features/macos-folder-access-prompts.md).
 
-## Automatic Daily Updates
-
-Keep Stave up-to-date automatically with a macOS LaunchAgent that checks for new releases every day at 10:00 AM:
-
-```bash
-gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/setup-auto-update.sh | bash
-```
-
-This registers a daily background task that:
-
-- compares the installed version against the latest GitHub release
-- installs the update silently into the detected writable app location if a new version is available
-- skips the check when the version is already current
-- logs all activity to `~/Library/Logs/Stave/auto-update.log`
-
-If your Mac is asleep at 10:00 AM, macOS runs the check as soon as the machine wakes up.
-
-To check status:
-
-```bash
-launchctl print gui/$(id -u)/com.stave.app.auto-update
-```
-
-To uninstall:
-
-```bash
-gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/setup-auto-update.sh | bash -s -- uninstall
-```
-
 ## Manual Fallback
 
 If you need the release bundle directly, download `Stave-macOS.zip` from the latest release.
@@ -99,4 +70,4 @@ The bundle contains:
 - `Install Stave.command`
 - `Install Stave in Terminal.txt`
 
-That path remains available as an offline/manual fallback, but the `gh` installer is the preferred internal install flow.
+That path remains available as an offline/manual fallback, but the `gh` installer is the preferred install flow.

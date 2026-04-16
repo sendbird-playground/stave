@@ -1,6 +1,6 @@
 # CLI Session Architecture Review
 
-> Compared against: **superset** (`~/workspace/superset`) and **t3code** (`~/workspace/t3code`)
+> Compared against: **superset** and **t3code**
 >
 > Reviewed: 2026-04-12 — commits `61b3a4b..HEAD` (xterm.js rewrite)
 
