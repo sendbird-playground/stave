@@ -1,3 +1,5 @@
+import { normalizeProjectDisplayName } from "@/store/project.utils";
+
 export interface ZenProjectListItem {
   projectName: string;
   projectPath: string;
@@ -9,15 +11,6 @@ interface ZenProjectRecord {
   projectPath: string;
 }
 
-function formatProjectLabel(args: { projectName: string | null; projectPath: string }) {
-  const trimmedName = args.projectName?.trim();
-  if (trimmedName) {
-    return trimmedName;
-  }
-  const normalizedPath = args.projectPath.replace(/[\\/]+$/, "");
-  return normalizedPath.split(/[/\\]/).at(-1) || "Project";
-}
-
 export function buildZenProjectList(args: {
   currentProjectName: string | null;
   currentProjectPath: string | null;
@@ -26,7 +19,7 @@ export function buildZenProjectList(args: {
   const rememberedProjects = args.recentProjects
     .filter((project) => project.projectPath.trim().length > 0)
     .map((project) => ({
-      projectName: formatProjectLabel({
+      projectName: normalizeProjectDisplayName({
         projectName: project.projectName,
         projectPath: project.projectPath,
       }),
@@ -39,7 +32,7 @@ export function buildZenProjectList(args: {
   }
 
   const currentProject: ZenProjectListItem = {
-    projectName: formatProjectLabel({
+    projectName: normalizeProjectDisplayName({
       projectName: args.currentProjectName,
       projectPath: args.currentProjectPath,
     }),

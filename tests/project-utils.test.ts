@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildProjectDefaultWorkspaceId,
+  formatWorkspacePathLabel,
+  isDefaultWorkspaceName,
   normalizeCurrentProjectState,
   normalizeProjectBasePrompt,
   normalizeProjectDisplayName,
   normalizeRecentProjectStates,
+  resolvePathBaseName,
+  resolveProjectForWorkspaceId,
   resolveTaskWorkspaceContext,
   resolveCurrentProjectDefaultWorkspaceId,
+  resolveWorkspaceName,
 } from "@/store/project.utils";
 
 const PROJECT_PATH = "/tmp/workspace/stave";
@@ -17,6 +22,29 @@ const DEFAULT_WORKSPACE_ID = buildProjectDefaultWorkspaceId({
 });
 
 describe("project name normalization", () => {
+  test("resolves path basenames after trimming trailing separators", () => {
+    expect(resolvePathBaseName({ path: "/tmp/workspace/stave/" })).toBe("stave");
+    expect(resolvePathBaseName({ path: "", fallback: "project" })).toBe("project");
+  });
+
+  test("identifies the default workspace name case-insensitively", () => {
+    expect(isDefaultWorkspaceName("Default Workspace")).toBe(true);
+    expect(isDefaultWorkspaceName("default workspace")).toBe(true);
+    expect(isDefaultWorkspaceName("feature/refactor")).toBe(false);
+  });
+
+  test("formats workspace paths relative to the project root when possible", () => {
+    expect(formatWorkspacePathLabel({
+      workspacePath: "/tmp/workspace/stave/.stave/workspaces/feat__agent-ui",
+      projectPath: PROJECT_PATH,
+    })).toBe(".stave/workspaces/feat__agent-ui");
+
+    expect(formatWorkspacePathLabel({
+      workspacePath: PROJECT_PATH,
+      projectPath: PROJECT_PATH,
+    })).toBe(PROJECT_PATH);
+  });
+
   test("replaces the generic placeholder name with the folder basename", () => {
     expect(normalizeProjectDisplayName({
       projectPath: PROJECT_PATH,
@@ -188,6 +216,82 @@ describe("project name normalization", () => {
       workspaceBranchById: { [DEFAULT_WORKSPACE_ID]: "main" },
       workspacePathById: { [DEFAULT_WORKSPACE_ID]: PROJECT_PATH },
       workspaceDefaultById: { [DEFAULT_WORKSPACE_ID]: true },
+    });
+  });
+
+  test("resolves workspace names from current state before falling back to recents", () => {
+    expect(resolveWorkspaceName({
+      workspaceId: "ws-current",
+      state: {
+        workspaces: [{ id: "ws-current", name: "feature/current", updatedAt: "2026-04-16T00:00:00.000Z" }],
+        recentProjects: [{
+          projectPath: "/tmp/other-project",
+          projectName: "other-project",
+          lastOpenedAt: "2026-04-16T00:00:00.000Z",
+          defaultBranch: "main",
+          workspaces: [{ id: "ws-recent", name: "feature/recent", updatedAt: "2026-04-16T00:00:00.000Z" }],
+          activeWorkspaceId: "ws-recent",
+          workspaceBranchById: {},
+          workspacePathById: {},
+          workspaceDefaultById: {},
+        }],
+      },
+    })).toBe("feature/current");
+
+    expect(resolveWorkspaceName({
+      workspaceId: "ws-recent",
+      state: {
+        workspaces: [],
+        recentProjects: [{
+          projectPath: "/tmp/other-project",
+          projectName: "other-project",
+          lastOpenedAt: "2026-04-16T00:00:00.000Z",
+          defaultBranch: "main",
+          workspaces: [{ id: "ws-recent", name: "feature/recent", updatedAt: "2026-04-16T00:00:00.000Z" }],
+          activeWorkspaceId: "ws-recent",
+          workspaceBranchById: {},
+          workspacePathById: {},
+          workspaceDefaultById: {},
+        }],
+      },
+    })).toBe("feature/recent");
+  });
+
+  test("resolves the owning project for a workspace from current state or recents", () => {
+    expect(resolveProjectForWorkspaceId({
+      workspaceId: "ws-current",
+      state: {
+        projectPath: PROJECT_PATH,
+        projectName: "stave",
+        workspaces: [{ id: "ws-current", name: "feature/current", updatedAt: "2026-04-16T00:00:00.000Z" }],
+        recentProjects: [],
+      },
+    })).toEqual({
+      projectPath: PROJECT_PATH,
+      projectName: "stave",
+    });
+
+    expect(resolveProjectForWorkspaceId({
+      workspaceId: "ws-recent",
+      state: {
+        projectPath: null,
+        projectName: null,
+        workspaces: [],
+        recentProjects: [{
+          projectPath: "/tmp/other-project",
+          projectName: "other-project",
+          lastOpenedAt: "2026-04-16T00:00:00.000Z",
+          defaultBranch: "main",
+          workspaces: [{ id: "ws-recent", name: "feature/recent", updatedAt: "2026-04-16T00:00:00.000Z" }],
+          activeWorkspaceId: "ws-recent",
+          workspaceBranchById: {},
+          workspacePathById: {},
+          workspaceDefaultById: {},
+        }],
+      },
+    })).toEqual({
+      projectPath: "/tmp/other-project",
+      projectName: "other-project",
     });
   });
 

@@ -1,3 +1,4 @@
+import { resolvePathBaseName } from "@/lib/path-utils";
 import { resolveWorkspaceRelativeFilePath } from "@/lib/workspace-file-path";
 
 export interface ResolvedWorkspaceFileLink {
@@ -96,7 +97,7 @@ export function formatFileLinkLocation(args: { line?: number; column?: number })
 }
 
 export function toBaseName(filePath: string) {
-  return filePath.split("/").filter(Boolean).at(-1) ?? filePath;
+  return resolvePathBaseName({ path: filePath, fallback: filePath });
 }
 
 export function getKnownFilePathSet(filePaths: readonly string[]) {

@@ -2,6 +2,7 @@ import {
   DEFAULT_PROVIDER_TIMEOUT_MS,
   PROVIDER_TIMEOUT_OPTIONS,
 } from "@/lib/providers/runtime-option-contract";
+import { resolvePathBaseName } from "@/lib/path-utils";
 import {
   updateApprovalPartsByRequestId,
   updateUserInputPartsByRequestId,
@@ -72,7 +73,7 @@ export function resolveLanguage(args: { filePath: string }) {
   if (extMap[ext]) {
     return extMap[ext];
   }
-  const basename = path.split("/").at(-1) ?? "";
+  const basename = resolvePathBaseName({ path });
   if (basename === "dockerfile" || basename.startsWith("dockerfile.")) {
     return "dockerfile";
   }

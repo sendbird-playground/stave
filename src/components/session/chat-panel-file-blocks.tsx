@@ -19,16 +19,13 @@ import {
   resolveWorkspaceRelativeFilePath,
 } from "@/lib/workspace-file-path";
 import { useDismissibleLayer } from "@/lib/dismissible-layer";
+import { toBaseName } from "@/lib/message-file-links";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import type { CodeDiffPart, FileContextPart, ImageContextPart } from "@/types/chat";
 
 const ReactDiffViewer = lazy(() => import("react-diff-viewer-continued"));
-
-export function toBaseName(filePath: string) {
-  return filePath.split("/").filter(Boolean).at(-1) ?? filePath;
-}
 
 function resolveChatBlockFilePath(args: { filePath: string; workspacePath?: string }) {
   const openFilePath = resolveWorkspaceRelativeFilePath(args) ?? args.filePath;
@@ -101,11 +98,11 @@ const CHAT_DIFF_VIEWER_STYLES = {
   },
 } as const;
 
-export function toDiffEditorTabId(args: { messageId: string; filePath: string; index: number }) {
+function toDiffEditorTabId(args: { messageId: string; filePath: string; index: number }) {
   return `chat-diff:${args.messageId}:${args.index}:${args.filePath}`;
 }
 
-export function ChangeCount(args: { value: number; tone: "added" | "removed" }) {
+function ChangeCount(args: { value: number; tone: "added" | "removed" }) {
   return (
     <span
       className={cn(

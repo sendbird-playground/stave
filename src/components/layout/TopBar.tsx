@@ -31,27 +31,11 @@ import {
   setRepoMapContextCache,
 } from "@/lib/fs/repo-map-context-cache";
 import { formatRepoMapForContext } from "@/lib/fs/repo-map.types";
+import { formatWorkspacePathLabel } from "@/store/project.utils";
 
 const IS_MAC = typeof window !== "undefined" && window.api?.platform === "darwin";
 const TOP_BAR_DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
 const TOP_BAR_NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
-
-function formatWorkspacePathLabel(args: {
-  workspacePath?: string;
-  projectPath?: string | null;
-}) {
-  const workspacePath = args.workspacePath?.trim();
-  if (!workspacePath) {
-    return "";
-  }
-
-  const projectPath = args.projectPath?.trim();
-  if (projectPath && workspacePath.startsWith(`${projectPath}/`)) {
-    return workspacePath.slice(projectPath.length + 1);
-  }
-
-  return workspacePath;
-}
 
 export function TopBar() {
   const [

@@ -2,6 +2,7 @@ import type {
   ProviderId,
   ProviderRuntimeOptions,
 } from "@/lib/providers/provider.types";
+import { resolvePathBaseName } from "@/lib/path-utils";
 
 export type SessionSlotState = "idle" | "running" | "background" | "exited";
 
@@ -80,9 +81,7 @@ export function getTerminalTabDefaultTitle(args: {
     return linkedTaskTitle;
   }
 
-  const normalizedPath = args.cwd.trim().replace(/[\\/]+$/, "");
-  const segments = normalizedPath.split(/[\\/]/).filter(Boolean);
-  return segments.at(-1) ?? "Terminal";
+  return resolvePathBaseName({ path: args.cwd, fallback: "Terminal" });
 }
 
 export function getCliSessionProviderLabel(

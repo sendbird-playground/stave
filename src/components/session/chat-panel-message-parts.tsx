@@ -21,6 +21,9 @@ import {
 } from "@/components/ai-elements";
 import { LinkifiedText } from "@/components/ui/linkified-text";
 import {
+  isSubagentProgressSystemEvent,
+  isSubagentToolPart,
+  isTodoToolPart,
   shouldAutoOpenToolPart,
   shouldRenderInlineSystemEvent,
 } from "@/components/session/chat-panel.utils";
@@ -63,14 +66,6 @@ export function CopyButton({ text }: { text: string }) {
       {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
     </MessageAction>
   );
-}
-
-export function isSubagentToolPart(args: { toolName: string }) {
-  return args.toolName.trim().toLowerCase() === "agent";
-}
-
-export function isTodoToolPart(args: { toolName: string }) {
-  return args.toolName.trim().toLowerCase() === "todowrite";
 }
 
 export function toToolDisplayName(toolName: string) {
@@ -240,10 +235,6 @@ export function MessagePartRenderer(args: {
     case "thinking":
       return null;
   }
-}
-
-export function isSubagentProgressSystemEvent(content: string): boolean {
-  return content.trimStart().startsWith("Subagent progress:");
 }
 
 export function buildChainOfThoughtSteps(parts: MessagePart[]): ChainOfThoughtStep[] {

@@ -8,11 +8,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { resolvePathBaseName } from "@/lib/path-utils";
 import { cn } from "@/lib/utils";
 import type { EditorTab } from "@/types/chat";
 
 function formatTabLabel(filePath: string) {
-  return filePath.split("/").filter(Boolean).at(-1) ?? filePath;
+  return resolvePathBaseName({ path: filePath, fallback: filePath });
 }
 
 export function EditorMainTabStrip(args: {

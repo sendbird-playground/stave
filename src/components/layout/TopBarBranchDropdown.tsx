@@ -15,19 +15,8 @@ import {
 import { isBranchAttachedElsewhere } from "@/lib/source-control-worktrees";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
+import { formatWorkspacePathLabel } from "@/store/project.utils";
 import type { CSSProperties } from "react";
-
-function formatWorkspacePathLabel(args: { workspacePath?: string; projectPath?: string | null }) {
-  const workspacePath = args.workspacePath?.trim();
-  if (!workspacePath) {
-    return "";
-  }
-  const projectPath = args.projectPath?.trim();
-  if (projectPath && workspacePath.startsWith(`${projectPath}/`)) {
-    return workspacePath.slice(projectPath.length + 1);
-  }
-  return workspacePath;
-}
 
 export function TopBarBranchDropdown(props: { noDragStyle: CSSProperties }) {
   const [branchOpen, setBranchOpen] = useState(false);

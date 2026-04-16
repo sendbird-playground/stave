@@ -65,7 +65,12 @@ import {
 } from "@/lib/tasks";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
+import { resolvePathBaseName } from "@/lib/path-utils";
 import { useAppStore } from "@/store/app.store";
+import {
+  isDefaultWorkspaceName,
+  resolveProjectNameFromPath,
+} from "@/store/project.utils";
 import {
   findPendingApprovals,
   findLatestPendingUserInputPart,
@@ -1131,19 +1136,15 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     [modelOptions],
   );
   const workspacePathLabel = useMemo(() => {
-    const normalizedPath = workspaceCwd?.replace(/[\\/]+$/, "");
-    if (!normalizedPath) {
-      return undefined;
-    }
-    return normalizedPath.split(/[/\\]/).at(-1) || undefined;
+    return resolvePathBaseName({ path: workspaceCwd }) || undefined;
   }, [workspaceCwd]);
   const workspaceProjectLabel = useMemo(() => {
-    const normalizedProjectPath = projectPath?.replace(/[\\/]+$/, "");
-    const projectLabel =
-      normalizedProjectPath?.split(/[/\\]/).at(-1) || "stave";
+    const projectLabel = projectPath
+      ? resolveProjectNameFromPath({ projectPath })
+      : "stave";
     if (
       activeWorkspaceName?.trim() &&
-      activeWorkspaceName.toLowerCase() !== "default workspace"
+      !isDefaultWorkspaceName(activeWorkspaceName)
     ) {
       return `user@${projectLabel}:${activeWorkspaceName.trim()}`;
     }

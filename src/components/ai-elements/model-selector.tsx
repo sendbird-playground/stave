@@ -23,11 +23,9 @@ import { ModelIcon } from "./model-icon";
 import { shouldOpenModelSelector, type ModelSelectorOption } from "./model-selector.utils";
 
 export {
-  buildModelSelectorOption,
   buildModelSelectorOptions,
   buildModelSelectorValue,
   buildRecommendedModelSelectorOptions,
-  DEFAULT_RECOMMENDED_MODEL_SELECTOR_KEYS,
   type ModelSelectorOption,
 } from "./model-selector.utils";
 
