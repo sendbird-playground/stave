@@ -1556,6 +1556,79 @@ function toCodexSourceLabel(source: unknown) {
   return "unknown";
 }
 
+export function toCodexConfigLayerDisplayValue(
+  value: unknown,
+  fallback = "unknown",
+) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    const parts = value
+      .map((entry) => toCodexConfigLayerDisplayValue(entry, ""))
+      .filter(Boolean);
+    return parts.length > 0 ? parts.join(" / ") : fallback;
+  }
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+  const record = value as Record<string, unknown>;
+  const pickScalar = (...entries: unknown[]) =>
+    entries.find(
+      (entry) =>
+        (typeof entry === "string" && entry.trim().length > 0) ||
+        typeof entry === "number" ||
+        typeof entry === "boolean",
+    );
+  const detail = pickScalar(
+    record.displayName,
+    record.label,
+    record.title,
+    record.path,
+    record.id,
+    record.name,
+  );
+  const kind = pickScalar(
+    record.kind,
+    record.type,
+    record.scope,
+    record.source,
+  );
+  if (detail != null) {
+    const detailLabel =
+      typeof detail === "string" ? detail.trim() : String(detail);
+    if (kind != null) {
+      const kindLabel = typeof kind === "string" ? kind.trim() : String(kind);
+      if (kindLabel.length > 0 && kindLabel !== detailLabel) {
+        return `${kindLabel}:${detailLabel}`;
+      }
+    }
+    return detailLabel;
+  }
+  const firstScalarEntry = Object.entries(record).find(
+    ([, entry]) =>
+      (typeof entry === "string" && entry.trim().length > 0) ||
+      typeof entry === "number" ||
+      typeof entry === "boolean",
+  );
+  if (firstScalarEntry) {
+    const [key, entry] = firstScalarEntry;
+    const entryLabel = typeof entry === "string" ? entry.trim() : String(entry);
+    return `${key}:${entryLabel}`;
+  }
+  const fallbackText = toText(value);
+  if (!fallbackText || fallbackText === "{}" || fallbackText === "null") {
+    return fallback;
+  }
+  return fallbackText.length > 180
+    ? `${fallbackText.slice(0, 179)}…`
+    : fallbackText;
+}
+
 function mapCodexModelCatalogEntry(model: any): CodexModelCatalogEntry {
   return {
     id: String(model?.id ?? model?.model ?? ""),
@@ -1814,8 +1887,8 @@ function mapCodexConfigSnapshot(response: any): CodexConfigSnapshot {
     layers: Array.isArray(response?.layers)
       ? response.layers.map(
           (layer: any): CodexConfigLayerSnapshot => ({
-            name: String(layer?.name ?? ""),
-            version: String(layer?.version ?? ""),
+            name: toCodexConfigLayerDisplayValue(layer?.name),
+            version: toCodexConfigLayerDisplayValue(layer?.version, ""),
             disabledReason:
               typeof layer?.disabledReason === "string"
                 ? layer.disabledReason
