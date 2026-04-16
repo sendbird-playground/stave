@@ -84,6 +84,19 @@ export function buildWorkspacePlanListEntries(args: {
 
 export const normalizeWorkspacePlanText = normalizePlanText;
 
+export function resolveWorkspacePlanPersistenceText(args: {
+  planText?: string | null;
+  lastPersistedPlanText?: string | null;
+}) {
+  const normalizedPlanText = normalizeWorkspacePlanText(args.planText ?? "");
+  if (!normalizedPlanText.trim()) {
+    return null;
+  }
+  return normalizedPlanText === (args.lastPersistedPlanText ?? null)
+    ? null
+    : normalizedPlanText;
+}
+
 export async function persistWorkspacePlanFile(args: {
   rootPath: string;
   taskId: string;

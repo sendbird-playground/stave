@@ -5,6 +5,7 @@ import {
   isWorkspacePlanFilePath,
   MAX_WORKSPACE_PLANS,
   parseWorkspacePlanFilePath,
+  resolveWorkspacePlanPersistenceText,
   sortWorkspacePlansNewestFirst,
 } from "@/lib/plans";
 import { hasMeaningfulPlanText, normalizePlanText } from "@/lib/plan-text";
@@ -95,5 +96,23 @@ describe("workspace plans helpers", () => {
   test("does not treat ellipsis-only placeholder text as a meaningful plan", () => {
     expect(hasMeaningfulPlanText("...")).toBe(false);
     expect(hasMeaningfulPlanText("…")).toBe(false);
+  });
+
+  test("skips persisting duplicate normalized plan text for the same turn", () => {
+    const persisted = resolveWorkspacePlanPersistenceText({
+      planText: "...\n\n## Plan\n- Inspect\n- Patch\n\nLet me know if you want changes.",
+      lastPersistedPlanText: "## Plan\n- Inspect\n- Patch",
+    });
+
+    expect(persisted).toBeNull();
+  });
+
+  test("persists a new normalized plan text when the content changed", () => {
+    const persisted = resolveWorkspacePlanPersistenceText({
+      planText: "## Plan\n- Inspect\n- Patch\n- Verify",
+      lastPersistedPlanText: "## Plan\n- Inspect\n- Patch",
+    });
+
+    expect(persisted).toBe("## Plan\n- Inspect\n- Patch\n- Verify");
   });
 });

@@ -6,7 +6,8 @@ const PLAN_VIEWER_COLLAPSED_GAP_PX = 8;
 const PLAN_VIEWER_EXPANDED_TOP_PX = 12;
 const PLAN_VIEWER_SIDE_GAP_PX = 16;
 const PLAN_VIEWER_NORMAL_MAX_WIDTH_PX = 672;
-export const SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME = "pointer-events-none absolute z-[25]";
+export const SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME =
+  "pointer-events-none absolute z-[25]";
 
 export type PlanViewerViewState = "normal" | "minimized" | "expanded";
 
@@ -15,17 +16,28 @@ interface PlanViewerDragPosition {
   y: number;
 }
 
-type PlanMessage = Pick<ChatMessage, "role" | "providerId" | "isPlanResponse" | "isStreaming" | "planText">;
+type PlanMessage = Pick<
+  ChatMessage,
+  "role" | "providerId" | "isPlanResponse" | "isStreaming" | "planText"
+>;
 
 function hasPlanContent(message?: PlanMessage | null) {
-  return message?.role === "assistant"
-    && message.isPlanResponse === true
-    && hasMeaningfulPlanText(message.planText);
+  return (
+    message?.role === "assistant" &&
+    message.isPlanResponse === true &&
+    hasMeaningfulPlanText(message.planText)
+  );
 }
 
 export function resolvePlanViewerState(args: {
   activeProvider: "claude-code" | "codex" | "stave";
-  claudePermissionMode: "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk" | "auto";
+  claudePermissionMode:
+    | "default"
+    | "acceptEdits"
+    | "bypassPermissions"
+    | "plan"
+    | "dontAsk"
+    | "auto";
   codexPlanMode?: boolean;
   latestPlanMessage?: PlanMessage | null;
   lastMessage?: PlanMessage | null;
@@ -36,30 +48,34 @@ export function resolvePlanViewerState(args: {
     : "";
 
   const isClaudePlanMode =
-    (args.activeProvider === "claude-code" || args.activeProvider === "stave")
-    && args.claudePermissionMode === "plan";
-  const isCodexPlanMode = args.activeProvider === "codex" && args.codexPlanMode === true;
+    (args.activeProvider === "claude-code" ||
+      args.activeProvider === "stave") &&
+    args.claudePermissionMode === "plan";
+  const isCodexPlanMode =
+    args.activeProvider === "codex" && args.codexPlanMode === true;
   const isPlanModeActive = isClaudePlanMode || isCodexPlanMode;
   const lastMessageHasPlan = hasPlanContent(args.lastMessage);
   const hasHistoricalPlan = hasPlanContent(args.latestPlanMessage);
   const shouldDelayCodexPendingViewer =
-    isCodexPlanMode
-    && args.isTurnActive
-    && args.latestPlanMessage?.isStreaming === true;
+    isCodexPlanMode &&
+    args.isTurnActive &&
+    args.latestPlanMessage?.isStreaming === true;
 
   // Stay in "preparing" while plan mode is active and the current turn has not
   // produced a fresh plan response yet. Historical plan text may still exist.
   const isPlanPreparing =
-    isPlanModeActive
-    && args.isTurnActive
-    && (!lastMessageHasPlan || shouldDelayCodexPendingViewer);
+    isPlanModeActive &&
+    args.isTurnActive &&
+    (!lastMessageHasPlan || shouldDelayCodexPendingViewer);
 
-  // Render the full viewer only while the task is still in plan review, or
-  // when the latest message is itself the plan response awaiting user action.
+  // Claude keeps the latest plan visible after leaving plan mode so the
+  // dedicated review controls stay available. Codex exits back to the normal
+  // input flow when the user turns plan mode off explicitly.
   const isPlanPending =
-    hasHistoricalPlan
-    && !shouldDelayCodexPendingViewer
-    && (isPlanModeActive || lastMessageHasPlan);
+    hasHistoricalPlan &&
+    !shouldDelayCodexPendingViewer &&
+    (isPlanModeActive ||
+      (args.activeProvider !== "codex" && lastMessageHasPlan));
   const canReplyToPlan = isPlanPending && !args.isTurnActive;
 
   return {
@@ -76,9 +92,9 @@ export function resolvePlanViewerAutoViewState(args: {
   planText: string;
 }): PlanViewerViewState {
   if (
-    args.viewState === "expanded"
-    && args.isPlanPreparing
-    && args.planText.trim().length > 0
+    args.viewState === "expanded" &&
+    args.isPlanPreparing &&
+    args.planText.trim().length > 0
   ) {
     return "minimized";
   }
@@ -102,7 +118,9 @@ export function resolvePlanViewerInsets(args: {
   isExpanded: boolean;
   inputDockHeight: number;
 }) {
-  const bottomOffset = Math.max(0, Math.round(args.inputDockHeight)) + PLAN_VIEWER_COLLAPSED_GAP_PX;
+  const bottomOffset =
+    Math.max(0, Math.round(args.inputDockHeight)) +
+    PLAN_VIEWER_COLLAPSED_GAP_PX;
 
   return {
     topOffset: args.isExpanded ? PLAN_VIEWER_EXPANDED_TOP_PX : null,
@@ -169,6 +187,8 @@ export function resolvePlanViewerLayout(args: {
       "pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg",
       isExpanded ? "h-full w-full" : "",
       isMinimized ? "w-72" : "",
-    ].filter(Boolean).join(" "),
+    ]
+      .filter(Boolean)
+      .join(" "),
   };
 }

@@ -1,5 +1,12 @@
 import { PromptInput, ZenPromptInput } from "@/components/ai-elements";
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   buildModelSelectorOptions,
   buildRecommendedModelSelectorOptions,
@@ -9,7 +16,11 @@ import {
 import type { PromptInputProviderModeStatus } from "@/components/ai-elements/prompt-input-provider-mode";
 import type { PromptInputRuntimeStatusItem } from "@/components/ai-elements/prompt-input-runtime-bar";
 import { Badge, Kbd, toast } from "@/components/ui";
-import { buildCommandPaletteItems, type CommandPaletteItem, type CommandPaletteProviderNote } from "@/lib/commands";
+import {
+  buildCommandPaletteItems,
+  type CommandPaletteItem,
+  type CommandPaletteProviderNote,
+} from "@/lib/commands";
 import {
   buildClaudeProviderModeSettingsPatch,
   buildCodexProviderModeSettingsPatch,
@@ -47,7 +58,11 @@ import {
   resolveProviderTurnDisplayState,
 } from "@/lib/providers/turn-status";
 import { getEffectiveSkillEntries } from "@/lib/skills/catalog";
-import { getTaskControlOwner, isTaskArchived, isTaskManaged } from "@/lib/tasks";
+import {
+  getTaskControlOwner,
+  isTaskArchived,
+  isTaskManaged,
+} from "@/lib/tasks";
 import type { SkillCatalogEntry } from "@/lib/skills/types";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
@@ -83,7 +98,11 @@ interface BaseChatInputProps {
   compact?: boolean;
 }
 
-const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
+const EMPTY_PROMPT_DRAFT: PromptDraft = {
+  text: "",
+  attachedFilePaths: [],
+  attachments: [],
+};
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const PROMPT_DRAFT_SAVE_DELAY_MS = 1200;
 const PROMPT_DRAFT_IDLE_TIMEOUT_MS = 750;
@@ -116,13 +135,7 @@ const INACTIVE_CODEX_SETTINGS = [
   false,
   true,
 ] as const;
-const INACTIVE_STAVE_SETTINGS = [
-  false,
-  "auto",
-  3,
-  true,
-  2,
-] as const;
+const INACTIVE_STAVE_SETTINGS = [false, "auto", 3, true, 2] as const;
 const EMPTY_PROVIDER_MODE_PRESETS: readonly ProviderModePresetDefinition[] = [];
 
 interface ChatInputComposerProps {
@@ -177,27 +190,36 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     resolveApproval,
     resolveUserInput,
     setStaveMuseOpen,
-  ] = useAppStore(useShallow((state) => [
-    state.promptDraftByTask[args.providerSelectionTarget] ?? EMPTY_PROMPT_DRAFT,
-    state.promptFocusNonce,
-    state.clearPromptDraft,
-    state.updatePromptDraft,
-    state.sendUserMessage,
-    state.openFileFromTree,
-    state.abortTaskTurn,
-    state.resolveApproval,
-    state.resolveUserInput,
-    state.setStaveMuseOpen,
-  ] as const));
-  const [pendingUserInputMessageId, pendingUserInputPart] = useAppStore(useShallow((state) => {
-    const messages = state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
-    const lastMessage = messages.at(-1);
-    if (!lastMessage) {
-      return [null, null] as const;
-    }
-    const part = findLatestPendingUserInputPart({ message: lastMessage });
-    return [lastMessage.id, part ?? null] as const;
-  }));
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.promptDraftByTask[args.providerSelectionTarget] ??
+            EMPTY_PROMPT_DRAFT,
+          state.promptFocusNonce,
+          state.clearPromptDraft,
+          state.updatePromptDraft,
+          state.sendUserMessage,
+          state.openFileFromTree,
+          state.abortTaskTurn,
+          state.resolveApproval,
+          state.resolveUserInput,
+          state.setStaveMuseOpen,
+        ] as const,
+    ),
+  );
+  const [pendingUserInputMessageId, pendingUserInputPart] = useAppStore(
+    useShallow((state) => {
+      const messages =
+        state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
+      const lastMessage = messages.at(-1);
+      if (!lastMessage) {
+        return [null, null] as const;
+      }
+      const part = findLatestPendingUserInputPart({ message: lastMessage });
+      return [lastMessage.id, part ?? null] as const;
+    }),
+  );
   const pendingUserInput = useMemo(() => {
     if (!pendingUserInputMessageId || !pendingUserInputPart) {
       return null;
@@ -207,9 +229,15 @@ function ChatInputComposer(args: ChatInputComposerProps) {
       part: pendingUserInputPart,
     };
   }, [pendingUserInputMessageId, pendingUserInputPart]);
-  const activeTaskMessages = useAppStore((state) => state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES);
-  const activeTurnId = useAppStore((state) => state.activeTurnIdsByTask[args.activeTaskId] ?? null);
-  const providerTurnActivity = useAppStore((state) => state.providerTurnActivityByTask[args.activeTaskId] ?? null);
+  const activeTaskMessages = useAppStore(
+    (state) => state.messagesByTask[args.activeTaskId] ?? EMPTY_MESSAGES,
+  );
+  const activeTurnId = useAppStore(
+    (state) => state.activeTurnIdsByTask[args.activeTaskId] ?? null,
+  );
+  const providerTurnActivity = useAppStore(
+    (state) => state.providerTurnActivityByTask[args.activeTaskId] ?? null,
+  );
   const pendingApprovals = useMemo(
     () => findPendingApprovals({ messages: activeTaskMessages }),
     [activeTaskMessages],
@@ -241,7 +269,10 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     [activeTaskMessages],
   );
   const promptSuggestions = useMemo(
-    () => (args.isTurnActive || isInputBlocked ? [] : getLatestPromptSuggestions(activeTaskMessages)),
+    () =>
+      args.isTurnActive || isInputBlocked
+        ? []
+        : getLatestPromptSuggestions(activeTaskMessages),
     [activeTaskMessages, args.isTurnActive, isInputBlocked],
   );
   const [draftText, setDraftText] = useState(promptDraft.text);
@@ -321,7 +352,8 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     });
     setFocusNonce((current) => current + 1);
     toast.message("Guidance drafted", {
-      description: "The current approval will be denied. Send the staged follow-up after the turn stops.",
+      description:
+        "The current approval will be denied. Send the staged follow-up after the turn stops.",
     });
   }
 
@@ -335,26 +367,32 @@ function ChatInputComposer(args: ChatInputComposerProps) {
 
   const filePicker = window.api?.fs?.pickFiles;
   const workspaceRootPath = args.workspaceCwd?.trim() || undefined;
-  const handleOpenFileSelector = workspaceRootPath && filePicker
-    ? async () => {
-        const result = await filePicker({ rootPath: workspaceRootPath });
-        if (!result.ok || result.filePaths.length === 0) {
-          return;
-        }
-
-        const currentFilePaths = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachedFilePaths ?? [];
-        const nextFilePaths = [...currentFilePaths];
-        for (const filePath of result.filePaths) {
-          if (!nextFilePaths.includes(filePath)) {
-            nextFilePaths.push(filePath);
+  const handleOpenFileSelector =
+    workspaceRootPath && filePicker
+      ? async () => {
+          const result = await filePicker({ rootPath: workspaceRootPath });
+          if (!result.ok || result.filePaths.length === 0) {
+            return;
           }
+
+          const currentFilePaths =
+            useAppStore.getState().promptDraftByTask[
+              args.providerSelectionTarget
+            ]?.attachedFilePaths ?? [];
+          const nextFilePaths = [...currentFilePaths];
+          for (const filePath of result.filePaths) {
+            if (!nextFilePaths.includes(filePath)) {
+              nextFilePaths.push(filePath);
+            }
+          }
+          updateNonTextPromptDraft({ attachedFilePaths: nextFilePaths });
         }
-        updateNonTextPromptDraft({ attachedFilePaths: nextFilePaths });
-      }
-    : undefined;
+      : undefined;
   const handlePasteFiles = workspaceRootPath
     ? async (input: { files: File[] }) => {
-        const currentFilePaths = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachedFilePaths ?? [];
+        const currentFilePaths =
+          useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]
+            ?.attachedFilePaths ?? [];
         const nextFilePaths = [...currentFilePaths];
         let attachedCount = 0;
 
@@ -378,7 +416,8 @@ function ChatInputComposer(args: ChatInputComposerProps) {
 
         if (attachedCount === 0) {
           toast.warning("No workspace files were attached", {
-            description: "Paste files copied from the current workspace, or use Attach Files.",
+            description:
+              "Paste files copied from the current workspace, or use Attach Files.",
           });
           return;
         }
@@ -387,15 +426,21 @@ function ChatInputComposer(args: ChatInputComposerProps) {
       }
     : undefined;
 
-  function schedulePromptDraftSave(nextDraft: { taskId: string; text: string }) {
+  function schedulePromptDraftSave(nextDraft: {
+    taskId: string;
+    text: string;
+  }) {
     cancelPendingDraftSave();
     draftSaveTimerRef.current = window.setTimeout(() => {
       draftSaveTimerRef.current = null;
       if ("requestIdleCallback" in window) {
-        draftSaveIdleRef.current = window.requestIdleCallback(() => {
-          draftSaveIdleRef.current = null;
-          commitPromptDraftText(nextDraft);
-        }, { timeout: PROMPT_DRAFT_IDLE_TIMEOUT_MS });
+        draftSaveIdleRef.current = window.requestIdleCallback(
+          () => {
+            draftSaveIdleRef.current = null;
+            commitPromptDraftText(nextDraft);
+          },
+          { timeout: PROMPT_DRAFT_IDLE_TIMEOUT_MS },
+        );
         return;
       }
       commitPromptDraftText(nextDraft);
@@ -439,12 +484,14 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     }
     staleDraftResetTurnKeyRef.current = resetTurnKey;
 
-    if (!isStaleActiveTurnDraft({
-      isTurnActive: args.isTurnActive,
-      draftText: draftTextRef.current,
-      latestUserPrompt: latestUserPromptMessage.content,
-      queuedNextTurn,
-    })) {
+    if (
+      !isStaleActiveTurnDraft({
+        isTurnActive: args.isTurnActive,
+        draftText: draftTextRef.current,
+        latestUserPrompt: latestUserPromptMessage.content,
+        queuedNextTurn,
+      })
+    ) {
       return;
     }
 
@@ -463,12 +510,15 @@ function ChatInputComposer(args: ChatInputComposerProps) {
     queuedNextTurn,
   ]);
 
-  useEffect(() => () => {
-    commitPromptDraftText({
-      taskId: syncedDraftRef.current.taskId,
-      text: draftTextRef.current,
-    });
-  }, []);
+  useEffect(
+    () => () => {
+      commitPromptDraftText({
+        taskId: syncedDraftRef.current.taskId,
+        text: draftTextRef.current,
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     const flushDraftText = () => {
@@ -491,33 +541,37 @@ function ChatInputComposer(args: ChatInputComposerProps) {
         return;
       }
       const target = event.target instanceof HTMLElement ? event.target : null;
-      if (shouldHandleApprovalTabShortcut({
-        key: event.key,
-        altKey: event.altKey,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey,
-        isComposing: event.isComposing,
-        targetTagName: target?.tagName,
-        targetRole: target?.getAttribute("role"),
-        targetIsContentEditable: target?.isContentEditable,
-      })) {
+      if (
+        shouldHandleApprovalTabShortcut({
+          key: event.key,
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+          isComposing: event.isComposing,
+          targetTagName: target?.tagName,
+          targetRole: target?.getAttribute("role"),
+          targetIsContentEditable: target?.isContentEditable,
+        })
+      ) {
         event.preventDefault();
         setGuidanceFocusNonce((current) => current + 1);
         return;
       }
 
-      if (!shouldHandleApprovalEnterShortcut({
-        key: event.key,
-        altKey: event.altKey,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey,
-        isComposing: event.isComposing,
-        targetTagName: target?.tagName,
-        targetRole: target?.getAttribute("role"),
-        targetIsContentEditable: target?.isContentEditable,
-      })) {
+      if (
+        !shouldHandleApprovalEnterShortcut({
+          key: event.key,
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+          isComposing: event.isComposing,
+          targetTagName: target?.tagName,
+          targetRole: target?.getAttribute("role"),
+          targetIsContentEditable: target?.isContentEditable,
+        })
+      ) {
         return;
       }
 
@@ -531,14 +585,21 @@ function ChatInputComposer(args: ChatInputComposerProps) {
 
     window.addEventListener("keydown", handleApprovalShortcut);
     return () => window.removeEventListener("keydown", handleApprovalShortcut);
-  }, [args.activeTaskId, args.approvalActionsDisabled, pendingApproval, resolveApproval]);
+  }, [
+    args.activeTaskId,
+    args.approvalActionsDisabled,
+    pendingApproval,
+    resolveApproval,
+  ]);
 
   const PromptInputComponent = args.compact ? ZenPromptInput : PromptInput;
 
   return (
     <div
       className={cn(
-        args.compact ? "bg-transparent px-0 py-0" : "bg-background px-3 py-2.5 sm:px-4",
+        args.compact
+          ? "bg-transparent px-0 py-0"
+          : "bg-background px-3 py-2.5 sm:px-4",
         args.isEmpty && !args.compact && "pb-6",
       )}
     >
@@ -546,19 +607,23 @@ function ChatInputComposer(args: ChatInputComposerProps) {
         {args.compact ? (
           <div className="mb-3 flex flex-col gap-1 border-b border-border/50 pb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/80">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-primary/85">{args.workspaceProjectLabel ?? "user@stave"}</span>
+              <span className="text-primary/85">
+                {args.workspaceProjectLabel ?? "user@stave"}
+              </span>
               {args.workspaceBranch ? (
                 <span>
-                  <span className="text-muted-foreground/55">branch:</span>
-                  {" "}
-                  <span className="text-foreground">{args.workspaceBranch}</span>
+                  <span className="text-muted-foreground/55">branch:</span>{" "}
+                  <span className="text-foreground">
+                    {args.workspaceBranch}
+                  </span>
                 </span>
               ) : null}
               {args.workspacePathLabel ? (
                 <span>
-                  <span className="text-muted-foreground/55">worktree:</span>
-                  {" "}
-                  <span className="text-foreground">{args.workspacePathLabel}</span>
+                  <span className="text-muted-foreground/55">worktree:</span>{" "}
+                  <span className="text-foreground">
+                    {args.workspacePathLabel}
+                  </span>
                 </span>
               ) : null}
             </div>
@@ -577,9 +642,18 @@ function ChatInputComposer(args: ChatInputComposerProps) {
             disabledReason={args.approvalDisabledReason}
             guidanceFocusNonce={guidanceFocusNonce}
             onResolveApproval={({ messageId, approved }) => {
-              resolveApproval({ taskId: args.activeTaskId, messageId, approved });
+              resolveApproval({
+                taskId: args.activeTaskId,
+                messageId,
+                approved,
+              });
             }}
-            onDraftGuidance={({ messageId, toolName, description, guidance }) => {
+            onDraftGuidance={({
+              messageId,
+              toolName,
+              description,
+              guidance,
+            }) => {
               stageApprovalGuidance({
                 toolName,
                 description,
@@ -600,7 +674,9 @@ function ChatInputComposer(args: ChatInputComposerProps) {
                 Stalled
               </Badge>
               <span>
-                No provider events for {stalledDurationLabel ?? "a while"}. This run may be stuck. Press <Kbd>Esc</Kbd> or use stop to interrupt it.
+                No provider events for {stalledDurationLabel ?? "a while"}. This
+                run may be stuck. Press <Kbd>Esc</Kbd> or use stop to interrupt
+                it.
               </span>
             </div>
           </div>
@@ -613,16 +689,18 @@ function ChatInputComposer(args: ChatInputComposerProps) {
           isTurnActive={args.isTurnActive}
           submitMode={args.isTurnActive ? "queue-next" : "send"}
           queuedNextTurn={queuedNextTurn}
-          onClearQueuedNextTurn={queuedNextTurn
-            ? () => {
-                cancelPendingDraftSave();
-                clearPromptDraft({ taskId: args.providerSelectionTarget });
-                adoptPromptDraftText({
-                  taskId: args.providerSelectionTarget,
-                  text: "",
-                });
-              }
-            : undefined}
+          onClearQueuedNextTurn={
+            queuedNextTurn
+              ? () => {
+                  cancelPendingDraftSave();
+                  clearPromptDraft({ taskId: args.providerSelectionTarget });
+                  adoptPromptDraftText({
+                    taskId: args.providerSelectionTarget,
+                    text: "",
+                  });
+                }
+              : undefined
+          }
           selectedModel={args.selectedModelOption}
           modelOptions={args.modelOptions}
           recommendedModelOptions={args.recommendedModelOptions}
@@ -660,58 +738,86 @@ function ChatInputComposer(args: ChatInputComposerProps) {
             args.onModelSelect(selectionArgs);
           }}
           fastMode={args.fastMode}
-          onFastModeChange={args.onFastModeChange
-            ? (enabled) => {
-                commitCurrentDraftText();
-                args.onFastModeChange?.(enabled);
-              }
-            : undefined}
+          onFastModeChange={
+            args.onFastModeChange
+              ? (enabled) => {
+                  commitCurrentDraftText();
+                  args.onFastModeChange?.(enabled);
+                }
+              : undefined
+          }
           planMode={args.planMode}
-          onPlanModeChange={args.onPlanModeChange
-            ? (enabled) => {
-                commitCurrentDraftText();
-                args.onPlanModeChange?.(enabled);
-              }
-            : undefined}
+          onPlanModeChange={
+            args.onPlanModeChange
+              ? (enabled) => {
+                  commitCurrentDraftText();
+                  args.onPlanModeChange?.(enabled);
+                }
+              : undefined
+          }
           thinkingMode={args.thinkingMode}
-          onThinkingModeChange={args.onThinkingModeChange
-            ? (value) => {
-                commitCurrentDraftText();
-                args.onThinkingModeChange?.(value);
-              }
-            : undefined}
+          onThinkingModeChange={
+            args.onThinkingModeChange
+              ? (value) => {
+                  commitCurrentDraftText();
+                  args.onThinkingModeChange?.(value);
+                }
+              : undefined
+          }
           pendingUserInput={pendingUserInput}
-          onUserInputSubmit={pendingUserInput ? ({ messageId, answers }) => {
-            resolveUserInput({ taskId: args.activeTaskId, messageId, answers });
-          } : undefined}
-          onUserInputDeny={pendingUserInput ? ({ messageId }) => {
-            resolveUserInput({ taskId: args.activeTaskId, messageId, denied: true });
-          } : undefined}
+          onUserInputSubmit={
+            pendingUserInput
+              ? ({ messageId, answers }) => {
+                  resolveUserInput({
+                    taskId: args.activeTaskId,
+                    messageId,
+                    answers,
+                  });
+                }
+              : undefined
+          }
+          onUserInputDeny={
+            pendingUserInput
+              ? ({ messageId }) => {
+                  resolveUserInput({
+                    taskId: args.activeTaskId,
+                    messageId,
+                    denied: true,
+                  });
+                }
+              : undefined
+          }
           providerModeStatus={args.providerModeStatus}
           providerModePresets={args.providerModePresets}
           activeProviderModePresetId={args.activeProviderModePresetId}
-          onProviderModeSelect={args.onProviderModeSelect
-            ? (presetId) => {
-                commitCurrentDraftText();
-                args.onProviderModeSelect?.(presetId);
-              }
-            : undefined}
+          onProviderModeSelect={
+            args.onProviderModeSelect
+              ? (presetId) => {
+                  commitCurrentDraftText();
+                  args.onProviderModeSelect?.(presetId);
+                }
+              : undefined
+          }
           runtimeStatusItems={args.runtimeStatusItems}
           effortLabel={args.effortLabel}
           effortValue={args.effortValue}
-          onEffortCycle={args.onEffortCycle
-            ? () => {
-                commitCurrentDraftText();
-                args.onEffortCycle?.();
-              }
-            : undefined}
+          onEffortCycle={
+            args.onEffortCycle
+              ? () => {
+                  commitCurrentDraftText();
+                  args.onEffortCycle?.();
+                }
+              : undefined
+          }
           attachments={promptDraft.attachments}
           onAttachFilesChange={({ filePaths }) =>
-            updateNonTextPromptDraft({ attachedFilePaths: filePaths })}
+            updateNonTextPromptDraft({ attachedFilePaths: filePaths })
+          }
           onOpenFileSelector={handleOpenFileSelector}
           onPasteFiles={handlePasteFiles}
           onAttachmentsChange={({ attachments }) =>
-            updateNonTextPromptDraft({ attachments })}
+            updateNonTextPromptDraft({ attachments })
+          }
           onFocus={() => setStaveMuseOpen({ open: false })}
           onSubmit={async ({ text, filePaths }) => {
             cancelPendingDraftSave();
@@ -724,7 +830,10 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               text: "",
             });
             const restoreSubmittedDraft = () => {
-              if (syncedDraftRef.current.taskId !== submittedDraft.taskId || draftTextRef.current !== "") {
+              if (
+                syncedDraftRef.current.taskId !== submittedDraft.taskId ||
+                draftTextRef.current !== ""
+              ) {
                 return;
               }
               adoptPromptDraftText(submittedDraft);
@@ -743,9 +852,15 @@ function ChatInputComposer(args: ChatInputComposerProps) {
                   content: tab.content,
                   language: tab.language,
                 }));
-              const currentAttachments = useAppStore.getState().promptDraftByTask[args.providerSelectionTarget]?.attachments ?? [];
+              const currentAttachments =
+                useAppStore.getState().promptDraftByTask[
+                  args.providerSelectionTarget
+                ]?.attachments ?? [];
               const imageContexts = currentAttachments
-                .filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image")
+                .filter(
+                  (a): a is Extract<Attachment, { kind: "image" }> =>
+                    a.kind === "image",
+                )
                 .map((a) => ({
                   dataUrl: a.dataUrl,
                   label: a.label,
@@ -754,8 +869,10 @@ function ChatInputComposer(args: ChatInputComposerProps) {
               const result = await sendUserMessage({
                 taskId: args.activeTaskId,
                 content: text,
-                fileContexts: fileContexts.length > 0 ? fileContexts : undefined,
-                imageContexts: imageContexts.length > 0 ? imageContexts : undefined,
+                fileContexts:
+                  fileContexts.length > 0 ? fileContexts : undefined,
+                imageContexts:
+                  imageContexts.length > 0 ? imageContexts : undefined,
               });
               if (result.status === "blocked") {
                 restoreSubmittedDraft();
@@ -773,9 +890,11 @@ function ChatInputComposer(args: ChatInputComposerProps) {
 }
 
 function BaseChatInput(args: BaseChatInputProps = {}) {
-  const [providerCommandCatalog, setProviderCommandCatalog] = useState(() => getCachedProviderCommandCatalog({
-    providerId: "claude-code",
-  }));
+  const [providerCommandCatalog, setProviderCommandCatalog] = useState(() =>
+    getCachedProviderCommandCatalog({
+      providerId: "claude-code",
+    }),
+  );
   const [
     activeTaskId,
     providerAvailability,
@@ -783,34 +902,74 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     setTaskProvider,
     updatePromptDraft,
     clearTaskProviderSession,
+    abortTaskTurn,
     updateSettings,
     refreshSkillCatalog,
-  ] = useAppStore(useShallow((state) => [
-    state.activeTaskId,
-    state.providerAvailability,
-    state.providerCommandCatalogRefreshNonce,
-    state.setTaskProvider,
-    state.updatePromptDraft,
-    state.clearTaskProviderSession,
-    state.updateSettings,
-    state.refreshSkillCatalog,
-  ] as const));
-  const activeTask = useAppStore((state) => state.tasks.find((task) => task.id === state.activeTaskId && !isTaskArchived(task)) ?? null);
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.activeTaskId,
+          state.providerAvailability,
+          state.providerCommandCatalogRefreshNonce,
+          state.setTaskProvider,
+          state.updatePromptDraft,
+          state.clearTaskProviderSession,
+          state.abortTaskTurn,
+          state.updateSettings,
+          state.refreshSkillCatalog,
+        ] as const,
+    ),
+  );
+  const activeTask = useAppStore(
+    (state) =>
+      state.tasks.find(
+        (task) => task.id === state.activeTaskId && !isTaskArchived(task),
+      ) ?? null,
+  );
   const draftProvider = useAppStore((state) => state.draftProvider);
   const activeProvider = activeTask?.provider ?? draftProvider;
-  const promptDraftRuntimeOverrides = useAppStore((state) =>
-    state.promptDraftByTask[activeTaskId || "draft:session"]?.runtimeOverrides
+  const promptDraftRuntimeOverrides = useAppStore(
+    (state) =>
+      state.promptDraftByTask[activeTaskId || "draft:session"]
+        ?.runtimeOverrides,
   );
-  const workspaceCwd = useAppStore((state) => state.workspacePathById[state.activeWorkspaceId] ?? state.projectPath ?? undefined);
-  const [activeWorkspaceBranch, activeWorkspaceName, projectPath] = useAppStore(useShallow((state) => [
-    state.workspaceBranchById[state.activeWorkspaceId] ?? undefined,
-    state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
-    state.projectPath,
-  ] as const));
-  const activeMessageCount = useAppStore((state) =>
-    state.messageCountByTask[state.activeTaskId] ?? (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length
+  const workspaceCwd = useAppStore(
+    (state) =>
+      state.workspacePathById[state.activeWorkspaceId] ??
+      state.projectPath ??
+      undefined,
   );
-  const isTurnActive = useAppStore((state) => Boolean(state.activeTurnIdsByTask[state.activeTaskId]));
+  const [activeWorkspaceBranch, activeWorkspaceName, projectPath] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.workspaceBranchById[state.activeWorkspaceId] ?? undefined,
+          state.workspaces.find(
+            (workspace) => workspace.id === state.activeWorkspaceId,
+          )?.name ?? null,
+          state.projectPath,
+        ] as const,
+    ),
+  );
+  const activeMessageCount = useAppStore(
+    (state) =>
+      state.messageCountByTask[state.activeTaskId] ??
+      (state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES).length,
+  );
+  const isTurnActive = useAppStore((state) =>
+    Boolean(state.activeTurnIdsByTask[state.activeTaskId]),
+  );
+  const latestMessageIsPlanResponse = useAppStore((state) => {
+    const messages = state.messagesByTask[state.activeTaskId] ?? EMPTY_MESSAGES;
+    const lastMessage = messages[messages.length - 1];
+    return Boolean(
+      lastMessage &&
+      lastMessage.role === "assistant" &&
+      lastMessage.isPlanResponse === true &&
+      lastMessage.planText?.trim(),
+    );
+  });
   const [
     modelClaude,
     modelCodex,
@@ -818,14 +977,19 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     skillsEnabled,
     skillsAutoSuggest,
     providerTimeoutMs,
-  ] = useAppStore(useShallow((state) => [
-    state.settings.modelClaude,
-    state.settings.modelCodex,
-    state.settings.modelStave,
-    state.settings.skillsEnabled,
-    state.settings.skillsAutoSuggest,
-    state.settings.providerTimeoutMs,
-  ] as const));
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.settings.modelClaude,
+          state.settings.modelCodex,
+          state.settings.modelStave,
+          state.settings.skillsEnabled,
+          state.settings.skillsAutoSuggest,
+          state.settings.providerTimeoutMs,
+        ] as const,
+    ),
+  );
   const [
     claudePermissionMode,
     claudePermissionModeBeforePlan,
@@ -838,23 +1002,25 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     claudeThinkingMode,
     claudeAgentProgressSummaries,
     claudeBinaryPath,
-  ] = useAppStore(useShallow((state) => (
-    activeProvider === "claude-code" || activeProvider === "stave"
-      ? [
-          state.settings.claudePermissionMode,
-          state.settings.claudePermissionModeBeforePlan,
-          state.settings.claudeAllowDangerouslySkipPermissions,
-          state.settings.claudeSandboxEnabled,
-          state.settings.claudeAllowUnsandboxedCommands,
-          state.settings.claudeTaskBudgetTokens,
-          state.settings.claudeSettingSources,
-          state.settings.claudeEffort,
-          state.settings.claudeThinkingMode,
-          state.settings.claudeAgentProgressSummaries,
-          state.settings.claudeBinaryPath,
-        ] as const
-      : INACTIVE_CLAUDE_SETTINGS
-  )));
+  ] = useAppStore(
+    useShallow((state) =>
+      activeProvider === "claude-code" || activeProvider === "stave"
+        ? ([
+            state.settings.claudePermissionMode,
+            state.settings.claudePermissionModeBeforePlan,
+            state.settings.claudeAllowDangerouslySkipPermissions,
+            state.settings.claudeSandboxEnabled,
+            state.settings.claudeAllowUnsandboxedCommands,
+            state.settings.claudeTaskBudgetTokens,
+            state.settings.claudeSettingSources,
+            state.settings.claudeEffort,
+            state.settings.claudeThinkingMode,
+            state.settings.claudeAgentProgressSummaries,
+            state.settings.claudeBinaryPath,
+          ] as const)
+        : INACTIVE_CLAUDE_SETTINGS,
+    ),
+  );
   const [
     codexFileAccess,
     codexNetworkAccess,
@@ -868,80 +1034,102 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     codexPlanMode,
     codexFastMode,
     codexFastModeVisible,
-  ] = useAppStore(useShallow((state) => (
-    activeProvider === "codex"
-      ? [
-          state.settings.codexFileAccess,
-          state.settings.codexNetworkAccess,
-          state.settings.codexApprovalPolicy,
-          state.settings.codexReasoningEffort,
-          state.settings.codexWebSearch,
-          state.settings.codexShowRawReasoning,
-          state.settings.codexReasoningSummary,
-          state.settings.codexReasoningSummarySupport,
-          state.settings.codexBinaryPath,
-          state.settings.codexPlanMode,
-          state.settings.codexFastMode,
-          state.settings.codexFastModeVisible,
-        ] as const
-      : INACTIVE_CODEX_SETTINGS
-  )));
+  ] = useAppStore(
+    useShallow((state) =>
+      activeProvider === "codex"
+        ? ([
+            state.settings.codexFileAccess,
+            state.settings.codexNetworkAccess,
+            state.settings.codexApprovalPolicy,
+            state.settings.codexReasoningEffort,
+            state.settings.codexWebSearch,
+            state.settings.codexShowRawReasoning,
+            state.settings.codexReasoningSummary,
+            state.settings.codexReasoningSummarySupport,
+            state.settings.codexBinaryPath,
+            state.settings.codexPlanMode,
+            state.settings.codexFastMode,
+            state.settings.codexFastModeVisible,
+          ] as const)
+        : INACTIVE_CODEX_SETTINGS,
+    ),
+  );
   const [
     staveAutoFastMode,
     staveAutoOrchestrationMode,
     staveAutoMaxSubtasks,
     staveAutoAllowCrossProviderWorkers,
     staveAutoMaxParallelSubtasks,
-  ] = useAppStore(useShallow((state) => (
-    activeProvider === "stave"
-      ? [
-          state.settings.staveAutoFastMode,
-          state.settings.staveAutoOrchestrationMode,
-          state.settings.staveAutoMaxSubtasks,
-          state.settings.staveAutoAllowCrossProviderWorkers,
-          state.settings.staveAutoMaxParallelSubtasks,
-        ] as const
-      : INACTIVE_STAVE_SETTINGS
-  )));
+  ] = useAppStore(
+    useShallow((state) =>
+      activeProvider === "stave"
+        ? ([
+            state.settings.staveAutoFastMode,
+            state.settings.staveAutoOrchestrationMode,
+            state.settings.staveAutoMaxSubtasks,
+            state.settings.staveAutoAllowCrossProviderWorkers,
+            state.settings.staveAutoMaxParallelSubtasks,
+          ] as const)
+        : INACTIVE_STAVE_SETTINGS,
+    ),
+  );
   const providerSelectionTarget = activeTaskId || "draft:session";
   const skillCatalog = useAppStore((state) => state.skillCatalog);
-  const taskRuntimeState = useMemo(() => resolvePromptDraftRuntimeState({
-    promptDraft: promptDraftRuntimeOverrides
-      ? {
-          ...EMPTY_PROMPT_DRAFT,
-          runtimeOverrides: promptDraftRuntimeOverrides,
-        }
-      : null,
-    fallback: {
+  const taskRuntimeState = useMemo(
+    () =>
+      resolvePromptDraftRuntimeState({
+        promptDraft: promptDraftRuntimeOverrides
+          ? {
+              ...EMPTY_PROMPT_DRAFT,
+              runtimeOverrides: promptDraftRuntimeOverrides,
+            }
+          : null,
+        fallback: {
+          claudePermissionMode,
+          claudePermissionModeBeforePlan,
+          codexPlanMode,
+        },
+      }),
+    [
       claudePermissionMode,
       claudePermissionModeBeforePlan,
       codexPlanMode,
-    },
-  }), [claudePermissionMode, claudePermissionModeBeforePlan, codexPlanMode, promptDraftRuntimeOverrides]);
+      promptDraftRuntimeOverrides,
+    ],
+  );
   const effectiveClaudePermissionMode = taskRuntimeState.claudePermissionMode;
-  const effectiveClaudePermissionModeBeforePlan = taskRuntimeState.claudePermissionModeBeforePlan;
+  const effectiveClaudePermissionModeBeforePlan =
+    taskRuntimeState.claudePermissionModeBeforePlan;
   const effectiveCodexPlanMode = taskRuntimeState.codexPlanMode;
   const isEmpty = activeMessageCount === 0;
-  const activeModel = activeProvider === "claude-code"
-    ? modelClaude
-    : activeProvider === "stave"
-      ? modelStave
-      : modelCodex;
+  const activeModel =
+    activeProvider === "claude-code"
+      ? modelClaude
+      : activeProvider === "stave"
+        ? modelStave
+        : modelCodex;
   const activeProviderAvailable = providerAvailability[activeProvider];
-  const selectedModelOption = useMemo<ModelSelectorOption>(() => buildModelSelectorValue({
-    providerId: activeProvider,
-    model: activeModel,
-    available: activeProviderAvailable,
-  }), [activeModel, activeProvider, activeProviderAvailable]);
-  const modelOptions = useMemo<ModelSelectorOption[]>(() => (
-    buildModelSelectorOptions({
-      providerIds: PROVIDER_IDS,
-      availabilityByProvider: providerAvailability,
-    })
-  ), [providerAvailability]);
-  const recommendedModelOptions = useMemo<ModelSelectorOption[]>(() => (
-    buildRecommendedModelSelectorOptions({ options: modelOptions })
-  ), [modelOptions]);
+  const selectedModelOption = useMemo<ModelSelectorOption>(
+    () =>
+      buildModelSelectorValue({
+        providerId: activeProvider,
+        model: activeModel,
+        available: activeProviderAvailable,
+      }),
+    [activeModel, activeProvider, activeProviderAvailable],
+  );
+  const modelOptions = useMemo<ModelSelectorOption[]>(
+    () =>
+      buildModelSelectorOptions({
+        providerIds: PROVIDER_IDS,
+        availabilityByProvider: providerAvailability,
+      }),
+    [providerAvailability],
+  );
+  const recommendedModelOptions = useMemo<ModelSelectorOption[]>(
+    () => buildRecommendedModelSelectorOptions({ options: modelOptions }),
+    [modelOptions],
+  );
   const workspacePathLabel = useMemo(() => {
     const normalizedPath = workspaceCwd?.replace(/[\\/]+$/, "");
     if (!normalizedPath) {
@@ -951,8 +1139,12 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
   }, [workspaceCwd]);
   const workspaceProjectLabel = useMemo(() => {
     const normalizedProjectPath = projectPath?.replace(/[\\/]+$/, "");
-    const projectLabel = normalizedProjectPath?.split(/[/\\]/).at(-1) || "stave";
-    if (activeWorkspaceName?.trim() && activeWorkspaceName.toLowerCase() !== "default workspace") {
+    const projectLabel =
+      normalizedProjectPath?.split(/[/\\]/).at(-1) || "stave";
+    if (
+      activeWorkspaceName?.trim() &&
+      activeWorkspaceName.toLowerCase() !== "default workspace"
+    ) {
       return `user@${projectLabel}:${activeWorkspaceName.trim()}`;
     }
     return `user@${projectLabel}`;
@@ -970,21 +1162,26 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     }
     return undefined;
   }, [activeProvider, claudeEffort, codexReasoningEffort]);
-  const effortValue = activeProvider === "claude-code"
-    ? claudeEffort
-    : activeProvider === "codex"
-      ? codexReasoningEffort
-      : undefined;
+  const effortValue =
+    activeProvider === "claude-code"
+      ? claudeEffort
+      : activeProvider === "codex"
+        ? codexReasoningEffort
+        : undefined;
   const onEffortCycle = useMemo(() => {
     if (activeProvider === "claude-code") {
-      return () => updateSettings({
-        patch: { claudeEffort: cycleClaudeEffortValue(claudeEffort) },
-      });
+      return () =>
+        updateSettings({
+          patch: { claudeEffort: cycleClaudeEffortValue(claudeEffort) },
+        });
     }
     if (activeProvider === "codex") {
-      return () => updateSettings({
-        patch: { codexReasoningEffort: cycleCodexEffortValue(codexReasoningEffort) },
-      });
+      return () =>
+        updateSettings({
+          patch: {
+            codexReasoningEffort: cycleCodexEffortValue(codexReasoningEffort),
+          },
+        });
     }
     return undefined;
   }, [activeProvider, claudeEffort, codexReasoningEffort, updateSettings]);
@@ -1051,86 +1248,88 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     staveAutoMaxSubtasks,
     staveAutoOrchestrationMode,
   ]);
-  const providerModeStatus = useMemo<PromptInputProviderModeStatus | null>(() => {
-    if (activeProvider === "claude-code") {
-      return {
-        providerLabel: "Claude",
-        ...resolveClaudeProviderModePresentation({
+  const providerModeStatus =
+    useMemo<PromptInputProviderModeStatus | null>(() => {
+      if (activeProvider === "claude-code") {
+        return {
+          providerLabel: "Claude",
+          ...resolveClaudeProviderModePresentation({
+            settings: {
+              claudePermissionMode,
+              claudeAllowDangerouslySkipPermissions,
+              claudeSandboxEnabled,
+              claudeAllowUnsandboxedCommands,
+            },
+            planMode: effectiveClaudePermissionMode === "plan",
+          }),
+        };
+      }
+
+      if (activeProvider === "codex") {
+        return {
+          providerLabel: "Codex",
+          ...resolveCodexProviderModePresentation({
+            settings: {
+              codexFileAccess,
+              codexApprovalPolicy,
+              codexNetworkAccess,
+              codexWebSearch,
+            },
+            planMode: effectiveCodexPlanMode,
+          }),
+        };
+      }
+
+      return null;
+    }, [
+      activeProvider,
+      claudeAllowDangerouslySkipPermissions,
+      claudeAllowUnsandboxedCommands,
+      claudePermissionMode,
+      claudeSandboxEnabled,
+      codexApprovalPolicy,
+      codexFileAccess,
+      codexNetworkAccess,
+      codexWebSearch,
+      effectiveClaudePermissionMode,
+      effectiveCodexPlanMode,
+    ]);
+  const activeProviderModePresetId =
+    useMemo<ProviderModePresetId | null>(() => {
+      if (activeProvider === "claude-code") {
+        return detectClaudeProviderModePreset({
           settings: {
             claudePermissionMode,
             claudeAllowDangerouslySkipPermissions,
             claudeSandboxEnabled,
             claudeAllowUnsandboxedCommands,
           },
-          planMode: effectiveClaudePermissionMode === "plan",
-        }),
-      };
-    }
+        });
+      }
 
-    if (activeProvider === "codex") {
-      return {
-        providerLabel: "Codex",
-        ...resolveCodexProviderModePresentation({
+      if (activeProvider === "codex") {
+        return detectCodexProviderModePreset({
           settings: {
             codexFileAccess,
             codexApprovalPolicy,
             codexNetworkAccess,
             codexWebSearch,
           },
-          planMode: effectiveCodexPlanMode,
-        }),
-      };
-    }
+        });
+      }
 
-    return null;
-  }, [
-    activeProvider,
-    claudeAllowDangerouslySkipPermissions,
-    claudeAllowUnsandboxedCommands,
-    claudePermissionMode,
-    claudeSandboxEnabled,
-    codexApprovalPolicy,
-    codexFileAccess,
-    codexNetworkAccess,
-    codexWebSearch,
-    effectiveClaudePermissionMode,
-    effectiveCodexPlanMode,
-  ]);
-  const activeProviderModePresetId = useMemo<ProviderModePresetId | null>(() => {
-    if (activeProvider === "claude-code") {
-      return detectClaudeProviderModePreset({
-        settings: {
-          claudePermissionMode,
-          claudeAllowDangerouslySkipPermissions,
-          claudeSandboxEnabled,
-          claudeAllowUnsandboxedCommands,
-        },
-      });
-    }
-
-    if (activeProvider === "codex") {
-      return detectCodexProviderModePreset({
-        settings: {
-          codexFileAccess,
-          codexApprovalPolicy,
-          codexNetworkAccess,
-          codexWebSearch,
-        },
-      });
-    }
-
-    return null;
-  }, [
-    activeProvider,
-    claudeAllowDangerouslySkipPermissions,
-    claudeAllowUnsandboxedCommands,
-    claudePermissionMode,
-    claudeSandboxEnabled,
-    codexApprovalPolicy,
-    codexFileAccess,
-    codexNetworkAccess,
-    codexWebSearch,
-  ]);
+      return null;
+    }, [
+      activeProvider,
+      claudeAllowDangerouslySkipPermissions,
+      claudeAllowUnsandboxedCommands,
+      claudePermissionMode,
+      claudeSandboxEnabled,
+      codexApprovalPolicy,
+      codexFileAccess,
+      codexNetworkAccess,
+      codexWebSearch,
+    ]);
   const providerModePresets = useMemo(() => {
     if (activeProvider === "claude-code") {
       return CLAUDE_PROVIDER_MODE_PRESETS;
@@ -1142,14 +1341,16 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
   }, [activeProvider]);
   const onProviderModeSelect = useMemo(() => {
     if (activeProvider === "claude-code") {
-      return (presetId: ProviderModePresetId) => updateSettings({
-        patch: buildClaudeProviderModeSettingsPatch({ presetId }),
-      });
+      return (presetId: ProviderModePresetId) =>
+        updateSettings({
+          patch: buildClaudeProviderModeSettingsPatch({ presetId }),
+        });
     }
     if (activeProvider === "codex") {
-      return (presetId: ProviderModePresetId) => updateSettings({
-        patch: buildCodexProviderModeSettingsPatch({ presetId }),
-      });
+      return (presetId: ProviderModePresetId) =>
+        updateSettings({
+          patch: buildCodexProviderModeSettingsPatch({ presetId }),
+        });
     }
     return undefined;
   }, [activeProvider, updateSettings]);
@@ -1158,7 +1359,9 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     let cancelled = false;
 
     if (!providerSupportsNativeCommandCatalog({ providerId: activeProvider })) {
-      const nextCatalog = getInitialProviderCommandCatalog({ providerId: activeProvider });
+      const nextCatalog = getInitialProviderCommandCatalog({
+        providerId: activeProvider,
+      });
       setProviderCommandCatalog(nextCatalog);
       setCachedProviderCommandCatalog({
         providerId: activeProvider,
@@ -1220,35 +1423,37 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       providerId: activeProvider,
       cwd: workspaceCwd,
       runtimeOptions,
-    }).then((response) => {
-      if (cancelled) {
-        return;
-      }
-      const nextCatalog = toProviderCommandCatalogState({
-        providerId: activeProvider,
-        response,
+    })
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        const nextCatalog = toProviderCommandCatalogState({
+          providerId: activeProvider,
+          response,
+        });
+        setProviderCommandCatalog(nextCatalog);
+        setCachedProviderCommandCatalog({
+          providerId: activeProvider,
+          cwd: workspaceCwd,
+          catalog: nextCatalog,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        const nextCatalog = toProviderCommandCatalogState({
+          providerId: activeProvider,
+          error,
+        });
+        setProviderCommandCatalog(nextCatalog);
+        setCachedProviderCommandCatalog({
+          providerId: activeProvider,
+          cwd: workspaceCwd,
+          catalog: nextCatalog,
+        });
       });
-      setProviderCommandCatalog(nextCatalog);
-      setCachedProviderCommandCatalog({
-        providerId: activeProvider,
-        cwd: workspaceCwd,
-        catalog: nextCatalog,
-      });
-    }).catch((error) => {
-      if (cancelled) {
-        return;
-      }
-      const nextCatalog = toProviderCommandCatalogState({
-        providerId: activeProvider,
-        error,
-      });
-      setProviderCommandCatalog(nextCatalog);
-      setCachedProviderCommandCatalog({
-        providerId: activeProvider,
-        cwd: workspaceCwd,
-        catalog: nextCatalog,
-      });
-    });
 
     return () => {
       cancelled = true;
@@ -1268,14 +1473,22 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
     workspaceCwd,
   ]);
 
-  const commandPalette = useMemo(() => buildCommandPaletteItems({
-    provider: activeProvider,
-    providerCommandCatalog,
-  }), [activeProvider, providerCommandCatalog]);
-  const skillPalette = useMemo(() => getEffectiveSkillEntries({
-    skills: skillCatalog.skills,
-    providerId: activeProvider,
-  }), [activeProvider, skillCatalog.skills]);
+  const commandPalette = useMemo(
+    () =>
+      buildCommandPaletteItems({
+        provider: activeProvider,
+        providerCommandCatalog,
+      }),
+    [activeProvider, providerCommandCatalog],
+  );
+  const skillPalette = useMemo(
+    () =>
+      getEffectiveSkillEntries({
+        skills: skillCatalog.skills,
+        providerId: activeProvider,
+      }),
+    [activeProvider, skillCatalog.skills],
+  );
   const deferredCommandPaletteItems = useDeferredValue(commandPalette.items);
   const deferredSkillPalette = useDeferredValue(skillPalette);
 
@@ -1288,7 +1501,9 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       if (skillCatalog.status === "loading") {
         return;
       }
-      const fetchedAtMs = skillCatalog.fetchedAt ? Date.parse(skillCatalog.fetchedAt) : 0;
+      const fetchedAtMs = skillCatalog.fetchedAt
+        ? Date.parse(skillCatalog.fetchedAt)
+        : 0;
       if (skillCatalog.status === "ready") {
         const CATALOG_TTL_MS = 5 * 60 * 1000;
         if (Date.now() - fetchedAtMs < CATALOG_TTL_MS) {
@@ -1303,7 +1518,14 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       }
     }
     void refreshSkillCatalog({ workspacePath: targetPath });
-  }, [refreshSkillCatalog, skillsEnabled, skillCatalog.status, skillCatalog.workspacePath, skillCatalog.fetchedAt, workspaceCwd]);
+  }, [
+    refreshSkillCatalog,
+    skillsEnabled,
+    skillCatalog.status,
+    skillCatalog.workspacePath,
+    skillCatalog.fetchedAt,
+    workspaceCwd,
+  ]);
 
   return (
     <ChatInputComposer
@@ -1336,13 +1558,18 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       effortValue={effortValue}
       onEffortCycle={onEffortCycle}
       onModelSelect={({ selection }) => {
-        setTaskProvider({ taskId: providerSelectionTarget, provider: selection.providerId });
+        setTaskProvider({
+          taskId: providerSelectionTarget,
+          provider: selection.providerId,
+        });
         if (selection.providerId === "claude-code") {
           updateSettings({
             patch: {
               modelClaude: normalizeModelSelection({
                 value: selection.model,
-                fallback: getDefaultModelForProvider({ providerId: selection.providerId }),
+                fallback: getDefaultModelForProvider({
+                  providerId: selection.providerId,
+                }),
               }),
             },
           });
@@ -1353,7 +1580,9 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
             patch: {
               modelStave: normalizeModelSelection({
                 value: selection.model,
-                fallback: getDefaultModelForProvider({ providerId: selection.providerId }),
+                fallback: getDefaultModelForProvider({
+                  providerId: selection.providerId,
+                }),
               }),
             },
           });
@@ -1363,14 +1592,16 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
           patch: {
             modelCodex: normalizeModelSelection({
               value: selection.model,
-              fallback: getDefaultModelForProvider({ providerId: selection.providerId }),
+              fallback: getDefaultModelForProvider({
+                providerId: selection.providerId,
+              }),
             }),
           },
         });
       }}
       fastMode={activeProvider === "codex" ? codexFastMode : undefined}
       onFastModeChange={
-        (activeProvider === "codex" && codexFastModeVisible)
+        activeProvider === "codex" && codexFastModeVisible
           ? (enabled) => {
               updateSettings({ patch: { codexFastMode: enabled } });
             }
@@ -1379,7 +1610,8 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
       planMode={
         activeProvider === "codex"
           ? effectiveCodexPlanMode
-          : (activeProvider === "claude-code" || activeProvider === "stave") && effectiveClaudePermissionMode === "plan"
+          : (activeProvider === "claude-code" || activeProvider === "stave") &&
+            effectiveClaudePermissionMode === "plan"
       }
       onPlanModeChange={
         activeProvider === "codex"
@@ -1389,8 +1621,11 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
                 enabled,
                 runtimeOverrides: promptDraftRuntimeOverrides,
                 claudePermissionMode: effectiveClaudePermissionMode,
-                claudePermissionModeBeforePlan: effectiveClaudePermissionModeBeforePlan,
+                claudePermissionModeBeforePlan:
+                  effectiveClaudePermissionModeBeforePlan,
                 codexPlanMode: effectiveCodexPlanMode,
+                isTurnActive,
+                hasPlanResponse: latestMessageIsPlanResponse,
               });
               updatePromptDraft({
                 taskId: providerSelectionTarget,
@@ -1398,30 +1633,38 @@ function BaseChatInput(args: BaseChatInputProps = {}) {
                   runtimeOverrides: nextPlanModeState.runtimeOverrides,
                 },
               });
-              if (nextPlanModeState.shouldClearCodexSession) {
-                clearTaskProviderSession({ taskId: providerSelectionTarget, providerId: "codex" });
+              if (nextPlanModeState.shouldAbortActiveTurn) {
+                abortTaskTurn({ taskId: providerSelectionTarget });
+              } else if (nextPlanModeState.shouldClearCodexSession) {
+                clearTaskProviderSession({
+                  taskId: providerSelectionTarget,
+                  providerId: "codex",
+                });
               }
             }
           : activeProvider === "claude-code" || activeProvider === "stave"
-          ? (enabled) => {
-              const nextPlanModeState = resolvePromptDraftPlanModeChange({
-                providerId: activeProvider,
-                enabled,
-                runtimeOverrides: promptDraftRuntimeOverrides,
-                claudePermissionMode: effectiveClaudePermissionMode,
-                claudePermissionModeBeforePlan: effectiveClaudePermissionModeBeforePlan,
-                codexPlanMode: effectiveCodexPlanMode,
-              });
-              updatePromptDraft({
-                taskId: providerSelectionTarget,
-                patch: {
-                  runtimeOverrides: nextPlanModeState.runtimeOverrides,
-                },
-              });
-            }
-          : undefined
+            ? (enabled) => {
+                const nextPlanModeState = resolvePromptDraftPlanModeChange({
+                  providerId: activeProvider,
+                  enabled,
+                  runtimeOverrides: promptDraftRuntimeOverrides,
+                  claudePermissionMode: effectiveClaudePermissionMode,
+                  claudePermissionModeBeforePlan:
+                    effectiveClaudePermissionModeBeforePlan,
+                  codexPlanMode: effectiveCodexPlanMode,
+                });
+                updatePromptDraft({
+                  taskId: providerSelectionTarget,
+                  patch: {
+                    runtimeOverrides: nextPlanModeState.runtimeOverrides,
+                  },
+                });
+              }
+            : undefined
       }
-      thinkingMode={activeProvider === "claude-code" ? claudeThinkingMode : undefined}
+      thinkingMode={
+        activeProvider === "claude-code" ? claudeThinkingMode : undefined
+      }
       onThinkingModeChange={
         activeProvider === "claude-code"
           ? (value) => updateSettings({ patch: { claudeThinkingMode: value } })

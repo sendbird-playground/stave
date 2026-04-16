@@ -18,10 +18,14 @@ export function resolvePromptDraftRuntimeState(args: {
 }): ResolvedPromptDraftRuntimeState {
   const runtimeOverrides = args.promptDraft?.runtimeOverrides;
   return {
-    claudePermissionMode: runtimeOverrides?.claudePermissionMode ?? args.fallback.claudePermissionMode,
+    claudePermissionMode:
+      runtimeOverrides?.claudePermissionMode ??
+      args.fallback.claudePermissionMode,
     claudePermissionModeBeforePlan:
-      runtimeOverrides?.claudePermissionModeBeforePlan ?? args.fallback.claudePermissionModeBeforePlan,
-    codexPlanMode: runtimeOverrides?.codexPlanMode ?? args.fallback.codexPlanMode,
+      runtimeOverrides?.claudePermissionModeBeforePlan ??
+      args.fallback.claudePermissionModeBeforePlan,
+    codexPlanMode:
+      runtimeOverrides?.codexPlanMode ?? args.fallback.codexPlanMode,
   };
 }
 
@@ -42,7 +46,8 @@ export function transitionClaudePromptDraftPermissionMode(args: {
   if (nextMode === "plan") {
     return {
       claudePermissionMode: "plan",
-      claudePermissionModeBeforePlan: currentMode !== "plan" ? currentMode : beforePlan,
+      claudePermissionModeBeforePlan:
+        currentMode !== "plan" ? currentMode : beforePlan,
     };
   }
 
@@ -66,14 +71,21 @@ export function resolvePromptDraftPlanModeChange(args: {
   claudePermissionMode: ClaudePermissionMode;
   claudePermissionModeBeforePlan: ClaudePermissionModeBeforePlan;
   codexPlanMode: boolean;
+  isTurnActive?: boolean;
+  hasPlanResponse?: boolean;
 }) {
   if (args.providerId === "codex") {
+    const disablingCodexPlanMode = args.codexPlanMode && !args.enabled;
     return {
       runtimeOverrides: {
         ...args.runtimeOverrides,
         codexPlanMode: args.enabled,
       } satisfies PromptDraftRuntimeOverrides,
-      shouldClearCodexSession: args.codexPlanMode && !args.enabled,
+      shouldClearCodexSession: disablingCodexPlanMode,
+      shouldAbortActiveTurn:
+        disablingCodexPlanMode &&
+        args.isTurnActive === true &&
+        args.hasPlanResponse === true,
     };
   }
 
@@ -88,12 +100,14 @@ export function resolvePromptDraftPlanModeChange(args: {
         beforePlan: args.claudePermissionModeBeforePlan,
       }),
       shouldClearCodexSession: false,
+      shouldAbortActiveTurn: false,
     };
   }
 
   return {
     runtimeOverrides: args.runtimeOverrides,
     shouldClearCodexSession: false,
+    shouldAbortActiveTurn: false,
   };
 }
 
@@ -101,7 +115,10 @@ export function arePromptDraftRuntimeOverridesEqual(
   left?: PromptDraftRuntimeOverrides,
   right?: PromptDraftRuntimeOverrides,
 ) {
-  return left?.claudePermissionMode === right?.claudePermissionMode
-    && left?.claudePermissionModeBeforePlan === right?.claudePermissionModeBeforePlan
-    && left?.codexPlanMode === right?.codexPlanMode;
+  return (
+    left?.claudePermissionMode === right?.claudePermissionMode &&
+    left?.claudePermissionModeBeforePlan ===
+      right?.claudePermissionModeBeforePlan &&
+    left?.codexPlanMode === right?.codexPlanMode
+  );
 }
