@@ -86,4 +86,4 @@ This rendered example shows the `Settings → General` workspace mode control wh
 
 - [Command Palette](command-palette.md)
 - [Project Instructions](project-instructions.md)
-- [Keyboard shortcut guide in-app](../ui/project-workspace-task-shell.md)
+- [Integrated Terminal](integrated-terminal.md)

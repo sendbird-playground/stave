@@ -1,12 +1,11 @@
 import { spawn } from "node:child_process";
-import { copyFile, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { chromium } from "@playwright/test";
 
 const repoRoot = process.cwd();
 const outputDir = path.join(repoRoot, "docs", "screenshots");
-const landingOverviewPath = path.join(repoRoot, "landing", "assets", "stave-app.png");
 const port = Number(process.env.DOC_SCREENSHOT_PORT ?? "4173");
 const baseUrl = `http://127.0.0.1:${port}`;
 const chromeExecutablePath =
@@ -270,7 +269,7 @@ function createScriptStatuses() {
       running: true,
       log: `[09:28:11] Starting docs-site
 [09:28:12] Serving .pages-dist at http://127.0.0.1:4174
-[09:28:18] GET /docs/install-guide.html 200
+[09:28:18] GET /docs/install-guide/ 200
 `,
       runId: "run-docs-site",
       sessionId: "session-docs-site",
@@ -502,8 +501,9 @@ function createBaseScenario(args = {}) {
       "README.md",
       "docs/install-guide.md",
       "docs/features/integrated-terminal.md",
-      "landing/index.html",
-      "scripts/build-pages-site.mjs",
+      "site/index.html",
+      "site/docs/index.html",
+      "scripts/build-pages-site.ts",
       "src/components/layout/SettingsDialog.tsx",
     ],
     ...args.state,
@@ -901,7 +901,6 @@ async function captureOverview(browser) {
   await page.screenshot({
     path: path.join(outputDir, "stave-app.png"),
   });
-  await copyFile(path.join(outputDir, "stave-app.png"), landingOverviewPath);
   await context.close();
   console.log("[capture] overview done");
 }

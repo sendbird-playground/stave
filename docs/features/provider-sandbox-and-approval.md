@@ -155,6 +155,6 @@ Provider differences that matter in practice:
 
 ## Related Docs
 
-- [Provider Runtimes](../providers/provider-runtimes.md)
-- [Stave Model Router](stave-model-router.md)
+- [Project Instructions](project-instructions.md)
+- [Local MCP user guide](local-mcp-user-guide.md)
 - [Install Guide](../install-guide.md)

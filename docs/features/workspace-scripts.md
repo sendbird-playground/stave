@@ -176,6 +176,6 @@ Minimal shared config example:
 
 ## Related Docs
 
-- [Project / workspace / task shell redesign](../ui/project-workspace-task-shell.md)
-- [Feature guide authoring](README.md)
-- [Feature guide template](../templates/feature-guide-template.md)
+- [Project Instructions](project-instructions.md)
+- [Local MCP user guide](local-mcp-user-guide.md)
+- [Command Palette](command-palette.md)

@@ -122,5 +122,5 @@ This rendered example shows the docked terminal inside the main Stave workspace 
 
 - [Command Palette](command-palette.md)
 - [Zen Mode](zen-mode.md)
-- [Terminal regression prevention](../developer/terminal-regression-prevention.md)
-- [Project / workspace / task shell redesign](../ui/project-workspace-task-shell.md)
+- [Workspace Scripts](workspace-scripts.md)
+- [Install Guide](../install-guide.md)

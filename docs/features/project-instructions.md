@@ -89,5 +89,5 @@ This rendered example shows the `Settings → Projects` section with repository-
 ## Related Docs
 
 - [Provider sandbox and approval guide](provider-sandbox-and-approval.md)
-- [Stave Model Router](stave-model-router.md)
+- [Local MCP user guide](local-mcp-user-guide.md)
 - [Workspace Scripts](workspace-scripts.md)

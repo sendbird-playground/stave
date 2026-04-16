@@ -1,23 +1,24 @@
 # GitHub Pages Site
 
-Stave publishes both the product landing page and a static docs site through GitHub Pages.
+Stave publishes a React-based landing page plus a curated public docs site through GitHub Pages.
 
-## Scope
+## Public Scope
 
-The public site is intentionally simple:
+The public site intentionally stays product-facing:
 
-- the root page explains what Stave is and links directly to install/docs
-- `/docs/` exposes the curated docs index and rendered Markdown guides
-- contributor-only depth still lives in `docs/`, but onboarding paths stay near the top
+- `/` is the product landing page
+- `/docs/` is the end-user docs home
+- `/docs/<guide>/` contains install, workflow, and feature reference pages only
+- contributor, architecture, provider-runtime, design-note, and historical roadmap docs stay in the repository but are not part of the public site nav or build
 
 ## Files
 
-- `landing/index.html` — landing page structure
-- `landing/styles.css` — landing page visual system
-- `landing/docs.css` — shared styling for rendered docs pages
-- `landing/app.js` — minimal landing-only behavior
-- `landing/assets/` — logo and landing-page screenshot assets
-- `scripts/build-pages-site.mjs` — copies the landing, renders `docs/**/*.md`, and writes `.pages-dist/`
+- `site/` — React site app for landing and docs
+- `site/src/public-docs.ts` — curated end-user docs information architecture
+- `site/src/site-components.tsx` — landing, docs layout, and shared site UI
+- `site/src/site.css` — site-only Tailwind and shadcn visual system
+- `scripts/build-pages-site.ts` — generates public docs content, runs the Vite build, and writes `.pages-dist/`
+- `vite.site.config.ts` — Vite config for the public site build
 
 ## Deployment
 
@@ -27,7 +28,7 @@ GitHub Pages deployment is handled by:
 
 Workflow behavior:
 
-- trigger: push to `main` when `landing/**`, `docs/**`, `package.json`, `bun.lock`, the Pages workflow, or the Pages build script changes
+- trigger: push to `main` when `site/**`, `docs/**`, `package.json`, `bun.lock`, `vite.site.config.ts`, the Pages workflow, or the Pages build script changes
 - trigger: manual `workflow_dispatch`
 - build step: `bun install --frozen-lockfile --ignore-scripts` then `bun run build:pages`
 - artifact path: `.pages-dist/`
@@ -48,4 +49,4 @@ cd .pages-dist
 python3 -m http.server 4173
 ```
 
-Open `http://localhost:4173` for the product landing page or `http://localhost:4173/docs/` for the docs site.
+Open `http://localhost:4173` for the landing page or `http://localhost:4173/docs/` for the docs home.

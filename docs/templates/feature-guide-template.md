@@ -87,7 +87,7 @@ Keep the document user-facing, task-oriented, and reusable for a future docs web
 ## Author Checklist
 
 - Use this template structure unless there is a strong reason not to.
-- Link the new guide from `docs/README.md`.
+- Add or update the public docs entry in `site/src/public-docs.ts`.
 - If the feature changes an existing workflow, update that guide instead of creating overlapping docs.
 - Keep copy stable enough to reuse in a docs website later.
 - If screenshots are included, keep them few, durable, and clearly captioned.

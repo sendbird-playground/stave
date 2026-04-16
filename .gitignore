@@ -19,3 +19,4 @@ claude-progress.txt
 execution/
 /work-handoff.md
 /handoff-*.md
+site/src/generated/

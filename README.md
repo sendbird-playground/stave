@@ -7,6 +7,7 @@
 Stave is a desktop AI coding workspace for Claude and Codex. It combines task-oriented chat, repo-aware context, an editor and terminal, workspace memory, and local automation in one app.
 
 **Website ->** https://shiny-barnacle-5vmm96j.pages.github.io/
+**Docs ->** https://shiny-barnacle-5vmm96j.pages.github.io/docs/
 
 ![Stave](docs/screenshots/stave-app.png)
 
@@ -80,11 +81,11 @@ Recommended next steps:
 
 ## Documentation
 
+- [Docs site](https://shiny-barnacle-5vmm96j.pages.github.io/docs/) for end-user install, workflow, and feature reference
 - [Install Guide](docs/install-guide.md) for the full macOS install and update flow
 - [Provider Sandbox and Approval Guide](docs/features/provider-sandbox-and-approval.md) for runtime safety and plan settings
 - [Local MCP User Guide](docs/features/local-mcp-user-guide.md) for same-machine automation setup
-- [Documentation index](docs/README.md) for feature, architecture, developer, and historical docs
 
 ## For Developers And Contributors
 
-Development setup, build and packaging commands, architecture pointers, and contribution guidance live in [Developer and Contributing Guide](docs/developer/contributing.md).
+Development setup, build and packaging commands, architecture pointers, and contribution guidance live in [Developer Docs](docs/developer/index.md) and the [Developer and Contributing Guide](docs/developer/contributing.md).

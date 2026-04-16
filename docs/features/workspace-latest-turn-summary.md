@@ -87,4 +87,4 @@ This rendered example shows the Information panel with the latest-turn summary p
 
 - [Stave Muse](stave-muse.md)
 - [Local MCP user guide](local-mcp-user-guide.md)
-- [Project / workspace / task shell redesign](../ui/project-workspace-task-shell.md)
+- [Project Instructions](project-instructions.md)

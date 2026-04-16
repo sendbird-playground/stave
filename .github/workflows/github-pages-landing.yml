@@ -5,11 +5,12 @@ on:
     branches:
       - main
     paths:
-      - landing/**
+      - site/**
       - docs/**
       - package.json
       - bun.lock
-      - scripts/build-pages-site.mjs
+      - scripts/build-pages-site.ts
+      - vite.site.config.ts
       - .github/workflows/github-pages-landing.yml
   workflow_dispatch:
 

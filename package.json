@@ -20,7 +20,7 @@
     "dev:desktop": "electron-vite dev",
     "dev:desktop:poll": "CHOKIDAR_USEPOLLING=1 CHOKIDAR_INTERVAL=120 electron-vite dev",
     "build": "tsc --noEmit && vite build",
-    "build:pages": "node scripts/build-pages-site.mjs",
+    "build:pages": "bun run scripts/build-pages-site.ts",
     "build:desktop": "tsc --noEmit && electron-vite build",
     "package:desktop:dir": "bun run rebuild:electron-deps && bun run build:desktop && electron-builder --config electron-builder.yml --dir",
     "run:desktop:packaged": "bun run rebuild:electron-deps && bun run build:desktop && node scripts/run-desktop-built.mjs",

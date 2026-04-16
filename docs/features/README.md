@@ -23,7 +23,7 @@ Use this folder for user-facing feature guides.
 
 ## Publishing Rules
 
-- Link every durable feature guide from [`docs/README.md`](../README.md).
+- Add or update public end-user navigation in [`site/src/public-docs.ts`](../../site/src/public-docs.ts).
 - Use stable headings so the same content can be reused in a future docs website.
 - Prefer short procedures, explicit UI labels, and small real examples over long prose.
 - Add screenshots when a guide depends on finding a specific UI surface or visually confirming success.
