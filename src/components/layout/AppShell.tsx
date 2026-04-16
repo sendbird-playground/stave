@@ -1,11 +1,22 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useShallow } from "zustand/react/shallow";
 import { GlobalCommandPalette } from "@/components/layout/GlobalCommandPalette";
 import { StaveMuseWidget } from "@/components/layout/StaveMuseWidget";
 import { resolveStaveMuseRightInset } from "@/components/layout/stave-muse-widget.utils";
 import { TopBar } from "@/components/layout/TopBar";
 import { ZenAppShellLayout } from "@/components/layout/ZenAppShellLayout";
-import { COLLAPSED_PROJECT_SIDEBAR_WIDTH, ProjectWorkspaceSidebar } from "@/components/layout/ProjectWorkspaceSidebar";
+import {
+  COLLAPSED_PROJECT_SIDEBAR_WIDTH,
+  ProjectWorkspaceSidebar,
+} from "@/components/layout/ProjectWorkspaceSidebar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
 import { CliSessionPanel } from "@/components/layout/CliSessionPanel";
 import { resolveLatestCompletedTurnTarget } from "@/components/layout/command-palette-navigation";
@@ -14,6 +25,7 @@ import { ChatArea } from "@/components/session/ChatArea";
 import { TerminalDock } from "@/components/layout/TerminalDock";
 import { Card, Toaster, toast } from "@/components/ui";
 import { ConfirmDialog } from "@/components/layout/ConfirmDialog";
+import { QuitConfirmationDialog } from "@/components/layout/QuitConfirmationDialog";
 import { listLatestWorkspaceTurns } from "@/lib/db/turns.db";
 import { UI_LAYER_CLASS } from "@/lib/ui-layers";
 import { isTaskArchived } from "@/lib/tasks";
@@ -48,7 +60,7 @@ import type { WorkspacePrStatus } from "@/lib/pr-status";
 const EditorPanel = lazy(() =>
   import("@/components/layout/EditorPanel").then((module) => ({
     default: module.EditorPanel,
-  }))
+  })),
 );
 const loadSettingsDialog = () =>
   import("@/components/layout/SettingsDialog").then((module) => ({
@@ -113,88 +125,104 @@ export function AppShell() {
     focusStaveMuse,
     setLayout,
     applyExternalWorkspaceInformationUpdate,
-  ] = useAppStore(useShallow((state) => [
-    state.projectPath,
-    state.projectName,
-    state.tasks,
-    state.activeTaskId,
-    state.activeSurface,
-    state.cliSessionTabs,
-    state.activeTurnIdsByTask,
-    state.workspaces,
-    state.activeWorkspaceId,
-    state.workspaceBranchById,
-    state.workspaceDefaultById,
-    state.workspacePathById,
-    state.workspacePrInfoById,
-    state.recentProjects,
-    state.layout.workspaceSidebarWidth,
-    state.layout.workspaceSidebarCollapsed,
-    state.layout.editorVisible,
-    state.layout.editorPanelWidth,
-    state.layout.sidebarOverlayVisible,
-    state.layout.sidebarOverlayTab,
-    state.layout.explorerPanelWidth,
-    state.layout.terminalDocked,
-    state.layout.terminalDockHeight ?? 210,
-    state.activeEditorTabId,
-    state.settings.appShellMode,
-    state.settings.commandPaletteHiddenCommandIds,
-    state.settings.commandPalettePinnedCommandIds,
-    state.settings.commandPaletteRecentCommandIds,
-    state.settings.commandPaletteShowRecent,
-    state.createTask,
-    state.selectTask,
-    state.clearTaskSelection,
-    state.setTaskProvider,
-    state.saveActiveEditorTab,
-    state.refreshProjectFiles,
-    state.refreshWorkspaces,
-    state.openProject,
-    state.switchWorkspace,
-    state.abortTaskTurn,
-    state.focusStaveMuse,
-    state.setLayout,
-    state.applyExternalWorkspaceInformationUpdate,
-  ] as const));
+  ] = useAppStore(
+    useShallow(
+      (state) =>
+        [
+          state.projectPath,
+          state.projectName,
+          state.tasks,
+          state.activeTaskId,
+          state.activeSurface,
+          state.cliSessionTabs,
+          state.activeTurnIdsByTask,
+          state.workspaces,
+          state.activeWorkspaceId,
+          state.workspaceBranchById,
+          state.workspaceDefaultById,
+          state.workspacePathById,
+          state.workspacePrInfoById,
+          state.recentProjects,
+          state.layout.workspaceSidebarWidth,
+          state.layout.workspaceSidebarCollapsed,
+          state.layout.editorVisible,
+          state.layout.editorPanelWidth,
+          state.layout.sidebarOverlayVisible,
+          state.layout.sidebarOverlayTab,
+          state.layout.explorerPanelWidth,
+          state.layout.terminalDocked,
+          state.layout.terminalDockHeight ?? 210,
+          state.activeEditorTabId,
+          state.settings.appShellMode,
+          state.settings.commandPaletteHiddenCommandIds,
+          state.settings.commandPalettePinnedCommandIds,
+          state.settings.commandPaletteRecentCommandIds,
+          state.settings.commandPaletteShowRecent,
+          state.createTask,
+          state.selectTask,
+          state.clearTaskSelection,
+          state.setTaskProvider,
+          state.saveActiveEditorTab,
+          state.refreshProjectFiles,
+          state.refreshWorkspaces,
+          state.openProject,
+          state.switchWorkspace,
+          state.abortTaskTurn,
+          state.focusStaveMuse,
+          state.setLayout,
+          state.applyExternalWorkspaceInformationUpdate,
+        ] as const,
+    ),
+  );
   const zenMode = appShellMode === "zen";
   const hasProject = Boolean(projectPath);
   const panelRowRef = useRef<HTMLDivElement>(null);
   const contentRowRef = useRef<HTMLDivElement>(null);
-  const pendingLayoutPatchRef = useRef<Partial<Record<ResizableLayoutKey, number>> | null>(null);
+  const pendingLayoutPatchRef = useRef<Partial<
+    Record<ResizableLayoutKey, number>
+  > | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const [zoomHudPercent, setZoomHudPercent] = useState<number | null>(null);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsInitialSection, setSettingsInitialSection] = useState<SectionId>("general");
-  const [settingsInitialProjectPath, setSettingsInitialProjectPath] = useState<string | null>(null);
+  const [settingsInitialSection, setSettingsInitialSection] =
+    useState<SectionId>("general");
+  const [settingsInitialProjectPath, setSettingsInitialProjectPath] = useState<
+    string | null
+  >(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const [contentRowWidth, setContentRowWidth] = useState(0);
   const [isLargeViewport, setIsLargeViewport] = useState(() =>
-    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches
+    typeof window === "undefined"
+      ? true
+      : window.matchMedia("(min-width: 1024px)").matches,
   );
   const zoomHudTimerRef = useRef<number | null>(null);
   const pendingShortcutChordRef = useRef<PendingShortcutChord | null>(null);
   const pendingShortcutChordTimerRef = useRef<number | null>(null);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [quittingApp, setQuittingApp] = useState(false);
   const handleFocusFileSearch = useCallback(() => {
-    const input = document.querySelector<HTMLInputElement>("[data-file-search-input]");
+    const input = document.querySelector<HTMLInputElement>(
+      "[data-file-search-input]",
+    );
     input?.focus();
     input?.select();
   }, []);
   const handlePreloadSettings = useCallback(() => {
     void loadSettingsDialog();
   }, []);
-  const handleOpenSettings = useCallback((options?: {
-    projectPath?: string | null;
-    section?: SectionId;
-  }) => {
-    handlePreloadSettings();
-    setSettingsInitialSection(options?.section ?? "general");
-    setSettingsInitialProjectPath(options?.projectPath ?? null);
-    setSettingsOpen(true);
-  }, [handlePreloadSettings]);
+  const handleOpenSettings = useCallback(
+    (options?: { projectPath?: string | null; section?: SectionId }) => {
+      handlePreloadSettings();
+      setSettingsInitialSection(options?.section ?? "general");
+      setSettingsInitialProjectPath(options?.projectPath ?? null);
+      setSettingsOpen(true);
+    },
+    [handlePreloadSettings],
+  );
   const handleSettingsOpenChange = useCallback((options: { open: boolean }) => {
     setSettingsOpen(options.open);
     if (!options.open) {
@@ -239,13 +267,18 @@ export function AppShell() {
     try {
       const turnsByWorkspaceId = Object.fromEntries(
         await Promise.all(
-          stateBefore.workspaces.map(async (workspace) => ([
-            workspace.id,
-            await listLatestWorkspaceTurns({ workspaceId: workspace.id }),
-          ] as const)),
+          stateBefore.workspaces.map(
+            async (workspace) =>
+              [
+                workspace.id,
+                await listLatestWorkspaceTurns({ workspaceId: workspace.id }),
+              ] as const,
+          ),
         ),
       );
-      const latestTarget = resolveLatestCompletedTurnTarget({ turnsByWorkspaceId });
+      const latestTarget = resolveLatestCompletedTurnTarget({
+        turnsByWorkspaceId,
+      });
 
       if (!latestTarget) {
         toast.message("No completed turns yet");
@@ -253,14 +286,19 @@ export function AppShell() {
       }
 
       if (stateBefore.activeWorkspaceId !== latestTarget.workspaceId) {
-        await stateBefore.switchWorkspace({ workspaceId: latestTarget.workspaceId });
+        await stateBefore.switchWorkspace({
+          workspaceId: latestTarget.workspaceId,
+        });
       }
 
       const stateAfter = useAppStore.getState();
-      const targetTask = stateAfter.tasks.find((task) => task.id === latestTarget.taskId);
+      const targetTask = stateAfter.tasks.find(
+        (task) => task.id === latestTarget.taskId,
+      );
       if (!targetTask) {
         toast.error("Unable to open the latest completed task", {
-          description: "The task for the newest completed turn is no longer available.",
+          description:
+            "The task for the newest completed turn is no longer available.",
         });
         return;
       }
@@ -273,7 +311,10 @@ export function AppShell() {
       stateAfter.selectTask({ taskId: latestTarget.taskId });
     } catch (error) {
       toast.error("Unable to find the latest completed turn", {
-        description: error instanceof Error ? error.message : "Turn history could not be loaded.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Turn history could not be loaded.",
       });
     }
   }, []);
@@ -311,12 +352,12 @@ export function AppShell() {
 
   function OverlayLoadingFallback(args: { title: string }) {
     return (
-      <div className={`${UI_LAYER_CLASS.dialog} fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]`}>
+      <div
+        className={`${UI_LAYER_CLASS.dialog} fixed inset-0 flex items-center justify-center bg-overlay p-4 backdrop-blur-[2px]`}
+      >
         <Card className="w-full max-w-md border-border/80 bg-background/95 p-6 shadow-2xl">
           <div className="text-sm text-muted-foreground">
-            Loading
-            {" "}
-            {args.title.toLowerCase()}
+            Loading {args.title.toLowerCase()}
             ...
           </div>
         </Card>
@@ -333,25 +374,30 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = window.api?.localMcp?.subscribeWorkspaceInformationUpdates?.((payload) => {
-      applyExternalWorkspaceInformationUpdate(payload);
-    });
+    const unsubscribe =
+      window.api?.localMcp?.subscribeWorkspaceInformationUpdates?.(
+        (payload) => {
+          applyExternalWorkspaceInformationUpdate(payload);
+        },
+      );
     return () => {
       unsubscribe?.();
     };
   }, [applyExternalWorkspaceInformationUpdate]);
 
   useEffect(() => {
-    const unsubscribe = window.api?.window?.subscribeZoomChanges?.(({ percent }) => {
-      setZoomHudPercent(percent);
-      if (zoomHudTimerRef.current !== null) {
-        window.clearTimeout(zoomHudTimerRef.current);
-      }
-      zoomHudTimerRef.current = window.setTimeout(() => {
-        setZoomHudPercent(null);
-        zoomHudTimerRef.current = null;
-      }, 1200);
-    });
+    const unsubscribe = window.api?.window?.subscribeZoomChanges?.(
+      ({ percent }) => {
+        setZoomHudPercent(percent);
+        if (zoomHudTimerRef.current !== null) {
+          window.clearTimeout(zoomHudTimerRef.current);
+        }
+        zoomHudTimerRef.current = window.setTimeout(() => {
+          setZoomHudPercent(null);
+          zoomHudTimerRef.current = null;
+        }, 1200);
+      },
+    );
     return () => {
       if (zoomHudTimerRef.current !== null) {
         window.clearTimeout(zoomHudTimerRef.current);
@@ -363,7 +409,14 @@ export function AppShell() {
   useEffect(() => {
     const unsubscribe = window.api?.window?.subscribeCloseShortcut?.(() => {
       const store = useAppStore.getState();
-      const { editorTabs, activeEditorTabId, activeTaskId, activeSurface, activeCliSessionTabId, settings } = store;
+      const {
+        editorTabs,
+        activeEditorTabId,
+        activeTaskId,
+        activeSurface,
+        activeCliSessionTabId,
+        settings,
+      } = store;
 
       if (activeEditorTabId && editorTabs.length > 0) {
         store.requestCloseActiveEditorTab();
@@ -371,7 +424,9 @@ export function AppShell() {
       }
 
       if (activeSurface.kind === "cli-session" && activeCliSessionTabId) {
-        const tab = store.cliSessionTabs.find((t) => t.id === activeCliSessionTabId);
+        const tab = store.cliSessionTabs.find(
+          (t) => t.id === activeCliSessionTabId,
+        );
         if (tab) {
           window.dispatchEvent(
             new CustomEvent("stave:request-close-cli-session", {
@@ -399,6 +454,16 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
+    const unsubscribe = window.api?.window?.subscribeAppQuitRequested?.(() => {
+      setQuittingApp(false);
+      setShowQuitConfirm(true);
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
     const clearPendingShortcutChord = () => {
       pendingShortcutChordRef.current = null;
       if (pendingShortcutChordTimerRef.current !== null) {
@@ -407,7 +472,9 @@ export function AppShell() {
       }
     };
 
-    const setPendingShortcutChord = (nextPendingChord: PendingShortcutChord | null) => {
+    const setPendingShortcutChord = (
+      nextPendingChord: PendingShortcutChord | null,
+    ) => {
       clearPendingShortcutChord();
       pendingShortcutChordRef.current = nextPendingChord;
       if (!nextPendingChord) {
@@ -449,7 +516,12 @@ export function AppShell() {
         return;
       }
 
-      if (hasMod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "p") {
+      if (
+        hasMod &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "p"
+      ) {
         if (!store.projectPath?.trim()) {
           return;
         }
@@ -459,7 +531,12 @@ export function AppShell() {
         return;
       }
 
-      if (hasMod && !event.altKey && event.shiftKey && event.key.toLowerCase() === "p") {
+      if (
+        hasMod &&
+        !event.altKey &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "p"
+      ) {
         event.preventDefault();
         event.stopPropagation();
         handleOpenCommandPalette();
@@ -488,15 +565,18 @@ export function AppShell() {
       }
 
       if (!hasMod) {
-        const activeElement = typeof document === "undefined" ? null : document.activeElement;
-        if (shouldAbortTaskOnEscape({
-          key: event.key,
-          ctrlKey: event.ctrlKey,
-          metaKey: event.metaKey,
-          shiftKey: event.shiftKey,
-          target: event.target,
-          activeElement,
-        })) {
+        const activeElement =
+          typeof document === "undefined" ? null : document.activeElement;
+        if (
+          shouldAbortTaskOnEscape({
+            key: event.key,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey,
+            target: event.target,
+            activeElement,
+          })
+        ) {
           store.abortTaskTurn({ taskId: store.activeTaskId });
         }
         return;
@@ -517,40 +597,72 @@ export function AppShell() {
 
       if (!event.shiftKey && event.key.toLowerCase() === "b") {
         event.preventDefault();
-        store.setLayout({ patch: { workspaceSidebarCollapsed: !store.layout.workspaceSidebarCollapsed } });
+        store.setLayout({
+          patch: {
+            workspaceSidebarCollapsed: !store.layout.workspaceSidebarCollapsed,
+          },
+        });
         return;
       }
 
       if (event.shiftKey && event.key.toLowerCase() === "b") {
         event.preventDefault();
-        const nextVisible = !(store.layout.sidebarOverlayVisible && store.layout.sidebarOverlayTab === "changes");
-        store.setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "changes" } });
+        const nextVisible = !(
+          store.layout.sidebarOverlayVisible &&
+          store.layout.sidebarOverlayTab === "changes"
+        );
+        store.setLayout({
+          patch: {
+            sidebarOverlayVisible: nextVisible,
+            sidebarOverlayTab: "changes",
+          },
+        });
         return;
       }
 
       if (event.key.toLowerCase() === "e") {
         event.preventDefault();
-        const nextVisible = !(store.layout.sidebarOverlayVisible && store.layout.sidebarOverlayTab === "explorer");
-        store.setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "explorer" } });
+        const nextVisible = !(
+          store.layout.sidebarOverlayVisible &&
+          store.layout.sidebarOverlayTab === "explorer"
+        );
+        store.setLayout({
+          patch: {
+            sidebarOverlayVisible: nextVisible,
+            sidebarOverlayTab: "explorer",
+          },
+        });
         return;
       }
 
       if (event.key.toLowerCase() === "i") {
         event.preventDefault();
-        const nextVisible = !(store.layout.sidebarOverlayVisible && store.layout.sidebarOverlayTab === "information");
-        store.setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "information" } });
+        const nextVisible = !(
+          store.layout.sidebarOverlayVisible &&
+          store.layout.sidebarOverlayTab === "information"
+        );
+        store.setLayout({
+          patch: {
+            sidebarOverlayVisible: nextVisible,
+            sidebarOverlayTab: "information",
+          },
+        });
         return;
       }
 
       if (event.code === "Backslash" && !event.shiftKey) {
         event.preventDefault();
-        store.setLayout({ patch: { editorVisible: !store.layout.editorVisible } });
+        store.setLayout({
+          patch: { editorVisible: !store.layout.editorVisible },
+        });
         return;
       }
 
       if (event.key === "`") {
         event.preventDefault();
-        store.setLayout({ patch: { terminalDocked: !store.layout.terminalDocked } });
+        store.setLayout({
+          patch: { terminalDocked: !store.layout.terminalDocked },
+        });
         return;
       }
 
@@ -560,10 +672,18 @@ export function AppShell() {
         return;
       }
 
-      if (event.shiftKey && (event.key.toLowerCase() === "j" || event.key === "ArrowDown")) {
+      if (
+        event.shiftKey &&
+        (event.key.toLowerCase() === "j" || event.key === "ArrowDown")
+      ) {
         event.preventDefault();
-        const currentIndex = store.tasks.findIndex((task) => task.id === store.activeTaskId);
-        const nextIndex = currentIndex >= 0 ? Math.min(store.tasks.length - 1, currentIndex + 1) : 0;
+        const currentIndex = store.tasks.findIndex(
+          (task) => task.id === store.activeTaskId,
+        );
+        const nextIndex =
+          currentIndex >= 0
+            ? Math.min(store.tasks.length - 1, currentIndex + 1)
+            : 0;
         const nextTaskId = store.tasks[nextIndex]?.id;
         if (nextTaskId) {
           store.selectTask({ taskId: nextTaskId });
@@ -571,9 +691,14 @@ export function AppShell() {
         return;
       }
 
-      if (event.shiftKey && (event.key.toLowerCase() === "k" || event.key === "ArrowUp")) {
+      if (
+        event.shiftKey &&
+        (event.key.toLowerCase() === "k" || event.key === "ArrowUp")
+      ) {
         event.preventDefault();
-        const currentIndex = store.tasks.findIndex((task) => task.id === store.activeTaskId);
+        const currentIndex = store.tasks.findIndex(
+          (task) => task.id === store.activeTaskId,
+        );
         const prevIndex = currentIndex >= 0 ? Math.max(0, currentIndex - 1) : 0;
         const prevTaskId = store.tasks[prevIndex]?.id;
         if (prevTaskId) {
@@ -587,13 +712,21 @@ export function AppShell() {
       window.removeEventListener("keydown", onKeyDown);
       clearPendingShortcutChord();
     };
-  }, [handleFocusFileSearch, handleOpenCommandPalette, handleOpenKeyboardShortcuts, handleToggleZenMode]);
+  }, [
+    handleFocusFileSearch,
+    handleOpenCommandPalette,
+    handleOpenKeyboardShortcuts,
+    handleToggleZenMode,
+  ]);
 
-  useEffect(() => () => {
-    if (resizeFrameRef.current !== null) {
-      window.cancelAnimationFrame(resizeFrameRef.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const node = contentRowRef.current;
@@ -603,7 +736,9 @@ export function AppShell() {
 
     const syncWidth = () => {
       const nextWidth = node.offsetWidth;
-      setContentRowWidth((currentWidth) => currentWidth === nextWidth ? currentWidth : nextWidth);
+      setContentRowWidth((currentWidth) =>
+        currentWidth === nextWidth ? currentWidth : nextWidth,
+      );
     };
 
     syncWidth();
@@ -619,16 +754,25 @@ export function AppShell() {
 
   useEffect(() => {
     const handleMuseOpenSettings = (event: Event) => {
-      const customEvent = event as CustomEvent<{ projectPath?: string | null; section?: SectionId }>;
+      const customEvent = event as CustomEvent<{
+        projectPath?: string | null;
+        section?: SectionId;
+      }>;
       handleOpenSettings({
         projectPath: customEvent.detail?.projectPath ?? null,
         section: customEvent.detail?.section ?? "muse",
       });
     };
 
-    window.addEventListener(STAVE_MUSE_OPEN_SETTINGS_EVENT, handleMuseOpenSettings as EventListener);
+    window.addEventListener(
+      STAVE_MUSE_OPEN_SETTINGS_EVENT,
+      handleMuseOpenSettings as EventListener,
+    );
     return () => {
-      window.removeEventListener(STAVE_MUSE_OPEN_SETTINGS_EVENT, handleMuseOpenSettings as EventListener);
+      window.removeEventListener(
+        STAVE_MUSE_OPEN_SETTINGS_EVENT,
+        handleMuseOpenSettings as EventListener,
+      );
     };
   }, [handleOpenSettings]);
 
@@ -654,12 +798,21 @@ export function AppShell() {
   }, [editorVisible, isLargeViewport, setLayout, sidebarOverlayVisible]);
 
   const hasMeasuredContentRowWidth = contentRowWidth > 0;
-  const canShowDesktopEditor = !hasMeasuredContentRowWidth
-    || contentRowWidth >= MIN_CHAT_PANEL_WIDTH + MIN_EDITOR_PANEL_WIDTH + PANEL_SEPARATOR_WIDTH;
-  const canShowDesktopSidebar = !hasMeasuredContentRowWidth
-    || contentRowWidth >= MIN_CHAT_PANEL_WIDTH + MIN_EXPLORER_PANEL_WIDTH + PANEL_SEPARATOR_WIDTH;
-  const canShowDesktopEditorAndSidebar = !hasMeasuredContentRowWidth
-    || contentRowWidth >= MIN_CHAT_PANEL_WIDTH + MIN_EDITOR_PANEL_WIDTH + MIN_EXPLORER_PANEL_WIDTH + (PANEL_SEPARATOR_WIDTH * 2);
+  const canShowDesktopEditor =
+    !hasMeasuredContentRowWidth ||
+    contentRowWidth >=
+      MIN_CHAT_PANEL_WIDTH + MIN_EDITOR_PANEL_WIDTH + PANEL_SEPARATOR_WIDTH;
+  const canShowDesktopSidebar =
+    !hasMeasuredContentRowWidth ||
+    contentRowWidth >=
+      MIN_CHAT_PANEL_WIDTH + MIN_EXPLORER_PANEL_WIDTH + PANEL_SEPARATOR_WIDTH;
+  const canShowDesktopEditorAndSidebar =
+    !hasMeasuredContentRowWidth ||
+    contentRowWidth >=
+      MIN_CHAT_PANEL_WIDTH +
+        MIN_EDITOR_PANEL_WIDTH +
+        MIN_EXPLORER_PANEL_WIDTH +
+        PANEL_SEPARATOR_WIDTH * 2;
 
   let showDesktopEditor = false;
   let showDesktopSidebar = false;
@@ -668,7 +821,11 @@ export function AppShell() {
   // On compact laptop widths, keep the center panel readable by moving the
   // secondary right-side panel into the overlay instead of overflowing inline.
   if (!isLargeViewport) {
-    overlayRightPanelMode = editorVisible ? "editor" : (sidebarOverlayVisible ? "sidebar" : null);
+    overlayRightPanelMode = editorVisible
+      ? "editor"
+      : sidebarOverlayVisible
+        ? "sidebar"
+        : null;
   } else if (editorVisible && sidebarOverlayVisible) {
     if (canShowDesktopEditorAndSidebar) {
       showDesktopEditor = true;
@@ -700,16 +857,14 @@ export function AppShell() {
   let desktopSidebarWidth = explorerPanelWidth;
 
   if (hasMeasuredContentRowWidth) {
-    ({
-      desktopEditorWidth,
-      desktopSidebarWidth,
-    } = resolveDesktopRightPanelWidths({
-      contentRowWidth,
-      preferredEditorWidth: editorPanelWidth,
-      preferredSidebarWidth: explorerPanelWidth,
-      showDesktopEditor,
-      showDesktopSidebar,
-    }));
+    ({ desktopEditorWidth, desktopSidebarWidth } =
+      resolveDesktopRightPanelWidths({
+        contentRowWidth,
+        preferredEditorWidth: editorPanelWidth,
+        preferredSidebarWidth: explorerPanelWidth,
+        showDesktopEditor,
+        showDesktopSidebar,
+      }));
   }
 
   if (zenMode) {
@@ -720,21 +875,20 @@ export function AppShell() {
 
   const showOverlayRightPanel = overlayRightPanelMode !== null;
   const modifierLabel = useMemo<"Cmd" | "Ctrl">(
-    () => (
-      typeof navigator !== "undefined" && /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
+    () =>
+      typeof navigator !== "undefined" &&
+      /(Mac|iPhone|iPad)/i.test(navigator.platform || navigator.userAgent)
         ? "Cmd"
-        : "Ctrl"
-    ),
+        : "Ctrl",
     [],
   );
-  const activeWorkspacePath = workspacePathById[activeWorkspaceId] ?? projectPath;
+  const activeWorkspacePath =
+    workspacePathById[activeWorkspaceId] ?? projectPath;
   const hasProjectContext = Boolean(projectPath?.trim());
   const museLeftInset = isLargeViewport
-    ? (
-      workspaceSidebarCollapsed
+    ? (workspaceSidebarCollapsed
         ? COLLAPSED_PROJECT_SIDEBAR_WIDTH
-        : Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)
-    ) + 12
+        : Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)) + 12
     : undefined;
   const museRightInset = resolveStaveMuseRightInset({
     hasProjectContext,
@@ -746,171 +900,224 @@ export function AppShell() {
     overlayRightPanelMode,
     viewportWidth: typeof window === "undefined" ? 1440 : window.innerWidth,
   });
-  const activeWorkspaceIsDefault = Boolean(workspaceDefaultById[activeWorkspaceId]);
-  const activeWorkspacePrStatus: WorkspacePrStatus = workspacePrInfoById[activeWorkspaceId]?.derived ?? "no_pr";
+  const activeWorkspaceIsDefault = Boolean(
+    workspaceDefaultById[activeWorkspaceId],
+  );
+  const activeWorkspacePrStatus: WorkspacePrStatus =
+    workspacePrInfoById[activeWorkspaceId]?.derived ?? "no_pr";
   const hasBlockingOverlayOpen =
     showCloseConfirm ||
+    showQuitConfirm ||
     commandPaletteOpen ||
     settingsOpen ||
     shortcutsOpen;
-  const commandPaletteContext = useMemo(() => ({
-    activeEditorTabId,
-    activeTaskId,
-    activeWorkspaceBranch: workspaceBranchById[activeWorkspaceId],
-    activeWorkspaceIsDefault,
-    activeWorkspacePrStatus,
-    hasActiveTurn: Boolean(activeTaskId && activeTurnIdsByTask[activeTaskId]),
-    layout: {
-      editorVisible,
-      sidebarOverlayTab,
-      sidebarOverlayVisible,
-      terminalDocked,
-      workspaceSidebarCollapsed,
-      zenMode,
-    },
-    modifierLabel,
-    preferences: {
-      hiddenIds: commandPaletteHiddenCommandIds,
-      pinnedIds: commandPalettePinnedCommandIds,
-      recentIds: commandPaletteRecentCommandIds,
-      showRecent: commandPaletteShowRecent,
-    },
-    projectPath,
-    projects: (() => {
-      const remembered = recentProjects.map((project) => ({
-        isCurrent: project.projectPath === projectPath,
-        projectName: project.projectName,
-        projectPath: project.projectPath,
-      }));
-      if (!projectPath || remembered.some((project) => project.projectPath === projectPath)) {
-        return remembered;
-      }
-      return [
-        {
-          isCurrent: true,
-          projectName: projectName ?? "Current project",
-          projectPath,
+  const commandPaletteContext = useMemo(
+    () => ({
+      activeEditorTabId,
+      activeTaskId,
+      activeWorkspaceBranch: workspaceBranchById[activeWorkspaceId],
+      activeWorkspaceIsDefault,
+      activeWorkspacePrStatus,
+      hasActiveTurn: Boolean(activeTaskId && activeTurnIdsByTask[activeTaskId]),
+      layout: {
+        editorVisible,
+        sidebarOverlayTab,
+        sidebarOverlayVisible,
+        terminalDocked,
+        workspaceSidebarCollapsed,
+        zenMode,
+      },
+      modifierLabel,
+      preferences: {
+        hiddenIds: commandPaletteHiddenCommandIds,
+        pinnedIds: commandPalettePinnedCommandIds,
+        recentIds: commandPaletteRecentCommandIds,
+        showRecent: commandPaletteShowRecent,
+      },
+      projectPath,
+      projects: (() => {
+        const remembered = recentProjects.map((project) => ({
+          isCurrent: project.projectPath === projectPath,
+          projectName: project.projectName,
+          projectPath: project.projectPath,
+        }));
+        if (
+          !projectPath ||
+          remembered.some((project) => project.projectPath === projectPath)
+        ) {
+          return remembered;
+        }
+        return [
+          {
+            isCurrent: true,
+            projectName: projectName ?? "Current project",
+            projectPath,
+          },
+          ...remembered,
+        ];
+      })(),
+      tasks: tasks.map((task) => ({
+        id: task.id,
+        isActive: task.id === activeTaskId,
+        isResponding: Boolean(activeTurnIdsByTask[task.id]),
+        provider: task.provider,
+        title: task.title,
+      })),
+      workspacePath: activeWorkspacePath ?? null,
+      workspaces: workspaces.map((workspace) => ({
+        id: workspace.id,
+        isActive: workspace.id === activeWorkspaceId,
+        isDefault: Boolean(workspaceDefaultById[workspace.id]),
+        name: workspace.name,
+        branch: workspaceBranchById[workspace.id],
+        path: workspacePathById[workspace.id],
+      })),
+      commands: {
+        clearTaskSelection: () => clearTaskSelection(),
+        createPullRequest: handleCreatePullRequest,
+        createTask: () => createTask({ title: "" }),
+        continueWorkspace: handleContinueWorkspace,
+        focusFileSearch: handleFocusFileSearch,
+        openStaveMuse: handleOpenStaveMuse,
+        openLatestCompletedTurnTask: handleOpenLatestCompletedTurnTask,
+        openInTerminal: async (path: string) => {
+          await window.api?.shell?.openInTerminal?.({ path });
         },
-        ...remembered,
-      ];
-    })(),
-    tasks: tasks.map((task) => ({
-      id: task.id,
-      isActive: task.id === activeTaskId,
-      isResponding: Boolean(activeTurnIdsByTask[task.id]),
-      provider: task.provider,
-      title: task.title,
-    })),
-    workspacePath: activeWorkspacePath ?? null,
-    workspaces: workspaces.map((workspace) => ({
-      id: workspace.id,
-      isActive: workspace.id === activeWorkspaceId,
-      isDefault: Boolean(workspaceDefaultById[workspace.id]),
-      name: workspace.name,
-      branch: workspaceBranchById[workspace.id],
-      path: workspacePathById[workspace.id],
-    })),
-    commands: {
-      clearTaskSelection: () => clearTaskSelection(),
-      createPullRequest: handleCreatePullRequest,
-      createTask: () => createTask({ title: "" }),
-      continueWorkspace: handleContinueWorkspace,
-      focusFileSearch: handleFocusFileSearch,
-      openStaveMuse: handleOpenStaveMuse,
-      openLatestCompletedTurnTask: handleOpenLatestCompletedTurnTask,
-      openInTerminal: async (path: string) => {
-        await window.api?.shell?.openInTerminal?.({ path });
+        openInGhostty: async (path: string) => {
+          await window.api?.shell?.openInGhostty?.({ path });
+        },
+        openInVSCode: async (path: string) => {
+          await window.api?.shell?.openInVSCode?.({ path });
+        },
+        openKeyboardShortcuts: handleOpenKeyboardShortcuts,
+        openProject: (nextProjectPath: string) =>
+          openProject({ projectPath: nextProjectPath }),
+        openSettings: handleOpenSettings,
+        refreshProjectFiles: () => refreshProjectFiles(),
+        refreshWorkspaces: () => refreshWorkspaces(),
+        revealInFileManager: async (path: string) => {
+          await window.api?.shell?.showInFinder?.({ path });
+        },
+        saveActiveEditor: () => saveActiveEditorTab().then(() => undefined),
+        selectTask: (taskId: string) => selectTask({ taskId }),
+        setTaskProvider: (
+          taskId: string,
+          provider: "claude-code" | "codex" | "stave",
+        ) => setTaskProvider({ taskId, provider }),
+        showOverlayTab: (tab: RightRailPanelId) =>
+          setLayout({
+            patch: { sidebarOverlayVisible: true, sidebarOverlayTab: tab },
+          }),
+        stopActiveTurn: () => abortTaskTurn({ taskId: activeTaskId }),
+        switchWorkspace: (workspaceId: string) =>
+          switchWorkspace({ workspaceId }),
+        toggleChangesPanel: () => {
+          const currentLayout = useAppStore.getState().layout;
+          const nextVisible = !(
+            currentLayout.sidebarOverlayVisible &&
+            currentLayout.sidebarOverlayTab === "changes"
+          );
+          setLayout({
+            patch: {
+              sidebarOverlayVisible: nextVisible,
+              sidebarOverlayTab: "changes",
+            },
+          });
+        },
+        toggleEditor: () =>
+          setLayout({
+            patch: {
+              editorVisible: !useAppStore.getState().layout.editorVisible,
+            },
+          }),
+        toggleInformationPanel: () => {
+          const currentLayout = useAppStore.getState().layout;
+          const nextVisible = !(
+            currentLayout.sidebarOverlayVisible &&
+            currentLayout.sidebarOverlayTab === "information"
+          );
+          setLayout({
+            patch: {
+              sidebarOverlayVisible: nextVisible,
+              sidebarOverlayTab: "information",
+            },
+          });
+        },
+        toggleTerminal: () =>
+          setLayout({
+            patch: {
+              terminalDocked: !useAppStore.getState().layout.terminalDocked,
+            },
+          }),
+        toggleZenMode: handleToggleZenMode,
+        toggleWorkspaceSidebar: () =>
+          setLayout({
+            patch: {
+              workspaceSidebarCollapsed:
+                !useAppStore.getState().layout.workspaceSidebarCollapsed,
+            },
+          }),
       },
-      openInGhostty: async (path: string) => {
-        await window.api?.shell?.openInGhostty?.({ path });
-      },
-      openInVSCode: async (path: string) => {
-        await window.api?.shell?.openInVSCode?.({ path });
-      },
-      openKeyboardShortcuts: handleOpenKeyboardShortcuts,
-      openProject: (nextProjectPath: string) => openProject({ projectPath: nextProjectPath }),
-      openSettings: handleOpenSettings,
-      refreshProjectFiles: () => refreshProjectFiles(),
-      refreshWorkspaces: () => refreshWorkspaces(),
-      revealInFileManager: async (path: string) => {
-        await window.api?.shell?.showInFinder?.({ path });
-      },
-      saveActiveEditor: () => saveActiveEditorTab().then(() => undefined),
-      selectTask: (taskId: string) => selectTask({ taskId }),
-      setTaskProvider: (taskId: string, provider: "claude-code" | "codex" | "stave") => setTaskProvider({ taskId, provider }),
-      showOverlayTab: (tab: RightRailPanelId) => setLayout({ patch: { sidebarOverlayVisible: true, sidebarOverlayTab: tab } }),
-      stopActiveTurn: () => abortTaskTurn({ taskId: activeTaskId }),
-      switchWorkspace: (workspaceId: string) => switchWorkspace({ workspaceId }),
-      toggleChangesPanel: () => {
-        const currentLayout = useAppStore.getState().layout;
-        const nextVisible = !(currentLayout.sidebarOverlayVisible && currentLayout.sidebarOverlayTab === "changes");
-        setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "changes" } });
-      },
-      toggleEditor: () => setLayout({ patch: { editorVisible: !useAppStore.getState().layout.editorVisible } }),
-      toggleInformationPanel: () => {
-        const currentLayout = useAppStore.getState().layout;
-        const nextVisible = !(currentLayout.sidebarOverlayVisible && currentLayout.sidebarOverlayTab === "information");
-        setLayout({ patch: { sidebarOverlayVisible: nextVisible, sidebarOverlayTab: "information" } });
-      },
-      toggleTerminal: () => setLayout({ patch: { terminalDocked: !useAppStore.getState().layout.terminalDocked } }),
-      toggleZenMode: handleToggleZenMode,
-      toggleWorkspaceSidebar: () => setLayout({ patch: { workspaceSidebarCollapsed: !useAppStore.getState().layout.workspaceSidebarCollapsed } }),
-    },
-  }), [
-    abortTaskTurn,
-    activeEditorTabId,
-    activeTaskId,
-    activeWorkspaceId,
-    activeWorkspaceIsDefault,
-    activeWorkspacePrStatus,
-    activeTurnIdsByTask,
-    activeWorkspacePath,
-    clearTaskSelection,
-    handleContinueWorkspace,
-    handleCreatePullRequest,
-    createTask,
-    editorVisible,
-    handleFocusFileSearch,
-    handleOpenStaveMuse,
-    handleOpenLatestCompletedTurnTask,
-    handleOpenKeyboardShortcuts,
-    handleOpenSettings,
-    modifierLabel,
-    openProject,
-    projectPath,
-    projectName,
-    recentProjects,
-    refreshProjectFiles,
-    refreshWorkspaces,
-    saveActiveEditorTab,
-    selectTask,
-    setLayout,
-    setTaskProvider,
-    commandPaletteHiddenCommandIds,
-    commandPalettePinnedCommandIds,
-    commandPaletteRecentCommandIds,
-    commandPaletteShowRecent,
-    sidebarOverlayVisible,
-    sidebarOverlayTab,
-    tasks,
-    terminalDocked,
-    zenMode,
-    workspaceBranchById,
-    workspaceDefaultById,
-    workspacePathById,
-    workspacePrInfoById,
-    workspaceSidebarCollapsed,
-    workspaces,
-    switchWorkspace,
-    handleToggleZenMode,
-  ]);
-  const showCliSurface = activeSurface.kind === "cli-session"
-    && cliSessionTabs.some((tab) => tab.id === activeSurface.cliSessionTabId);
+    }),
+    [
+      abortTaskTurn,
+      activeEditorTabId,
+      activeTaskId,
+      activeWorkspaceId,
+      activeWorkspaceIsDefault,
+      activeWorkspacePrStatus,
+      activeTurnIdsByTask,
+      activeWorkspacePath,
+      clearTaskSelection,
+      handleContinueWorkspace,
+      handleCreatePullRequest,
+      createTask,
+      editorVisible,
+      handleFocusFileSearch,
+      handleOpenStaveMuse,
+      handleOpenLatestCompletedTurnTask,
+      handleOpenKeyboardShortcuts,
+      handleOpenSettings,
+      modifierLabel,
+      openProject,
+      projectPath,
+      projectName,
+      recentProjects,
+      refreshProjectFiles,
+      refreshWorkspaces,
+      saveActiveEditorTab,
+      selectTask,
+      setLayout,
+      setTaskProvider,
+      commandPaletteHiddenCommandIds,
+      commandPalettePinnedCommandIds,
+      commandPaletteRecentCommandIds,
+      commandPaletteShowRecent,
+      sidebarOverlayVisible,
+      sidebarOverlayTab,
+      tasks,
+      terminalDocked,
+      zenMode,
+      workspaceBranchById,
+      workspaceDefaultById,
+      workspacePathById,
+      workspacePrInfoById,
+      workspaceSidebarCollapsed,
+      workspaces,
+      switchWorkspace,
+      handleToggleZenMode,
+    ],
+  );
+  const showCliSurface =
+    activeSurface.kind === "cli-session" &&
+    cliSessionTabs.some((tab) => tab.id === activeSurface.cliSessionTabId);
 
   return (
     <div className="relative flex h-full w-full bg-background text-foreground">
       {zoomHudPercent !== null ? (
-        <div className={`pointer-events-none absolute left-1/2 top-16 ${UI_LAYER_CLASS.floatingChrome} -translate-x-1/2`}>
+        <div
+          className={`pointer-events-none absolute left-1/2 top-16 ${UI_LAYER_CLASS.floatingChrome} -translate-x-1/2`}
+        >
           <div className="rounded-full border border-border/80 bg-card/95 px-3 py-1 text-sm font-medium text-foreground shadow-lg backdrop-blur-sm">
             Zoom {zoomHudPercent}%
           </div>
@@ -929,14 +1136,53 @@ export function AppShell() {
           void window.api?.window?.close?.();
         }}
       />
+      <QuitConfirmationDialog
+        open={showQuitConfirm}
+        quitting={quittingApp}
+        shortcutLabel={window.api?.platform === "darwin" ? "Cmd+Q" : null}
+        onCancel={() => {
+          setQuittingApp(false);
+          setShowQuitConfirm(false);
+          void window.api?.window?.cancelAppQuit?.();
+        }}
+        onConfirm={() => {
+          setQuittingApp(true);
+          void window.api?.window
+            ?.confirmAppQuit?.()
+            .then((result) => {
+              if (result?.ok) {
+                return;
+              }
+              setQuittingApp(false);
+              setShowQuitConfirm(false);
+              toast.error("Unable to quit Stave", {
+                description: "The quit request is no longer pending.",
+              });
+            })
+            .catch((error) => {
+              setQuittingApp(false);
+              toast.error("Unable to quit Stave", {
+                description:
+                  error instanceof Error
+                    ? error.message
+                    : "The app could not confirm the quit request.",
+              });
+            });
+        }}
+      />
       <GlobalCommandPalette
         open={commandPaletteOpen}
         onOpenChange={setCommandPaletteOpen}
         runtimeContext={commandPaletteContext}
       />
       {shortcutsOpen ? (
-        <Suspense fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}>
-          <KeyboardShortcutsDrawer open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        <Suspense
+          fallback={<OverlayLoadingFallback title="Keyboard Shortcuts" />}
+        >
+          <KeyboardShortcutsDrawer
+            open={shortcutsOpen}
+            onOpenChange={setShortcutsOpen}
+          />
         </Suspense>
       ) : null}
       {settingsOpen ? (
@@ -955,7 +1201,10 @@ export function AppShell() {
         <>
           <RenderProfiler id="ProjectWorkspaceSidebar">
             <ProjectWorkspaceSidebar
-              width={Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH)}
+              width={Math.max(
+                workspaceSidebarWidth,
+                WORKSPACE_SIDEBAR_MIN_WIDTH,
+              )}
               collapsed={workspaceSidebarCollapsed}
               animate={!sidebarResizing}
               onOpenCommandPalette={handleOpenCommandPalette}
@@ -971,11 +1220,17 @@ export function AppShell() {
                 event.preventDefault();
                 setSidebarResizing(true);
                 const startX = event.clientX;
-                const startWidth = Math.max(workspaceSidebarWidth, WORKSPACE_SIDEBAR_MIN_WIDTH);
+                const startWidth = Math.max(
+                  workspaceSidebarWidth,
+                  WORKSPACE_SIDEBAR_MIN_WIDTH,
+                );
                 const onMove = (moveEvent: MouseEvent) => {
                   const next = Math.max(
                     WORKSPACE_SIDEBAR_MIN_WIDTH,
-                    Math.min(WORKSPACE_SIDEBAR_MAX_WIDTH, startWidth + (moveEvent.clientX - startX)),
+                    Math.min(
+                      WORKSPACE_SIDEBAR_MAX_WIDTH,
+                      startWidth + (moveEvent.clientX - startX),
+                    ),
                   );
                   scheduleLayoutResizePatch("workspaceSidebarWidth", next);
                 };
@@ -994,15 +1249,25 @@ export function AppShell() {
           ) : null}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <TopBar />
-            <div ref={panelRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-              <div ref={contentRowRef} className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+            <div
+              ref={panelRowRef}
+              className="flex min-h-0 min-w-0 flex-1 overflow-hidden"
+            >
+              <div
+                ref={contentRowRef}
+                className="flex min-h-0 min-w-0 flex-1 overflow-hidden"
+              >
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   {hasProject ? <WorkspaceTaskTabs /> : null}
                   <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                         <div className="min-h-0 min-w-0 flex-1 sm:min-w-[420px]">
-                          <div className={showCliSurface ? "hidden h-full" : "h-full"}>
+                          <div
+                            className={
+                              showCliSurface ? "hidden h-full" : "h-full"
+                            }
+                          >
                             <ChatArea />
                           </div>
                           <CliSessionPanel />
@@ -1017,8 +1282,14 @@ export function AppShell() {
                             const startHeight = terminalDockHeight;
                             const onMove = (moveEvent: MouseEvent) => {
                               const delta = startY - moveEvent.clientY;
-                              const next = Math.max(120, Math.min(420, startHeight + delta));
-                              scheduleLayoutResizePatch("terminalDockHeight", next);
+                              const next = Math.max(
+                                120,
+                                Math.min(420, startHeight + delta),
+                              );
+                              scheduleLayoutResizePatch(
+                                "terminalDockHeight",
+                                next,
+                              );
                             };
                             const onUp = () => {
                               flushPendingLayoutPatch();
@@ -1045,16 +1316,28 @@ export function AppShell() {
                         const startX = event.clientX;
                         const startWidth = desktopEditorWidth;
                         const onMove = (moveEvent: MouseEvent) => {
-                          const containerWidth = contentRowRef.current?.offsetWidth ?? 9999;
-                          const explorerWidth = showDesktopSidebar ? desktopSidebarWidth : 0;
+                          const containerWidth =
+                            contentRowRef.current?.offsetWidth ?? 9999;
+                          const explorerWidth = showDesktopSidebar
+                            ? desktopSidebarWidth
+                            : 0;
                           const separators = showDesktopSidebar ? 2 : 1;
                           const maxEditor = Math.max(
                             MIN_EDITOR_PANEL_WIDTH,
-                            containerWidth - MIN_CHAT_PANEL_WIDTH - explorerWidth - separators,
+                            containerWidth -
+                              MIN_CHAT_PANEL_WIDTH -
+                              explorerWidth -
+                              separators,
                           );
-                          const minEditor = Math.min(MIN_EDITOR_PANEL_WIDTH, maxEditor);
+                          const minEditor = Math.min(
+                            MIN_EDITOR_PANEL_WIDTH,
+                            maxEditor,
+                          );
                           const delta = startX - moveEvent.clientX;
-                          const next = Math.max(minEditor, Math.min(maxEditor, startWidth + delta));
+                          const next = Math.max(
+                            minEditor,
+                            Math.min(maxEditor, startWidth + delta),
+                          );
                           scheduleLayoutResizePatch("editorPanelWidth", next);
                         };
                         const onUp = () => {
@@ -1068,7 +1351,10 @@ export function AppShell() {
                     >
                       <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
                     </div>
-                    <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopEditorWidth}px` }}>
+                    <div
+                      className="hidden min-h-0 min-w-0 lg:block"
+                      style={{ width: `${desktopEditorWidth}px` }}
+                    >
                       <RenderProfiler id="EditorMainPanel" thresholdMs={10}>
                         <EditorMainPanel />
                       </RenderProfiler>
@@ -1084,15 +1370,24 @@ export function AppShell() {
                         const startX = event.clientX;
                         const startWidth = desktopSidebarWidth;
                         const onMove = (moveEvent: MouseEvent) => {
-                          const containerWidth = contentRowRef.current?.offsetWidth ?? 9999;
-                          const editorWidth = showDesktopEditor ? desktopEditorWidth : 0;
+                          const containerWidth =
+                            contentRowRef.current?.offsetWidth ?? 9999;
+                          const editorWidth = showDesktopEditor
+                            ? desktopEditorWidth
+                            : 0;
                           const separators = showDesktopEditor ? 2 : 1;
                           const maxExplorer = Math.max(
                             MIN_EXPLORER_PANEL_WIDTH,
-                            containerWidth - MIN_CHAT_PANEL_WIDTH - editorWidth - separators,
+                            containerWidth -
+                              MIN_CHAT_PANEL_WIDTH -
+                              editorWidth -
+                              separators,
                           );
                           const delta = startX - moveEvent.clientX;
-                          const next = Math.max(MIN_EXPLORER_PANEL_WIDTH, Math.min(maxExplorer, startWidth + delta));
+                          const next = Math.max(
+                            MIN_EXPLORER_PANEL_WIDTH,
+                            Math.min(maxExplorer, startWidth + delta),
+                          );
                           scheduleLayoutResizePatch("explorerPanelWidth", next);
                         };
                         const onUp = () => {
@@ -1106,8 +1401,20 @@ export function AppShell() {
                     >
                       <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/40 transition-colors group-hover:bg-primary/50 group-active:bg-primary/70" />
                     </div>
-                    <Suspense fallback={<aside className="bg-card p-3 text-sm text-muted-foreground" style={{ width: `${desktopSidebarWidth}px` }}>Loading panel...</aside>}>
-                      <div className="hidden min-h-0 min-w-0 lg:block" style={{ width: `${desktopSidebarWidth}px` }}>
+                    <Suspense
+                      fallback={
+                        <aside
+                          className="bg-card p-3 text-sm text-muted-foreground"
+                          style={{ width: `${desktopSidebarWidth}px` }}
+                        >
+                          Loading panel...
+                        </aside>
+                      }
+                    >
+                      <div
+                        className="hidden min-h-0 min-w-0 lg:block"
+                        style={{ width: `${desktopSidebarWidth}px` }}
+                      >
                         <RenderProfiler id="EditorPanel" thresholdMs={8}>
                           <EditorPanel
                             onOpenSettings={handleOpenSettings}
@@ -1121,11 +1428,20 @@ export function AppShell() {
                 {showOverlayRightPanel ? (
                   <div className="min-h-0 min-w-0 w-[min(22rem,56vw)] max-w-[22rem] border-l border-border/40">
                     {overlayRightPanelMode === "editor" ? (
-                      <RenderProfiler id="EditorMainPanelMobile" thresholdMs={10}>
+                      <RenderProfiler
+                        id="EditorMainPanelMobile"
+                        thresholdMs={10}
+                      >
                         <EditorMainPanel />
                       </RenderProfiler>
                     ) : (
-                      <Suspense fallback={<aside className="h-full bg-card p-3 text-sm text-muted-foreground">Loading panel...</aside>}>
+                      <Suspense
+                        fallback={
+                          <aside className="h-full bg-card p-3 text-sm text-muted-foreground">
+                            Loading panel...
+                          </aside>
+                        }
+                      >
                         <RenderProfiler id="EditorPanelMobile" thresholdMs={8}>
                           <EditorPanel
                             onOpenSettings={handleOpenSettings}
