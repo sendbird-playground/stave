@@ -1,6 +1,6 @@
 # Install Guide
 
-The current macOS installation flow for Stave is optimized around GitHub CLI authentication rather than double-clicking a downloaded helper.
+This is the recommended macOS install flow for Stave. It uses GitHub CLI to fetch the latest release and open the app directly into the desktop workspace.
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ Once `gh` is authenticated, install the latest Stave release with:
 gh api -H 'Accept: application/vnd.github.v3.raw+json' repos/sendbird-playground/stave/contents/scripts/install-latest-release.sh | bash
 ```
 
-That installer script:
+The installer script:
 
 - downloads the latest `Stave-macOS.zip` release asset
 - extracts the bundle into a temporary directory
@@ -50,7 +50,7 @@ After a successful install, Stave opens into the desktop workspace shown below.
 
 ![Stave desktop workspace after install](screenshots/stave-app.png)
 
-The installed app uses this same workspace shell for chat, editor, side panels, and update actions.
+The installed app uses this same workspace shell for chat, editor, side panels, terminal work, and update actions.
 
 ## In-App Update Button
 

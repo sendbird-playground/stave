@@ -130,4 +130,4 @@
 
 - [Local MCP User Guide](local-mcp-user-guide.md)
 - [Command Palette](command-palette.md)
-- [Skill selector](skill-selector.md)
+- [Project Instructions](project-instructions.md)

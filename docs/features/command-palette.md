@@ -1,88 +1,118 @@
 # Command Palette
 
-## Goal
-
-- Provide a global IDE action launcher on `Cmd/Ctrl+Shift+P`.
-- Keep slash commands separate as chat-input syntax, not shell-wide actions.
-- Make palette actions extensible through a registry instead of hard-coded dialog state.
+Use the Command Palette when you know what you want to do in Stave but do not want to hunt through the UI first.
 
 ![Command Palette with grouped workspace actions](../screenshots/command-palette.png)
 
-This rendered example shows the global command palette listing grouped actions for navigation, tasks, settings, and workspace context changes.
+This example shows the global palette listing navigation, task, settings, and workspace actions in one searchable view.
 
-## UX Model
+## What It Is For
 
-- `Cmd/Ctrl+Shift+P` opens the global command palette anywhere in the app.
-- `Cmd/Ctrl+P` still focuses top-bar file quick open.
-- Provider slash-command suggestions in the composer now follow the current caret position instead of only matching the first token in the draft.
-- The palette is for executable IDE actions:
-  - navigation
-  - view toggles
-  - task actions
-  - provider switching
-  - settings entry points
-  - external workspace actions
-- Slash commands stay in the composer and follow provider-native behavior.
+- Jump to app actions from anywhere in Stave.
+- Open settings, switch views, create tasks, and move around the workspace without relying on the mouse.
+- Reach the same action quickly even when you do not remember where the visible button lives.
 
-## Default Command Groups
+## Open The Palette
 
-- `Navigation`
-  - quick open file
-  - go home
-  - jump to the latest completed turn task
-  - switch task / workspace / project
-  - refresh project files / workspaces
-- `View`
-  - toggle workspace sidebar
-  - toggle changes panel
-  - show explorer / toggle information
-  - toggle editor / terminal
-  - enter / exit zen mode
-- `Task`
-  - new task
-  - create PR
-  - continue in new workspace
-  - save file
-  - stop active turn
-- `Provider`
-  - set provider to Claude, Codex, or Stave Auto
-- `Settings`
-  - open settings
-  - jump to Design, Providers, or Command Palette settings
-  - open keyboard shortcuts
-- `External`
-  - reveal active workspace
-  - open active workspace in VS Code or Terminal
+- Press `Cmd/Ctrl+Shift+P`
+- Or open it from the app chrome when a command-palette entry point is visible
 
-## Customisation
+The palette is global. You do not need to focus the chat composer first.
 
-Settings → Command Palette supports:
+## Typical Commands
 
-- pinned core commands
-- hidden core commands
-- recent-command visibility
-- clearing recent history
+### Navigation
 
-The palette persists recent command IDs and surfaces them in a dedicated `Recent` section when enabled.
+- quick open a file
+- go home
+- switch task, workspace, or project
+- refresh project files or workspaces
 
-## Extension Surface
+### View
 
-The palette uses an internal registry exposed through:
+- toggle the workspace sidebar
+- show or hide Explorer, Information, editor, or terminal surfaces
+- enter or exit Zen Mode
 
-```ts
-registerCommandPaletteContributor(contributor)
-```
+### Task
 
-Contributors can inject additional commands without coupling to the dialog UI. Core Stave commands, dynamic task/workspace entries, and future contributed commands all use the same presentation and execution pipeline.
+- create a new task
+- stop the active turn
+- continue work in a new workspace
+- open create-PR flow
+
+### Provider And Settings
+
+- switch between Claude, Codex, and Stave Auto
+- open Settings
+- jump directly to a specific settings section
+- open keyboard shortcuts
+
+### External Workspace Actions
+
+- reveal the active workspace
+- open the active workspace in VS Code
+- open the active workspace in Terminal
+
+## Quick Start
+
+1. Press `Cmd/Ctrl+Shift+P`.
+2. Type a few words that describe the action you want, such as `terminal`, `settings`, `task`, or `workspace`.
+3. Use the arrow keys to move through the results.
+4. Press `Enter` to run the selected action.
+
+## How To Use It Well
+
+### Jump To An Action You Use Often
+
+1. Open the palette.
+2. Type a short keyword such as `explorer`, `zen`, or `new task`.
+3. Run the command directly from the result list.
+
+This is the fastest way to learn Stave's navigation model without memorizing every button location first.
+
+### Open A Settings Section Directly
+
+1. Open the palette.
+2. Search for a settings area such as `providers`, `design`, or `shortcuts`.
+3. Run the matching settings command.
+
+This is usually faster than opening Settings and browsing manually.
+
+### Work Mostly From The Keyboard
+
+- Keep the palette for app-level actions.
+- Keep slash commands in the prompt composer for provider-specific prompt behavior.
+
+That separation matters: the Command Palette controls Stave itself, while slash commands affect what the model does inside a task.
 
 ## Related Shortcuts
 
+- `Cmd/Ctrl+P` focuses file quick open in the top bar.
 - `Cmd/Ctrl+,` opens the main Settings dialog.
 - `Cmd/Ctrl+B` toggles the left workspace sidebar.
-- `Cmd/Ctrl+Shift+B` toggles the source control panel.
-- `Cmd/Ctrl+E` opens the explorer panel.
-- `Cmd/Ctrl+I` toggles the information panel.
-- `Cmd/Ctrl+K`, then `Z` toggles Zen mode.
-- `Cmd/Ctrl+L` or `Cmd/Ctrl+J` focuses the prompt composer when it is not already focused.
-- `Alt+P` opens the prompt model selector from anywhere in the app.
-- `Shift+Tab` toggles plan mode from anywhere in the app.
+- `Cmd/Ctrl+Shift+B` toggles the changes panel.
+- `Cmd/Ctrl+E` opens Explorer.
+- `Cmd/Ctrl+I` toggles the Information panel.
+- `Cmd/Ctrl+K`, then `Z` toggles Zen Mode.
+- `Alt+P` opens the prompt model selector.
+
+## Troubleshooting
+
+### I expected a slash command result
+
+- Symptom: you search for a provider slash command in the Command Palette and do not see the result you want.
+- Cause: slash commands belong to the prompt composer, not the global palette.
+- Fix: place the cursor in the prompt composer and use the provider's slash-command flow there.
+
+### I cannot remember the exact command name
+
+- Symptom: the result list does not show what you expected.
+- Cause: you searched too narrowly.
+- Fix: try broader words such as `terminal`, `workspace`, `provider`, or `settings` instead of the full label.
+
+## Related Docs
+
+- [Integrated Terminal](integrated-terminal.md)
+- [Zen Mode](zen-mode.md)
+- [Runtime Safety Controls](provider-sandbox-and-approval.md)

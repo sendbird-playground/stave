@@ -85,6 +85,6 @@ This rendered example shows the Information panel with the latest-turn summary p
 
 ## Related Docs
 
-- [Stave Muse](stave-muse.md)
 - [Local MCP user guide](local-mcp-user-guide.md)
 - [Project Instructions](project-instructions.md)
+- [Notifications](notifications.md)
