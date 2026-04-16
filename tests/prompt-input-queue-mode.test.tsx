@@ -28,6 +28,12 @@ function setWindowContext() {
   } as unknown;
 }
 
+function getCrossReviewButtonMarkup(html: string) {
+  return html.match(
+    /<button[^>]*aria-label="Cross review with Claude"[^>]*>[\s\S]*?<\/button>/,
+  )?.[0];
+}
+
 afterEach(() => {
   (globalThis as { window?: unknown }).window = originalWindow;
 });
@@ -121,16 +127,51 @@ describe("PromptInput queue mode", () => {
         }),
       ),
     );
+    const buttonMarkup = getCrossReviewButtonMarkup(html);
 
     expect(html).toContain('aria-label="Cross review with Claude"');
     expect(html).toContain(">Review</span>");
     expect(html).toContain(">Claude</span>");
-    expect(html).toContain("border-primary/35");
-    expect(html).toContain("bg-primary/10");
-    expect(html).toContain("text-primary");
+    expect(buttonMarkup).toBeTruthy();
+    expect(buttonMarkup).toContain('data-variant="ghost"');
+    expect(buttonMarkup).toContain("text-muted-foreground");
+    expect(buttonMarkup).toContain("hover:bg-secondary/30");
+    expect(buttonMarkup).toContain("bg-secondary/20");
     expect(html.indexOf('aria-label="Cross review with Claude"')).toBeLessThan(
       html.indexOf('aria-label="Attach files"'),
     );
+  });
+
+  test("keeps the cross-review CTA understated in minimal mode", async () => {
+    setWindowContext();
+    const [{ ZenPromptInput }, { TooltipProvider }] = await Promise.all([
+      import("@/components/ai-elements/prompt-input"),
+      import("@/components/ui"),
+    ]);
+    const html = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(ZenPromptInput, {
+          value: "",
+          selectedModel: MODEL_OPTION,
+          modelOptions: [MODEL_OPTION],
+          attachedFilePaths: [],
+          crossReviewProvider: "claude-code" as const,
+          onValueChange: () => {},
+          onModelSelect: () => {},
+          onAttachFilesChange: () => {},
+          onCrossReview: () => {},
+          onSubmit: () => {},
+        }),
+      ),
+    );
+    const buttonMarkup = getCrossReviewButtonMarkup(html);
+
+    expect(buttonMarkup).toBeTruthy();
+    expect(buttonMarkup).toContain('data-variant="ghost"');
+    expect(buttonMarkup).not.toContain("bg-background/60");
+    expect(buttonMarkup).not.toContain("backdrop-blur-md");
   });
 
   test("renders queued-next-turn preview and queue action during an active turn", async () => {
