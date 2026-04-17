@@ -2,8 +2,10 @@ import { accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
 import {
   canExecutePath,
+  listNodeVersionManagerBinDirs,
   normalizeExecutablePathValue,
   resolveExecutablePath,
+  resolveLoginShellCommandPath,
   resolveLoginShellEnvVarValue,
 } from "./executable-path";
 import {
@@ -163,12 +165,20 @@ export function resolveClaudeCliExecutablePath(
       extraPaths: [...CLAUDE_LOOKUP_PATHS],
     }) ?? "";
 
+  const versionManagerClaudePaths = listNodeVersionManagerBinDirs().map(
+    (binDir) => `${binDir}/claude`,
+  );
+  const loginShellClaudePath = resolveLoginShellCommandPath({
+    command: "claude",
+  });
   const candidates = [
     process.env.STAVE_CLAUDE_CLI_PATH,
     process.env.CLAUDE_CODE_PATH,
     `${homedir()}/.claude/local/claude`,
     `${homedir()}/.bun/bin/claude`,
     `${homedir()}/.local/bin/claude`,
+    ...versionManagerClaudePaths,
+    loginShellClaudePath ?? "",
     baseResolved,
   ]
     .map((value) => normalizeExecutablePathValue({ value }) ?? value?.trim())
@@ -265,6 +275,12 @@ export function resolveCodexCliExecutablePath(
       extraPaths: [...CODEX_LOOKUP_PATHS],
     }) ?? "";
 
+  const versionManagerCodexPaths = listNodeVersionManagerBinDirs().map(
+    (binDir) => `${binDir}/codex`,
+  );
+  const loginShellCodexPath = resolveLoginShellCommandPath({
+    command: "codex",
+  });
   const candidates = [
     normalizeExecutablePathValue({
       value: process.env.STAVE_CODEX_CLI_PATH,
@@ -273,6 +289,8 @@ export function resolveCodexCliExecutablePath(
       "",
     `${homedir()}/.bun/bin/codex`,
     `${homedir()}/.local/bin/codex`,
+    ...versionManagerCodexPaths,
+    loginShellCodexPath ?? "",
     baseResolved,
   ]
     .map((value) => normalizeExecutablePathValue({ value }) ?? value?.trim())
