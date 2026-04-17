@@ -7,37 +7,21 @@ import {
   resolvePlanViewerState,
   SESSION_INPUT_FLOATING_WRAPPER_CLASS_NAME,
 } from "@/components/session/plan-viewer.utils";
-import { resolveTodoFloaterVisibility } from "@/components/session/todo-floater.utils";
+import {
+  findLatestTodoPart,
+  resolveTodoFloaterVisibility,
+} from "@/components/session/todo-floater.utils";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app.store";
 import { resolvePromptDraftRuntimeState } from "@/store/prompt-draft-runtime";
 import { useShallow } from "zustand/react/shallow";
-import type { ChatMessage, PromptDraft, ToolUsePart } from "@/types/chat";
+import type { ChatMessage, PromptDraft } from "@/types/chat";
 
 /** Keep the floater visible briefly after all todos complete so the user sees the final state. */
 const COMPLETION_LINGER_MS = 2000;
 
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_PROMPT_DRAFT: PromptDraft = { text: "", attachedFilePaths: [], attachments: [] };
-
-/**
- * Scan messages in reverse to find the latest TodoWrite tool_use part.
- */
-function findLatestTodoPart(messages: ChatMessage[]): ToolUsePart | null {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    if (!message || message.role !== "assistant") {
-      continue;
-    }
-    for (let j = (message.parts?.length ?? 0) - 1; j >= 0; j -= 1) {
-      const part = message.parts![j];
-      if (part?.type === "tool_use" && part.toolName.trim().toLowerCase() === "todowrite") {
-        return part;
-      }
-    }
-  }
-  return null;
-}
 
 interface TodoFloaterProps {
   inputDockHeight?: number;
