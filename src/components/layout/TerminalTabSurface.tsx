@@ -8,19 +8,6 @@ import type { UseTerminalTabManagerReturn } from "@/components/layout/useTermina
 import { getTerminalSessionRouter } from "@/lib/terminal/terminal-session-router";
 import { cn } from "@/lib/utils";
 
-const INACTIVE_OUTPUT_BUFFER_MAX_CHARS = 512_000;
-
-function appendBoundedText(existing: string, next: string, maxChars: number) {
-  if (!next) {
-    return existing;
-  }
-  const combined = `${existing}${next}`;
-  if (combined.length <= maxChars) {
-    return combined;
-  }
-  return combined.slice(-maxChars);
-}
-
 export function TerminalTabSurface(args: {
   tabKey: string;
   sessionId: string | null;
@@ -40,19 +27,6 @@ export function TerminalTabSurface(args: {
   ) => Promise<void> | void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const isActiveRef = useRef(args.isActive);
-  const deferredScreenStateRef = useRef<string | null>(null);
-  const deferredOutputRef = useRef("");
-
-  useEffect(() => {
-    isActiveRef.current = args.isActive;
-  }, [args.isActive]);
-
-  useEffect(() => {
-    deferredScreenStateRef.current = null;
-    deferredOutputRef.current = "";
-  }, [args.sessionId]);
-
   const terminalInstance = useTerminalInstance({
     containerRef,
     diagnosticContext: {
@@ -75,33 +49,9 @@ export function TerminalTabSurface(args: {
   ), [args.tabKey, args.tabManager, terminalInstance.controller]);
 
   useEffect(() => {
-    if (!args.isActive || !terminalInstance.ready) {
-      return;
-    }
-
-    if (deferredScreenStateRef.current !== null) {
-      terminalInstance.controller.clear();
-      if (deferredScreenStateRef.current) {
-        terminalInstance.controller.write(deferredScreenStateRef.current);
-      }
-      deferredScreenStateRef.current = null;
-    }
-
-    if (deferredOutputRef.current) {
-      terminalInstance.controller.write(deferredOutputRef.current);
-      deferredOutputRef.current = "";
-    }
-  }, [args.isActive, terminalInstance.controller, terminalInstance.ready]);
-
-  // Keep the subscription alive for all mounted terminals regardless of which
-  // tab is currently active.  Gating on isActive would tear down and recreate
-  // the subscription on every tab switch, causing the router to replay the
-  // stale attach-time screen state (onScreenState clear) on top of output that
-  // was already written to the terminal while it was the active tab — the root
-  // cause of text from different sessions appearing mixed together.
-  useEffect(() => {
     if (
       !args.sessionId ||
+      !args.isActive ||
       !args.isVisible ||
       !terminalInstance.ready
     ) {
@@ -111,29 +61,17 @@ export function TerminalTabSurface(args: {
     const router = getTerminalSessionRouter();
     return router.subscribe(args.sessionId, {
       onScreenState: (screenState) => {
-        if (!isActiveRef.current) {
-          deferredScreenStateRef.current = screenState;
-          deferredOutputRef.current = "";
-          return;
-        }
         terminalInstance.controller.clear();
         if (screenState) {
           terminalInstance.controller.write(screenState);
         }
       },
       onOutput: (output) => {
-        if (!isActiveRef.current) {
-          deferredOutputRef.current = appendBoundedText(
-            deferredOutputRef.current,
-            output,
-            INACTIVE_OUTPUT_BUFFER_MAX_CHARS,
-          );
-          return;
-        }
         terminalInstance.controller.write(output);
       },
     });
   }, [
+    args.isActive,
     args.isVisible,
     args.sessionId,
     terminalInstance.controller,
