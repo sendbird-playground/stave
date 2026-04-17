@@ -1,163 +1,164 @@
 export type PublicDocRoute = {
   routePath: string;
   sourcePath: string;
-  title?: string;
-  description?: string;
+  title: string;
+  description: string;
   previewImage?: string;
-  featured?: boolean;
 };
 
 export type PublicDocSection = {
   id: string;
   title: string;
-  description: string;
   docs: PublicDocRoute[];
 };
 
+/**
+ * Information architecture for the public Stave docs site.
+ *
+ * Rules:
+ * - End-user content only. Contributor, architecture, and historical roadmap
+ *   material belongs under `docs/developer/**`, `docs/architecture/**`, and
+ *   `docs/future/**`, which are excluded from this build.
+ * - The first doc of the first section is treated as the docs home. Visiting
+ *   `/docs/` renders that doc directly — there is no separate landing card.
+ */
 export const PUBLIC_DOC_SECTIONS: PublicDocSection[] = [
   {
-    id: "get-started",
-    title: "Get Started",
-    description:
-      "Install the app, learn the main workspace surfaces, and choose safe defaults for your first turns.",
+    id: "getting-started",
+    title: "Getting Started",
     docs: [
       {
         routePath: "install-guide",
         sourcePath: "docs/install-guide.md",
         title: "Install on macOS",
         description:
-          "Install the latest Stave desktop build with GitHub CLI and launch straight into the workspace.",
+          "Install the latest Stave desktop build with GitHub CLI and open the workspace for the first time.",
         previewImage: "screenshots/stave-app.png",
-        featured: true,
       },
+    ],
+  },
+  {
+    id: "using-stave",
+    title: "Using Stave",
+    docs: [
       {
         routePath: "integrated-terminal",
         sourcePath: "docs/features/integrated-terminal.md",
         title: "Integrated Terminal",
         description:
-          "Use docked shells and full-panel Claude or Codex sessions without leaving the workspace.",
+          "Run a docked shell or a full Claude or Codex CLI session without leaving the workspace.",
         previewImage: "screenshots/integrated-terminal.png",
-        featured: true,
       },
       {
         routePath: "command-palette",
         sourcePath: "docs/features/command-palette.md",
         title: "Command Palette",
         description:
-          "Jump to actions, navigation, and workspace controls from one searchable launcher.",
+          "Jump to any action, setting, or workspace surface from one searchable launcher.",
         previewImage: "screenshots/command-palette.png",
-        featured: true,
       },
       {
-        routePath: "provider-sandbox-and-approval",
+        routePath: "runtime-safety",
         sourcePath: "docs/features/provider-sandbox-and-approval.md",
         title: "Runtime Safety Controls",
         description:
-          "Choose file access, approvals, network access, and plan mode before you send a turn.",
+          "Decide how much file access, network access, and autonomy Claude or Codex has before you send a turn.",
         previewImage: "screenshots/provider-controls-claude.png",
-        featured: true,
-      },
-    ],
-  },
-  {
-    id: "core-features",
-    title: "Core Features",
-    description:
-      "The product surfaces most people use every day while working inside Stave.",
-    docs: [
-      {
-        routePath: "project-instructions",
-        sourcePath: "docs/features/project-instructions.md",
-        title: "Project Instructions",
-        description:
-          "Save repository-specific rules once so every task in that project starts with the same guidance.",
-        previewImage: "screenshots/project-instructions.png",
-        featured: true,
       },
       {
         routePath: "attachments",
         sourcePath: "docs/features/attachments.md",
         title: "Attachments",
         description:
-          "Add files and context to a task when the model should work from exact local material.",
+          "Add files and images to the chat composer so the model can work from exact local context.",
       },
+    ],
+  },
+  {
+    id: "workspace",
+    title: "Workspace",
+    docs: [
       {
-        routePath: "notifications",
-        sourcePath: "docs/features/notifications.md",
-        title: "Notifications",
+        routePath: "project-instructions",
+        sourcePath: "docs/features/project-instructions.md",
+        title: "Project Instructions",
         description:
-          "Track approvals, task status, and follow-up work without staying inside one task view.",
-        previewImage: "screenshots/notifications.png",
-      },
-      {
-        routePath: "workspace-latest-turn-summary",
-        sourcePath: "docs/features/workspace-latest-turn-summary.md",
-        title: "Latest Turn Summary",
-        description:
-          "Keep a short workspace recap visible in the Information panel so switching context is faster.",
-        previewImage: "screenshots/information-panel.png",
+          "Save repository-level rules once so every task in that project starts with the same guidance.",
+        previewImage: "screenshots/project-instructions.png",
       },
       {
         routePath: "workspace-scripts",
         sourcePath: "docs/features/workspace-scripts.md",
         title: "Workspace Scripts",
         description:
-          "Run shared actions, services, and lifecycle hooks from the workspace instead of memorizing commands.",
+          "Run shared actions, long-running services, and lifecycle hooks from the workspace side panel.",
         previewImage: "screenshots/scripts-panel.png",
+      },
+      {
+        routePath: "latest-turn-summary",
+        sourcePath: "docs/features/workspace-latest-turn-summary.md",
+        title: "Latest Turn Summary",
+        description:
+          "Keep a short workspace recap in the Information panel so switching context is faster.",
+        previewImage: "screenshots/information-panel.png",
+      },
+      {
+        routePath: "notifications",
+        sourcePath: "docs/features/notifications.md",
+        title: "Notifications",
+        description:
+          "Track approvals, task completions, and follow-up work across workspaces from the top-bar bell.",
+        previewImage: "screenshots/notifications.png",
       },
       {
         routePath: "zen-mode",
         sourcePath: "docs/features/zen-mode.md",
         title: "Zen Mode",
         description:
-          "Hide surrounding chrome when you want the workspace to focus on the active task only.",
+          "Hide the surrounding chrome when you want to focus on a single task at a time.",
         previewImage: "screenshots/workspace-mode.png",
       },
     ],
   },
   {
-    id: "guides",
-    title: "Guides",
-    description:
-      "Product-facing setup and automation guides for people who want to go deeper than the default workflow.",
+    id: "advanced",
+    title: "Advanced",
     docs: [
-      {
-        routePath: "local-mcp-user-guide",
-        sourcePath: "docs/features/local-mcp-user-guide.md",
-        title: "Local MCP",
-        description:
-          "Expose Stave tools to same-machine automation clients without turning the app into a remote service.",
-        previewImage: "screenshots/mcp-settings.png",
-      },
       {
         routePath: "lens",
         sourcePath: "docs/features/lens.md",
         title: "Lens Browser",
         description:
-          "Inspect a live page inside the desktop app and send element context directly into a task.",
+          "Inspect a live page in the right rail and send DOM, console, or element context into a task draft.",
+      },
+      {
+        routePath: "local-mcp",
+        sourcePath: "docs/features/local-mcp-user-guide.md",
+        title: "Local MCP",
+        description:
+          "Expose Stave's task and workspace tools to same-machine automation clients over loopback or stdio.",
+        previewImage: "screenshots/mcp-settings.png",
+      },
+      {
+        routePath: "language-intelligence",
+        sourcePath: "docs/features/language-intelligence.md",
+        title: "Language Intelligence",
+        description:
+          "Turn on language servers for TypeScript, JavaScript, and Python so the editor understands your project.",
+        previewImage: "screenshots/language-intelligence.png",
       },
     ],
   },
   {
     id: "reference",
     title: "Reference",
-    description:
-      "Focused reference material for platform behavior, editor support, and troubleshooting edge cases.",
     docs: [
       {
-        routePath: "language-intelligence",
-        sourcePath: "docs/features/language-intelligence.md",
-        title: "Language Intelligence",
-        description:
-          "Understand how Stave uses language servers and project context for editor-aware features.",
-        previewImage: "screenshots/language-intelligence.png",
-      },
-      {
-        routePath: "macos-folder-access-prompts",
+        routePath: "macos-folder-access",
         sourcePath: "docs/features/macos-folder-access-prompts.md",
-        title: "macOS Folder Access Prompts",
+        title: "macOS Folder Access",
         description:
-          "Handle the repeated system permission dialogs that can appear after install or update.",
+          "Handle the system permission prompts that can keep reappearing for Desktop, Documents, and Downloads.",
       },
     ],
   },
@@ -165,4 +166,12 @@ export const PUBLIC_DOC_SECTIONS: PublicDocSection[] = [
 
 export function flattenPublicDocs() {
   return PUBLIC_DOC_SECTIONS.flatMap((section) => section.docs);
+}
+
+export function getHomeDoc() {
+  const first = PUBLIC_DOC_SECTIONS[0]?.docs[0];
+  if (!first) {
+    throw new Error("PUBLIC_DOC_SECTIONS must contain at least one doc.");
+  }
+  return first;
 }

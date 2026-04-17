@@ -1,66 +1,79 @@
 # Notifications
 
-Stave now includes an in-app notification center for background task activity.
+Stave has an in-app notification center that tracks task activity across every project and workspace you have open, so you can step away from a task and still know when it needs you again.
 
 ![Notifications popover with unread task updates and approval requests](../screenshots/notifications.png)
 
-This rendered example shows the top-bar notification center with unread task completions and approval requests grouped in one popover.
+The notification center lives in the top bar behind the bell icon.
 
-## What it does
+## What Notifications Tell You
 
-- records task turn completions across workspaces
-- records approval requests with project / workspace / task context
-- keeps notification history in SQLite
-- can play an optional synthesized success sound when a task turn completes
-- tracks read / unread state
-- lets you jump from a notification back into the related project, workspace, and task
-- keeps approval handling accessible even if the original task trace is collapsed, because the active task also surfaces a composer-side approval queue
-- lets you approve or deny approval requests directly from the notification center
+- A task turn finished.
+- A task is waiting for your approval.
+- A task needs extra input before it can continue.
 
-## UI
+Notifications stay in the app even if you close and reopen Stave, and even if the originating task has been archived.
 
-- the notification center lives in the top bar behind the bell button
-- unread notifications show a badge count
-- each notification can be marked as read individually
-- unread notifications stay in the main inbox list
-- read notifications move out of the inbox and remain visible in a separate history view
-- notifications stay readable after the underlying task or workspace is no longer active
-- active tasks also show the same pending approvals above the composer so you can resolve them without scrolling back to the originating assistant message
-- if the linked task is archived, opening the notification still routes to the correct project and workspace, then asks you to restore the task before reopening it
-- Settings > General includes task completion sound controls for enable/disable, preset, volume, and preview
+## Open The Center
 
-## Persistence model
+- Click the bell icon in the top bar.
+- A badge shows how many unread items you have.
+- Unread items sit in the main inbox.
+- Items you read move into a history view but stay available.
 
-Notifications are stored separately from workspace snapshots in a dedicated SQLite table.
+## Respond To Approvals
 
-Each record captures:
+You do not have to scroll back through the task chat to approve or deny a tool call.
 
-- notification kind
-- frozen title / body text for historical readability
-- project path and project name
-- workspace id and workspace name
-- task id and task title
-- turn id and provider id
-- optional inline action metadata such as approval request ids
-- `created_at` and `read_at`
-- a dedupe key for event-safe insertion
-- a JSON payload for future audit or analytics work
+- Open the bell and find the approval entry.
+- Approve or deny it directly from the notification.
+- The change is reflected back in the task immediately.
 
-This keeps notification history durable without coupling it to the mutable workspace snapshot.
+If you prefer, the task itself also shows a pending-approval card above the composer.
 
-## Current event sources
+## Jump Back To A Task
 
-- `task.turn_completed`
-  - emitted after the finishing turn has fully cleared the workspace's responding state
-  - in practice this matches the point where the workspace sidebar wave indicator disappears
-- `task.approval_requested`
-  - emitted when a provider requests approval during an active turn
+- Click a notification.
+- Stave switches to the right project, workspace, and task.
+- If the task was archived, Stave asks you to restore it before reopening.
 
-## Why this shape
+## Success Sound
 
-The notification table is intentionally append-friendly and context-rich so the same records can later feed:
+You can play a short sound when a task turn finishes. This is useful when you have a long-running task in the background and want a quick audio cue.
 
-- audit logs
-- workspace activity timelines
-- per-project or per-workspace statistics
-- approval trend analysis
+1. Open `Settings > General`.
+2. Find `Task Completion Sound`.
+3. Enable it, choose a preset, and set the volume.
+4. Click `Preview` to hear it.
+
+## Tips
+
+- Use the notification center instead of keeping every task view open side by side.
+- Mark approvals `Deny` from the center if you want to stop a long agent without losing the current task.
+- If you switch devices or restart Stave, notification history comes back with you.
+
+## Troubleshooting
+
+### I Never See New Notifications
+
+- Symptom: the bell stays at zero even though a task just finished.
+- Cause: the turn never fully completed, so the workspace is still responding.
+- Fix: look at the task; if the indicator is still animating, the turn is not yet considered finished.
+
+### Clicking A Notification Does Nothing
+
+- Symptom: selecting an entry does not navigate anywhere.
+- Cause: the task was archived.
+- Fix: Stave asks you to restore the task before reopening it. Accept the restore prompt.
+
+### The Sound Does Not Play
+
+- Symptom: turns finish but no sound plays.
+- Cause: the sound is disabled or the volume is set to zero.
+- Fix: open `Settings > General > Task Completion Sound`, enable it, raise the volume, and click `Preview`.
+
+## Related Docs
+
+- [Runtime Safety Controls](provider-sandbox-and-approval.md)
+- [Latest Turn Summary](workspace-latest-turn-summary.md)
+- [Command Palette](command-palette.md)
