@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -15,9 +15,12 @@ interface ResolveExecutablePathArgs {
 
 const LOGIN_SHELL_PATH_MARKER = "__STAVE_LOGIN_SHELL_PATH__";
 const LOGIN_SHELL_ENV_MARKER_PREFIX = "__STAVE_LOGIN_SHELL_ENV__";
-const LOGIN_SHELL_PROBE_TIMEOUT_MS = 750;
+const LOGIN_SHELL_COMMAND_MARKER_PREFIX = "__STAVE_LOGIN_SHELL_CMD__";
+const LOGIN_SHELL_PROBE_TIMEOUT_MS = 2500;
 let cachedLoginShellPath: string | null | undefined;
 const cachedLoginShellEnvVarValues = new Map<string, string | null>();
+const cachedLoginShellCommandPaths = new Map<string, string | null>();
+let cachedNodeVersionManagerBinDirs: string[] | null = null;
 
 function sanitizeCommandName(args: { value: string }) {
   const trimmed = args.value.trim();
@@ -269,6 +272,149 @@ export function resolveLoginShellEnvVarValue(args: { key: string }) {
   return null;
 }
 
+function safeReadDir(args: { path: string }) {
+  try {
+    return readdirSync(args.path);
+  } catch {
+    return [];
+  }
+}
+
+function isExistingDirectory(args: { path: string }) {
+  try {
+    return statSync(args.path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Enumerate bin directories for Node.js version managers (nvm, fnm, volta).
+ * These contain real node-based CLIs (claude, codex) installed globally under
+ * a specific Node version. GUI-launched Electron apps on macOS typically do
+ * not inherit these paths, so we scan them directly.
+ */
+export function listNodeVersionManagerBinDirs(
+  args: { baseEnv?: NodeJS.ProcessEnv } = {},
+) {
+  if (process.platform === "win32") {
+    return [];
+  }
+  const useCache = !args.baseEnv || args.baseEnv === process.env;
+  if (useCache && cachedNodeVersionManagerBinDirs !== null) {
+    return cachedNodeVersionManagerBinDirs;
+  }
+
+  const env = args.baseEnv ?? process.env;
+  const home = env.HOME?.trim() || homedir();
+  const dirs: string[] = [];
+
+  // nvm: $NVM_DIR/versions/node/<version>/bin
+  const nvmRoot = env.NVM_DIR?.trim() || `${home}/.nvm`;
+  const nvmNodeRoot = path.join(nvmRoot, "versions", "node");
+  for (const version of safeReadDir({ path: nvmNodeRoot })) {
+    const binDir = path.join(nvmNodeRoot, version, "bin");
+    if (isExistingDirectory({ path: binDir })) {
+      dirs.push(binDir);
+    }
+  }
+
+  // fnm: $FNM_DIR/node-versions/<version>/installation/bin
+  const fnmRootCandidates = [
+    env.FNM_DIR?.trim(),
+    `${home}/.fnm`,
+    `${home}/.local/share/fnm`,
+  ].filter((value): value is string => Boolean(value));
+  for (const fnmRoot of fnmRootCandidates) {
+    const fnmNodeRoot = path.join(fnmRoot, "node-versions");
+    for (const version of safeReadDir({ path: fnmNodeRoot })) {
+      const binDir = path.join(fnmNodeRoot, version, "installation", "bin");
+      if (isExistingDirectory({ path: binDir })) {
+        dirs.push(binDir);
+      }
+    }
+  }
+
+  // volta shim directory (shims wrap real node binaries)
+  const voltaBin = env.VOLTA_HOME?.trim()
+    ? path.join(env.VOLTA_HOME.trim(), "bin")
+    : `${home}/.volta/bin`;
+  if (isExistingDirectory({ path: voltaBin })) {
+    dirs.push(voltaBin);
+  }
+
+  const unique = [...new Set(dirs)];
+  if (useCache) {
+    cachedNodeVersionManagerBinDirs = unique;
+  }
+  return unique;
+}
+
+/**
+ * Ask the user's login shell where a command lives via `command -v <name>`.
+ * This leverages the user's full shell initialization (nvm, fnm, asdf, mise,
+ * volta, chruby, custom PATH tweaks in .zshrc/.bashrc) so we can find a CLI
+ * regardless of install method. Cached per-command.
+ */
+export function resolveLoginShellCommandPath(args: { command: string }) {
+  const safeCommand = sanitizeCommandName({ value: args.command });
+  if (!safeCommand) {
+    return null;
+  }
+  if (cachedLoginShellCommandPaths.has(safeCommand)) {
+    return cachedLoginShellCommandPaths.get(safeCommand) ?? null;
+  }
+  if (process.platform === "win32") {
+    cachedLoginShellCommandPaths.set(safeCommand, null);
+    return null;
+  }
+
+  const markerSuffix = safeCommand.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+  const marker = `${LOGIN_SHELL_COMMAND_MARKER_PREFIX}${markerSuffix}__`;
+  for (const shell of getLoginShellCandidates()) {
+    const result = spawnSync(
+      shell,
+      [
+        "-ilc",
+        `printf '${marker}%s${marker}' "$(command -v ${safeCommand} 2>/dev/null || true)"`,
+      ],
+      {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          TERM: process.env.TERM || "dumb",
+        },
+        timeout: LOGIN_SHELL_PROBE_TIMEOUT_MS,
+        maxBuffer: 1024 * 1024,
+      },
+    );
+    const parsed = parseMarkedProbeOutput({
+      stdout: result.stdout,
+      stderr: result.stderr,
+      marker,
+    });
+    if (!parsed) {
+      continue;
+    }
+    const normalized = normalizeExecutablePathValue({ value: parsed });
+    if (normalized && canExecutePath({ path: normalized })) {
+      cachedLoginShellCommandPaths.set(safeCommand, normalized);
+      return normalized;
+    }
+  }
+
+  cachedLoginShellCommandPaths.set(safeCommand, null);
+  return null;
+}
+
+/** Reset module-level caches. Intended for tests only. */
+export function __resetExecutablePathCachesForTests() {
+  cachedLoginShellPath = undefined;
+  cachedLoginShellEnvVarValues.clear();
+  cachedLoginShellCommandPaths.clear();
+  cachedNodeVersionManagerBinDirs = null;
+}
+
 export function resolveExecutableLookupPath(
   args: {
     basePath?: string;
@@ -298,6 +444,9 @@ export function resolveExecutableLookupPath(
           "/usr/sbin",
           "/sbin",
         ];
+  const versionManagerBinDirs = listNodeVersionManagerBinDirs({
+    baseEnv: args.baseEnv,
+  });
 
   return mergePathEntries([
     ...(args.extraPaths ?? []),
@@ -306,6 +455,7 @@ export function resolveExecutableLookupPath(
     args.baseEnv?.PATH,
     process.env.PATH,
     ...commonUnixPaths,
+    ...versionManagerBinDirs,
   ]);
 }
 

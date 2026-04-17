@@ -329,8 +329,10 @@ Stave does not hardcode one binary path. It probes a small set of candidates, me
 1. `runtimeOptions.codexBinaryPath`
 2. `STAVE_CODEX_CLI_PATH`
 3. explicit probes of `<user-home>/.bun/bin/codex` and `<user-home>/.local/bin/codex`
-4. `STAVE_CODEX_CMD` resolved through the merged PATH
-5. default `codex` resolved through the merged PATH
+4. `codex` binaries found under Node version manager bin directories (nvm, fnm, volta) — e.g. `$NVM_DIR/versions/node/*/bin/codex`
+5. the user's login-shell `command -v codex` result (picks up asdf, mise, chruby, and any custom shell PATH tweaks)
+6. `STAVE_CODEX_CMD` resolved through the merged PATH
+7. default `codex` resolved through the merged PATH
 
 If multiple executable candidates exist, Stave runs `candidate --version`, parses semver, and prefers the newest valid version.
 
@@ -342,10 +344,22 @@ If multiple executable candidates exist, Stave runs `candidate --version`, parse
 4. `<user-home>/.claude/local/claude`
 5. `<user-home>/.bun/bin/claude`
 6. `<user-home>/.local/bin/claude`
-7. `STAVE_CLAUDE_CMD` resolved through the merged PATH
-8. default `claude` resolved through the merged PATH
+7. `claude` binaries found under Node version manager bin directories (nvm, fnm, volta)
+8. the user's login-shell `command -v claude` result (asdf/mise/chruby/custom PATH)
+9. `STAVE_CLAUDE_CMD` resolved through the merged PATH
+10. default `claude` resolved through the merged PATH
 
 Each candidate must be executable and respond successfully to `--version`. If multiple valid candidates exist, Stave sorts them by parsed version and chooses the newest one.
+
+### How version-manager-installed CLIs are discovered
+
+GUI-launched Electron apps on macOS start with a minimal launchd PATH that typically excludes `nvm`/`fnm`/`volta` directories. To make `npm install -g @openai/codex` "just work" regardless of install method, Stave does three things in addition to the normal PATH merge:
+
+1. Scans `$NVM_DIR/versions/node/*/bin`, `$FNM_DIR/node-versions/*/installation/bin` (and `~/.local/share/fnm/...`), and `$VOLTA_HOME/bin` for each CLI name.
+2. Spawns the user's login shell (`zsh -ilc` on macOS) once and asks `command -v <cli>`, caching the answer. This covers any tool manager or custom shell setup that only injects PATH at shell init time.
+3. Uses the login-shell PATH itself (cached) when building the environment for child processes, so `which codex` inside the merged env also succeeds.
+
+You do not need to symlink anything into `/usr/local/bin` or set `STAVE_CODEX_CLI_PATH` for an nvm-installed codex to be discovered — the explicit override remains available if you want to force a specific install.
 
 ## Useful environment variables
 

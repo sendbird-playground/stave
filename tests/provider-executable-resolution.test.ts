@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { resolveClaudeExecutablePath } from "../electron/providers/claude-sdk-runtime";
 import {
@@ -8,6 +15,7 @@ import {
 } from "../electron/providers/cli-path-env";
 import { resolveCodexExecutablePath as resolveCodexAppServerExecutablePath } from "../electron/providers/codex-app-server-runtime";
 import { resolveCodexExecutablePath as resolveCodexSdkExecutablePath } from "../electron/providers/codex-sdk-runtime";
+import { __resetExecutablePathCachesForTests } from "../electron/providers/executable-path";
 
 const createdDirectories: string[] = [];
 
@@ -258,6 +266,48 @@ describe("provider executable resolution", () => {
         expect(resolveCodexAppServerExecutablePath()).toBe(
           fixture.executablePath,
         );
+      },
+    );
+  });
+
+  test("auto-discovers a Codex binary installed under an nvm-managed Node version", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const fakeNvmRoot = mkdtempSync(path.join(tmpdir(), "stave-fake-nvm-"));
+    createdDirectories.push(fakeNvmRoot);
+    const binDir = path.join(
+      fakeNvmRoot,
+      "versions",
+      "node",
+      "v24.14.1",
+      "bin",
+    );
+    mkdirSync(binDir, { recursive: true });
+    const codexPath = path.join(binDir, "codex");
+    writeFileSync(
+      codexPath,
+      "#!/bin/sh\necho 'codex-cli 9.9.9'\n",
+      "utf8",
+    );
+    chmodSync(codexPath, 0o755);
+
+    withTemporaryEnv(
+      {
+        NVM_DIR: fakeNvmRoot,
+        STAVE_CODEX_CLI_PATH: undefined,
+        STAVE_CODEX_CMD: undefined,
+      },
+      () => {
+        __resetExecutablePathCachesForTests();
+        try {
+          expect(resolveCodexCliExecutablePath()).toBe(codexPath);
+          expect(resolveCodexSdkExecutablePath()).toBe(codexPath);
+          expect(resolveCodexAppServerExecutablePath()).toBe(codexPath);
+        } finally {
+          __resetExecutablePathCachesForTests();
+        }
       },
     );
   });
