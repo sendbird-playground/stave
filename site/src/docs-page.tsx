@@ -11,6 +11,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -300,41 +301,61 @@ function DocSearchDialog({
   const docs = flattenSiteDocs(data);
   return (
     <CommandDialog
+      className="max-w-2xl border-border/80 bg-background/95 p-0 shadow-2xl"
       description="Search public Stave documentation."
       onOpenChange={onOpenChange}
       open={open}
       title="Search docs"
     >
-      <CommandInput placeholder="Search guides, features, references..." />
-      <CommandList>
-        <CommandEmpty>No matching docs.</CommandEmpty>
-        {data.sections.map((section) => (
-          <CommandGroup key={section.id} heading={section.title}>
-            {section.docs.map((doc) => (
-              <CommandItem
-                key={doc.routePath}
-                keywords={[
-                  doc.title,
-                  doc.description,
-                  section.title,
-                  doc.routePath,
-                ]}
-                onSelect={() => {
-                  window.location.href = docHref(currentRoute, doc.routePath);
-                }}
-                value={`${section.title} ${doc.title}`}
-              >
-                <FileText className="size-4" />
-                <span>{doc.title}</span>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {section.title}
-                </span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ))}
-        {docs.length > 0 ? null : null}
-      </CommandList>
+      <Command
+        key={open ? "open" : "closed"}
+        className="flex h-[min(70vh,32rem)] min-h-0 flex-col bg-transparent"
+      >
+        <div className="shrink-0 border-b border-border/70 px-1 pb-1">
+          <CommandInput
+            autoFocus
+            placeholder="Search guides, features, references..."
+          />
+        </div>
+        <CommandList className="min-h-0 max-h-none flex-1 px-2 pb-3">
+          <CommandEmpty className="px-4 py-10 text-sm text-muted-foreground">
+            No matching docs.
+          </CommandEmpty>
+          {data.sections.map((section) => (
+            <CommandGroup
+              key={section.id}
+              className="py-1"
+              heading={section.title}
+            >
+              {section.docs.map((doc) => (
+                <CommandItem
+                  key={doc.routePath}
+                  keywords={[
+                    doc.title,
+                    doc.description,
+                    section.title,
+                    doc.routePath,
+                  ]}
+                  onSelect={() => {
+                    window.location.href = docHref(
+                      currentRoute,
+                      doc.routePath,
+                    );
+                  }}
+                  value={`${section.title} ${doc.title}`}
+                >
+                  <FileText className="size-4" />
+                  <span>{doc.title}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {section.title}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ))}
+          {docs.length > 0 ? null : null}
+        </CommandList>
+      </Command>
     </CommandDialog>
   );
 }
@@ -398,7 +419,10 @@ export function DocsPageRoot({
               <div className="grid gap-10 xl:grid-cols-[minmax(0,1fr)_220px]">
                 <article className="min-w-0 max-w-3xl space-y-10">
                   <DocHero currentRoute={currentRoute} resolved={resolved} />
-                  <MarkdownContent markdown={markdown} />
+                  <MarkdownContent
+                    currentRoute={currentRoute}
+                    markdown={markdown}
+                  />
                   <Separator />
                   <DocNeighbors
                     currentRoute={currentRoute}

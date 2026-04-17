@@ -46,7 +46,28 @@ export function extractHeadings(markdown: string): HeadingEntry[] {
     });
 }
 
-export function MarkdownContent({ markdown }: { markdown: string }) {
+/**
+ * The build pipeline bakes asset hrefs in as `../screenshots/foo.png`,
+ * which is correct when a doc is rendered at `/docs/<slug>/` but wrong
+ * when the same markdown is rendered at the `/docs/` home shell (which
+ * reuses the first doc's content). Rewrite the relative prefix at
+ * render time based on the route depth.
+ */
+function remapAssetHref(href: string | undefined, currentRoute: string) {
+  if (!href) return href;
+  if (currentRoute !== "home") return href;
+  if (/^(?:https?:|mailto:|#|\/)/.test(href)) return href;
+  if (href.startsWith("../")) return `./${href.slice(3)}`;
+  return href;
+}
+
+export function MarkdownContent({
+  markdown,
+  currentRoute = "",
+}: {
+  markdown: string;
+  currentRoute?: string;
+}) {
   const headings = React.useMemo(() => extractHeadings(markdown), [markdown]);
   const indexRef = React.useRef(0);
   indexRef.current = 0;
@@ -69,9 +90,10 @@ export function MarkdownContent({ markdown }: { markdown: string }) {
           a: ({ children, href, ...props }) => {
             const isExternal =
               typeof href === "string" && /^https?:\/\//.test(href);
+            const remapped = remapAssetHref(href, currentRoute);
             return (
               <a
-                href={href}
+                href={remapped}
                 rel={isExternal ? "noreferrer" : undefined}
                 target={isExternal ? "_blank" : undefined}
                 {...props}
@@ -88,7 +110,14 @@ export function MarkdownContent({ markdown }: { markdown: string }) {
             return <code className={cn(className, "block")}>{children}</code>;
           },
           img: ({ alt, src }) => (
-            <img alt={alt ?? ""} loading="lazy" src={src} />
+            <img
+              alt={alt ?? ""}
+              loading="lazy"
+              src={remapAssetHref(
+                typeof src === "string" ? src : undefined,
+                currentRoute,
+              )}
+            />
           ),
         }}
         remarkPlugins={[remarkGfm]}
