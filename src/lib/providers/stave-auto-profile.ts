@@ -8,7 +8,10 @@ import type {
   StaveAutoRoleRuntimeOverridesMap,
   StaveWorkerRole,
 } from "@/lib/providers/provider.types";
-import { DEFAULT_CLAUDE_OPUS_MODEL } from "@/lib/providers/model-catalog";
+import {
+  DEFAULT_CLAUDE_OPUS_1M_MODEL,
+  DEFAULT_CLAUDE_OPUS_MODEL,
+} from "@/lib/providers/model-catalog";
 
 export type StaveAutoModelPresetId =
   | "recommended"
@@ -228,7 +231,7 @@ const STAVE_AUTO_MODEL_PRESET_PROFILES: Record<
     classifierModel: "claude-haiku-4-5",
     supervisorModel: "claude-sonnet-4-6[1m]",
     planModel: "opusplan",
-    analyzeModel: DEFAULT_CLAUDE_OPUS_MODEL,
+    analyzeModel: DEFAULT_CLAUDE_OPUS_1M_MODEL,
     implementModel: "gpt-5.3-codex",
     quickEditModel: "claude-haiku-4-5",
     generalModel: "claude-sonnet-4-6[1m]",
