@@ -37,6 +37,7 @@ import {
   useAppStore,
 } from "@/store/app.store";
 import { EditorMainPanel } from "@/components/layout/EditorMainPanel";
+import { EditorMonacoWarmup } from "@/components/layout/editor-monaco-warmup";
 import { RightRail } from "@/components/layout/RightRail";
 import {
   MIN_CHAT_PANEL_WIDTH,
@@ -797,6 +798,40 @@ export function AppShell() {
     }
   }, [editorVisible, isLargeViewport, setLayout, sidebarOverlayVisible]);
 
+  // Prewarm Monaco off-screen at idle time so the first real editor open does
+  // not block the main thread. If the editor panel is already visible, Monaco
+  // is mounting anyway and no separate warmup is needed.
+  const [monacoWarmupActive, setMonacoWarmupActive] = useState(false);
+  const monacoWarmedRef = useRef(false);
+
+  useEffect(() => {
+    if (monacoWarmedRef.current) return;
+    if (editorVisible) {
+      monacoWarmedRef.current = true;
+      return;
+    }
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    const schedule = win.requestIdleCallback
+      ? (cb: () => void) => win.requestIdleCallback!(cb, { timeout: 3000 })
+      : (cb: () => void) => window.setTimeout(cb, 600);
+    const cancel = win.cancelIdleCallback
+      ? (handle: number) => win.cancelIdleCallback!(handle)
+      : (handle: number) => window.clearTimeout(handle);
+    const handle = schedule(() => {
+      if (monacoWarmedRef.current) return;
+      setMonacoWarmupActive(true);
+    });
+    return () => cancel(handle);
+  }, [editorVisible]);
+
+  const handleMonacoWarmed = useCallback(() => {
+    monacoWarmedRef.current = true;
+    window.setTimeout(() => setMonacoWarmupActive(false), 200);
+  }, []);
+
   const hasMeasuredContentRowWidth = contentRowWidth > 0;
   const canShowDesktopEditor =
     !hasMeasuredContentRowWidth ||
@@ -1461,6 +1496,9 @@ export function AppShell() {
             rightInset={museRightInset}
             showFloatingTrigger={!isLargeViewport}
           />
+          {monacoWarmupActive && !editorVisible ? (
+            <EditorMonacoWarmup onReady={handleMonacoWarmed} />
+          ) : null}
         </>
       )}
     </div>
