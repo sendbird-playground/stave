@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { Query, SDKAssistantMessage, SDKAuthStatusMessage, SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { buildClaudeEnv, resolveClaudeExecutablePath, prewarmClaudeSdk } from "./claude-sdk-runtime";
 
@@ -21,9 +20,7 @@ interface InlineCompletionResult {
 // Shared constants
 // ---------------------------------------------------------------------------
 
-const COMPLETION_MODEL = "claude-haiku-4-5";
 const SDK_MODEL = "claude-haiku-4-5";
-const DEFAULT_MAX_TOKENS = 256;
 const MAX_PREFIX_CHARS = 8000;
 const MAX_SUFFIX_CHARS = 4000;
 const MAX_PREFIX_LINES = 150;
@@ -31,7 +28,7 @@ const MAX_SUFFIX_LINES = 100;
 const SDK_EARLY_SETTLE_MS = 20;
 
 // ---------------------------------------------------------------------------
-// Prompt builder (shared by both backends)
+// Prompt builder
 // ---------------------------------------------------------------------------
 
 function trimContextLines(args: {
@@ -84,10 +81,6 @@ function buildCompletionPrompt(args: InlineCompletionRequest) {
     "Reply with ONLY the code that replaces [HOLE]. No markdown, no backticks, no explanation.",
   ].join("\n");
 
-  // Prefill: last line of prefix so API path continues code naturally
-  const lastPrefixLine = prefix.split("\n").pop() ?? "";
-  const prefill = lastPrefixLine.trimEnd();
-
   const systemPrompt = args.systemPromptOverride?.trim() || [
     "You are a code completion engine embedded in an IDE.",
     "You receive a file snippet with a [HOLE] marker where the cursor is.",
@@ -104,7 +97,6 @@ function buildCompletionPrompt(args: InlineCompletionRequest) {
   return {
     system: systemPrompt,
     user,
-    prefill,
   };
 }
 
@@ -212,7 +204,10 @@ function mergeInlineCompletionText(previous: string, candidate: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Backend 1: Claude SDK
+// Backend: claude-agent-sdk (CLI-backed). Honors ANTHROPIC_API_KEY for
+// API-key auth and the user's Claude CLI login otherwise — both paths flow
+// through the same query() stream, so the migration off @anthropic-ai/sdk
+// keeps a single code path.
 // ---------------------------------------------------------------------------
 
 let cachedClaudeExecutablePath: string | null | undefined;
@@ -449,118 +444,16 @@ async function requestViaClaudeSdk(
 }
 
 // ---------------------------------------------------------------------------
-// Backend 2: Remote Anthropic API (fallback when CLI unavailable)
-// ---------------------------------------------------------------------------
-
-let clientInstance: Anthropic | null = null;
-let lastApiKeyCheck = 0;
-let cachedApiKey = "";
-const API_KEY_CHECK_INTERVAL_MS = 30_000;
-
-function resolveApiKey(): string {
-  const now = Date.now();
-  if (cachedApiKey && now - lastApiKeyCheck < API_KEY_CHECK_INTERVAL_MS) {
-    return cachedApiKey;
-  }
-  lastApiKeyCheck = now;
-  cachedApiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
-  return cachedApiKey;
-}
-
-function getClient(): Anthropic | null {
-  const apiKey = resolveApiKey();
-  if (!apiKey) {
-    clientInstance = null;
-    return null;
-  }
-  if (!clientInstance) {
-    clientInstance = new Anthropic({ apiKey });
-  }
-  return clientInstance;
-}
-
-/** AbortController for the in-flight API request. */
-let activeAbortController: AbortController | null = null;
-
-function abortApiRequest() {
-  activeAbortController?.abort();
-  activeAbortController = null;
-}
-
-async function requestViaApi(
-  args: InlineCompletionRequest,
-): Promise<InlineCompletionResult> {
-  const client = getClient();
-  if (!client) {
-    return { ok: false, text: "", error: "ANTHROPIC_API_KEY not set" };
-  }
-
-  const prompt = buildCompletionPrompt(args);
-  const abortController = new AbortController();
-  activeAbortController = abortController;
-
-  try {
-    const response = await client.messages.create(
-      {
-        model: COMPLETION_MODEL,
-        max_tokens: args.maxTokens ?? DEFAULT_MAX_TOKENS,
-        system: prompt.system,
-        messages: [
-          { role: "user", content: prompt.user },
-          { role: "assistant", content: prompt.prefill },
-        ],
-      },
-      { signal: abortController.signal },
-    );
-
-    if (abortController.signal.aborted) {
-      return { ok: false, text: "", error: "aborted" };
-    }
-
-    const text = response.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("");
-
-    const normalized = normalizeInlineCompletionText(text);
-    return { ok: true, text: normalized };
-  } catch (error) {
-    if (abortController.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
-      return { ok: false, text: "", error: "aborted" };
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, text: "", error: message };
-  } finally {
-    if (activeAbortController === abortController) {
-      activeAbortController = null;
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 export function abortActiveInlineCompletion() {
   abortSdkRequest();
-  abortApiRequest();
 }
 
 export async function requestInlineCompletion(
   args: InlineCompletionRequest,
 ): Promise<InlineCompletionResult> {
-  // Prefer direct API when available (clean system prompt + assistant prefill).
-  // Fall back to SDK (uses Claude Code's system prompt, less controllable).
-  if (resolveApiKey()) {
-    const apiResult = await requestViaApi(args);
-    if (apiResult.ok) {
-      return { ...apiResult, text: removeSuffixOverlap(apiResult.text, args.suffix) };
-    }
-    if (apiResult.error === "aborted") {
-      return apiResult;
-    }
-  }
-
   const sdkResult = await requestViaClaudeSdk(args);
   if (sdkResult.ok) {
     return { ...sdkResult, text: removeSuffixOverlap(sdkResult.text, args.suffix) };
@@ -569,5 +462,5 @@ export async function requestInlineCompletion(
 }
 
 export function isInlineCompletionAvailable(): boolean {
-  return Boolean(resolveClaudeSdkExecutablePath()) || Boolean(resolveApiKey());
+  return Boolean(resolveClaudeSdkExecutablePath());
 }
