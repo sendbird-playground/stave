@@ -689,6 +689,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
   // re-running this effect every time the tabManager reference changes.
   const tabStatusByTabKey = args.tabManager.statusByTabKey;
   const tabManagerClear = args.tabManager.clear;
+  const tabManagerRestoreScreenState = args.tabManager.restoreScreenState;
   const tabManagerWrite = args.tabManager.write;
 
   useEffect(() => {
@@ -704,7 +705,6 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
       }
 
       hydratedRevisionByTabKeyRef.current[tabKey] = status.revision;
-      tabManagerClear(tabKey);
 
       if (sessionIdByTabKeyRef.current[tabKey]) {
         continue;
@@ -712,12 +712,11 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
 
       const screenState = screenStateByTabKeyRef.current[tabKey];
       if (typeof screenState === "string") {
-        if (screenState) {
-          tabManagerWrite(tabKey, screenState);
-        }
+        tabManagerRestoreScreenState(tabKey, screenState);
         continue;
       }
 
+      tabManagerClear(tabKey);
       const transcript = transcriptRef.current[tabKey] ?? "";
       if (transcript) {
         tabManagerWrite(tabKey, transcript);
@@ -728,6 +727,7 @@ export function useTerminalSessionManager<TTab extends { id: string }>(
     args.tabs,
     tabStatusByTabKey,
     tabManagerClear,
+    tabManagerRestoreScreenState,
     tabManagerWrite,
   ]);
 

@@ -77,6 +77,7 @@ export interface UseTerminalTabManagerReturn {
   registerInstance: (tabKey: string, controller: TerminalInstanceController) => () => void;
   updateInstanceStatus: (tabKey: string, status: TerminalTabInstanceStatus) => void;
   clear: (tabKey: string) => void;
+  restoreScreenState: (tabKey: string, screenState: string) => void;
   write: (tabKey: string, data: string) => void;
   writeln: (tabKey: string, data: string) => void;
   resize: (tabKey: string, cols: number, rows: number) => void;
@@ -145,6 +146,10 @@ export function useTerminalTabManager<TTab extends { id: string }>(
 
   const clear = useCallback((tabKey: string) => {
     instancesRef.current.get(tabKey)?.clear();
+  }, []);
+
+  const restoreScreenState = useCallback((tabKey: string, screenState: string) => {
+    instancesRef.current.get(tabKey)?.restoreScreenState(screenState);
   }, []);
 
   const write = useCallback((tabKey: string, data: string) => {
@@ -252,6 +257,7 @@ export function useTerminalTabManager<TTab extends { id: string }>(
     registerInstance,
     updateInstanceStatus,
     clear,
+    restoreScreenState,
     write,
     writeln,
     resize,
@@ -266,6 +272,7 @@ export function useTerminalTabManager<TTab extends { id: string }>(
     getSize,
     proposeDimensions,
     registerInstance,
+    restoreScreenState,
     resize,
     restart,
     shouldMountTerminal,

@@ -300,6 +300,7 @@ export interface TerminalInstanceController {
   readonly terminal: Terminal | null;
   readonly fitAddon: FitAddon | null;
   clear: () => void;
+  restoreScreenState: (screenState: string) => void;
   write: (data: string) => void;
   writeln: (data: string) => void;
   resize: (cols: number, rows: number) => void;
@@ -331,6 +332,29 @@ export interface UseTerminalInstanceReturn {
   error: string | null;
   writeErrorCount: number;
   revision: number;
+}
+
+type ScreenStateTerminalLike = {
+  reset: () => void;
+  write: (data: string) => void;
+};
+
+export function restoreTerminalScreenState(args: {
+  terminal?: ScreenStateTerminalLike | null;
+  screenState: string;
+}) {
+  const terminal = args.terminal;
+  if (!terminal) {
+    return;
+  }
+
+  // Snapshot replay needs a fresh parser/render surface. `clear()` only emits
+  // ANSI erase commands into the existing state, which can leave stale session
+  // state behind when a new PTY is attached to the same renderer.
+  terminal.reset();
+  if (args.screenState) {
+    terminal.write(args.screenState);
+  }
 }
 
 export function useTerminalInstance(
@@ -951,6 +975,28 @@ export function useTerminalInstance(
             terminalRef.current?.clear();
           },
           { message: "Failed to clear terminal renderer." },
+        );
+      },
+      restoreScreenState(screenState: string) {
+        executeTerminalOperation(
+          "restore-terminal-screen-state",
+          () => {
+            const terminal = terminalRef.current;
+            if (!terminal) {
+              return false;
+            }
+
+            restoreTerminalScreenState({
+              terminal,
+              screenState,
+            });
+            return true;
+          },
+          {
+            countWriteError: true,
+            countWriteSuccessWhen: Boolean,
+            message: "Failed to restore terminal screen state.",
+          },
         );
       },
       write(data: string) {

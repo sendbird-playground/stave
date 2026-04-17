@@ -61,10 +61,7 @@ export function TerminalTabSurface(args: {
     const router = getTerminalSessionRouter();
     return router.subscribe(args.sessionId, {
       onScreenState: (screenState) => {
-        terminalInstance.controller.clear();
-        if (screenState) {
-          terminalInstance.controller.write(screenState);
-        }
+        terminalInstance.controller.restoreScreenState(screenState);
       },
       onOutput: (output) => {
         terminalInstance.controller.write(output);
