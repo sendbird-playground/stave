@@ -6,6 +6,7 @@ import { build } from "vite";
 import {
   PUBLIC_DOC_SECTIONS,
   flattenPublicDocs,
+  getHomeDoc,
 } from "../site/src/public-docs";
 
 const repoRoot = process.cwd();
@@ -20,63 +21,6 @@ const generatedModulePath = path.join(
 );
 const docsHomeOutputPath = path.join(outputRoot, "docs", "index.html");
 
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[`]/g, "")
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function stripInlineMarkdown(value: string) {
-  return value
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/!\[[^\]]*]\([^)]+\)/g, "")
-    .trim();
-}
-
-function extractDocTitle(rawMarkdown: string, sourcePath: string) {
-  const titleMatch = rawMarkdown.match(/^#\s+(.+)$/m);
-  return titleMatch?.[1]?.trim() ?? path.basename(sourcePath, ".md");
-}
-
-function extractDocDescription(rawMarkdown: string) {
-  const paragraphs = rawMarkdown
-    .replace(/^#\s+.+$/m, "")
-    .split(/\n\s*\n/)
-    .map((block) => block.trim())
-    .filter(Boolean);
-
-  for (const paragraph of paragraphs) {
-    if (
-      paragraph.startsWith("##") ||
-      paragraph.startsWith("###") ||
-      paragraph.startsWith("- ") ||
-      paragraph.startsWith("* ") ||
-      /^\d+\.\s+/.test(paragraph) ||
-      paragraph.startsWith("```") ||
-      paragraph.startsWith("![") ||
-      paragraph.startsWith("|") ||
-      paragraph.startsWith("<")
-    ) {
-      continue;
-    }
-
-    const cleaned = stripInlineMarkdown(paragraph);
-    if (cleaned.length > 0 && !cleaned.endsWith(":")) {
-      return cleaned.length > 180 ? `${cleaned.slice(0, 177)}...` : cleaned;
-    }
-  }
-
-  return "Reference documentation for using Stave.";
-}
-
 function routeHref(fromRoute: string, targetRoute: string) {
   if (fromRoute === targetRoute) {
     return "./";
@@ -85,7 +29,7 @@ function routeHref(fromRoute: string, targetRoute: string) {
   return `../${targetRoute}/`;
 }
 
-function assetHref(fromRoute: string, targetAssetPath: string) {
+function assetHref(_fromRoute: string, targetAssetPath: string) {
   return `../${targetAssetPath}`;
 }
 
@@ -166,10 +110,9 @@ async function createGeneratedModule() {
       transformedDocs.push({
         routePath: doc.routePath,
         sourcePath: doc.sourcePath,
-        title: doc.title ?? extractDocTitle(rawMarkdown, resolvedSourcePath),
-        description: doc.description ?? extractDocDescription(rawMarkdown),
+        title: doc.title,
+        description: doc.description,
         previewImage: doc.previewImage,
-        featured: doc.featured ?? false,
         content: transformedMarkdown,
       });
     }
@@ -177,15 +120,19 @@ async function createGeneratedModule() {
     transformedSections.push({
       id: section.id,
       title: section.title,
-      description: section.description,
       docs: transformedDocs,
     });
   }
 
+  const siteData = {
+    sections: transformedSections,
+    homeRoute: getHomeDoc().routePath,
+  };
+
   await mkdir(path.dirname(generatedModulePath), { recursive: true });
   await writeFile(
     generatedModulePath,
-    `export const siteData = ${JSON.stringify({ sections: transformedSections }, null, 2)} as const\n`,
+    `import type { SiteData } from "../site-types";\n\nexport const siteData: SiteData = ${JSON.stringify(siteData, null, 2)};\n`,
   );
 }
 
