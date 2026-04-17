@@ -50,7 +50,7 @@ describe("model catalog", () => {
       resolveDefaultClaudeEffortForModel({ model: DEFAULT_CLAUDE_OPUS_MODEL }),
     ).toBe("xhigh");
     expect(
-      resolveDefaultClaudeEffortForModel({ model: "claude-opus-4-6[1m]" }),
+      resolveDefaultClaudeEffortForModel({ model: "claude-opus-4-7[1m]" }),
     ).toBe("xhigh");
     expect(
       resolveDefaultClaudeEffortForModel({ model: "claude-sonnet-4-6" }),
@@ -81,13 +81,13 @@ describe("model catalog", () => {
     ).toBe("max");
   });
 
-  test("upgrades settings-scoped Opus 4.6 aliases to Opus 4.7", () => {
+  test("upgrades settings-scoped Opus 4.6 aliases to Opus 4.7 while preserving the 1M suffix", () => {
     expect(
       upgradeSettingsScopedClaudeOpusModel({ model: "claude-opus-4-6" }),
     ).toBe(DEFAULT_CLAUDE_OPUS_MODEL);
     expect(
       upgradeSettingsScopedClaudeOpusModel({ model: "claude-opus-4-6[1m]" }),
-    ).toBe(DEFAULT_CLAUDE_OPUS_MODEL);
+    ).toBe("claude-opus-4-7[1m]");
     expect(
       upgradeSettingsScopedClaudeOpusModel({ model: "claude-opus-4-6-fast" }),
     ).toBe("claude-opus-4-6-fast");
@@ -126,16 +126,21 @@ describe("model catalog", () => {
   // ── 1M context model variants ─────────────────────────────────────────────
 
   test("formats [1m] model variants with human-readable labels", () => {
-    expect(toHumanModelName({ model: "claude-opus-4-6[1m]" })).toBe(
-      "Claude Opus 4.6 (1M)",
+    expect(toHumanModelName({ model: "claude-opus-4-7[1m]" })).toBe(
+      "Claude Opus 4.7 (1M)",
     );
     expect(toHumanModelName({ model: "claude-sonnet-4-6[1m]" })).toBe(
       "Claude Sonnet 4.6 (1M)",
     );
+    // Legacy Opus 4.6 (1M) label is retained so existing chat/turn records
+    // continue to render a recognizable name.
+    expect(toHumanModelName({ model: "claude-opus-4-6[1m]" })).toBe(
+      "Claude Opus 4.6 (1M)",
+    );
   });
 
   test("infers claude-code provider for [1m] model variants", () => {
-    expect(inferProviderIdFromModel({ model: "claude-opus-4-6[1m]" })).toBe(
+    expect(inferProviderIdFromModel({ model: "claude-opus-4-7[1m]" })).toBe(
       "claude-code",
     );
     expect(inferProviderIdFromModel({ model: "claude-sonnet-4-6[1m]" })).toBe(
@@ -147,7 +152,7 @@ describe("model catalog", () => {
     expect(
       getProviderWaveToneClass({
         providerId: "stave",
-        model: "claude-opus-4-6[1m]",
+        model: "claude-opus-4-7[1m]",
       }),
     ).toBe("text-provider-claude");
     expect(

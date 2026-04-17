@@ -10,10 +10,11 @@ const STAVE_LOGO_LIGHT_ICON_URL = `${import.meta.env.BASE_URL}stave-logo-light.s
 export const STAVE_LOGO_URL = `${import.meta.env.BASE_URL}stave-logo.svg`;
 const STAVE_LOGO_AUTO_ICON_URL = `${import.meta.env.BASE_URL}stave-logo-auto.svg`;
 export const DEFAULT_CLAUDE_OPUS_MODEL = "claude-opus-4-7";
-const LEGACY_AUTOMATIC_CLAUDE_OPUS_MODELS = new Set([
-  "claude-opus-4-6",
-  "claude-opus-4-6[1m]",
-]);
+export const DEFAULT_CLAUDE_OPUS_1M_MODEL = "claude-opus-4-7[1m]";
+const LEGACY_AUTOMATIC_CLAUDE_OPUS_MODELS: Record<string, string> = {
+  "claude-opus-4-6": DEFAULT_CLAUDE_OPUS_MODEL,
+  "claude-opus-4-6[1m]": DEFAULT_CLAUDE_OPUS_1M_MODEL,
+};
 
 // Source: https://platform.claude.com/docs/en/about-claude/models/overview
 // Latest models comparison (as of 2026-04-17)
@@ -21,8 +22,7 @@ const LEGACY_AUTOMATIC_CLAUDE_OPUS_MODELS = new Set([
 // parses it and auto-injects the `context-1m-2025-08-07` beta header.
 export const CLAUDE_SDK_MODEL_OPTIONS = [
   DEFAULT_CLAUDE_OPUS_MODEL,
-  "claude-opus-4-6",
-  "claude-opus-4-6[1m]",
+  DEFAULT_CLAUDE_OPUS_1M_MODEL,
   "opusplan",
   "claude-sonnet-4-6",
   "claude-sonnet-4-6[1m]",
@@ -230,8 +230,9 @@ export function normalizeModelSelection(args: {
 
 export function upgradeSettingsScopedClaudeOpusModel(args: { model: string }) {
   const normalizedModel = args.model.trim().toLowerCase();
-  if (LEGACY_AUTOMATIC_CLAUDE_OPUS_MODELS.has(normalizedModel)) {
-    return DEFAULT_CLAUDE_OPUS_MODEL;
+  const upgraded = LEGACY_AUTOMATIC_CLAUDE_OPUS_MODELS[normalizedModel];
+  if (upgraded) {
+    return upgraded;
   }
   return args.model;
 }
@@ -293,6 +294,9 @@ export function toHumanModelName(args: { model: string }) {
   // 2. Static known names
   const known: Record<string, string> = {
     [DEFAULT_CLAUDE_OPUS_MODEL]: "Claude Opus 4.7",
+    [DEFAULT_CLAUDE_OPUS_1M_MODEL]: "Claude Opus 4.7 (1M)",
+    // Legacy labels kept so historical chat/turn records still render a
+    // recognizable name after the preset options migrated to 4.7.
     "claude-opus-4-6": "Claude Opus 4.6",
     "claude-opus-4-6[1m]": "Claude Opus 4.6 (1M)",
     opusplan: "Claude Opus Plan",

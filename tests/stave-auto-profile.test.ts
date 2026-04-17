@@ -115,7 +115,7 @@ describe("stave auto profile presets", () => {
     });
 
     expect(patch.staveAutoSupervisorModel).toBe("claude-sonnet-4-6[1m]");
-    expect(patch.staveAutoAnalyzeModel).toBe("claude-opus-4-7");
+    expect(patch.staveAutoAnalyzeModel).toBe("claude-opus-4-7[1m]");
     expect(patch.staveAutoGeneralModel).toBe("claude-sonnet-4-6[1m]");
 
     // Lightweight roles stay on standard-context models

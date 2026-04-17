@@ -47,6 +47,7 @@ import {
   STAVE_AUTO_MODEL_PRESETS,
 } from "@/lib/providers/stave-auto-profile";
 import {
+  DEFAULT_CLAUDE_OPUS_1M_MODEL,
   DEFAULT_CLAUDE_OPUS_MODEL,
   getDefaultModelForProvider,
 } from "@/lib/providers/model-catalog";
@@ -85,8 +86,7 @@ const CLAUDE_ADVISOR_SOURCE_MODEL_OPTIONS = buildModelSelectorOptions({
       "claude-haiku-4-5",
       "claude-sonnet-4-6",
       DEFAULT_CLAUDE_OPUS_MODEL,
-      "claude-opus-4-6",
-      "claude-opus-4-6[1m]",
+      DEFAULT_CLAUDE_OPUS_1M_MODEL,
     ],
   },
 });
