@@ -4,6 +4,18 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/inter";
 
+/*
+ * The site subproject lives under /site/, but reuses the app's shadcn
+ * primitives at /src/components/ui and helper hooks/libs at /src/hooks
+ * and /src/lib via the @/ alias. Tailwind v4's auto-scan only sees files
+ * under the Vite root (site/), so the shadcn classes (e.g. md:block on
+ * the sidebar) were being dropped. Declare the extra roots here so
+ * Tailwind scans them too.
+ */
+@source "../../src/components/ui";
+@source "../../src/hooks";
+@source "../../src/lib";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
