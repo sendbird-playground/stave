@@ -191,12 +191,12 @@ export function TodoFloater({ inputDockHeight = 0 }: TodoFloaterProps) {
     >
       <div className="pointer-events-auto flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-lg">
         {/* Header */}
-        <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
-          <ListTodo className="size-3.5 shrink-0 text-primary" />
-          <span className="flex-1 truncate text-[0.8125rem] font-medium">
+        <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3.5 py-2.5">
+          <ListTodo className="size-4 shrink-0 text-primary" />
+          <span className="flex-1 truncate text-[0.875rem] font-medium">
             Todo
           </span>
-          <span className="text-[0.75rem] tabular-nums text-muted-foreground">
+          <span className="text-[0.8125rem] tabular-nums text-muted-foreground">
             {progress.completedCount}/{progress.totalCount}
           </span>
         </div>
@@ -213,18 +213,18 @@ export function TodoFloater({ inputDockHeight = 0 }: TodoFloaterProps) {
         </div>
 
         {/* Todo items */}
-        <div className="max-h-52 overflow-y-auto px-3 py-2">
-          <ol className="space-y-1">
+        <div className="max-h-60 overflow-y-auto px-3.5 py-3">
+          <ol className="space-y-1.5">
             {displayTodos.map((todo, idx) => (
               <li
                 // biome-ignore lint/suspicious/noArrayIndexKey: stable todo list ordering
                 key={idx}
-                className="flex items-start gap-2"
+                className="flex items-start gap-2.5"
               >
                 <TodoFloaterItemIcon status={todo.status} />
                 <span
                   className={cn(
-                    "text-[0.8125rem] leading-[1.5]",
+                    "text-[0.875rem] leading-[1.55]",
                     todo.status === "completed" &&
                       "text-muted-foreground line-through",
                     todo.status === "in_progress" &&
@@ -246,15 +246,15 @@ export function TodoFloater({ inputDockHeight = 0 }: TodoFloaterProps) {
 function TodoFloaterItemIcon({ status }: { status: TodoItem["status"] }) {
   if (status === "completed") {
     return (
-      <CheckCircle2 className="mt-[0.1875rem] size-3.5 shrink-0 text-success" />
+      <CheckCircle2 className="mt-[0.1875rem] size-4 shrink-0 text-success" />
     );
   }
   if (status === "in_progress") {
     return (
-      <LoaderCircle className="mt-[0.1875rem] size-3.5 shrink-0 animate-spin text-primary" />
+      <LoaderCircle className="mt-[0.1875rem] size-4 shrink-0 animate-spin text-primary" />
     );
   }
   return (
-    <Circle className="mt-[0.1875rem] size-3.5 shrink-0 text-muted-foreground/50" />
+    <Circle className="mt-[0.1875rem] size-4 shrink-0 text-muted-foreground/50" />
   );
 }

@@ -3786,6 +3786,26 @@ export async function streamCodexWithAppServer(
               });
             return;
           }
+          case "todo_list": {
+            // Mirror the legacy codex-sdk runtime: surface Codex's todo_list
+            // items as a TodoWrite tool_use bridge event so the TodoFloater
+            // (which scans for toolName === "TodoWrite") can render them.
+            const todoItem = item as {
+              items?: Array<{ text?: string; completed?: boolean }>;
+            };
+            const todos = (todoItem.items ?? []).map((entry) => ({
+              content: entry.text ?? "",
+              status: entry.completed ? "completed" : "pending",
+            }));
+            emitBridgeEvent({
+              type: "tool",
+              ...(itemId ? { toolUseId: itemId } : {}),
+              toolName: "TodoWrite",
+              input: JSON.stringify({ todos }),
+              state: "output-available",
+            });
+            return;
+          }
           default:
             return;
         }
