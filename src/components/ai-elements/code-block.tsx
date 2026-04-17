@@ -147,7 +147,7 @@ export const CodeBlockContent = memo(function CodeBlockContent({ code, language 
   if (html) {
     return (
       <div
-        className="overflow-x-auto font-mono [&>pre]:m-0 [&>pre]:overflow-visible [&>pre]:px-4 [&>pre]:py-3"
+        className="font-mono [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:px-4 [&>pre]:py-3"
         style={{ fontSize: `${messageCodeFontSize}px` }}
         // Shiki output is sanitised — no user content reaches dangerouslySetInnerHTML
         // eslint-disable-next-line react/no-danger
