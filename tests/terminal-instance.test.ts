@@ -6,6 +6,7 @@ import {
 import {
   focusTerminalInstanceSurface,
   isSwallowableTerminalRuntimeError,
+  restoreTerminalScreenState,
   restoreVisibleTerminalViewport,
 } from "../src/components/layout/useTerminalInstance";
 
@@ -247,5 +248,45 @@ describe("restoreVisibleTerminalViewport", () => {
     await restoreVisibleTerminalViewport({ terminal });
 
     expect(rendered).toBe(true);
+  });
+});
+
+describe("restoreTerminalScreenState", () => {
+  test("resets the renderer before replaying a restored screen state", () => {
+    const calls: string[] = [];
+    const terminal = {
+      reset() {
+        calls.push("reset");
+      },
+      write(data: string) {
+        calls.push(`write:${data}`);
+      },
+    };
+
+    restoreTerminalScreenState({
+      terminal,
+      screenState: "prompt$ ls\r\n",
+    });
+
+    expect(calls).toEqual(["reset", "write:prompt$ ls\r\n"]);
+  });
+
+  test("still resets when the restored screen state is empty", () => {
+    const calls: string[] = [];
+    const terminal = {
+      reset() {
+        calls.push("reset");
+      },
+      write() {
+        calls.push("write");
+      },
+    };
+
+    restoreTerminalScreenState({
+      terminal,
+      screenState: "",
+    });
+
+    expect(calls).toEqual(["reset"]);
   });
 });
