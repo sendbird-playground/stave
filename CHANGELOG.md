@@ -1,3 +1,31 @@
+## [0.3.8](https://github.com/sendbird-playground/stave/compare/v0.3.7...v0.3.8) (2026-04-17)
+
+### Highlights
+
+- rebuild the public landing page and docs site on shadcn primitives with a new end-user information architecture, `Cmd+K` search, TOC scroll-spy, and a task-oriented rewrite of the core feature docs; follow-up fixes repair Tailwind class scanning for shared primitives, the `CommandDialog` wrapper, and home-route screenshot paths so the preview renders cleanly on desktop and mobile
+- add an in-app **Changelog** viewer under Settings → System that renders the bundled `CHANGELOG.md` with linkified PR/commit references and a version badge
+- add manual and auto refresh to the Source Control panel with persisted interval options (Off / 5s / 10s / 30s / 1m), visibility-aware polling, and a non-flickering background tick path
+- upgrade the default Claude Opus tier to 4.7, add a `claude-opus-4-7[1m]` 1M-context variant, and migrate legacy 4.6 selections across settings, Stave Auto profiles, the model fallback map, and human-readable labels
+- auto-detect GUI-launched `claude` and `codex` binaries installed under nvm / fnm / volta (with a cached login-shell `command -v` probe covering asdf / mise / chruby / custom PATH) so Stave resolves node-version-manager CLIs on macOS without manual `STAVE_*_CLI_PATH` overrides
+- prewarm Monaco at idle to eliminate the first-open editor freeze, reset the ghostty renderer before replaying restored terminal screen state, and extend Shiki `<pre>` backgrounds across horizontal scroll in chat code blocks
+- migrate inline completions to the Claude Agent SDK directly, dropping the separate `@anthropic-ai/sdk` dependency and bumping Claude Agent SDK to 0.2.112
+- stop TodoWrite floater state from persisting across user messages, enlarge the floater typography/spacing for readability, and surface Codex native `todo_list` items through the TodoWrite bridge
+
+### References
+
+- [#476](https://github.com/sendbird-playground/stave/pull/476)
+- [#477](https://github.com/sendbird-playground/stave/pull/477)
+- [#478](https://github.com/sendbird-playground/stave/pull/478)
+- [#479](https://github.com/sendbird-playground/stave/pull/479)
+- [#480](https://github.com/sendbird-playground/stave/pull/480)
+- [#481](https://github.com/sendbird-playground/stave/pull/481)
+- [#482](https://github.com/sendbird-playground/stave/pull/482)
+- [#483](https://github.com/sendbird-playground/stave/pull/483)
+- [#484](https://github.com/sendbird-playground/stave/pull/484)
+- [#485](https://github.com/sendbird-playground/stave/pull/485)
+- [#486](https://github.com/sendbird-playground/stave/pull/486)
+- [#487](https://github.com/sendbird-playground/stave/pull/487)
+
 ## [0.3.7](https://github.com/sendbird-playground/stave/compare/v0.3.6...v0.3.7) (2026-04-16)
 
 ### Highlights
