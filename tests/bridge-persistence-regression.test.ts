@@ -4280,7 +4280,8 @@ describe("workspace store hydration ordering", () => {
       },
     });
 
-    const { useAppStore } = await import("../src/store/app.store");
+    const { useAppStore, waitForPendingWorkspaceArchiveCleanups } =
+      await import("../src/store/app.store");
     const initialState = useAppStore.getInitialState();
     useAppStore.setState({
       ...initialState,
@@ -4322,13 +4323,19 @@ describe("workspace store hydration ordering", () => {
       .getState()
       .closeWorkspace({ workspaceId: "ws-feature-close" });
 
-    expect(closedWorkspaceIds).toEqual(["ws-feature-close"]);
+    // closeWorkspace now updates renderer state instantly and defers
+    // persistence/git cleanup to a detached promise. Await it explicitly so
+    // the persistence assertion below is deterministic.
     expect(
       useAppStore.getState().workspaces.map((workspace) => workspace.id),
     ).toEqual(["ws-main-close"]);
     expect(useAppStore.getState().workspaceFileCacheByPath).toEqual({
       "/tmp/stave-project-close": ["root.ts"],
     });
+
+    await waitForPendingWorkspaceArchiveCleanups();
+
+    expect(closedWorkspaceIds).toEqual(["ws-feature-close"]);
   });
 
   test("switchWorkspace resolves after shell hydrate and backfills messages asynchronously for uncached workspaces", async () => {
