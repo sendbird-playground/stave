@@ -6,6 +6,8 @@ The Stave Model Router is a built-in meta-provider that selects the best AI mode
 
 In the model selector, choose **Stave** from the provider list. The task is then stored with `provider: "stave"` and every subsequent turn in that task goes through the router.
 
+By default, `Alt+3` also selects the same `Stave Auto` prompt target immediately. You can remap that slot, along with `Alt+1..0`, in **Settings -> Command Palette**.
+
 The model selector shows **Stave Auto** as the single model option. The chat surface shows a compact Stave routing card at the beginning of each assistant turn with the chosen model, strategy, short reason, and whether fast mode was requested vs actually applied. Expanded orchestration progress is shown in its own card. Raw routing JSON is treated as diagnostics data, not normal chat content.
 
 ## How the router works

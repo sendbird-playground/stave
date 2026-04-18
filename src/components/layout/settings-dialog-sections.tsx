@@ -50,15 +50,25 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import {
   getDefaultModelForProvider,
+  getProviderLabel,
   normalizeModelSelection,
   resolveClaudeEffortForModelSwitch,
 } from "@/lib/providers/model-catalog";
+import {
+  DEFAULT_MODEL_SHORTCUT_KEYS,
+  describeModelShortcutKey,
+  MODEL_SHORTCUT_SLOT_LABELS,
+  normalizeModelShortcutKeys,
+} from "@/lib/providers/model-shortcuts";
 import { useCodexModelCatalog } from "@/lib/providers/use-codex-model-catalog";
 import { BOOLEAN_TOGGLE_OPTIONS } from "@/lib/providers/runtime-option-contract";
 import { resolveSidebarArtworkClass } from "@/lib/themes";
@@ -106,6 +116,7 @@ import { MuseSection } from "./settings-dialog-muse-section";
 import { ProvidersSection } from "./settings-dialog-providers-section";
 import { ToolingSection } from "./settings-dialog-tooling-section";
 import { WorkspaceScriptsManager } from "./WorkspaceScriptsManager";
+import { WorkspaceShortcutChip } from "./WorkspaceShortcutChip";
 import {
   ChoiceButtons,
   DraftInput,
@@ -138,6 +149,11 @@ const NOTIFICATION_SOUND_PRESET_OPTIONS: Array<{
 }));
 
 const PROMPT_MODEL_PROVIDER_IDS = ["claude-code", "codex"] as const;
+const MODEL_SHORTCUT_PROVIDER_IDS = [
+  "stave",
+  ...PROMPT_MODEL_PROVIDER_IDS,
+] as const;
+const UNASSIGNED_MODEL_SHORTCUT_VALUE = "__unassigned__";
 
 interface GitRemoteState {
   name: string;
@@ -2359,6 +2375,7 @@ function CommandPaletteSection() {
     commandPalettePinnedCommandIds,
     commandPaletteHiddenCommandIds,
     commandPaletteRecentCommandIds,
+    modelShortcutKeys,
   ] = useAppStore(
     useShallow(
       (state) =>
@@ -2367,11 +2384,33 @@ function CommandPaletteSection() {
           state.settings.commandPalettePinnedCommandIds,
           state.settings.commandPaletteHiddenCommandIds,
           state.settings.commandPaletteRecentCommandIds,
+          state.settings.modelShortcutKeys,
         ] as const,
     ),
   );
   const updateSettings = useAppStore((state) => state.updateSettings);
   const commands = useMemo(() => getCommandPaletteCoreCommands(), []);
+  const normalizedModelShortcutKeys = useMemo(
+    () => normalizeModelShortcutKeys(modelShortcutKeys),
+    [modelShortcutKeys],
+  );
+  const {
+    options: modelShortcutOptions,
+    recommendedOptions: recommendedModelShortcutOptions,
+  } = useSettingsModelSelectorOptions({
+    providerIds: MODEL_SHORTCUT_PROVIDER_IDS,
+  });
+  const recommendedModelShortcutKeySet = useMemo(
+    () => new Set(recommendedModelShortcutOptions.map((option) => option.key)),
+    [recommendedModelShortcutOptions],
+  );
+  const additionalModelShortcutOptions = useMemo(
+    () =>
+      modelShortcutOptions.filter(
+        (option) => !recommendedModelShortcutKeySet.has(option.key),
+      ),
+    [modelShortcutOptions, recommendedModelShortcutKeySet],
+  );
 
   function togglePinnedCommand(commandId: string) {
     const isPinned = commandPalettePinnedCommandIds.includes(commandId);
@@ -2404,11 +2443,21 @@ function CommandPaletteSection() {
     });
   }
 
+  function updateModelShortcutSlot(slotIndex: number, nextShortcutKey: string) {
+    const nextKeys = [...normalizedModelShortcutKeys];
+    nextKeys[slotIndex] = nextShortcutKey;
+    updateSettings({
+      patch: {
+        modelShortcutKeys: nextKeys,
+      },
+    });
+  }
+
   return (
     <>
       <SectionHeading
         title="Command Palette"
-        description="Configure the global command launcher opened with Cmd/Ctrl+Shift+P. This is separate from slash commands in the chat input."
+        description="Configure the global command launcher and prompt-model hotkeys. This is separate from slash commands in the chat input."
       />
       <SectionStack>
         <SettingsCard
@@ -2455,6 +2504,144 @@ function CommandPaletteSection() {
             >
               Reset Palette Settings
             </Button>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Model Shortcuts"
+          description="Map Alt+1..0 to prompt models. These shortcuts switch the active task provider and draft model immediately."
+          titleAccessory={<Badge variant="secondary">Alt+1..0</Badge>}
+        >
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                updateSettings({
+                  patch: {
+                    modelShortcutKeys: [...DEFAULT_MODEL_SHORTCUT_KEYS],
+                  },
+                })
+              }
+              disabled={normalizedModelShortcutKeys.every(
+                (value, index) =>
+                  value === (DEFAULT_MODEL_SHORTCUT_KEYS[index] ?? ""),
+              )}
+            >
+              Reset Default Shortcuts
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                updateSettings({
+                  patch: {
+                    modelShortcutKeys: MODEL_SHORTCUT_SLOT_LABELS.map(() => ""),
+                  },
+                })
+              }
+              disabled={normalizedModelShortcutKeys.every(
+                (value) => value.length === 0,
+              )}
+            >
+              Clear All Shortcuts
+            </Button>
+          </div>
+          <div className="space-y-2.5">
+            {MODEL_SHORTCUT_SLOT_LABELS.map((slotLabel, slotIndex) => {
+              const selectedShortcutKey =
+                normalizedModelShortcutKeys[slotIndex] ?? "";
+              const selectedShortcutDetails = describeModelShortcutKey({
+                shortcutKey: selectedShortcutKey,
+              });
+              const defaultShortcutDetails = describeModelShortcutKey({
+                shortcutKey: DEFAULT_MODEL_SHORTCUT_KEYS[slotIndex] ?? "",
+              });
+              const currentValue = modelShortcutOptions.some(
+                (option) => option.key === selectedShortcutKey,
+              )
+                ? selectedShortcutKey
+                : UNASSIGNED_MODEL_SHORTCUT_VALUE;
+
+              return (
+                <div
+                  key={slotLabel}
+                  className="rounded-lg border border-border/70 bg-card/60 p-3"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                    <div className="min-w-0 space-y-1 lg:w-52 lg:shrink-0">
+                      <div className="flex items-center gap-2">
+                        <WorkspaceShortcutChip
+                          modifier="Alt"
+                          label={slotLabel}
+                        />
+                        <p className="text-sm font-medium text-foreground">
+                          Model Slot {slotLabel}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Default:{" "}
+                        {defaultShortcutDetails?.modelLabel ?? "Unassigned"}
+                      </p>
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Select
+                        value={currentValue}
+                        onValueChange={(value) =>
+                          updateModelShortcutSlot(
+                            slotIndex,
+                            value === UNASSIGNED_MODEL_SHORTCUT_VALUE
+                              ? ""
+                              : value,
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-10 w-full rounded-md border-border/80 bg-background">
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-80">
+                          <SelectGroup>
+                            <SelectLabel>Shortcut State</SelectLabel>
+                            <SelectItem value={UNASSIGNED_MODEL_SHORTCUT_VALUE}>
+                              Unassigned
+                            </SelectItem>
+                          </SelectGroup>
+                          <SelectSeparator />
+                          <SelectGroup>
+                            <SelectLabel>Recommended</SelectLabel>
+                            {recommendedModelShortcutOptions.map((option) => (
+                              <SelectItem key={option.key} value={option.key}>
+                                {getProviderLabel({
+                                  providerId: option.providerId,
+                                  variant: "full",
+                                })}{" "}
+                                · {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                          <SelectSeparator />
+                          <SelectGroup>
+                            <SelectLabel>All Models</SelectLabel>
+                            {additionalModelShortcutOptions.map((option) => (
+                              <SelectItem key={option.key} value={option.key}>
+                                {getProviderLabel({
+                                  providerId: option.providerId,
+                                  variant: "full",
+                                })}{" "}
+                                · {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedShortcutDetails
+                          ? `Currently selects ${selectedShortcutDetails.modelLabel} on ${selectedShortcutDetails.providerLabel}.`
+                          : "No model assigned. The shortcut stays inactive until you set one."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </SettingsCard>
 
@@ -2866,6 +3053,31 @@ function PromptModelField(args: {
   value: string;
   onSelect: (model: string) => void;
 }) {
+  const {
+    options: promptModelOptions,
+    recommendedOptions: promptRecommendedModelOptions,
+  } = useSettingsModelSelectorOptions({
+    providerIds: PROMPT_MODEL_PROVIDER_IDS,
+  });
+
+  return (
+    <LabeledField title={args.title} description={args.description}>
+      <ModelSelector
+        value={buildModelSelectorValue({ model: args.value })}
+        options={promptModelOptions}
+        recommendedOptions={promptRecommendedModelOptions}
+        className="w-full"
+        triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
+        menuClassName="sm:max-w-lg"
+        onSelect={({ selection }) => args.onSelect(selection.model)}
+      />
+    </LabeledField>
+  );
+}
+
+function useSettingsModelSelectorOptions(args: {
+  providerIds: readonly (typeof MODEL_SHORTCUT_PROVIDER_IDS)[number][];
+}) {
   const codexBinaryPath = useAppStore(
     (state) => state.settings.codexBinaryPath,
   );
@@ -2895,32 +3107,23 @@ function PromptModelField(args: {
   const promptModelOptions = useMemo(
     () =>
       buildModelSelectorOptions({
-        providerIds: PROMPT_MODEL_PROVIDER_IDS,
+        providerIds: args.providerIds,
         modelsByProvider: {
           codex: codexModelCatalog.models,
         },
         enrichmentByModel: codexModelEnrichmentForPrompt,
       }),
-    [codexModelCatalog.models, codexModelEnrichmentForPrompt],
+    [args.providerIds, codexModelCatalog.models, codexModelEnrichmentForPrompt],
   );
   const promptRecommendedModelOptions = useMemo(
     () => buildRecommendedModelSelectorOptions({ options: promptModelOptions }),
     [promptModelOptions],
   );
 
-  return (
-    <LabeledField title={args.title} description={args.description}>
-      <ModelSelector
-        value={buildModelSelectorValue({ model: args.value })}
-        options={promptModelOptions}
-        recommendedOptions={promptRecommendedModelOptions}
-        className="w-full"
-        triggerClassName="h-10 w-full max-w-none rounded-md border border-border/80 bg-background px-3 hover:bg-muted/40"
-        menuClassName="sm:max-w-lg"
-        onSelect={({ selection }) => args.onSelect(selection.model)}
-      />
-    </LabeledField>
-  );
+  return {
+    options: promptModelOptions,
+    recommendedOptions: promptRecommendedModelOptions,
+  };
 }
 
 function PromptsSection() {

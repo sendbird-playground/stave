@@ -77,6 +77,7 @@ import {
   normalizeModelSelection,
   upgradeSettingsScopedClaudeOpusModel,
 } from "@/lib/providers/model-catalog";
+import { normalizeModelShortcutKeys } from "@/lib/providers/model-shortcuts";
 import {
   DEFAULT_PROMPT_RESPONSE_STYLE,
   DEFAULT_PROMPT_PR_DESCRIPTION,
@@ -803,6 +804,8 @@ export interface AppSettings {
   commandPalettePinnedCommandIds: string[];
   commandPaletteHiddenCommandIds: string[];
   commandPaletteRecentCommandIds: string[];
+  /** Alt+1..0 prompt-model bindings, stored as `provider:model` keys. */
+  modelShortcutKeys: string[];
   reviewStrictMode: boolean;
   reviewChecklistPreset: string;
   terminalFontSize: number;
@@ -1614,6 +1617,7 @@ const defaultSettings: AppSettings = {
   commandPalettePinnedCommandIds: [],
   commandPaletteHiddenCommandIds: [],
   commandPaletteRecentCommandIds: [],
+  modelShortcutKeys: normalizeModelShortcutKeys(),
   reviewStrictMode: true,
   reviewChecklistPreset: "safety-first",
   terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
@@ -6333,6 +6337,13 @@ export const useAppStore = create<AppState>()(
               : {
                   sharedSkillsHome: normalizeSharedSkillsHomeSetting(
                     patch.sharedSkillsHome,
+                  ),
+                }),
+            ...(patch.modelShortcutKeys === undefined
+              ? {}
+              : {
+                  modelShortcutKeys: normalizeModelShortcutKeys(
+                    patch.modelShortcutKeys,
                   ),
                 }),
             ...(patch.reasoningExpansionMode === undefined
@@ -11268,6 +11279,9 @@ export const useAppStore = create<AppState>()(
               (value: unknown): value is string => typeof value === "string",
             )
           : defaultSettings.commandPaletteRecentCommandIds;
+        state.settings.modelShortcutKeys = normalizeModelShortcutKeys(
+          raw.modelShortcutKeys,
+        );
         if (
           typeof raw.staveModelPlanner === "string" &&
           typeof raw.staveAutoPlanModel !== "string"
