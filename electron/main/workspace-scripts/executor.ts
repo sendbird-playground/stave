@@ -6,9 +6,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import * as pty from "node-pty";
-import {
-  SCRIPT_ENV_VARS,
-} from "../../../src/lib/workspace-scripts/constants";
+import { SCRIPT_ENV_VARS } from "../../../src/lib/workspace-scripts/constants";
 import {
   getScriptEntry,
   getScriptHooksForTrigger,
@@ -42,7 +40,8 @@ import {
   buildOrbitDisplayCommand,
   buildOrbitEnv,
   buildOrbitGetArgs,
-  buildOrbitCommand,
+  buildOrbitShellWrapperRunArgs,
+  buildPortlessLaunchSpec,
   buildOrbitRunArgs,
   extractOrbitOutput,
   resolvePortlessCommand,
@@ -89,11 +88,19 @@ function buildScriptEnv(args: {
     [SCRIPT_ENV_VARS.WORKSPACE_NAME]: args.workspaceName,
     [SCRIPT_ENV_VARS.WORKSPACE_PATH]: args.workspacePath,
     [SCRIPT_ENV_VARS.BRANCH]: args.branch,
-    ...(args.hookContext?.taskId ? { [SCRIPT_ENV_VARS.TASK_ID]: args.hookContext.taskId } : {}),
-    ...(args.hookContext?.taskTitle ? { [SCRIPT_ENV_VARS.TASK_TITLE]: args.hookContext.taskTitle } : {}),
-    ...(args.hookContext?.turnId ? { [SCRIPT_ENV_VARS.TURN_ID]: args.hookContext.turnId } : {}),
+    ...(args.hookContext?.taskId
+      ? { [SCRIPT_ENV_VARS.TASK_ID]: args.hookContext.taskId }
+      : {}),
+    ...(args.hookContext?.taskTitle
+      ? { [SCRIPT_ENV_VARS.TASK_TITLE]: args.hookContext.taskTitle }
+      : {}),
+    ...(args.hookContext?.turnId
+      ? { [SCRIPT_ENV_VARS.TURN_ID]: args.hookContext.turnId }
+      : {}),
     [SCRIPT_ENV_VARS.TARGET_ID]: args.scriptEntry.targetId,
-    ...(args.source.kind === "hook" ? { [SCRIPT_ENV_VARS.TRIGGER]: args.source.trigger } : {}),
+    ...(args.source.kind === "hook"
+      ? { [SCRIPT_ENV_VARS.TRIGGER]: args.source.trigger }
+      : {}),
     ...args.scriptEntry.target.env,
   };
 }
@@ -103,7 +110,9 @@ function resolveScriptCwd(args: {
   workspacePath: string;
   scriptEntry: ResolvedWorkspaceScript;
 }) {
-  return args.scriptEntry.target.cwd === "project" ? args.projectPath : args.workspacePath;
+  return args.scriptEntry.target.cwd === "project"
+    ? args.projectPath
+    : args.workspacePath;
 }
 
 function createProcessKey(args: {
@@ -327,7 +336,11 @@ async function runFiniteScript(args: {
               } catch {
                 // noop
               }
-              reject(new Error(`Script timed out after ${args.scriptEntry.timeoutMs}ms`));
+              reject(
+                new Error(
+                  `Script timed out after ${args.scriptEntry.timeoutMs}ms`,
+                ),
+              );
             }
           }, args.scriptEntry.timeoutMs);
         }
@@ -355,7 +368,11 @@ async function runFiniteScript(args: {
       scriptKind: args.scriptEntry.kind,
       runId,
       source: args.source,
-      event: { type: "command-completed", commandIndex: index, exitCode: lastExitCode },
+      event: {
+        type: "command-completed",
+        commandIndex: index,
+        exitCode: lastExitCode,
+      },
     });
 
     if (lastExitCode !== 0) {
@@ -400,7 +417,11 @@ async function runServiceScript(args: {
     scriptKind: args.scriptEntry.kind,
   });
   const existing = getWorkspaceScriptProcess(key);
-  if (existing && !existing.aborted && args.scriptEntry.restartOnRun === false) {
+  if (
+    existing &&
+    !existing.aborted &&
+    args.scriptEntry.restartOnRun === false
+  ) {
     return {
       ok: true as const,
       runId: existing.runId,
@@ -418,7 +439,8 @@ async function runServiceScript(args: {
   const runId = randomUUID();
   const cwd = resolveScriptCwd(args);
   const prefixCommands = args.scriptEntry.commands.slice(0, -1);
-  const lastCommand = args.scriptEntry.commands[args.scriptEntry.commands.length - 1];
+  const lastCommand =
+    args.scriptEntry.commands[args.scriptEntry.commands.length - 1];
 
   if (!lastCommand) {
     return { ok: true as const, runId };
@@ -443,9 +465,7 @@ async function runServiceScript(args: {
     };
   }
 
-  const orbitCommand = args.scriptEntry.orbit
-    ? resolvePortlessCommand()
-    : null;
+  const orbitCommand = args.scriptEntry.orbit ? resolvePortlessCommand() : null;
   if (args.scriptEntry.orbit && !orbitCommand) {
     return {
       ok: false as const,
@@ -464,36 +484,49 @@ async function runServiceScript(args: {
   const orbitCommandArgs = args.scriptEntry.orbit
     ? tokenizeOrbitCommand(lastCommand)
     : null;
-  const orbitRunArgs = args.scriptEntry.orbit && orbitCommand && orbitCommandArgs
-    ? buildOrbitRunArgs({
-        commandArgs: orbitCommandArgs,
-        orbit: args.scriptEntry.orbit,
-        defaultName: path.basename(args.projectPath),
-      })
-    : null;
-  const orbitUsesShellWrapper = Boolean(args.scriptEntry.orbit && orbitCommand && !orbitRunArgs);
-  const commandToRun = args.scriptEntry.orbit && orbitCommand
-    ? (orbitRunArgs
-        ? buildOrbitDisplayCommand({
-            portlessCommand: orbitCommand,
-            orbitArgs: orbitRunArgs,
-          })
-        : buildOrbitCommand({
+  const orbitRunArgs =
+    args.scriptEntry.orbit && orbitCommand && orbitCommandArgs
+      ? buildOrbitRunArgs({
+          commandArgs: orbitCommandArgs,
+          orbit: args.scriptEntry.orbit,
+          defaultName: path.basename(args.projectPath),
+        })
+      : args.scriptEntry.orbit && orbitCommand
+        ? buildOrbitShellWrapperRunArgs({
             command: lastCommand,
             orbit: args.scriptEntry.orbit,
             defaultName: path.basename(args.projectPath),
-            portlessCommand: orbitCommand,
-          }))
+          })
+        : null;
+  const orbitLaunchSpec =
+    args.scriptEntry.orbit && orbitCommand && orbitRunArgs
+      ? buildPortlessLaunchSpec({
+          portlessCommand: orbitCommand,
+          orbitArgs: orbitRunArgs,
+        })
+      : null;
+  const orbitUsesShellWrapper = Boolean(
+    args.scriptEntry.orbit && orbitCommand && !orbitCommandArgs,
+  );
+  const commandToRun = orbitLaunchSpec
+    ? buildOrbitDisplayCommand({
+        portlessCommand: orbitCommand,
+        orbitArgs: orbitRunArgs,
+      })
     : lastCommand;
 
-  const shellExe = args.scriptEntry.target.shell || process.env.SHELL || "/bin/bash";
-  const ptyProcess = args.scriptEntry.orbit && orbitCommand && orbitRunArgs
-    ? pty.spawn(orbitCommand, orbitRunArgs, {
+  const shellExe =
+    args.scriptEntry.target.shell || process.env.SHELL || "/bin/bash";
+  const orbitProcessEnv = orbitLaunchSpec
+    ? { ...env, ...orbitLaunchSpec.env }
+    : env;
+  const ptyProcess = orbitLaunchSpec
+    ? pty.spawn(orbitLaunchSpec.command, orbitLaunchSpec.args, {
         name: "xterm-color",
         cols: 120,
         rows: 30,
         cwd,
-        env: env as Record<string, string>,
+        env: orbitProcessEnv as Record<string, string>,
       })
     : pty.spawn(shellExe, ["-c", commandToRun], {
         name: "xterm-color",
@@ -541,17 +574,27 @@ async function runServiceScript(args: {
   });
 
   if (args.scriptEntry.orbit && orbitCommand && orbitRunArgs) {
-    const orbitUrlResult = spawnSync(orbitCommand, buildOrbitGetArgs({
-      orbit: args.scriptEntry.orbit,
-      defaultName: path.basename(args.projectPath),
-    }), {
-      cwd,
-      env,
-      encoding: "utf8",
+    const orbitGetLaunchSpec = buildPortlessLaunchSpec({
+      portlessCommand: orbitCommand,
+      orbitArgs: buildOrbitGetArgs({
+        orbit: args.scriptEntry.orbit,
+        defaultName: path.basename(args.projectPath),
+      }),
     });
-    const orbitUrl = orbitUrlResult.status === 0
-      ? orbitUrlResult.stdout.trim()
-      : "";
+    const orbitUrlResult = spawnSync(
+      orbitGetLaunchSpec.command,
+      orbitGetLaunchSpec.args,
+      {
+        cwd,
+        env: {
+          ...env,
+          ...orbitGetLaunchSpec.env,
+        },
+        encoding: "utf8",
+      },
+    );
+    const orbitUrl =
+      orbitUrlResult.status === 0 ? orbitUrlResult.stdout.trim() : "";
     if (orbitUrl) {
       emitScriptEvent({
         workspaceId: args.workspaceId,
@@ -698,7 +741,10 @@ export async function runScriptHook(args: {
     if (!result.ok) {
       summary.failures.push({
         scriptId: ref.scriptId,
-        message: "error" in result && result.error ? result.error : `Exited with ${result.exitCode ?? -1}`,
+        message:
+          "error" in result && result.error
+            ? result.error
+            : `Exited with ${result.exitCode ?? -1}`,
       });
       if (ref.blocking) {
         break;
@@ -722,26 +768,32 @@ export async function stopAllWorkspaceScriptProcesses(args: {
   workspaceId: string;
 }): Promise<void> {
   const entries = listWorkspaceScriptProcessesForWorkspace(args.workspaceId);
-  await Promise.all(entries.map((entry) => stopScriptEntry({
-    workspaceId: entry.workspaceId,
-    scriptId: entry.scriptId,
-    scriptKind: entry.scriptKind,
-  })));
+  await Promise.all(
+    entries.map((entry) =>
+      stopScriptEntry({
+        workspaceId: entry.workspaceId,
+        scriptId: entry.scriptId,
+        scriptKind: entry.scriptKind,
+      }),
+    ),
+  );
 }
 
 export async function cleanupAllScriptProcesses(): Promise<void> {
   const keys = listWorkspaceScriptProcessKeys();
-  await Promise.all(keys.map(async (key) => {
-    const entry = getWorkspaceScriptProcess(key);
-    if (!entry) {
-      return;
-    }
-    entry.aborted = true;
-    entry.cleanup?.();
-    entry.cleanup = undefined;
-    if (entry.process) {
-      await killProcess(entry.process);
-    }
-    deleteWorkspaceScriptProcess(key);
-  }));
+  await Promise.all(
+    keys.map(async (key) => {
+      const entry = getWorkspaceScriptProcess(key);
+      if (!entry) {
+        return;
+      }
+      entry.aborted = true;
+      entry.cleanup?.();
+      entry.cleanup = undefined;
+      if (entry.process) {
+        await killProcess(entry.process);
+      }
+      deleteWorkspaceScriptProcess(key);
+    }),
+  );
 }
