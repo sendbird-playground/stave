@@ -220,6 +220,39 @@ function ReadOnlyCodeBlock(args: { value: string; minHeight?: string }) {
   );
 }
 
+function getCodexAccountBadgeState(account: CodexAppServerSnapshot["account"]) {
+  if (!account) {
+    return {
+      label: "unknown",
+      tone: "default" as const,
+    };
+  }
+
+  const hasResolvedAccount =
+    account.type === "apiKey" ||
+    account.type === "chatgpt" ||
+    account.email != null ||
+    account.planType != null;
+  if (account.requiresOpenaiAuth && !hasResolvedAccount) {
+    return {
+      label: "needs login",
+      tone: "warning" as const,
+    };
+  }
+
+  if (!account.requiresOpenaiAuth) {
+    return {
+      label: "not required",
+      tone: "success" as const,
+    };
+  }
+
+  return {
+    label: "ready",
+    tone: "success" as const,
+  };
+}
+
 export function CodexSection() {
   const [
     codexBinaryPath,
@@ -1074,6 +1107,7 @@ export function CodexSection() {
   }, [commandQuery]);
 
   const snapshot = snapshotState.snapshot;
+  const accountBadge = getCodexAccountBadgeState(snapshot?.account ?? null);
 
   return (
     <>
@@ -1221,11 +1255,10 @@ export function CodexSection() {
                             <p className="text-sm font-medium text-foreground">
                               Account
                             </p>
-                            {snapshot.account?.requiresOpenaiAuth ? (
-                              <StatusPill label="needs auth" tone="warning" />
-                            ) : (
-                              <StatusPill label="ready" tone="success" />
-                            )}
+                            <StatusPill
+                              label={accountBadge.label}
+                              tone={accountBadge.tone}
+                            />
                           </div>
                           <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                             <p>Type: {snapshot.account?.type ?? "unknown"}</p>
