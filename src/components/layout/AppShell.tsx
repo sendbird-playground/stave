@@ -17,6 +17,7 @@ import {
   COLLAPSED_PROJECT_SIDEBAR_WIDTH,
   ProjectWorkspaceSidebar,
 } from "@/components/layout/ProjectWorkspaceSidebar";
+import { PresetBar } from "@/components/layout/PresetBar";
 import { WorkspaceTaskTabs } from "@/components/layout/WorkspaceTaskTabs";
 import { CliSessionPanel } from "@/components/layout/CliSessionPanel";
 import { resolveLatestCompletedTurnTarget } from "@/components/layout/command-palette-navigation";
@@ -1294,6 +1295,7 @@ export function AppShell() {
               >
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   {hasProject ? <WorkspaceTaskTabs /> : null}
+                  {hasProject ? <PresetBar /> : null}
                   <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
